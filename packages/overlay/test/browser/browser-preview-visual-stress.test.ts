@@ -9,6 +9,7 @@ import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { testTaskOrderKey } from "../fixtures/timeline-order.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { expertSquadCatalogFixture } from "./expert-squad-fixture.ts"
 
 const PORT = 7778
 const SCREENSHOT_DIR = fileURLToPath(new URL("../../.scratch/browser-preview-visual-stress/", import.meta.url))
@@ -156,6 +157,11 @@ async function waitForText(
           "[data-ui='browser-preview-selection-failed'], [data-ui='browser-preview-native-error'], [data-ui='browser-preview-live'], [data-ui='browser-preview-evidence'], [data-ui='browser-preview-evidence-missing']",
         )
         return {
+          selectedSource: (window as any).boardStore?.selectedSource ?? null,
+          boardTaskID: (window as any).boardStore?.board?.task?.id ?? "",
+          settingsDirectory: (window as any).settingsStore?.directory ?? "",
+          activeRowTaskID:
+            document.querySelector<HTMLElement>(".task-row-main[aria-current='page']")?.dataset.taskId || "",
           status: document.querySelector<HTMLElement>(".browser-preview-status")?.dataset.status || "",
           activeUI: active?.getAttribute("data-ui") || "",
           activeStatus: active?.dataset.status || "",
@@ -462,6 +468,7 @@ test(
     const captureBodies: unknown[] = []
     const selectedTargets: unknown[] = []
     const unexpectedRequests: string[] = []
+    const logBodies: unknown[] = []
     let boardRequestCount = 0
     let previewTargetRequestCount = 0
     let serverOrigin = ""
@@ -486,7 +493,7 @@ test(
       sessionID: "ses_preview_visual_stress",
       request: "Build agent started a browser_preview service and the operator is validating the preview panel.",
       title: "Preview visual stress",
-      time: { created: now - 10_000, updated: now - 1_000 },
+      time: { created: now - 10_000, started: now - 9_000, updated: now - 1_000 },
     }
     const otherTask = {
       id: otherTaskID,
@@ -496,7 +503,7 @@ test(
       sessionID: "ses_preview_visual_other",
       request: "A second task verifies preview state does not leak across task switches.",
       title: "Preview visual other task",
-      time: { created: now - 20_000, updated: now - 2_000 },
+      time: { created: now - 20_000, started: now - 19_000, updated: now - 2_000 },
     }
     const board = {
       snapshotVersion: "preview-visual-stress-board",
@@ -522,11 +529,9 @@ test(
       lanes: [],
       interactions: [],
     }
-    const promptProfileCatalog = {
+    const expertSquadCatalog = expertSquadCatalogFixture({
       active: "frontend-replica",
-      project_active: "frontend-replica",
-      session_active: null,
-      default: "general",
+      projectActive: "frontend-replica",
       targets: [
         { id: "build", label: "Build", description: "Build agent prompt.", editable: true, built_in_only: false },
       ],
@@ -536,19 +541,15 @@ test(
           label: "General",
           description: "General profile.",
           built_in: true,
-          editable: false,
-          agents: {},
         },
         {
           id: "frontend-replica",
           label: "Frontend Replica",
           description: "Frontend implementation profile.",
-          built_in: true,
-          editable: false,
-          agents: {},
+          built_in: false,
         },
       ],
-    }
+    })
     const urlFor = (id: string) =>
       id === alternateTargetID
         ? `${serverOrigin}/preview/alternate/${"very-long-segment-".repeat(18)}`
@@ -679,11 +680,18 @@ test(
           })
         if (path === "/provider") return json({ all: [], connected: [], default: {} })
         if (path === "/provider/auth") return json({})
-        if (path === "/config/prompt-profile") return json(promptProfileCatalog)
+        if (path === "/expert-squad/catalog") return json(expertSquadCatalog)
         if (path === "/config" && req.method === "PATCH")
           return json({ model: "", prompt_profile: { active: "frontend-replica" } })
         if (path === "/config") return json({ model: "", prompt_profile: { active: "frontend-replica" } })
-        if (path === "/log" && req.method === "POST") return json({ ok: true })
+        if (path === "/log" && req.method === "POST") {
+          try {
+            logBodies.push(await req.json())
+          } catch {
+            logBodies.push(await req.text())
+          }
+          return json({ ok: true })
+        }
         if (path === "/channel") return json([])
         if (path === "/executor") return json([])
         if (path === "/agent") return json([])
@@ -1003,6 +1011,7 @@ test(
         () => ({
           errors,
           requestLog,
+          logBodies,
         }),
       )
       assert.equal(await page.$('[data-ui="browser-preview-selection-failed"]'), null)

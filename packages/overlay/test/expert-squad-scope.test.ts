@@ -2,22 +2,23 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import type { HostTransport, TransportRequest } from "../src/services/host-transport"
+import { expertSquadCatalogFixture } from "./browser/expert-squad-fixture"
+
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 
-const CONFIG_SOURCE = readFileSync(join(import.meta.dir, "../src/services/config.ts"), "utf8")
 const MAIN_SOURCE = readFileSync(join(import.meta.dir, "../src/main.tsx"), "utf8")
+const SERVICE_SOURCE = readFileSync(join(import.meta.dir, "../src/services/expert-squad.ts"), "utf8")
 const SKILL_MARKET_SOURCE = readFileSync(join(import.meta.dir, "../src/components/settings/SkillMarketPanel.tsx"), "utf8")
 
 const { configure } = await import("../src/services/api")
-const { loadPromptProfileCatalog, markPromptProfileCatalogStale, markSessionConfigStale } = await import(
-  "../src/services/config"
-)
+const { loadExpertSquadCatalog, markExpertSquadCatalogStale } = await import("../src/services/expert-squad")
+const { markSessionConfigStale } = await import("../src/services/config")
 const { HOST_CAPABILITIES, __setHostTransportForTest } = await import("../src/services/host-transport")
 const { setAppStore } = await import("../src/store/app")
 const { setBoardStore } = await import("../src/store/board")
 const { setSettingsStore } = await import("../src/store/settings")
-const { promptProfileCatalogDirectory, promptProfileCatalogRequestKey, promptProfileCatalogScope } = await import(
-  "../src/services/prompt-profile-scope"
+const { expertSquadCatalogDirectory, expertSquadCatalogRequestKey, expertSquadCatalogScope } = await import(
+  "../src/services/expert-squad-scope"
 )
 
 function resetStores(): void {
@@ -53,7 +54,41 @@ function resetStores(): void {
   })
 }
 
-describe("prompt profile task session owner", () => {
+function installCatalogTransport(): TransportRequest[] {
+  const requests: TransportRequest[] = []
+  __setHostTransportForTest({
+    kind: "browser",
+    capabilities: HOST_CAPABILITIES.browser,
+    async request(req) {
+      requests.push(req)
+      return {
+        status: 200,
+        ok: true,
+        headers: {},
+        body: expertSquadCatalogFixture({
+          active: "frontend-replica",
+          projectActive: "frontend-replica",
+          squads: [
+            { id: "general", label: "General", built_in: true },
+            { id: "frontend-replica", label: "Frontend Replica", built_in: false },
+          ],
+        }),
+      }
+    },
+    openStream() {
+      return { close() {} }
+    },
+    async native() {
+      return true
+    },
+    subscribeUiCommand() {
+      return { unsubscribe() {} }
+    },
+  } satisfies HostTransport)
+  return requests
+}
+
+describe("expert squad task session owner", () => {
   afterEach(() => {
     resetStores()
     configure({ directory: "" })
@@ -64,9 +99,9 @@ describe("prompt profile task session owner", () => {
     resetStores()
     setBoardStore("selectedSource", { kind: "task", id: "tsk_1", directory: "D:/repo/task" })
 
-    expect(promptProfileCatalogDirectory()).toBe("D:/repo/task")
-    expect(promptProfileCatalogScope()).toEqual({ kind: "pending", taskID: "tsk_1", directory: "D:/repo/task" })
-    expect(promptProfileCatalogRequestKey()).toBe("prompt-profile:pending-task:tsk_1:D:/repo/task")
+    expect(expertSquadCatalogDirectory()).toBe("D:/repo/task")
+    expect(expertSquadCatalogScope()).toEqual({ kind: "pending", taskID: "tsk_1", directory: "D:/repo/task" })
+    expect(expertSquadCatalogRequestKey()).toBe("expert-squad:pending-task:tsk_1:D:/repo/task")
   })
 
   test("selected task ignores stale board sessions from a previous task", () => {
@@ -81,7 +116,7 @@ describe("prompt profile task session owner", () => {
       },
     })
 
-    expect(promptProfileCatalogScope()).toEqual({ kind: "pending", taskID: "tsk_2", directory: "D:/repo/task" })
+    expect(expertSquadCatalogScope()).toEqual({ kind: "pending", taskID: "tsk_2", directory: "D:/repo/task" })
 
     setBoardStore("tasks", [
       {
@@ -93,10 +128,10 @@ describe("prompt profile task session owner", () => {
       },
     ])
 
-    expect(promptProfileCatalogScope()).toEqual({ kind: "session", sessionID: "ses_new", directory: "D:/repo/task" })
+    expect(expertSquadCatalogScope()).toEqual({ kind: "session", sessionID: "ses_new", directory: "D:/repo/task" })
   })
 
-  test("selected task keeps prompt profile pending while task switch is hydrating", () => {
+  test("selected task keeps expert squad pending while task switch is hydrating", () => {
     resetStores()
     setBoardStore("selectedSource", { kind: "task", id: "tsk_1", directory: "D:/repo/task" })
     setBoardStore("taskSwitching", true)
@@ -110,13 +145,13 @@ describe("prompt profile task session owner", () => {
       },
     ])
 
-    expect(promptProfileCatalogScope()).toEqual({ kind: "pending", taskID: "tsk_1", directory: "D:/repo/task" })
-    expect(promptProfileCatalogRequestKey()).toBe("prompt-profile:pending-task:tsk_1:D:/repo/task")
+    expect(expertSquadCatalogScope()).toEqual({ kind: "pending", taskID: "tsk_1", directory: "D:/repo/task" })
+    expect(expertSquadCatalogRequestKey()).toBe("expert-squad:pending-task:tsk_1:D:/repo/task")
 
     setBoardStore("taskSwitching", false)
 
-    expect(promptProfileCatalogScope()).toEqual({ kind: "session", sessionID: "ses_root", directory: "D:/repo/task" })
-    expect(promptProfileCatalogRequestKey()).toMatch(/^prompt-profile:catalog:D:\/repo\/task:session:ses_root:\d+$/)
+    expect(expertSquadCatalogScope()).toEqual({ kind: "session", sessionID: "ses_root", directory: "D:/repo/task" })
+    expect(expertSquadCatalogRequestKey()).toMatch(/^expert-squad:catalog:D:\/repo\/task:session:ses_root:\d+$/)
   })
 
   test("selected task loads the root session catalog after the root session resolves", () => {
@@ -132,10 +167,10 @@ describe("prompt profile task session owner", () => {
       },
     ])
 
-    const key = promptProfileCatalogRequestKey()
+    const key = expertSquadCatalogRequestKey()
 
-    expect(promptProfileCatalogScope()).toEqual({ kind: "session", sessionID: "ses_root", directory: "D:/repo/task" })
-    expect(key).toMatch(/^prompt-profile:catalog:D:\/repo\/task:session:ses_root:\d+$/)
+    expect(expertSquadCatalogScope()).toEqual({ kind: "session", sessionID: "ses_root", directory: "D:/repo/task" })
+    expect(key).toMatch(/^expert-squad:catalog:D:\/repo\/task:session:ses_root:\d+$/)
 
     setBoardStore("tasks", [
       {
@@ -147,44 +182,56 @@ describe("prompt profile task session owner", () => {
       },
     ])
 
-    expect(promptProfileCatalogRequestKey()).toBe(key)
+    expect(expertSquadCatalogRequestKey()).toBe(key)
   })
 
   test("project and standalone session scopes keep distinct request keys", () => {
     resetStores()
-    const projectKey = promptProfileCatalogRequestKey()
+    const projectKey = expertSquadCatalogRequestKey()
 
     setBoardStore("selectedSource", { kind: "session", id: "ses_direct" })
 
-    expect(projectKey).toMatch(/^prompt-profile:catalog:D:\/repo\/project:project:\d+$/)
-    expect(promptProfileCatalogScope()).toEqual({
+    expect(projectKey).toMatch(/^expert-squad:catalog:D:\/repo\/project:project:\d+$/)
+    expect(expertSquadCatalogScope()).toEqual({
       kind: "session",
       sessionID: "ses_direct",
       directory: "D:/repo/project",
     })
-    expect(promptProfileCatalogRequestKey()).toMatch(
-      /^prompt-profile:catalog:D:\/repo\/project:session:ses_direct:\d+$/,
-    )
+    expect(expertSquadCatalogRequestKey()).toMatch(/^expert-squad:catalog:D:\/repo\/project:session:ses_direct:\d+$/)
   })
 
-  test("prompt profile catalog loaders require an explicit project or session scope", () => {
-    expect(CONFIG_SOURCE).toContain("export type PromptProfileCatalogScope")
-    expect(CONFIG_SOURCE).toContain("export async function loadPromptProfileCatalog(scope: PromptProfileCatalogScope)")
-    expect(CONFIG_SOURCE).not.toContain("loadPromptProfileCatalog(sessionID?: string)")
-    expect(MAIN_SOURCE).toContain("const scope = promptProfileCatalogScope()")
-    expect(MAIN_SOURCE).toContain("promptProfileLoadedRequestKey")
-    expect(MAIN_SOURCE).toContain("requestKey === promptProfileInFlightRequestKey")
+  test("expert squad catalog loaders require an explicit project or session scope", () => {
+    expect(SERVICE_SOURCE).toContain("export type ExpertSquadCatalogScope")
+    expect(SERVICE_SOURCE).toContain("export async function loadExpertSquadCatalog(scope: ExpertSquadCatalogScope)")
+    expect(SERVICE_SOURCE).not.toContain("loadExpertSquadCatalog(sessionID?: string)")
+    expect(MAIN_SOURCE).toContain("const scope = expertSquadCatalogScope()")
+    expect(MAIN_SOURCE).toContain("expertSquadLoadedRequestKey")
+    expect(MAIN_SOURCE).toContain("requestKey === expertSquadInFlightRequestKey")
+    expect(MAIN_SOURCE).toContain("setActiveExpertSquad(catalog.active.effective)")
+    expect(MAIN_SOURCE).not.toContain("catalog.profiles")
+    expect(MAIN_SOURCE).not.toContain("setActivePromptProfile")
     expect(MAIN_SOURCE).not.toContain("rootTaskSessionID() || activeSessionID() || undefined")
   })
 
-  test("skill mount matrix uses the same prompt profile session scope", () => {
-    expect(SKILL_MARKET_SOURCE).toContain('import { promptProfileCatalogScope } from "../../services/prompt-profile-scope"')
-    expect(SKILL_MARKET_SOURCE).toContain("const scope = promptProfileCatalogScope()")
+  test("overlay expert squad catalog type carries MCP prompt and resource refs", () => {
+    for (const field of [
+      "default_mcp_prompt_refs",
+      "package_mcp_prompt_refs",
+      "default_mcp_resource_refs",
+      "package_mcp_resource_refs",
+    ]) {
+      expect(SERVICE_SOURCE).toContain(`${field}: string[]`)
+    }
+  })
+
+  test("skill mount matrix uses the same expert squad session scope", () => {
+    expect(SKILL_MARKET_SOURCE).toContain('import { expertSquadCatalogScope } from "../../services/expert-squad-scope"')
+    expect(SKILL_MARKET_SOURCE).toContain("const scope = expertSquadCatalogScope()")
     expect(SKILL_MARKET_SOURCE).toContain('scope.kind === "pending"')
     expect(SKILL_MARKET_SOURCE).toContain("sessionID,")
   })
 
-  test("ordinary config reloads do not change the prompt profile request key", () => {
+  test("ordinary config reloads do not change the expert squad request key", () => {
     resetStores()
     setBoardStore("selectedSource", { kind: "task", id: "tsk_1", directory: "D:/repo/task" })
     setBoardStore("tasks", [
@@ -197,7 +244,7 @@ describe("prompt profile task session owner", () => {
       },
     ])
 
-    const before = promptProfileCatalogRequestKey()
+    const before = expertSquadCatalogRequestKey()
 
     setAppStore("config", {
       prompt_profile: {
@@ -205,58 +252,26 @@ describe("prompt profile task session owner", () => {
       },
     })
 
-    expect(promptProfileCatalogRequestKey()).toBe(before)
+    expect(expertSquadCatalogRequestKey()).toBe(before)
 
     markSessionConfigStale("ses_root")
 
-    expect(promptProfileCatalogRequestKey()).toBe(before)
+    expect(expertSquadCatalogRequestKey()).toBe(before)
 
-    markPromptProfileCatalogStale()
+    markExpertSquadCatalogStale()
 
-    expect(promptProfileCatalogRequestKey()).not.toBe(before)
+    expect(expertSquadCatalogRequestKey()).not.toBe(before)
   })
 
   test("catalog requests carry the scope directory instead of relying on the global api directory", async () => {
     resetStores()
     configure({ directory: "D:/repo/old" })
-    const requests: TransportRequest[] = []
-    __setHostTransportForTest({
-      kind: "browser",
-      capabilities: HOST_CAPABILITIES.browser,
-      async request(req) {
-        requests.push(req)
-        return {
-          status: 200,
-          ok: true,
-          headers: {},
-          body: {
-            active: "frontend-replica",
-            project_active: "frontend-replica",
-            session_active: "frontend-replica",
-            default: "general",
-            targets: [],
-            profiles: [
-              { id: "general", label: "General" },
-              { id: "frontend-replica", label: "Frontend Replica" },
-            ],
-          },
-        }
-      },
-      openStream() {
-        return { close() {} }
-      },
-      async native() {
-        return true
-      },
-      subscribeUiCommand() {
-        return { unsubscribe() {} }
-      },
-    } satisfies HostTransport)
+    const requests = installCatalogTransport()
 
-    await loadPromptProfileCatalog({ kind: "session", directory: "D:/repo/task", sessionID: "ses_root" })
+    await loadExpertSquadCatalog({ kind: "session", directory: "D:/repo/task", sessionID: "ses_root" })
 
     expect(requests).toHaveLength(1)
-    expect(requests[0]!.path).toBe("config/prompt-profile")
+    expect(requests[0]!.path).toBe("expert-squad/catalog")
     expect(requests[0]!.query?.directory).toBe("D:/repo/task")
     expect(requests[0]!.query?.sessionID).toBe("ses_root")
   })
@@ -269,17 +284,14 @@ describe("prompt profile task session owner", () => {
     const gate = new Promise<void>((resolve) => {
       release = resolve
     })
-    const responseBody = {
+    const responseBody = expertSquadCatalogFixture({
       active: "frontend-replica",
-      project_active: "frontend-replica",
-      session_active: "frontend-replica",
-      default: "general",
-      targets: [],
-      profiles: [
-        { id: "general", label: "General" },
-        { id: "frontend-replica", label: "Frontend Replica" },
+      projectActive: "frontend-replica",
+      squads: [
+        { id: "general", label: "General", built_in: true },
+        { id: "frontend-replica", label: "Frontend Replica", built_in: false },
       ],
-    }
+    })
     __setHostTransportForTest({
       kind: "browser",
       capabilities: HOST_CAPABILITIES.browser,
@@ -304,8 +316,8 @@ describe("prompt profile task session owner", () => {
       },
     } satisfies HostTransport)
 
-    const first = loadPromptProfileCatalog({ kind: "session", directory: "D:/repo/task", sessionID: "ses_root" })
-    const second = loadPromptProfileCatalog({ kind: "session", directory: "D:/repo/task", sessionID: "ses_root" })
+    const first = loadExpertSquadCatalog({ kind: "session", directory: "D:/repo/task", sessionID: "ses_root" })
+    const second = loadExpertSquadCatalog({ kind: "session", directory: "D:/repo/task", sessionID: "ses_root" })
 
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(requests).toHaveLength(1)
@@ -314,7 +326,7 @@ describe("prompt profile task session owner", () => {
 
     await expect(Promise.all([first, second])).resolves.toEqual([responseBody, responseBody])
 
-    await loadPromptProfileCatalog({ kind: "session", directory: "D:/repo/task", sessionID: "ses_root" })
+    await loadExpertSquadCatalog({ kind: "session", directory: "D:/repo/task", sessionID: "ses_root" })
 
     expect(requests).toHaveLength(2)
   })

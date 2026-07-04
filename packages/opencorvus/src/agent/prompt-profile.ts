@@ -1,7 +1,6 @@
 import z from "zod"
 import { AgentRoleContract, type AgentRoleID } from "@/agent/role-contract"
-import { builtInPromptProfiles, loadedBuiltInPackages } from "@/expert-squad/builtin"
-import { catalogProfileFromPackage } from "@/expert-squad/catalog-profile"
+import { builtInPromptProfiles } from "@/expert-squad/builtin"
 
 export const DEFAULT_PROMPT_PROFILE_ID = "general"
 export const PROMPT_PROFILE_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
@@ -101,20 +100,8 @@ export const PromptProfileCatalogProfileSchema = z
   })
   .strict()
 
-export const PromptProfileCatalogSchema = z
-  .object({
-    active: z.string(),
-    project_active: z.string(),
-    session_active: z.string().nullable(),
-    default: z.string(),
-    targets: z.array(PromptProfileTargetCatalogEntrySchema),
-    profiles: z.array(PromptProfileCatalogProfileSchema),
-  })
-  .strict()
-
 export type PromptProfileTargetCatalogEntry = z.output<typeof PromptProfileTargetCatalogEntrySchema>
 export type PromptProfileCatalogProfile = z.output<typeof PromptProfileCatalogProfileSchema>
-export type PromptProfileCatalog = z.output<typeof PromptProfileCatalogSchema>
 
 type ConfigLike = {
   prompt_profile?: PromptProfileConfig
@@ -165,31 +152,6 @@ export namespace PromptProfile {
     return [input.base, profilePrompt, input.userAppend]
       .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
       .join("\n\n")
-  }
-
-  export function list(
-    config: ConfigLike,
-    opts: {
-      projectActive?: string
-      sessionActive?: string | null
-    } = {},
-  ): PromptProfileCatalog {
-    const active = activeID(config)
-    const profiles = loadedBuiltInPackages.map((pkg) =>
-      catalogProfileFromPackage({
-        id: pkg.id,
-        pkg,
-        builtIn: true,
-      }),
-    )
-    return PromptProfileCatalogSchema.parse({
-      active,
-      project_active: opts.projectActive ?? active,
-      session_active: opts.sessionActive ?? null,
-      default: DEFAULT_PROMPT_PROFILE_ID,
-      targets,
-      profiles,
-    })
   }
 
   export function assertKnownProfileID(profileID: string, config: ConfigLike): void {

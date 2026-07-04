@@ -1,6 +1,6 @@
 import { For, Show, createEffect, createMemo, createSignal, onCleanup } from "solid-js"
 import type { JSX } from "solid-js"
-import PromptCatalog from "./settings/PromptCatalog"
+import ExpertSquadPanel from "./settings/ExpertSquadPanel"
 import ChannelsPanel from "./settings/ChannelsPanel"
 import { McpPanel, SkillMarketPanel, SkillsPanel } from "./settings/SkillMarketPanel"
 import ProvidersPanel from "./settings/ProvidersPanel"
@@ -42,7 +42,7 @@ interface ConfigTabDef {
 const SECTION_ICONS: Record<ConfigDialogTab, IconName> = {
   general: "config-general",
   permissions: "config-permissions",
-  prompt: "config-prompt",
+  "expert-squad": "expert-squad",
   channel: "config-channel",
   skill: "config-skill",
   "skill-market": "config-skill-market",
@@ -55,7 +55,7 @@ const SECTION_ICONS: Record<ConfigDialogTab, IconName> = {
 }
 
 const SECTION_BADGES: Partial<Record<ConfigDialogTab, string>> = {
-  prompt: "promptBadge",
+  "expert-squad": "expertSquadBadge",
   memory: "memoryBadge",
 }
 
@@ -80,8 +80,8 @@ function activePanelBodyID(tab: ConfigDialogTab): string {
       return "generalBody"
     case "permissions":
       return "permissionsBody"
-    case "prompt":
-      return "promptBody"
+    case "expert-squad":
+      return "expertSquadBody"
     case "channel":
       return "channelConfigBody"
     case "skill":
@@ -243,8 +243,8 @@ export function ConfigDialogHost() {
         return <GeneralPanel />
       case "permissions":
         return <PermissionsPanel />
-      case "prompt":
-        return <PromptCatalog />
+      case "expert-squad":
+        return <ExpertSquadPanel />
       case "channel":
         return <ChannelsPanel />
       case "skill":

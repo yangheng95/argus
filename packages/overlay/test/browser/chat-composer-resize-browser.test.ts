@@ -7,6 +7,7 @@ import test from "node:test"
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -49,23 +50,7 @@ test("chat composer resize separator supports keyboard focus and height adjustme
   assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
   assert.equal(typeof globalThis.Bun, "undefined")
 
-  const promptProfileCatalog = {
-    active: "general",
-    project_active: "general",
-    session_active: null,
-    default: "general",
-    targets: [],
-    profiles: [
-      {
-        id: "general",
-        label: "General",
-        description: "Default prompt profile.",
-        built_in: true,
-        editable: false,
-        agents: {},
-      },
-    ],
-  }
+  const expertSquadCatalog = generalExpertSquadCatalog()
 
   const server = await startBrowserFixture(async (req) => {
     const url = new URL(req.url)
@@ -98,7 +83,7 @@ test("chat composer resize separator supports keyboard focus and height adjustme
     if (path === "/provider/auth") return send({})
     if (path === "/config/providers") return send({ providers: [], default: {} })
     if (path === "/config/prompt") return send([])
-    if (path === "/config/prompt-profile") return send(promptProfileCatalog)
+    if (path === "/expert-squad/catalog") return send(expertSquadCatalog)
     if (path === "/config" && (req.method === "GET" || req.method === "PATCH")) {
       return send({
         model: "opencorvus/gpt-5-nano",

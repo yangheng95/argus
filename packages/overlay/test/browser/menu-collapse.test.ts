@@ -4,6 +4,7 @@ import test from "node:test"
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -68,15 +69,8 @@ test("closed titlebar menus do not block task-scope panel interactions", async (
     if (path === "/provider/auth") return send({})
     if (path === "/config/providers") return send({ providers: [] })
     if (path === "/config/prompt") return send([])
-    if (path === "/config/prompt-profile")
-      return send({
-        active: "general",
-        project_active: "general",
-        session_active: null,
-        default: "general",
-        targets: [],
-        profiles: [],
-      })
+    if (path === "/expert-squad/catalog")
+      return send(generalExpertSquadCatalog())
     if (path === "/config") return send({ model: "" })
     if (path === "/agent") return send([])
     if (path === "/channel") return send([])

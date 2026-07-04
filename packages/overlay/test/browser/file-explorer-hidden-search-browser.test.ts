@@ -7,6 +7,7 @@ import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { installBrowserErrorCollector } from "./error-collector.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -70,7 +71,7 @@ test(
       if (path === "/config/providers") return json({ providers: [], default: {} })
       if (path === "/config") return json({ model: "opencorvus/gpt-5-nano", prompt_profile: { active: "general" } })
       if (path === "/config/prompt") return json([])
-      if (path === "/config/prompt-profile") return json({ active: "general", targets: [], profiles: [] })
+      if (path === "/expert-squad/catalog") return json(generalExpertSquadCatalog())
       if (path === "/terminal/profiles") return json({ defaultProfileID: "", profiles: [] })
       if (path === "/coding/cli/profiles") return json({ profiles: [] })
       if (path === "/agent" || path === "/channel" || path === "/executor") return json([])

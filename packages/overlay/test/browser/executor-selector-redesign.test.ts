@@ -23,6 +23,7 @@ import sharp from "sharp"
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { expertSquadCatalogFixture } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -148,31 +149,24 @@ test(
     const codexModel = "gpt-5.5-codex"
     let hexinApiKeySaveCount = 0
     const budgetRequests: Array<{ directory: string; remaining: number }> = []
-    const promptProfileCatalog = {
+    const expertSquadCatalog = expertSquadCatalogFixture({
       active: "frontend-replica",
-      project_active: "frontend-replica",
-      session_active: null,
-      default: "general",
-      targets: [],
+      projectActive: "frontend-replica",
       profiles: [
         {
           id: "general",
           label: "General",
           description: "Baseline prompt set.",
           built_in: true,
-          editable: false,
-          agents: {},
         },
         {
           id: "frontend-replica",
           label: "Frontend Replica",
           description: "Visual UI verification squad.",
-          built_in: true,
-          editable: false,
-          agents: {},
+          built_in: false,
         },
       ],
-    }
+    })
 
     const server = await startBrowserFixture(async (req) => {
       const url = new URL(req.url)
@@ -286,7 +280,7 @@ test(
         return send(await req.json())
       }
       if (path === "/config/prompt") return send([])
-      if (path === "/config/prompt-profile") return send(promptProfileCatalog)
+      if (path === "/expert-squad/catalog") return send(expertSquadCatalog)
       if (path === "/mission") return send([])
       if (path === "/agent") return send([])
       if (path === "/channel") return send([])
@@ -419,7 +413,7 @@ test(
         const value = budget?.querySelector(".executor-budget-value") as HTMLElement | null
         const mirrorSlot = document.querySelector('[data-side="mirror"]') as HTMLElement | null
         const externalSlot = document.querySelector('[data-side="external"]') as HTMLElement | null
-        const promptProfile = document.querySelector('[data-ui="prompt-profile-selector"]') as HTMLElement | null
+        const promptProfile = document.querySelector('[data-ui="expert-squad-selector"]') as HTMLElement | null
         const meta = document.querySelector(".chat-compose-meta-left") as HTMLElement | null
         const budgetRect = budget?.getBoundingClientRect()
         const mirrorRect = mirrorSlot?.getBoundingClientRect()

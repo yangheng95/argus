@@ -85,16 +85,16 @@ describe("goal / mission / chat / agent reply reuse the AutoGrowTextarea primiti
     expect(cardCss).not.toMatch(/\.interaction-card__custom-input\s*\{/)
   })
 
-  test("settings long-text editors reuse the shared primitive and prompt profiles stay read-only", () => {
-    const promptCatalog = read("components/settings/PromptCatalog.tsx")
+  test("settings long-text editors reuse the shared primitive and expert squads stay read-only", () => {
+    const expertSquadPanel = read("components/settings/ExpertSquadPanel.tsx")
     const providers = read("components/settings/ProvidersPanel.tsx")
     const settingsCss = read("styles/surfaces/settings.css")
 
-    expect(promptCatalog).not.toContain('import { AutoGrowTextarea } from "../primitives/AutoGrowTextarea"')
-    expect(promptCatalog).not.toContain("<AutoGrowTextarea")
-    expect(promptCatalog).not.toContain('class="composer-textarea prompt-profile-description"')
-    expect(promptCatalog).not.toContain('class="composer-textarea prompt-profile-textarea"')
-    expect(promptCatalog).not.toMatch(/<textarea\b/)
+    expect(expertSquadPanel).not.toContain('import { AutoGrowTextarea } from "../primitives/AutoGrowTextarea"')
+    expect(expertSquadPanel).not.toContain("<AutoGrowTextarea")
+    expect(expertSquadPanel).not.toContain('class="composer-textarea expert-squad-description"')
+    expect(expertSquadPanel).not.toContain('class="composer-textarea expert-squad-textarea"')
+    expect(expertSquadPanel).not.toMatch(/<textarea\b/)
 
     expect(providers).toContain('import { AutoGrowTextarea } from "../primitives/AutoGrowTextarea"')
     expect(providers).toContain("<AutoGrowTextarea")

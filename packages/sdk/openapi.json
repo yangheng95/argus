@@ -1372,380 +1372,6 @@
         ]
       }
     },
-    "/config/prompt-profile": {
-      "get": {
-        "operationId": "config.promptProfile",
-        "summary": "List prompt profiles and expert-squad package projections",
-        "description": "Returns the single active prompt_profile.active value, project/session active sources, built-in general profile, and current-project .opencorvus/expert-squads/<id> package-backed profiles with capability projections.",
-        "responses": {
-          "200": {
-            "description": "Prompt profile catalog",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "active": {
-                      "type": "string"
-                    },
-                    "project_active": {
-                      "type": "string"
-                    },
-                    "session_active": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "default": {
-                      "type": "string"
-                    },
-                    "targets": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "id": {
-                            "type": "string"
-                          },
-                          "label": {
-                            "type": "string"
-                          },
-                          "description": {
-                            "type": "string"
-                          },
-                          "editable": {
-                            "type": "boolean"
-                          },
-                          "built_in_only": {
-                            "type": "boolean"
-                          }
-                        },
-                        "required": [
-                          "id",
-                          "label",
-                          "editable",
-                          "built_in_only"
-                        ],
-                        "additionalProperties": false
-                      }
-                    },
-                    "profiles": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "id": {
-                            "type": "string"
-                          },
-                          "label": {
-                            "type": "string"
-                          },
-                          "description": {
-                            "type": "string"
-                          },
-                          "built_in": {
-                            "type": "boolean"
-                          },
-                          "editable": {
-                            "type": "boolean"
-                          },
-                          "agents": {
-                            "type": "object",
-                            "propertyNames": {
-                              "type": "string"
-                            },
-                            "additionalProperties": {
-                              "type": "string"
-                            }
-                          },
-                          "capability_profile_id": {
-                            "type": "string"
-                          },
-                          "projection_hash": {
-                            "type": "string"
-                          },
-                          "projected_agents": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            }
-                          },
-                          "capability_projection": {
-                            "type": "object",
-                            "properties": {
-                              "scheduler": {
-                                "type": "object",
-                                "properties": {
-                                  "built_in_tool_ids": {
-                                    "type": "array",
-                                    "items": {
-                                      "type": "string"
-                                    }
-                                  },
-                                  "default_skill_refs": {
-                                    "type": "array",
-                                    "items": {
-                                      "type": "string"
-                                    }
-                                  },
-                                  "package_skill_refs": {
-                                    "type": "array",
-                                    "items": {
-                                      "type": "string"
-                                    }
-                                  },
-                                  "default_tool_refs": {
-                                    "type": "array",
-                                    "items": {
-                                      "type": "string"
-                                    }
-                                  },
-                                  "package_tool_refs": {
-                                    "type": "array",
-                                    "items": {
-                                      "type": "string"
-                                    }
-                                  },
-                                  "default_mcp_server_refs": {
-                                    "type": "array",
-                                    "items": {
-                                      "type": "string"
-                                    }
-                                  },
-                                  "package_mcp_server_refs": {
-                                    "type": "array",
-                                    "items": {
-                                      "type": "string"
-                                    }
-                                  },
-                                  "default_mcp_tool_refs": {
-                                    "type": "array",
-                                    "items": {
-                                      "type": "string"
-                                    }
-                                  },
-                                  "package_mcp_tool_refs": {
-                                    "type": "array",
-                                    "items": {
-                                      "type": "string"
-                                    }
-                                  },
-                                  "default_mcp_prompt_refs": {
-                                    "type": "array",
-                                    "items": {
-                                      "type": "string"
-                                    }
-                                  },
-                                  "package_mcp_prompt_refs": {
-                                    "type": "array",
-                                    "items": {
-                                      "type": "string"
-                                    }
-                                  },
-                                  "default_mcp_resource_refs": {
-                                    "type": "array",
-                                    "items": {
-                                      "type": "string"
-                                    }
-                                  },
-                                  "package_mcp_resource_refs": {
-                                    "type": "array",
-                                    "items": {
-                                      "type": "string"
-                                    }
-                                  }
-                                },
-                                "required": [
-                                  "built_in_tool_ids",
-                                  "default_skill_refs",
-                                  "package_skill_refs",
-                                  "default_tool_refs",
-                                  "package_tool_refs",
-                                  "default_mcp_server_refs",
-                                  "package_mcp_server_refs",
-                                  "default_mcp_tool_refs",
-                                  "package_mcp_tool_refs",
-                                  "default_mcp_prompt_refs",
-                                  "package_mcp_prompt_refs",
-                                  "default_mcp_resource_refs",
-                                  "package_mcp_resource_refs"
-                                ],
-                                "additionalProperties": false
-                              },
-                              "agents": {
-                                "type": "object",
-                                "propertyNames": {
-                                  "type": "string"
-                                },
-                                "additionalProperties": {
-                                  "type": "object",
-                                  "properties": {
-                                    "built_in_tool_ids": {
-                                      "type": "array",
-                                      "items": {
-                                        "type": "string"
-                                      }
-                                    },
-                                    "default_skill_refs": {
-                                      "type": "array",
-                                      "items": {
-                                        "type": "string"
-                                      }
-                                    },
-                                    "package_skill_refs": {
-                                      "type": "array",
-                                      "items": {
-                                        "type": "string"
-                                      }
-                                    },
-                                    "default_tool_refs": {
-                                      "type": "array",
-                                      "items": {
-                                        "type": "string"
-                                      }
-                                    },
-                                    "package_tool_refs": {
-                                      "type": "array",
-                                      "items": {
-                                        "type": "string"
-                                      }
-                                    },
-                                    "default_mcp_server_refs": {
-                                      "type": "array",
-                                      "items": {
-                                        "type": "string"
-                                      }
-                                    },
-                                    "package_mcp_server_refs": {
-                                      "type": "array",
-                                      "items": {
-                                        "type": "string"
-                                      }
-                                    },
-                                    "default_mcp_tool_refs": {
-                                      "type": "array",
-                                      "items": {
-                                        "type": "string"
-                                      }
-                                    },
-                                    "package_mcp_tool_refs": {
-                                      "type": "array",
-                                      "items": {
-                                        "type": "string"
-                                      }
-                                    },
-                                    "default_mcp_prompt_refs": {
-                                      "type": "array",
-                                      "items": {
-                                        "type": "string"
-                                      }
-                                    },
-                                    "package_mcp_prompt_refs": {
-                                      "type": "array",
-                                      "items": {
-                                        "type": "string"
-                                      }
-                                    },
-                                    "default_mcp_resource_refs": {
-                                      "type": "array",
-                                      "items": {
-                                        "type": "string"
-                                      }
-                                    },
-                                    "package_mcp_resource_refs": {
-                                      "type": "array",
-                                      "items": {
-                                        "type": "string"
-                                      }
-                                    }
-                                  },
-                                  "required": [
-                                    "built_in_tool_ids",
-                                    "default_skill_refs",
-                                    "package_skill_refs",
-                                    "default_tool_refs",
-                                    "package_tool_refs",
-                                    "default_mcp_server_refs",
-                                    "package_mcp_server_refs",
-                                    "default_mcp_tool_refs",
-                                    "package_mcp_tool_refs",
-                                    "default_mcp_prompt_refs",
-                                    "package_mcp_prompt_refs",
-                                    "default_mcp_resource_refs",
-                                    "package_mcp_resource_refs"
-                                  ],
-                                  "additionalProperties": false
-                                }
-                              }
-                            },
-                            "required": [
-                              "scheduler",
-                              "agents"
-                            ],
-                            "additionalProperties": false
-                          }
-                        },
-                        "required": [
-                          "id",
-                          "label",
-                          "built_in",
-                          "editable",
-                          "agents",
-                          "capability_profile_id",
-                          "projection_hash",
-                          "projected_agents",
-                          "capability_projection"
-                        ],
-                        "additionalProperties": false
-                      }
-                    }
-                  },
-                  "required": [
-                    "active",
-                    "project_active",
-                    "session_active",
-                    "default",
-                    "targets",
-                    "profiles"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "directory",
-            "in": "query",
-            "required": false,
-            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "sessionID",
-            "schema": {
-              "type": "string"
-            },
-            "description": "Optional root or child session id for session-effective prompt profile view"
-          }
-        ],
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.config.promptProfile({\n  ...\n})"
-          }
-        ]
-      }
-    },
     "/config/providers": {
       "get": {
         "operationId": "config.providers",
@@ -13137,6 +12763,632 @@
           {
             "lang": "js",
             "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.skill.policy({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/expert-squad/catalog": {
+      "get": {
+        "operationId": "expertSquad.catalog",
+        "summary": "List expert squads and active capability projection",
+        "description": "Returns the effective expert-squad catalog for the current project or session. The active value is still the single prompt_profile.active config field; this route exposes its expert-squad package view.",
+        "responses": {
+          "200": {
+            "description": "Expert squad catalog",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "active": {
+                      "type": "object",
+                      "properties": {
+                        "effective": {
+                          "type": "string"
+                        },
+                        "project": {
+                          "type": "string"
+                        },
+                        "session_override": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "effective",
+                        "project",
+                        "session_override"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "default": {
+                      "type": "string"
+                    },
+                    "scope": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "project",
+                            "session"
+                          ]
+                        },
+                        "directory": {
+                          "type": "string"
+                        },
+                        "sessionID": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "directory"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "targets": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "editable": {
+                            "type": "boolean"
+                          },
+                          "built_in_only": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "label",
+                          "editable",
+                          "built_in_only"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "squads": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "built_in": {
+                            "type": "boolean"
+                          },
+                          "editable": {
+                            "type": "boolean"
+                          },
+                          "agents": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "capability_profile_id": {
+                            "type": "string"
+                          },
+                          "projection_hash": {
+                            "type": "string"
+                          },
+                          "projected_agents": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "capability_projection": {
+                            "type": "object",
+                            "properties": {
+                              "scheduler": {
+                                "type": "object",
+                                "properties": {
+                                  "built_in_tool_ids": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "default_skill_refs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "package_skill_refs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "default_tool_refs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "package_tool_refs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "default_mcp_server_refs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "package_mcp_server_refs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "default_mcp_tool_refs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "package_mcp_tool_refs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "default_mcp_prompt_refs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "package_mcp_prompt_refs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "default_mcp_resource_refs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "package_mcp_resource_refs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "built_in_tool_ids",
+                                  "default_skill_refs",
+                                  "package_skill_refs",
+                                  "default_tool_refs",
+                                  "package_tool_refs",
+                                  "default_mcp_server_refs",
+                                  "package_mcp_server_refs",
+                                  "default_mcp_tool_refs",
+                                  "package_mcp_tool_refs",
+                                  "default_mcp_prompt_refs",
+                                  "package_mcp_prompt_refs",
+                                  "default_mcp_resource_refs",
+                                  "package_mcp_resource_refs"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "agents": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {
+                                  "type": "object",
+                                  "properties": {
+                                    "built_in_tool_ids": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "default_skill_refs": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "package_skill_refs": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "default_tool_refs": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "package_tool_refs": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "default_mcp_server_refs": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "package_mcp_server_refs": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "default_mcp_tool_refs": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "package_mcp_tool_refs": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "default_mcp_prompt_refs": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "package_mcp_prompt_refs": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "default_mcp_resource_refs": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "package_mcp_resource_refs": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "built_in_tool_ids",
+                                    "default_skill_refs",
+                                    "package_skill_refs",
+                                    "default_tool_refs",
+                                    "package_tool_refs",
+                                    "default_mcp_server_refs",
+                                    "package_mcp_server_refs",
+                                    "default_mcp_tool_refs",
+                                    "package_mcp_tool_refs",
+                                    "default_mcp_prompt_refs",
+                                    "package_mcp_prompt_refs",
+                                    "default_mcp_resource_refs",
+                                    "package_mcp_resource_refs"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              }
+                            },
+                            "required": [
+                              "scheduler",
+                              "agents"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "version": {
+                            "type": "string"
+                          },
+                          "source": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "built_in"
+                                  }
+                                },
+                                "required": [
+                                  "kind"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "project_package"
+                                  },
+                                  "root": {
+                                    "type": "string"
+                                  },
+                                  "manifest_path": {
+                                    "type": "string"
+                                  },
+                                  "readme_path": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "root",
+                                  "manifest_path",
+                                  "readme_path"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          },
+                          "readme": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string",
+                                "const": "README.md"
+                              },
+                              "append_target": {
+                                "type": "string",
+                                "const": "orchestrator"
+                              },
+                              "content": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "append_target",
+                              "content"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "selector": {
+                            "type": "object",
+                            "properties": {
+                              "ref": {
+                                "type": "string"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "description": {
+                                "type": "string"
+                              },
+                              "summary": {
+                                "type": "string"
+                              },
+                              "selection_guidance": {
+                                "type": "string"
+                              },
+                              "instructions_path": {
+                                "type": "string",
+                                "const": "selector.md"
+                              },
+                              "instructions": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "ref",
+                              "id",
+                              "label",
+                              "summary",
+                              "selection_guidance",
+                              "instructions_path",
+                              "instructions"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "dynamic_attributes": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "label",
+                          "built_in",
+                          "editable",
+                          "agents",
+                          "capability_profile_id",
+                          "projection_hash",
+                          "projected_agents",
+                          "capability_projection",
+                          "source",
+                          "readme",
+                          "dynamic_attributes"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "active_skill_projection": {
+                      "type": "object",
+                      "properties": {
+                        "active_squad_id": {
+                          "type": "string"
+                        },
+                        "capability_profile_id": {
+                          "type": "string"
+                        },
+                        "built_in": {
+                          "type": "boolean"
+                        },
+                        "projection_hash": {
+                          "type": "string"
+                        },
+                        "projected_tool_ids": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "projected_agent_ids": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "selector_skill_names": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "production_skill_names": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "projected_skill_names": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "skills": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "description": {
+                                "type": "string"
+                              },
+                              "builtin": {
+                                "type": "boolean"
+                              },
+                              "location": {
+                                "type": "string"
+                              },
+                              "required_tools": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "mounted_agents": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "description",
+                              "builtin",
+                              "location",
+                              "required_tools",
+                              "mounted_agents"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "active_squad_id",
+                        "capability_profile_id",
+                        "built_in",
+                        "projection_hash",
+                        "projected_tool_ids",
+                        "projected_agent_ids",
+                        "selector_skill_names",
+                        "production_skill_names",
+                        "projected_skill_names",
+                        "skills"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "active",
+                    "default",
+                    "scope",
+                    "targets",
+                    "squads",
+                    "active_skill_projection"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sessionID",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional root or child session id for session-effective expert-squad catalog view"
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.expertSquad.catalog({\n  ...\n})"
           }
         ]
       }

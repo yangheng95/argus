@@ -8,6 +8,7 @@ import {
 import { Config } from "../../src/config/config"
 import { PromptProfileResolver } from "../../src/expert-squad/prompt-profile-resolver"
 import { REPOSITORY_ROOT } from "../fixture/expert-squad"
+import { tmpdir } from "../fixture/fixture"
 
 const requiredProjectTargetMatrix = {
   "frontend-replica": [
@@ -151,13 +152,20 @@ describe("prompt profiles", () => {
   })
 
   test("built-in prompt-profile source contains only the default scheduler profile", async () => {
+    await using project = await tmpdir({ git: true })
     const config = Config.Info.parse({})
     expect(Object.keys(PromptProfile.builtIns)).toEqual(["general"])
     expect(PromptProfile.builtIns.general.agents).toEqual({})
     expect(PromptProfile.composeAgentPrompt({ agentID: "build", base: "BASE", config })).toBe("BASE")
-    expect((await PromptProfileResolver.list({ config })).profiles.map((profile) => profile.id)).toEqual(["general"])
-    const builtInCatalog = PromptProfile.list(config)
-    const generalProfile = builtInCatalog.profiles.find((profile) => profile.id === "general")
+    const builtInCatalog = await PromptProfileResolver.catalog({
+      config,
+      projectActive: "general",
+      sessionOverride: null,
+      scope: { kind: "project", directory: project.path },
+      defaultSkills: [],
+    })
+    expect(builtInCatalog.squads.map((squad) => squad.id)).toEqual(["general"])
+    const generalProfile = builtInCatalog.squads.find((squad) => squad.id === "general")
     expect(generalProfile?.capability_projection.scheduler.built_in_tool_ids).toContain("select_expert_squad")
     expect(generalProfile?.capability_projection.scheduler.built_in_tool_ids).toContain("complete_task")
   })
@@ -405,9 +413,14 @@ describe("prompt profiles", () => {
 
   test("profile catalog exposes built-in default and project package-backed definitions", async () => {
     const config = repositoryConfig("frontend-replica")
-    const catalog = await PromptProfileResolver.list({ projectDirectory: REPOSITORY_ROOT, config })
-    expect(catalog.project_active).toBe("frontend-replica")
-    expect(catalog.session_active).toBe(null)
+    const catalog = await PromptProfileResolver.catalog({
+      config,
+      projectActive: "frontend-replica",
+      sessionOverride: null,
+      scope: { kind: "project", directory: REPOSITORY_ROOT },
+    })
+    expect(catalog.active.project).toBe("frontend-replica")
+    expect(catalog.active.session_override).toBe(null)
     expect(catalog.targets.find((target) => target.id === "build")).toMatchObject({
       id: "build",
       editable: true,
@@ -418,19 +431,25 @@ describe("prompt profiles", () => {
       editable: false,
       built_in_only: true,
     })
-    expect(catalog.profiles.find((profile) => profile.id === "general")).toMatchObject({
+    expect(catalog.squads.find((squad) => squad.id === "general")).toMatchObject({
       id: "general",
       built_in: true,
       editable: false,
     })
-    expect(catalog.profiles.find((profile) => profile.id === "frontend-replica")).toMatchObject({
+    expect(catalog.squads.find((squad) => squad.id === "frontend-replica")).toMatchObject({
       id: "frontend-replica",
       built_in: false,
       editable: false,
     })
-    expect(catalog.profiles.find((profile) => profile.id === "frontend-replica")?.capability_projection.agents.build.built_in_tool_ids).toContain("read")
-    expect(catalog.profiles.find((profile) => profile.id === "frontend-replica")?.capability_projection.agents.build.built_in_tool_ids).toContain("edit")
-    expect(catalog.profiles.map((profile) => profile.id)).toEqual([
+    expect(
+      catalog.squads.find((squad) => squad.id === "frontend-replica")?.capability_projection.agents.build
+        .built_in_tool_ids,
+    ).toContain("read")
+    expect(
+      catalog.squads.find((squad) => squad.id === "frontend-replica")?.capability_projection.agents.build
+        .built_in_tool_ids,
+    ).toContain("edit")
+    expect(catalog.squads.map((squad) => squad.id)).toEqual([
       "general",
       "algorithm",
       "backend",
@@ -438,7 +457,7 @@ describe("prompt profiles", () => {
       "frontend-innovate",
       "frontend-replica",
     ])
-    expect(catalog.profiles.some((profile) => profile.id === "custom-squad")).toBe(false)
+    expect(catalog.squads.some((squad) => squad.id === "custom-squad")).toBe(false)
   })
 
   test("keeps profile existence out of Config.Info and rejects removed custom profile definitions", () => {

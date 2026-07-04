@@ -6,17 +6,11 @@ import test from "node:test"
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
-const PROMPT_PROFILE_CATALOG = {
-  active: "general",
-  project_active: "general",
-  session_active: null,
-  default: "general",
-  targets: [],
-  profiles: [],
-}
+const EXPERT_SQUAD_CATALOG = generalExpertSquadCatalog()
 
 const EMPTY_SKILL_MOUNT_MATRIX = {
   scope: "project",
@@ -83,7 +77,7 @@ function commonOverlayBootstrapResponse(path: string): Response | null {
   if (path === "/project/current/worktrees") return send([])
   if (path === "/coding/cli/profiles" || path === "/terminal/profiles") return send({ profiles: [] })
   if (path === "/mission") return send([])
-  if (path === "/config/prompt-profile") return send(PROMPT_PROFILE_CATALOG)
+  if (path === "/expert-squad/catalog") return send(EXPERT_SQUAD_CATALOG)
   if (path === "/skill/mounts") return send(EMPTY_SKILL_MOUNT_MATRIX)
   return null
 }

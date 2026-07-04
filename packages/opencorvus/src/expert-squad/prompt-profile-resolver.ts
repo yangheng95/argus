@@ -10,9 +10,7 @@ import type { ToolContext as PluginToolContext, ToolDefinition } from "@opencorv
 import {
   DEFAULT_PROMPT_PROFILE_ID,
   PromptProfile,
-  PromptProfileCatalogSchema,
   PromptProfileIDSchema,
-  type PromptProfileCatalog,
   type PromptProfileCatalogProfile,
   type PromptProfileConfig,
   type PromptProfileDefinition,
@@ -28,6 +26,7 @@ import { Truncate } from "@/tool/truncation"
 import { MCP } from "@/mcp"
 import { materializeMcpToolResult } from "@/mcp/materialize"
 import { Filesystem } from "@/util/filesystem"
+import { assertNoInlineBase64Payload } from "@/util/inline-base64"
 import { EngineConfig } from "@/engine/config"
 import {
   WorkflowRegistry,
@@ -37,7 +36,13 @@ import {
 } from "@/engine/workflow"
 import { loadedBuiltInPackages } from "./builtin"
 import {
+  ExpertSquadCatalogSchema,
+  type ExpertSquadCatalog,
+  type ExpertSquadCatalogSummary,
+} from "./catalog"
+import {
   catalogProfileFromPackage as catalogProfileFromCapabilityPackage,
+  catalogSummaryFromPackage as catalogSummaryFromCapabilityPackage,
   defaultMcpPromptProviderName as defaultMcpPromptProviderNameFromRef,
   defaultMcpResourceProviderName as defaultMcpResourceProviderNameFromRef,
   defaultMcpToolProviderName as defaultMcpToolProviderNameFromRef,
@@ -63,10 +68,18 @@ export namespace PromptProfileResolver {
     projectDirectory?: string
   }
 
-  export interface CatalogInput extends ProjectScope {
+  export interface ExpertSquadCatalogInput {
     config: ConfigLike
-    projectActive?: string
-    sessionActive?: string | null
+    projectActive: string
+    sessionOverride: string | null
+    scope: {
+      kind: "project" | "session"
+      directory: string
+      sessionID?: string
+    }
+    defaultSkills?: Skill.Info[]
+    agentIDs?: string[]
+    workflow?: MiniWorkflow
   }
 
   export interface PromptInput extends ProjectScope {
@@ -318,6 +331,17 @@ export namespace PromptProfileResolver {
     builtIn: boolean
   }): PromptProfileCatalogProfile {
     return catalogProfileFromCapabilityPackage({
+      ...input,
+      builtInToolIDs: expandedSchedulerBuiltInToolIDs(input.pkg.manifest.capability_projection.scheduler),
+    })
+  }
+
+  function catalogSummaryFromPackage(input: {
+    id: string
+    pkg: PackageWithCapability
+    builtIn: boolean
+  }): ExpertSquadCatalogSummary {
+    return catalogSummaryFromCapabilityPackage({
       ...input,
       builtInToolIDs: expandedSchedulerBuiltInToolIDs(input.pkg.manifest.capability_projection.scheduler),
     })
@@ -907,6 +931,7 @@ export namespace PromptProfileResolver {
     providerName: string
     sourcePath?: string
     get(args?: Record<string, string>): Promise<MCP.GetPromptResult>
+    getProjectionPayload(args?: Record<string, string>): Promise<MCP.ProjectionPromptPayload>
   }
 
   export interface ProjectedMcpResource extends MCP.ResourceInfo {
@@ -914,6 +939,7 @@ export namespace PromptProfileResolver {
     providerName: string
     sourcePath?: string
     read(): Promise<MCP.ReadResourceResult>
+    readProjectionPayload(): Promise<MCP.ProjectionResourcePayload>
   }
 
   async function defaultMcpPromptFromConfig(input: {
@@ -937,6 +963,14 @@ export namespace PromptProfileResolver {
       providerName: input.providerName,
       get: (args?: Record<string, string>) =>
         MCP.getScopedPrompt({
+          key: input.providerName,
+          mcp,
+          promptName,
+          cwd: input.cwd,
+          args,
+        }),
+      getProjectionPayload: (args?: Record<string, string>) =>
+        MCP.getScopedPromptProjectionPayload({
           key: input.providerName,
           mcp,
           promptName,
@@ -967,6 +1001,13 @@ export namespace PromptProfileResolver {
       providerName: input.providerName,
       read: () =>
         MCP.readScopedResource({
+          key: input.providerName,
+          mcp,
+          resourceName,
+          cwd: input.cwd,
+        }),
+      readProjectionPayload: () =>
+        MCP.readScopedResourceProjectionPayload({
           key: input.providerName,
           mcp,
           resourceName,
@@ -1011,6 +1052,14 @@ export namespace PromptProfileResolver {
           cwd,
           args,
         }),
+      getProjectionPayload: (args?: Record<string, string>) =>
+        MCP.getScopedPromptProjectionPayload({
+          key: input.providerName,
+          mcp,
+          promptName,
+          cwd,
+          args,
+        }),
     }
   }
 
@@ -1044,6 +1093,13 @@ export namespace PromptProfileResolver {
       sourcePath,
       read: () =>
         MCP.readScopedResource({
+          key: input.providerName,
+          mcp,
+          resourceName,
+          cwd,
+        }),
+      readProjectionPayload: () =>
+        MCP.readScopedResourceProjectionPayload({
           key: input.providerName,
           mcp,
           resourceName,
@@ -1554,10 +1610,226 @@ export namespace PromptProfileResolver {
     return mergeMcpProjectionMap(defaults, packageItems, context, "resource")
   }
 
-  function stringifyMcpProjectionPayload(payload: unknown, context: string): string {
+  type SanitizedMcpPromptProjection = {
+    description?: string
+    messages: Array<{
+      role: string
+      content:
+        | { type: "text"; text: string; annotations?: SanitizedMcpAnnotations }
+        | { type: "resource_text"; uri?: string; mimeType?: string; text: string }
+        | {
+            type: "resource_link"
+            uri: string
+            name?: string
+            title?: string
+            description?: string
+            mimeType?: string
+            annotations?: SanitizedMcpAnnotations
+            icons?: SanitizedMcpIcon[]
+          }
+    }>
+  }
+
+  type SanitizedMcpResourceProjection = {
+    contents: Array<{ uri: string; mimeType?: string; text: string }>
+  }
+
+  type SanitizedMcpAnnotations = {
+    audience?: Array<"user" | "assistant">
+    priority?: number
+    lastModified?: string
+  }
+
+  type SanitizedMcpIcon = {
+    src: string
+    mimeType?: string
+    sizes?: string[]
+    theme?: "light" | "dark"
+  }
+
+  function stringifySanitizedMcpProjectionPayload(payload: unknown, context: string): string {
     const text = JSON.stringify(payload, null, 2)
     if (typeof text !== "string") throw new Error(`${context} returned no JSON-serializable payload.`)
     return text
+  }
+
+  function requireMcpProjectionRecord(value: unknown, context: string): Record<string, unknown> {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error(`${context} returned an invalid MCP projection payload.`)
+    }
+    const record = value as Record<string, unknown>
+    if (Object.hasOwn(record, "_meta")) {
+      throw new Error(`${context} returned MCP _meta; projected context accepts text and link metadata only.`)
+    }
+    return record
+  }
+
+  function requireMcpProjectionString(value: unknown, context: string): string {
+    if (typeof value !== "string") throw new Error(`${context} must be a string.`)
+    assertNoInlineBase64Payload(value, context)
+    return value
+  }
+
+  function optionalMcpProjectionString(value: unknown, context: string): string | undefined {
+    if (value === undefined) return undefined
+    if (typeof value !== "string") throw new Error(`${context} must be a string.`)
+    assertNoInlineBase64Payload(value, context)
+    return value
+  }
+
+  function requireMcpProjectionArray(value: unknown, context: string): unknown[] {
+    if (!Array.isArray(value)) throw new Error(`${context} must be an array.`)
+    return value
+  }
+
+  function assertMcpProjectionFields(
+    record: Record<string, unknown>,
+    allowedFields: readonly string[],
+    context: string,
+  ): void {
+    const allowed = new Set(allowedFields)
+    for (const field of Object.keys(record)) {
+      if (!allowed.has(field)) throw new Error(`${context} contains unsupported field ${JSON.stringify(field)}.`)
+    }
+  }
+
+  function optionalMcpProjectionAnnotations(value: unknown, context: string): SanitizedMcpAnnotations | undefined {
+    if (value === undefined) return undefined
+    const record = requireMcpProjectionRecord(value, context)
+    assertMcpProjectionFields(record, ["audience", "priority", "lastModified"], context)
+    const annotations: SanitizedMcpAnnotations = {}
+    if (record.audience !== undefined) {
+      const audience = requireMcpProjectionArray(record.audience, `${context}.audience`).map((item, index) => {
+        const role = requireMcpProjectionString(item, `${context}.audience[${index}]`)
+        if (role !== "user" && role !== "assistant") {
+          throw new Error(`${context}.audience[${index}] must be user or assistant.`)
+        }
+        return role
+      })
+      annotations.audience = audience
+    }
+    if (record.priority !== undefined) {
+      if (typeof record.priority !== "number" || !Number.isFinite(record.priority) || record.priority < 0 || record.priority > 1) {
+        throw new Error(`${context}.priority must be a finite number from 0 to 1.`)
+      }
+      annotations.priority = record.priority
+    }
+    const lastModified = optionalMcpProjectionString(record.lastModified, `${context}.lastModified`)
+    if (lastModified !== undefined) annotations.lastModified = lastModified
+    return annotations
+  }
+
+  function optionalMcpProjectionIcons(value: unknown, context: string): SanitizedMcpIcon[] | undefined {
+    if (value === undefined) return undefined
+    return requireMcpProjectionArray(value, context).map((item, index) => {
+      const iconContext = `${context}[${index}]`
+      const record = requireMcpProjectionRecord(item, iconContext)
+      assertMcpProjectionFields(record, ["src", "mimeType", "sizes", "theme"], iconContext)
+      const icon: SanitizedMcpIcon = {
+        src: requireMcpProjectionString(record.src, `${iconContext}.src`),
+      }
+      const mimeType = optionalMcpProjectionString(record.mimeType, `${iconContext}.mimeType`)
+      if (mimeType !== undefined) icon.mimeType = mimeType
+      if (record.sizes !== undefined) {
+        icon.sizes = requireMcpProjectionArray(record.sizes, `${iconContext}.sizes`).map((size, sizeIndex) =>
+          requireMcpProjectionString(size, `${iconContext}.sizes[${sizeIndex}]`),
+        )
+      }
+      const theme = optionalMcpProjectionString(record.theme, `${iconContext}.theme`)
+      if (theme !== undefined) {
+        if (theme !== "light" && theme !== "dark") throw new Error(`${iconContext}.theme must be light or dark.`)
+        icon.theme = theme
+      }
+      return icon
+    })
+  }
+
+  function sanitizeMcpPromptContent(content: unknown, context: string): SanitizedMcpPromptProjection["messages"][number]["content"] {
+    const record = requireMcpProjectionRecord(content, context)
+    const type = requireMcpProjectionString(record.type, `${context}.type`)
+    if (type === "text") {
+      assertMcpProjectionFields(record, ["type", "text", "annotations"], context)
+      const annotations = optionalMcpProjectionAnnotations(record.annotations, `${context}.annotations`)
+      return {
+        type,
+        text: requireMcpProjectionString(record.text, `${context}.text`),
+        ...(annotations !== undefined ? { annotations } : {}),
+      }
+    }
+    if (type === "resource") {
+      assertMcpProjectionFields(record, ["type", "resource"], context)
+      const resource = requireMcpProjectionRecord(record.resource, `${context}.resource`)
+      if (Object.hasOwn(resource, "blob")) {
+        throw new Error(`${context}.resource contains binary blob content; projected context accepts text only.`)
+      }
+      assertMcpProjectionFields(resource, ["uri", "mimeType", "text"], `${context}.resource`)
+      return {
+        type: "resource_text",
+        uri: optionalMcpProjectionString(resource.uri, `${context}.resource.uri`),
+        mimeType: optionalMcpProjectionString(resource.mimeType, `${context}.resource.mimeType`),
+        text: requireMcpProjectionString(resource.text, `${context}.resource.text`),
+      }
+    }
+    if (type === "resource_link") {
+      assertMcpProjectionFields(
+        record,
+        ["type", "uri", "name", "title", "description", "mimeType", "annotations", "icons"],
+        context,
+      )
+      const annotations = optionalMcpProjectionAnnotations(record.annotations, `${context}.annotations`)
+      const icons = optionalMcpProjectionIcons(record.icons, `${context}.icons`)
+      return {
+        type,
+        uri: requireMcpProjectionString(record.uri, `${context}.uri`),
+        name: optionalMcpProjectionString(record.name, `${context}.name`),
+        title: optionalMcpProjectionString(record.title, `${context}.title`),
+        description: optionalMcpProjectionString(record.description, `${context}.description`),
+        mimeType: optionalMcpProjectionString(record.mimeType, `${context}.mimeType`),
+        ...(annotations !== undefined ? { annotations } : {}),
+        ...(icons !== undefined ? { icons } : {}),
+      }
+    }
+    if (type === "image" || type === "audio") {
+      throw new Error(`${context} contains ${type} content; projected context accepts text and link metadata only.`)
+    }
+    throw new Error(`${context} contains unsupported MCP content type ${JSON.stringify(type)}.`)
+  }
+
+  function sanitizeMcpPromptProjectionPayload(payload: unknown, context: string): SanitizedMcpPromptProjection {
+    const record = requireMcpProjectionRecord(payload, context)
+    assertMcpProjectionFields(record, ["description", "messages"], context)
+    return {
+      description: optionalMcpProjectionString(record.description, `${context}.description`),
+      messages: requireMcpProjectionArray(record.messages, `${context}.messages`).map((message, index) => {
+        const messageContext = `${context}.messages[${index}]`
+        const messageRecord = requireMcpProjectionRecord(message, messageContext)
+        assertMcpProjectionFields(messageRecord, ["role", "content"], messageContext)
+        return {
+          role: requireMcpProjectionString(messageRecord.role, `${messageContext}.role`),
+          content: sanitizeMcpPromptContent(messageRecord.content, `${messageContext}.content`),
+        }
+      }),
+    }
+  }
+
+  function sanitizeMcpResourceProjectionPayload(payload: unknown, context: string): SanitizedMcpResourceProjection {
+    const record = requireMcpProjectionRecord(payload, context)
+    assertMcpProjectionFields(record, ["contents"], context)
+    return {
+      contents: requireMcpProjectionArray(record.contents, `${context}.contents`).map((content, index) => {
+        const contentContext = `${context}.contents[${index}]`
+        const contentRecord = requireMcpProjectionRecord(content, contentContext)
+        if (Object.hasOwn(contentRecord, "blob")) {
+          throw new Error(`${contentContext} contains binary blob content; projected context accepts text only.`)
+        }
+        assertMcpProjectionFields(contentRecord, ["uri", "mimeType", "text"], contentContext)
+        return {
+          uri: requireMcpProjectionString(contentRecord.uri, `${contentContext}.uri`),
+          mimeType: optionalMcpProjectionString(contentRecord.mimeType, `${contentContext}.mimeType`),
+          text: requireMcpProjectionString(contentRecord.text, `${contentContext}.text`),
+        }
+      }),
+    }
   }
 
   function renderMcpProjectionBlock(input: {
@@ -1567,6 +1839,11 @@ export namespace PromptProfileResolver {
     sourcePath?: string
     payload: unknown
   }): string {
+    const context = `MCP ${input.kind} ${input.ref}`
+    const payload =
+      input.kind === "prompt"
+        ? sanitizeMcpPromptProjectionPayload(input.payload, context)
+        : sanitizeMcpResourceProjectionPayload(input.payload, context)
     return [
       `### MCP ${input.kind}: ${input.providerName}`,
       "",
@@ -1574,7 +1851,7 @@ export namespace PromptProfileResolver {
       ...(input.sourcePath ? [`source: ${input.sourcePath}`] : []),
       "",
       "```json",
-      stringifyMcpProjectionPayload(input.payload, `MCP ${input.kind} ${input.ref}`),
+      stringifySanitizedMcpProjectionPayload(payload, context),
       "```",
     ].join("\n")
   }
@@ -1593,7 +1870,7 @@ export namespace PromptProfileResolver {
           providerName,
           ref: prompt.ref,
           sourcePath: prompt.sourcePath,
-          payload: await prompt.get({}),
+          payload: await prompt.getProjectionPayload({}),
         }),
       ),
     )
@@ -1604,7 +1881,7 @@ export namespace PromptProfileResolver {
           providerName,
           ref: resource.ref,
           sourcePath: resource.sourcePath,
-          payload: await resource.read(),
+          payload: await resource.readProjectionPayload(),
         }),
       ),
     )
@@ -2139,39 +2416,72 @@ export namespace PromptProfileResolver {
     throw new Error(`Unknown prompt profile ${JSON.stringify(input.profileID)}`)
   }
 
-  export async function list(input: CatalogInput): Promise<PromptProfileCatalog> {
+  export async function catalog(input: ExpertSquadCatalogInput): Promise<ExpertSquadCatalog> {
     const active = PromptProfile.activeID(input.config)
-    const projectPackagesByID = input.projectDirectory
-      ? await projectCatalogPackages(input.projectDirectory)
-      : {}
-    const profiles: PromptProfileCatalogProfile[] = [
+    const projectDirectory = input.scope.directory
+    const projectPackagesByID = await projectCatalogPackages(projectDirectory)
+    const squads: ExpertSquadCatalogSummary[] = [
       ...Object.entries(builtInPackages).map(([id, pkg]) =>
-        catalogProfileFromCapabilityPackage({
+        catalogSummaryFromPackage({
           id,
           pkg,
           builtIn: true,
-          builtInToolIDs: expandedSchedulerBuiltInToolIDs(pkg.manifest.capability_projection.scheduler),
         }),
       ),
       ...Object.entries(projectPackagesByID).map(([id, pkg]) =>
-        catalogProfileFromCapabilityPackage({
+        catalogSummaryFromPackage({
           id,
           pkg,
           builtIn: false,
-          builtInToolIDs: expandedSchedulerBuiltInToolIDs(pkg.manifest.capability_projection.scheduler),
         }),
       ),
     ]
-    if (!profiles.some((profile) => profile.id === active)) {
+    if (!squads.some((squad) => squad.id === active)) {
       throw new Error(`Unknown prompt profile ${JSON.stringify(active)}`)
     }
-    return PromptProfileCatalogSchema.parse({
-      active,
-      project_active: input.projectActive ?? active,
-      session_active: input.sessionActive ?? null,
+    const skillProjectionInput: SkillProjectionInput = {
+      projectDirectory,
+      config: input.config,
+      defaultSkills: input.defaultSkills,
+      agentIDs: input.agentIDs,
+      workflow: input.workflow,
+    }
+    const skillProjection =
+      input.defaultSkills === undefined
+        ? await Instance.provide({
+            directory: projectDirectory,
+            fn: () => resolveSkillProjection(skillProjectionInput),
+          })
+        : await resolveSkillProjection(skillProjectionInput)
+    return ExpertSquadCatalogSchema.parse({
+      active: {
+        effective: active,
+        project: input.projectActive,
+        session_override: input.sessionOverride,
+      },
       default: DEFAULT_PROMPT_PROFILE_ID,
+      scope: input.scope,
       targets: PromptProfile.targets,
-      profiles,
+      squads,
+      active_skill_projection: {
+        active_squad_id: skillProjection.expertSquadID,
+        capability_profile_id: skillProjection.capabilityProfileID,
+        built_in: skillProjection.builtIn,
+        projection_hash: skillProjection.projectionHash,
+        projected_tool_ids: skillProjection.projectedToolIDs,
+        projected_agent_ids: skillProjection.projectedAgentIDs,
+        selector_skill_names: skillProjection.selectorSkillNames,
+        production_skill_names: skillProjection.productionSkillNames,
+        projected_skill_names: skillProjection.projectedSkillNames,
+        skills: skillProjection.skills.map((skill) => ({
+          name: skill.name,
+          description: skill.description,
+          builtin: skill.builtin ?? false,
+          location: skill.location,
+          required_tools: skill.required_tools,
+          mounted_agents: skill.mounted_agents,
+        })),
+      },
     })
   }
 }

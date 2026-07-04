@@ -36,6 +36,41 @@ const pipelineWorkflow = WorkflowRegistry.resolveSync("pipeline")!
 const directWorkflow = WorkflowRegistry.resolveSync("direct")!
 
 const retiredStaticProfileIDs = ["frontend-replica", "frontend-automation-debug", "frontend-innovate", "backend", "algorithm"] as const
+const packageMcpServerPath = path.join(import.meta.dir, "../fixture/package-mcp-server.ts")
+
+function packageMcpDefinition(capabilities: { prompts?: string[]; resources?: string[] }) {
+  return {
+    type: "local" as const,
+    command: [process.execPath, packageMcpServerPath],
+    capabilities,
+  }
+}
+
+async function composeSchedulerPromptWithPackageMcp(input: {
+  projectPath: string
+  promptName?: string
+  resourceName?: string
+}) {
+  const packageMcpServerRef = `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/package-browser`
+  const promptRef = input.promptName ? `${packageMcpServerRef}/prompt/${input.promptName}` : undefined
+  const resourceRef = input.resourceName ? `${packageMcpServerRef}/resource/${input.resourceName}` : undefined
+  await writeProjectExpertSquadPackage(input.projectPath, PROJECT_EXPERT_SQUAD_ID, {
+    schedulerPackageMcpServerRefs: [packageMcpServerRef],
+    schedulerPackageMcpPromptRefs: promptRef ? [promptRef] : [],
+    schedulerPackageMcpResourceRefs: resourceRef ? [resourceRef] : [],
+    packageMcpDefinition: packageMcpDefinition({
+      ...(input.promptName ? { prompts: [input.promptName] } : {}),
+      ...(input.resourceName ? { resources: [input.resourceName] } : {}),
+    }),
+  })
+
+  return PromptProfileResolver.composeAgentPrompt({
+    projectDirectory: input.projectPath,
+    agentID: "orchestrator",
+    base: "BASE",
+    config: Config.Info.parse({ prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } }),
+  })
+}
 
 describe("PromptProfileResolver", () => {
   test("loads project package profiles into the catalog and composes package overlays", async () => {
@@ -78,15 +113,16 @@ describe("PromptProfileResolver", () => {
       }),
     ).resolves.toBeUndefined()
 
-    const catalog = await PromptProfileResolver.list({
-      projectDirectory: project.path,
+    const catalog = await PromptProfileResolver.catalog({
       config,
       projectActive: PROJECT_EXPERT_SQUAD_ID,
-      sessionActive: null,
+      sessionOverride: null,
+      scope: { kind: "project", directory: project.path },
+      defaultSkills: [],
     })
-    const profile = catalog.profiles.find((entry) => entry.id === PROJECT_EXPERT_SQUAD_ID)
+    const profile = catalog.squads.find((entry) => entry.id === PROJECT_EXPERT_SQUAD_ID)
 
-    expect(catalog.active).toBe(PROJECT_EXPERT_SQUAD_ID)
+    expect(catalog.active.effective).toBe(PROJECT_EXPERT_SQUAD_ID)
     expect(profile).toMatchObject({
       id: PROJECT_EXPERT_SQUAD_ID,
       label: "Project Replica",
@@ -118,11 +154,16 @@ describe("PromptProfileResolver", () => {
       "capability_profile_id",
       "capability_projection",
       "description",
+      "dynamic_attributes",
       "editable",
       "id",
       "label",
       "projected_agents",
       "projection_hash",
+      "readme",
+      "selector",
+      "source",
+      "version",
     ])
 
     const buildPrompt = await PromptProfileResolver.composeAgentPrompt({
@@ -199,9 +240,14 @@ describe("PromptProfileResolver", () => {
     await using project = await tmpdir({ git: true })
     const config = Config.Info.parse({ prompt_profile: { active: "missing-profile" } })
 
-    await expect(PromptProfileResolver.list({ projectDirectory: project.path, config })).rejects.toThrow(
-      /Unknown prompt profile "missing-profile"/,
-    )
+    await expect(
+      PromptProfileResolver.catalog({
+        config,
+        projectActive: "missing-profile",
+        sessionOverride: null,
+        scope: { kind: "project", directory: project.path },
+      }),
+    ).rejects.toThrow(/Unknown prompt profile "missing-profile"/)
     await expect(
       PromptProfileResolver.assertKnownProfileID({ projectDirectory: project.path, profileID: "missing-profile", config }),
     ).rejects.toThrow(/Unknown prompt profile "missing-profile"/)
@@ -212,9 +258,14 @@ describe("PromptProfileResolver", () => {
     await writeProjectExpertSquadPackage(project.path, "general")
     const config = Config.Info.parse({ prompt_profile: { active: "general" } })
 
-    await expect(PromptProfileResolver.list({ projectDirectory: project.path, config })).rejects.toThrow(
-      /collides with a built-in expert squad id/,
-    )
+    await expect(
+      PromptProfileResolver.catalog({
+        config,
+        projectActive: "general",
+        sessionOverride: null,
+        scope: { kind: "project", directory: project.path },
+      }),
+    ).rejects.toThrow(/collides with a built-in expert squad id/)
   })
 
   test("resolves general scheduler capability to the explicit role-base tool set", async () => {
@@ -602,6 +653,8 @@ describe("PromptProfileResolver", () => {
     expect(normalizedComposedPrompt).toContain("package-mcp-prompt::")
     expect(normalizedComposedPrompt).toContain("package-mcp-resource:")
     expect(normalizedComposedPrompt).toContain("agents/orchestrator/mcp")
+    expect(normalizedComposedPrompt).not.toContain("\"blob\"")
+    expect(normalizedComposedPrompt).not.toContain("\"_meta\"")
 
     await Instance.provide({
       directory: project.path,
@@ -613,6 +666,253 @@ describe("PromptProfileResolver", () => {
       },
     })
   })
+
+  test("rejects projected package MCP prompt image content before prompt composition", async () => {
+    await using project = await tmpdir({ git: true })
+    const packageMcpServerRef = `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/package-browser`
+    const packageMcpPromptRef = `${packageMcpServerRef}/prompt/image`
+    await writeProjectExpertSquadPackage(project.path, PROJECT_EXPERT_SQUAD_ID, {
+      schedulerPackageMcpServerRefs: [packageMcpServerRef],
+      schedulerPackageMcpPromptRefs: [packageMcpPromptRef],
+      packageMcpDefinition: {
+        type: "local",
+        command: [process.execPath, path.join(import.meta.dir, "../fixture/package-mcp-server.ts")],
+        capabilities: {
+          prompts: ["image"],
+        },
+      },
+    })
+
+    await expect(
+      PromptProfileResolver.composeAgentPrompt({
+        projectDirectory: project.path,
+        agentID: "orchestrator",
+        base: "BASE",
+        config: Config.Info.parse({ prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } }),
+      }),
+    ).rejects.toThrow(/MCP prompt .*image.*contains image content/)
+  })
+
+  test("rejects projected package MCP prompt audio content before prompt composition", async () => {
+    await using project = await tmpdir({ git: true })
+
+    await expect(
+      composeSchedulerPromptWithPackageMcp({
+        projectPath: project.path,
+        promptName: "audio",
+      }),
+    ).rejects.toThrow(/MCP prompt .*audio.*contains audio content/)
+  })
+
+  test("projects safe package MCP resource_link metadata", async () => {
+    await using project = await tmpdir({ git: true })
+
+    const prompt = await composeSchedulerPromptWithPackageMcp({
+      projectPath: project.path,
+      promptName: "resource-link",
+    })
+
+    expect(prompt).toContain('"type": "resource_link"')
+    expect(prompt).toContain('"description": "Safe linked metadata"')
+    expect(prompt).toContain('"annotations"')
+    expect(prompt).toContain('"icons"')
+    expect(prompt).toContain('"src": "https://example.test/icon.png"')
+    expect(prompt).not.toContain('"_meta"')
+    expect(prompt).not.toContain("data:image/png;base64")
+  })
+
+  test("rejects projected package MCP _meta before prompt composition", async () => {
+    await using project = await tmpdir({ git: true })
+
+    await expect(
+      composeSchedulerPromptWithPackageMcp({
+        projectPath: project.path,
+        promptName: "meta-text",
+      }),
+    ).rejects.toThrow(/MCP _meta/)
+  })
+
+  for (const vector of [
+    {
+      name: "required prompt text type",
+      promptName: "text-number",
+      error: /content\.text must be a string/,
+    },
+    {
+      name: "required resource text type",
+      resourceName: "dom-text-number",
+      error: /contents\[0\]\.text must be a string/,
+    },
+    {
+      name: "optional resource link description type",
+      promptName: "resource-link-description-number",
+      error: /content\.description must be a string/,
+    },
+    {
+      name: "optional annotation lastModified type",
+      promptName: "resource-link-annotation-last-modified-number",
+      error: /content\.annotations\.lastModified must be a string/,
+    },
+    {
+      name: "icon src type",
+      promptName: "resource-link-icon-src-number",
+      error: /content\.icons\[0\]\.src must be a string/,
+    },
+    {
+      name: "prompt text unknown field",
+      promptName: "text-extra-field",
+      error: /content contains unsupported field "secret"/,
+    },
+    {
+      name: "embedded resource unknown field",
+      promptName: "resource-extra-field",
+      error: /content\.resource contains unsupported field "secret"/,
+    },
+    {
+      name: "resource read unknown field",
+      resourceName: "dom-extra-field",
+      error: /contents\[0\] contains unsupported field "secret"/,
+    },
+    {
+      name: "annotation unknown field",
+      promptName: "resource-link-annotation-extra-field",
+      error: /content\.annotations contains unsupported field "secret"/,
+    },
+    {
+      name: "icon unknown field",
+      promptName: "resource-link-icon-extra-field",
+      error: /content\.icons\[0\] contains unsupported field "secret"/,
+    },
+    {
+      name: "unknown prompt content type",
+      promptName: "video",
+      error: /unsupported MCP content type "video"/,
+    },
+  ] satisfies readonly Array<{ name: string; promptName?: string; resourceName?: string; error: RegExp }>) {
+    test(`rejects projected package MCP ${vector.name} before prompt composition`, async () => {
+      await using project = await tmpdir({ git: true })
+
+      await expect(
+        composeSchedulerPromptWithPackageMcp({
+          projectPath: project.path,
+          promptName: vector.promptName,
+          resourceName: vector.resourceName,
+        }),
+      ).rejects.toThrow(vector.error)
+    })
+  }
+
+  test("rejects projected package MCP inline base64 text before prompt composition", async () => {
+    await using project = await tmpdir({ git: true })
+
+    await expect(
+      composeSchedulerPromptWithPackageMcp({
+        projectPath: project.path,
+        promptName: "data-text",
+      }),
+    ).rejects.toThrow(/refusing inline base64 data URL/)
+  })
+
+  test("rejects projected package MCP inline base64 embedded resource text before prompt composition", async () => {
+    await using project = await tmpdir({ git: true })
+
+    await expect(
+      composeSchedulerPromptWithPackageMcp({
+        projectPath: project.path,
+        promptName: "resource-data-text",
+      }),
+    ).rejects.toThrow(/refusing inline base64 data URL/)
+  })
+
+  test("rejects projected package MCP inline base64 resource_link fields before prompt composition", async () => {
+    await using project = await tmpdir({ git: true })
+
+    await expect(
+      composeSchedulerPromptWithPackageMcp({
+        projectPath: project.path,
+        promptName: "resource-link-data-uri",
+      }),
+    ).rejects.toThrow(/refusing inline base64 data URL/)
+  })
+
+  test("rejects projected package MCP inline base64 optional resource_link metadata before prompt composition", async () => {
+    await using project = await tmpdir({ git: true })
+
+    await expect(
+      composeSchedulerPromptWithPackageMcp({
+        projectPath: project.path,
+        promptName: "resource-link-description-data-uri",
+      }),
+    ).rejects.toThrow(/refusing inline base64 data URL/)
+  })
+
+  test("rejects projected package MCP resource blob content before prompt composition", async () => {
+    await using project = await tmpdir({ git: true })
+    const packageMcpServerRef = `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/package-browser`
+    const packageMcpResourceRef = `${packageMcpServerRef}/resource/dom-binary`
+    await writeProjectExpertSquadPackage(project.path, PROJECT_EXPERT_SQUAD_ID, {
+      schedulerPackageMcpServerRefs: [packageMcpServerRef],
+      schedulerPackageMcpResourceRefs: [packageMcpResourceRef],
+      packageMcpDefinition: {
+        type: "local",
+        command: [process.execPath, path.join(import.meta.dir, "../fixture/package-mcp-server.ts")],
+        capabilities: {
+          resources: ["dom-binary"],
+        },
+      },
+    })
+
+    await expect(
+      PromptProfileResolver.composeAgentPrompt({
+        projectDirectory: project.path,
+        agentID: "orchestrator",
+        base: "BASE",
+        config: Config.Info.parse({ prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } }),
+      }),
+    ).rejects.toThrow(/MCP resource .*dom-binary.*binary blob content/)
+  })
+
+  test("rejects projected package MCP inline base64 resource text before prompt composition", async () => {
+    await using project = await tmpdir({ git: true })
+
+    await expect(
+      composeSchedulerPromptWithPackageMcp({
+        projectPath: project.path,
+        resourceName: "dom-data-text",
+      }),
+    ).rejects.toThrow(/refusing inline base64 data URL/)
+  })
+
+  for (const vector of [
+    {
+      name: "prompt text",
+      promptName: "raw-data-text",
+    },
+    {
+      name: "embedded resource text",
+      promptName: "resource-raw-data-text",
+    },
+    {
+      name: "resource_link metadata",
+      promptName: "resource-link-description-raw-data",
+    },
+    {
+      name: "resource read text",
+      resourceName: "dom-raw-data-text",
+    },
+  ] satisfies readonly Array<{ name: string; promptName?: string; resourceName?: string }>) {
+    test(`rejects projected package MCP raw base64 ${vector.name} before prompt composition`, async () => {
+      await using project = await tmpdir({ git: true })
+
+      await expect(
+        composeSchedulerPromptWithPackageMcp({
+          projectPath: project.path,
+          promptName: vector.promptName,
+          resourceName: vector.resourceName,
+        }),
+      ).rejects.toThrow(/refusing raw base64 binary payload/)
+    })
+  }
 
   test("projects worker default MCP prompts and resources from the effective config", async () => {
     await using project = await tmpdir({ git: true })
@@ -1048,14 +1348,15 @@ describe("PromptProfileResolver", () => {
     expect(generalPrompt).toContain("# General")
     expect(generalPrompt).not.toContain("PROJECT_README_ORCHESTRATOR_APPEND_ONLY")
 
-    const catalog = await PromptProfileResolver.list({
-      projectDirectory: project.path,
+    const catalog = await PromptProfileResolver.catalog({
       config: generalConfig,
       projectActive: "general",
-      sessionActive: null,
+      sessionOverride: null,
+      scope: { kind: "project", directory: project.path },
+      defaultSkills: [],
     })
-    expect(catalog.active).toBe("general")
-    expect(catalog.profiles.find((profile) => profile.id === PROJECT_EXPERT_SQUAD_ID)).toMatchObject({
+    expect(catalog.active.effective).toBe("general")
+    expect(catalog.squads.find((profile) => profile.id === PROJECT_EXPERT_SQUAD_ID)).toMatchObject({
       built_in: false,
       capability_profile_id: PROJECT_EXPERT_SQUAD_ID,
       agents: { build: "project build overlay" },
@@ -1383,13 +1684,14 @@ describe("PromptProfileResolver", () => {
       },
     })
 
-    const catalog = await PromptProfileResolver.list({
-      projectDirectory: project.path,
+    const catalog = await PromptProfileResolver.catalog({
       config,
       projectActive: PROJECT_EXPERT_SQUAD_ID,
-      sessionActive: null,
+      sessionOverride: null,
+      scope: { kind: "project", directory: project.path },
+      defaultSkills: [],
     })
-    const profile = catalog.profiles.find((entry) => entry.id === PROJECT_EXPERT_SQUAD_ID)
+    const profile = catalog.squads.find((entry) => entry.id === PROJECT_EXPERT_SQUAD_ID)
     expect(profile?.projected_agents).toEqual(["general", "integrity"])
     expect(profile?.capability_projection.agents.build).toBeUndefined()
     expect(profile?.capability_projection.agents.integrity.built_in_tool_ids).toEqual(

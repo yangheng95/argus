@@ -7,6 +7,7 @@ import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { installBrowserErrorCollector } from "./error-collector.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -138,7 +139,7 @@ test(
       if (path === "/provider/auth") return send({})
       if (path === "/config/providers") return send({ providers: [], default: {} })
       if (path === "/config/prompt") return send([])
-      if (path === "/config/prompt-profile") return send({ active: "general", targets: [], profiles: [] })
+      if (path === "/expert-squad/catalog") return send(generalExpertSquadCatalog())
       if (path === "/config") return send({ model: "", prompt_profile: { active: "general" } })
       if (path === "/coding/cli/profiles" || path === "/terminal/profiles") return send([])
       if (path === "/coding/sessions") {

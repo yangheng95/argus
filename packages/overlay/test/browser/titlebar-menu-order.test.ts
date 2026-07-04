@@ -6,6 +6,7 @@ import test from "node:test"
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -29,23 +30,7 @@ test(
     assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
     assert.equal(typeof globalThis.Bun, "undefined")
 
-    const promptProfiles = {
-      active: "general",
-      project_active: "general",
-      session_active: null,
-      default: "general",
-      targets: [],
-      profiles: [
-        {
-          id: "general",
-          label: "General",
-          description: "Baseline prompt set.",
-          built_in: true,
-          editable: false,
-          agents: {},
-        },
-      ],
-    }
+    const expertSquads = generalExpertSquadCatalog()
 
     const server = await startBrowserFixture(async (req) => {
       const url = new URL(req.url)
@@ -79,7 +64,7 @@ test(
       if (path === "/provider/auth") return send({})
       if (path === "/config/providers") return send({ providers: [], default: {} })
       if (path === "/config/prompt") return send([])
-      if (path === "/config/prompt-profile") return send(promptProfiles)
+      if (path === "/expert-squad/catalog") return send(expertSquads)
       if (path === "/config") return send({ model: "hexin/gpt-5.5" })
       if (path === "/agent") return send([])
       if (path === "/channel") return send([])
@@ -187,9 +172,9 @@ test(
       assert.ok(settings.right <= help.left + 0.5)
 
       await page.click('[data-menu-trigger="settings"]')
-      await page.waitForSelector('[data-testid="titlebar-settings-prompt"]', { visible: true })
-      await page.click('[data-testid="titlebar-settings-prompt"]')
-      await page.waitForSelector('[data-config-panel="prompt"] #promptBody', { visible: true })
+      await page.waitForSelector('[data-testid="titlebar-settings-expert-squad"]', { visible: true })
+      await page.click('[data-testid="titlebar-settings-expert-squad"]')
+      await page.waitForSelector('[data-config-panel="expert-squad"] #expertSquadBody', { visible: true })
 
       await page.keyboard.press("Escape")
       await page.keyboard.down("Alt")

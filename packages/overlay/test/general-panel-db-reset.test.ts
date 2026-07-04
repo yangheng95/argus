@@ -10,7 +10,7 @@ const ZH = JSON.parse(readFileSync(join(import.meta.dir, "../src/i18n/zh-CN.json
 
 test("GeneralPanel database reset is exposed through the config service with explicit confirmation", () => {
   expect(GENERAL_PANEL).toContain(
-    'import { reloadProjectScope, patchConfig, resetDatabase } from "../../services/config"',
+    'import { reloadProjectScope, resetDatabase } from "../../services/config"',
   )
   expect(GENERAL_PANEL).not.toContain('from "../../services/project-directory"')
   expect(GENERAL_PANEL).toContain("appStore.enginePaths?.database?.trim()")
@@ -30,9 +30,9 @@ test("config service owns the current database reset request shape", () => {
   expect(GENERAL_PANEL).not.toContain('apiJson("global/db/reset"')
   expect(GENERAL_PANEL).not.toContain('apiRequest<unknown>("global/db/reset"')
   expect(MAIN).toContain('from "./services/config"')
-  expect(MAIN).toContain("loadPromptProfileCatalog")
+  expect(MAIN).toContain("loadExpertSquadCatalog")
   expect(MAIN).toContain("resetDatabase")
-  expect(MAIN).toContain("type PromptProfileOption")
+  expect(MAIN).toContain("type ExpertSquadOption")
   expect(MAIN).toContain("await resetDatabase(databasePath)")
   expect(MAIN).not.toContain('apiJson("global/db/reset"')
   expect(MAIN).not.toContain('apiRequest<unknown>("global/db/reset"')

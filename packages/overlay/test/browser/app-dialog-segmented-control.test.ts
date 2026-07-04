@@ -7,6 +7,7 @@ import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { installBrowserErrorCollector } from "./error-collector.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -33,23 +34,7 @@ function eventStream() {
   })
 }
 
-const promptProfileCatalog = {
-  active: "general",
-  project_active: "general",
-  session_active: null,
-  default: "general",
-  targets: [],
-  profiles: [
-    {
-      id: "general",
-      label: "General",
-      description: "Default prompt profile",
-      built_in: true,
-      editable: false,
-      agents: {},
-    },
-  ],
-}
+const expertSquadCatalog = generalExpertSquadCatalog()
 
 type DecisionMode = "enter-start" | "space-queue" | "click-queue"
 
@@ -115,7 +100,7 @@ async function withTaskDecisionFixture(
     if (path === "/config/providers") return send({ providers: [], default: {} })
     if (path === "/config") return send({ model: "opencorvus/gpt-5-nano", prompt_profile: { active: "general" } })
     if (path === "/config/prompt") return send([])
-    if (path === "/config/prompt-profile") return send(promptProfileCatalog)
+    if (path === "/expert-squad/catalog") return send(expertSquadCatalog)
     if (path === "/terminal/profiles") return send({ defaultProfileID: "powershell", profiles: [] })
     if (path === "/coding/cli/profiles") return send({ profiles: [] })
     if (path === "/agent" || path === "/channel") return send([])

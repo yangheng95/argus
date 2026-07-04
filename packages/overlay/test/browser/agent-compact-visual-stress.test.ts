@@ -9,6 +9,7 @@ import { launchBrowser, type OverlayPage } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { installBrowserErrorCollector } from "./error-collector.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { expertSquadCatalogFixture } from "./expert-squad-fixture.ts"
 
 const PORT = 7378
 const TASK_ID = "tsk_agent_compact_visual_stress"
@@ -820,11 +821,10 @@ test(
         agentView: { topLevelSessionIDs, sessions: viewSessions, messages: viewMessages },
       }
     }
-    const promptProfileCatalog = {
+    const expertSquadCatalog = expertSquadCatalogFixture({
       active: "compact",
-      project_active: "compact",
-      session_active: null,
-      default: "compact",
+      projectActive: "compact",
+      defaultProfile: "general",
       targets: [
         { id: "build", label: "Build", description: "Build agent prompt.", editable: true, built_in_only: false },
         {
@@ -840,12 +840,10 @@ test(
           id: "compact",
           label: "Compact Stress",
           description: "Agent compact visual benchmark profile.",
-          built_in: true,
-          editable: false,
-          agents: {},
+          built_in: false,
         },
       ],
-    }
+    })
     const browserPreviewTarget = {
       kind: "missing",
       status: "missing",
@@ -912,7 +910,7 @@ test(
         if (path === "/provider/auth") return json({ openai: { ok: true, authenticated: true } })
         if (path === "/provider/hexin/budget") return json({ ok: true })
         if (path === "/config/providers") return json({ providers: [], default: {} })
-        if (path === "/config/prompt-profile") return json(promptProfileCatalog)
+        if (path === "/expert-squad/catalog") return json(expertSquadCatalog)
         if (path === "/config" && req.method === "PATCH") return json(await req.json())
         if (path === "/config") return json({ model: "openai/gpt-5-mini", prompt_profile: { active: "compact" } })
         if (path === "/config/prompt") return json([])

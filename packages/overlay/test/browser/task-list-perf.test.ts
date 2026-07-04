@@ -9,6 +9,7 @@ import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { testTaskOrderKey } from "../fixtures/timeline-order.ts"
 import { installBrowserErrorCollector } from "./error-collector.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -110,23 +111,7 @@ function assertInteractionPerf(metric: InteractionPerf, label: string) {
   assert.ok(metric.maxLongTaskMs <= PERF_LIMITS.maxLongTaskMs, `${label} maxLongTaskMs=${metric.maxLongTaskMs}`)
 }
 
-const PROMPT_PROFILE_CATALOG = {
-  active: "general",
-  project_active: "general",
-  session_active: null,
-  default: "general",
-  targets: [],
-  profiles: [
-    {
-      id: "general",
-      label: "General",
-      description: "Default prompt profile",
-      built_in: true,
-      editable: false,
-      agents: {},
-    },
-  ],
-}
+const EXPERT_SQUAD_CATALOG = generalExpertSquadCatalog()
 
 function pageByCursor<T>(
   items: T[],
@@ -212,7 +197,7 @@ test(`overlay task surfaces stay responsive with ${TASK_COUNT} queued tasks`, { 
         directory: "D:/perf/workspace",
       })
     }
-    if (path === "/config/prompt" || path === "/config/prompt-profile") return send(PROMPT_PROFILE_CATALOG)
+    if (path === "/config/prompt" || path === "/expert-squad/catalog") return send(EXPERT_SQUAD_CATALOG)
     if (/^\/session\/[^/]+\/config$/.test(path)) return send({ config: {} })
     if (path === "/channel") return send([])
     if (path === "/channel/runtime") return send({ status: "disabled", channels: [] })

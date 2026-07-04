@@ -34,6 +34,7 @@ import {
   normalizeComposerDraftKey,
   setComposerDraft,
 } from "../services/composer-draft"
+import type { ExpertSquadOption } from "../services/expert-squad"
 import { currentUIScale } from "../utils/layout-tokens"
 
 // ── Types ──
@@ -44,11 +45,7 @@ export interface ChatAttachment {
   filename: string
 }
 
-export interface PromptProfileOption {
-  id: string
-  label: string
-  description?: string
-}
+export type { ExpertSquadOption } from "../services/expert-squad"
 
 export interface ChatComposerProps {
   /**
@@ -69,7 +66,7 @@ export interface ChatComposerProps {
     text: string,
     attachments: ChatAttachment[],
     webSearch: boolean,
-    promptProfile: string,
+    expertSquadID: string,
   ) => void | Promise<void>
   /** Called when the user clicks the stop button while busy. */
   onStop?: () => void
@@ -94,9 +91,9 @@ export interface ChatComposerProps {
   draftKey?: string
   /** Optional single prompt hint for scoped composers such as Mission launch. */
   placeholder?: string
-  promptProfiles: PromptProfileOption[]
-  promptProfileID: string
-  onPromptProfileChange: (profileID: string) => void
+  expertSquads: ExpertSquadOption[]
+  expertSquadID: string
+  onExpertSquadChange: (expertSquadID: string) => void
 }
 
 function composerDialogErrorMessage(error: unknown): string {
@@ -426,7 +423,7 @@ export function ChatComposer(props: ChatComposerProps) {
     const submittedDraftKey = props.draftKey
     setSubmitting(true)
     try {
-      await props.onSubmit(trimmed, sentAttachments, false, props.promptProfileID)
+      await props.onSubmit(trimmed, sentAttachments, false, props.expertSquadID)
       setText("")
       clearComposerDraft(submittedDraftKey)
       setAttachments([])
@@ -565,17 +562,17 @@ export function ChatComposer(props: ChatComposerProps) {
   }
   const sendAriaLabel = () => (props.busy ? t("chat.stop_label") : t("chat.send_label"))
   const sendLabel = () => (props.busy ? t("chat.stop_label") : t("chat.send_label"))
-  const selectedPromptProfile = createMemo(() => {
-    return props.promptProfiles.find((profile) => profile.id === props.promptProfileID) ?? null
+  const selectedExpertSquad = createMemo(() => {
+    return props.expertSquads.find((squad) => squad.id === props.expertSquadID) ?? null
   })
-  const promptProfileLabel = createMemo(() => {
-    return selectedPromptProfile()?.label ?? props.promptProfileID
+  const expertSquadLabel = createMemo(() => {
+    return selectedExpertSquad()?.label ?? props.expertSquadID
   })
-  const promptProfileDisabled = createMemo(() => props.promptProfiles.length === 0 || !props.enabled || props.busy)
+  const expertSquadDisabled = createMemo(() => props.expertSquads.length === 0 || !props.enabled || props.busy)
 
-  function selectPromptProfile(profile: PromptProfileOption | null): void {
-    if (!profile || profile.id === props.promptProfileID) return
-    props.onPromptProfileChange(profile.id)
+  function selectExpertSquad(squad: ExpertSquadOption | null): void {
+    if (!squad || squad.id === props.expertSquadID) return
+    props.onExpertSquadChange(squad.id)
   }
 
   return (
@@ -712,35 +709,35 @@ export function ChatComposer(props: ChatComposerProps) {
        * stays clean. */}
       <div class="chat-compose-meta">
         <div class="chat-compose-meta-left">
-          <SelectControl<PromptProfileOption>
-            class="prompt-profile-select-wrap"
-            options={props.promptProfiles}
-            value={selectedPromptProfile()}
-            onChange={selectPromptProfile}
+          <SelectControl<ExpertSquadOption>
+            class="expert-squad-select-wrap"
+            options={props.expertSquads}
+            value={selectedExpertSquad()}
+            onChange={selectExpertSquad}
             optionValue="id"
             optionTextValue="label"
-            disabled={promptProfileDisabled()}
+            disabled={expertSquadDisabled()}
             disallowEmptySelection
             gutter={4}
             sameWidth
-            triggerClass="prompt-profile-select-trigger"
-            triggerDataUI="prompt-profile-selector"
-            triggerTitle={t("prompt_profile.selector_title")}
-            ariaLabel={t("prompt_profile.selector_title")}
-            contentClass="prompt-profile-select-content"
-            listboxClass="prompt-profile-select-listbox"
-            optionClass="prompt-profile-select-option"
-            optionCopyClass="prompt-profile-select-option-copy"
-            iconClass="prompt-profile-select-caret"
+            triggerClass="expert-squad-select-trigger"
+            triggerDataUI="expert-squad-selector"
+            triggerTitle={t("expert_squad.selector_title")}
+            ariaLabel={t("expert_squad.selector_title")}
+            contentClass="expert-squad-select-content"
+            listboxClass="expert-squad-select-listbox"
+            optionClass="expert-squad-select-option"
+            optionCopyClass="expert-squad-select-option-copy"
+            iconClass="expert-squad-select-caret"
             icon={<Icon name="caret-down" size={9} />}
             optionData={(option) => ({
-              "data-profile-id": option.id,
+              "data-squad-id": option.id,
               title: option.description ?? option.label,
             })}
             renderValue={() => (
-              <span class="prompt-profile-select-copy">
-                <span class="prompt-profile-select-label">{t("prompt_profile.selector_label")}</span>
-                <span class="prompt-profile-select-value">{promptProfileLabel()}</span>
+              <span class="expert-squad-select-copy">
+                <span class="expert-squad-select-label">{t("expert_squad.selector_label")}</span>
+                <span class="expert-squad-select-value">{expertSquadLabel()}</span>
               </span>
             )}
             renderOptionLabel={(option) => option.label}

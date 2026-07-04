@@ -7,28 +7,13 @@ import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { installBrowserErrorCollector } from "./error-collector.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
 const viewports = [320, 480, 600, 700, 760, 1120, 1440]
 const locales = ["en-US", "zh-CN"]
-const PROMPT_PROFILE_CATALOG = {
-  active: "general",
-  project_active: "general",
-  session_active: null,
-  default: "general",
-  targets: [],
-  profiles: [
-    {
-      id: "general",
-      label: "General",
-      description: "Default prompt profile",
-      built_in: true,
-      editable: false,
-      agents: {},
-    },
-  ],
-}
+const EXPERT_SQUAD_CATALOG = generalExpertSquadCatalog()
 
 function route(url: URL) {
   return url.pathname.replace(/\/+$/, "") || "/"
@@ -61,7 +46,7 @@ function titlebarCommonProjectResponse(path: string, req: Request): Response | n
   if (path === "/coding/cli/profiles" || path === "/terminal/profiles") return send({ profiles: [] })
   if (path === "/task/events") return eventStream()
   if (path === "/mission") return send([])
-  if (path === "/config/prompt-profile") return send(PROMPT_PROFILE_CATALOG)
+  if (path === "/expert-squad/catalog") return send(EXPERT_SQUAD_CATALOG)
   if (path === "/log" && req.method === "POST") return send({ ok: true })
   return null
 }
@@ -106,7 +91,7 @@ test(
       if (path === "/provider/auth") return send({})
       if (path === "/config/providers") return send({ providers: [], default: {} })
       if (path === "/config/prompt") return send([])
-      if (path === "/config/prompt-profile") return send(PROMPT_PROFILE_CATALOG)
+      if (path === "/expert-squad/catalog") return send(EXPERT_SQUAD_CATALOG)
       if (path === "/config") return send(config)
       if (path === "/agent") return send([])
       if (path === "/channel") return send([])
@@ -390,7 +375,7 @@ test(
             ),
           )
           assert.equal(settingsEntries.includes("titlebar-settings-permissions"), true)
-          assert.equal(settingsEntries.includes("titlebar-settings-prompt"), true)
+          assert.equal(settingsEntries.includes("titlebar-settings-expert-squad"), true)
           assert.equal(settingsEntries.includes("titlebar-settings-channel"), true)
           await page.keyboard.press("Escape")
           await page.waitForFunction(() => !document.querySelector('[data-testid="titlebar-menu-settings"]'))

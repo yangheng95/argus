@@ -73,10 +73,8 @@ function firstSegment(p: string): string {
 function requestBodyFields(op: any): string[] {
   const schema = op?.requestBody?.content?.["application/json"]?.schema
   if (!schema || typeof schema !== "object") return []
-  const required = Array.isArray(schema.required) ? schema.required : []
   const properties = schema.properties && typeof schema.properties === "object" ? Object.keys(schema.properties) : []
-  const names = required.length > 0 ? required : properties
-  return names.filter((name): name is string => typeof name === "string").sort()
+  return properties.filter((name): name is string => typeof name === "string").sort()
 }
 
 function schemaRefName(ref: string): string {

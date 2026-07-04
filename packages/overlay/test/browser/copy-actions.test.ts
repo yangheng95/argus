@@ -6,6 +6,7 @@ import test from "node:test"
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -185,24 +186,8 @@ test(
       if (path === "/project/current/worktrees") return send([])
       if (path === "/session") return send([])
       if (path === "/config/prompt") return send([])
-      if (path === "/config/prompt-profile") {
-        return send({
-          active: "general",
-          project_active: "general",
-          session_active: null,
-          default: "general",
-          targets: [],
-          profiles: [
-            {
-              id: "general",
-              label: "General",
-              description: "Default prompt profile",
-              built_in: true,
-              editable: false,
-              agents: {},
-            },
-          ],
-        })
+      if (path === "/expert-squad/catalog") {
+        return send(generalExpertSquadCatalog())
       }
       if (path.startsWith("/task/") && path.endsWith("/board")) return send(data.board)
       if (path === "/task/task-1/operator-model-context") return send({ selected: null, candidates: [] })

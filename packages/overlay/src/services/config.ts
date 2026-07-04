@@ -217,36 +217,6 @@ export interface DatabaseResetResponse {
   targets: DatabaseResetTarget[]
 }
 
-export interface PromptProfileOption {
-  id: string
-  label: string
-  description?: string
-  built_in?: boolean
-  editable?: boolean
-  agents?: Record<string, string>
-}
-
-export interface PromptProfileTarget {
-  id: string
-  label: string
-  description?: string
-  editable: boolean
-  built_in_only: boolean
-}
-
-export interface PromptProfileCatalog {
-  active: string
-  project_active: string
-  session_active: string | null
-  default: string
-  targets: PromptProfileTarget[]
-  profiles: PromptProfileOption[]
-}
-
-export type PromptProfileCatalogScope =
-  | { kind: "project"; directory: string }
-  | { kind: "session"; sessionID: string; directory: string }
-
 export function modelContextID(context: TaskOperatorModelContext | null | undefined): string {
   const providerID = context?.model?.providerID
   const modelID = context?.model?.modelID
@@ -254,8 +224,6 @@ export function modelContextID(context: TaskOperatorModelContext | null | undefi
 }
 
 const [sessionConfigRefreshTokenValue, setSessionConfigRefreshTokenValue] = createSignal(0)
-const [promptProfileCatalogRefreshTokenValue, setPromptProfileCatalogRefreshTokenValue] = createSignal(0)
-let pendingPromptProfileCatalogLoad: { key: string; promise: Promise<PromptProfileCatalog> } | null = null
 
 export function sessionConfigRefreshToken(): number {
   return sessionConfigRefreshTokenValue()
@@ -263,14 +231,6 @@ export function sessionConfigRefreshToken(): number {
 
 export function markSessionConfigStale(_sessionID?: string): void {
   setSessionConfigRefreshTokenValue((value) => value + 1)
-}
-
-export function promptProfileCatalogRefreshToken(): number {
-  return promptProfileCatalogRefreshTokenValue()
-}
-
-export function markPromptProfileCatalogStale(): void {
-  setPromptProfileCatalogRefreshTokenValue((value) => value + 1)
 }
 
 function directoryScopedPath(path: string, directory: string, label: string): string {
@@ -355,52 +315,6 @@ export async function resetDatabase(database: string): Promise<DatabaseResetResp
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ database: currentDatabase }),
   })
-}
-
-export async function loadPromptProfileCatalog(scope: PromptProfileCatalogScope): Promise<PromptProfileCatalog> {
-  if (!appStore.connected) {
-    throw new Error("Cannot load prompt profiles while disconnected")
-  }
-  const directory = scope.directory.trim()
-  if (!directory) throw new Error("loadPromptProfileCatalog: directory is required")
-  const sessionID = scope.kind === "session" ? scope.sessionID.trim() : ""
-  if (scope.kind === "session" && !sessionID) throw new Error("loadPromptProfileCatalog: sessionID is required")
-  const key = `${directory}\n${sessionID}`
-  if (pendingPromptProfileCatalogLoad?.key === key) return await pendingPromptProfileCatalogLoad.promise
-  const params = new URLSearchParams({ directory })
-  if (sessionID) params.set("sessionID", sessionID)
-  const promise = apiJson(`config/prompt-profile?${params.toString()}`) as Promise<PromptProfileCatalog>
-  pendingPromptProfileCatalogLoad = { key, promise }
-  try {
-    return await promise
-  } finally {
-    if (pendingPromptProfileCatalogLoad?.promise === promise) pendingPromptProfileCatalogLoad = null
-  }
-}
-
-export async function setProjectPromptProfileActive(profileID: string, directory: string): Promise<any> {
-  const saved = await updateConfig((current) => {
-    const promptProfile =
-      current.prompt_profile && typeof current.prompt_profile === "object" && !Array.isArray(current.prompt_profile)
-        ? { ...current.prompt_profile }
-        : {}
-    current.prompt_profile = {
-      ...promptProfile,
-      active: profileID,
-    }
-  }, { directory })
-  markPromptProfileCatalogStale()
-  return saved
-}
-
-export async function setSessionPromptProfileActive(
-  sessionID: string,
-  profileID: string,
-  directory: string,
-): Promise<SessionConfigResponse> {
-  const saved = await patchSessionConfig({ sessionID, directory, diff: { prompt_profile: { active: profileID } } })
-  markPromptProfileCatalogStale()
-  return saved
 }
 
 export async function syncAgentPromptLocale(

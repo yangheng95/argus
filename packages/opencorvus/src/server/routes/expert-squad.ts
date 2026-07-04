@@ -1,10 +1,17 @@
 import { ExpertSquadPackageManager } from "@/expert-squad/manager"
+import { PromptProfileResolver } from "@/expert-squad/prompt-profile-resolver"
+import { Config } from "@/config/config"
+import { EffectiveConfig } from "@/config/effective"
+import { PromptProfile } from "@/agent/prompt-profile"
 import { Instance } from "@/project/instance"
+import { Session } from "@/session"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { namedErrorResponse } from "../error"
+import { ExpertSquadCatalogSchema } from "@/expert-squad/catalog"
+import { assertActiveProjectSession } from "../active-project-session"
 
 export const ExpertSquadPackageError = NamedError.create(
   "ExpertSquadPackageError",
@@ -47,6 +54,22 @@ const ExportResult = z.object({
   fileCount: z.number().int().nonnegative(),
 })
 
+async function rootSession(sessionID: string): Promise<Session.Info> {
+  let current = await Session.get(sessionID)
+  for (let hops = 0; current.parentID; hops++) {
+    if (hops >= 64) throw new Error(`Session parent chain for ${sessionID} exceeds 64 hops`)
+    current = await Session.get(current.parentID)
+  }
+  return current
+}
+
+function sessionPromptProfileOverride(session: Session.Info): string | null {
+  const stored = session.metadata?.configOverlay ?? {}
+  const overlay = Config.Overlay.parse(stored)
+  const active = overlay.prompt_profile?.active
+  return typeof active === "string" ? active : null
+}
+
 async function packageRoute<T>(run: () => Promise<T>): Promise<T> {
   try {
     return await run()
@@ -63,6 +86,71 @@ async function packageRoute<T>(run: () => Promise<T>): Promise<T> {
 
 export function ExpertSquadRoutes() {
   return new Hono()
+    .get(
+      "/catalog",
+      describeRoute({
+        summary: "List expert squads and active capability projection",
+        description:
+          "Returns the effective expert-squad catalog for the current project or session. The active value is still the single prompt_profile.active config field; this route exposes its expert-squad package view.",
+        operationId: "expertSquad.catalog",
+        responses: {
+          200: {
+            description: "Expert squad catalog",
+            content: {
+              "application/json": {
+                schema: resolver(ExpertSquadCatalogSchema),
+              },
+            },
+          },
+        },
+      }),
+      validator(
+        "query",
+        z.object({
+          sessionID: z
+            .string()
+            .optional()
+            .meta({ description: "Optional root or child session id for session-effective expert-squad catalog view" }),
+        }),
+      ),
+      async (c) => {
+        const query = c.req.valid("query")
+        if (!query.sessionID) {
+          const config = await Config.get()
+          return c.json(
+            await PromptProfileResolver.catalog({
+              config,
+              projectActive: PromptProfile.activeID(config),
+              sessionOverride: null,
+              scope: {
+                kind: "project",
+                directory: Instance.directory,
+              },
+            }),
+          )
+        }
+
+        await assertActiveProjectSession(query.sessionID)
+        const [projectConfig, effectiveConfig, projectDirectory, owner] = await Promise.all([
+          EffectiveConfig.base({ sessionID: query.sessionID }),
+          EffectiveConfig.effective({ sessionID: query.sessionID }),
+          EffectiveConfig.directory({ sessionID: query.sessionID }),
+          rootSession(query.sessionID),
+        ])
+        return c.json(
+          await PromptProfileResolver.catalog({
+            config: effectiveConfig,
+            projectActive: PromptProfile.activeID(projectConfig),
+            sessionOverride: sessionPromptProfileOverride(owner),
+            scope: {
+              kind: "session",
+              directory: projectDirectory,
+              sessionID: owner.id,
+            },
+          }),
+        )
+      },
+    )
     .post(
       "/import-folder",
       describeRoute({

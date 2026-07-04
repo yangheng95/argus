@@ -17,8 +17,8 @@ const DIALOG_SERVICE = readFileSync(join(OVERLAY_ROOT, "src", "services", "dialo
 const CHANNELS_TSX = readFileSync(join(OVERLAY_ROOT, "src", "components", "settings", "ChannelsPanel.tsx"), "utf8")
 const HEADER_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "header.css"), "utf8")
 const PROVIDERS_TSX = readFileSync(join(OVERLAY_ROOT, "src", "components", "settings", "ProvidersPanel.tsx"), "utf8")
-const PROMPT_CATALOG_TSX = readFileSync(
-  join(OVERLAY_ROOT, "src", "components", "settings", "PromptCatalog.tsx"),
+const EXPERT_SQUAD_PANEL_TSX = readFileSync(
+  join(OVERLAY_ROOT, "src", "components", "settings", "ExpertSquadPanel.tsx"),
   "utf8",
 )
 const RETIRED_LLM_PROVIDER_SELECTORS = [
@@ -163,7 +163,6 @@ describe("config panel sizing", () => {
       ".about-author-card",
       ".about-info-grid",
       ".about-shortcut-grid",
-      ".prompt-preview-card",
       ".extension-head",
       ".channel-doc-card",
       ".market-card",
@@ -297,25 +296,25 @@ describe("config panel sizing", () => {
     expect(bodyOf('.config-sidebar .oc-tab[data-config-tab="about"]')).toMatch(/margin-top:\s*auto/)
   })
 
-  test("prompt profile editor has no retired per-agent prompt editor surface", () => {
-    expect(PROMPT_CATALOG_TSX).not.toContain("<Tabs")
-    expect(PROMPT_CATALOG_TSX).not.toContain("<Tab")
-    expect(PROMPT_CATALOG_TSX).not.toContain('data-ui="prompt-view-tabs"')
-    expect(PROMPT_CATALOG_TSX).not.toContain('data-ui="prompt-view-tab"')
-    expect(PROMPT_CATALOG_TSX).not.toContain('role="tablist"')
-    expect(PROMPT_CATALOG_TSX).not.toContain('role="tab"')
-    expect(PROMPT_CATALOG_TSX).not.toContain('type PromptViewMode = "code" | "preview" | "default"')
-    expect(PROMPT_CATALOG_TSX).not.toContain('when={viewMode(entryID) !== "code"}')
-    expect(PROMPT_CATALOG_TSX).not.toContain('class="field-input prompt-textarea"')
-    expect(PROMPT_CATALOG_TSX).not.toContain('class="composer-textarea prompt-profile-textarea"')
-    expect(PROMPT_CATALOG_TSX).toContain('class="prompt-preview-card prompt-preview-card--attached"')
-    expect(PROMPT_CATALOG_TSX).not.toContain('class="prompt-toolbar"')
-    expect(PROMPT_CATALOG_TSX).not.toContain('<details class="prompt-diff-details">')
-    expect(PROMPT_CATALOG_TSX).not.toContain('{t("prompt.show_default")}')
+  test("expert squad panel has no retired per-agent prompt editor surface", () => {
+    expect(EXPERT_SQUAD_PANEL_TSX).not.toContain("<Tabs")
+    expect(EXPERT_SQUAD_PANEL_TSX).not.toContain("<Tab")
+    expect(EXPERT_SQUAD_PANEL_TSX).not.toContain('data-ui="prompt-view-tabs"')
+    expect(EXPERT_SQUAD_PANEL_TSX).not.toContain('data-ui="prompt-view-tab"')
+    expect(EXPERT_SQUAD_PANEL_TSX).not.toContain('role="tablist"')
+    expect(EXPERT_SQUAD_PANEL_TSX).not.toContain('role="tab"')
+    expect(EXPERT_SQUAD_PANEL_TSX).not.toContain('type PromptViewMode = "code" | "preview" | "default"')
+    expect(EXPERT_SQUAD_PANEL_TSX).not.toContain('when={viewMode(entryID) !== "code"}')
+    expect(EXPERT_SQUAD_PANEL_TSX).not.toContain('class="field-input prompt-textarea"')
+    expect(EXPERT_SQUAD_PANEL_TSX).not.toContain('class="composer-textarea expert-squad-textarea"')
+    expect(EXPERT_SQUAD_PANEL_TSX).toContain('class="expert-squad-prompt-card"')
+    expect(EXPERT_SQUAD_PANEL_TSX).not.toContain('class="prompt-toolbar"')
+    expect(EXPERT_SQUAD_PANEL_TSX).not.toContain('<details class="prompt-diff-details">')
+    expect(EXPERT_SQUAD_PANEL_TSX).not.toContain('{t("prompt.show_default")}')
     expect(SETTINGS_CSS).not.toContain('data-ui="prompt-view-tabs"')
     expect(SETTINGS_CSS).not.toContain('data-ui="prompt-view-tab"')
     expect(SETTINGS_CSS).not.toContain(".prompt-textarea")
     expect(SETTINGS_CSS).not.toContain(".prompt-editor-actions")
-    expect(bodyOf(".prompt-preview-card--attached")).toMatch(/min-height:\s*calc\(160px \* var\(--ui-scale\)\)/)
+    expect(bodyOf(".expert-squad-prompt-body")).toMatch(/min-height:\s*calc\(48px \* var\(--ui-scale\)\)/)
   })
 })

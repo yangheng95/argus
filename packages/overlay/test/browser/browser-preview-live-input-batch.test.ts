@@ -9,6 +9,7 @@ import { launchBrowser, type OverlayPage } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { testTaskOrderKey } from "../fixtures/timeline-order.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { expertSquadCatalogFixture } from "./expert-squad-fixture.ts"
 
 const SCREENSHOT_PATH = fileURLToPath(new URL("../../.scratch/browser-preview-native-surface.png", import.meta.url))
 
@@ -119,23 +120,20 @@ async function nativeCommands(page: OverlayPage): Promise<NativeCommandRecord[]>
   return await page.evaluate(() => ((window as any).__browserPreviewNativeCommands || []) as NativeCommandRecord[])
 }
 
-const promptProfileCatalog = {
+const expertSquadCatalog = expertSquadCatalogFixture({
   active: "default",
-  project_active: "default",
-  session_active: null,
-  default: "default",
+  projectActive: "default",
+  defaultProfile: "general",
   targets: [{ id: "build", label: "Build", description: "Build agent prompt.", editable: true, built_in_only: false }],
   profiles: [
     {
       id: "default",
       label: "Default",
       description: "Default implementation profile.",
-      built_in: true,
-      editable: false,
-      agents: {},
+      built_in: false,
     },
   ],
-}
+})
 
 test("browser preview native surface owns browser navigation without PNG live routes", async () => {
   assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
@@ -214,7 +212,7 @@ test("browser preview native surface owns browser navigation without PNG live ro
       })
     if (path === "/provider") return json({ all: [], connected: [], default: {} })
     if (path === "/provider/auth") return json({})
-    if (path === "/config/prompt-profile") return json(promptProfileCatalog)
+    if (path === "/expert-squad/catalog") return json(expertSquadCatalog)
     if (path === "/config" && req.method === "PATCH") return json({ model: "", prompt_profile: { active: "default" } })
     if (path === "/config") return json({ model: "", prompt_profile: { active: "default" } })
     if (path === "/log" && req.method === "POST") return json({ ok: true })

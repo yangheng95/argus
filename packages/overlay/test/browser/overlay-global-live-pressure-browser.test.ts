@@ -15,6 +15,7 @@ import {
 } from "../fixtures/timeline-order.ts"
 import { installBrowserErrorCollector } from "./error-collector.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -408,24 +409,8 @@ function mcpPayload(): any {
   )
 }
 
-function promptProfileCatalog(): any {
-  return {
-    active: "general",
-    project_active: "general",
-    session_active: null,
-    default: "general",
-    targets: [],
-    profiles: [
-      {
-        id: "general",
-        label: "General",
-        description: "Default prompt profile",
-        built_in: true,
-        editable: false,
-        agents: {},
-      },
-    ],
-  }
+function expertSquadCatalog(): any {
+  return generalExpertSquadCatalog()
 }
 
 async function waitForPageState(
@@ -531,7 +516,7 @@ test(
       if (path === "/vcs") return json({ branch: "main", clean: true, dirty: false, staged: 0, modified: 0, untracked: 0, conflicts: 0, ahead: 0, behind: 0 })
       if (path === "/config") return json({ model: "openai/gpt-5-mini", directory: PROJECT_ROOT, assistant: { max_executor_groups: 3 }, mcp: {} })
       if (path === "/config/providers") return json({ providers: [], default: {} })
-      if (path === "/config/prompt" || path === "/config/prompt-profile") return json(promptProfileCatalog())
+      if (path === "/config/prompt" || path === "/expert-squad/catalog") return json(expertSquadCatalog())
       if (path === "/provider") return json({ all: [], connected: [], default: {} })
       if (path === "/provider/auth") return json({})
       if (path === "/channel") return json([])
@@ -810,7 +795,7 @@ test(
           await action()
           return
         }
-        if (label === "complete settings skill matrix") {
+        if (label === "complete settings skill panel") {
           await page.evaluate((metricLabel) => {
             ;(window as any).__ocGlobalStartProbe(metricLabel)
           }, label)
@@ -821,9 +806,11 @@ test(
           await waitForPageState(
             page,
             () =>
-              document.querySelectorAll('#configDialog [data-config-panel="skill"] .agent-skill-grid-cell').length >=
-              192,
-            "settings skill matrix",
+              document.querySelectorAll('#configDialog [data-config-panel="skill"] [data-ui="agent-skill-tabs"] .agent-capability-tab')
+                .length >= 8 &&
+              document.querySelectorAll('#configDialog [data-config-panel="skill"] [data-ui="agent-skill-pool"] .agent-skill-pool-row')
+                .length >= 24,
+            "settings skill panel",
             () => ({ requests: requests.slice(-8) }),
           )
           const metric = await page.evaluate(async () => await (window as any).__ocGlobalActiveProbe.stop())
@@ -967,7 +954,7 @@ test(
                   await frame()
                 }
               },
-              "open settings skill matrix": async () => {
+              "open settings skill panel": async () => {
                 const settings = document.querySelector<HTMLButtonElement>('[data-menu-trigger="settings"]')
                 if (!settings) throw new Error("Missing settings menu trigger")
                 settings.dispatchEvent(
@@ -984,9 +971,11 @@ test(
                 const skillItem = document.querySelector<HTMLButtonElement>('[data-testid="titlebar-settings-skill"]')
                 if (!skillItem) throw new Error("Missing settings skill menu item")
                 skillItem.click()
-                await waitFor("settings skill matrix", () =>
-                  document.querySelectorAll('#configDialog [data-config-panel="skill"] .agent-skill-grid-cell')
-                    .length >= 192
+                await waitFor("settings skill panel", () =>
+                  document.querySelectorAll('#configDialog [data-config-panel="skill"] [data-ui="agent-skill-tabs"] .agent-capability-tab')
+                    .length >= 8 &&
+                  document.querySelectorAll('#configDialog [data-config-panel="skill"] [data-ui="agent-skill-pool"] .agent-skill-pool-row')
+                    .length >= 24
                 )
               },
             }
@@ -1023,7 +1012,7 @@ test(
       await measure("scroll agent rail", async () => undefined)
       await measure("open settings menu", async () => undefined)
       await measure("open settings skill dialog shell", async () => undefined)
-      await measure("complete settings skill matrix", async () => undefined)
+      await measure("complete settings skill panel", async () => undefined)
 
       const domMetrics = await page.evaluate(() => ({
         mountedConversationCards: document.querySelectorAll(".conversation-virtual-item > [data-card-id]").length,
@@ -1031,7 +1020,15 @@ test(
         agentRailButtons: document.querySelectorAll('[data-ui="conversation-agent-rail-locate"]').length,
         screenshotCards: document.querySelectorAll(".screenshot-browser-card").length,
         fileRows: document.querySelectorAll(".file-explorer-row").length,
-        skillCells: document.querySelectorAll('#configDialog [data-config-panel="skill"] .agent-skill-grid-cell').length,
+        skillTabs: document.querySelectorAll(
+          '#configDialog [data-config-panel="skill"] [data-ui="agent-skill-tabs"] .agent-capability-tab',
+        ).length,
+        skillPoolRows: document.querySelectorAll(
+          '#configDialog [data-config-panel="skill"] [data-ui="agent-skill-pool"] .agent-skill-pool-row',
+        ).length,
+        skillMountedRows: document.querySelectorAll(
+          '#configDialog [data-config-panel="skill"] .agent-mounted-skill-row',
+        ).length,
         openPanels: Array.from(document.querySelectorAll<HTMLElement>(".center-workbench-view[data-open='true']")).map(
           (node) => node.id,
         ),
@@ -1078,7 +1075,9 @@ test(
       assert.ok(domMetrics.mountedConversationCards <= PERF_LIMITS.mountedConversationCards, JSON.stringify(domMetrics))
       assert.ok(domMetrics.screenshotCards <= PERF_LIMITS.screenshotCards, JSON.stringify(domMetrics))
       assert.ok(domMetrics.fileRows <= PERF_LIMITS.fileRows, JSON.stringify(domMetrics))
-      assert.equal(domMetrics.skillCells, SKILL_COUNT * AGENT_COUNT, JSON.stringify(domMetrics))
+      assert.equal(domMetrics.skillTabs, AGENT_COUNT, JSON.stringify(domMetrics))
+      assert.equal(domMetrics.skillPoolRows, SKILL_COUNT, JSON.stringify(domMetrics))
+      assert.ok(domMetrics.skillMountedRows >= 1, JSON.stringify(domMetrics))
       assert.ok(domMetrics.agentRailButtons >= TRANSCRIPT_MESSAGES - 5, JSON.stringify(domMetrics))
       assert.ok(domMetrics.openPanels.includes("centerWorkbenchWorkflow"), JSON.stringify(domMetrics))
       assert.ok(domMetrics.openPanels.includes("centerWorkbenchBrowser"), JSON.stringify(domMetrics))

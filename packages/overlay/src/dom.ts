@@ -33,10 +33,10 @@ export interface DomRefs {
   // Task meta
   taskStatus: HTMLElement | null
 
-  // Prompt section
-  promptSection: HTMLElement | null
-  promptBody: HTMLElement | null
-  promptBadge: HTMLElement | null
+  // Expert-squad section
+  expertSquadSection: HTMLElement | null
+  expertSquadBody: HTMLElement | null
+  expertSquadBadge: HTMLElement | null
   taskActionsBar: HTMLElement | null
 
   // template sections
@@ -157,10 +157,10 @@ export function getDomRefs(): DomRefs {
     // Task meta
     taskStatus: $<HTMLElement>("#taskStatus"),
 
-    // Prompt section
-    promptSection: $<HTMLElement>("#promptSection"),
-    promptBody: $<HTMLElement>("#promptBody"),
-    promptBadge: $<HTMLElement>("#promptBadge"),
+    // Expert-squad section
+    expertSquadSection: $<HTMLElement>("#expertSquadSection"),
+    expertSquadBody: $<HTMLElement>("#expertSquadBody"),
+    expertSquadBadge: $<HTMLElement>("#expertSquadBadge"),
     taskActionsBar: $<HTMLElement>("#taskActionsBar"),
 
     // template sections

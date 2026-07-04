@@ -6,6 +6,7 @@ import test from "node:test"
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -232,15 +233,8 @@ test(
           version: "file-link-visual-test",
         })
       }
-      if (path === "/config/prompt" || path === "/config/prompt-profile") {
-        return send({
-          active: "general",
-          project_active: "general",
-          session_active: null,
-          default: "general",
-          targets: [],
-          profiles: [],
-        })
+      if (path === "/config/prompt" || path === "/expert-squad/catalog") {
+        return send(generalExpertSquadCatalog())
       }
       if (path === "/channel") return send([])
       if (path === "/channel/runtime") return send({ status: "disabled", channels: [] })

@@ -6,6 +6,7 @@ import test from "node:test"
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { expertSquadCatalogFixture } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -314,14 +315,19 @@ test("notification task action is an explicit button on toast and panel surfaces
     acceptance: null,
     interactions: [],
   }
-  const promptProfileCatalog = {
+  const expertSquadCatalog = expertSquadCatalogFixture({
     active: "default",
-    project_active: "default",
-    session_active: null,
-    default: "default",
-    targets: [],
-    profiles: [],
-  }
+    projectActive: "default",
+    defaultProfile: "general",
+    profiles: [
+      {
+        id: "default",
+        label: "Default",
+        description: "Default project profile.",
+        built_in: false,
+      },
+    ],
+  })
 
   const server = await startBrowserFixture(async (req) => {
     const url = new URL(req.url)
@@ -372,7 +378,7 @@ test("notification task action is an explicit button on toast and panel surfaces
     }
     if (path === "/config") return send({})
     if (path === "/config/prompt") return send([])
-    if (path === "/config/prompt-profile") return send(promptProfileCatalog)
+    if (path === "/expert-squad/catalog") return send(expertSquadCatalog)
     if (path === "/config/providers") return send({ providers: [], default: {} })
     if (path === "/provider") return send({ all: [], connected: [], default: {} })
     if (path === "/provider/auth") return send({})

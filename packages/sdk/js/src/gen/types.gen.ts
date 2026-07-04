@@ -4589,90 +4589,6 @@ export type ConfigPromptResponses = {
 
 export type ConfigPromptResponse = ConfigPromptResponses[keyof ConfigPromptResponses]
 
-export type ConfigPromptProfileData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-    /**
-     * Optional root or child session id for session-effective prompt profile view
-     */
-    sessionID?: string
-  }
-  url: "/config/prompt-profile"
-}
-
-export type ConfigPromptProfileResponses = {
-  /**
-   * Prompt profile catalog
-   */
-  200: {
-    active: string
-    project_active: string
-    session_active: string | null
-    default: string
-    targets: Array<{
-      id: string
-      label: string
-      description?: string
-      editable: boolean
-      built_in_only: boolean
-    }>
-    profiles: Array<{
-      id: string
-      label: string
-      description?: string
-      built_in: boolean
-      editable: boolean
-      agents: {
-        [key: string]: string
-      }
-      capability_profile_id: string
-      projection_hash: string
-      projected_agents: Array<string>
-      capability_projection: {
-        scheduler: {
-          built_in_tool_ids: Array<string>
-          default_skill_refs: Array<string>
-          package_skill_refs: Array<string>
-          default_tool_refs: Array<string>
-          package_tool_refs: Array<string>
-          default_mcp_server_refs: Array<string>
-          package_mcp_server_refs: Array<string>
-          default_mcp_tool_refs: Array<string>
-          package_mcp_tool_refs: Array<string>
-          default_mcp_prompt_refs: Array<string>
-          package_mcp_prompt_refs: Array<string>
-          default_mcp_resource_refs: Array<string>
-          package_mcp_resource_refs: Array<string>
-        }
-        agents: {
-          [key: string]: {
-            built_in_tool_ids: Array<string>
-            default_skill_refs: Array<string>
-            package_skill_refs: Array<string>
-            default_tool_refs: Array<string>
-            package_tool_refs: Array<string>
-            default_mcp_server_refs: Array<string>
-            package_mcp_server_refs: Array<string>
-            default_mcp_tool_refs: Array<string>
-            package_mcp_tool_refs: Array<string>
-            default_mcp_prompt_refs: Array<string>
-            package_mcp_prompt_refs: Array<string>
-            default_mcp_resource_refs: Array<string>
-            package_mcp_resource_refs: Array<string>
-          }
-        }
-      }
-    }>
-  }
-}
-
-export type ConfigPromptProfileResponse = ConfigPromptProfileResponses[keyof ConfigPromptProfileResponses]
-
 export type ConfigProvidersData = {
   body?: never
   path?: never
@@ -8893,6 +8809,145 @@ export type SkillPolicyResponses = {
 }
 
 export type SkillPolicyResponse = SkillPolicyResponses[keyof SkillPolicyResponses]
+
+export type ExpertSquadCatalogData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+    /**
+     * Optional root or child session id for session-effective expert-squad catalog view
+     */
+    sessionID?: string
+  }
+  url: "/expert-squad/catalog"
+}
+
+export type ExpertSquadCatalogResponses = {
+  /**
+   * Expert squad catalog
+   */
+  200: {
+    active: {
+      effective: string
+      project: string
+      session_override: string | null
+    }
+    default: string
+    scope: {
+      kind: "project" | "session"
+      directory: string
+      sessionID?: string
+    }
+    targets: Array<{
+      id: string
+      label: string
+      description?: string
+      editable: boolean
+      built_in_only: boolean
+    }>
+    squads: Array<{
+      id: string
+      label: string
+      description?: string
+      built_in: boolean
+      editable: boolean
+      agents: {
+        [key: string]: string
+      }
+      capability_profile_id: string
+      projection_hash: string
+      projected_agents: Array<string>
+      capability_projection: {
+        scheduler: {
+          built_in_tool_ids: Array<string>
+          default_skill_refs: Array<string>
+          package_skill_refs: Array<string>
+          default_tool_refs: Array<string>
+          package_tool_refs: Array<string>
+          default_mcp_server_refs: Array<string>
+          package_mcp_server_refs: Array<string>
+          default_mcp_tool_refs: Array<string>
+          package_mcp_tool_refs: Array<string>
+          default_mcp_prompt_refs: Array<string>
+          package_mcp_prompt_refs: Array<string>
+          default_mcp_resource_refs: Array<string>
+          package_mcp_resource_refs: Array<string>
+        }
+        agents: {
+          [key: string]: {
+            built_in_tool_ids: Array<string>
+            default_skill_refs: Array<string>
+            package_skill_refs: Array<string>
+            default_tool_refs: Array<string>
+            package_tool_refs: Array<string>
+            default_mcp_server_refs: Array<string>
+            package_mcp_server_refs: Array<string>
+            default_mcp_tool_refs: Array<string>
+            package_mcp_tool_refs: Array<string>
+            default_mcp_prompt_refs: Array<string>
+            package_mcp_prompt_refs: Array<string>
+            default_mcp_resource_refs: Array<string>
+            package_mcp_resource_refs: Array<string>
+          }
+        }
+      }
+      version?: string
+      source:
+        | {
+            kind: "built_in"
+          }
+        | {
+            kind: "project_package"
+            root: string
+            manifest_path: string
+            readme_path: string
+          }
+      readme: {
+        path: "README.md"
+        append_target: "orchestrator"
+        content: string
+      }
+      selector?: {
+        ref: string
+        id: string
+        label: string
+        description?: string
+        summary: string
+        selection_guidance: string
+        instructions_path: "selector.md"
+        instructions: string
+      }
+      dynamic_attributes: {
+        [key: string]: unknown
+      }
+    }>
+    active_skill_projection: {
+      active_squad_id: string
+      capability_profile_id: string
+      built_in: boolean
+      projection_hash: string
+      projected_tool_ids: Array<string>
+      projected_agent_ids: Array<string>
+      selector_skill_names: Array<string>
+      production_skill_names: Array<string>
+      projected_skill_names: Array<string>
+      skills: Array<{
+        name: string
+        description: string
+        builtin: boolean
+        location: string
+        required_tools: Array<string>
+        mounted_agents: Array<string>
+      }>
+    }
+  }
+}
+
+export type ExpertSquadCatalogResponse = ExpertSquadCatalogResponses[keyof ExpertSquadCatalogResponses]
 
 export type ExpertSquadImportFolderData = {
   body: {

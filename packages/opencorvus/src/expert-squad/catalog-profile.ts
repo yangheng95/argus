@@ -2,10 +2,18 @@ import { createHash } from "node:crypto"
 import { AgentToolPool } from "@/agent/tool-pool-contract"
 import { AgentRoleContract, type AgentRoleID } from "@/agent/role-contract"
 import type { PromptProfileCatalogProfile, PromptProfileDefinition } from "@/agent/prompt-profile"
+import type { ExpertSquadCatalogSummary } from "@/expert-squad/catalog"
 import type { ExpertSquadRegistry } from "@/expert-squad/registry"
 
 export type ExpertSquadCatalogPackage = {
   id: string
+  version?: string
+  selector?: ExpertSquadRegistry.SelectorMetadata
+  selectorInstructions?: string
+  readmeContent?: string
+  root?: string
+  manifestPath?: string
+  readmePath?: string
   promptProfile: PromptProfileDefinition
   manifest: {
     dynamic_attributes: ExpertSquadRegistry.Manifest["dynamic_attributes"]
@@ -190,5 +198,56 @@ export function catalogProfileFromPackage(input: {
           }),
       ),
     },
+  }
+}
+
+export function catalogSummaryFromPackage(input: {
+  id: string
+  pkg: ExpertSquadCatalogPackage
+  builtIn: boolean
+  builtInToolIDs?: readonly string[]
+}): ExpertSquadCatalogSummary {
+  const profile = catalogProfileFromPackage(input)
+  const selector = input.pkg.selector
+    ? {
+        ref: input.pkg.selector.ref,
+        id: input.pkg.selector.id,
+        label: input.pkg.selector.label,
+        description: input.pkg.selector.description,
+        summary: input.pkg.selector.summary,
+        selection_guidance: input.pkg.selector.selection_guidance,
+        instructions_path: "selector.md" as const,
+        instructions: input.pkg.selectorInstructions ?? "",
+      }
+    : undefined
+  if (selector && !selector.instructions.trim()) {
+    throw new Error(`Expert squad ${input.id} selector requires top-level selector.md instructions.`)
+  }
+  const readme = input.pkg.readmeContent ?? ""
+  if (!readme.trim()) throw new Error(`Expert squad ${input.id} README.md is blank.`)
+  const source = input.builtIn
+    ? { kind: "built_in" as const }
+    : (() => {
+        if (!input.pkg.root || !input.pkg.manifestPath || !input.pkg.readmePath) {
+          throw new Error(`Project expert squad ${input.id} is missing canonical catalog paths.`)
+        }
+        return {
+          kind: "project_package" as const,
+          root: input.pkg.root,
+          manifest_path: input.pkg.manifestPath,
+          readme_path: input.pkg.readmePath,
+        }
+      })()
+  return {
+    ...profile,
+    version: input.pkg.version,
+    source,
+    readme: {
+      path: "README.md",
+      append_target: "orchestrator",
+      content: readme,
+    },
+    selector,
+    dynamic_attributes: input.pkg.manifest.dynamic_attributes,
   }
 }

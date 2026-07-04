@@ -8,6 +8,7 @@ import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { testMessageOrderKey, testPartOrderKey, testSessionOrderKey } from "../fixtures/timeline-order.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -256,15 +257,8 @@ test("workflow generating panels expose live busy status regions", async () => {
     if (path === "/agent") return send([])
     if (path === "/config/providers") return send({ providers: [], default: {} })
     if (path === "/config/prompt") return send([])
-    if (path === "/config/prompt-profile")
-      return send({
-        active: "general",
-        project_active: "general",
-        session_active: null,
-        default: "general",
-        targets: [],
-        profiles: [],
-      })
+    if (path === "/expert-squad/catalog")
+      return send(generalExpertSquadCatalog())
     if (path === "/config") return send({ model: "opencorvus/gpt-5-nano" })
     if (path === "/channel") return send([])
     if (path === "/skill/installed" || path === "/skill" || path === "/skill/market") return send([])

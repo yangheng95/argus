@@ -189,7 +189,7 @@ test("command palette and titlebar browser suites use the shared collector", () 
 test("provider prompt and skill browser suites are covered by the central browser collector", () => {
   const files = [
     "agent-models-panel.test.ts",
-    "prompt-profile-panel.test.ts",
+    "expert-squad-panel.test.ts",
     "provider-agent-model-sync.test.ts",
     "provider-auth-panel.test.ts",
     "provider-oauth.test.ts",
@@ -226,7 +226,7 @@ test("confirmed TaskList and conversation browser coverage uses the shared colle
     "task-list-reduced-motion-browser.test.ts",
     "task-list-perf.test.ts",
     "task-status-header-missing-completion-browser.test.ts",
-    "prompt-profile-selector-browser.test.ts",
+    "expert-squad-selector-browser.test.ts",
     "conversation-agent-rail-scroll-browser.test.ts",
     "message-card-chronological-turns-browser.test.ts",
   ]

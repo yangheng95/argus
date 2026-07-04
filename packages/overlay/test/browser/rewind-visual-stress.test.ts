@@ -8,6 +8,7 @@ import sharp from "sharp"
 import { launchBrowser, type OverlayPage } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { expertSquadCatalogFixture } from "./expert-squad-fixture.ts"
 
 const PORT = 7478
 const TASK_ID = "tsk_rewind_visual_stress"
@@ -1013,11 +1014,10 @@ test(
       attachments: [],
       time: { created: times.t1, started: times.t1, updated: times.t8 },
     }
-    const promptProfileCatalog = {
+    const expertSquadCatalog = expertSquadCatalogFixture({
       active: "front",
-      project_active: "front",
-      session_active: null,
-      default: "front",
+      projectActive: "front",
+      defaultProfile: "general",
       targets: [
         {
           id: "requirements",
@@ -1041,12 +1041,10 @@ test(
           id: "front",
           label: "Frontend",
           description: "Frontend rewind stress benchmark profile.",
-          built_in: true,
-          editable: false,
-          agents: {},
+          built_in: false,
         },
       ],
-    }
+    })
     const browserPreviewTarget = {
       kind: "missing",
       status: "missing",
@@ -1210,7 +1208,7 @@ test(
         if (path === "/provider/auth") return json({})
         if (path === "/provider/hexin/budget") return json({ ok: true })
         if (path === "/config/providers") return json({ providers: [], default: {} })
-        if (path === "/config/prompt-profile") return json(promptProfileCatalog)
+        if (path === "/expert-squad/catalog") return json(expertSquadCatalog)
         if (path === "/config" && req.method === "PATCH") return json(await req.json())
         if (path === "/config") return json({ model: "", prompt_profile: { active: "front" } })
         if (path === "/config/prompt") return json([])

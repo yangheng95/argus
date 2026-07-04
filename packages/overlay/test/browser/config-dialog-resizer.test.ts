@@ -6,6 +6,7 @@ import test from "node:test"
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { frontendReplicaExpertSquadCatalog } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -23,32 +24,8 @@ function send(value: unknown, init?: ResponseInit) {
   })
 }
 
-function promptProfileCatalog() {
-  return {
-    active: "frontend-replica",
-    project_active: "frontend-replica",
-    session_active: null,
-    default: "general",
-    targets: [],
-    profiles: [
-      {
-        id: "general",
-        label: "General",
-        description: "General profile.",
-        built_in: true,
-        editable: false,
-        agents: {},
-      },
-      {
-        id: "frontend-replica",
-        label: "Frontend Replica",
-        description: "Frontend Replica profile.",
-        built_in: true,
-        editable: false,
-        agents: {},
-      },
-    ],
-  }
+function expertSquadCatalog() {
+  return frontendReplicaExpertSquadCatalog()
 }
 
 test(
@@ -84,7 +61,7 @@ test(
       if (path === "/provider/auth") return send({})
       if (path === "/config" && req.method === "PATCH") return send({ model: "" })
       if (path === "/config") return send({ model: "", version: "1.2.3" })
-      if (path === "/config/prompt-profile") return send(promptProfileCatalog())
+      if (path === "/expert-squad/catalog") return send(expertSquadCatalog())
       if (path === "/channel") return send([])
       if (path === "/executor") return send([])
       if (path === "/agent") return send([])

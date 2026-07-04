@@ -33,7 +33,7 @@ OpenAPI 只会给项目作用域操作标注 `directory` query 参数。单个 T
 | GET | `/global/tasks` | List tasks across projects | `task.global.list` |
 | POST | `/instance/dispose` | Dispose instance 错误: `ActiveExecutorSessionsError`. | `instance.dispose` |
 | GET | `/log` | Read logs 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `log.read` |
-| POST | `/log` | Write log 请求体: `level`, `message`, `service`; 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `app.log` |
+| POST | `/log` | Write log 请求体: `extra`, `level`, `message`, `service`; 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `app.log` |
 | GET | `/log/files` | List log files | `log.files` |
 | GET | `/log/tail` | Read recent logs 错误: `LogFileNotFoundError`, `NotFoundError`. | `log.tail` |
 | POST | `/restart` | Restart the server | `server.restart` |
@@ -54,7 +54,6 @@ OpenAPI 只会给项目作用域操作标注 `directory` query 参数。单个 T
 | GET | `/config` | Get configuration | `config.get` |
 | PATCH | `/config` | Update configuration (JSON Merge Patch) 错误: `BadRequestError`. | `config.update` |
 | GET | `/config/prompt` | List prompt catalog | `config.prompt` |
-| GET | `/config/prompt-profile` | List prompt profiles and expert-squad package projections | `config.promptProfile` |
 | GET | `/config/providers` | List config providers | `config.providers` |
 | POST | `/config/proxy/test` | Test network proxy 错误: `NetworkProxyTestResponse`. | `config.proxy.test` |
 | GET | `/formatter` | Get formatter status | `formatter.status` |
@@ -84,10 +83,10 @@ OpenAPI 只会给项目作用域操作标注 `directory` query 参数。单个 T
 | GET | `/goal-run/{goalRunID}/diff` | Get goal-run workspace diff 错误: `LogFileNotFoundError`, `NotFoundError`. | `goalRun.diff` |
 | DELETE | `/goal/{goalID}` | Delete goal 错误: `LogFileNotFoundError`, `NotFoundError`. | `goal.delete` |
 | PATCH | `/goal/{goalID}` | Update goal 请求体: `acceptance_specs`, `description`; 错误: `LogFileNotFoundError`, `NotFoundError`. | `goal.update` |
-| POST | `/interaction/{interactionID}/reject` | Reject interaction 请求体: `autoReply`; 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `interaction.reject` |
-| POST | `/interaction/{interactionID}/reply` | Reply to interaction 请求体: `autoReply`; 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `interaction.reply` |
+| POST | `/interaction/{interactionID}/reject` | Reject interaction 请求体: `autoReply`, `message`; 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `interaction.reject` |
+| POST | `/interaction/{interactionID}/reply` | Reply to interaction 请求体: `answers`, `autoReply`, `message`, `reply`; 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `interaction.reply` |
 | GET | `/mission` | List Missions | `mission.list` |
-| POST | `/mission/wake` | Wake the Mission agent 请求体: `text`; 错误: `BadRequestError`. | `mission.wake` |
+| POST | `/mission/wake` | Wake the Mission agent 请求体: `missionID`, `model`, `promptProfile`, `text`, `title`; 错误: `BadRequestError`. | `mission.wake` |
 | DELETE | `/mission/{missionID}` | Delete a Mission 错误: `LogFileNotFoundError`, `NotFoundError`. | `mission.delete` |
 | POST | `/mission/{missionID}/abort` | Abort a Mission 错误: `AgentSessionPendingCoordinationError`, `LogFileNotFoundError`, `NotFoundError`, `ReplyTargetEnvelopeMissingError`, `TaskCancellationIncompleteError`. | `mission.abort` |
 | GET | `/mission/{missionID}/project-archive` | Download Mission project archive 错误: `LogFileNotFoundError`, `NotFoundError`. | `mission.projectArchive` |
@@ -100,8 +99,8 @@ OpenAPI 只会给项目作用域操作标注 `directory` query 参数。单个 T
 | GET | `/run/{runID}/brief` | Get run brief 错误: `LogFileNotFoundError`, `NotFoundError`. | `run.brief` |
 | GET | `/run/{runID}/diff` | Get run workspace diff 错误: `LogFileNotFoundError`, `NotFoundError`. | `run.diff` |
 | GET | `/run/{runID}/evaluations` | List run evaluations 错误: `LogFileNotFoundError`, `NotFoundError`. | `run.evaluations` |
-| POST | `/task` | Create task 请求体: `request`; 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `task.create` |
-| PATCH | `/task-queue/reorder` | Reorder queued tasks in a directory 请求体: `directory`. | `task.queue.reorder` |
+| POST | `/task` | Create task 请求体: `attachments`, `budget`, `channelBinding`, `checks`, `executor`, `goals`, `kind`, `metadata`, `milestones`, `model`, `priority`, `project`, `promptProfile`, `queue`, `request`, `requestID`, `routing`, `source`, `title`; 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `task.create` |
+| PATCH | `/task-queue/reorder` | Reorder queued tasks in a directory 请求体: `directory`, `orderedTaskIDs`, `revision`. | `task.queue.reorder` |
 | GET | `/task/events` | Subscribe to global task-list change notifications | `task.list.events` |
 | DELETE | `/task/{taskID}` | Delete task 错误: `LogFileNotFoundError`, `NotFoundError`. | `task.delete` |
 | GET | `/task/{taskID}` | Get task 错误: `LogFileNotFoundError`, `NotFoundError`. | `task.get` |
@@ -110,7 +109,7 @@ OpenAPI 只会给项目作用域操作标注 `directory` query 参数。单个 T
 | GET | `/task/{taskID}/brief` | Get task brief 错误: `LogFileNotFoundError`, `NotFoundError`. | `task.brief` |
 | GET | `/task/{taskID}/browser-preview` | Resolve task browser preview target 错误: `BadRequestError`, `BrowserPreviewEvidenceCorruptionError`, `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.taskTarget` |
 | POST | `/task/{taskID}/browser-preview/capture` | Capture browser preview verification evidence 请求体: `targetID`, `viewportIDs`; 错误: `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.captureTaskTarget` |
-| POST | `/task/{taskID}/browser-preview/compare` | Compare browser preview regions against source visual evidence 请求体: `inlineBindings`, `targetID`, `viewportIDs`; 错误: `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.compareTaskTargetRegions` |
+| POST | `/task/{taskID}/browser-preview/compare` | Compare browser preview regions against source visual evidence 请求体: `inlineBindings`, `output`, `targetID`, `viewportIDs`; 错误: `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.compareTaskTargetRegions` |
 | GET | `/task/{taskID}/browser-preview/evidence/{evidenceID}` | Read browser preview verification evidence 错误: `BadRequestError`, `BrowserPreviewEvidenceCorruptionError`, `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.readTaskEvidence` |
 | GET | `/task/{taskID}/browser-preview/evidence/{evidenceID}/artifact/{artifactName}` | Read browser preview region comparison artifact 错误: `BrowserPreviewEvidenceCorruptionError`, `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.readTaskEvidenceArtifact` |
 | GET | `/task/{taskID}/browser-preview/evidence/{evidenceID}/capture.png` | Read browser preview evidence screenshot 错误: `BrowserPreviewEvidenceCorruptionError`, `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.readTaskEvidenceCapture` |
@@ -125,18 +124,18 @@ OpenAPI 只会给项目作用域操作标注 `directory` query 参数。单个 T
 | POST | `/task/{taskID}/followup` | Generate follow-up suggestion 错误: `LogFileNotFoundError`, `NotFoundError`. | `task.followup` |
 | POST | `/task/{taskID}/inject` | Inject message into running task 请求体: `message`; 错误: `AgentSessionPendingCoordinationError`, `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`, `ReplyTargetEnvelopeMissingError`, `TaskCancellationIncompleteError`. | `task.inject` |
 | GET | `/task/{taskID}/interactions` | List task interactions 错误: `LogFileNotFoundError`, `NotFoundError`. | `task.interactions` |
-| POST | `/task/{taskID}/message` | Handle task message 请求体: `source`, `text`; 错误: `AgentSessionPendingCoordinationError`, `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`, `ReplyTargetEnvelopeMissingError`, `TaskCancellationIncompleteError`. | `task.message` |
+| POST | `/task/{taskID}/message` | Handle task message 请求体: `attachments`, `channel`, `promptProfile`, `resolvedRole`, `source`, `text`, `user_id`; 错误: `AgentSessionPendingCoordinationError`, `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`, `ReplyTargetEnvelopeMissingError`, `TaskCancellationIncompleteError`. | `task.message` |
 | GET | `/task/{taskID}/operator-model-context` | Get task operator model context 错误: `AgentSessionPendingCoordinationError`, `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`, `ReplyTargetEnvelopeMissingError`, `TaskCancellationIncompleteError`. | `task.operatorModelContext` |
 | GET | `/task/{taskID}/progress` | Get task progress 错误: `LogFileNotFoundError`, `NotFoundError`. | `task.progress` |
 | GET | `/task/{taskID}/project-archive` | Download task project archive 错误: `LogFileNotFoundError`, `NotFoundError`. | `task.projectArchive` |
 | POST | `/task/{taskID}/replan` | Replan task 错误: `LogFileNotFoundError`, `NotFoundError`. | `task.replan` |
 | POST | `/task/{taskID}/retry` | Retry task 错误: `LogFileNotFoundError`, `NotFoundError`. | `task.retry` |
-| POST | `/task/{taskID}/rewind` | Rewind task timeline; optionally also reset goal worktree files 请求体: `anchor`, `resetWorktree`; 错误: `LogFileNotFoundError`, `NotFoundError`. | `task.rewind` |
+| POST | `/task/{taskID}/rewind` | Rewind task timeline; optionally also reset goal worktree files 请求体: `anchor`, `reason`, `resetWorktree`; 错误: `LogFileNotFoundError`, `NotFoundError`. | `task.rewind` |
 | POST | `/task/{taskID}/rewind/clear` | Clear the rewind cursor (visibility only; will not unrevert any reset worktree files) 错误: `LogFileNotFoundError`, `NotFoundError`. | `task.clearRewindCursor` |
 | GET | `/task/{taskID}/runs` | List task runs 错误: `LogFileNotFoundError`, `NotFoundError`. | `task.runs` |
 | POST | `/task/{taskID}/session/{sessionID}/cancel` | Cancel a task agent session 错误: `AgentSessionPendingCoordinationError`, `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`, `ReplyTargetEnvelopeMissingError`, `TaskCancellationIncompleteError`. | `task.session.cancel` |
 | POST | `/task/{taskID}/session/{sessionID}/operator-steer` | Steer a task agent session through operator coordination 请求体: `message`; 错误: `AgentSessionPendingCoordinationError`, `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`, `OperatorSteerTargetError`, `OperatorSteerWakeError`, `SessionRuntimeContractMissingError`. | `task.session.operatorSteer` |
-| POST | `/task/{taskID}/session/{sessionID}/reply` | Reply directly to a task agent session 请求体: `message`; 错误: `AgentDirectReplyDisabledError`, `AgentSessionAttachmentReferenceError`, `AgentSessionPendingCoordinationError`, `InvalidReplyTargetKindError`, `LogFileNotFoundError`, `MissingModelConfigError`, `NotFoundError`, `ReplyTargetEnvelopeMissingError`, `SessionRuntimeContractMissingError`, `TaskCancellationIncompleteError`. | `task.session.reply` |
+| POST | `/task/{taskID}/session/{sessionID}/reply` | Reply directly to a task agent session 请求体: `attachments`, `message`; 错误: `AgentDirectReplyDisabledError`, `AgentSessionAttachmentReferenceError`, `AgentSessionPendingCoordinationError`, `InvalidReplyTargetKindError`, `LogFileNotFoundError`, `MissingModelConfigError`, `NotFoundError`, `ReplyTargetEnvelopeMissingError`, `SessionRuntimeContractMissingError`, `TaskCancellationIncompleteError`. | `task.session.reply` |
 | POST | `/task/{taskID}/start-now` | Start a queued task immediately 错误: `LogFileNotFoundError`, `NotFoundError`. | `task.queue.startNow` |
 | GET | `/task/{taskID}/status` | Get task status 错误: `LogFileNotFoundError`, `NotFoundError`. | `task.status` |
 | PATCH | `/task/{taskID}/title` | Update task title 请求体: `title`; 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `task.updateTitle` |
@@ -149,7 +148,7 @@ OpenAPI 只会给项目作用域操作标注 `directory` query 参数。单个 T
 | Method | 路径 | 说明 | operationId |
 |---|---|---|---|
 | GET | `/session` | List sessions | `session.list` |
-| POST | `/session` | Create session 请求体: `kind`; 错误: `BadRequestError`. | `session.create` |
+| POST | `/session` | Create session 请求体: `goalID`, `kind`, `metadata`, `parentID`, `permission`, `title`; 错误: `BadRequestError`. | `session.create` |
 | GET | `/session/global` | List sessions across projects 错误: `BadRequestError`. | `session.listGlobal` |
 | GET | `/session/status` | Get session status 错误: `BadRequestError`. | `session.status` |
 | DELETE | `/session/{sessionID}` | Delete session 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.delete` |
@@ -157,7 +156,7 @@ OpenAPI 只会给项目作用域操作标注 `directory` query 参数。单个 T
 | PATCH | `/session/{sessionID}` | Update session 请求体: `time`, `title`; 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.update` |
 | POST | `/session/{sessionID}/abort` | Abort session 错误: `AgentSessionPendingCoordinationError`, `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`, `ReplyTargetEnvelopeMissingError`, `TaskCancellationIncompleteError`. | `session.abort` |
 | GET | `/session/{sessionID}/children` | Get session children 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.children` |
-| POST | `/session/{sessionID}/command` | Send command 请求体: `arguments`, `command`; 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.command` |
+| POST | `/session/{sessionID}/command` | Send command 请求体: `agent`, `arguments`, `command`, `messageID`, `model`, `parts`, `variant`; 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.command` |
 | GET | `/session/{sessionID}/config` | Get session effective configuration 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.config.get` |
 | PATCH | `/session/{sessionID}/config` | Update session configuration overlay 请求体: `agent`, `model`, `prompt`, `prompt_profile`; 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.config.update` |
 | GET | `/session/{sessionID}/conversation` | Hydrate session conversation state 错误: `LogFileNotFoundError`, `NotFoundError`. | `session.conversation` |
@@ -166,15 +165,15 @@ OpenAPI 只会给项目作用域操作标注 `directory` query 参数。单个 T
 | POST | `/session/{sessionID}/fork` | Fork session 请求体: `messageID`. | `session.fork` |
 | POST | `/session/{sessionID}/init` | Initialize session 请求体: `messageID`, `modelID`, `providerID`; 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.init` |
 | GET | `/session/{sessionID}/message` | Get session messages 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.messages` |
-| POST | `/session/{sessionID}/message` | Send message 请求体: `parts`; 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.prompt` |
+| POST | `/session/{sessionID}/message` | Send message 请求体: `agent`, `byteMaterializationProjectID`, `extra`, `format`, `messageID`, `model`, `noReply`, `parts`, `system`, `systemMode`, `tools`, `variant`; 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.prompt` |
 | DELETE | `/session/{sessionID}/message/{messageID}` | Delete message 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.deleteMessage` |
 | GET | `/session/{sessionID}/message/{messageID}` | Get message 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.message` |
 | DELETE | `/session/{sessionID}/message/{messageID}/part/{partID}` | （无说明） 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `part.delete` |
 | PATCH | `/session/{sessionID}/message/{messageID}/part/{partID}` | （无说明） 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `part.update` |
-| POST | `/session/{sessionID}/prompt_async` | Send async message 请求体: `parts`; 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.prompt_async` |
+| POST | `/session/{sessionID}/prompt_async` | Send async message 请求体: `agent`, `byteMaterializationProjectID`, `extra`, `format`, `messageID`, `model`, `noReply`, `parts`, `system`, `systemMode`, `tools`, `variant`; 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.prompt_async` |
 | GET | `/session/{sessionID}/prompt_async/{taskID}` | Get async prompt task status 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.prompt_async_status` |
-| POST | `/session/{sessionID}/shell` | Run shell command 请求体: `agent`, `command`; 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.shell` |
-| POST | `/session/{sessionID}/summarize` | Summarize session 请求体: `modelID`, `providerID`; 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.summarize` |
+| POST | `/session/{sessionID}/shell` | Run shell command 请求体: `agent`, `command`, `model`; 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.shell` |
+| POST | `/session/{sessionID}/summarize` | Summarize session 请求体: `auto`, `focus`, `modelID`, `providerID`; 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.summarize` |
 | GET | `/session/{sessionID}/todo` | Get session todos 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.todo` |
 | GET | `/session/{sessionID}/trace` | Get session AgentTrace events | `session.trace` |
 
@@ -207,7 +206,7 @@ OpenAPI 只会给项目作用域操作标注 `directory` query 参数。单个 T
 | GET | `/channel` | List channels | `channel.list` |
 | POST | `/channel/attachment` | Create a temporary channel attachment URL 请求体: `data`, `filename`, `mime`; 错误: `BadRequestError`. | `channel.attachment.create` |
 | GET | `/channel/attachment/{id}` | Read a temporary channel attachment 错误: `LogFileNotFoundError`, `NotFoundError`. | `channel.attachment.get` |
-| POST | `/channel/message` | Handle channel message 请求体: `channel`, `platform`, `text`, `thread`. | `channel.message` |
+| POST | `/channel/message` | Handle channel message 请求体: `allow_create`, `allow_session_mutation`, `attachments`, `bind`, `channel`, `executor`, `metadata`, `model`, `platform`, `request_id`, `source`, `task_id`, `text`, `thread`, `user_id`. | `channel.message` |
 | GET | `/channel/runtime` | Get managed channel runtime | `channel.runtime` |
 | POST | `/channel/runtime/restart` | Restart managed channel runtime | `channel.runtime.restart` |
 
@@ -216,9 +215,9 @@ OpenAPI 只会给项目作用域操作标注 `directory` query 参数。单个 T
 | Method | 路径 | 说明 | operationId |
 |---|---|---|---|
 | GET | `/gateway/capabilities` | List gateway capabilities | `gateway.capabilities` |
-| POST | `/gateway/channel/{platform}/message` | Handle gateway channel message 请求体: `channel`, `text`, `thread`. | `gateway.channel.message` |
+| POST | `/gateway/channel/{platform}/message` | Handle gateway channel message 请求体: `allow_create`, `allow_session_mutation`, `attachments`, `bind`, `channel`, `executor`, `metadata`, `model`, `platform`, `request_id`, `source`, `task_id`, `text`, `thread`, `user_id`. | `gateway.channel.message` |
 | POST | `/gateway/control/action` | Run gateway control action | `gateway.control.action` |
-| POST | `/gateway/control/message` | Handle gateway control message 请求体: `text`. | `gateway.control.message` |
+| POST | `/gateway/control/message` | Handle gateway control message 请求体: `allow_create`, `attachments`, `channel`, `executor`, `metadata`, `model`, `request_id`, `sessionID`, `source`, `surface`, `taskID`, `text`, `thread`, `user_id`. | `gateway.control.message` |
 | GET | `/gateway/stats` | Get gateway stats | `gateway.stats` |
 
 ### Attachment
@@ -233,19 +232,20 @@ OpenAPI 只会给项目作用域操作标注 `directory` query 参数。单个 T
 |---|---|---|---|
 | GET | `/panel/capabilities` | List panel capabilities | `panel.capabilities` |
 | GET | `/panel/knowledge/memory` | List memory files for current project | `panel.knowledge.memory.list` |
-| POST | `/panel/knowledge/memory/search` | Search memories 请求体: `query`. | `panel.knowledge.memory.search` |
+| POST | `/panel/knowledge/memory/search` | Search memories 请求体: `limit`, `query`, `sessionID`, `taskID`. | `panel.knowledge.memory.search` |
 | DELETE | `/panel/knowledge/memory/{id}` | Delete memory file 错误: `LogFileNotFoundError`, `NotFoundError`. | `panel.knowledge.memory.delete` |
 | GET | `/panel/knowledge/memory/{id}` | Get memory file content (all chunks) 错误: `LogFileNotFoundError`, `NotFoundError`. | `panel.knowledge.memory.get` |
-| POST | `/panel/message` | Handle desktop panel message 请求体: `surface`, `text`. | `panel.message` |
-| POST | `/panel/message/stream` | Handle desktop panel message with streaming 请求体: `surface`, `text`. | `panel.message.stream` |
+| POST | `/panel/message` | Handle desktop panel message 请求体: `allow_create`, `attachments`, `channel`, `executor`, `metadata`, `model`, `request_id`, `sessionID`, `source`, `surface`, `taskID`, `text`, `thread`, `user_id`. | `panel.message` |
+| POST | `/panel/message/stream` | Handle desktop panel message with streaming 请求体: `allow_create`, `attachments`, `channel`, `executor`, `metadata`, `model`, `request_id`, `sessionID`, `source`, `surface`, `taskID`, `text`, `thread`, `user_id`. | `panel.message.stream` |
 
 ### Expert Squad
 
 | Method | 路径 | 说明 | operationId |
 |---|---|---|---|
+| GET | `/expert-squad/catalog` | List expert squads and active capability projection | `expertSquad.catalog` |
 | POST | `/expert-squad/export` | Export an expert squad ZIP archive 请求体: `id`; 错误: `ExpertSquadPackageError`. | `expertSquad.export` |
-| POST | `/expert-squad/import-file` | Import an expert squad ZIP archive 请求体: `archiveBase64`; 错误: `ExpertSquadPackageError`. | `expertSquad.importFile` |
-| POST | `/expert-squad/import-folder` | Import an expert squad folder 请求体: `sourceDirectory`; 错误: `ExpertSquadPackageError`. | `expertSquad.importFolder` |
+| POST | `/expert-squad/import-file` | Import an expert squad ZIP archive 请求体: `archiveBase64`, `filename`, `replace`; 错误: `ExpertSquadPackageError`. | `expertSquad.importFile` |
+| POST | `/expert-squad/import-folder` | Import an expert squad folder 请求体: `replace`, `sourceDirectory`; 错误: `ExpertSquadPackageError`. | `expertSquad.importFolder` |
 
 ### Skill
 
@@ -254,16 +254,16 @@ OpenAPI 只会给项目作用域操作标注 `directory` query 参数。单个 T
 | GET | `/agent` | List agents | `app.agents` |
 | GET | `/skill` | List skills | `app.skills` |
 | GET | `/skill/directories` | Get skill directories | `skill.directories` |
-| POST | `/skill/import-and-mount` | Import a dropped skill and mount it to an agent 请求体: `agent`, `import`. | `skill.importAndMount` |
+| POST | `/skill/import-and-mount` | Import a dropped skill and mount it to an agent 请求体: `agent`, `import`, `sessionID`. | `skill.importAndMount` |
 | POST | `/skill/import-file` | Import a dropped skill source 请求体: `archiveBase64`, `content`, `filename`, `files`, `policy`, `sourceName`. | `skill.importFile` |
-| POST | `/skill/install` | Install or import a skill source 请求体: `kind`, `value`. | `skill.install` |
+| POST | `/skill/install` | Install or import a skill source 请求体: `kind`, `policy`, `value`. | `skill.install` |
 | GET | `/skill/installed` | List installed skills | `skill.installed` |
 | GET | `/skill/market` | List skill markets | `skill.market` |
-| POST | `/skill/mount` | Mount a skill to an agent 请求体: `agent`, `skill`. | `skill.mount` |
+| POST | `/skill/mount` | Mount a skill to an agent 请求体: `agent`, `sessionID`, `skill`. | `skill.mount` |
 | GET | `/skill/mounts` | List agent skill mounts | `skill.mounts` |
 | POST | `/skill/policy` | Set skill permission policy 请求体: `action`, `name`. | `skill.policy` |
-| POST | `/skill/remove` | Remove a skill source 请求体: `source`. | `skill.remove` |
-| POST | `/skill/unmount` | Unmount a skill from an agent 请求体: `agent`, `skill`. | `skill.unmount` |
+| POST | `/skill/remove` | Remove a skill source 请求体: `kind`, `source`. | `skill.remove` |
+| POST | `/skill/unmount` | Unmount a skill from an agent 请求体: `agent`, `sessionID`, `skill`. | `skill.unmount` |
 
 ### Control
 
@@ -301,7 +301,7 @@ OpenAPI 只会给项目作用域操作标注 `directory` query 参数。单个 T
 | Method | 路径 | 说明 | operationId |
 |---|---|---|---|
 | GET | `/permission` | List pending permissions | `permission.list` |
-| POST | `/permission/{requestID}/reply` | Respond to permission request 请求体: `autoReply`, `reply`; 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `permission.reply` |
+| POST | `/permission/{requestID}/reply` | Respond to permission request 请求体: `autoReply`, `message`, `reply`; 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `permission.reply` |
 
 ### Provider
 
@@ -309,14 +309,14 @@ OpenAPI 只会给项目作用域操作标注 `directory` query 参数。单个 T
 |---|---|---|---|
 | GET | `/provider` | List providers | `provider.list` |
 | GET | `/provider/auth` | Get provider auth methods | `provider.auth` |
-| POST | `/provider/discover-models` | Discover OpenAI-compatible provider models 请求体: `api`; 错误: `BadRequestError`. | `provider.discover.models` |
+| POST | `/provider/discover-models` | Discover OpenAI-compatible provider models 请求体: `api`, `apiKey`, `providerID`; 错误: `BadRequestError`. | `provider.discover.models` |
 | GET | `/provider/hexin/budget` | Get hexin gateway key budget | `provider.hexin.budget` |
 | POST | `/provider/hexin/refresh` | Refresh hexin gateway model list | `provider.hexin.refresh` |
 | POST | `/provider/refresh` | Refresh the provider model registry | `provider.refresh` |
-| POST | `/provider/{providerID}/auth/execute` | Execute auth method 请求体: `method`; 错误: `BadRequestError`. | `provider.auth.execute` |
-| POST | `/provider/{providerID}/auth/prompts` | Get auth prompts 请求体: `method`; 错误: `BadRequestError`. | `provider.auth.prompts` |
-| POST | `/provider/{providerID}/oauth/authorize` | OAuth authorize 请求体: `method`; 错误: `BadRequestError`. | `provider.oauth.authorize` |
-| POST | `/provider/{providerID}/oauth/callback` | OAuth callback 请求体: `method`; 错误: `BadRequestError`. | `provider.oauth.callback` |
+| POST | `/provider/{providerID}/auth/execute` | Execute auth method 请求体: `inputs`, `method`; 错误: `BadRequestError`. | `provider.auth.execute` |
+| POST | `/provider/{providerID}/auth/prompts` | Get auth prompts 请求体: `inputs`, `method`; 错误: `BadRequestError`. | `provider.auth.prompts` |
+| POST | `/provider/{providerID}/oauth/authorize` | OAuth authorize 请求体: `inputs`, `method`; 错误: `BadRequestError`. | `provider.oauth.authorize` |
+| POST | `/provider/{providerID}/oauth/callback` | OAuth callback 请求体: `code`, `method`; 错误: `BadRequestError`. | `provider.oauth.callback` |
 | POST | `/provider/{providerID}/test` | Test provider connection 请求体: `modelID`; 错误: `BadRequestError`. | `provider.test` |
 
 ### Question
@@ -332,12 +332,12 @@ OpenAPI 只会给项目作用域操作标注 `directory` query 参数。单个 T
 | Method | 路径 | 说明 | operationId |
 |---|---|---|---|
 | GET | `/pty` | List PTY sessions | `pty.list` |
-| POST | `/pty` | Create PTY session 请求体: `command`; 错误: `BadRequestError`. | `pty.create` |
+| POST | `/pty` | Create PTY session 请求体: `args`, `command`, `cwd`, `env`, `title`; 错误: `BadRequestError`. | `pty.create` |
 | DELETE | `/pty/{ptyID}` | Remove PTY session 错误: `LogFileNotFoundError`, `NotFoundError`. | `pty.remove` |
 | GET | `/pty/{ptyID}` | Get PTY session 错误: `LogFileNotFoundError`, `NotFoundError`. | `pty.get` |
 | PUT | `/pty/{ptyID}` | Update PTY session 请求体: `size`, `title`; 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `pty.update` |
 | GET | `/pty/{ptyID}/connect` | Connect to PTY session 错误: `LogFileNotFoundError`, `NotFoundError`. | `pty.connect` |
-| POST | `/terminal/open` | Open system terminal 请求体: `cwd`; 错误: `BadRequestError`. | `terminal.open` |
+| POST | `/terminal/open` | Open system terminal 请求体: `cwd`, `profileID`; 错误: `BadRequestError`. | `terminal.open` |
 | GET | `/terminal/profiles` | List system terminal profiles 错误: `BadRequestError`. | `terminal.profiles` |
 
 ### File / Search
@@ -349,7 +349,7 @@ OpenAPI 只会给项目作用域操作标注 `directory` query 参数。单个 T
 | PATCH | `/file/content` | Write file 请求体: `content`, `path`; 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`, `UnknownError`. | `file.write` |
 | DELETE | `/file/item` | Delete file item 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `file.delete` |
 | PATCH | `/file/item` | Move file item 请求体: `newPath`, `path`; 错误: `AgentSessionPendingCoordinationError`, `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`, `ReplyTargetEnvelopeMissingError`, `TaskCancellationIncompleteError`. | `file.move` |
-| POST | `/file/item` | Create file item 请求体: `path`, `type`; 错误: `AgentSessionPendingCoordinationError`, `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`, `ReplyTargetEnvelopeMissingError`, `TaskCancellationIncompleteError`. | `file.create` |
+| POST | `/file/item` | Create file item 请求体: `content`, `path`, `type`; 错误: `AgentSessionPendingCoordinationError`, `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`, `ReplyTargetEnvelopeMissingError`, `TaskCancellationIncompleteError`. | `file.create` |
 | POST | `/file/item/copy` | Copy file item 请求体: `newPath`, `path`; 错误: `AgentSessionPendingCoordinationError`, `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`, `ReplyTargetEnvelopeMissingError`, `TaskCancellationIncompleteError`. | `file.copy` |
 | GET | `/file/status` | Get file status | `file.status` |
 | POST | `/file/upload` | Upload files 请求体: `files`, `targetDir`; 错误: `AgentSessionPendingCoordinationError`, `BadRequestError`, `ReplyTargetEnvelopeMissingError`, `TaskCancellationIncompleteError`. | `file.upload` |
@@ -363,11 +363,11 @@ OpenAPI 只会给项目作用域操作标注 `directory` query 参数。单个 T
 | Method | 路径 | 说明 | operationId |
 |---|---|---|---|
 | GET | `/experimental/event-schedule` | List event-triggered tasks 错误: `BadRequestError`. | `experimental.eventschedule.list` |
-| POST | `/experimental/event-schedule` | Create event-triggered task 请求体: `eventType`, `name`, `prompt`; 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `experimental.eventschedule.create` |
+| POST | `/experimental/event-schedule` | Create event-triggered task 请求体: `cooldownMs`, `eventType`, `match`, `name`, `oneShot`, `prompt`, `sessionId`; 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `experimental.eventschedule.create` |
 | DELETE | `/experimental/event-schedule/{id}` | Cancel event-triggered task 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `experimental.eventschedule.delete` |
 | GET | `/experimental/resource` | Get MCP resources 错误: `UnknownError`. | `experimental.resource.list` |
 | GET | `/experimental/schedule` | List scheduled tasks 错误: `BadRequestError`. | `experimental.schedule.list` |
-| POST | `/experimental/schedule` | Create scheduled task 请求体: `expression`, `name`, `prompt`; 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `experimental.schedule.create` |
+| POST | `/experimental/schedule` | Create scheduled task 请求体: `expression`, `name`, `oneShot`, `prompt`, `sessionId`; 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `experimental.schedule.create` |
 | DELETE | `/experimental/schedule/{id}` | Cancel scheduled task 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `experimental.schedule.delete` |
 | GET | `/experimental/scratchpad` | Get scratchpad content 错误: `LogFileNotFoundError`, `NotFoundError`. | `experimental.scratchpad.get` |
 | GET | `/experimental/task-plan` | List tasks for a session 错误: `LogFileNotFoundError`, `NotFoundError`. | `experimental.taskplan.list` |

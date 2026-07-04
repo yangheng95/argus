@@ -6,6 +6,7 @@ import test from "node:test"
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -32,23 +33,7 @@ function eventStream() {
   })
 }
 
-const promptProfileCatalog = {
-  active: "general",
-  project_active: "general",
-  session_active: null,
-  default: "general",
-  targets: [],
-  profiles: [
-    {
-      id: "general",
-      label: "General",
-      description: "Default prompt profile",
-      built_in: true,
-      editable: false,
-      agents: {},
-    },
-  ],
-}
+const expertSquadCatalog = generalExpertSquadCatalog()
 
 const syntaxMarkdown = [
   "```ts",
@@ -131,7 +116,7 @@ test("rendered Markdown syntax highlighting stays readable across overlay themes
     if (path === "/provider/auth") return send({})
     if (path === "/config/providers") return send({ providers: [], default: {} })
     if (path === "/config") return send({ model: "" })
-    if (path === "/config/prompt-profile") return send(promptProfileCatalog)
+    if (path === "/expert-squad/catalog") return send(expertSquadCatalog)
     if (path === "/terminal/profiles") return send({ profiles: [] })
     if (path === "/coding/cli/profiles") return send({ profiles: [] })
     if (path === "/agent") return send([])

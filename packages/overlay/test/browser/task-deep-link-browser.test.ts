@@ -6,6 +6,7 @@ import test from "node:test"
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -113,9 +114,9 @@ test("URL taskID deep link selects the linked task before persisted restore", as
     if (path === "/config")
       return send({ server: {}, provider: {}, channel: {}, mcp: {}, model: "", directory: DIRECTORY })
     if (path === "/config/prompt")
-      return send({ active: "general", project_active: "general", default: "general", targets: [], profiles: [] })
-    if (path === "/config/prompt-profile")
-      return send({ active: "general", project_active: "general", default: "general", targets: [], profiles: [] })
+      return send(generalExpertSquadCatalog())
+    if (path === "/expert-squad/catalog")
+      return send(generalExpertSquadCatalog())
     if (path === "/channel") return send([])
     if (path === "/channel/runtime") return send({ status: "disabled", channels: [] })
     if (path === "/gateway/stats") return send({ active: 0, queued: 0, completed: 0, failed: 0 })
@@ -260,9 +261,9 @@ test("directory-only URL parameters keep task row operations usable", async () =
     if (path === "/config")
       return send({ server: {}, provider: {}, channel: {}, mcp: {}, model: "", directory: DIRECTORY })
     if (path === "/config/prompt")
-      return send({ active: "general", project_active: "general", default: "general", targets: [], profiles: [] })
-    if (path === "/config/prompt-profile")
-      return send({ active: "general", project_active: "general", default: "general", targets: [], profiles: [] })
+      return send(generalExpertSquadCatalog())
+    if (path === "/expert-squad/catalog")
+      return send(generalExpertSquadCatalog())
     if (path === "/channel") return send([])
     if (path === "/channel/runtime") return send({ status: "disabled", channels: [] })
     if (path === "/gateway/stats") return send({ active: 0, queued: 0, completed: 0, failed: 0 })

@@ -2,7 +2,7 @@
 //
 // `.field-label` is the form-label primitive used across every
 // settings panel (Providers, AgentModels, Channels, SkillMarket,
-// PromptCatalog, General). It carried `text-transform: uppercase`
+// ExpertSquad, General). It carried `text-transform: uppercase`
 // + `letter-spacing: 0.08em` (via the --subhead-track token), which
 // force-uppercased every form label across Settings — "Server URL"
 // rendered as "SERVER URL", "API Key" as "API KEY", etc — even

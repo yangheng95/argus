@@ -6,6 +6,7 @@ import test from "node:test"
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -56,7 +57,7 @@ test("sidebar version label keeps the author email on hover", async () => {
     if (path === "/provider/auth") return send({})
     if (path === "/config/providers") return send({ providers: [], default: {} })
     if (path === "/config/prompt") return send([])
-    if (path === "/config/prompt-profile") return send({ active: "general", targets: [], profiles: [] })
+    if (path === "/expert-squad/catalog") return send(generalExpertSquadCatalog())
     if (path === "/config") return send({ model: "", version: "1.2.3" })
     if (path === "/agent") return send([])
     if (path === "/channel") return send([])

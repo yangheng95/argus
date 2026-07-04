@@ -310,3 +310,180 @@ Round 2 completed on 2026-07-05 with the same three read-only reviewers.
 - API reviewer: no blocker. Non-blocking advice added: source guards for old overlay callers and deriving `active_skill_projection` from `PromptProfileResolver.resolveSkillProjection(...)`.
 - UX reviewer: no blocker. Non-blocking advice added: single catalog-load error path, replaced-squad selection after replace, visible manual path mode, and scope-directory notices for export.
 - Test reviewer: no blocker. Non-blocking advice added: stronger residue guards, browser error collector rename, directory-injection route list update, and final `rg` scan.
+
+## Implementation Recall, 2026-07-05
+
+User follow-up:
+
+- "开始重构"
+
+Acceptance carried into implementation:
+
+- Replace the obsolete overlay Prompt tab with the Expert Squads settings surface described above.
+- Add one canonical expert-squad catalog read path, `GET /expert-squad/catalog`, for the overlay.
+- Keep `prompt_profile.active` as the only active selection storage; do not introduce `expert_squad.active`.
+- Preserve session-root ownership semantics and distinguish effective active, project active, and explicit session override.
+- Add package lifecycle controls for folder import, ZIP import, explicit replace, export, and visible recovery after catalog load failure.
+- Add focused tests for backend catalog, overlay scope/service/surface, directory injection, and old Prompt surface residue.
+- Perform real browser visual verification before claiming the UI delivery complete.
+
+Hard constraints recalled immediately before editing:
+
+- No fallback, compatibility route/caller, hidden gate, local active-source cache, or silent switch to `general`.
+- Do not restart, kill, refresh, or interfere with a running OpenCorvus / overlay process.
+- Existing dirty worktree changes are treated as user/other-task state and must not be reverted.
+- Any target file with existing uncommitted changes must be read and changed incrementally.
+
+Sources reread before implementation:
+
+- `AGENTS.md`
+- `specs/README.md`
+- `specs/records/2026-07/README.md`
+- `specs/current/architecture/04-extensions.md`
+- `specs/current/architecture/07-panel.md`
+- `specs/records/2026-07/2026-07-03-dynamic-expert-squad-loading.md`
+- `specs/records/2026-07/2026-07-04-architecture-issue-subagent-investigation.md`
+- `C:/Users/chuan/.codex/skills/opencorvus-expert-squad-creator/SKILL.md`
+- `C:/Users/chuan/.codex/skills/opencorvus-expert-squad-creator/references/open-corvus-expert-squad-checklist.md`
+
+Repository search evidence before implementation:
+
+- `rg -n "PromptProfile|builtIns|prompt_profile|frontend-replica|frontend-innovate|expert-squad|select_expert_squad|mounted Orchestrator expert-squad|skill tool" packages/opencorvus/src packages/opencorvus/test specs`
+- `rg -n "frontend-replica-expert-squad|frontend-innovate-expert-squad|frontend-automation-debug-expert-squad|builtin-skills|required_tools|mounted_agents" packages/opencorvus/src packages/opencorvus/test`
+- `rg -n "requiredBuiltInTargetMatrix|built-in registry pressure|overlay target|prompt-profile" packages/opencorvus/test/agent packages/opencorvus/test/server`
+- `rg -n 'PromptCatalog|config/prompt-profile|prompt-profile-fixture|titlebar-settings-prompt|data-config-panel="prompt"|loadPromptProfileCatalog|prompt-profile-scope|promptProfileCatalogScope|Prompt Profile|Prompt Profiles|prompt profile|prompt-profile|prompt\.title|settings\.prompt' packages/overlay/src packages/overlay/test packages/opencorvus/src packages/opencorvus/test`
+- `rg -n "PromptProfile|promptProfile|prompt_profile|loadPromptProfileCatalog|markPromptProfileCatalog|PromptProfileCatalog|promptProfileCatalog|prompt-profile|config-prompt|prompt\.title|prompt_profile" packages/overlay/src packages/overlay/test -g "*.ts" -g "*.tsx" -g "*.json"`
+
+Implementation-time findings:
+
+- `packages/opencorvus/src/server/routes/expert-squad.ts` currently owns only import-folder, import-file, and export.
+- `packages/opencorvus/src/server/routes/config.ts` still owns `GET /config/prompt-profile`; it already has unrelated uncommitted session lineage assertions that must be preserved.
+- `packages/opencorvus/src/expert-squad/prompt-profile-resolver.ts` already has unrelated uncommitted scoped MCP projection sanitization changes that must be preserved.
+- `PromptProfileResolver.list()` already has the projection catalog base, but lacks source metadata, README content, selector instructions, explicit active object, and active skill projection.
+- `packages/overlay/src/components/settings/PromptCatalog.tsx`, `packages/overlay/src/services/config.ts`, `packages/overlay/src/services/prompt-profile-scope.ts`, `packages/overlay/src/main.tsx`, `packages/overlay/src/components/ChatComposer.tsx`, and `packages/overlay/src/components/settings/SkillMarketPanel.tsx` are the active overlay call path.
+- `packages/overlay/src/main.tsx`, `packages/overlay/src/components/ChatComposer.tsx`, and `packages/overlay/src/services/config.ts` already contain unrelated uncommitted changes moving the composer selector toward the backend catalog single source; those changes must be retained.
+- Existing browser fixtures still commonly mock `/config/prompt-profile`, so route migration must update shared fixtures or targeted browser tests instead of leaving an overlay compatibility caller.
+
+## Implementation Result, 2026-07-05
+
+Implemented backend catalog surface:
+
+- Added `GET /expert-squad/catalog` as the single overlay-facing expert-squad catalog route.
+- Retired overlay use of `/config/prompt-profile`; API docs and SDK/OpenAPI no longer publish that route.
+- Catalog responses expose `active.effective`, `active.project`, `active.session_override`, scope directory/session, source metadata, README content, selector metadata/instructions, dynamic attributes, and `active_skill_projection`.
+- `PromptProfileResolver.catalog(...)` uses `scope.directory` as the single project directory input and derives active projection through `resolveSkillProjection(...)`.
+- Runtime catalog projection supplies `Instance.provide(...)` when default skills are not explicitly injected by tests.
+
+Implemented overlay settings surface:
+
+- Replaced the old settings Prompt tab with `ExpertSquadPanel`.
+- Added `packages/overlay/src/services/expert-squad.ts` and `packages/overlay/src/services/expert-squad-scope.ts`.
+- Added package lifecycle controls for import folder, import ZIP, explicit replace, export ZIP, project activation, and session activation.
+- Catalog load errors render exact request errors with recovery actions still visible.
+- Composer selector is now labelled Expert Squad and loads from `/expert-squad/catalog`, while task/mission submission still writes the existing `promptProfile` API field.
+
+Validation completed:
+
+- `bun test --timeout 0 packages/opencorvus/test/agent/prompt-profile.test.ts packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts packages/opencorvus/test/server/config-routes.test.ts` -> 91 pass, 0 fail.
+- `bun run --cwd packages/opencorvus typecheck` -> pass.
+- `bun run --cwd packages/overlay typecheck` -> pass.
+- `bun run api:routes-check` -> pass.
+- `bun run docs:api` regenerated API docs after route changes.
+- `bun run docs:check` -> pass.
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts` -> 19 pass, 0 fail.
+- `bun test packages/overlay/test/expert-squad-settings-surface.test.ts packages/overlay/test/expert-squad-lifecycle-service.test.ts packages/overlay/test/expert-squad-scope.test.ts packages/overlay/test/config-panel-sizing.test.ts packages/overlay/test/composer-textarea-unification.test.ts packages/overlay/test/dialog-service-single-source.test.ts packages/overlay/test/general-panel-db-reset.test.ts packages/overlay/test/executor-settings.test.ts packages/overlay/test/theme-form-control-coverage.test.ts` -> 94 pass, 0 fail.
+- `bun run overlay:i18n-check` -> pass.
+- `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/expert-squad-panel.test.ts packages/overlay/test/browser/expert-squad-selector-browser.test.ts` -> 3 pass, 0 fail.
+- `git diff --check` -> pass, with unrelated CRLF normalization warnings in already dirty files.
+- Production overlay residue scan: `rg -n 'PromptCatalog|prompt-profile-scope|loadPromptCatalog|loadPromptProfileCatalog|selectedPromptProfile|setActivePromptProfile|promptProfileCatalogScope|promptBody|titlebar-settings-prompt|data-config-panel="prompt"|\.prompt-profile-' packages/overlay/src -g '*.ts' -g '*.tsx' -g '*.css' -g '*.json'` -> no matches.
+- API residue scan: `rg -n '/config/prompt-profile|config\.promptProfile' packages/web/src/content/docs packages/sdk/openapi.json packages/sdk/js/src/gen/types.gen.ts packages/sdk/js/src/gen/sdk.gen.ts` -> no matches.
+
+Visual review completed:
+
+- `.scratch/expert-squad-settings-panel.png`: inspected manually; settings page is nonblank, old Prompt tab/editor is absent, package identity/source/README/selector/projection are visible, and lifecycle actions are visible.
+- `.scratch/expert-squad-selector-runtime-highlighted-en-US.png`: inspected manually; light popup text, selected state, and focus state are readable.
+- `.scratch/expert-squad-selector-runtime-highlighted-zh-CN.png`: inspected manually; Chinese text, selected state, and focus state are readable.
+
+## Left Toolbar Capability Panels Recall, 2026-07-05
+
+User follow-up:
+
+- Add or refactor left-toolbar Tool / MCP / Skill panels so they show each registered agent's held tools, MCP entries, and skills.
+- Present agents through vertical tabs.
+- The existing skill mount matrix has become a poor fit after dynamic expert-squad projection; replace that problem shape.
+- The bottom of the corresponding panel should show all configurable items; right-click can add a skill to a registered agent.
+- The panels must support dynamically registered expert squads and their projected MCP / skill / tool refs.
+- Use independent-agent GUI review to catch sloppy implementation.
+
+Additional acceptance:
+
+- Add a left-toolbar Tool panel; keep Skill and MCP panels as first-class left-toolbar surfaces.
+- Use `GET /expert-squad/catalog` as the single dynamic expert-squad projection source for tool and MCP display.
+- Do not invent a frontend-only or config-side tool/MCP mount path. `config.agent.<built-in>.tools` is rejected by backend validation, MCP is project-level config, and only `/skill/mount*` is the current per-agent operator-managed mount API.
+- The Skill panel must switch from the horizontal agent-column matrix to vertical agent tabs with a per-agent mounted list and a bottom skill pool.
+- Skill pool right-click must mount the chosen skill to the selected/target registered agent through `/skill/mount` with the same expert-squad-aware session scope already used by the matrix.
+- Tool and MCP panels are projection/availability inspectors unless a backend write contract exists; they must not render fake add-to-agent actions.
+- GUI validation must include real browser screenshots of the left Tool, MCP, and Skill panels and an independent agent review of those screenshots or rendered UI evidence.
+
+Additional code and search evidence:
+
+- `packages/overlay/src/main.tsx` owns `LeftActivity`, `LEFT_ACTIVITIES`, `LEFT_ACTIVITY_BODY_IDS`, and the Solid mounts for `SkillsPanel` / `McpPanel`.
+- `packages/overlay/src/components/settings/SkillMarketPanel.tsx` owns the current Skill, MCP, and market panels. It has a horizontal `.agent-skill-matrix` with agent columns and skill rows, and uses `expertSquadCatalogScope()` for session-aware skill mounts.
+- `packages/overlay/src/services/extensions.ts` owns `loadSkillMountMatrix`, `mountSkill`, `unmountSkill`, and `importAndMountSkill`; the returned matrix already includes `active_profile`, `capability_profile_id`, projection hashes, projected tools, projected agents, selector skills, and production skills.
+- `packages/overlay/src/services/expert-squad.ts` owns the new catalog types, including `capability_projection` with scheduler and per-agent tool / skill / MCP refs.
+- `packages/opencorvus/src/skill/mounts.ts` is the single backend write model for operator-managed per-agent skill mounts.
+- `packages/opencorvus/src/config/config.ts` rejects `config.agent.<built-in>.tools`, so a Tool panel cannot add built-in tools to built-in agents without a deliberate backend architecture change.
+- `packages/overlay/test/left-activity-toolbar.test.ts`, `packages/overlay/test/browser/skill-mcp-panel-browser.test.ts`, and `packages/overlay/test/browser/skill-mount-matrix-browser.test.ts` are the current tests that pin the left toolbar and old skill matrix shape.
+
+Implementation plan for the added panel work:
+
+- Extend left activity ids with `tool`, add `leftPanelTools` / `solidLeftToolsPanel`, icon, i18n labels, and a `ToolsPanel` export.
+- Refactor `SkillMarketPanel.tsx` into a shared compact agent-capability layout for `tool`, `skill`, and `mcp` modes.
+- Load the expert-squad catalog in compact Tool/MCP views using `expertSquadCatalogScope()` and show per-agent projected built-in/default/package refs from the active squad.
+- Convert the Skill view to vertical agent tabs backed by `/skill/mounts`, with mounted skills in the active agent body and all pool skills in a bottom configurable list.
+- Add a context menu/right-click path on bottom skill pool rows to mount to the active agent; keep click/keyboard mount controls explicit and server-backed.
+- Update CSS and i18n for vertical tabs, bottom pool, read-only projection groups, and new Tool activity.
+- Replace old matrix tests with source and browser tests that assert vertical tabs, dynamic projection refs, no fake tool/MCP mount action, session-scoped skill mount calls, and GUI screenshots.
+
+## Left Toolbar Capability Panels Result, 2026-07-05
+
+Implemented left-toolbar surfaces:
+
+- Added `tool` to the left activity set, including `leftPanelTools`, the Solid mount point, a toolbar icon, and English / Chinese labels.
+- Kept `skill` and `mcp` as first-class left-toolbar surfaces and moved all three compact panels to a shared vertical agent-tab layout.
+- Tool and MCP panels now load dynamic capability projections through `loadExpertSquadCatalog(...)` with `expertSquadCatalogScope()` and render agent-specific projected refs plus a bottom projected pool.
+- Skill panel now renders vertical agent tabs, the selected agent's mounted skills, and a bottom skill pool. Pool rows can be mounted through the existing `/skill/mount` server contract with the expert-squad-aware session scope.
+- Tool and MCP panels remain read-only inspectors. No frontend-only tool or MCP mount action was added.
+- The old horizontal skill matrix selectors and CSS were removed from the overlay source and tests.
+
+Implementation-time fixture/root findings:
+
+- The side-activity mission browser fixture had stale task runtime shape; opening the Mission panel threw because `task.time.started` was missing. The fixture now includes the durable started timestamp instead of masking the product path.
+- Mission history fixtures used `limit: 0`, which violated the current conversation-history contract. They now use the same positive limit as the real client path.
+- The file explorer fixture returned the old `{ entries: [...] }` wrapper shape. It now returns the current `FileNode[]` response.
+- The MCP add-server browser test was racing the PATCH request and the connect POST. The test now waits for the actual `POST /mcp/newremote/connect` request before asserting, so it verifies the real async chain.
+
+Visual evidence generated and manually inspected:
+
+- `.scratch/left-tool-panel.png` shows the Tool panel with vertical agent tabs and a fully visible projected tool pool.
+- `.scratch/left-skill-panel.png` shows the Skill panel with vertical agent tabs, mounted skill body, and bottom skill pool.
+- `.scratch/left-mcp-panel.png` shows the MCP panel with vertical agent tabs, configured server status, and a fully visible projected MCP pool.
+- `.scratch/expert-squad-settings-agent-overlays.png` adds a focused lower-page screenshot for Agent Guidance so the Expert Squads page is not validated only by its upper metadata area.
+
+Independent GUI (Graphical User Interface) review:
+
+- Round 1 blocker: MCP pool overlapped the `PACKAGE TOOLS` heading, and the lower Expert Squads screenshot had too much blank space to prove Agent Guidance. Fixed by moving MCP status before the projected pool, tightening compact panel layout, and adding a focused Agent Guidance screenshot.
+- Round 2 blocker: Tool and MCP pool badges counted more items than were visibly inspectable. Fixed by constraining the compact sidebar body so Tool shows 9 of 9 projected tools and MCP shows 7 of 7 projected MCP items.
+- Round 3 result: no blockers. The reviewer accepted the Tool, Skill, MCP, selector, and Expert Squads screenshots as visible and non-overlapping, with only a non-blocking note that the Tool default body is dense.
+
+Final validation completed after the documentation update:
+
+- `bun test packages/overlay/test/notification-center-primitive.test.ts packages/overlay/test/left-activity-toolbar.test.ts packages/overlay/test/expert-squad-settings-surface.test.ts packages/overlay/test/mission-session-source.test.ts packages/overlay/test/mission-launcher-component.test.ts packages/overlay/test/expert-squad-scope.test.ts packages/overlay/test/expert-squad-lifecycle-service.test.ts packages/overlay/test/api-directory-injection.test.ts` -> 176 pass, 0 fail.
+- `bun run --cwd packages/overlay typecheck` -> pass.
+- `bun run overlay:i18n-check` -> pass.
+- `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/expert-squad-panel.test.ts packages/overlay/test/browser/expert-squad-selector-browser.test.ts packages/overlay/test/browser/left-tool-panels-directory-browser.test.ts packages/overlay/test/browser/skill-mount-matrix-browser.test.ts packages/overlay/test/browser/skill-mcp-panel-browser.test.ts packages/overlay/test/browser/side-activity-toolbar-browser.test.ts` -> 10 pass, 0 fail.
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts` -> 19 pass, 0 fail.
+- `git diff --check` -> pass, with unrelated CRLF normalization warnings in already dirty files.
+- Production residue scan for obsolete Prompt catalog source names under `packages/overlay/src` -> no matches.
+- Old skill matrix residue scan under `packages/overlay/src` and `packages/overlay/test` -> no matches.
+- API residue scan for the retired `/config/prompt-profile` docs / SDK path -> no matches.

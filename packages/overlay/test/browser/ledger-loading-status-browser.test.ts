@@ -6,6 +6,7 @@ import test from "node:test"
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -121,15 +122,8 @@ test("left ledger loading skeletons expose live status text without visual regre
     if (path === "/provider/auth") return send({})
     if (path === "/config/providers") return send({ providers: [], default: {} })
     if (path === "/config") return send({ server: {}, provider: {}, channel: {}, mcp: {}, model: "" })
-    if (path === "/config/prompt" || path === "/config/prompt-profile") {
-      return send({
-        active: "general",
-        project_active: "general",
-        session_active: null,
-        default: "general",
-        targets: [],
-        profiles: [],
-      })
+    if (path === "/config/prompt" || path === "/expert-squad/catalog") {
+      return send(generalExpertSquadCatalog())
     }
     if (path === "/channel" || path === "/executor" || path === "/agent") return send([])
     if (path === "/channel/runtime") return send({ status: "disabled", channels: [] })

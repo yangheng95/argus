@@ -141,7 +141,7 @@ describe("apiUrl directory injection (W2-V31)", () => {
     test("config/mcp", () => expectInjects("config/mcp"))
     test("config/skill", () => expectInjects("config/skill"))
     test("config/prompt", () => expectInjects("config/prompt"))
-    test("config/prompt-profile", () => expectInjects("config/prompt-profile"))
+    test("expert-squad/catalog", () => expectInjects("expert-squad/catalog"))
     test("config/executor", () => expectInjects("config/executor"))
     test("provider", () => expectInjects("provider"))
     test("provider Hexin budget", () => expectInjects("provider/hexin/budget"))
@@ -223,7 +223,7 @@ describe("apiUrl directory injection (W2-V31)", () => {
       "vcs",
       "config",
       "config/proxy/test",
-      "config/prompt-profile",
+      "expert-squad/catalog",
       "skill/mounts",
       "skill/mount",
       "skill/unmount",

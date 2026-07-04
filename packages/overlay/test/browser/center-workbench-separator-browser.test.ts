@@ -6,6 +6,7 @@ import test from "node:test"
 import { launchBrowser, type OverlayPage } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -23,23 +24,7 @@ function send(value: unknown, init?: ResponseInit) {
   })
 }
 
-const PROMPT_PROFILE_CATALOG = {
-  active: "general",
-  project_active: "general",
-  session_active: null,
-  default: "general",
-  targets: [],
-  profiles: [
-    {
-      id: "general",
-      label: "General",
-      description: "Default prompt profile",
-      built_in: true,
-      editable: false,
-      agents: {},
-    },
-  ],
-}
+const EXPERT_SQUAD_CATALOG = generalExpertSquadCatalog()
 
 function colorAlpha(value: string): number {
   const slashAlpha = value.match(/\/\s*([0-9.]+)/)
@@ -351,7 +336,7 @@ test(
       if (path === "/provider") return send({ all: [], connected: [], default: {} })
       if (path === "/provider/auth") return send({})
       if (path === "/config/providers") return send({ providers: [], default: {} })
-      if (path === "/config/prompt-profile") return send(PROMPT_PROFILE_CATALOG)
+      if (path === "/expert-squad/catalog") return send(EXPERT_SQUAD_CATALOG)
       if (path === "/config") return send({ model: "", prompt_profile: { active: "general" } })
       if (path === "/agent") return send([])
       if (path === "/channel") return send([])

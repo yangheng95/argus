@@ -8,6 +8,7 @@ import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { testMessageOrderKey, testPartOrderKey, testSessionOrderKey, testTaskOrderKey } from "../fixtures/timeline-order.ts"
 import { installBrowserErrorCollector } from "./error-collector.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -328,15 +329,8 @@ test("message cards render as chronological adjacent segment aggregation", async
     if (path === "/provider/auth") return json({})
     if (path === "/config/providers") return json({ providers: [], default: {} })
     if (path === "/config/prompt") return json([])
-    if (path === "/config/prompt-profile")
-      return json({
-        active: "general",
-        project_active: "general",
-        session_active: null,
-        default: "general",
-        targets: [],
-        profiles: [],
-      })
+    if (path === "/expert-squad/catalog")
+      return json(generalExpertSquadCatalog())
     if (path === "/config") return json({ model: "openai/gpt-5-mini" })
     if (path === "/channel") return json([])
     if (path === "/executor") return json([])

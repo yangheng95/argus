@@ -124,6 +124,9 @@ test("notification panel stretches the shared list and cards to the panel width"
   expect(portalChildRule).toContain("flex: 1 1 0;")
   expect(cardRule).toContain("box-sizing: border-box;")
   expect(toastRule).toContain("width: min(")
+  expect(toastRule).toContain("right: calc(64px")
+  expect(toastRule).toContain("top: calc(")
+  expect(toastRule).not.toContain("bottom:")
   expect(toastRule).not.toContain("width: 100%;")
 })
 

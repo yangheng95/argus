@@ -6,6 +6,7 @@ import test from "node:test"
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { expertSquadCatalogFixture } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -23,30 +24,31 @@ function send(value: unknown, init?: ResponseInit) {
   })
 }
 
-function promptProfileCatalog() {
-  return {
+function eventStream() {
+  return new Response("", {
+    headers: { "content-type": "text/event-stream; charset=utf-8" },
+  })
+}
+
+function expertSquadCatalog() {
+  return expertSquadCatalogFixture({
     active: "frontend-replica",
-    project_active: "frontend-replica",
-    session_active: null,
-    default: "general",
-    targets: [],
+    projectActive: "frontend-replica",
     profiles: [
       {
         id: "general",
         label: "General",
-        description: "General prompt profile.",
+        description: "General expert squad.",
         built_in: true,
-        editable: false,
       },
       {
         id: "frontend-replica",
         label: "Expert Squad",
-        description: "Default prompt expert squad.",
-        built_in: true,
-        editable: false,
+        description: "Default expert squad.",
+        built_in: false,
       },
     ],
-  }
+  })
 }
 
 async function waitFor<T>(read: () => T | null | Promise<T | null>, label: string): Promise<T> {
@@ -94,8 +96,9 @@ test(
       if (path === "/provider") return send({ all: [], connected: [], default: {} })
       if (path === "/provider/auth") return send({})
       if (path === "/config/providers") return send({ providers: [] })
+      if (path === "/task/events") return eventStream()
       if (path === "/config/prompt") return send([])
-      if (path === "/config/prompt-profile") return send(promptProfileCatalog())
+      if (path === "/expert-squad/catalog") return send(expertSquadCatalog())
       if (path === "/config") return send({ model: "" })
       if (path === "/mission") return send([])
       if (path === "/panel/knowledge/memory") return send([])
@@ -274,8 +277,9 @@ test(
       if (path === "/provider") return send({ all: [], connected: [], default: {} })
       if (path === "/provider/auth") return send({})
       if (path === "/config/providers") return send({ providers: [] })
+      if (path === "/task/events") return eventStream()
       if (path === "/config/prompt") return send([])
-      if (path === "/config/prompt-profile") return send(promptProfileCatalog())
+      if (path === "/expert-squad/catalog") return send(expertSquadCatalog())
       if (path === "/config") return send({ model: "" })
       if (path === "/mission") return send([])
       if (path === "/panel/knowledge/memory") return send([])
@@ -376,8 +380,9 @@ test(
       if (path === "/provider") return send({ all: [], connected: [], default: {} })
       if (path === "/provider/auth") return send({})
       if (path === "/config/providers") return send({ providers: [] })
+      if (path === "/task/events") return eventStream()
       if (path === "/config/prompt") return send([])
-      if (path === "/config/prompt-profile") return send(promptProfileCatalog())
+      if (path === "/expert-squad/catalog") return send(expertSquadCatalog())
       if (path === "/config") return send({ model: "" })
       if (path === "/mission") return send([])
       if (path === "/channel") return send([])

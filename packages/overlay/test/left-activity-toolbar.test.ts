@@ -27,7 +27,7 @@ test("left activity shell keeps the token-owned minimum width", () => {
   expect(body).not.toMatch(/min-width\s*:\s*0\b/)
 })
 
-test("left activity toolbar owns task, mission, assistant, memory, skill, and MCP controls", () => {
+test("left activity toolbar owns task, mission, assistant, memory, tool, skill, and MCP controls", () => {
   const html = read("src/index.html")
   const main = read("src/main.tsx")
   const toolbar = read("src/components/SideActivityToolbar.tsx")
@@ -42,9 +42,10 @@ test("left activity toolbar owns task, mission, assistant, memory, skill, and MC
   expect(html).toContain('id="leftPanelTasks"')
   expect(html).toContain('id="leftPanelMissions"')
   expect(html).toContain('id="leftPanelSkills"')
+  expect(html).toContain('id="leftPanelTools"')
   expect(html).toContain('id="leftPanelMcp"')
   expect(html).toContain('id="leftPanelMemory"')
-  expect(main).toContain('type LeftActivity = "tasks" | "mission" | "assistant" | "memory" | "skill" | "mcp"')
+  expect(main).toContain('type LeftActivity = "tasks" | "mission" | "assistant" | "memory" | "tool" | "skill" | "mcp"')
   expect(main).toContain("const LEFT_ACTIVITIES")
   expect(main).toContain("const LEFT_ACTIVITY_BY_ID")
   expect(main).toContain("function leftActivityDefinition(activity: LeftActivity)")
@@ -79,6 +80,9 @@ test("left activity toolbar owns task, mission, assistant, memory, skill, and MC
   expect(main).toContain(
     'id: "memory", icon: "config-memory", labelKey: "memory.title", tooltipKey: "activity.tooltip.memory"',
   )
+  expect(main).toContain(
+    'id: "tool", icon: "config-tool", labelKey: "tool.title", tooltipKey: "activity.tooltip.tool"',
+  )
   expect(main).toContain('id: "skill"')
   expect(main).toContain('icon: "config-skill"')
   expect(main).toContain('labelKey: "skill.title"')
@@ -88,6 +92,9 @@ test("left activity toolbar owns task, mission, assistant, memory, skill, and MC
   expect(main).toContain('data-tone="warn"')
   expect(main).toContain('id: "mcp", icon: "config-mcp", labelKey: "mcp.title", tooltipKey: "activity.tooltip.mcp"')
   expect(main).toContain(
+    '<ToolsPanel active={selectedLeftPanelActivity() === "tool"} directory={activeDirectory} compact />',
+  )
+  expect(main).toContain(
     '<SkillsPanel active={selectedLeftPanelActivity() === "skill"} directory={activeDirectory} compact />',
   )
   expect(main).toContain(
@@ -95,6 +102,8 @@ test("left activity toolbar owns task, mission, assistant, memory, skill, and MC
   )
   expect(main).not.toContain('<SkillsPanel active={selectedLeftPanelActivity() === "skill"} compact />')
   expect(main).not.toContain('<McpPanel active={selectedLeftPanelActivity() === "mcp"} compact />')
+  expect(icons).toContain("Wrench")
+  expect(icons).toContain('"config-tool": { component: Wrench }')
   expect(main).toContain('active={selectedLeftPanelActivity() === "memory"}')
   expect(main).toContain("directory={activeDirectory}")
   expect(icons).toContain("ListTodo")
@@ -132,6 +141,7 @@ test("left activity toolbar owns task, mission, assistant, memory, skill, and MC
     "activity.tooltip.mission",
     "activity.tooltip.assistant",
     "activity.tooltip.memory",
+    "activity.tooltip.tool",
     "activity.tooltip.skill",
     "activity.tooltip.mcp",
     "activity.tooltip.workflow",
@@ -170,6 +180,11 @@ test("skill panel imports dropped files, directories, and zip archives through t
   expect(panel).toContain("await importAndMountSkill(agent")
   expect(panel).toContain('event.dataTransfer?.getData("application/x-opencorvus-skill")')
   expect(panel).toContain("agent-skill-matrix")
+  expect(panel).toContain('data-view="agent-tabs"')
+  expect(panel).toContain('data-ui="agent-skill-tabs"')
+  expect(panel).toContain('data-ui="agent-skill-pool"')
+  expect(panel).toContain("handleSkillPoolContextMenu")
+  expect(panel).toContain("await handleMount(agent.name, skill.name)")
   expect(panel).toContain("mounted_agents?: string[]")
   expect(panel).toContain("unmounted?: boolean")
   expect(panel).toContain('class="tool-panel-toolbar"')

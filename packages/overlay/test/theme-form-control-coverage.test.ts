@@ -132,11 +132,11 @@ describe("shared Kobalte select popup colors", () => {
     expect(selectControl).toContain('withClass("oc-select-indicator", props.indicatorClass)')
   })
 
-  test("prompt profile option descriptions inherit the shared popup foreground", () => {
-    const promptProfileDescriptionBlock =
-      composerCss.match(/\.prompt-profile-select-option-copy\s+small\s*{[^}]*}/)?.[0] ?? ""
+  test("expert squad option descriptions inherit the shared popup foreground", () => {
+    const expertSquadDescriptionBlock =
+      composerCss.match(/\.expert-squad-select-option-copy\s+small\s*{[^}]*}/)?.[0] ?? ""
 
-    expect(promptProfileDescriptionBlock).not.toMatch(/color\s*:/)
+    expect(expertSquadDescriptionBlock).not.toMatch(/color\s*:/)
   })
 
   test("browser preview candidate dropdown uses the shared select popup colors", () => {

@@ -15,7 +15,14 @@ import { pickDirectory, syncActiveDirectoryApiContext } from "../../services/wor
 import { appStore } from "../../store/app"
 import { updateConfig } from "../../services/config"
 import { getHostTransport } from "../../services/host-transport"
-import { promptProfileCatalogScope } from "../../services/prompt-profile-scope"
+import { expertSquadCatalogScope } from "../../services/expert-squad-scope"
+import {
+  expertSquadCatalogRefreshToken,
+  loadExpertSquadCatalog,
+  type ExpertSquadCatalog,
+  type ExpertSquadCapabilityProjectionEntry,
+  type ExpertSquadOption,
+} from "../../services/expert-squad"
 import { nativeConfirm, nativeOpen } from "../../utils/native"
 import { formatErrorDetails, notifyError } from "../../services/notify"
 import { createVisibilityInterval } from "../../utils/visibility-interval"
@@ -130,9 +137,17 @@ interface SkillDropPayload {
   files?: SkillImportPackageFile[]
 }
 
-interface ActiveMatrixPair {
-  skill: string
-  agent: string
+type CapabilityPanelMode = "tool" | "mcp"
+
+interface CapabilityProjectionGroup {
+  key: string
+  labelKey: string
+  items: string[]
+}
+
+interface CapabilityProjectionAgent {
+  id: string
+  entry: ExpertSquadCapabilityProjectionEntry
 }
 
 // ── Helpers ──
@@ -338,14 +353,71 @@ function sourceDirectoryTone(directory: string): string {
   return `custom-${hash % 6}`
 }
 
-function matrixAgentTrack(agent: Pick<AgentSkillRow, "name">, compact: boolean): string {
-  if (compact) return "minmax(calc(76px * var(--ui-scale)), calc(92px * var(--ui-scale)))"
-  return "minmax(calc(92px * var(--ui-scale)), calc(112px * var(--ui-scale)))"
+function uniqueStrings(values: readonly string[]): string[] {
+  return [...new Set(values.filter((value) => typeof value === "string" && value.trim()).map((value) => value.trim()))]
+}
+
+function activeCatalogSquad(catalog: ExpertSquadCatalog | null): ExpertSquadOption | undefined {
+  if (!catalog) return undefined
+  return catalog.squads.find((squad) => squad.id === catalog.active.effective)
+}
+
+function projectionEntryForAgent(
+  squad: ExpertSquadOption | undefined,
+  agentID: string,
+): ExpertSquadCapabilityProjectionEntry | undefined {
+  if (!squad) return undefined
+  if (agentID === "orchestrator") return squad.capability_projection.scheduler
+  return squad.capability_projection.agents[agentID]
+}
+
+function projectionAgentIDs(squad: ExpertSquadOption | undefined): string[] {
+  if (!squad) return []
+  return uniqueStrings(["orchestrator", ...squad.projected_agents, ...Object.keys(squad.capability_projection.agents)])
+}
+
+function capabilityGroups(mode: CapabilityPanelMode, entry: ExpertSquadCapabilityProjectionEntry): CapabilityProjectionGroup[] {
+  if (mode === "tool") {
+    return [
+      { key: "built-in-tools", labelKey: "tool.group.built_in", items: entry.built_in_tool_ids },
+      { key: "default-tools", labelKey: "tool.group.default", items: entry.default_tool_refs },
+      { key: "package-tools", labelKey: "tool.group.package", items: entry.package_tool_refs },
+    ]
+  }
+  return [
+    { key: "default-mcp-servers", labelKey: "mcp.group.default_servers", items: entry.default_mcp_server_refs },
+    { key: "package-mcp-servers", labelKey: "mcp.group.package_servers", items: entry.package_mcp_server_refs },
+    { key: "default-mcp-tools", labelKey: "mcp.group.default_tools", items: entry.default_mcp_tool_refs },
+    { key: "package-mcp-tools", labelKey: "mcp.group.package_tools", items: entry.package_mcp_tool_refs },
+    { key: "default-mcp-prompts", labelKey: "mcp.group.default_prompts", items: entry.default_mcp_prompt_refs },
+    { key: "package-mcp-prompts", labelKey: "mcp.group.package_prompts", items: entry.package_mcp_prompt_refs },
+    { key: "default-mcp-resources", labelKey: "mcp.group.default_resources", items: entry.default_mcp_resource_refs },
+    { key: "package-mcp-resources", labelKey: "mcp.group.package_resources", items: entry.package_mcp_resource_refs },
+  ]
+}
+
+function capabilityPool(mode: CapabilityPanelMode, squad: ExpertSquadOption | undefined): string[] {
+  if (!squad) return []
+  const entries = [squad.capability_projection.scheduler, ...Object.values(squad.capability_projection.agents)]
+  const values =
+    mode === "tool"
+      ? entries.flatMap((entry) => [...entry.built_in_tool_ids, ...entry.default_tool_refs, ...entry.package_tool_refs])
+      : entries.flatMap((entry) => [
+          ...entry.default_mcp_server_refs,
+          ...entry.package_mcp_server_refs,
+          ...entry.default_mcp_tool_refs,
+          ...entry.package_mcp_tool_refs,
+          ...entry.default_mcp_prompt_refs,
+          ...entry.package_mcp_prompt_refs,
+          ...entry.default_mcp_resource_refs,
+          ...entry.package_mcp_resource_refs,
+        ])
+  return uniqueStrings(values)
 }
 
 // ── Extension Settings Panels ──
 
-type ExtensionPanelMode = "skill" | "mcp" | "skill-market"
+type ExtensionPanelMode = "tool" | "skill" | "mcp" | "skill-market"
 const MCP_STATUS_REFRESH_INTERVAL_MS = 1_000
 const SKILL_MATRIX_RENDER_CHUNK_SIZE = 8
 
@@ -478,10 +550,28 @@ function ExtensionSettingsPanel(props: {
   }
 
   const panelActive = createMemo(() => props.active === true)
+  const toolPanelActive = createMemo(() => props.mode === "tool" && panelActive())
   const skillPanelActive = createMemo(() => props.mode === "skill" && panelActive())
   const mcpPanelActive = createMemo(() => props.mode === "mcp" && panelActive())
   const marketPanelActive = createMemo(() => props.mode === "skill-market" && panelActive())
   const mounts = createMemo(() => (skillPanelActive() ? skillMountMatrix(appStore.skillMounts) : undefined))
+  const [capabilityCatalog, setCapabilityCatalog] = createSignal<ExpertSquadCatalog | null>(null)
+  const catalogSquad = createMemo(() => activeCatalogSquad(capabilityCatalog()))
+  const capabilityAgents = createMemo<CapabilityProjectionAgent[]>(() => {
+    const squad = catalogSquad()
+    return projectionAgentIDs(squad)
+      .map((id) => {
+        const entry = projectionEntryForAgent(squad, id)
+        return entry ? { id, entry } : undefined
+      })
+      .filter((agent): agent is CapabilityProjectionAgent => Boolean(agent))
+  })
+  const capabilityPoolItems = createMemo(() => capabilityPool(props.mode === "mcp" ? "mcp" : "tool", catalogSquad()))
+  const [activeCapabilityAgent, setActiveCapabilityAgent] = createSignal("")
+  const activeCapability = createMemo(() => {
+    const agents = capabilityAgents()
+    return agents.find((agent) => agent.id === activeCapabilityAgent()) ?? agents[0]
+  })
   const poolSkills = createMemo(() => mounts()?.skills ?? [])
   const agentRows = createMemo(() => {
     const matrix = mounts()
@@ -494,6 +584,11 @@ function ExtensionSettingsPanel(props: {
         mounted: rows.get(agent.name) ?? [],
       })) as AgentSkillRow[]
   })
+  const [activeSkillAgent, setActiveSkillAgent] = createSignal("")
+  const activeSkillAgentRow = createMemo(() => {
+    const rows = agentRows()
+    return rows.find((agent) => agent.name === activeSkillAgent()) ?? rows[0]
+  })
   const mountedSkillLookupByAgent = createMemo(() => {
     const lookup = new Map<string, Map<string, MountedSkillItem>>()
     for (const agent of agentRows()) {
@@ -501,17 +596,6 @@ function ExtensionSettingsPanel(props: {
     }
     return lookup
   })
-  const matrixGridTemplate = createMemo(() => {
-    const compact = props.compact === true
-    const skillColumn = compact
-      ? "minmax(calc(150px * var(--ui-scale)), calc(188px * var(--ui-scale)))"
-      : "minmax(calc(208px * var(--ui-scale)), calc(248px * var(--ui-scale)))"
-    const agentColumns = agentRows()
-      .map((agent) => matrixAgentTrack(agent, compact))
-      .join(" ")
-    return `${skillColumn} ${agentColumns}`.trim()
-  })
-  const [activeMatrixPair, setActiveMatrixPair] = createSignal<ActiveMatrixPair | null>(null)
   const mcp = createMemo((): Record<string, McpItem> => (mcpPanelActive() ? { ...(appStore.mcp as Record<string, McpItem>) } : {}))
   const market = createMemo((): MarketItem[] =>
     marketPanelActive() ? [...(appStore.skillMarket as MarketItem[])] : [],
@@ -525,6 +609,24 @@ function ExtensionSettingsPanel(props: {
   const matrixSkills = createMemo(() => {
     if (props.compact) return poolSkills()
     return poolSkills().slice(0, visibleMatrixSkillCount())
+  })
+
+  createEffect(() => {
+    const ids = capabilityAgents().map((agent) => agent.id)
+    if (ids.length === 0) {
+      setActiveCapabilityAgent("")
+      return
+    }
+    if (!ids.includes(activeCapabilityAgent())) setActiveCapabilityAgent(ids[0]!)
+  })
+
+  createEffect(() => {
+    const names = agentRows().map((agent) => agent.name)
+    if (names.length === 0) {
+      setActiveSkillAgent("")
+      return
+    }
+    if (!names.includes(activeSkillAgent())) setActiveSkillAgent(names[0]!)
   })
 
   createEffect(() => {
@@ -553,77 +655,12 @@ function ExtensionSettingsPanel(props: {
     })
   })
 
-  function activateMatrixPair(skill: string, agent: string) {
-    setActiveMatrixPair({ skill, agent })
-  }
-
-  function clearMatrixPair(skill: string, agent: string) {
-    const active = activeMatrixPair()
-    if (active?.skill === skill && active.agent === agent) setActiveMatrixPair(null)
-  }
-
-  function matrixSkillActive(skill: string): boolean {
-    return activeMatrixPair()?.skill === skill
-  }
-
-  function matrixAgentActive(agent: string): boolean {
-    return activeMatrixPair()?.agent === agent
-  }
-
-  function matrixPairActive(skill: string, agent: string): boolean {
-    const active = activeMatrixPair()
-    return active?.skill === skill && active.agent === agent
-  }
-
-  const matrixSkillNames = createMemo(() => matrixSkills().map((item) => item.name))
-  const matrixAgentNames = createMemo(() => agentRows().map((agent) => agent.name))
-  const firstMatrixPair = createMemo<ActiveMatrixPair | null>(() => {
-    const skill = matrixSkillNames()[0]
-    const agent = matrixAgentNames()[0]
-    return skill && agent ? { skill, agent } : null
-  })
-
-  function matrixCellTabIndex(skill: string, agent: string): number | undefined {
-    const active = activeMatrixPair() ?? firstMatrixPair()
-    return active?.skill === skill && active.agent === agent ? 0 : undefined
-  }
-
-  function focusMatrixCell(skill: string, agent: string): void {
-    setActiveMatrixPair({ skill, agent })
-    window.requestAnimationFrame(() => {
-      const selector = `.agent-skill-grid-cell[data-skill-name="${CSS.escape(skill)}"][data-agent-name="${CSS.escape(agent)}"]`
-      document.querySelector<HTMLButtonElement>(selector)?.focus()
-    })
-  }
-
-  function handleMatrixCellKeyDown(event: KeyboardEvent, skill: string, agent: string): void {
-    const skills = matrixSkillNames()
-    const agents = matrixAgentNames()
-    const skillIndex = skills.indexOf(skill)
-    const agentIndex = agents.indexOf(agent)
-    if (skillIndex < 0 || agentIndex < 0) return
-    let nextSkillIndex = skillIndex
-    let nextAgentIndex = agentIndex
-    if (event.key === "ArrowRight") nextAgentIndex = Math.min(agents.length - 1, agentIndex + 1)
-    else if (event.key === "ArrowLeft") nextAgentIndex = Math.max(0, agentIndex - 1)
-    else if (event.key === "ArrowDown") nextSkillIndex = Math.min(skills.length - 1, skillIndex + 1)
-    else if (event.key === "ArrowUp") nextSkillIndex = Math.max(0, skillIndex - 1)
-    else if (event.key === "Home") nextAgentIndex = 0
-    else if (event.key === "End") nextAgentIndex = Math.max(0, agents.length - 1)
-    else return
-    const nextSkill = skills[nextSkillIndex]
-    const nextAgent = agents[nextAgentIndex]
-    if (!nextSkill || !nextAgent || (nextSkill === skill && nextAgent === agent)) return
-    event.preventDefault()
-    focusMatrixCell(nextSkill, nextAgent)
-  }
-
   function mountedSkillForAgent(agent: string, skill: string): MountedSkillItem | undefined {
     return mountedSkillLookupByAgent().get(agent)?.get(skill)
   }
 
   async function refreshSkillMounts(options: { refresh?: boolean; directory?: string } = {}) {
-    const scope = promptProfileCatalogScope()
+    const scope = expertSquadCatalogScope()
     if (!options.directory && scope.kind === "pending") return undefined
     const directory =
       options.directory ??
@@ -653,8 +690,11 @@ function ExtensionSettingsPanel(props: {
     setLoading(true)
     setNotice("")
     try {
-      if (props.mode === "mcp") {
+      if (props.mode === "tool") {
+        await refreshCapabilityCatalog()
+      } else if (props.mode === "mcp") {
         await refreshMcpStatus({ directory })
+        await refreshCapabilityCatalog()
       } else if (props.mode === "skill-market") {
         await Promise.all([
           refreshSkillMounts({ refresh: options.refreshSkills, directory }),
@@ -666,6 +706,31 @@ function ExtensionSettingsPanel(props: {
       if (!sourceMatchesDirectory(directory)) return
     } catch (e) {
       if (sourceMatchesDirectory(directory)) setPanelNotice(e instanceof Error ? e.message : String(e))
+    } finally {
+      if (sourceMatchesDirectory(directory)) setLoading(false)
+    }
+  }
+
+  async function refreshCapabilityCatalog() {
+    const scope = expertSquadCatalogScope()
+    if (scope.kind === "pending" || scope.kind === "unavailable") {
+      setCapabilityCatalog(null)
+      return undefined
+    }
+    const directory = scope.directory
+    setLoading(true)
+    setNotice("")
+    try {
+      const catalog = await loadExpertSquadCatalog(scope)
+      if (!sourceMatchesDirectory(directory)) return undefined
+      setCapabilityCatalog(catalog)
+      return catalog
+    } catch (e) {
+      if (sourceMatchesDirectory(directory)) {
+        setCapabilityCatalog(null)
+        setPanelNotice(e instanceof Error ? e.message : String(e))
+      }
+      return undefined
     } finally {
       if (sourceMatchesDirectory(directory)) setLoading(false)
     }
@@ -934,6 +999,21 @@ function ExtensionSettingsPanel(props: {
     }
   }
 
+  async function handleSkillPoolContextMenu(event: MouseEvent, skill: SkillItem) {
+    event.preventDefault()
+    event.stopPropagation()
+    const agent = activeSkillAgentRow()
+    if (!agent) {
+      setPanelNotice(t("skill.mount.no_agent"), "warn")
+      return
+    }
+    if (mountedSkillForAgent(agent.name, skill.name)) {
+      setPanelNotice(t("skill.mount.already_mounted", { skill: skill.name, agent: agent.name }), "warn")
+      return
+    }
+    await handleMount(agent.name, skill.name)
+  }
+
   async function handleBrowseFolder() {
     if (!canPickSkillDirectory()) return
     try {
@@ -968,6 +1048,12 @@ function ExtensionSettingsPanel(props: {
       .catch((e) => {
         if (sourceMatchesDirectory(directory)) setPanelNotice(e instanceof Error ? e.message : String(e))
       })
+  })
+
+  createEffect(() => {
+    if (!toolPanelActive() && !mcpPanelActive()) return
+    expertSquadCatalogRefreshToken()
+    void refreshCapabilityCatalog()
   })
 
   createEffect(() => {
@@ -1086,6 +1172,88 @@ function ExtensionSettingsPanel(props: {
     }
   }
 
+  function renderCapabilityAgentTabs(mode: CapabilityPanelMode): JSX.Element {
+    const active = () => activeCapability()
+    return (
+      <div class="agent-capability-layout" data-ui={`${mode}-agent-capability-tabs`}>
+        <div class="agent-capability-tabs" role="tablist" aria-orientation="vertical" aria-label={t("capability.agents")}>
+          <For each={capabilityAgents()}>
+            {(agent) => (
+              <button
+                type="button"
+                class="agent-capability-tab"
+                role="tab"
+                data-agent-name={agent.id}
+                aria-selected={active()?.id === agent.id ? "true" : "false"}
+                onClick={() => setActiveCapabilityAgent(agent.id)}
+              >
+                <span>{agent.id}</span>
+                <SettingsPill tone="neutral">
+                  {capabilityGroups(mode, agent.entry).reduce((count, group) => count + group.items.length, 0)}
+                </SettingsPill>
+              </button>
+            )}
+          </For>
+        </div>
+        <section class="agent-capability-detail" role="tabpanel">
+          <Show when={active()} fallback={<div class="empty-hint">{t("capability.none")}</div>}>
+            {(agent) => (
+              <>
+                <div class="agent-capability-heading">
+                  <strong>{agent().id}</strong>
+                  <span>{catalogSquad()?.label || catalogSquad()?.id || ""}</span>
+                </div>
+                <div class="agent-capability-groups">
+                  <For each={capabilityGroups(mode, agent().entry)}>
+                    {(group) => (
+                      <div class="agent-capability-group" data-empty={group.items.length === 0 ? "true" : "false"}>
+                        <span class="agent-capability-group__title">{t(group.labelKey)}</span>
+                        <Show when={group.items.length > 0} fallback={<small>{t("capability.empty_group")}</small>}>
+                          <div class="agent-capability-chip-list">
+                            <For each={group.items}>
+                              {(item) => (
+                                <span class="agent-capability-chip" title={item}>
+                                  {item}
+                                </span>
+                              )}
+                            </For>
+                          </div>
+                        </Show>
+                      </div>
+                    )}
+                  </For>
+                </div>
+              </>
+            )}
+          </Show>
+        </section>
+      </div>
+    )
+  }
+
+  function renderCapabilityPool(mode: CapabilityPanelMode): JSX.Element {
+    const items = () => capabilityPoolItems()
+    return (
+      <div class="capability-pool" data-ui={`${mode}-capability-pool`}>
+        <div class="capability-pool__head">
+          <strong>{mode === "tool" ? t("tool.pool.projected") : t("mcp.pool.projected")}</strong>
+          <SettingsPill tone="neutral">{items().length}</SettingsPill>
+        </div>
+        <Show when={items().length > 0} fallback={<div class="empty-hint">{t("capability.none")}</div>}>
+          <div class="capability-pool__list">
+            <For each={items()}>
+              {(item) => (
+                <span class="agent-capability-chip" title={item}>
+                  {item}
+                </span>
+              )}
+            </For>
+          </div>
+        </Show>
+      </div>
+    )
+  }
+
   return (
     <>
       <Show when={loading()}>
@@ -1109,6 +1277,34 @@ function ExtensionSettingsPanel(props: {
             </Show>
           </Button>
         </div>
+      </Show>
+
+      {/* ── Projected Tools ── */}
+      <Show when={toolPanelActive()}>
+        <SettingsGroup
+          class="extension-settings-group"
+          data-compact={props.compact ? "true" : "false"}
+          title={props.compact ? undefined : t("tool.title")}
+          actions={
+            props.compact ? undefined : (
+              <PanelActionButton icon="refresh" label={t("common.reload")} onClick={() => reloadCurrentPanel()} />
+            )
+          }
+        >
+          <Show when={props.compact}>
+            <div class="tool-panel-toolbar" role="toolbar" aria-label={t("tool.title")}>
+              <PanelActionButton compact icon="refresh" label={t("common.reload")} onClick={() => reloadCurrentPanel()} />
+            </div>
+          </Show>
+          <div class="extension-settings-body">
+            <div class="capability-scope-strip">
+              <span>{capabilityCatalog()?.active.effective || ""}</span>
+              <small>{catalogSquad()?.projection_hash || ""}</small>
+            </div>
+            {renderCapabilityAgentTabs("tool")}
+            {renderCapabilityPool("tool")}
+          </div>
+        </SettingsGroup>
       </Show>
 
       {/* ── Installed Skills ── */}
@@ -1186,6 +1382,7 @@ function ExtensionSettingsPanel(props: {
               class="agent-skill-matrix"
               data-compact={props.compact ? "true" : "false"}
               data-unmounted={mounts()?.unmounted_count ? "true" : "false"}
+              data-view="agent-tabs"
             >
               <div class="agent-skill-matrix__summary">
                 <strong>{t("skill.mount.matrix")}</strong>
@@ -1195,163 +1392,175 @@ function ExtensionSettingsPanel(props: {
                   </SettingsPill>
                 </Show>
               </div>
-              <Show when={poolSkills().length > 0} fallback={<div class="empty-hint">{t("skill.none_custom")}</div>}>
-                <div
-                  class="agent-skill-matrix-grid"
-                  style={{ "grid-template-columns": matrixGridTemplate() }}
-                  aria-label={t("skill.mount.matrix")}
-                >
-                  <div class="agent-skill-grid-corner" role="columnheader">
-                    {t("skill.mount.pool")}
+              <Show when={agentRows().length > 0} fallback={<div class="empty-hint">{t("skill.mount.no_agents")}</div>}>
+                <div class="agent-capability-layout agent-skill-tab-layout" data-ui="agent-skill-tabs">
+                  <div
+                    class="agent-capability-tabs"
+                    role="tablist"
+                    aria-orientation="vertical"
+                    aria-label={t("capability.agents")}
+                  >
+                    <For each={agentRows()}>
+                      {(agent) => (
+                        <button
+                          type="button"
+                          class="agent-capability-tab"
+                          role="tab"
+                          data-agent-name={agent.name}
+                          data-skill-tool={agent.skill_tool_available ? "true" : "false"}
+                          aria-selected={activeSkillAgentRow()?.name === agent.name ? "true" : "false"}
+                          onClick={() => setActiveSkillAgent(agent.name)}
+                          onDragOver={(event) => {
+                            if (!agent.skill_tool_available) return
+                            event.preventDefault()
+                            if (event.dataTransfer) event.dataTransfer.dropEffect = "copy"
+                          }}
+                          onDrop={(event) => {
+                            if (!agent.skill_tool_available) return
+                            setActiveSkillAgent(agent.name)
+                            void handleAgentDrop(agent.name, event)
+                          }}
+                        >
+                          <span>{agent.name}</span>
+                          <SettingsPill tone={agent.mounted.length > 0 ? "ok" : "neutral"}>
+                            {agent.mounted.length}
+                          </SettingsPill>
+                        </button>
+                      )}
+                    </For>
                   </div>
-                  <For each={agentRows()}>
-                    {(agent) => (
-                      <div
-                        class="agent-skill-grid-agent"
-                        data-active-combo={matrixAgentActive(agent.name) ? "true" : "false"}
-                        data-skill-tool={agent.skill_tool_available ? "true" : "false"}
-                        role="columnheader"
-                        title={agent.name}
-                        onDragOver={(event) => {
-                          if (!agent.skill_tool_available) return
-                          event.preventDefault()
-                          if (event.dataTransfer) event.dataTransfer.dropEffect = "copy"
-                        }}
-                        onDrop={(event) => {
-                          if (!agent.skill_tool_available) return
-                          void handleAgentDrop(agent.name, event)
-                        }}
-                      >
-                        <span>{agent.name}</span>
-                      </div>
-                    )}
-                  </For>
-                  <For each={matrixSkills()}>
-                    {(item) => {
-                      const mountedAgents = () => mountedAgentsFor(item)
-                      const sourceDirectory = () => skillSourceDirectory(item)
-                      const skillTitle = () =>
-                        [
-                          item.name,
-                          item.description,
-                          sourceDirectory(),
-                          mountedAgents().join(", ") || t("skill.mount.unmounted"),
-                          item.location,
-                        ]
-                          .filter(Boolean)
-                          .join("\n")
-                      return (
+                  <section class="agent-capability-detail agent-skill-detail" role="tabpanel">
+                    <Show when={activeSkillAgentRow()} fallback={<div class="empty-hint">{t("skill.mount.no_agent")}</div>}>
+                      {(agent) => (
                         <>
+                          <div class="agent-capability-heading">
+                            <strong>{agent().name}</strong>
+                            <span>{agent().description || t("skill.mount.agent")}</span>
+                          </div>
                           <div
-                            role="rowheader"
-                            class="agent-skill-grid-skill"
-                            data-active-combo={matrixSkillActive(item.name) ? "true" : "false"}
+                            class="agent-mounted-skill-list"
+                            onDragOver={(event) => {
+                              if (!agent().skill_tool_available) return
+                              event.preventDefault()
+                              if (event.dataTransfer) event.dataTransfer.dropEffect = "copy"
+                            }}
+                            onDrop={(event) => {
+                              if (!agent().skill_tool_available) return
+                              void handleAgentDrop(agent().name, event)
+                            }}
+                          >
+                            <Show
+                              when={agent().mounted.length > 0}
+                              fallback={<div class="empty-hint">{t("skill.mount.none_for_agent")}</div>}
+                            >
+                              <For each={agent().mounted}>
+                                {(item) => (
+                                  <div
+                                    class="agent-mounted-skill-row"
+                                    data-state={item.enabled ? "mounted" : "conflict"}
+                                    title={item.location || item.name}
+                                  >
+                                    <span class="agent-mounted-skill-row__main">
+                                      <strong>{item.name}</strong>
+                                      <small>{item.description || item.reason || ""}</small>
+                                    </span>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      tone="neutral"
+                                      title={t("skill.mount.remove")}
+                                      aria-label={`${t("skill.mount.remove")}: ${item.name} -> ${agent().name}`}
+                                      disabled={loading()}
+                                      onClick={() => void handleUnmount(agent().name, item.name)}
+                                    >
+                                      <Icon name="cancel" />
+                                    </Button>
+                                  </div>
+                                )}
+                              </For>
+                            </Show>
+                          </div>
+                        </>
+                      )}
+                    </Show>
+                  </section>
+                </div>
+              </Show>
+              <div class="agent-skill-pool" data-ui="agent-skill-pool">
+                <div class="capability-pool__head">
+                  <strong>{t("skill.mount.pool")}</strong>
+                  <SettingsPill tone={mounts()?.unmounted_count ? "warn" : "neutral"}>{poolSkills().length}</SettingsPill>
+                </div>
+                <Show when={poolSkills().length > 0} fallback={<div class="empty-hint">{t("skill.none_custom")}</div>}>
+                  <div class="agent-skill-pool__list">
+                    <For each={matrixSkills()}>
+                      {(item) => {
+                        const mountedAgents = () => mountedAgentsFor(item)
+                        const sourceDirectory = () => skillSourceDirectory(item)
+                        const activeAgent = () => activeSkillAgentRow()
+                        const alreadyMounted = () => {
+                          const agent = activeAgent()
+                          return agent ? Boolean(mountedSkillForAgent(agent.name, item.name)) : false
+                        }
+                        const mountLabel = () => {
+                          const agent = activeAgent()
+                          return agent
+                            ? `${t("skill.mount.add")}: ${item.name} -> ${agent.name}`
+                            : t("skill.mount.no_agent")
+                        }
+                        return (
+                          <div
+                            class="agent-skill-pool-row"
                             data-unmounted={item.unmounted ? "true" : "false"}
-                            title={skillTitle()}
+                            data-already-mounted={alreadyMounted() ? "true" : "false"}
+                            data-skill-name={item.name}
+                            title={[item.name, item.description, item.location].filter(Boolean).join("\n")}
                             draggable
+                            onContextMenu={(event) => void handleSkillPoolContextMenu(event, item)}
                             onDragStart={(event) => {
                               event.dataTransfer?.setData("application/x-opencorvus-skill", item.name)
                               if (event.dataTransfer) event.dataTransfer.effectAllowed = "copy"
                             }}
                           >
-                            <span class="agent-skill-grid-skill__name">{item.name}</span>
-                            <span class="agent-skill-grid-skill__meta">
-                              <Show when={sourceDirectory()}>
-                                <span
-                                  class="agent-skill-grid-skill__source"
-                                  data-source-directory={sourceDirectory()}
-                                  data-source-tone={sourceDirectoryTone(sourceDirectory())}
-                                >
-                                  {sourceDirectory()}
-                                </span>
-                              </Show>
-                              <span>{mountedAgentLabel(mountedAgents().length)}</span>
-                              <Show when={skillDuplicateLocations(item).length > 1}>
-                                <span title={skillDuplicateTitle(item)}>{t("skill.duplicate")}</span>
-                              </Show>
+                            <span class="agent-skill-pool-row__main">
+                              <strong>{item.name}</strong>
+                              <small>
+                                <Show when={sourceDirectory()}>
+                                  <span
+                                    class="agent-skill-pool-row__source"
+                                    data-source-directory={sourceDirectory()}
+                                    data-source-tone={sourceDirectoryTone(sourceDirectory())}
+                                  >
+                                    {sourceDirectory()}
+                                  </span>
+                                </Show>
+                                <span>{mountedAgentLabel(mountedAgents().length)}</span>
+                              </small>
                             </span>
-                          </div>
-                          <For each={agentRows()}>
-                            {(agent) => {
-                              const mounted = () => mountedSkillForAgent(agent.name, item.name)
-                              const cellDisabled = () => !agent.skill_tool_available || loading()
-                              const cellState = () => {
-                                if (!agent.skill_tool_available) return "unavailable"
-                                const current = mounted()
-                                if (!current) return "available"
-                                return current.enabled ? "mounted" : "conflict"
-                              }
-                              const cellLabel = () => {
-                                const current = mounted()
-                                if (!agent.skill_tool_available) {
-                                  return `${agent.name}: ${t("skill.mount.no_skill_tool")}`
-                                }
-                                if (!current) return `${t("skill.mount.add")}: ${item.name} -> ${agent.name}`
-                                if (current.enabled) return `${t("skill.mount.remove")}: ${item.name} -> ${agent.name}`
-                                return `${item.name} -> ${agent.name}: ${current.reason || ""}`
-                              }
-                              const activateCell = () => {
-                                if (cellDisabled()) return
-                                const current = mounted()
-                                if (current) {
-                                  void handleUnmount(agent.name, item.name)
-                                  return
-                                }
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              tone="neutral"
+                              title={mountLabel()}
+                              aria-label={mountLabel()}
+                              disabled={!activeAgent() || alreadyMounted() || loading()}
+                              onClick={() => {
+                                const agent = activeAgent()
+                                if (!agent) return
                                 void handleMount(agent.name, item.name)
-                              }
-                              const handleCellKeyDown = (event: KeyboardEvent) => {
-                                if (event.key === "Enter" || event.key === " ") {
-                                  event.preventDefault()
-                                  activateCell()
-                                  return
-                                }
-                                handleMatrixCellKeyDown(event, item.name, agent.name)
-                              }
-                              return (
-                                <div
-                                  role="button"
-                                  class="agent-skill-grid-cell"
-                                  data-active-combo={matrixPairActive(item.name, agent.name) ? "true" : "false"}
-                                  data-agent-name={agent.name}
-                                  data-disabled={cellDisabled() ? "true" : "false"}
-                                  data-skill-name={item.name}
-                                  data-state={cellState()}
-                                  aria-disabled={cellDisabled() ? "true" : undefined}
-                                  title={cellLabel()}
-                                  aria-label={cellLabel()}
-                                  tabIndex={cellDisabled() ? undefined : matrixCellTabIndex(item.name, agent.name)}
-                                  onPointerEnter={() => activateMatrixPair(item.name, agent.name)}
-                                  onPointerLeave={(event) => {
-                                    if (!event.currentTarget.matches(":focus")) clearMatrixPair(item.name, agent.name)
-                                  }}
-                                  onFocus={() => activateMatrixPair(item.name, agent.name)}
-                                  onBlur={() => clearMatrixPair(item.name, agent.name)}
-                                  onKeyDown={handleCellKeyDown}
-                                  onClick={activateCell}
-                                  onDragOver={(event) => {
-                                    if (cellDisabled()) return
-                                    event.preventDefault()
-                                    if (event.dataTransfer) event.dataTransfer.dropEffect = "copy"
-                                  }}
-                                  onDrop={(event) => {
-                                    if (cellDisabled()) return
-                                    void handleAgentDrop(agent.name, event)
-                                  }}
-                                >
-                                  <span class="agent-skill-grid-cell__glyph" aria-hidden="true" />
-                                  <Show when={cellState() === "conflict"}>
-                                    <span class="agent-skill-grid-cell__reason">{mounted()?.reason || ""}</span>
-                                  </Show>
-                                </div>
-                              )
-                            }}
-                          </For>
-                        </>
-                      )
-                    }}
-                  </For>
-                </div>
-              </Show>
+                              }}
+                            >
+                              <Icon name="plus" />
+                            </Button>
+                          </div>
+                        )
+                      }}
+                    </For>
+                  </div>
+                </Show>
+              </div>
             </div>
 
             <Show when={!props.compact}>
@@ -1650,7 +1859,16 @@ function ExtensionSettingsPanel(props: {
                 </div>
               </div>
             </Show>
+            <div class="capability-scope-strip">
+              <span>{capabilityCatalog()?.active.effective || ""}</span>
+              <small>{catalogSquad()?.projection_hash || ""}</small>
+            </div>
+            {renderCapabilityAgentTabs("mcp")}
             <div class="extension-list" id="mcpList">
+              <div class="capability-pool__head">
+                <strong>{t("mcp.configured_status")}</strong>
+                <SettingsPill tone="neutral">{mcpEntries().length}</SettingsPill>
+              </div>
               <Show when={mcpEntries().length > 0} fallback={<div class="empty-hint">{t("mcp.none")}</div>}>
                 <For each={mcpEntries()}>
                   {([name, item]) => {
@@ -1670,6 +1888,7 @@ function ExtensionSettingsPanel(props: {
                 </For>
               </Show>
             </div>
+            {renderCapabilityPool("mcp")}
           </div>
         </SettingsGroup>
       </Show>
@@ -1747,6 +1966,17 @@ export function SkillsPanel(props: { active?: boolean; compact?: boolean; direct
   return (
     <ExtensionSettingsPanel
       mode="skill"
+      active={props.active ?? true}
+      compact={props.compact}
+      directory={props.directory}
+    />
+  )
+}
+
+export function ToolsPanel(props: { active?: boolean; compact?: boolean; directory?: DirectoryProp } = {}) {
+  return (
+    <ExtensionSettingsPanel
+      mode="tool"
       active={props.active ?? true}
       compact={props.compact}
       directory={props.directory}

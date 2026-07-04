@@ -4,7 +4,7 @@ import type { AppDialogOptions } from "../services/app-dialog"
 export type ConfigDialogTab =
   | "general"
   | "permissions"
-  | "prompt"
+  | "expert-squad"
   | "channel"
   | "skill"
   | "skill-market"
@@ -30,7 +30,7 @@ export interface ConfigSection {
 export const CONFIG_SECTIONS: readonly ConfigSection[] = [
   { id: "general", labelKey: "settings.title" },
   { id: "permissions", labelKey: "permissions.title" },
-  { id: "prompt", labelKey: "prompt.title" },
+  { id: "expert-squad", labelKey: "expert_squad.title" },
   { id: "channel", labelKey: "channel.title" },
   { id: "skill", labelKey: "skill.title" },
   { id: "skill-market", labelKey: "skill.market.title" },

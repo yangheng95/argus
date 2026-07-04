@@ -11,7 +11,7 @@
 // treatments for the same semantic state. There IS a shared primitive
 // already — `.empty-hint` plus a card-chrome shell at styles.css:2444 —
 // but only DiffView / LogViewer / MemoryPanel /
-// PromptCatalog used it. The right panel didn't.
+// settings package inspectors used it. The right panel didn't.
 //
 // This test pins the contract:
 //   1. The three components above that still render explicit empty-state DOM

@@ -19,7 +19,7 @@ import { FileChangesPanel, type FileChangesActiveView } from "./components/FileC
 import { BrowserPreviewPanel } from "./components/BrowserPreviewPanel"
 import { ScreenshotBrowserPanel } from "./components/ScreenshotBrowserPanel"
 import { SideActivityToolbar, type SideActivity } from "./components/SideActivityToolbar"
-import { McpPanel, SkillsPanel } from "./components/settings/SkillMarketPanel"
+import { McpPanel, SkillsPanel, ToolsPanel } from "./components/settings/SkillMarketPanel"
 import { MemoryPanel } from "./components/MemoryPanel"
 import { closeFileEditor, fileWorkbenchOpen } from "./services/file-workbench"
 import type { DiffTarget } from "./services/diff"
@@ -60,12 +60,12 @@ import {
   type PaneState,
 } from "./services/pane"
 import { panelMessage } from "./services/chat"
+import { resetDatabase } from "./services/config"
 import {
-  loadPromptProfileCatalog,
-  resetDatabase,
-  type PromptProfileCatalogScope,
-  type PromptProfileOption,
-} from "./services/config"
+  loadExpertSquadCatalog,
+  type ExpertSquadCatalogScope,
+  type ExpertSquadOption,
+} from "./services/expert-squad"
 import { NotificationCenter } from "./components/NotificationCenter"
 import { waitForLogDrain, AppLog } from "./utils/log"
 import { teardownApp } from "./services/init"
@@ -100,7 +100,7 @@ import { buildChatDebugBlob, buildTaskDebugBlob, writeDebugClipboard } from "./u
 import { taskOwningDirectory } from "./services/task-directory"
 import { taskScopedPath } from "./services/task-path"
 import { createAnimationFrameScheduler } from "./utils/animation-frame"
-import { promptProfileCatalogRequestKey, promptProfileCatalogScope } from "./services/prompt-profile-scope"
+import { expertSquadCatalogRequestKey, expertSquadCatalogScope } from "./services/expert-squad-scope"
 import {
   clampCenterWorkbenchResizeWidth,
   centerWorkbenchResizeRange,
@@ -266,7 +266,7 @@ type CenterWorkbenchPanel =
   | "screenshots"
   | "file"
 type RightActivity = Exclude<CenterWorkbenchPanel, "file">
-type LeftActivity = "tasks" | "mission" | "assistant" | "memory" | "skill" | "mcp"
+type LeftActivity = "tasks" | "mission" | "assistant" | "memory" | "tool" | "skill" | "mcp"
 type PrimaryLeftActivity = "tasks" | "mission" | "assistant"
 type PrimaryCenterPanel = "task" | "mission" | "chat"
 
@@ -331,6 +331,7 @@ const LEFT_ACTIVITIES: readonly SideActivity<LeftActivity>[] = [
   { id: "tasks", icon: "tasks", labelKey: "task.ledger.title", tooltipKey: "activity.tooltip.tasks" },
   { id: "assistant", icon: "message", labelKey: "coding_assistant.title", tooltipKey: "activity.tooltip.assistant" },
   { id: "memory", icon: "config-memory", labelKey: "memory.title", tooltipKey: "activity.tooltip.memory" },
+  { id: "tool", icon: "config-tool", labelKey: "tool.title", tooltipKey: "activity.tooltip.tool" },
   {
     id: "skill",
     icon: "config-skill",
@@ -1179,6 +1180,7 @@ const LEFT_ACTIVITY_BODY_IDS: Record<LeftActivity, string> = {
   mission: "leftPanelMissions",
   assistant: "leftPanelAssistant",
   memory: "leftPanelMemory",
+  tool: "leftPanelTools",
   skill: "leftPanelSkills",
   mcp: "leftPanelMcp",
 }
@@ -1397,55 +1399,59 @@ function deleteGoal(goalId: string): void {
 // finishes. Populated by a busy→idle effect below; cleared by the composer
 // via onSuggestionConsumed after it either injects or drops the value.
 const [pendingSuggestion, setPendingSuggestion] = createSignal("")
-const [promptProfiles, setPromptProfiles] = createSignal<PromptProfileOption[]>([])
-const [activePromptProfile, setActivePromptProfile] = createSignal("general")
+const [expertSquads, setExpertSquads] = createSignal<ExpertSquadOption[]>([])
+const [activeExpertSquad, setActiveExpertSquad] = createSignal("")
 // Track the previous task-busy state so we only fire once per finish edge.
 let lastTaskBusy = false
 let lastSuggestionTaskID: string | null = null
-let promptProfileLoadSequence = 0
-let promptProfileInFlightRequestKey = ""
-let promptProfileLoadedRequestKey = ""
-const promptProfileRequestKey = createMemo(() => promptProfileCatalogRequestKey())
+let expertSquadLoadSequence = 0
+let expertSquadInFlightRequestKey = ""
+let expertSquadLoadedRequestKey = ""
+const expertSquadRequestKey = createMemo(() => expertSquadCatalogRequestKey())
 
-async function refreshPromptProfiles(scope: PromptProfileCatalogScope, requestKey: string): Promise<void> {
-  if (requestKey === promptProfileInFlightRequestKey || requestKey === promptProfileLoadedRequestKey) return
-  const sequence = ++promptProfileLoadSequence
-  promptProfileInFlightRequestKey = requestKey
+async function refreshExpertSquads(scope: ExpertSquadCatalogScope, requestKey: string): Promise<void> {
+  if (requestKey === expertSquadInFlightRequestKey || requestKey === expertSquadLoadedRequestKey) return
+  const sequence = ++expertSquadLoadSequence
+  expertSquadInFlightRequestKey = requestKey
   try {
-    const catalog = await loadPromptProfileCatalog(scope)
-    if (sequence !== promptProfileLoadSequence) return
-    setPromptProfiles(catalog.profiles)
-    setActivePromptProfile((current) =>
-      catalog.profiles.some((profile) => profile.id === current) ? current : catalog.active,
-    )
-    promptProfileLoadedRequestKey = requestKey
+    const catalog = await loadExpertSquadCatalog(scope)
+    if (sequence !== expertSquadLoadSequence) return
+    setExpertSquads(catalog.squads)
+    setActiveExpertSquad(catalog.active.effective)
+    expertSquadLoadedRequestKey = requestKey
+  } catch (error) {
+    if (sequence === expertSquadLoadSequence) {
+      setExpertSquads([])
+      setActiveExpertSquad("")
+      expertSquadLoadedRequestKey = ""
+    }
+    throw error
   } finally {
-    if (promptProfileInFlightRequestKey === requestKey) promptProfileInFlightRequestKey = ""
+    if (expertSquadInFlightRequestKey === requestKey) expertSquadInFlightRequestKey = ""
   }
 }
 
-createEffect(() => {
-  const selectedTaskSessionID = rootTaskSessionID()
-  const selectedSessionID = activeSessionID()
-  const configuredActive = appStore.config?.prompt_profile?.active
-  if (!selectedTaskSessionID && !selectedSessionID && typeof configuredActive === "string" && configuredActive.trim()) {
-    setActivePromptProfile(configuredActive)
-  }
-})
-
 createEffect<string>((previousKey) => {
-  const requestKey = promptProfileRequestKey()
+  const requestKey = expertSquadRequestKey()
   if (requestKey === previousKey) return previousKey
-  const scope = promptProfileCatalogScope()
+  const scope = expertSquadCatalogScope()
   if (scope.kind === "pending") {
-    promptProfileLoadSequence++
-    promptProfileInFlightRequestKey = ""
-    promptProfileLoadedRequestKey = ""
-    setPromptProfiles([])
+    expertSquadLoadSequence++
+    expertSquadInFlightRequestKey = ""
+    expertSquadLoadedRequestKey = ""
+    setExpertSquads([])
+    setActiveExpertSquad("")
     return requestKey
   }
-  if (scope.kind === "unavailable") return requestKey
-  void refreshPromptProfiles(scope, requestKey).catch((error) => reportOverlayRuntimeError("prompt-profile", error))
+  if (scope.kind === "unavailable") {
+    expertSquadLoadSequence++
+    expertSquadInFlightRequestKey = ""
+    expertSquadLoadedRequestKey = ""
+    setExpertSquads([])
+    setActiveExpertSquad("")
+    return requestKey
+  }
+  void refreshExpertSquads(scope, requestKey).catch((error) => reportOverlayRuntimeError("expert-squad", error))
   return requestKey
 }, "")
 
@@ -1521,18 +1527,20 @@ if (composerEl) {
         }
         pendingSuggestion={pendingSuggestion()}
         onSuggestionConsumed={() => setPendingSuggestion("")}
-        promptProfiles={promptProfiles()}
-        promptProfileID={activePromptProfile()}
-        onPromptProfileChange={setActivePromptProfile}
-        onSubmit={async (text, attachments, webSearch, promptProfile) => {
+        expertSquads={expertSquads()}
+        expertSquadID={activeExpertSquad()}
+        onExpertSquadChange={setActiveExpertSquad}
+        onSubmit={async (text, attachments, webSearch, expertSquadID) => {
+          const promptProfile = expertSquadID.trim()
           const metadata = {
             ...(webSearch ? { web_search: true } : {}),
-            promptProfile,
+            ...(promptProfile ? { promptProfile } : {}),
           }
           if (missionSubmitActive()) {
             if (attachments.length > 0) {
               throw new Error(t("mission.launcher.attachments_unsupported"))
             }
+            if (!promptProfile) throw new Error(t("expert_squad.selector_unavailable"))
             setMissionLauncherSubmitting(true)
             try {
               const model = typeof appStore.config?.model === "string" ? appStore.config.model : undefined
@@ -1634,6 +1642,14 @@ if (leftSkillsPanelEl) {
   render(
     () => <SkillsPanel active={selectedLeftPanelActivity() === "skill"} directory={activeDirectory} compact />,
     leftSkillsPanelEl,
+  )
+}
+
+const leftToolsPanelEl = document.getElementById("solidLeftToolsPanel")
+if (leftToolsPanelEl) {
+  render(
+    () => <ToolsPanel active={selectedLeftPanelActivity() === "tool"} directory={activeDirectory} compact />,
+    leftToolsPanelEl,
   )
 }
 

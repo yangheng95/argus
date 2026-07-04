@@ -5,6 +5,7 @@ import test from "node:test"
 
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
+import { expertSquadCatalogFixture } from "./expert-squad-fixture.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
 
 await ensureOverlayDist()
@@ -22,6 +23,15 @@ function send(value: unknown, init?: ResponseInit) {
     headers: {
       "content-type": "application/json; charset=utf-8",
       ...(init?.headers || {}),
+    },
+  })
+}
+
+function eventStream() {
+  return new Response(":\n\n", {
+    headers: {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-cache",
     },
   })
 }
@@ -53,6 +63,19 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
       content: "Remember that the left Memory panel uses sibling controls.",
     },
   }
+  const expertSquadCatalog = expertSquadCatalogFixture({
+    active: "general",
+    projectActive: "general",
+    squads: [
+      {
+        id: "general",
+        label: "General",
+        description: "General expert squad.",
+        built_in: true,
+        agents: { requirements: "Requirements" },
+      },
+    ],
+  })
   const server = await startBrowserFixture(async (req) => {
     const url = new URL(req.url)
     const path = route(url)
@@ -136,11 +159,15 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
     if (path === "/provider/auth") return send({})
     if (path === "/config/providers") return send({ providers: [] })
     if (path === "/config") return send({ model: "" })
+    if (path === "/expert-squad/catalog") return send(expertSquadCatalog)
     if (path === "/agent") return send([])
     if (path === "/channel") return send([])
     if (path === "/executor") return send([])
+    if (path === "/mission") return send([])
     if (path === "/session") return send([])
     if (path === "/coding/sessions") return send({ sessions: [] })
+    if (path === "/task/events" || path === `/task/${TASK_ID}/events` || path === `/task/${TASK_ID}/conversation/events`)
+      return eventStream()
     const projectReviewSkill = {
       name: "project-review",
       description: "Project skill loaded from the active workspace directory.",
@@ -204,20 +231,22 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
     return send({})
   })
 
-  const browser = await launchBrowser(["--disable-dev-shm-usage"])
+  let browser: Awaited<ReturnType<typeof launchBrowser>> | null = null
+  let page: any
   try {
-    const page = await browser.newPage()
+    browser = await launchBrowser(["--disable-dev-shm-usage"])
+    page = await browser.newPage()
     await page.setViewport({ width: 1280, height: 365 })
     await page.evaluateOnNewDocument(
       (input) => {
-        const { serverUrl, directory } = input as { serverUrl: string; directory: string }
+        const { serverUrl, directory, taskID } = input as { serverUrl: string; directory: string; taskID: string }
         ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
         localStorage.setItem("oc_directory", directory)
         localStorage.setItem("oc_workspace_directory", directory)
         localStorage.setItem("oc_server_url", serverUrl)
-        localStorage.setItem("oc_workspace_task", TASK_ID)
+        localStorage.setItem("oc_workspace_task", taskID)
       },
-      { serverUrl: server.origin, directory: WORKSPACE_DIR },
+      { serverUrl: server.origin, directory: WORKSPACE_DIR, taskID: TASK_ID },
     )
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded", timeout: 60_000 })
@@ -241,7 +270,7 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
     const skillButton = '[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]'
     await page.waitForSelector(skillButton, { visible: true })
     await page.click(skillButton)
-    await page.waitForSelector("#leftPanelSkills[data-active='true'] .agent-skill-grid-skill")
+    await page.waitForSelector('#leftPanelSkills[data-active="true"] [data-ui="agent-skill-tabs"]')
     assert.equal(
       requestLog.some((item) => item.path === "/skill/mounts"),
       true,
@@ -250,24 +279,25 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
       requestLog.some((item) => item.path === "/mcp"),
       false,
     )
-    const skillName = await page.$eval(
-      "#leftPanelSkills .agent-skill-grid-skill__name",
-      (node) => node.textContent || "",
-    )
+    const skillName = await page.$eval("#leftPanelSkills .agent-skill-pool-row strong", (node) => node.textContent || "")
     assert.equal(skillName, "project-review")
-    const skillMatrixMetrics = await page.$eval("#leftPanelSkills .agent-skill-matrix-grid", (node) => {
+    const skillPanelMetrics = await page.$eval("#leftPanelSkills .agent-skill-matrix", (node) => {
       const rect = node.getBoundingClientRect()
       return {
         height: rect.height,
+        view: (node as HTMLElement).dataset.view || "",
         text: node.textContent || "",
-        mountedCells: node.querySelectorAll('.agent-skill-grid-cell[data-state="mounted"]').length,
+        mountedRows: node.querySelectorAll(".agent-mounted-skill-row").length,
+        skillPools: node.querySelectorAll('[data-ui="agent-skill-pool"]').length,
         sourceListVisible: !!document.querySelector("#leftPanelSkills .extension-list"),
       }
     })
-    assert.ok(skillMatrixMetrics.height > 24)
-    assert.match(skillMatrixMetrics.text, /project-review/)
-    assert.equal(skillMatrixMetrics.mountedCells, 1)
-    assert.equal(skillMatrixMetrics.sourceListVisible, false)
+    assert.ok(skillPanelMetrics.height > 24)
+    assert.equal(skillPanelMetrics.view, "agent-tabs")
+    assert.match(skillPanelMetrics.text, /project-review/)
+    assert.equal(skillPanelMetrics.mountedRows, 1)
+    assert.equal(skillPanelMetrics.skillPools, 1)
+    assert.equal(skillPanelMetrics.sourceListVisible, false)
     const skillPanel = await page.$("#leftPanelSkills")
     assert.ok(skillPanel, "skill panel should exist before screenshot")
     const skillScreenshotPath = resolve(".scratch", "left-skill-panel-primitive-row.png")
@@ -400,7 +430,7 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
     assert.equal(memoryRequest?.directory, WORKSPACE_DIR)
     assert.equal(memoryRequest?.taskID, TASK_ID)
   } finally {
-    await browser.close()
+    await browser?.close()
     await server.close()
   }
 })

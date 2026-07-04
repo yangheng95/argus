@@ -58,7 +58,6 @@ import type {
   CommandListResponses,
   Config as Config4,
   ConfigGetResponses,
-  ConfigPromptProfileResponses,
   ConfigPromptResponses,
   ConfigProvidersResponses,
   ConfigProxyTestErrors,
@@ -95,6 +94,7 @@ import type {
   ExperimentalWorkspaceListResponses,
   ExperimentalWorkspaceRemoveErrors,
   ExperimentalWorkspaceRemoveResponses,
+  ExpertSquadCatalogResponses,
   ExpertSquadExportErrors,
   ExpertSquadExportResponses,
   ExpertSquadImportFileErrors,
@@ -936,36 +936,6 @@ export class Config extends HeyApiClient {
     )
     return (options?.client ?? this.client).get<ConfigPromptResponses, unknown, ThrowOnError>({
       url: "/config/prompt",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * List prompt profiles and expert-squad package projections
-   *
-   * Returns the single active prompt_profile.active value, project/session active sources, built-in general profile, and current-project .opencorvus/expert-squads/<id> package-backed profiles with capability projections.
-   */
-  public promptProfile<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      sessionID?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "query", key: "sessionID" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<ConfigPromptProfileResponses, unknown, ThrowOnError>({
-      url: "/config/prompt-profile",
       ...options,
       ...params,
     })
@@ -4048,6 +4018,36 @@ export class Skill extends HeyApiClient {
 }
 
 export class ExpertSquad extends HeyApiClient {
+  /**
+   * List expert squads and active capability projection
+   *
+   * Returns the effective expert-squad catalog for the current project or session. The active value is still the single prompt_profile.active config field; this route exposes its expert-squad package view.
+   */
+  public catalog<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      sessionID?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "sessionID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ExpertSquadCatalogResponses, unknown, ThrowOnError>({
+      url: "/expert-squad/catalog",
+      ...options,
+      ...params,
+    })
+  }
+
   /**
    * Import an expert squad folder
    *

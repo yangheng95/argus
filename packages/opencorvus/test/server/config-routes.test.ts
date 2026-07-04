@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { readFile } from "fs/promises"
 import path from "path"
 import { Config } from "../../src/config/config"
+import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
@@ -14,6 +15,7 @@ import {
 import { tmpdir } from "../fixture/fixture"
 
 const ROOT = path.resolve(import.meta.dir, "..", "..", "..", "..")
+const PACKAGE_MCP_SERVER_PATH = path.join(import.meta.dir, "../fixture/package-mcp-server.ts")
 
 async function repoFile(...parts: string[]) {
   return await readFile(path.join(ROOT, ...parts), "utf8")
@@ -171,7 +173,7 @@ describe("config prompt routes", () => {
     })
   })
 
-  test("GET /config/prompt-profile returns full active profile catalog", async () => {
+  test("GET /expert-squad/catalog returns full active expert-squad catalog", async () => {
     await using tmp = await tmpdir({ git: true })
     for (const id of [
       "algorithm",
@@ -225,7 +227,7 @@ describe("config prompt routes", () => {
         })
         expect(patchResponse.status).toBe(200)
 
-        const response = await app.request("/config/prompt-profile", {
+        const response = await app.request("/expert-squad/catalog", {
           headers: {
             "x-opencorvus-directory": tmp.path,
           },
@@ -233,16 +235,20 @@ describe("config prompt routes", () => {
 
         expect(response.status).toBe(200)
         const body = (await response.json()) as {
-          active: string
-          project_active: string
-          session_active: string | null
+          active: {
+            effective: string
+            project: string
+            session_override: string | null
+          }
           default: string
           targets: Array<{ id: string; editable: boolean; built_in_only: boolean }>
-          profiles: Array<{
+          squads: Array<{
             id: string
             label: string
             built_in: boolean
             editable: boolean
+            readme: { append_target: "orchestrator"; content: string }
+            selector?: { summary: string; selection_guidance: string; instructions: string }
             agents: Record<string, string>
             capability_profile_id: string
             projection_hash: string
@@ -252,10 +258,17 @@ describe("config prompt routes", () => {
               agents: Record<string, { built_in_tool_ids: string[]; package_tool_refs: string[] }>
             }
           }>
+          active_skill_projection: {
+            active_squad_id: string
+            projection_hash: string
+            projected_tool_ids: string[]
+            projected_agent_ids: string[]
+            projected_skill_names: string[]
+          }
         }
-        expect(body.active).toBe("backend")
-        expect(body.project_active).toBe("backend")
-        expect(body.session_active).toBe(null)
+        expect(body.active.effective).toBe("backend")
+        expect(body.active.project).toBe("backend")
+        expect(body.active.session_override).toBe(null)
         expect(body.default).toBe("general")
         expect(body.targets.find((target) => target.id === "build")).toMatchObject({
           id: "build",
@@ -267,7 +280,7 @@ describe("config prompt routes", () => {
           editable: false,
           built_in_only: true,
         })
-        expect(body.profiles.map((profile) => profile.id)).toEqual([
+        expect(body.squads.map((squad) => squad.id)).toEqual([
           "general",
           "algorithm",
           "backend",
@@ -275,29 +288,31 @@ describe("config prompt routes", () => {
           "frontend-innovate",
           "frontend-replica",
         ])
-        const frontendReplicaProfile = body.profiles.find((profile) => profile.id === "frontend-replica")
+        const frontendReplicaProfile = body.squads.find((squad) => squad.id === "frontend-replica")
         expect(frontendReplicaProfile).toMatchObject({
           label: "Frontend Replica",
           built_in: false,
           editable: false,
           capability_profile_id: "frontend-replica",
         })
+        expect(frontendReplicaProfile?.readme.append_target).toBe("orchestrator")
+        expect(frontendReplicaProfile?.readme.content.length).toBeGreaterThan(0)
         expect(frontendReplicaProfile?.projection_hash).toMatch(/^[a-f0-9]{64}$/)
         expect(frontendReplicaProfile?.projected_agents).toContain("build")
         expect(frontendReplicaProfile?.capability_projection.scheduler.built_in_tool_ids).toContain("build")
         expect(frontendReplicaProfile?.capability_projection.agents.build.built_in_tool_ids).toContain("read")
         expect(frontendReplicaProfile?.capability_projection.agents.build.built_in_tool_ids).toContain("edit")
-        expect(body.profiles.find((profile) => profile.id === "frontend-innovate")).toMatchObject({
+        expect(body.squads.find((squad) => squad.id === "frontend-innovate")).toMatchObject({
           label: "Frontend Innovate",
           built_in: false,
           editable: false,
         })
-        expect(body.profiles.find((profile) => profile.id === "frontend-automation-debug")).toMatchObject({
+        expect(body.squads.find((squad) => squad.id === "frontend-automation-debug")).toMatchObject({
           label: "Frontend Automation Debug",
           built_in: false,
           editable: false,
         })
-        const generalProfile = body.profiles.find((profile) => profile.id === "general")
+        const generalProfile = body.squads.find((squad) => squad.id === "general")
         expect(generalProfile).toMatchObject({
           built_in: true,
           editable: false,
@@ -305,12 +320,15 @@ describe("config prompt routes", () => {
         })
         expect(generalProfile?.capability_projection.scheduler.built_in_tool_ids).toContain("select_expert_squad")
         expect(generalProfile?.capability_projection.scheduler.built_in_tool_ids).toContain("complete_task")
-        expect(body.profiles.every((profile) => !profile.editable)).toBe(true)
+        expect(body.active_skill_projection.active_squad_id).toBe("backend")
+        expect(body.active_skill_projection.projection_hash).toMatch(/^[a-f0-9]{64}$/)
+        expect(body.active_skill_projection.projected_agent_ids).toContain("build")
+        expect(body.squads.every((squad) => !squad.editable)).toBe(true)
       },
     })
   })
 
-  test("GET /config/prompt-profile does not parse inactive package MCP definitions", async () => {
+  test("GET /expert-squad/catalog does not parse inactive package MCP definitions", async () => {
     await using tmp = await tmpdir({ git: true })
     const inactiveRoot = await writeProjectExpertSquadPackage(tmp.path)
     await Bun.write(path.join(inactiveRoot, "mcp", "broken.jsonc"), "{")
@@ -319,7 +337,7 @@ describe("config prompt routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
-        const response = await app.request("/config/prompt-profile", {
+        const response = await app.request("/expert-squad/catalog", {
           headers: {
             "x-opencorvus-directory": tmp.path,
           },
@@ -327,16 +345,16 @@ describe("config prompt routes", () => {
 
         expect(response.status).toBe(200)
         const body = (await response.json()) as {
-          active: string
-          profiles: Array<{
+          active: { effective: string }
+          squads: Array<{
             id: string
             built_in: boolean
             capability_profile_id: string
             agents: Record<string, string>
           }>
         }
-        expect(body.active).toBe("general")
-        expect(body.profiles.find((profile) => profile.id === PROJECT_EXPERT_SQUAD_ID)).toMatchObject({
+        expect(body.active.effective).toBe("general")
+        expect(body.squads.find((squad) => squad.id === PROJECT_EXPERT_SQUAD_ID)).toMatchObject({
           built_in: false,
           capability_profile_id: PROJECT_EXPERT_SQUAD_ID,
           agents: {
@@ -364,7 +382,7 @@ describe("config prompt routes", () => {
     })
   })
 
-  test("GET /config/prompt-profile returns session-effective project package profile when sessionID is supplied", async () => {
+  test("GET /expert-squad/catalog returns session-effective project package profile when sessionID is supplied", async () => {
     await using tmp = await tmpdir({ git: true })
     await writeProjectExpertSquadPackage(tmp.path)
 
@@ -387,7 +405,7 @@ describe("config prompt routes", () => {
         })
 
         const app = Server.App()
-        const response = await app.request(`/config/prompt-profile?sessionID=${encodeURIComponent(root.id)}`, {
+        const response = await app.request(`/expert-squad/catalog?sessionID=${encodeURIComponent(root.id)}`, {
           headers: {
             "x-opencorvus-directory": tmp.path,
           },
@@ -395,10 +413,12 @@ describe("config prompt routes", () => {
 
         expect(response.status).toBe(200)
         const body = (await response.json()) as {
-          active: string
-          project_active: string
-          session_active: string | null
-          profiles: Array<{
+          active: {
+            effective: string
+            project: string
+            session_override: string | null
+          }
+          squads: Array<{
             id: string
             built_in: boolean
             editable: boolean
@@ -411,11 +431,15 @@ describe("config prompt routes", () => {
               agents: Record<string, { package_tool_refs: string[] }>
             }
           }>
+          active_skill_projection: {
+            active_squad_id: string
+          }
         }
-        expect(body.active).toBe(PROJECT_EXPERT_SQUAD_ID)
-        expect(body.project_active).toBe("general")
-        expect(body.session_active).toBe(PROJECT_EXPERT_SQUAD_ID)
-        expect(body.profiles.find((profile) => profile.id === PROJECT_EXPERT_SQUAD_ID)).toMatchObject({
+        expect(body.active.effective).toBe(PROJECT_EXPERT_SQUAD_ID)
+        expect(body.active.project).toBe("general")
+        expect(body.active.session_override).toBe(PROJECT_EXPERT_SQUAD_ID)
+        expect(body.active_skill_projection.active_squad_id).toBe(PROJECT_EXPERT_SQUAD_ID)
+        expect(body.squads.find((squad) => squad.id === PROJECT_EXPERT_SQUAD_ID)).toMatchObject({
           built_in: false,
           editable: false,
           capability_profile_id: PROJECT_EXPERT_SQUAD_ID,
@@ -426,7 +450,7 @@ describe("config prompt routes", () => {
             orchestrator: "project orchestrator overlay",
           },
         })
-        const projectProfile = body.profiles.find((profile) => profile.id === PROJECT_EXPERT_SQUAD_ID)
+        const projectProfile = body.squads.find((squad) => squad.id === PROJECT_EXPERT_SQUAD_ID)
         expect(projectProfile?.projection_hash).toMatch(/^[a-f0-9]{64}$/)
         expect(projectProfile?.capability_projection.scheduler.package_tool_refs).toEqual([
           `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/source-evidence`,
@@ -480,6 +504,120 @@ describe("config prompt routes", () => {
         expect(build?.effective_prompt).toContain("project build overlay")
       },
     })
+  })
+
+  test("GET /config/prompt rejects session-effective projected worker MCP raw base64 before returning catalog", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const packageMcpServerRef = `${PROJECT_EXPERT_SQUAD_ID}/build/package-browser`
+    await writeProjectExpertSquadPackage(tmp.path, PROJECT_EXPERT_SQUAD_ID, {
+      buildPackageMcpServerRefs: [packageMcpServerRef],
+      buildPackageMcpPromptRefs: [`${packageMcpServerRef}/prompt/raw-data-text`],
+      packageMcpDefinition: {
+        type: "local",
+        command: [process.execPath, PACKAGE_MCP_SERVER_PATH],
+        capabilities: {
+          prompts: ["raw-data-text"],
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const root = await Session.create({ kind: "root", title: "prompt catalog raw base64 root" })
+        await Session.mergeConfigOverlay({
+          sessionID: root.id,
+          patch: {
+            prompt_profile: {
+              active: PROJECT_EXPERT_SQUAD_ID,
+            },
+          },
+        })
+
+        const app = Server.App()
+        const response = await app.request(`/config/prompt?sessionID=${encodeURIComponent(root.id)}`, {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(response.status).toBeGreaterThanOrEqual(500)
+        expect(await response.text()).toContain("refusing raw base64 binary payload")
+      },
+    })
+  })
+
+  test("GET /config prompt session-effective routes reject sessions outside the active project", async () => {
+    await using one = await tmpdir({ git: true })
+    await using two = await tmpdir({ git: true })
+    const app = Server.App()
+    let oneSessionID = ""
+    let oneChildWithForeignParentID = ""
+    let twoSessionID = ""
+
+    await Instance.provide({
+      directory: one.path,
+      fn: async () => {
+        oneSessionID = (await Session.create({ kind: "root", title: "project a prompt route owner" })).id
+      },
+    })
+    await Instance.provide({
+      directory: two.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "root", title: "project b prompt route owner" })
+        twoSessionID = session.id
+        await Session.mergeConfigOverlay({
+          sessionID: twoSessionID,
+          patch: { prompt: { core_header: "project-b-config-route-secret" } },
+        })
+      },
+    })
+    await Instance.provide({
+      directory: one.path,
+      fn: async () => {
+        const child: Session.Info = {
+          id: Identifier.descending("session"),
+          slug: "cross-parent-child",
+          projectID: Instance.project.id,
+          directory: one.path,
+          parentID: twoSessionID,
+          title: "project a child with project b parent",
+          version: "test",
+          kind: "build",
+          time: {
+            created: Date.now(),
+            updated: Date.now(),
+          },
+        }
+        await Session.importSnapshot({ info: child, messages: [] })
+        oneChildWithForeignParentID = child.id
+      },
+    })
+
+    for (const route of ["/config/prompt", "/expert-squad/catalog"]) {
+      const foreign = await app.request(`${route}?sessionID=${encodeURIComponent(twoSessionID)}`, {
+        headers: {
+          "x-opencorvus-directory": one.path,
+        },
+      })
+      expect(foreign.status).toBe(404)
+      expect(await foreign.text()).not.toContain("project-b-config-route-secret")
+
+      const foreignParent = await app.request(`${route}?sessionID=${encodeURIComponent(oneChildWithForeignParentID)}`, {
+        headers: {
+          "x-opencorvus-directory": one.path,
+        },
+      })
+      expect(foreignParent.status).toBe(404)
+      expect(await foreignParent.text()).not.toContain("project-b-config-route-secret")
+    }
+
+    const own = await app.request(`/config/prompt?sessionID=${encodeURIComponent(oneSessionID)}`, {
+      headers: {
+        "x-opencorvus-directory": one.path,
+      },
+    })
+    expect(own.status).toBe(200)
   })
 
   test("PATCH /config accepts a repository project frontend automation debug profile and prompt preview uses it", async () => {
@@ -540,18 +678,18 @@ describe("config prompt routes", () => {
 
         expect(patchResponse.status).toBe(200)
 
-        const catalogResponse = await app.request("/config/prompt-profile", {
+        const catalogResponse = await app.request("/expert-squad/catalog", {
           headers: {
             "x-opencorvus-directory": tmp.path,
           },
         })
         expect(catalogResponse.status).toBe(200)
         const catalog = (await catalogResponse.json()) as {
-          active: string
-          profiles: Array<{ id: string; built_in: boolean; editable: boolean; agents: Record<string, string> }>
+          active: { effective: string }
+          squads: Array<{ id: string; built_in: boolean; editable: boolean; agents: Record<string, string> }>
         }
-        expect(catalog.active).toBe(PROJECT_EXPERT_SQUAD_ID)
-        expect(catalog.profiles.find((profile) => profile.id === PROJECT_EXPERT_SQUAD_ID)).toMatchObject({
+        expect(catalog.active.effective).toBe(PROJECT_EXPERT_SQUAD_ID)
+        expect(catalog.squads.find((squad) => squad.id === PROJECT_EXPERT_SQUAD_ID)).toMatchObject({
           built_in: false,
           editable: false,
           agents: {

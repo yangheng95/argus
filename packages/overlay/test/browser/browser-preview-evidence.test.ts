@@ -6,6 +6,7 @@ import test from "node:test"
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { expertSquadCatalogFixture } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -29,23 +30,20 @@ function eventStream() {
   })
 }
 
-const promptProfileCatalog = {
+const expertSquadCatalog = expertSquadCatalogFixture({
   active: "default",
-  project_active: "default",
-  session_active: null,
-  default: "default",
+  projectActive: "default",
+  defaultProfile: "general",
   targets: [{ id: "build", label: "Build", description: "Build agent prompt.", editable: true, built_in_only: false }],
   profiles: [
     {
       id: "default",
       label: "Default",
       description: "Default implementation profile.",
-      built_in: true,
-      editable: false,
-      agents: {},
+      built_in: false,
     },
   ],
-}
+})
 
 async function waitForPageState(page: any, predicate: () => boolean, label: string, diagnostics?: () => unknown) {
   for (let i = 0; i < 100; i += 1) {
@@ -217,7 +215,7 @@ test(
       if (path === "/provider/auth") return send({})
       if (path === "/config" && req.method === "PATCH") return send({ model: "" })
       if (path === "/config") return send({ model: "" })
-      if (path === "/config/prompt-profile") return send(promptProfileCatalog)
+      if (path === "/expert-squad/catalog") return send(expertSquadCatalog)
       if (path === "/channel") return send([])
       if (path === "/executor") return send([])
       if (path === "/agent") return send([])
@@ -779,7 +777,7 @@ test(
       if (path === "/provider/auth") return send({})
       if (path === "/config" && req.method === "PATCH") return send({ model: "" })
       if (path === "/config") return send({ model: "" })
-      if (path === "/config/prompt-profile") return send(promptProfileCatalog)
+      if (path === "/expert-squad/catalog") return send(expertSquadCatalog)
       if (path === "/channel") return send([])
       if (path === "/executor") return send([])
       if (path === "/agent") return send([])

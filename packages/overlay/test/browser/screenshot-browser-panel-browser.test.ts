@@ -9,6 +9,7 @@ import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { installBrowserErrorCollector } from "./error-collector.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { frontendReplicaExpertSquadCatalog } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -340,32 +341,8 @@ function conversationPayload() {
   }
 }
 
-function promptProfileCatalog() {
-  return {
-    active: "frontend-replica",
-    project_active: "frontend-replica",
-    session_active: null,
-    default: "general",
-    targets: [],
-    profiles: [
-      {
-        id: "general",
-        label: "General",
-        description: "General profile.",
-        built_in: true,
-        editable: false,
-        agents: {},
-      },
-      {
-        id: "frontend-replica",
-        label: "Frontend Replica",
-        description: "Frontend Replica profile.",
-        built_in: true,
-        editable: false,
-        agents: {},
-      },
-    ],
-  }
+function expertSquadCatalog() {
+  return frontendReplicaExpertSquadCatalog()
 }
 
 test(
@@ -452,7 +429,7 @@ test(
       if (path === "/provider") return json({ all: [], connected: [], default: {} })
       if (path === "/provider/auth") return json({})
       if (path === "/config/providers") return json({ providers: [] })
-      if (path === "/config/prompt-profile") return json(promptProfileCatalog())
+      if (path === "/expert-squad/catalog") return json(expertSquadCatalog())
       if (path === "/config") return json({ model: "" })
       if (path === "/coding/cli/profiles" || path === "/terminal/profiles") return json({ profiles: [] })
       if (path === "/agent") return json([])

@@ -8,6 +8,7 @@ import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { installBrowserErrorCollector } from "./error-collector.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -62,23 +63,7 @@ function boardForTask(item: any): any {
   }
 }
 
-const PROMPT_PROFILE_CATALOG = {
-  active: "general",
-  project_active: "general",
-  session_active: null,
-  default: "general",
-  targets: [],
-  profiles: [
-    {
-      id: "general",
-      label: "General",
-      description: "Default prompt profile",
-      built_in: true,
-      editable: false,
-      agents: {},
-    },
-  ],
-}
+const EXPERT_SQUAD_CATALOG = generalExpertSquadCatalog()
 
 async function visibleTaskRows(page: any) {
   return page.evaluate(() =>
@@ -143,7 +128,7 @@ test("task tree parent selection does not leave later task-row clicks trapped in
         directory: "D:/tree-click/workspace",
       })
     }
-    if (path === "/config/prompt" || path === "/config/prompt-profile") return send(PROMPT_PROFILE_CATALOG)
+    if (path === "/config/prompt" || path === "/expert-squad/catalog") return send(EXPERT_SQUAD_CATALOG)
     if (path === "/channel") return send([])
     if (path === "/channel/runtime") return send({ status: "disabled", channels: [] })
     if (path === "/gateway/stats") return send({ active: 0, queued: 3, completed: 0, failed: 0 })

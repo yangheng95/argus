@@ -7,6 +7,7 @@ import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { installBrowserErrorCollector } from "./error-collector.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { expertSquadCatalogFixture } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -33,23 +34,10 @@ function eventStream() {
   })
 }
 
-const promptProfileCatalog = {
-  active: "general",
-  project_active: "general",
-  session_active: null,
-  default: "general",
+const expertSquadCatalog = expertSquadCatalogFixture({
   targets: [{ id: "build", label: "Build", description: "Build agent prompt.", editable: true, built_in_only: false }],
-  profiles: [
-    {
-      id: "general",
-      label: "General",
-      description: "General implementation profile.",
-      built_in: true,
-      editable: false,
-      agents: {},
-    },
-  ],
-}
+  profiles: [{ id: "general", label: "General", description: "General implementation profile.", built_in: true }],
+})
 
 const installedSkills = [
   {
@@ -122,7 +110,7 @@ test("command palette uses the shared Dialog primitive while preserving hotkey f
     if (path === "/provider/hexin/budget") return send({ ok: false, error: "HEXIN_API_KEY unset" })
     if (path === "/config/providers") return send({ providers: [] })
     if (path === "/config/prompt") return send([])
-    if (path === "/config/prompt-profile") return send(promptProfileCatalog)
+    if (path === "/expert-squad/catalog") return send(expertSquadCatalog)
     if (path === "/config") return send({ model: "" })
     if (path === "/agent") return send([])
     if (path === "/channel") return send([])

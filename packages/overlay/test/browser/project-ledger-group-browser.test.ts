@@ -6,6 +6,7 @@ import test from "node:test"
 import { launchBrowser, type OverlayPage } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -483,24 +484,8 @@ test(
           directory: PROJECT_DIR,
         })
       }
-      if (path === "/config/prompt" || path === "/config/prompt-profile") {
-        return json({
-          active: "general",
-          project_active: "general",
-          session_active: null,
-          default: "general",
-          targets: [],
-          profiles: [
-            {
-              id: "general",
-              label: "General",
-              description: "Default prompt profile",
-              built_in: true,
-              editable: false,
-              agents: {},
-            },
-          ],
-        })
+      if (path === "/config/prompt" || path === "/expert-squad/catalog") {
+        return json(generalExpertSquadCatalog())
       }
       if (path === "/channel") return json([])
       if (path === "/channel/runtime") return json({ status: "disabled", channels: [] })

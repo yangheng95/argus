@@ -257,7 +257,7 @@
   min-width: 0;
 }
 
-/* Compose meta: the compact prompt-profile and executor selector row beneath
+/* Compose meta: the compact expert-squad and executor selector row beneath
    the textarea. */
 .chat-compose-meta {
   display: flex;
@@ -279,7 +279,7 @@
   min-width: 0;
 }
 
-.prompt-profile-select-wrap {
+.expert-squad-select-wrap {
   position: relative;
   display: flex;
   min-width: 0;
@@ -295,20 +295,20 @@
     color var(--ui-duration-fast);
 }
 
-.prompt-profile-select-wrap:hover {
+.expert-squad-select-wrap:hover {
   background: color-mix(in srgb, var(--surface-inset) 86%, var(--accent) 14%);
   color: var(--text-strong);
   box-shadow: inset 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--accent) 22%, var(--border));
 }
 
-.prompt-profile-select-wrap:focus-within {
+.expert-squad-select-wrap:focus-within {
   background: color-mix(in srgb, var(--surface-inset) 84%, var(--accent) 16%);
   box-shadow:
     inset 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--accent) 28%, var(--border)),
     0 0 0 calc(2px * var(--ui-scale)) var(--accent-ring);
 }
 
-.prompt-profile-select-trigger.oc-select-trigger {
+.expert-squad-select-trigger.oc-select-trigger {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -325,11 +325,11 @@
   cursor: pointer;
 }
 
-.prompt-profile-select-trigger.oc-select-trigger > .prompt-profile-select-copy {
+.expert-squad-select-trigger.oc-select-trigger > .expert-squad-select-copy {
   white-space: normal;
 }
 
-.prompt-profile-select-copy {
+.expert-squad-select-copy {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -338,7 +338,7 @@
   flex: 1 1 auto;
 }
 
-.prompt-profile-select-label {
+.expert-squad-select-label {
   min-width: 0;
   font-size: calc(10px * var(--ui-scale));
   font-weight: var(--ui-font-weight-medium);
@@ -346,7 +346,7 @@
   line-height: 1;
 }
 
-.prompt-profile-select-value {
+.expert-squad-select-value {
   min-width: 0;
   overflow: hidden;
   color: var(--text-strong);
@@ -357,38 +357,38 @@
   white-space: nowrap;
 }
 
-.prompt-profile-select-caret {
+.expert-squad-select-caret {
   display: inline-flex;
   flex: 0 0 auto;
   color: var(--text-muted);
 }
 
-.prompt-profile-select-trigger.oc-select-trigger:disabled {
+.expert-squad-select-trigger.oc-select-trigger:disabled {
   cursor: default;
   opacity: var(--ui-opacity-disabled);
 }
 
-.prompt-profile-select-wrap:has(.prompt-profile-select-trigger:disabled) {
+.expert-squad-select-wrap:has(.expert-squad-select-trigger:disabled) {
   color: var(--text-muted);
   opacity: var(--ui-opacity-disabled);
 }
 
-.prompt-profile-select-content {
+.expert-squad-select-content {
   min-width: calc(180px * var(--ui-scale));
 }
 
-.prompt-profile-select-listbox {
+.expert-squad-select-listbox {
   max-height: min(calc(240px * var(--ui-scale)), calc(var(--ui-overlay-shell-height) - 32px));
 }
 
-.prompt-profile-select-option-copy {
+.expert-squad-select-option-copy {
   display: flex;
   flex-direction: column;
   gap: calc(2px * var(--ui-scale));
   min-width: 0;
 }
 
-.prompt-profile-select-option-copy small {
+.expert-squad-select-option-copy small {
   overflow: hidden;
   font-size: var(--ui-font-tiny);
   line-height: 1.25;

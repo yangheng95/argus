@@ -7,6 +7,7 @@ import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { installBrowserErrorCollector } from "./error-collector.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -76,7 +77,7 @@ const SIDE_ACTIVITY_TASK = {
   status: "active",
   directory: "D:/overlay/workspace/app",
   sessionID: "ses_side_activity",
-  time: { created: 1_735_689_600_000, updated: 1_735_689_660_000 },
+  time: { created: 1_735_689_600_000, started: 1_735_689_610_000, updated: 1_735_689_660_000 },
 }
 
 function taskListPayload() {
@@ -237,23 +238,7 @@ test(
     const requestLog: Array<{ method: string; path: string }> = []
     let missionInterruptible = true
     let resolveMissionArchive: ((response: Response) => void) | null = null
-    const promptProfileCatalog = {
-      active: "general",
-      project_active: "general",
-      session_active: null,
-      default: "general",
-      targets: [],
-      profiles: [
-        {
-          id: "general",
-          label: "General",
-          description: "Baseline prompt set.",
-          built_in: true,
-          editable: false,
-          agents: {},
-        },
-      ],
-    }
+    const expertSquadCatalog = generalExpertSquadCatalog()
     const server = await startBrowserFixture(async (req) => {
       const url = new URL(req.url)
       const path = route(url)
@@ -289,7 +274,7 @@ test(
           events: [],
           view: { topLevelSessionIDs: [], sessions: [], messages: [] },
           agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
-          history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 0 },
+          history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 160 },
           messageWatermark: 0,
         })
       }
@@ -327,7 +312,7 @@ test(
           events: [],
           view: { topLevelSessionIDs: [], sessions: [], messages: [] },
           agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
-          history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 0 },
+          history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 160 },
           messageWatermark: 0,
         })
       }
@@ -415,7 +400,7 @@ test(
           events: [],
           view: { topLevelSessionIDs: [], sessions: [], messages: [] },
           agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
-          history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 0 },
+          history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 160 },
           messageWatermark: 0,
         })
       }
@@ -464,7 +449,7 @@ test(
       if (path === "/provider") return send({ all: [], connected: [], default: {} })
       if (path === "/provider/auth") return send({})
       if (path === "/config/providers") return send({ providers: [] })
-      if (path === "/config/prompt-profile") return send(promptProfileCatalog)
+      if (path === "/expert-squad/catalog") return send(expertSquadCatalog)
       if (path === "/config") return send({ model: "", prompt_profile: { active: "general" } })
       if (path === "/agent") return send([])
       if (path === "/channel") return send([])
@@ -501,7 +486,7 @@ test(
         ])
       }
       if (path === "/panel/knowledge/preference") return send([])
-      if (path === "/file") return send({ entries: [{ path: "src/main.tsx", name: "main.tsx", type: "file" }] })
+      if (path === "/file") return send([{ path: "src/main.tsx", name: "main.tsx", type: "file" }])
       if (path === "/find/file") return send({ entries: [] })
       return send({})
     })
@@ -597,6 +582,18 @@ test(
             ),
             leftAssistantPressed: attr(
               '[data-ui="side-activity-button"][data-side="left"][data-activity="assistant"]',
+              "aria-pressed",
+            ),
+            leftToolButton:
+              document.querySelector<HTMLElement>(
+                '[data-ui="side-activity-button"][data-side="left"][data-activity="tool"]',
+              )?.dataset.active ?? "",
+            leftToolCurrent: attr(
+              '[data-ui="side-activity-button"][data-side="left"][data-activity="tool"]',
+              "aria-current",
+            ),
+            leftToolPressed: attr(
+              '[data-ui="side-activity-button"][data-side="left"][data-activity="tool"]',
               "aria-pressed",
             ),
             leftSkillButton:
@@ -800,7 +797,7 @@ test(
         centerDiff: "false",
         centerPreview: "false",
         leftToolbarExists: true,
-        leftActivityButtons: 6,
+        leftActivityButtons: 7,
         leftTasksButton: "false",
         leftTasksCurrent: "",
         leftTasksPressed: "",
@@ -810,6 +807,9 @@ test(
         leftAssistantButton: "false",
         leftAssistantCurrent: "",
         leftAssistantPressed: "",
+        leftToolButton: "false",
+        leftToolCurrent: "",
+        leftToolPressed: "",
         leftSkillButton: "false",
         leftSkillCurrent: "",
         leftSkillPressed: "",
@@ -1426,7 +1426,7 @@ test(
       )
 
       await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]')
-      await page.waitForSelector("#leftPanelSkills[data-active='true'] .agent-skill-matrix-grid")
+      await page.waitForSelector('#leftPanelSkills[data-active="true"] [data-ui="agent-skill-tabs"]')
       assertMatchObject(await activeState(), {
         leftHeaderTitle: "Skills",
         leftHeaderAriaLabel: "Skills",
@@ -1449,10 +1449,12 @@ test(
           }),
         )
         const matrix = panel.querySelector<HTMLElement>(".agent-skill-matrix")!
-        const grid = panel.querySelector<HTMLElement>(".agent-skill-matrix-grid")!
-        const skill = panel.querySelector<HTMLElement>(".agent-skill-grid-skill")!
-        const skillName = panel.querySelector<HTMLElement>(".agent-skill-grid-skill__name")!
-        const mountedCells = panel.querySelectorAll<HTMLElement>('.agent-skill-grid-cell[data-state="mounted"]')
+        const tabs = panel.querySelector<HTMLElement>('[data-ui="agent-skill-tabs"]')!
+        const activeTab = tabs.querySelector<HTMLElement>('.agent-capability-tab[aria-selected="true"]')
+        const pool = panel.querySelector<HTMLElement>('[data-ui="agent-skill-pool"]')!
+        const poolRow = pool.querySelector<HTMLElement>(".agent-skill-pool-row")!
+        const poolName = poolRow.querySelector<HTMLElement>("strong")!
+        const mountedRows = panel.querySelectorAll<HTMLElement>(".agent-mounted-skill-row")
         return {
           active: panel.dataset.active,
           hasToolbar: !!toolbar,
@@ -1461,13 +1463,14 @@ test(
           buttonTitles: buttons.map((item) => item.title),
           buttonWidths: buttons.map((item) => item.width),
           matrixCompact: matrix.dataset.compact,
+          matrixView: matrix.dataset.view,
           matrixDisplay: getComputedStyle(matrix).display,
-          gridDisplay: getComputedStyle(grid).display,
-          gridColumns: getComputedStyle(grid).gridTemplateColumns,
-          skillName: skillName.textContent || "",
-          skillNameWhiteSpace: getComputedStyle(skillName).whiteSpace,
-          skillMinWidth: Math.round(skill.getBoundingClientRect().width),
-          mountedCells: mountedCells.length,
+          tabsDisplay: getComputedStyle(tabs).display,
+          activeAgent: activeTab?.dataset.agentName ?? "",
+          poolName: poolName.textContent || "",
+          poolNameWhiteSpace: getComputedStyle(poolName).whiteSpace,
+          poolRowMinWidth: Math.round(poolRow.getBoundingClientRect().width),
+          mountedRows: mountedRows.length,
           sourceListVisible: !!panel.querySelector(".extension-list"),
           dropZoneVisible: !!panel.querySelector(".skill-drop-zone"),
         }
@@ -1478,11 +1481,13 @@ test(
         hasInternalHeader: false,
         buttonTexts: ["", ""],
         matrixCompact: "true",
+        matrixView: "agent-tabs",
         matrixDisplay: "flex",
-        gridDisplay: "grid",
-        skillName: "research-report",
-        skillNameWhiteSpace: "nowrap",
-        mountedCells: 1,
+        tabsDisplay: "grid",
+        activeAgent: "requirements",
+        poolName: "research-report",
+        poolNameWhiteSpace: "normal",
+        mountedRows: 1,
         sourceListVisible: false,
         dropZoneVisible: false,
       })
@@ -1491,8 +1496,7 @@ test(
         skillPanelState.buttonWidths.every((width) => width <= 32),
         true,
       )
-      assert.ok(skillPanelState.gridColumns.includes("px"))
-      assert.ok(skillPanelState.skillMinWidth > 120)
+      assert.ok(skillPanelState.poolRowMinWidth > 120)
 
       await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]')
       await page.waitForFunction(
@@ -2125,7 +2129,7 @@ test(
           events: [],
           view: { topLevelSessionIDs: [], sessions: [], messages: [] },
           agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
-          history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 0 },
+          history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 160 },
           messageWatermark: 0,
         })
       }
@@ -2151,7 +2155,7 @@ test(
       if (path === "/provider/auth") return send({})
       if (path === "/config/providers") return send({ providers: [], default: {} })
       if (path === "/config/prompt") return send([])
-      if (path === "/config/prompt-profile") return send({ active: "general", targets: [], profiles: [] })
+      if (path === "/expert-squad/catalog") return send(generalExpertSquadCatalog())
       if (path === "/config") return send({ model: "opencorvus/gpt-5-nano" })
       if (path === "/skill/mounts")
         return send({ scope: "project", skills: [], agents: [], matrix: [], project_mounts: {}, unmounted_count: 0 })
@@ -2294,7 +2298,7 @@ test(
           events: [],
           view: { topLevelSessionIDs: [], sessions: [], messages: [] },
           agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
-          history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 0 },
+          history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 160 },
           messageWatermark: 0,
         })
       }
@@ -2320,7 +2324,7 @@ test(
       if (path === "/provider/auth") return send({})
       if (path === "/config/providers") return send({ providers: [], default: {} })
       if (path === "/config/prompt") return send([])
-      if (path === "/config/prompt-profile") return send({ active: "general", targets: [], profiles: [] })
+      if (path === "/expert-squad/catalog") return send(generalExpertSquadCatalog())
       if (path === "/config") return send({ model: "opencorvus/gpt-5-nano" })
       if (path === "/skill/mounts")
         return send({ scope: "project", skills: [], agents: [], matrix: [], project_mounts: {}, unmounted_count: 0 })

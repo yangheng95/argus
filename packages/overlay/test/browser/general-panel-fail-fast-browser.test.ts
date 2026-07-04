@@ -8,6 +8,7 @@ import test from "node:test"
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -101,15 +102,8 @@ test("General Settings write failures stay visible and do not report saved state
     if (path === "/provider/auth") return send({})
     if (path === "/config/providers") return send({ providers: [], default: {} })
     if (path === "/config/prompt") return send([])
-    if (path === "/config/prompt-profile") {
-      return send({
-        active: "general",
-        project_active: "general",
-        session_active: null,
-        default: "general",
-        targets: [],
-        profiles: [],
-      })
+    if (path === "/expert-squad/catalog") {
+      return send(generalExpertSquadCatalog())
     }
     if (path === "/config" && req.method === "GET") {
       return send({

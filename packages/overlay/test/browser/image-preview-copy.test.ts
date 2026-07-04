@@ -7,6 +7,7 @@ import { deflateSync } from "node:zlib"
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { expertSquadCatalogFixture } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -88,23 +89,20 @@ function eventStream() {
   })
 }
 
-const promptProfileCatalog = {
+const expertSquadCatalog = expertSquadCatalogFixture({
   active: "default",
-  project_active: "default",
-  session_active: null,
-  default: "default",
+  projectActive: "default",
+  defaultProfile: "general",
   targets: [{ id: "build", label: "Build", description: "Build agent prompt.", editable: true, built_in_only: false }],
   profiles: [
     {
       id: "default",
       label: "Default",
       description: "Default implementation profile.",
-      built_in: true,
-      editable: false,
-      agents: {},
+      built_in: false,
     },
   ],
-}
+})
 
 test(
   "tool output image preview copies image bytes to the clipboard",
@@ -250,7 +248,7 @@ test(
       if (path === "/mission") return send([])
       if (path === "/session") return send([])
       if (path === "/config/prompt") return send([])
-      if (path === "/config/prompt-profile") return send(promptProfileCatalog)
+      if (path === "/expert-squad/catalog") return send(expertSquadCatalog)
       if (path === `/task/${taskID}/board`) return send(board)
       if (path === `/task/${taskID}/conversation`) {
         return send({

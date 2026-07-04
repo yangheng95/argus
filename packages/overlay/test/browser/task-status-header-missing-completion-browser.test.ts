@@ -7,6 +7,7 @@ import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { installBrowserErrorCollector } from "./error-collector.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -212,7 +213,7 @@ async function fixtureResponse(req: Request): Promise<Response> {
   if (path === "/provider/auth") return send({})
   if (path === "/config/providers") return send({ providers: [], default: {} })
   if (path === "/config/prompt") return send([])
-  if (path === "/config/prompt-profile") return send({ active: "general", targets: [], profiles: [] })
+  if (path === "/expert-squad/catalog") return send(generalExpertSquadCatalog())
   if (path === "/config" && (req.method === "GET" || req.method === "PATCH")) return send({ model: "" })
   if (path === "/agent" || path === "/channel" || path === "/executor") return send([])
   if (path === "/skill/installed" || path === "/skill") return send([])

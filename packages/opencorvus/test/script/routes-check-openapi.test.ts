@@ -162,4 +162,19 @@ describe("api routes check OpenAPI drift", () => {
       additionalProperties: false,
     })
   })
+
+  test("generated API docs list optional request body fields alongside required fields", () => {
+    const apiDocs = readRepoFile("packages", "web", "src", "content", "docs", "reference", "api.mdx")
+
+    expect(apiDocs).toContain(
+      "Wake the Mission agent Body: `missionID`, `model`, `promptProfile`, `text`, `title`",
+    )
+    expect(apiDocs).toContain(
+      "Create task Body: `attachments`, `budget`, `channelBinding`, `checks`, `executor`, `goals`, `kind`, `metadata`, `milestones`, `model`, `priority`, `project`, `promptProfile`, `queue`, `request`, `requestID`, `routing`, `source`, `title`",
+    )
+    expect(apiDocs).toContain(
+      "Handle task message Body: `attachments`, `channel`, `promptProfile`, `resolvedRole`, `source`, `text`, `user_id`",
+    )
+    expect(apiDocs).toContain("Mount a skill to an agent Body: `agent`, `sessionID`, `skill`")
+  })
 })

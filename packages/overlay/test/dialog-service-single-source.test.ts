@@ -159,6 +159,7 @@ describe("app/session dialog single source", () => {
     expect(configHost).toContain("const [renderedConfigTab, setRenderedConfigTab]")
     expect(configHost).toContain("window.requestAnimationFrame(() => setRenderedConfigTab(tab))")
     expect(configHost).toContain("data-config-panel={activeConfigTab()}")
+    expect(configHost).toContain("<ExpertSquadPanel />")
     expect(configHost).not.toContain(
       "<PromptCatalog />\n            </div>\n          </div>\n          <div classList",
     )

@@ -298,7 +298,7 @@ describe("executor settings", () => {
     expect((captured?.body as any).value.model).toBe("openai/gpt-5.5")
   })
 
-  test("task creation forwards the selected prompt profile as a task overlay field", async () => {
+  test("task creation forwards the selected expert squad through the task overlay field", async () => {
     let captured: TransportRequest | undefined
     __setHostTransportForTest(
       fakeTransport((req) => {
@@ -321,18 +321,18 @@ describe("executor settings", () => {
     expect(body.metadata?.promptProfile).toBeUndefined()
   })
 
-  test("prompt profile selector delegates option rendering to Kobalte Select", () => {
-    expect(CHAT_COMPOSER_SOURCE).toContain('triggerDataUI="prompt-profile-selector"')
+  test("expert squad selector delegates option rendering to Kobalte Select", () => {
+    expect(CHAT_COMPOSER_SOURCE).toContain('triggerDataUI="expert-squad-selector"')
     expect(CHAT_COMPOSER_SOURCE).toContain('import { SelectControl } from "./ui/SelectControl"')
-    expect(CHAT_COMPOSER_SOURCE).toContain("<SelectControl<PromptProfileOption>")
-    expect(CHAT_COMPOSER_SOURCE).toContain('triggerClass="prompt-profile-select-trigger"')
-    expect(CHAT_COMPOSER_SOURCE).toContain('optionCopyClass="prompt-profile-select-option-copy"')
+    expect(CHAT_COMPOSER_SOURCE).toContain("<SelectControl<ExpertSquadOption>")
+    expect(CHAT_COMPOSER_SOURCE).toContain('triggerClass="expert-squad-select-trigger"')
+    expect(CHAT_COMPOSER_SOURCE).toContain('optionCopyClass="expert-squad-select-option-copy"')
     expect(CHAT_COMPOSER_SOURCE).not.toContain('import * as Select from "@kobalte/core/select"')
     expect(CHAT_COMPOSER_SOURCE).not.toContain("<Select.Root")
     expect(CHAT_COMPOSER_SOURCE).not.toContain("<Select.HiddenSelect")
-    expect(CHAT_COMPOSER_SOURCE).not.toContain("function PromptProfileSelectOptionItem")
-    expect(CHAT_COMPOSER_SOURCE).toContain("selectedPromptProfile()?.label ?? props.promptProfileID")
-    expect(COMPOSER_CSS_SOURCE).toContain(".prompt-profile-select-trigger.oc-select-trigger")
+    expect(CHAT_COMPOSER_SOURCE).not.toContain("function expertSquadselectOptionItem")
+    expect(CHAT_COMPOSER_SOURCE).toContain("selectedExpertSquad()?.label ?? props.expertSquadID")
+    expect(COMPOSER_CSS_SOURCE).toContain(".expert-squad-select-trigger.oc-select-trigger")
     expect(CHAT_COMPOSER_SOURCE).not.toContain("<select")
     expect(CHAT_COMPOSER_SOURCE).not.toContain("<option")
     expect(CHAT_COMPOSER_SOURCE).not.toContain("HTMLSelectElement")

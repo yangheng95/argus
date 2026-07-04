@@ -9,7 +9,7 @@ import { EngineConfig } from "../../engine/config"
 import { ChannelSupervisor } from "@/channel/supervisor"
 import { Provider } from "../../provider/provider"
 import { Agent } from "../../agent/agent"
-import { PromptProfile, PromptProfileCatalogSchema } from "@/agent/prompt-profile"
+import { PromptProfile } from "@/agent/prompt-profile"
 import { PromptCatalog } from "../../config/prompt-catalog"
 import { Instance } from "@/project/instance"
 import { mapValues } from "remeda"
@@ -17,6 +17,7 @@ import { badRequestBody, errors } from "../error"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
 import { testNetworkProxy } from "../../util/network-proxy-test"
+import { assertActiveProjectSession } from "../active-project-session"
 
 const log = Log.create({ service: "server" })
 
@@ -206,66 +207,12 @@ export const ConfigRoutes = lazy(() =>
       async (c) => {
         const query = c.req.valid("query")
         if (!query.sessionID) return c.json(await PromptCatalog.list())
+        await assertActiveProjectSession(query.sessionID)
         const [config, projectDirectory] = await Promise.all([
           EffectiveConfig.effective({ sessionID: query.sessionID }),
           EffectiveConfig.directory({ sessionID: query.sessionID }),
         ])
         return c.json(await PromptCatalog.list({ config, projectDirectory }))
-      },
-    )
-    .get(
-      "/prompt-profile",
-      describeRoute({
-        summary: "List prompt profiles and expert-squad package projections",
-        description:
-          "Returns the single active prompt_profile.active value, project/session active sources, built-in general profile, and current-project .opencorvus/expert-squads/<id> package-backed profiles with capability projections.",
-        operationId: "config.promptProfile",
-        responses: {
-          200: {
-            description: "Prompt profile catalog",
-            content: {
-              "application/json": {
-                schema: resolver(PromptProfileCatalogSchema),
-              },
-            },
-          },
-        },
-      }),
-      validator(
-        "query",
-        z.object({
-          sessionID: z
-            .string()
-            .optional()
-            .meta({ description: "Optional root or child session id for session-effective prompt profile view" }),
-        }),
-      ),
-      async (c) => {
-        const query = c.req.valid("query")
-        if (!query.sessionID) {
-          const config = await Config.get()
-          return c.json(
-            await PromptProfileResolver.list({
-              projectDirectory: Instance.directory,
-              config,
-              projectActive: PromptProfile.activeID(config),
-              sessionActive: null,
-            }),
-          )
-        }
-        const [projectConfig, effectiveConfig, projectDirectory] = await Promise.all([
-          EffectiveConfig.base({ sessionID: query.sessionID }),
-          EffectiveConfig.effective({ sessionID: query.sessionID }),
-          EffectiveConfig.directory({ sessionID: query.sessionID }),
-        ])
-        return c.json(
-          await PromptProfileResolver.list({
-            projectDirectory,
-            config: effectiveConfig,
-            projectActive: PromptProfile.activeID(projectConfig),
-            sessionActive: PromptProfile.activeID(effectiveConfig),
-          }),
-        )
       },
     )
     .get(

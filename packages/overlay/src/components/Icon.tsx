@@ -59,6 +59,7 @@ import {
   Trash2,
   Undo2,
   Upload,
+  Wrench,
   Workflow,
   X,
 } from "lucide-solid"
@@ -177,8 +178,8 @@ export type IconName =
   // Config dialog navigation
   | "config-general"
   | "config-permissions"
-  | "config-prompt"
   | "config-channel"
+  | "config-tool"
   | "config-skill"
   | "config-skill-market"
   | "config-mcp"
@@ -255,8 +256,8 @@ const LUCIDE_ICON_MAP: Partial<Record<IconName, LucideIconRecord>> = {
   "status-cancelled": { component: Ban },
   "config-general": { component: Settings },
   "config-permissions": { component: Shield },
-  "config-prompt": { component: MessageSquare },
   "config-channel": { component: Rss },
+  "config-tool": { component: Wrench },
   "config-skill": { component: Package },
   "config-skill-market": { component: ShoppingBag },
   "config-mcp": { component: Cable },

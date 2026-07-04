@@ -8,6 +8,7 @@ import test from "node:test"
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
 import { installBrowserErrorCollector } from "./error-collector.ts"
 
 await ensureOverlayDist()
@@ -122,15 +123,8 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
     if (path === "/provider/auth") return send({})
     if (path === "/config/providers") return send({ providers: [], default: {} })
     if (path === "/config/prompt") return send([])
-    if (path === "/config/prompt-profile") {
-      return send({
-        active: "general",
-        project_active: "general",
-        session_active: null,
-        default: "general",
-        targets: [],
-        profiles: [],
-      })
+    if (path === "/expert-squad/catalog") {
+      return send(generalExpertSquadCatalog())
     }
     if (path === "/config" && req.method === "GET") return send(config)
     if (path === "/config" && req.method === "PATCH") {
@@ -269,14 +263,14 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
     await page.waitForSelector("#leftPanelMcp[data-active='true'] #mcpList")
     const skillProjectionWhileMcpOpen = await page.$eval("#leftPanelSkills", (node: HTMLElement) => ({
       active: node.dataset.active || "",
-      matrixGrids: node.querySelectorAll(".agent-skill-matrix-grid").length,
-      matrixCells: node.querySelectorAll(".agent-skill-grid-cell").length,
+      agentTabs: node.querySelectorAll('[data-ui="agent-skill-tabs"]').length,
+      skillPools: node.querySelectorAll('[data-ui="agent-skill-pool"]').length,
       text: node.textContent?.trim() || "",
     }))
     assert.deepEqual(
       skillProjectionWhileMcpOpen,
-      { active: "false", matrixGrids: 0, matrixCells: 0, text: "" },
-      "Skills matrix must unmount when MCP becomes the active compact tool panel",
+      { active: "false", agentTabs: 0, skillPools: 0, text: "" },
+      "Skills capability panel must unmount when MCP becomes the active compact tool panel",
     )
     await page.waitForFunction(() => document.querySelector("#leftPanelMcp")?.textContent?.includes("browser"))
     const statusScreenshot = await saveElementScreenshot(page, "#leftPanelMcp", "skill-mcp-status-pills.png")
@@ -422,6 +416,14 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
       { type: "remote", transport: "sse", url: "https://mcp.example.com/new" },
       "remote MCP config must persist the selected transport",
     )
+    for (
+      let attempt = 0;
+      attempt < 50 &&
+      !requests.some((item) => item.method === "POST" && item.path === "/mcp/newremote/connect");
+      attempt += 1
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
     assert.ok(
       requests.some((item) => item.method === "POST" && item.path === "/mcp/newremote/connect"),
       "adding remote MCP should connect the named server after config patch",

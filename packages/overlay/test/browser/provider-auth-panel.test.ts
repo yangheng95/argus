@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url"
 import { launchBrowser, type OverlayBrowser, type OverlayPage } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
 
 type Browser = OverlayBrowser
 type Page = OverlayPage
@@ -68,6 +69,15 @@ function send(value: unknown, init?: ResponseInit) {
     headers: {
       "content-type": "application/json; charset=utf-8",
       ...(init?.headers || {}),
+    },
+  })
+}
+
+function eventStream() {
+  return new Response(":\n\n", {
+    headers: {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-cache",
     },
   })
 }
@@ -139,7 +149,13 @@ async function withOverlay(
     if (staticResponse) return staticResponse
     if (path === "/global/health") return send({ version: "1.2.3" })
     if (path === "/global/tasks") return send({ tasks: [] })
+    if (path === "/global/projects/discover") {
+      return send({ root: "D:/overlay", defaultDirectory: data.path.directory, projects: [] })
+    }
     if (path === "/session") return send([])
+    if (path === "/task/events") return eventStream()
+    if (path === "/project/current/worktrees") return send([])
+    if (path === "/coding/cli/profiles" || path === "/terminal/profiles") return send({ profiles: [] })
     if (path === "/path") return send(data.path)
     if (path === "/vcs") return send(data.vcs)
     if (path === "/provider") return send(data.provider)
@@ -156,15 +172,8 @@ async function withOverlay(
       })
     }
     if (path === "/config/prompt") return send([])
-    if (path === "/config/prompt-profile") {
-      return send({
-        active: "general",
-        project_active: "general",
-        session_active: null,
-        default: "general",
-        targets: [],
-        profiles: [],
-      })
+    if (path === "/expert-squad/catalog") {
+      return send(generalExpertSquadCatalog())
     }
     if (path === "/config" && req.method === "GET") return send(data.config)
     if (path === "/config" && req.method === "PATCH") {

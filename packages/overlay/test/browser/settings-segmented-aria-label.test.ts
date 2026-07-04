@@ -6,6 +6,7 @@ import test from "node:test"
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -98,15 +99,8 @@ test("settings segmented controls expose per-row accessible names", async () => 
       return send(config)
     }
     if (path === "/config/prompt") return send([])
-    if (path === "/config/prompt-profile")
-      return send({
-        active: "general",
-        project_active: "general",
-        session_active: null,
-        default: "general",
-        targets: [],
-        profiles: [],
-      })
+    if (path === "/expert-squad/catalog")
+      return send(generalExpertSquadCatalog())
     if (path === "/agent") return send([])
     if (path === "/channel") return send([])
     if (path === "/channel/runtime") return send({ status: "disabled", channels: [] })
@@ -203,9 +197,9 @@ test("settings segmented controls expose per-row accessible names", async () => 
 
     await page.focus('[data-config-tab="permissions"]')
     await page.keyboard.press("ArrowDown")
-    await page.waitForFunction(() => document.activeElement?.getAttribute("data-config-tab") === "prompt")
+    await page.waitForFunction(() => document.activeElement?.getAttribute("data-config-tab") === "expert-squad")
     await page.keyboard.press("Enter")
-    await page.waitForSelector('[data-config-panel="prompt"] #promptBody')
+    await page.waitForSelector('[data-config-panel="expert-squad"] #expertSquadBody')
     await page.keyboard.press("End")
     await page.waitForFunction(() => document.activeElement?.getAttribute("data-config-tab") === "about")
     const focusedAboutTab = await page.$eval('[data-config-tab="about"]', (node: HTMLElement) => {

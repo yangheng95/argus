@@ -6,6 +6,7 @@ import test from "node:test"
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -744,23 +745,7 @@ test(
         },
       ]
     }
-    const promptProfileCatalog = {
-      active: "general",
-      project_active: "general",
-      session_active: null,
-      default: "general",
-      targets: [],
-      profiles: [
-        {
-          id: "general",
-          label: "General",
-          description: "Default prompt profile",
-          built_in: true,
-          editable: false,
-          agents: {},
-        },
-      ],
-    }
+    const expertSquadCatalog = generalExpertSquadCatalog()
     const skillPool = () =>
       data.skills.map((skill) => ({
         ...skill,
@@ -809,7 +794,7 @@ test(
         return send({ ok: true, message: "Provider connected" })
       }
       if (path === "/config/prompt") return send(prompts())
-      if (path === "/config/prompt-profile") return send(promptProfileCatalog)
+      if (path === "/expert-squad/catalog") return send(expertSquadCatalog)
       if (path === "/config" && req.method === "GET") return send(data.config)
       if (path === "/config" && req.method === "PATCH") {
         data.config = await req.json()
