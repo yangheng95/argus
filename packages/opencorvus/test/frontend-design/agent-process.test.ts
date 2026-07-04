@@ -77,6 +77,10 @@ test("FrontendDesignAgent.analyze persists process and iteration artifacts from 
         expect(input.toolKit.tools.record_frontend_replacement_result).toBeDefined()
         expect(input.toolKit.tools.create_visual_region_coordinate_atlas).toBeDefined()
         expect(input.toolKit.tools.create_visual_region_binding_package).toBeDefined()
+        expect(input.toolKit.stageOwnedToolIDs).toContain("submit_frontend_template")
+        expect(input.toolKit.stageOwnedToolIDs).toContain("update_frontend_basics")
+        expect(input.toolKit.stageOwnedToolIDs).not.toContain("record_frontend_region_selection")
+        expect(input.toolKit.stageOwnedToolIDs).not.toContain("create_visual_region_binding_package")
 
         await input.toolKit.tools.record_frontend_region_selection.execute({
           regionComponentName: "HeroRegion",

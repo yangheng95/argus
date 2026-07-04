@@ -109,6 +109,7 @@ export namespace VisualQaAgent {
         : undefined,
       toolKit: {
         tools: agentTools,
+        stageOwnedToolIDs: Object.keys(outputToolKit.tools),
         getCollector: () => outputToolKit.getCollector(),
         buildReport: () => outputToolKit.buildReport(),
       },

@@ -244,6 +244,124 @@ test(
 )
 
 test(
+  "runAgentSession preserves declared stage-owned terminal tools under active project capability projection",
+  async () => {
+    mock.module("@/agent/model", () => ({
+      resolveAgentModel: async () => ({
+        providerID: "test",
+        api: { id: "mock" },
+      }),
+    }))
+    const { runAgentSession } = await import("../../src/agent/runner")
+
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID },
+      },
+    })
+    await writeProjectExpertSquadPackage(tmp.path)
+    const packageToolProviderName = PromptProfileResolver.packageToolProviderName(
+      `${PROJECT_EXPERT_SQUAD_ID}/build/build-evidence`,
+    )
+
+    type Collector = { done?: boolean }
+    const collector: Collector = {}
+    const promptCalls: Array<Parameters<typeof SessionPrompt.prompt>[0]> = []
+    spyOn(SessionPrompt, "prompt").mockImplementation(async (input) => {
+      promptCalls.push(input)
+      collector.done = true
+      return {
+        info: {
+          id: "msg_runner_stage_owned_terminal_assistant",
+          sessionID: input.sessionID,
+          role: "assistant",
+          parentID: input.messageID,
+          time: { created: Date.now() },
+          agent: input.agent ?? "build",
+          providerID: input.model?.providerID ?? "test",
+          modelID: input.model?.modelID ?? "mock",
+          cost: 0,
+          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          path: { cwd: tmp.path, root: tmp.path },
+        },
+        parts: [
+          {
+            id: "prt_runner_stage_owned_terminal_assistant",
+            sessionID: input.sessionID,
+            messageID: "msg_runner_stage_owned_terminal_assistant",
+            type: "text",
+            text: "terminal tool satisfied",
+          },
+        ],
+      } as Awaited<ReturnType<typeof SessionPrompt.prompt>>
+    })
+
+    const reportTool = tool({
+      description: "Stage-owned terminal report.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        collector.done = true
+        return "RECORDED"
+      },
+    })
+    const sidecarTool = tool({
+      description: "Undeclared sidecar.",
+      inputSchema: z.object({}),
+      execute: async () => "sidecar",
+    })
+    const toolKit: AgentToolKit<Collector> = {
+      tools: {
+        read: tool({
+          description: "Projected worker read tool.",
+          inputSchema: z.object({}),
+          execute: async () => "read",
+        }),
+        report_build_result: reportTool,
+        unreferenced_sidecar: sidecarTool,
+      },
+      stageOwnedToolIDs: ["report_build_result"],
+      getCollector: () => collector,
+      buildReport: () => ({ summary: "ok", detail: "ok" }),
+    }
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const out = await runAgentSession({
+          kind: "build",
+          core: BUILD_CORE,
+          sessionTitle: "stage-owned terminal projection",
+          toolKit,
+          buildUserPrompt: () => "implement the request",
+          terminalTool: {
+            toolName: "report_build_result",
+            isSatisfied: (value) => value.done === true,
+            shouldExposeOnlyTerminalTool: () => false,
+          },
+        })
+
+        const descriptor = WorkerTurnDescriptor.latestForSession(out.session.id)
+        const contract = SessionPrompt.getSessionRuntimeContract(out.session.id)
+        expect(Object.keys(contract?.tools ?? {}).sort()).toEqual(
+          ["read", "report_build_result", packageToolProviderName].sort(),
+        )
+        expect(contract?.tools.report_build_result).toBe(reportTool)
+        expect(contract?.tools).not.toHaveProperty("unreferenced_sidecar")
+        expect(descriptor?.payload.tools.enabled).toEqual(
+          ["read", "report_build_result", packageToolProviderName].sort(),
+        )
+        expect(descriptor?.payload.tools.terminal).toBe("report_build_result")
+        SessionPrompt.clearSessionRuntimeContract(out.session.id)
+      },
+    })
+
+    expect(promptCalls).toHaveLength(1)
+  },
+  { timeout: RUNNER_PROMPT_TEST_TIMEOUT_MILLISECONDS },
+)
+
+test(
   "runAgentSession passes taskID to registry tool execution context",
   async () => {
     mock.module("@/agent/model", () => ({
@@ -617,6 +735,7 @@ test(
           },
         }),
       },
+      stageOwnedToolIDs: ["report_build_result"],
       getCollector: () => collector,
       buildReport: () => ({ summary: "missing terminal", detail: "missing terminal" }),
     }
@@ -705,6 +824,7 @@ test(
           },
         }),
       },
+      stageOwnedToolIDs: ["report_build_result"],
       getCollector: () => collector,
       buildReport: () => ({ summary: "missing terminal", detail: "missing terminal" }),
     }
@@ -884,6 +1004,7 @@ test(
           },
         }),
       },
+      stageOwnedToolIDs: ["report_build_result"],
       getCollector: () => collector,
       buildReport: () => ({ summary: "provider error", detail: "provider error" }),
     }
@@ -1118,6 +1239,7 @@ test(
               },
             }),
           },
+          stageOwnedToolIDs: ["report_build_result"],
           getCollector: () => collector,
           buildReport: () => ({ summary: "ok", detail: "ok" }),
         }

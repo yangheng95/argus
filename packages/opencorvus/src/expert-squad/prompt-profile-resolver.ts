@@ -1726,7 +1726,12 @@ export namespace PromptProfileResolver {
   export async function projectWorkerTools<T>(
     tools: Record<string, T>,
     capability: ResolvedWorkerCapability,
-    input: { projectDirectory?: string; toolDirectory?: string; signal?: AbortSignal } = {},
+    input: {
+      projectDirectory?: string
+      toolDirectory?: string
+      signal?: AbortSignal
+      stageOwnedToolIDs?: Iterable<string>
+    } = {},
   ): Promise<Record<string, T>> {
     const projected: Record<string, T> = {}
     const builtInToolIDs = new Set(capability.builtInToolIDs)
@@ -1798,6 +1803,25 @@ export namespace PromptProfileResolver {
         )
       }
       projected[providerName] = packageMcpTool
+    }
+    for (const toolID of input.stageOwnedToolIDs ?? []) {
+      if (!Object.hasOwn(tools, toolID)) {
+        throw new Error(
+          `Active expert squad ${JSON.stringify(
+            capability.promptProfileID,
+          )} ${capability.agentID} stage-owned worker tool ${JSON.stringify(toolID)} is not registered in the runtime map.`,
+        )
+      }
+      const stageOwnedTool = tools[toolID]!
+      if (Object.hasOwn(projected, toolID)) {
+        if (projected[toolID] === stageOwnedTool) continue
+        throw new Error(
+          `Active expert squad ${JSON.stringify(
+            capability.promptProfileID,
+          )} ${capability.agentID} stage-owned worker tool ${JSON.stringify(toolID)} collides with a projected tool.`,
+        )
+      }
+      projected[toolID] = stageOwnedTool
     }
     return projected
   }

@@ -111,6 +111,7 @@ const log = Log.create({ service: "agent-runner" })
  */
 export interface AgentToolKit<C> {
   tools: ToolSet
+  stageOwnedToolIDs?: readonly string[]
   getCollector: () => C
   buildReport: (context?: AgentReportContext) => AgentReport
 }
@@ -735,6 +736,7 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
     projectDirectory,
     toolDirectory: session.directory,
     signal: input.signal,
+    stageOwnedToolIDs: input.toolKit.stageOwnedToolIDs,
   })
   const enableMap = {
     ...promptToolSwitchesForAgentRun({

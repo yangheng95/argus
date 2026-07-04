@@ -178,6 +178,7 @@ export async function runResearchSession(
     onStatus: input.onStatus,
     toolKit: {
       tools: { ...retrievalTools, ...utilityTools, ...outputToolKit.tools },
+      stageOwnedToolIDs: Object.keys(outputToolKit.tools),
       getCollector: outputToolKit.getCollector,
       buildReport: outputToolKit.buildReport,
     },

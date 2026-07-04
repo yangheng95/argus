@@ -90,6 +90,7 @@ export namespace IntentAnalysisAgent {
       onStatus: input.onStatus,
       toolKit: {
         tools: toolKit.tools,
+        stageOwnedToolIDs: toolKit.stageOwnedToolIDs,
         getCollector: toolKit.getCollector,
         buildReport: toolKit.buildReport,
       },
@@ -150,6 +151,7 @@ async function buildToolKit(opts?: { taskID?: string; sessionID?: string; signal
   const outputToolKit = createIntentOutputTools()
   return {
     tools: { ...contextTools, ...outputToolKit.tools },
+    stageOwnedToolIDs: Object.keys(outputToolKit.tools),
     getCollector: () => outputToolKit.getCollector(),
     buildReport: outputToolKit.buildReport,
   }

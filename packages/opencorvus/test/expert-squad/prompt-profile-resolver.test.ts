@@ -729,6 +729,117 @@ describe("PromptProfileResolver", () => {
     expect(packageToolResult.metadata.provider_tool_name).toBe(packageToolProviderName)
   })
 
+  test("projects declared stage-owned worker tools without exposing undeclared sidecars", async () => {
+    await using project = await tmpdir({ git: true })
+    await writeProjectExpertSquadPackage(project.path)
+    const packageToolRef = `${PROJECT_EXPERT_SQUAD_ID}/build/build-evidence`
+    const packageToolProviderName = PromptProfileResolver.packageToolProviderName(packageToolRef)
+    const capability = await PromptProfileResolver.resolveWorkerCapability({
+      projectDirectory: project.path,
+      agentID: "build",
+      config: Config.Info.parse({ prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } }),
+    })
+    const reportTool = { kind: "stage-terminal" }
+    const updateTool = { kind: "stage-update" }
+    const sidecarTool = { kind: "ordinary-worker-extra" }
+
+    const projectedTools = await PromptProfileResolver.projectWorkerTools(
+      {
+        read: { kind: "dummy" },
+        report_build_result: reportTool,
+        update_build_report: updateTool,
+        unreferenced_sidecar: sidecarTool,
+      },
+      capability,
+      {
+        projectDirectory: project.path,
+        stageOwnedToolIDs: ["report_build_result", "update_build_report"],
+      },
+    )
+
+    expect(projectedTools.report_build_result).toBe(reportTool)
+    expect(projectedTools.update_build_report).toBe(updateTool)
+    expect(Object.hasOwn(projectedTools, "unreferenced_sidecar")).toBe(false)
+    expect(Object.hasOwn(projectedTools, packageToolProviderName)).toBe(true)
+  })
+
+  test("rejects stage-owned worker tool declarations missing from the runtime map", async () => {
+    await using project = await tmpdir({ git: true })
+    await writeProjectExpertSquadPackage(project.path)
+    const capability = await PromptProfileResolver.resolveWorkerCapability({
+      projectDirectory: project.path,
+      agentID: "build",
+      config: Config.Info.parse({ prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } }),
+    })
+
+    await expect(
+      PromptProfileResolver.projectWorkerTools({}, capability, {
+        projectDirectory: project.path,
+        stageOwnedToolIDs: ["submit_missing"],
+      }),
+    ).rejects.toThrow(/stage-owned worker tool "submit_missing" is not registered/)
+  })
+
+  test("projects frontend replica research and design stage-owned terminal tools from the real package", async () => {
+    await using project = await tmpdir({ git: true })
+    await copyRepositoryExpertSquadPackage(project.path, "frontend-replica")
+    const config = Config.Info.parse({ prompt_profile: { active: "frontend-replica" } })
+
+    const researchCapability = await PromptProfileResolver.resolveWorkerCapability({
+      projectDirectory: project.path,
+      agentID: "frontend-research",
+      config,
+    })
+    const submitResearchBrief = { kind: "research-terminal" }
+    const updateResearchScope = { kind: "research-update" }
+    const researchProjectedTools = await PromptProfileResolver.projectWorkerTools(
+      {
+        submit_research_brief: submitResearchBrief,
+        update_research_scope: updateResearchScope,
+        unreferenced_sidecar: { kind: "ordinary-worker-extra" },
+      },
+      researchCapability,
+      {
+        projectDirectory: project.path,
+        stageOwnedToolIDs: ["submit_research_brief", "update_research_scope"],
+      },
+    )
+
+    expect(researchCapability.promptProfileID).toBe("frontend-replica")
+    expect(researchCapability.agentID).toBe("frontend-research")
+    expect(researchProjectedTools.submit_research_brief).toBe(submitResearchBrief)
+    expect(researchProjectedTools.update_research_scope).toBe(updateResearchScope)
+    expect(Object.hasOwn(researchProjectedTools, "unreferenced_sidecar")).toBe(false)
+
+    const designCapability = await PromptProfileResolver.resolveWorkerCapability({
+      projectDirectory: project.path,
+      agentID: "frontend-design",
+      config,
+    })
+    const submitFrontendTemplate = { kind: "design-terminal" }
+    const updateFrontendBasics = { kind: "design-update" }
+    const designProjectedTools = await PromptProfileResolver.projectWorkerTools(
+      {
+        read: { kind: "design-context" },
+        submit_frontend_template: submitFrontendTemplate,
+        update_frontend_basics: updateFrontendBasics,
+        unreferenced_sidecar: { kind: "ordinary-worker-extra" },
+      },
+      designCapability,
+      {
+        projectDirectory: project.path,
+        stageOwnedToolIDs: ["submit_frontend_template", "update_frontend_basics"],
+      },
+    )
+
+    expect(designCapability.promptProfileID).toBe("frontend-replica")
+    expect(designCapability.agentID).toBe("frontend-design")
+    expect(Object.hasOwn(designProjectedTools, "read")).toBe(true)
+    expect(designProjectedTools.submit_frontend_template).toBe(submitFrontendTemplate)
+    expect(designProjectedTools.update_frontend_basics).toBe(updateFrontendBasics)
+    expect(Object.hasOwn(designProjectedTools, "unreferenced_sidecar")).toBe(false)
+  })
+
   test("projects worker default tool refs from the runtime tool map", async () => {
     await using project = await tmpdir({ git: true })
     const defaultToolRef = "default/tool/worker-index"

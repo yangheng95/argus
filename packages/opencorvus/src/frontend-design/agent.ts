@@ -256,6 +256,7 @@ export namespace FrontendDesignAgent {
         : undefined,
       toolKit: {
         tools: agentTools,
+        stageOwnedToolIDs: Object.keys(submitFrontendTemplateTool),
         getCollector: () => outputToolKit.getCollector(),
         buildReport: () => appendFrontendProcessTrace(outputToolKit.buildReport(), processTrace),
       },

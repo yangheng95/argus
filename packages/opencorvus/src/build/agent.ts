@@ -1261,12 +1261,14 @@ export namespace BuildAgent {
 
       const buildToolKit: {
         tools: ToolSet
+        stageOwnedToolIDs: readonly string[]
         getCollector: () => BuildCollector
         buildReport: () => ReturnType<typeof buildBuildReport>
       } =
         ownsWorktree && worktreeBranch && worktreeDir
-          ? {
-              tools: {
+          ? (() => {
+              const stageTools = {
+                ...createBuildRuntimeTools(),
                 merge_back: tool({
                   description:
                     "Publish your goal branch's commits onto the project's primary " +
@@ -1295,19 +1297,26 @@ export namespace BuildAgent {
                   inputSchema: z.object({}),
                   execute: executeMergeBack,
                 }),
-                ...createBuildRuntimeTools(),
-              },
-              getCollector: () => buildCollector,
-              buildReport: buildBuildReport,
-            }
-          : {
-              // Caller-owned directories (input.workDir set) skip merge_back —
-              // the caller manages publishing. The agent prompt is gated on the
-              // tool's presence so the LLM does not invent the call.
-              tools: createBuildRuntimeTools(),
-              getCollector: () => buildCollector,
-              buildReport: buildBuildReport,
-            }
+              }
+              return {
+                tools: stageTools,
+                stageOwnedToolIDs: Object.keys(stageTools),
+                getCollector: () => buildCollector,
+                buildReport: buildBuildReport,
+              }
+            })()
+          : (() => {
+              const stageTools = createBuildRuntimeTools()
+              return {
+                // Caller-owned directories (input.workDir set) skip merge_back —
+                // the caller manages publishing. The agent prompt is gated on the
+                // tool's presence so the LLM does not invent the call.
+                tools: stageTools,
+                stageOwnedToolIDs: Object.keys(stageTools),
+                getCollector: () => buildCollector,
+                buildReport: buildBuildReport,
+              }
+            })()
 
       let out: { session: { id: string }; structured?: unknown; collector?: BuildCollector } | undefined
       let parsed: ReturnType<typeof BuildResultSchema.safeParse> | undefined

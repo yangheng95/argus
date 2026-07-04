@@ -130,6 +130,7 @@ export namespace RequirementsAgent {
         : undefined,
       toolKit: {
         tools: { ...contextTools, ...outputToolKit.tools },
+        stageOwnedToolIDs: Object.keys(outputToolKit.tools),
         getCollector: () => outputToolKit.getCollector(),
         buildReport: () => outputToolKit.buildReport(),
       },

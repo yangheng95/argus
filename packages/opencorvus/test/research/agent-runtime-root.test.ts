@@ -128,6 +128,8 @@ test(
         let observedReady = false
         let observedSummary: string | undefined
         runnerImpl = async (input) => {
+          expect(input.toolKit.stageOwnedToolIDs).toContain("submit_research_brief")
+          expect(input.toolKit.stageOwnedToolIDs).toContain("update_research_scope")
           observedReady = input.terminalTool.shouldExposeOnlyTerminalTool()
           observedSummary = input.toolKit.getCollector().summary
           return {

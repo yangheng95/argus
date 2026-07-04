@@ -652,10 +652,7 @@ async function createSingleSessionIntegrityToolKit(input: {
   const previewTools = input.taskID
     ? await createIntegrityPreviewTools({ taskID: input.taskID, signal: input.signal })
     : {}
-  return {
-    tools: {
-      ...evidenceTools,
-      ...previewTools,
+  const outputTools = {
       register_integrity_check_item: tool({
         description:
           "Register one concrete Integrity check item before reporting reviewer coverage, findings, repairs, or final verdict. Every active requirement must be covered by at least one check item.",
@@ -826,7 +823,14 @@ async function createSingleSessionIntegrityToolKit(input: {
           return `RECORDED: integrity review recorded with verdict=${parsed.data.verdict}.`
         },
       }),
+  }
+  return {
+    tools: {
+      ...evidenceTools,
+      ...previewTools,
+      ...outputTools,
     },
+    stageOwnedToolIDs: Object.keys(outputTools),
     getCollector: () => input.collector,
     buildReport: () => ({
       summary: input.collector.report?.summary ?? "Integrity review missing",
