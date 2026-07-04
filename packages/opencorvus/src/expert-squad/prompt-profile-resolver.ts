@@ -47,6 +47,8 @@ import {
   packageMcpToolProviderName as packageMcpToolProviderNameFromRef,
   packageToolProviderName as packageToolProviderNameFromRef,
   projectionHash,
+  schedulerBuiltInToolIDsFromProjection,
+  workerBuiltInToolIDsFromProjection,
 } from "./catalog-profile"
 import { ExpertSquadRegistry } from "./registry"
 
@@ -393,38 +395,14 @@ export namespace PromptProfileResolver {
   }
 
   function expandedSchedulerBuiltInToolIDs(projection: ExpertSquadRegistry.Projection): string[] {
-    const toolIDs = new Set<string>()
-    if (projection.role_base) {
-      for (const toolID of AgentToolPool.orchestratorSchedulerRoleBaseToolIDs()) toolIDs.add(toolID)
-    }
-    for (const toolID of projection.built_in_tool_ids) toolIDs.add(toolID)
-
-    const canonicalToolIDs = AgentToolPool.canonicalToolIDs()
-    for (const toolID of toolIDs) {
-      if (!canonicalToolIDs.has(toolID)) {
-        throw new Error(`Orchestrator scheduler role base projects unknown built-in tool "${toolID}"`)
-      }
-    }
-    return [...toolIDs]
+    return schedulerBuiltInToolIDsFromProjection(projection)
   }
 
   function expandedWorkerBuiltInToolIDs(
     agentID: AgentRoleID,
     projection: ExpertSquadRegistry.Projection,
   ): string[] {
-    const toolIDs = new Set<string>()
-    if (projection.role_base) {
-      for (const toolID of AgentToolPool.visibleToolIDs(AgentToolPool.assignment(agentID))) toolIDs.add(toolID)
-    }
-    for (const toolID of projection.built_in_tool_ids) toolIDs.add(toolID)
-
-    const canonicalToolIDs = AgentToolPool.canonicalToolIDs()
-    for (const toolID of toolIDs) {
-      if (!canonicalToolIDs.has(toolID)) {
-        throw new Error(`Worker ${agentID} projects unknown built-in tool "${toolID}"`)
-      }
-    }
-    return [...toolIDs]
+    return workerBuiltInToolIDsFromProjection(agentID, projection)
   }
 
   export async function resolveSchedulerCapability(
@@ -1649,6 +1627,8 @@ export namespace PromptProfileResolver {
       })
     }
     if (!AgentRoleContract.isRoleID(input.agentID)) return undefined
+    const active = await packageForActiveProfile(input)
+    if (!Object.hasOwn(active.pkg.manifest.capability_projection.agents, input.agentID)) return undefined
     const capability = await resolveWorkerCapability({
       projectDirectory: input.projectDirectory,
       config: input.config,
@@ -1751,10 +1731,9 @@ export namespace PromptProfileResolver {
     const projected: Record<string, T> = {}
     const builtInToolIDs = new Set(capability.builtInToolIDs)
     const defaultToolProviderNames = new Set(capability.defaultToolProviderNames)
-    const canonicalToolIDs = AgentToolPool.canonicalToolIDs()
     for (const [toolID, item] of Object.entries(tools)) {
       if (defaultToolProviderNames.has(toolID)) continue
-      if (canonicalToolIDs.has(toolID) && !builtInToolIDs.has(toolID)) continue
+      if (!builtInToolIDs.has(toolID)) continue
       projected[toolID] = item
     }
 

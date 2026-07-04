@@ -1893,6 +1893,57 @@ Phase 9 Recall, 2026-07-04:
 - `bun run api:routes-check` passed.
 - `git diff --check` passed with CRLF warnings only.
 
+## Phase 21 Post-Push Independent Audit Closure, 2026-07-04
+
+### Recall
+
+- Current objective remains the full expert-squad source refactor: built-in source keeps only `general`; all domain expert squads load from `.opencorvus/expert-squads/<id>` by manifest ID; README is active Orchestrator append prompt; agent prompts, skills, tools, MCP definitions, and dynamic attributes are package-scoped and unioned only through explicit active projection.
+- The newest user clarification remains: the expert-squad README is scheduler/Orchestrator append prompt, not worker prompt content.
+- Sources reread before this phase: `AGENTS.md`, `specs/README.md`, `specs/records/2026-07/README.md`, this record's Recall plus Phase 19/20 sections, `C:/Users/chuan/.codex/skills/opencorvus-expert-squad-creator/SKILL.md`, and `C:/Users/chuan/.codex/skills/opencorvus-expert-squad-creator/references/open-corvus-expert-squad-checklist.md`.
+- Independent audit feedback:
+  - Cicero found that selector skill body still had a manifest-derived fallback when `selector.instructions` was omitted, creating a dual selector prompt source.
+  - Maxwell found weak proof that `agents/general/system.md` enters the active `general` agent prompt, and that package import/export fixtures did not include a general agent prompt.
+  - Nash found that `/config/prompt-profile` exposed raw manifest projection instead of the runtime effective projection after `role_base` expansion, and that worker projection allowed non-canonical tool entries through unless they happened to be canonical.
+
+### Search Evidence
+
+- `rg -n "selector|selection_guidance|instructions" .opencorvus/expert-squads packages/opencorvus/src/expert-squad/builtin packages/opencorvus/test/fixture packages/opencorvus/test/expert-squad packages/opencorvus/test/server packages/opencorvus/test/tool packages/opencorvus/test/skill -g "*.jsonc" -g "*.ts" -g "*.md"` showed repository selector-enabled packages already use `selector.md`, while tests still allowed manifest-only selector bodies.
+- `rg -n "projectWorkerTools\\(|projectOrchestratorTools\\(|AgentToolPool\\.canonicalToolIDs|canonicalToolIDs\\(|toolKit\\.tools|runtimeTools" packages/opencorvus/src packages/opencorvus/test -g "*.ts"` showed worker projection is the boundary before runner installs runtime tools.
+- `rg -n "PromptProfile\\.validateConfig|assertKnownProfileID\\(|PromptProfileResolver\\.assertKnownProfileID|PromptProfile\\.assertKnownProfileID|PromptProfile\\.list\\(|PromptProfileResolver\\.list\\(|composeAgentPrompt\\(|PromptProfile\\.composeAgentPrompt" packages/opencorvus/src packages/opencorvus/test -g "*.ts"` showed production prompt composition and config writes use `PromptProfileResolver`; the static catalog remains a built-in-only exported surface.
+
+### Planned Repair
+
+- Make selector-enabled packages use `selector.md` as the only selector skill body source. Manifest selector fields remain metadata; they no longer synthesize skill body content.
+- Add focused tests proving active project package `agents/general/system.md` reaches the `general` agent prompt, while README remains Orchestrator-only.
+- Add package import/export fixture coverage for `agents/general/system.md`.
+- Make prompt-profile catalog projection expose effective projection arrays after `role_base` expansion, not raw manifest arrays.
+- Tighten worker runtime tool projection so only role-assignment tools and explicitly referenced default/package tools survive; unrelated non-canonical entries fail to leak into the runtime contract.
+- Keep `/config/prompt` prompt preview usable for all editable built-in agents without weakening runtime execution: preview omits active package MCP context for workers outside the active projection, while `resolveWorkerCapability()` remains fail-fast when such a worker is actually run under that active package.
+
+### Implementation
+
+- `ExpertSquadRegistry` now requires selector-enabled packages to declare `selector.instructions: "selector.md"`. The selector skill body comes only from top-level `selector.md`; manifest `selection_guidance` is metadata and no longer synthesizes a skill body.
+- Registry tests now reject README-as-selector and selector metadata without `selector.md`, preserving the README as active Orchestrator prompt content rather than inactive discovery content.
+- Package-manager fixtures and project package fixtures now include `agents/general/system.md`; import/export tests assert that file survives folder and ZIP round trips.
+- `PromptProfileResolver.composeAgentPrompt()` proves the active package README is appended only for `agentID: "orchestrator"`, while `agents/general/system.md` reaches the active `general` agent prompt.
+- Catalog projection now shares the same role-base expansion helpers as runtime resolution, so `/config/prompt-profile` exposes effective `built_in_tool_ids` rather than raw manifest arrays.
+- Worker tool projection now retains only `capability.builtInToolIDs` plus explicitly projected default/package tool refs. Unreferenced sidecar runtime tools no longer leak into projected worker tools.
+- Static `PromptProfile.list()` now delegates package catalog projection to the same effective projection helper instead of passing raw manifest scheduler tool IDs.
+- Prompt preview now skips active package MCP prompt/resource context for known worker roles that are not projected by the active package. This keeps configuration preview observable without adding a runtime fallback path; actual worker runs still call `resolveWorkerCapability()` and fail visibly if the role is absent.
+
+### Validation
+
+- `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/registry.test.ts` passed: 44 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/package-manager.test.ts` passed: 19 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts packages/opencorvus/test/agent/prompt-profile.test.ts` passed after the prompt-preview follow-up: 50 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/server/config-routes.test.ts` passed: 11 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/tool/skill.test.ts packages/opencorvus/test/skill/skill.test.ts` passed: 38 pass.
+- `bun run --cwd packages/opencorvus typecheck` passed.
+- `bun test --timeout=2147483647 packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/historical-docs-links.test.ts` passed: 66 pass.
+- `bun run api:routes-check` passed.
+- `bun run docs:check` passed.
+- `git diff --check` passed with CRLF warnings only in unrelated pre-existing working-copy files.
+
 ## Phase 20 MCP Prompt/Resource Prompt-Composition Closure, 2026-07-04
 
 ### Recall

@@ -285,6 +285,8 @@ describe("config prompt routes", () => {
         expect(frontendReplicaProfile?.projection_hash).toMatch(/^[a-f0-9]{64}$/)
         expect(frontendReplicaProfile?.projected_agents).toContain("build")
         expect(frontendReplicaProfile?.capability_projection.scheduler.built_in_tool_ids).toContain("build")
+        expect(frontendReplicaProfile?.capability_projection.agents.build.built_in_tool_ids).toContain("read")
+        expect(frontendReplicaProfile?.capability_projection.agents.build.built_in_tool_ids).toContain("edit")
         expect(body.profiles.find((profile) => profile.id === "frontend-innovate")).toMatchObject({
           label: "Frontend Innovate",
           built_in: false,
@@ -295,11 +297,14 @@ describe("config prompt routes", () => {
           built_in: false,
           editable: false,
         })
-        expect(body.profiles.find((profile) => profile.id === "general")).toMatchObject({
+        const generalProfile = body.profiles.find((profile) => profile.id === "general")
+        expect(generalProfile).toMatchObject({
           built_in: true,
           editable: false,
           capability_profile_id: "general",
         })
+        expect(generalProfile?.capability_projection.scheduler.built_in_tool_ids).toContain("select_expert_squad")
+        expect(generalProfile?.capability_projection.scheduler.built_in_tool_ids).toContain("complete_task")
         expect(body.profiles.every((profile) => !profile.editable)).toBe(true)
       },
     })
@@ -334,7 +339,11 @@ describe("config prompt routes", () => {
         expect(body.profiles.find((profile) => profile.id === PROJECT_EXPERT_SQUAD_ID)).toMatchObject({
           built_in: false,
           capability_profile_id: PROJECT_EXPERT_SQUAD_ID,
-          agents: { build: "project build overlay" },
+          agents: {
+            build: "project build overlay",
+            general: "project general overlay",
+            orchestrator: "project orchestrator overlay",
+          },
         })
 
         const patchResponse = await app.request("/config", {
@@ -410,8 +419,12 @@ describe("config prompt routes", () => {
           built_in: false,
           editable: false,
           capability_profile_id: PROJECT_EXPERT_SQUAD_ID,
-          projected_agents: ["build"],
-          agents: { build: "project build overlay" },
+          projected_agents: ["build", "general"],
+          agents: {
+            build: "project build overlay",
+            general: "project general overlay",
+            orchestrator: "project orchestrator overlay",
+          },
         })
         const projectProfile = body.profiles.find((profile) => profile.id === PROJECT_EXPERT_SQUAD_ID)
         expect(projectProfile?.projection_hash).toMatch(/^[a-f0-9]{64}$/)
@@ -541,7 +554,11 @@ describe("config prompt routes", () => {
         expect(catalog.profiles.find((profile) => profile.id === PROJECT_EXPERT_SQUAD_ID)).toMatchObject({
           built_in: false,
           editable: false,
-          agents: { build: "project build overlay" },
+          agents: {
+            build: "project build overlay",
+            general: "project general overlay",
+            orchestrator: "project orchestrator overlay",
+          },
         })
 
         const previewResponse = await app.request("/config/prompt", {

@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto"
+import { AgentToolPool } from "@/agent/tool-pool-contract"
+import { AgentRoleContract, type AgentRoleID } from "@/agent/role-contract"
 import type { PromptProfileCatalogProfile, PromptProfileDefinition } from "@/agent/prompt-profile"
 import type { ExpertSquadRegistry } from "@/expert-squad/registry"
 
@@ -35,8 +37,45 @@ export function projectionHash(input: {
 }
 
 export function catalogProjectionEntry(projection: ExpertSquadRegistry.Projection) {
+  return catalogProjectionEntryWithBuiltInTools(projection, projection.built_in_tool_ids)
+}
+
+function assertCanonicalBuiltInToolIDs(toolIDs: Iterable<string>, context: string) {
+  const canonicalToolIDs = AgentToolPool.canonicalToolIDs()
+  for (const toolID of toolIDs) {
+    if (!canonicalToolIDs.has(toolID)) throw new Error(`${context} projects unknown built-in tool "${toolID}"`)
+  }
+}
+
+export function schedulerBuiltInToolIDsFromProjection(projection: ExpertSquadRegistry.Projection): string[] {
+  const toolIDs = new Set<string>()
+  if (projection.role_base) {
+    for (const toolID of AgentToolPool.orchestratorSchedulerRoleBaseToolIDs()) toolIDs.add(toolID)
+  }
+  for (const toolID of projection.built_in_tool_ids) toolIDs.add(toolID)
+  assertCanonicalBuiltInToolIDs(toolIDs, "Orchestrator scheduler role base")
+  return [...toolIDs]
+}
+
+export function workerBuiltInToolIDsFromProjection(
+  agentID: AgentRoleID,
+  projection: ExpertSquadRegistry.Projection,
+): string[] {
+  const toolIDs = new Set<string>()
+  if (projection.role_base) {
+    for (const toolID of AgentToolPool.visibleToolIDs(AgentToolPool.assignment(agentID))) toolIDs.add(toolID)
+  }
+  for (const toolID of projection.built_in_tool_ids) toolIDs.add(toolID)
+  assertCanonicalBuiltInToolIDs(toolIDs, `Worker ${agentID}`)
+  return [...toolIDs]
+}
+
+function catalogProjectionEntryWithBuiltInTools(
+  projection: ExpertSquadRegistry.Projection,
+  builtInToolIDs: readonly string[],
+) {
   return {
-    built_in_tool_ids: [...projection.built_in_tool_ids],
+    built_in_tool_ids: [...builtInToolIDs],
     default_skill_refs: [...projection.default_skill_refs],
     package_skill_refs: [...projection.package_skill_refs],
     default_tool_refs: [...projection.default_tool_refs],
@@ -102,9 +141,10 @@ export function catalogProfileFromPackage(input: {
   id: string
   pkg: ExpertSquadCatalogPackage
   builtIn: boolean
-  builtInToolIDs: readonly string[]
+  builtInToolIDs?: readonly string[]
 }): PromptProfileCatalogProfile {
   const scheduler = input.pkg.manifest.capability_projection.scheduler
+  const schedulerBuiltInToolIDs = input.builtInToolIDs ?? schedulerBuiltInToolIDsFromProjection(scheduler)
   const defaultToolProviderNames = scheduler.default_tool_refs.map(defaultToolNameFromRef)
   const packageToolRefs = input.builtIn ? [] : scheduler.package_tool_refs
   const defaultMcpToolProviderNames = scheduler.default_mcp_tool_refs.map(defaultMcpToolProviderName)
@@ -122,7 +162,7 @@ export function catalogProfileFromPackage(input: {
       profileID: input.id,
       projection: scheduler,
       toolIDs: [
-        ...input.builtInToolIDs,
+        ...schedulerBuiltInToolIDs,
         ...defaultToolProviderNames,
         ...packageToolRefs.map(packageToolProviderName),
         ...defaultMcpToolProviderNames,
@@ -132,11 +172,22 @@ export function catalogProfileFromPackage(input: {
     }),
     projected_agents: Object.keys(projection.agents).sort(),
     capability_projection: {
-      scheduler: catalogProjectionEntry(projection.scheduler),
+      scheduler: catalogProjectionEntryWithBuiltInTools(projection.scheduler, schedulerBuiltInToolIDs),
       agents: Object.fromEntries(
         Object.entries(projection.agents)
           .sort(([left], [right]) => left.localeCompare(right))
-          .map(([agentID, agentProjection]) => [agentID, catalogProjectionEntry(agentProjection)]),
+          .map(([agentID, agentProjection]) => {
+            if (!AgentRoleContract.isRoleID(agentID)) {
+              throw new Error(`Unknown prompt profile target ${JSON.stringify(agentID)}`)
+            }
+            return [
+              agentID,
+              catalogProjectionEntryWithBuiltInTools(
+                agentProjection,
+                workerBuiltInToolIDsFromProjection(agentID, agentProjection),
+              ),
+            ]
+          }),
       ),
     },
   }

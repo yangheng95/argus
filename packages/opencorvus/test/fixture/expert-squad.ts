@@ -110,11 +110,15 @@ export function projectExpertSquadManifest(id = PROJECT_EXPERT_SQUAD_ID, options
         ...(schedulerPackageMcpResourceRefs.length ? { package_mcp_resource_refs: schedulerPackageMcpResourceRefs } : {}),
       },
       agents: {
+        general: { role_base: true },
         build: buildProjection,
         ...extraAgentProjections,
       },
     },
     agents: {
+      general: {
+        prompt: "agents/general/system.md",
+      },
       orchestrator: {
         prompt: "agents/orchestrator/system.md",
         skill_refs: [`${id}/orchestrator/scheduler`],
@@ -146,6 +150,7 @@ export function projectExpertSquadFiles(
       `Call select_expert_squad with profile_id ${id} only when the task matches project-local replica work.`,
       "",
     ].join("\n"),
+    [`${root}agents/general/system.md`]: "project general overlay",
     [`${root}agents/orchestrator/system.md`]: "project orchestrator overlay",
     [`${root}agents/build/system.md`]: "project build overlay",
     [`${root}agents/orchestrator/skills/scheduler/SKILL.md`]:

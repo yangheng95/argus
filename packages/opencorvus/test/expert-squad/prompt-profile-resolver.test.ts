@@ -93,9 +93,10 @@ describe("PromptProfileResolver", () => {
       built_in: false,
       editable: false,
       capability_profile_id: PROJECT_EXPERT_SQUAD_ID,
-      projected_agents: ["build"],
+      projected_agents: ["build", "general"],
       agents: {
         build: "project build overlay",
+        general: "project general overlay",
         orchestrator: "project orchestrator overlay",
       },
     })
@@ -152,6 +153,17 @@ describe("PromptProfileResolver", () => {
     expect(normalizedOrchestratorPrompt).toContain("agents/orchestrator/mcp")
     expect(orchestratorPrompt.endsWith("USER APPEND")).toBe(true)
 
+    const activeGeneralPrompt = await PromptProfileResolver.composeAgentPrompt({
+      projectDirectory: project.path,
+      agentID: "general",
+      base: "BASE",
+      userAppend: "USER APPEND",
+      config,
+    })
+    expect(activeGeneralPrompt).toContain("BASE\n\nproject general overlay")
+    expect(activeGeneralPrompt).not.toContain("PROJECT_README_ORCHESTRATOR_APPEND_ONLY")
+    expect(activeGeneralPrompt.endsWith("USER APPEND")).toBe(true)
+
     const generalConfig = Config.Info.parse({ prompt_profile: { active: "general" } })
     const generalPrompt = await PromptProfileResolver.composeAgentPrompt({
       projectDirectory: project.path,
@@ -162,6 +174,25 @@ describe("PromptProfileResolver", () => {
     expect(generalPrompt).toContain("# General")
     expect(generalPrompt).not.toContain("# Project Replica")
     expect(generalPrompt).not.toContain("PROJECT_README_ORCHESTRATOR_APPEND_ONLY")
+  })
+
+  test("compose prompt preview omits active package context for workers outside the active projection", async () => {
+    await using project = await tmpdir({ git: true })
+    await writeProjectExpertSquadPackage(project.path)
+    const config = Config.Info.parse({ prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } })
+
+    const prompt = await PromptProfileResolver.composeAgentPrompt({
+      projectDirectory: project.path,
+      agentID: "coding",
+      base: "BASE",
+      userAppend: "USER APPEND",
+      config,
+    })
+
+    expect(prompt).toBe("BASE\n\nUSER APPEND")
+    expect(prompt).not.toContain("PROJECT_README_ORCHESTRATOR_APPEND_ONLY")
+    expect(prompt).not.toContain("project build overlay")
+    expect(prompt).not.toContain("## Projected MCP Context")
   })
 
   test("rejects unknown project profile IDs with project context", async () => {
@@ -672,6 +703,7 @@ describe("PromptProfileResolver", () => {
       {
         read: { kind: "dummy" },
         complete_task: { kind: "orchestrator-only" },
+        unreferenced_sidecar: { kind: "ordinary-worker-extra" },
       },
       capability,
       { projectDirectory: project.path },
@@ -679,6 +711,7 @@ describe("PromptProfileResolver", () => {
 
     expect(Object.hasOwn(projectedTools, "read")).toBe(true)
     expect(Object.hasOwn(projectedTools, "complete_task")).toBe(false)
+    expect(Object.hasOwn(projectedTools, "unreferenced_sidecar")).toBe(false)
     expect(Object.hasOwn(projectedTools, packageToolProviderName)).toBe(true)
     const packageToolResult = await (projectedTools[packageToolProviderName] as any).execute(
       {},
@@ -1101,7 +1134,7 @@ describe("PromptProfileResolver", () => {
 
         expect(projection.activeProfile).toBe(PROJECT_EXPERT_SQUAD_ID)
         expect(projection.projectedToolIDs).not.toContain("build")
-        expect(projection.projectedAgentIDs).toEqual(["orchestrator", "build"])
+        expect(projection.projectedAgentIDs).toEqual(["orchestrator", "general", "build"])
         expect(projection.selectorSkillNames).toEqual([`${PROJECT_EXPERT_SQUAD_ID}-expert-squad`])
         expect(projection.productionSkillNames.sort()).toEqual(["implementation", "scheduler"])
         expect(projection.projectedSkillNames).toEqual(projection.skills.map((skill) => skill.name))
@@ -1246,8 +1279,11 @@ describe("PromptProfileResolver", () => {
       sessionActive: null,
     })
     const profile = catalog.profiles.find((entry) => entry.id === PROJECT_EXPERT_SQUAD_ID)
-    expect(profile?.projected_agents).toEqual(["integrity"])
-    expect(profile?.capability_projection.agents.integrity.built_in_tool_ids).toEqual([])
+    expect(profile?.projected_agents).toEqual(["general", "integrity"])
+    expect(profile?.capability_projection.agents.build).toBeUndefined()
+    expect(profile?.capability_projection.agents.integrity.built_in_tool_ids).toEqual(
+      [...AgentToolPool.visibleToolIDs(AgentToolPool.assignment("integrity"))],
+    )
   })
 
   test("resolves explicit default skill refs into the active package skill projection", async () => {

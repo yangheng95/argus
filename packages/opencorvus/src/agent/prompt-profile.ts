@@ -180,7 +180,6 @@ export namespace PromptProfile {
         id: pkg.id,
         pkg,
         builtIn: true,
-        builtInToolIDs: pkg.manifest.capability_projection.scheduler.built_in_tool_ids,
       }),
     )
     return PromptProfileCatalogSchema.parse({

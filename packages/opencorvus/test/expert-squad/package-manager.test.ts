@@ -77,6 +77,7 @@ function manifest(overrides: Record<string, unknown> = {}) {
     selector: {
       summary: "Use for replica tasks.",
       selection_guidance: `Call select_expert_squad with profile_id ${id}.`,
+      instructions: "selector.md",
     },
     capability_projection: {
       scheduler: {
@@ -94,6 +95,9 @@ function manifest(overrides: Record<string, unknown> = {}) {
       },
     },
     agents: {
+      general: {
+        prompt: "agents/general/system.md",
+      },
       orchestrator: {
         prompt: "agents/orchestrator/system.md",
         skill_refs: [`${id}/orchestrator/scheduler`],
@@ -113,6 +117,8 @@ function packageFileMap(prefix = "", overrides: Record<string, string> = {}) {
   const root = prefix ? `${prefix.replace(/\/+$/, "")}/` : ""
   return {
     [`${root}README.md`]: "# Frontend Replica\n",
+    [`${root}selector.md`]: "# Frontend Replica Selector\n\nUse explicit selector instructions from this file.\n",
+    [`${root}agents/general/system.md`]: "general overlay",
     [`${root}agents/orchestrator/system.md`]: "orchestrator overlay",
     [`${root}agents/build/system.md`]: "build overlay",
     [`${root}agents/orchestrator/skills/scheduler/SKILL.md`]: "---\nname: scheduler\n---\n",
@@ -185,6 +191,7 @@ describe("ExpertSquadPackageManager", () => {
     const targetRoot = path.join(project.path, ".opencorvus", "expert-squads", PACKAGE_ID)
     expect(imported).toEqual({ id: PACKAGE_ID, targetRoot, replaced: false })
     expect(await fs.readFile(path.join(targetRoot, "README.md"), "utf8")).toContain("Frontend Replica")
+    expect(await fs.readFile(path.join(targetRoot, "agents", "general", "system.md"), "utf8")).toContain("general overlay")
     await expect(ExpertSquadRegistry.loadPackage(targetRoot)).resolves.toMatchObject({ id: PACKAGE_ID })
     expect(await readJsonFile(projectConfig.file)).toEqual(projectConfig.value)
     expect(await ExpertSquadRegistry.discover(project.path)).toHaveLength(1)
@@ -610,6 +617,7 @@ describe("ExpertSquadPackageManager", () => {
     expect(exported.fileCount).toBe(entries.size)
     expect(entries.has(ExpertSquadRegistry.MANIFEST)).toBe(false)
     expect(entries.get(`${PACKAGE_ID}/${ExpertSquadRegistry.MANIFEST}`)).toContain(`"id": "${PACKAGE_ID}"`)
+    expect(entries.get(`${PACKAGE_ID}/agents/general/system.md`)).toBe("general overlay")
     expect(Array.from(entries.keys()).some((entry) => entry.includes(".opencorvus/r"))).toBe(false)
 
     const imported = await ExpertSquadPackageManager.importArchive({

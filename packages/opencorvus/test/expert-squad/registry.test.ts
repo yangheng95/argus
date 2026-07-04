@@ -29,6 +29,7 @@ function manifest(overrides: Record<string, unknown> = {}) {
     selector: {
       summary: "Use for replica tasks.",
       selection_guidance: "Call select_expert_squad with profile_id frontend-replica.",
+      instructions: "selector.md",
     },
     capability_projection: {
       scheduler: {
@@ -74,6 +75,7 @@ function manifest(overrides: Record<string, unknown> = {}) {
 async function writeValidPackage(root: string, overrides: Record<string, unknown> = {}, folder = "frontend-replica") {
   const packageRoot = path.join(root, ".opencorvus", "expert-squads", folder)
   await writeFile(packageRoot, "README.md", "# Frontend Replica\n")
+  await writeFile(packageRoot, "selector.md", "# Frontend Replica Selector\n")
   await writeFile(packageRoot, "agents/general/system.md", "general overlay")
   await writeFile(packageRoot, "agents/orchestrator/system.md", "orchestrator overlay")
   await writeFile(packageRoot, "agents/build/system.md", "build overlay")
@@ -229,6 +231,7 @@ describe("ExpertSquadRegistry", () => {
         2,
       ),
     )
+    await writeFile(inactiveRoot, "selector.md", "# Backend Debug Selector\n")
 
     const loaded = await ExpertSquadRegistry.discover(tmp.path)
 
@@ -376,6 +379,18 @@ describe("ExpertSquadRegistry", () => {
     await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow()
   })
 
+  test("rejects selector metadata without selector.md instructions instead of synthesizing a skill body", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, {
+      selector: {
+        summary: "Use for replica tasks.",
+        selection_guidance: "Call select_expert_squad with profile_id frontend-replica.",
+      },
+    })
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow()
+  })
+
   test("omitted selector does not generate selector metadata", async () => {
     await using tmp = await tmpdir()
     const packageRoot = await writeValidPackage(tmp.path, { selector: undefined })
@@ -422,6 +437,7 @@ describe("ExpertSquadRegistry", () => {
         instructions: "selector.md",
       },
     })
+    await fs.rm(path.join(packageRoot, "selector.md"))
 
     await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/selector\.instructions/)
   })

@@ -156,6 +156,10 @@ describe("prompt profiles", () => {
     expect(PromptProfile.builtIns.general.agents).toEqual({})
     expect(PromptProfile.composeAgentPrompt({ agentID: "build", base: "BASE", config })).toBe("BASE")
     expect((await PromptProfileResolver.list({ config })).profiles.map((profile) => profile.id)).toEqual(["general"])
+    const builtInCatalog = PromptProfile.list(config)
+    const generalProfile = builtInCatalog.profiles.find((profile) => profile.id === "general")
+    expect(generalProfile?.capability_projection.scheduler.built_in_tool_ids).toContain("select_expert_squad")
+    expect(generalProfile?.capability_projection.scheduler.built_in_tool_ids).toContain("complete_task")
   })
 
   test("resolver composes package-backed project overlays from .opencorvus", async () => {
@@ -424,6 +428,8 @@ describe("prompt profiles", () => {
       built_in: false,
       editable: false,
     })
+    expect(catalog.profiles.find((profile) => profile.id === "frontend-replica")?.capability_projection.agents.build.built_in_tool_ids).toContain("read")
+    expect(catalog.profiles.find((profile) => profile.id === "frontend-replica")?.capability_projection.agents.build.built_in_tool_ids).toContain("edit")
     expect(catalog.profiles.map((profile) => profile.id)).toEqual([
       "general",
       "algorithm",

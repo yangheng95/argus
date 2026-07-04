@@ -25,7 +25,9 @@ export namespace ExpertSquadRegistry {
     .object({
       summary: z.string().min(1),
       selection_guidance: z.string().min(1),
-      instructions: RelativePath.optional(),
+      instructions: z.string().refine((value) => value === "selector.md", {
+        message: "selector instructions must be top-level selector.md",
+      }),
     })
     .strict()
     .optional()
@@ -788,15 +790,9 @@ export namespace ExpertSquadRegistry {
     if (!pkg.selector) return undefined
     const skillName = `${pkg.id}-expert-squad`
     const description = `Orchestrator skill for ${pkg.label} tasks. ${pkg.selector.summary}`
-    const body =
-      pkg.selectorInstructions ??
-      [
-        `# ${pkg.label} Expert Squad`,
-        "",
-        pkg.selector.selection_guidance,
-        "",
-        "Call `select_expert_squad` with the manifest ID from this package when the task evidence matches this expert squad.",
-      ].join("\n")
+    if (!pkg.selectorInstructions) {
+      throw new Error(`Expert squad ${pkg.id} selector requires top-level selector.md instructions.`)
+    }
 
     return [
       "---",
@@ -811,7 +807,7 @@ export namespace ExpertSquadRegistry {
       "priority: 90",
       "---",
       "",
-      body.trim(),
+      pkg.selectorInstructions.trim(),
       "",
     ].join("\n")
   }
