@@ -448,3 +448,31 @@ Retained downgraded or rejected areas:
 - Static `PromptProfile.*` helpers remain maintenance risk, not proven runtime double source.
 - `renderVisualQaIntegrityContext` fail-soft normalization remains future-risk, not current main-chain defect.
 - Formal Visual QA string-ref parity issue remains rejected because formal report refs are durable evidence references validated by schema and output tool.
+
+## Round 3 Fresh-Agent Review
+
+User follow-up: "用新agent复核".
+
+Execution boundary:
+
+- Three fresh explorer agents were spawned after the Round 2 record was committed and pushed.
+- They were instructed to work read-only, avoid further delegation, avoid commits/worktrees/process operations, and only verify the existing investigation record.
+- No product code was changed.
+
+Fresh review agents:
+
+- Carson (`019f2d8c-b951-7192-8467-29bffdafe134`): scheduler, queue, overlay, conversation/API, control docs, and Integrity workflow metadata.
+- Banach (`019f2d8c-c480-7f22-b621-536062985e0e`): expert-squad, PromptProfile, and MCP projection boundaries.
+- Faraday (`019f2d8c-d070-7a92-b34b-d9ae6a3ca2e3`): verification evidence, Visual QA, and Integrity context contracts.
+
+Review result:
+
+- Carson marked all seven assigned findings `VERIFIED` and requested no record change: scheduler wake lifecycle split, queue cwd dual legal sources, overlay delete ordering, conversation events route-policy inconsistency, public `byteMaterializationProjectID` contract leak, stale control route inventory/document-health stale-count assertion, and Integrity review-only versus non-skippable metadata conflict.
+- Banach marked all five assigned expert-squad findings/gaps `VERIFIED` and requested no record change: worker built-in tool projection drift, orchestrator-versus-worker fail-fast inconsistency, MCP bare-base64 downgrade as wording/test gap, backend/algorithm selector absence as product-boundary discoverability risk, and static `PromptProfile.*` as maintenance risk rather than runtime double source.
+- Faraday marked all four assigned evidence/Visual QA findings/gaps `VERIFIED` and requested no record change: visual-feedback decision-log mirror dependence, visual-feedback outer/inner status confirmed risk, `renderVisualQaIntegrityContext` fail-soft as future-risk only, and Formal Visual QA string-ref issue remaining rejected.
+
+Round 3 disposition:
+
+- No retained confirmed finding was rejected.
+- No downgraded/rejected finding was upgraded.
+- The Round 2 final status remains unchanged.
