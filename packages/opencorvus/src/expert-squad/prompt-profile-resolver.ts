@@ -1938,10 +1938,11 @@ export namespace PromptProfileResolver {
     const selectors: ProjectSelectorPackage[] = []
     for (const entry of await ExpertSquadRegistry.discover(projectDirectory)) {
       assertNoBuiltInCollision(entry.id)
+      if (!entry.selector) continue
       const packageRoot = path.join(base, entry.id)
       selectors.push({
         pkg: entry,
-        location: path.join(packageRoot, entry.selectorInstructions ? "selector.md" : ExpertSquadRegistry.MANIFEST),
+        location: path.join(packageRoot, "selector.md"),
       })
     }
     return selectors
@@ -1969,7 +1970,7 @@ export namespace PromptProfileResolver {
     }> = []
     if (active.profileID === DEFAULT_PROMPT_PROFILE_ID) {
       const builtInSelectorPackages = loadedBuiltInPackages.filter((pkg) => pkg.selector)
-      const projectSelectorPackages = (await selectorCatalog(input.projectDirectory)).filter((entry) => entry.pkg.selector)
+      const projectSelectorPackages = await selectorCatalog(input.projectDirectory)
       selectorPackages.push(
         ...builtInSelectorPackages.map((pkg) => ({ pkg, builtin: true, location: undefined })),
         ...projectSelectorPackages.map((entry) => ({

@@ -127,7 +127,7 @@ describe("ExpertSquadRegistry", () => {
     expect(loaded.manifest.capability_projection.scheduler.package_mcp_resource_refs).toEqual([
       "frontend-replica/orchestrator/browser/resource/dom",
     ])
-    expect(loaded.projectedWorkflowTools).toEqual(["build"])
+    expect(loaded.explicitSchedulerWorkflowTools).toEqual(["build"])
     expect(loaded.readmeContent).toBe("# Frontend Replica")
   })
 

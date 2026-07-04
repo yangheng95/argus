@@ -395,7 +395,9 @@ describe("sub-agent infrastructure homogeneity manifest", () => {
     expect(selectorCatalogSource).toContain("Promise<ProjectSelectorPackage[]>")
     expect(selectorCatalogSource).toContain("ExpertSquadRegistry.discover(projectDirectory)")
     expect(selectorCatalogSource).toContain("assertNoBuiltInCollision(entry.id)")
-    expect(selectorCatalogSource).toContain('entry.selectorInstructions ? "selector.md" : ExpertSquadRegistry.MANIFEST')
+    expect(selectorCatalogSource).toContain("if (!entry.selector) continue")
+    expect(selectorCatalogSource).toContain('path.join(packageRoot, "selector.md")')
+    expect(selectorCatalogSource).not.toContain("ExpertSquadRegistry.MANIFEST")
     expect(selectorCatalogSource).not.toContain("ExpertSquadRegistry.loadPackage")
     expect(selectorCatalogSource).not.toContain("ExpertSquadRegistry.loadCatalogPackage")
 

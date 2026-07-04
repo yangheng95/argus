@@ -150,7 +150,7 @@ export namespace ExpertSquadRegistry {
     packageMcpToolRefs: Set<string>
     packageMcpPromptRefs: Set<string>
     packageMcpResourceRefs: Set<string>
-    projectedWorkflowTools: OrchestratorWorkflowToolName[]
+    explicitSchedulerWorkflowTools: OrchestratorWorkflowToolName[]
   }
 
   export interface CatalogPackage extends PackageLocation {
@@ -897,10 +897,10 @@ export namespace ExpertSquadRegistry {
       })
     }
 
-    const projectedWorkflowTools = manifest.capability_projection.scheduler.built_in_tool_ids.filter(
+    const explicitSchedulerWorkflowTools = manifest.capability_projection.scheduler.built_in_tool_ids.filter(
       (toolID): toolID is OrchestratorWorkflowToolName => workflowByTool.has(toolID as OrchestratorWorkflowToolName),
     )
-    for (const workflowTool of projectedWorkflowTools) {
+    for (const workflowTool of explicitSchedulerWorkflowTools) {
       const role = workflowByTool.get(workflowTool)!
       if (!manifest.capability_projection.agents[role]) {
         throw new Error(`capability_projection.scheduler.${workflowTool} requires capability_projection.agents.${role}`)
@@ -920,7 +920,7 @@ export namespace ExpertSquadRegistry {
       packageMcpToolRefs: refs.mcpToolRefs,
       packageMcpPromptRefs: refs.mcpPromptRefs,
       packageMcpResourceRefs: refs.mcpResourceRefs,
-      projectedWorkflowTools,
+      explicitSchedulerWorkflowTools,
     }
   }
 

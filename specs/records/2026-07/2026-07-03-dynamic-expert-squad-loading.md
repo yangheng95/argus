@@ -1944,6 +1944,25 @@ Phase 9 Recall, 2026-07-04:
 - `bun run docs:check` passed.
 - `git diff --check` passed with CRLF warnings only in unrelated pre-existing working-copy files.
 
+### Second Independent Re-Review Closure
+
+- Wegener and Linnaeus found no blocking residuals after the Phase 21 fixes. Wegener flagged one clarity issue: selector catalog locations still had a manifest-location expression even though selector bodies no longer fall back to manifest content.
+- Hilbert found no blocking runtime residuals, but flagged two clarity/coverage gaps: loaded package metadata named `projectedWorkflowTools` even though it represented explicit scheduler workflow refs from the manifest, and `/config/prompt` preview coverage did not prove unprojected editable workers stay free of active package prompt/README/MCP context.
+- Revisions applied:
+  - `selectorCatalog()` now skips non-selector packages directly and always reports selector packages at `<package>/selector.md`; the manifest is no longer part of selector skill location metadata.
+  - `LoadedPackage.projectedWorkflowTools` was renamed to `explicitSchedulerWorkflowTools` to avoid conflating manifest-explicit workflow dispatch refs with effective role-base projection.
+  - `/config/prompt` route coverage now asserts that an active project package overlays projected `build` prompt content while an unprojected editable worker (`coding`) has `profile_prompt: null` and does not receive project package prompt, README, or projected MCP context.
+- Validation after second re-review closure:
+  - `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/registry.test.ts` passed: 44 pass.
+  - `bun test --timeout=2147483647 packages/opencorvus/test/agent/subagent-infrastructure-homogeneity.test.ts` passed: 33 pass.
+  - `bun test --timeout=2147483647 packages/opencorvus/test/server/config-routes.test.ts` passed: 11 pass.
+  - `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts packages/opencorvus/test/server/config-routes.test.ts` passed: 43 pass.
+  - `bun run --cwd packages/opencorvus typecheck` passed.
+  - `bun test --timeout=2147483647 packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/historical-docs-links.test.ts` passed: 66 pass after this validation note was added.
+  - `bun run api:routes-check` passed.
+  - `bun run docs:check` passed.
+  - `git diff --check` passed with CRLF warnings only in unrelated pre-existing working-copy files.
+
 ## Phase 20 MCP Prompt/Resource Prompt-Composition Closure, 2026-07-04
 
 ### Recall

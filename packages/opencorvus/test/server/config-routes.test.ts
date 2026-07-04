@@ -577,6 +577,15 @@ describe("config prompt routes", () => {
         expect(build?.active_profile).toBe(PROJECT_EXPERT_SQUAD_ID)
         expect(build?.profile_prompt).toBe("project build overlay")
         expect(build?.effective_prompt).toContain("project build overlay")
+
+        const coding = preview.find((item) => item.key === "coding")
+        expect(coding?.active_profile).toBe(PROJECT_EXPERT_SQUAD_ID)
+        expect(coding?.profile_prompt).toBeNull()
+        expect(coding?.effective_prompt).not.toContain("project build overlay")
+        expect(coding?.effective_prompt).not.toContain("project general overlay")
+        expect(coding?.effective_prompt).not.toContain("project orchestrator overlay")
+        expect(coding?.effective_prompt).not.toContain("PROJECT_README_ORCHESTRATOR_APPEND_ONLY")
+        expect(coding?.effective_prompt).not.toContain("## Projected MCP Context")
       },
     })
   })
