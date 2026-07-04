@@ -126,6 +126,9 @@ export namespace SessionLoop {
     sessionID: string
     agentKind: string
     contractKind: SessionRuntimeContractKind
+    promptProfileID?: string
+    capabilityProfileID?: string
+    projectionHash?: string
     workerTurnDescriptorID?: string
     workerTurnDescriptorHash?: string
     goalID?: string
@@ -164,6 +167,8 @@ export namespace SessionLoop {
     includeMcpTools?: boolean
     /** True skips registry and Model Context Protocol tools for this exact worker session. */
     exactTools?: boolean
+    /** When present, registry tools are loaded through the normal wrappers but filtered to this projected set. */
+    projectedRegistryToolIDs?: string[]
   }
 
   // ---------------------------------------------------------------------------
@@ -573,6 +578,32 @@ export namespace SessionLoop {
         throw new Error(
           `SessionRuntimeContract worker descriptor tools mismatch for ${input.sessionID}: expected ${descriptorTools.join(",") || "<none>"}, found ${contractTools.join(",") || "<none>"}`,
         )
+      }
+      if (identity.promptProfileID || identity.capabilityProfileID || identity.projectionHash) {
+        const capability = descriptor.payload.capability
+        if (!capability) {
+          throw new SessionRuntimeContractMissingError({
+            message: `SessionRuntimeContract worker descriptor capability missing for ${input.sessionID}`,
+            sessionID: input.sessionID,
+            ...(identity.agentKind ? { agentKind: identity.agentKind } : {}),
+            reason: "missing",
+          })
+        }
+        if (capability.promptProfileID !== identity.promptProfileID) {
+          throw new Error(
+            `SessionRuntimeContract prompt profile mismatch for ${input.sessionID}: expected ${identity.promptProfileID ?? "<unset>"}, found ${capability.promptProfileID}`,
+          )
+        }
+        if (capability.capabilityProfileID !== identity.capabilityProfileID) {
+          throw new Error(
+            `SessionRuntimeContract capability profile mismatch for ${input.sessionID}: expected ${identity.capabilityProfileID ?? "<unset>"}, found ${capability.capabilityProfileID}`,
+          )
+        }
+        if (capability.projectionHash !== identity.projectionHash) {
+          throw new Error(
+            `SessionRuntimeContract projection hash mismatch for ${input.sessionID}: expected ${identity.projectionHash ?? "<unset>"}, found ${capability.projectionHash}`,
+          )
+        }
       }
     }
     if (input.rejectSatisfiedTerminal !== false && contract.terminalToolContract?.isSatisfied()) {
@@ -2860,6 +2891,9 @@ export namespace SessionLoop {
     const runtimeContract = getSessionRuntimeContract(input.session.id)
     const extras = runtimeContract?.tools ?? {}
     const exactRuntimeContractTools = usesExactRuntimeContractTools(input.agent.name, runtimeContract)
+    const projectedRegistryToolIDs = runtimeContract?.projectedRegistryToolIDs
+      ? new Set(runtimeContract.projectedRegistryToolIDs)
+      : undefined
 
     if (!exactRuntimeContractTools) {
       for (const item of await ToolRegistry.tools(
@@ -2867,6 +2901,7 @@ export namespace SessionLoop {
         input.agent,
         input.config,
       )) {
+        if (projectedRegistryToolIDs && !projectedRegistryToolIDs.has(item.id)) continue
         // Session-level deny rules take precedence (e.g. build fast-path denying "task")
         if (input.session.permission?.length) {
           const rule = PermissionNext.evaluate(item.id, "*", input.session.permission)
@@ -3134,6 +3169,7 @@ export namespace SessionLoop {
         const enrichedOptions = {
           ...(options && typeof options === "object" ? (options as Record<string, unknown>) : {}),
           opencorvus: {
+            projectID: Instance.project.id,
             sessionID: ctx.sessionID,
             messageID: ctx.messageID,
             toolCallID,

@@ -9,6 +9,20 @@ function read(relativePath: string) {
   return fs.readFileSync(path.join(repoRoot, relativePath), "utf8")
 }
 
+function gitCheckIgnorePositiveNoIndex(relativePath: string) {
+  const result = Bun.spawnSync({
+    cmd: ["git", "check-ignore", "-v", "--no-index", relativePath],
+    cwd: repoRoot,
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+  const output = new TextDecoder().decode(result.stdout).trim()
+  const lastMatch = output.split(/\r?\n/).filter(Boolean).at(-1)
+  if (!lastMatch) return false
+  const pattern = lastMatch.match(/^[^:]+:\d+:(.*?)\t/)?.[1]
+  return pattern ? !pattern.startsWith("!") : false
+}
+
 function packageReadmeBunRunCommands(readmePath: string) {
   const text = read(readmePath)
   return [...text.matchAll(/^bun run --cwd ([^\s]+) ([^\s]+)[^\r\n]*$/gm)].map((match) => ({
@@ -1722,6 +1736,20 @@ describe("document health audit regressions", () => {
     expect(read(".gitignore")).toContain("packages/overlay/src-tauri/target-codex-repaired/")
   })
 
+  test("expert-squad build agent prompts are not hidden by generic build-output ignores", () => {
+    const packageRoot = path.join(repoRoot, ".opencorvus", "expert-squads")
+    const promptPaths = fs
+      .readdirSync(packageRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => `.opencorvus/expert-squads/${entry.name}/agents/build/system.md`)
+
+    expect(promptPaths).not.toEqual([])
+    for (const relativePath of promptPaths) {
+      expect(fs.existsSync(path.join(repoRoot, relativePath))).toBe(true)
+    }
+    expect(promptPaths.filter(gitCheckIgnorePositiveNoIndex)).toEqual([])
+  })
+
   test("overlay fixtures use current skill mounts and conversation hydrate contracts", () => {
     const offenders = walkTextFiles("packages/overlay/test").flatMap((file) => {
       const text = read(file)
@@ -2124,9 +2152,10 @@ describe("document health audit regressions", () => {
     expect(mcpSource).not.toContain("for (const { name, transport } of transports)")
     expectFilesNotToContain(walkTextFiles("specs"), ["pendingOAuthTransports"])
 
-    expect(read("packages/opencorvus/src/config/config.ts")).toContain("Remote MCP transport")
-    expect(read("packages/opencorvus/src/config/config.ts")).toContain("Defaults to 30000 (30 seconds)")
-    expect(read("packages/opencorvus/src/config/config.ts")).not.toContain("Defaults to 5000 (5 seconds)")
+    const mcpConfigSchema = read("packages/opencorvus/src/config/mcp-schema.ts")
+    expect(mcpConfigSchema).toContain("Remote MCP transport")
+    expect(mcpConfigSchema).toContain("Defaults to 30000 (30 seconds)")
+    expect(mcpConfigSchema).not.toContain("Defaults to 5000 (5 seconds)")
     expect(read("packages/web/src/content/docs/mcp-servers.mdx")).not.toContain("falls back to SSE")
     expect(read("packages/web/src/content/docs/zh-cn/mcp-servers.mdx")).not.toContain("失败降级")
 

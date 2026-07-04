@@ -539,13 +539,16 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
   if (input.signal?.aborted) {
     throw new AgentRunError(kind, "aborted before model resolution")
   }
+  const [effectiveConfig, projectDirectory] = await Promise.all([
+    EffectiveConfig.effective(configScope),
+    EffectiveConfig.directory(configScope),
+  ])
 
   // ── 1. Resolve model ─────────────────────────────────────────────────
   let model: Awaited<ReturnType<typeof resolveAgentModel>> | undefined
   let modelResolutionError: unknown
   if (input.model) {
-    const config = await EffectiveConfig.effective(configScope)
-    model = await Provider.getModel(input.model.providerID, input.model.modelID, { config }).catch((err) => {
+    model = await Provider.getModel(input.model.providerID, input.model.modelID, { config: effectiveConfig }).catch((err) => {
       modelResolutionError = err
       return undefined
     })
@@ -574,6 +577,16 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
   if (input.signal?.aborted) {
     throw new AgentRunError(kind, "aborted after model resolution")
   }
+  const workerCapability = await PromptProfileResolver.resolveWorkerCapability({
+    config: effectiveConfig,
+    projectDirectory,
+    agentID: role,
+  })
+  const capabilityIdentity = {
+    promptProfileID: workerCapability.promptProfileID,
+    capabilityProfileID: workerCapability.capabilityProfileID,
+    projectionHash: workerCapability.projectionHash,
+  }
 
   // ── 2. Compose the system prompt ─────────────────────────────────────
   // Static parts (core + user override) come from
@@ -597,19 +610,11 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
   } else {
     parts = [{ type: "text", text: userText }]
   }
-  // Capability gate — drop multimodal file parts the resolved model cannot
-  // accept on input. Without this, every agent that calls
-  // AttachmentStore.inlineFileParts (build / acceptance / architect /
-  // intent-analysis / integrity / requirements / frontend-design) would
-  // forward image / pdf / audio / video bytes to a
-  // text-only coding endpoint (e.g. dashscope coding) where the provider
-  // wrapper either silently strips them OR replaces them with an inline
-  // "ERROR: Cannot read …" text part (see provider/transform.ts
-  // unsupportedParts). Both outcomes leave the agent reasoning about
-  // visual context it never received. We strip upstream so the prompt
-  // accurately reflects what the agent will actually see; the
-  // provider-layer replacement remains as a safety net for direct
-  // SessionPrompt.prompt callers that bypass the runner.
+  // Capability gate for low-level provider-bound callers that still pass
+  // explicit file parts. Task-worker agent context should normally use
+  // link/index refs, but the runner must still refuse media parts that the
+  // resolved model cannot accept when direct SessionPrompt callers or legacy
+  // continuations supply them.
   const fileParts = parts.filter((p): p is typeof p & { type: "file" } => p.type === "file")
   if (fileParts.length > 0) {
     const before = fileParts.length
@@ -682,6 +687,24 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
         `existing session ${session.id} has directory=${session.directory}, expected ${expectedDirectory}`,
       )
     }
+    const priorDescriptor = WorkerTurnDescriptor.latestForSession(session.id)
+    const priorCapability = priorDescriptor?.payload.capability
+    if (priorDescriptor && !priorCapability) {
+      throw new AgentRunError(kind, `existing session ${session.id} has no worker capability descriptor`)
+    }
+    if (
+      priorCapability &&
+      (priorCapability.promptProfileID !== capabilityIdentity.promptProfileID ||
+        priorCapability.capabilityProfileID !== capabilityIdentity.capabilityProfileID ||
+        priorCapability.projectionHash !== capabilityIdentity.projectionHash)
+    ) {
+      throw new AgentRunError(
+        kind,
+        `existing session ${session.id} worker capability is stale: ` +
+          `expected ${capabilityIdentity.promptProfileID}/${capabilityIdentity.capabilityProfileID}/${capabilityIdentity.projectionHash}, ` +
+          `found ${priorCapability.promptProfileID}/${priorCapability.capabilityProfileID}/${priorCapability.projectionHash}`,
+      )
+    }
   }
 
   // ── 5. Stream-error capture + abort propagation ──────────────────────
@@ -708,14 +731,19 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
   input.signal?.addEventListener("abort", abortPrompt, { once: true })
 
   // ── 6. Invoke SessionPrompt with the agent's extra tools ─────────────
+  const runtimeTools = await PromptProfileResolver.projectWorkerTools(input.toolKit.tools, workerCapability, {
+    projectDirectory,
+    toolDirectory: session.directory,
+    signal: input.signal,
+  })
   const enableMap = {
     ...promptToolSwitchesForAgentRun({
-      extraToolNames: Object.keys(input.toolKit.tools),
+      extraToolNames: Object.keys(runtimeTools),
       role,
     }),
     ...(input.toolSwitches ?? {}),
   }
-  if (input.terminalTool && !(input.terminalTool.toolName in input.toolKit.tools)) {
+  if (input.terminalTool && !(input.terminalTool.toolName in runtimeTools)) {
     throw new AgentRunError(
       kind,
       `terminal tool ${input.terminalTool.toolName} is not registered in the agent tool kit`,
@@ -739,7 +767,11 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
     parentSessionID: input.parentSessionID,
     taskID: input.taskID,
     modelID: model.id,
-    toolNames: Object.keys(input.toolKit.tools),
+    toolNames: Object.keys(runtimeTools),
+    projectedRegistryToolIDs: workerCapability.builtInToolIDs,
+    promptProfileID: workerCapability.promptProfileID,
+    capabilityProfileID: workerCapability.capabilityProfileID,
+    projectionHash: workerCapability.projectionHash,
   })
 
   const lifecycleDisposable =
@@ -766,10 +798,11 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
         rawSystemPrompt: input.rawSystemPrompt === true,
       },
       tools: {
-        enabled: Object.keys(input.toolKit.tools).sort(),
+        enabled: Object.keys(runtimeTools).sort(),
         switches: enableMap,
         terminal: input.terminalTool?.toolName,
       },
+      capability: capabilityIdentity,
       output: {
         format: input.format ? "json_schema" : "text",
         resultMode: "reply",
@@ -787,6 +820,7 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
     identity: {
       sessionID: session.id,
       agentKind: agentName,
+      ...capabilityIdentity,
       workerTurnDescriptorID: descriptor.id,
       workerTurnDescriptorHash: descriptor.hash,
       goalID: input.goalID,
@@ -795,14 +829,15 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
       contractKind: input.runtimeContract?.contractKind ?? "stage-attempt",
       installedAt: Date.now(),
     },
-    tools: input.toolKit.tools,
+    tools: runtimeTools,
     system: [systemPrompt],
     systemMode: "complete",
     terminalToolContract,
     structuredOutputGuard: input.format?.validate,
     stream: input.stream,
-    includeMcpTools: input.runtimeContract?.includeMcpTools,
+    includeMcpTools: workerCapability.includeMcpTools,
     exactTools: input.runtimeContract?.exactTools,
+    projectedRegistryToolIDs: workerCapability.builtInToolIDs,
   })
   let byteMaterializationProjectID = session.projectID
   if (input.byteMaterializationProjectID) {

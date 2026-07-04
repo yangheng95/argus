@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "id": "algorithm",
-  "label": "Algorithm",
-  "description": "Correctness, complexity, benchmark, and adversarial-case focused expert squad.",
+  "id": "backend",
+  "label": "Backend",
+  "description": "API, state, data, integration, and operational correctness focused expert squad.",
   "version": "2026.07.03",
   "readme": "README.md",
   "capability_projection": {
@@ -32,6 +32,18 @@
         "role_base": true
       },
       "coding-assistant": {
+        "role_base": true
+      },
+      "compaction": {
+        "role_base": true
+      },
+      "title": {
+        "role_base": true
+      },
+      "summary": {
+        "role_base": true
+      },
+      "control": {
         "role_base": true
       },
       "general": {
@@ -105,9 +117,6 @@
     },
     "fact-check": {
       "prompt": "agents/fact-check/system.md"
-    },
-    "goal-workload-analyst": {
-      "prompt": "agents/goal-workload-analyst/system.md"
     },
     "integrity": {
       "prompt": "agents/integrity/system.md"

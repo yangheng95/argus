@@ -7,6 +7,7 @@ import path from "node:path"
 import sharp from "sharp"
 import z from "zod"
 import { persistBrowserPreviewEvidence } from "../../src/browser-preview/persist"
+import { buildEvidencePackFromContextPackets } from "../../src/build/evidence-pack"
 import { composeBuildInputEvidenceManifest } from "../../src/build/evidence-manifest"
 import { Bus } from "../../src/bus"
 import { Database, and, eq, sql } from "../../src/storage/db"
@@ -24,7 +25,13 @@ import {
 } from "../../src/engine/engine.sql"
 import { createDecisionLog } from "../../src/decision-log"
 import { Identifier } from "../../src/id/id"
-import { createWorkflowState, WorkflowRegistry } from "../../src/engine/workflow"
+import {
+  createWorkflowState,
+  WorkflowRegistry,
+  type MiniWorkflow,
+  type OrchestratorWorkflowToolName,
+} from "../../src/engine/workflow"
+import type { AgentRoleID } from "../../src/agent/role-contract"
 import { createOrchestratorTools, READ_CONTEXT_OUTPUT_CHAR_BUDGET } from "../../src/orchestrator/tools"
 import * as TaskLoop from "../../src/orchestrator/loop"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
@@ -45,7 +52,11 @@ import {
 import * as EnginePersist from "../../src/engine/persist"
 import { AttachmentStore } from "../../src/storage/attachment-store"
 import { resetDatabase, TEST_DATABASE_LOCK_DIAGNOSTIC_TIMEOUT_MS } from "../fixture/db"
-import { PROJECT_EXPERT_SQUAD_ID, writeProjectExpertSquadPackage } from "../fixture/expert-squad"
+import {
+  copyRepositoryExpertSquadPackage,
+  PROJECT_EXPERT_SQUAD_ID,
+  writeProjectExpertSquadPackage,
+} from "../fixture/expert-squad"
 import { tmpdir } from "../fixture/fixture"
 import { persistTestBrowserPreviewTarget } from "../fixture/browser-preview"
 import {
@@ -57,6 +68,7 @@ import {
   findGoal,
   findGoalRun,
   findGoalLatestWorkspace,
+  findBuildOutcomesForTask,
   findTask,
   findLatestIntegrityArtifactMissingStatus,
   findLatestIntegrityAttemptArtifact,
@@ -80,7 +92,17 @@ import {
   listLiveOrchestratorToolOwnership,
 } from "../../src/engine/tool-ownership"
 import { Ownership } from "../../src/engine/ownership"
-import { buildIntegrityReplayContext, buildSpecSnapshotLineage } from "../../src/integrity/replay-context"
+import {
+  buildIntegrityReplayContext,
+  buildSpecSnapshotLineage,
+  integrityReplayContextPacket,
+  INTEGRITY_REPLAY_CONTEXT_PACKET_SCHEMA,
+  INTEGRITY_REPLAY_CONTEXT_PACKET_SOURCE,
+} from "../../src/integrity/replay-context"
+import {
+  IMPLEMENTATION_EVIDENCE_CONTEXT_PACKET_SCHEMA,
+  IMPLEMENTATION_EVIDENCE_CONTEXT_PACKET_SOURCE,
+} from "../../src/integrity/acceptance-tools"
 import {
   buildIntegrityRootHistory,
   persistentRootSummary,
@@ -128,6 +150,27 @@ import { installControlModel } from "../workspace/mock-control-model"
 
 const ORCHESTRATOR_TOOLS_TEST_TIMEOUT_MS = TEST_DATABASE_LOCK_DIAGNOSTIC_TIMEOUT_MS + 15_000
 
+function workflowDeclaringAgentRole(role: AgentRoleID, tool: OrchestratorWorkflowToolName): MiniWorkflow {
+  return {
+    id: `test-${tool}-${role}`,
+    name: `Test ${tool}`,
+    description: `Test workflow declaring ${role}`,
+    goalLoopStepIDs: [],
+    steps: [
+      {
+        id: tool,
+        tool,
+        agentRole: role,
+        label: role,
+        hint: `Dispatch ${role}`,
+        scope: "task",
+        skippable: false,
+        after: [],
+      },
+    ],
+  }
+}
+
 let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
 let reviewIntegrityImpl: ((input: any) => Promise<any>) | undefined
 let computeRequirementStatusSnapshotImpl: ((input: any) => any[]) | undefined
@@ -155,6 +198,47 @@ function buildToolOptions(label = "build") {
       toolPartID: `prt_${label}_${stamp}`,
     },
   } as any
+}
+
+function contextPacketText(context: unknown, source: string): string {
+  const packets = (context as { contextPackets?: Array<{ source?: string; parts?: Array<unknown> }> } | undefined)
+    ?.contextPackets
+  return (packets ?? [])
+    .filter((packet) => packet.source === source)
+    .flatMap((packet) => packet.parts ?? [])
+    .map((part) => {
+      if (part && typeof part === "object" && (part as { type?: unknown }).type === "text") {
+        return String((part as { text?: unknown }).text ?? "")
+      }
+      if (part && typeof part === "object" && (part as { type?: unknown }).type === "media_ref") {
+        return String((part as { url?: unknown }).url ?? "")
+      }
+      return ""
+    })
+    .join("\n")
+}
+
+function contextPacketStructuredData(context: unknown, source: string, schema: string): unknown {
+  const packets = (context as { contextPackets?: Array<{ source?: string; parts?: Array<unknown> }> } | undefined)
+    ?.contextPackets
+  const matches = (packets ?? [])
+    .filter((packet) => packet.source === source)
+    .flatMap((packet) => packet.parts ?? [])
+    .filter(
+      (part) =>
+        part &&
+        typeof part === "object" &&
+        (part as { type?: unknown }).type === "structured" &&
+        (part as { schema?: unknown }).schema === schema,
+    )
+  expect(matches).toHaveLength(1)
+  return (matches[0] as { data?: unknown }).data
+}
+
+function buildEvidencePackFromBuildContext(context: unknown) {
+  const packets = (context as { contextPackets?: Parameters<typeof buildEvidencePackFromContextPackets>[0] } | undefined)
+    ?.contextPackets
+  return buildEvidencePackFromContextPackets(packets)
 }
 
 async function buildPersistedToolOptions(input: {
@@ -815,8 +899,8 @@ function minimalVisualQaReport() {
         observed: "The main surface was checked from fresh Visual QA evidence.",
         viewports: [{ width: 1280, height: 720 }],
         states: ["default"],
-        source_refs: ["build evidence"],
-        evidence_refs: ["visual-qa-evidence"],
+        source_refs: ["build_attempt_outcome:out_visual_recovery"],
+        evidence_refs: ["browser_preview_evidence:art_visual_qa_recovery"],
       },
     ],
     coverage: [
@@ -825,20 +909,19 @@ function minimalVisualQaReport() {
         region: "main surface",
         viewports: [{ width: 1280, height: 720 }],
         states: ["default"],
-        source_refs: ["build evidence"],
-        evidence_refs: ["visual-qa-evidence"],
+        source_refs: ["build_attempt_outcome:out_visual_recovery"],
+        evidence_refs: ["browser_preview_evidence:art_visual_qa_recovery"],
         notes: "Main surface was checked.",
       },
     ],
     findings: [],
     production_blockers: [],
     unresolved_code_module_problems: [],
-    repairs: [],
     evidence: [
       {
         check_ids: [checkID],
-        type: "command" as const,
-        ref: "bun test visual-qa",
+        type: "screenshot" as const,
+        ref: "browser_preview_evidence:art_visual_qa_recovery",
         state: "default",
         note: "Visual QA recovery test evidence.",
       },
@@ -850,8 +933,6 @@ function minimalVisualQaReport() {
       missing_regions: [],
       blocker_ids: [],
     },
-    commands: [],
-    changed_files: [],
     open_questions: [],
     fact_check_items: [],
   }
@@ -1800,6 +1881,48 @@ function integrityTeamResult(input: {
   }
 }
 
+async function testResolveGoalContributionRefs(worktreeDir: string, baseRef: string) {
+  const diffHeadRef = (await $`git rev-parse HEAD`.cwd(worktreeDir).text()).trim()
+  return {
+    contributionCommitRef: diffHeadRef,
+    diffBaseRef: baseRef,
+    diffHeadRef,
+  }
+}
+
+async function testCollectGoalContributionDiffs(worktreeDir: string, baseRef: string) {
+  const headRef = (await $`git rev-parse HEAD`.cwd(worktreeDir).text()).trim()
+  if (!headRef || headRef === baseRef) return []
+  const statusOut = await $`git -c core.quotepath=false diff --no-ext-diff --no-renames --name-status ${baseRef} ${headRef} -- .`
+    .cwd(worktreeDir)
+    .text()
+  const statuses = new Map<string, "added" | "deleted" | "modified">()
+  for (const line of statusOut.trim().split("\n")) {
+    if (!line) continue
+    const [code, file] = line.split("\t")
+    if (!code || !file) continue
+    statuses.set(file, code.startsWith("A") ? "added" : code.startsWith("D") ? "deleted" : "modified")
+  }
+  const numstatOut = await $`git -c core.quotepath=false diff --no-ext-diff --no-renames --numstat ${baseRef} ${headRef} -- .`
+    .cwd(worktreeDir)
+    .text()
+  return numstatOut
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const [additions, deletions, file] = line.split("\t")
+      return {
+        file: file!,
+        before: "",
+        after: "",
+        additions: Number.parseInt(additions ?? "0", 10) || 0,
+        deletions: Number.parseInt(deletions ?? "0", 10) || 0,
+        status: statuses.get(file!) ?? "modified",
+      }
+    })
+}
+
 mock.module("@/build/agent", () => ({
   BuildAgent: {
     run: (input: any) => {
@@ -1807,6 +1930,8 @@ mock.module("@/build/agent", () => ({
       return buildAgentRunImpl(input)
     },
   },
+  collectGoalContributionDiffs: testCollectGoalContributionDiffs,
+  resolveGoalContributionRefs: testResolveGoalContributionRefs,
 }))
 
 mock.module("@/integrity", () => ({
@@ -1824,6 +1949,7 @@ mock.module("@/integrity", () => ({
   computeRequirementStatusSnapshot: (input: any) => computeRequirementStatusSnapshotImpl?.(input) ?? [],
   buildIntegrityReplayContext,
   buildSpecSnapshotLineage,
+  integrityReplayContextPacket,
   buildIntegrityRootHistory,
   persistentRootSummary,
   renderIntegrityRootHistoryBlock,
@@ -2445,6 +2571,7 @@ describe("orchestrator tools", () => {
     const now = Date.now()
     const projectID = "prj_select_expert_squad"
     const taskID = "tsk_select_expert_squad"
+    await copyRepositoryExpertSquadPackage(tmp.path, "frontend-innovate")
     await writeProjectExpertSquadPackage(tmp.path)
     Database.use((db) => {
       db.insert(ProjectTable)
@@ -2746,10 +2873,13 @@ describe("orchestrator tools", () => {
             verdict: "pass",
             summary: "Post-build integrity passed",
           })
+        const pipeline = WorkflowRegistry.resolveSync("pipeline")!
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
           signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState: createWorkflowState(pipeline),
         })
 
         const result = await tools.integrity.execute(
@@ -2885,10 +3015,13 @@ describe("orchestrator tools", () => {
           summary: "active run",
           now,
         })
+        const pipeline = WorkflowRegistry.resolveSync("pipeline")!
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
           signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState: createWorkflowState(pipeline),
         })
 
         const result = await tools.complete_task.execute(
@@ -2933,10 +3066,13 @@ describe("orchestrator tools", () => {
           now,
           insertProject: false,
         })
+        const pipeline = WorkflowRegistry.resolveSync("pipeline")!
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
           signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState: createWorkflowState(pipeline),
         })
         const emptySummaryResult = await tools.complete_task.execute(
           { summary: "   " },
@@ -2958,6 +3094,47 @@ describe("orchestrator tools", () => {
         )
         expect(toolText(terminalResult)).toContain(`Task ${taskID} is terminal (status=completed)`)
         expect(toolText(terminalResult)).toContain("complete_task was not executed")
+      },
+    })
+  })
+
+  test("cancel_task and retry_task require orchestrator tool execution identity", async () => {
+    const now = Date.now()
+    const taskID = `tsk_lifecycle_identity_${now.toString(16)}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "lifecycle identity parent" })
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: parent.id,
+              source: "test",
+              title: "Lifecycle identity task",
+              request: "require tool execution identity",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
+        )
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        await expect(tools.cancel_task.execute({ reason: "operator stopped the task" }, {} as any)).rejects.toThrow(
+          /cancel_task: missing real tool execution identity/,
+        )
+        await expect(tools.retry_task.execute({ reason: "operator requested retry" }, {} as any)).rejects.toThrow(
+          /retry_task: missing real tool execution identity/,
+        )
       },
     })
   })
@@ -2994,10 +3171,13 @@ describe("orchestrator tools", () => {
           executorResumed: false,
           status: "active",
         })
+        const pipeline = WorkflowRegistry.resolveSync("pipeline")!
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
           signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState: createWorkflowState(pipeline),
         })
 
         const result = await tools.inject_operator_message.execute(
@@ -3096,10 +3276,11 @@ describe("orchestrator tools", () => {
       },
     })
 
-    expect(capturedContext?.integrityFeedback).toContain("## Persistent Integrity Findings")
-    expect(capturedContext?.integrityFeedback).toMatch(/root: root_[a-f0-9]{12}/)
-    expect(capturedContext?.integrityFeedback).toContain("BF-R2-settings-validation")
-    expect(capturedContext?.retryGuidance).toBe("Retry by fixing the storage load validator.")
+    const integrityPacket = contextPacketText(capturedContext, "integrity")
+    expect(integrityPacket).toContain("## Persistent Integrity Findings")
+    expect(integrityPacket).toMatch(/root: root_[a-f0-9]{12}/)
+    expect(integrityPacket).toContain("BF-R2-settings-validation")
+    expect(contextPacketText(capturedContext, "orchestrator")).toBe("Retry by fixing the storage load validator.")
   })
 
   test("goal build rejects persisted contract_audit graph id mismatch before build starts", async () => {
@@ -3326,10 +3507,13 @@ describe("orchestrator tools", () => {
           throw new Error("rendered webpage evidence capture failed")
         }
 
+        const pipeline = WorkflowRegistry.resolveSync("pipeline")!
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
           signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState: createWorkflowState(pipeline),
         })
 
         const result = await tools.frontend_research.execute(
@@ -3403,10 +3587,13 @@ describe("orchestrator tools", () => {
           throw new Error("frontend research agent crashed after session persistence")
         }
 
+        const pipeline = WorkflowRegistry.resolveSync("pipeline")!
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
           signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState: createWorkflowState(pipeline),
         })
 
         const result = await tools.frontend_research.execute(
@@ -3688,8 +3875,11 @@ describe("orchestrator tools", () => {
         expect(visualQaInput.taskID).toBe(taskID)
         expect(visualQaInput.reason).toBe("Need final frontend GUI review.")
         expect(visualQaInput.focus).toBe("Main screen")
-        expect(visualQaInput.appUrl).toBe("http://127.0.0.1:5173")
-        expect(visualQaInput.previewCommand).toBe("npm run dev")
+        expect(visualQaInput.appUrl).toBeUndefined()
+        expect(visualQaInput.previewCommand).toBeUndefined()
+        const visualQaDispatchPacket = contextPacketText(visualQaInput, "visual_qa_dispatch")
+        expect(visualQaDispatchPacket).toContain("app_url: http://127.0.0.1:5173")
+        expect(visualQaDispatchPacket).toContain("preview_command: npm run dev")
         expect(childSessionID).toMatch(/^ses_/)
         const visualQaDecisions = createDecisionLog(taskID).readByPhase("visual_qa")
         expect(visualQaDecisions.some((entry) => entry.key === "latest_summary")).toBe(true)
@@ -3713,7 +3903,7 @@ describe("orchestrator tools", () => {
 
         const secondResult = await tools.visual_qa.execute(
           {
-            reason: "Re-check after Build repair.",
+            reason: "Re-check after implementation repair.",
             focus: "Main screen",
             app_url: "http://127.0.0.1:5173",
             preview_command: "npm run dev",
@@ -3840,7 +4030,7 @@ describe("orchestrator tools", () => {
                     region: "economy-page",
                     reference_region_key: "economy-page@desktop",
                     viewports: [{ width: 800, height: 600 }],
-                    source_refs: ["web-clone-source/reference.png"],
+                    source_refs: ["frontend_research:art_web_clone_source:ev_reference"],
                     evidence_refs: [comparisonRef],
                   })),
                   coverage: [
@@ -3849,7 +4039,7 @@ describe("orchestrator tools", () => {
                       region: "economy-page",
                       viewports: [{ width: 800, height: 600 }],
                       states: ["default"],
-                      source_refs: ["web-clone-source/reference.png"],
+                      source_refs: ["frontend_research:art_web_clone_source:ev_reference"],
                       evidence_refs: [comparisonRef],
                       notes: "Checked task-scoped rendered reference-comparison evidence.",
                     },
@@ -5048,6 +5238,7 @@ describe("orchestrator tools", () => {
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
+          workflow: WorkflowRegistry.resolveSync("pipeline"),
           signal: new AbortController().signal,
         })
         const request = await createAgentCoordinationRequest({
@@ -5058,7 +5249,7 @@ describe("orchestrator tools", () => {
           summary: "Need redispatch",
           details: "The worker is blocked and asks the orchestrator for a scheduler action.",
           blocking: true,
-          requestedDecision: "redispatch",
+          requestedDecision: "evaluate scheduler-owned stage rerun",
           severity: "blocked",
         })
         const result = toolText(
@@ -5185,6 +5376,7 @@ describe("orchestrator tools", () => {
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
+          workflow: workflowDeclaringAgentRole("architect", "architect"),
           signal: new AbortController().signal,
         })
         const request = await createAgentCoordinationRequest({
@@ -5195,7 +5387,7 @@ describe("orchestrator tools", () => {
           summary: "Need architect redispatch",
           details: "The worker is blocked and asks for a fresh architect decomposition pass.",
           blocking: true,
-          requestedDecision: "redispatch",
+          requestedDecision: "evaluate scheduler-owned stage rerun",
           severity: "blocked",
         })
         const result = toolText(
@@ -5236,18 +5428,15 @@ describe("orchestrator tools", () => {
           status: "completed",
           result: {
             redispatch_binding: {
-              dispatcher: "architect_stage",
+              workflow_tool_name: "architect",
               stage: "architect",
               target_kind: "architect",
             },
-            dispatcher: "architect_stage",
-            stage: "architect",
             source_session_id: worker.id,
             redispatch_session_id: redispatchSessionID,
             spec_snapshot_id: activeSpec?.id,
             goals_count: 1,
             contracts_count: 0,
-            target_kind: "architect",
             started: true,
             redispatch_started: true,
             preexisting_architect_session_ids: [worker.id],
@@ -5383,6 +5572,7 @@ describe("orchestrator tools", () => {
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
+          workflow: workflowDeclaringAgentRole("architect", "architect"),
           signal: new AbortController().signal,
         })
         const request = await createAgentCoordinationRequest({
@@ -5394,7 +5584,7 @@ describe("orchestrator tools", () => {
           details:
             "The worker is blocked and the prior redispatch persisted architect output before action completion.",
           blocking: true,
-          requestedDecision: "redispatch",
+          requestedDecision: "evaluate scheduler-owned stage rerun",
           severity: "blocked",
         })
         const options = await buildPersistedToolOptions({
@@ -5411,20 +5601,13 @@ describe("orchestrator tools", () => {
           decision: "redispatch",
           reason,
           message: guidance,
-          redispatchBinding: {
-            dispatcher: "architect_stage",
-            stage: "architect",
-            target_kind: "architect",
-          },
+          redispatchWorkflow: workflowDeclaringAgentRole("architect", "architect"),
         })
         await recordAgentCoordinationActionProgress({
           taskID,
           actionID: response.payload.action_id,
           result: {
-            dispatcher: "architect_stage",
-            stage: "architect",
             source_session_id: worker.id,
-            target_kind: "architect",
             redispatch_started: true,
             redispatch_started_at: Date.now(),
             preexisting_architect_session_ids: [worker.id, oldArchitect.id],
@@ -5555,15 +5738,12 @@ describe("orchestrator tools", () => {
           action: "redispatch_worker",
           status: "completed",
           result: {
-            dispatcher: "architect_stage",
-            stage: "architect",
             source_session_id: worker.id,
             redispatch_session_id: redispatched.id,
             spec_snapshot_id: specID,
             architect_contract_graph_artifact_id: graphID,
             goals_count: 1,
             contracts_count: 0,
-            target_kind: "architect",
             started: true,
             redispatch_started: true,
             recovered_redispatch: true,
@@ -5596,7 +5776,7 @@ describe("orchestrator tools", () => {
       request: "Runtime-contract requirements worker asks for redispatch",
       goalTitle: "Coordinate requirements redispatch",
       goalSlug: "coordinate-requirements-redispatch",
-      objective: "Redispatch requirements through a concrete stage dispatcher binding",
+      objective: "Redispatch requirements through a concrete workflow tool binding",
       now,
     })
 
@@ -5632,6 +5812,7 @@ describe("orchestrator tools", () => {
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
+          workflow: workflowDeclaringAgentRole("requirements", "requirements"),
           signal: new AbortController().signal,
         })
         const request = await createAgentCoordinationRequest({
@@ -5642,7 +5823,7 @@ describe("orchestrator tools", () => {
           summary: "Need requirements redispatch",
           details: "The worker is blocked and asks for a fresh requirements pass.",
           blocking: true,
-          requestedDecision: "redispatch",
+          requestedDecision: "evaluate scheduler-owned stage rerun",
           severity: "blocked",
         })
         const result = toolText(
@@ -5677,18 +5858,15 @@ describe("orchestrator tools", () => {
           status: "completed",
           result: {
             redispatch_binding: {
-              dispatcher: "requirements_stage",
+              workflow_tool_name: "requirements",
               stage: "requirements",
               target_kind: "requirements",
             },
-            dispatcher: "requirements_stage",
-            stage: "requirements",
             source_session_id: worker.id,
             redispatch_session_id: redispatchSessionID,
             spec_snapshot_id: activeSpec?.id,
             requirements_count: 1,
             decisions_count: 1,
-            target_kind: "requirements",
             started: true,
             redispatch_started: true,
             recovered_redispatch: false,
@@ -5781,6 +5959,7 @@ describe("orchestrator tools", () => {
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
+          workflow: workflowDeclaringAgentRole("requirements", "requirements"),
           signal: new AbortController().signal,
         })
         const request = await createAgentCoordinationRequest({
@@ -5792,7 +5971,7 @@ describe("orchestrator tools", () => {
           details:
             "The worker is blocked and the prior redispatch persisted a requirements spec before action completion.",
           blocking: true,
-          requestedDecision: "redispatch",
+          requestedDecision: "evaluate scheduler-owned stage rerun",
           severity: "blocked",
         })
         const options = await buildPersistedToolOptions({
@@ -5809,20 +5988,13 @@ describe("orchestrator tools", () => {
           decision: "redispatch",
           reason,
           message: guidance,
-          redispatchBinding: {
-            dispatcher: "requirements_stage",
-            stage: "requirements",
-            target_kind: "requirements",
-          },
+          redispatchWorkflow: workflowDeclaringAgentRole("requirements", "requirements"),
         })
         await recordAgentCoordinationActionProgress({
           taskID,
           actionID: response.payload.action_id,
           result: {
-            dispatcher: "requirements_stage",
-            stage: "requirements",
             source_session_id: worker.id,
-            target_kind: "requirements",
             redispatch_started: true,
             redispatch_started_at: Date.now(),
             preexisting_requirements_session_ids: [worker.id, oldRequirements.id],
@@ -5905,14 +6077,11 @@ describe("orchestrator tools", () => {
           action: "redispatch_worker",
           status: "completed",
           result: {
-            dispatcher: "requirements_stage",
-            stage: "requirements",
             source_session_id: worker.id,
             redispatch_session_id: redispatched.id,
             spec_snapshot_id: specID,
             requirements_count: 1,
             decisions_count: 1,
-            target_kind: "requirements",
             started: true,
             redispatch_started: true,
             recovered_redispatch: true,
@@ -5945,7 +6114,7 @@ describe("orchestrator tools", () => {
       request: "Runtime-contract worker asks for redispatch",
       goalTitle: "Coordinate frontend research redispatch",
       goalSlug: "coordinate-frontend-research-redispatch",
-      objective: "Redispatch frontend research through a concrete stage dispatcher binding",
+      objective: "Redispatch frontend research through a concrete workflow tool binding",
       now,
     })
 
@@ -5989,6 +6158,7 @@ describe("orchestrator tools", () => {
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
+          workflow: WorkflowRegistry.resolveSync("pipeline"),
           signal: new AbortController().signal,
         })
         const request = await createAgentCoordinationRequest({
@@ -5999,7 +6169,7 @@ describe("orchestrator tools", () => {
           summary: "Need redispatch",
           details: "The worker is blocked and asks the orchestrator for a scheduler action.",
           blocking: true,
-          requestedDecision: "redispatch",
+          requestedDecision: "evaluate scheduler-owned stage rerun",
           evidenceRefs: [sourceURL],
           severity: "blocked",
         })
@@ -6045,16 +6215,13 @@ describe("orchestrator tools", () => {
           status: "completed",
           result: {
             redispatch_binding: {
-              dispatcher: "frontend_research_stage",
+              workflow_tool_name: "frontend_research",
               stage: "frontend-research",
               target_kind: "frontend-research",
             },
-            dispatcher: "frontend_research_stage",
-            stage: "frontend-research",
             source_session_id: worker.id,
             redispatch_session_id: redispatchSessionID,
             source_url: sourceURL,
-            target_kind: "frontend-research",
             started: true,
             redispatch_started: true,
             recovered_redispatch: false,
@@ -6120,6 +6287,7 @@ describe("orchestrator tools", () => {
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
+          workflow: WorkflowRegistry.resolveSync("pipeline"),
           signal: new AbortController().signal,
         })
         const request = await createAgentCoordinationRequest({
@@ -6130,7 +6298,7 @@ describe("orchestrator tools", () => {
           summary: "Need redispatch recovery",
           details: "The worker is blocked and the prior redispatch persisted a brief before action completion.",
           blocking: true,
-          requestedDecision: "redispatch",
+          requestedDecision: "evaluate scheduler-owned stage rerun",
           evidenceRefs: [sourceURL],
           severity: "blocked",
         })
@@ -6148,21 +6316,14 @@ describe("orchestrator tools", () => {
           decision: "redispatch",
           reason,
           message: guidance,
-          redispatchBinding: {
-            dispatcher: "frontend_research_stage",
-            stage: "frontend-research",
-            target_kind: "frontend-research",
-          },
+          redispatchWorkflow: workflowDeclaringAgentRole("frontend-research", "frontend_research"),
         })
         await recordAgentCoordinationActionProgress({
           taskID,
           actionID: response.payload.action_id,
           result: {
-            dispatcher: "frontend_research_stage",
-            stage: "frontend-research",
             source_session_id: worker.id,
             source_url: sourceURL,
-            target_kind: "frontend-research",
             redispatch_started: true,
             redispatch_started_at: Date.now(),
           },
@@ -6211,13 +6372,10 @@ describe("orchestrator tools", () => {
           action: "redispatch_worker",
           status: "completed",
           result: {
-            dispatcher: "frontend_research_stage",
-            stage: "frontend-research",
             source_session_id: worker.id,
             redispatch_session_id: redispatched.id,
             frontend_research_brief_artifact_id: artifactID,
             source_url: sourceURL,
-            target_kind: "frontend-research",
             started: true,
             redispatch_started: true,
             recovered_redispatch: true,
@@ -6256,7 +6414,7 @@ describe("orchestrator tools", () => {
           request: "Runtime-contract frontend-design worker asks for redispatch",
           goalTitle: "Coordinate frontend design redispatch",
           goalSlug: "coordinate-frontend-design-redispatch",
-          objective: "Redispatch frontend design through a concrete stage dispatcher binding",
+          objective: "Redispatch frontend design through a concrete workflow tool binding",
           now,
           insertProject: false,
         })
@@ -6300,6 +6458,7 @@ describe("orchestrator tools", () => {
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
+          workflow: WorkflowRegistry.resolveSync("pipeline"),
           signal: new AbortController().signal,
         })
         const request = await createAgentCoordinationRequest({
@@ -6310,7 +6469,7 @@ describe("orchestrator tools", () => {
           summary: "Need frontend-design redispatch",
           details: "The worker needs a fresh frontend-design handoff for the same visual reference.",
           blocking: true,
-          requestedDecision: "redispatch",
+          requestedDecision: "evaluate scheduler-owned stage rerun",
           severity: "blocked",
         })
         const result = toolText(
@@ -6344,12 +6503,10 @@ describe("orchestrator tools", () => {
           status: "completed",
           result: {
             redispatch_binding: {
-              dispatcher: "frontend_design_stage",
+              workflow_tool_name: "frontend_design",
               stage: "frontend-design",
               target_kind: "frontend-design",
             },
-            dispatcher: "frontend_design_stage",
-            stage: "frontend-design",
             source_session_id: worker.id,
             redispatch_session_id: redispatchSessionID,
             design_specs_count: 1,
@@ -6357,7 +6514,6 @@ describe("orchestrator tools", () => {
             reference_artifacts_count: 1,
             frontend_project_status: "not_created",
             source_url_count: 0,
-            target_kind: "frontend-design",
             started: true,
           },
         })
@@ -6387,7 +6543,7 @@ describe("orchestrator tools", () => {
       request: "Runtime-contract deep research worker asks for redispatch",
       goalTitle: "Coordinate deep research redispatch",
       goalSlug: "coordinate-deep-research-redispatch",
-      objective: "Redispatch deep research through a concrete stage dispatcher binding",
+      objective: "Redispatch deep research through a concrete workflow tool binding",
       now,
     })
 
@@ -6429,6 +6585,7 @@ describe("orchestrator tools", () => {
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
+          workflow: WorkflowRegistry.resolveSync("pipeline"),
           signal: new AbortController().signal,
         })
         const request = await createAgentCoordinationRequest({
@@ -6439,7 +6596,7 @@ describe("orchestrator tools", () => {
           summary: "Need deep research redispatch",
           details: "The worker is blocked and asks for a fresh research evidence pass.",
           blocking: true,
-          requestedDecision: "redispatch",
+          requestedDecision: "evaluate scheduler-owned stage rerun",
           evidenceRefs: sourceURLs,
           severity: "blocked",
         })
@@ -6473,16 +6630,13 @@ describe("orchestrator tools", () => {
           status: "completed",
           result: {
             redispatch_binding: {
-              dispatcher: "deep_research_stage",
+              workflow_tool_name: "deep_research",
               stage: "deep-research",
               target_kind: "deep-research",
             },
-            dispatcher: "deep_research_stage",
-            stage: "deep-research",
             source_session_id: worker.id,
             redispatch_session_id: redispatchSessionID,
             source_urls: sourceURLs,
-            target_kind: "deep-research",
             started: true,
             redispatch_started: true,
             recovered_redispatch: false,
@@ -6557,6 +6711,7 @@ describe("orchestrator tools", () => {
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
+          workflow: WorkflowRegistry.resolveSync("pipeline"),
           signal: new AbortController().signal,
         })
         const request = await createAgentCoordinationRequest({
@@ -6568,7 +6723,7 @@ describe("orchestrator tools", () => {
           details:
             "The worker is blocked and the prior redispatch persisted a research brief before action completion.",
           blocking: true,
-          requestedDecision: "redispatch",
+          requestedDecision: "evaluate scheduler-owned stage rerun",
           evidenceRefs: sourceURLs,
           severity: "blocked",
         })
@@ -6586,21 +6741,14 @@ describe("orchestrator tools", () => {
           decision: "redispatch",
           reason,
           message: guidance,
-          redispatchBinding: {
-            dispatcher: "deep_research_stage",
-            stage: "deep-research",
-            target_kind: "deep-research",
-          },
+          redispatchWorkflow: workflowDeclaringAgentRole("deep-research", "deep_research"),
         })
         await recordAgentCoordinationActionProgress({
           taskID,
           actionID: response.payload.action_id,
           result: {
-            dispatcher: "deep_research_stage",
-            stage: "deep-research",
             source_session_id: worker.id,
             source_urls: sourceURLs,
-            target_kind: "deep-research",
             redispatch_started: true,
             redispatch_started_at: Date.now(),
             preexisting_deep_research_session_ids: [worker.id, oldResearch.id],
@@ -6646,13 +6794,10 @@ describe("orchestrator tools", () => {
           action: "redispatch_worker",
           status: "completed",
           result: {
-            dispatcher: "deep_research_stage",
-            stage: "deep-research",
             source_session_id: worker.id,
             redispatch_session_id: redispatched.id,
             research_brief_artifact_id: artifactID,
             source_urls: sourceURLs,
-            target_kind: "deep-research",
             started: true,
             redispatch_started: true,
             recovered_redispatch: true,
@@ -6691,7 +6836,7 @@ describe("orchestrator tools", () => {
           request: "Runtime-contract visual QA worker asks for redispatch",
           goalTitle: "Coordinate visual QA redispatch",
           goalSlug: "coordinate-visual-qa-redispatch",
-          objective: "Redispatch visual QA through a concrete stage dispatcher binding",
+          objective: "Redispatch visual QA through a concrete workflow tool binding",
           now,
           insertProject: false,
         })
@@ -6720,6 +6865,7 @@ describe("orchestrator tools", () => {
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
+          workflow: WorkflowRegistry.resolveSync("pipeline"),
           signal: new AbortController().signal,
         })
         const request = await createAgentCoordinationRequest({
@@ -6730,7 +6876,7 @@ describe("orchestrator tools", () => {
           summary: "Need visual QA redispatch",
           details: "The worker needs a fresh visual QA pass for the same task surface.",
           blocking: true,
-          requestedDecision: "redispatch",
+          requestedDecision: "evaluate scheduler-owned stage rerun",
           severity: "blocked",
         })
         const result = toolText(
@@ -6766,22 +6912,13 @@ describe("orchestrator tools", () => {
           status: "completed",
           result: {
             redispatch_binding: {
-              dispatcher: "visual_qa_stage",
+              workflow_tool_name: "visual_qa",
               stage: "visual-qa",
               target_kind: "visual-qa",
             },
-            dispatcher: "visual_qa_stage",
-            stage: "visual-qa",
             source_session_id: worker.id,
             redispatch_session_id: redispatchSessionID,
-            accepted: false,
-            submitted_accepted: true,
-            findings_count: 0,
-            production_blockers_count: 0,
-            evidence_count: 1,
-            repairs_count: 0,
-            changed_files_count: 0,
-            target_kind: "visual-qa",
+            report_ref: expect.any(String),
             started: true,
             redispatch_started: true,
             preexisting_visual_qa_session_ids: [worker.id],
@@ -6853,6 +6990,7 @@ describe("orchestrator tools", () => {
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
+          workflow: WorkflowRegistry.resolveSync("pipeline"),
           signal: new AbortController().signal,
         })
         const request = await createAgentCoordinationRequest({
@@ -6863,7 +7001,7 @@ describe("orchestrator tools", () => {
           summary: "Need visual QA redispatch recovery",
           details: "The worker needs a fresh visual QA pass and the previous redispatch persisted report rows.",
           blocking: true,
-          requestedDecision: "redispatch",
+          requestedDecision: "evaluate scheduler-owned stage rerun",
           severity: "blocked",
         })
         const options = await buildPersistedToolOptions({
@@ -6880,20 +7018,13 @@ describe("orchestrator tools", () => {
           decision: "redispatch",
           reason,
           message: guidance,
-          redispatchBinding: {
-            dispatcher: "visual_qa_stage",
-            stage: "visual-qa",
-            target_kind: "visual-qa",
-          },
+          redispatchWorkflow: workflowDeclaringAgentRole("visual-qa", "visual_qa"),
         })
         await recordAgentCoordinationActionProgress({
           taskID,
           actionID: response.payload.action_id,
           result: {
-            dispatcher: "visual_qa_stage",
-            stage: "visual-qa",
             source_session_id: worker.id,
-            target_kind: "visual-qa",
             redispatch_started: true,
             redispatch_started_at: Date.now(),
             preexisting_visual_qa_session_ids: [worker.id, oldVisualQa.id],
@@ -6918,7 +7049,6 @@ describe("orchestrator tools", () => {
           phase: "visual_qa",
           key: "latest_summary",
           value: [
-            "accepted=false",
             "submitted_accepted=true",
             "effective_accepted=false",
             "self_report_issues=1",
@@ -6931,7 +7061,6 @@ describe("orchestrator tools", () => {
             "reference_parity_required=false",
             "reference_comparison_evidence=(none)",
             "reference_missing_regions=(none)",
-            "changed_files=(none)",
           ].join("\n"),
           reason: "Latest structured visual QA summary for read_context and integrity review.",
         })
@@ -6969,20 +7098,10 @@ describe("orchestrator tools", () => {
           action: "redispatch_worker",
           status: "completed",
           result: {
-            dispatcher: "visual_qa_stage",
-            stage: "visual-qa",
             source_session_id: worker.id,
             redispatch_session_id: redispatched.id,
-            visual_qa_report_decision_id: reportDecision?.id,
-            visual_qa_summary_decision_id: summaryDecision?.id,
-            accepted: false,
-            submitted_accepted: true,
-            findings_count: 0,
-            production_blockers_count: 0,
-            evidence_count: 1,
-            repairs_count: 0,
-            changed_files_count: 0,
-            target_kind: "visual-qa",
+            report_ref: reportDecision?.id,
+            summary_ref: summaryDecision?.id,
             started: true,
             redispatch_started: true,
             recovered_redispatch: true,
@@ -7023,7 +7142,7 @@ describe("orchestrator tools", () => {
           request: "Runtime-contract integrity worker asks for redispatch",
           goalTitle: "Coordinate integrity redispatch",
           goalSlug: "coordinate-integrity-redispatch",
-          objective: "Redispatch integrity through a concrete stage dispatcher binding",
+          objective: "Redispatch integrity through a concrete workflow tool binding",
           now,
           insertProject: false,
         })
@@ -7058,6 +7177,7 @@ describe("orchestrator tools", () => {
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
+          workflow: WorkflowRegistry.resolveSync("pipeline"),
           signal: new AbortController().signal,
         })
         const request = await createAgentCoordinationRequest({
@@ -7068,7 +7188,7 @@ describe("orchestrator tools", () => {
           summary: "Need integrity redispatch",
           details: "The worker needs a fresh final integrity review for the same task.",
           blocking: true,
-          requestedDecision: "redispatch",
+          requestedDecision: "evaluate scheduler-owned stage rerun",
           severity: "blocked",
         })
         const result = toolText(
@@ -7085,8 +7205,13 @@ describe("orchestrator tools", () => {
             }),
           ),
         )
+        const latest = findLatestIntegrityAttemptArtifact({
+          taskID,
+          specSnapshotID: specID,
+          phase: "post_build",
+        })
         expect(result).toContain(`Responded to coordination request ${request.payload.request_id} with redispatch`)
-        expect(result).toContain(`integrity session ${redispatchSessionID} recorded pass review`)
+        expect(result).toContain(`integrity session ${redispatchSessionID} recorded review report ${latest?.artifactID}`)
         expect(integrityInput.parentSessionID).toBe(parent.id)
         expect(integrityInput.taskID).toBe(taskID)
         expect(integrityInput.task.id).toBe(taskID)
@@ -7094,11 +7219,6 @@ describe("orchestrator tools", () => {
         expect(findAgentCoordinationRequest({ taskID, requestID: request.payload.request_id })?.payload.status).toBe(
           "responded",
         )
-        const latest = findLatestIntegrityAttemptArtifact({
-          taskID,
-          specSnapshotID: specID,
-          phase: "post_build",
-        })
         expect((latest?.payload as any)?.session_id).toBe(redispatchSessionID)
         const actions = listAgentCoordinationActions(taskID)
         expect(actions).toHaveLength(1)
@@ -7107,23 +7227,13 @@ describe("orchestrator tools", () => {
           status: "completed",
           result: {
             redispatch_binding: {
-              dispatcher: "integrity_stage",
+              workflow_tool_name: "integrity",
               stage: "integrity",
               target_kind: "integrity",
             },
-            dispatcher: "integrity_stage",
-            stage: "integrity",
             source_session_id: worker.id,
             redispatch_session_id: redispatchSessionID,
-            spec_snapshot_id: specID,
-            phase: "post_build",
-            verdict: "pass",
-            reviewer_count: 2,
-            findings_count: 0,
-            required_repairs_count: 0,
-            unresolved_disagreements_count: 0,
-            integrity_attempt_id: latest?.artifactID,
-            target_kind: "integrity",
+            report_ref: latest?.artifactID,
             started: true,
             redispatch_started: true,
             preexisting_integrity_session_ids: [worker.id],
@@ -7196,6 +7306,7 @@ describe("orchestrator tools", () => {
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
+          workflow: WorkflowRegistry.resolveSync("pipeline"),
           signal: new AbortController().signal,
         })
         const request = await createAgentCoordinationRequest({
@@ -7206,7 +7317,7 @@ describe("orchestrator tools", () => {
           summary: "Need integrity redispatch recovery",
           details: "The worker needs a fresh integrity review and the prior redispatch persisted an attempt.",
           blocking: true,
-          requestedDecision: "redispatch",
+          requestedDecision: "evaluate scheduler-owned stage rerun",
           severity: "blocked",
         })
         const options = await buildPersistedToolOptions({
@@ -7223,20 +7334,13 @@ describe("orchestrator tools", () => {
           decision: "redispatch",
           reason,
           message: guidance,
-          redispatchBinding: {
-            dispatcher: "integrity_stage",
-            stage: "integrity",
-            target_kind: "integrity",
-          },
+          redispatchWorkflow: workflowDeclaringAgentRole("integrity", "integrity"),
         })
         await recordAgentCoordinationActionProgress({
           taskID,
           actionID: response.payload.action_id,
           result: {
-            dispatcher: "integrity_stage",
-            stage: "integrity",
             source_session_id: worker.id,
-            target_kind: "integrity",
             redispatch_started: true,
             redispatch_started_at: Date.now(),
             preexisting_integrity_session_ids: [worker.id, oldIntegrity.id],
@@ -7283,7 +7387,7 @@ describe("orchestrator tools", () => {
         )
 
         expect(result).toContain(`Responded to coordination request ${request.payload.request_id} with redispatch`)
-        expect(result).toContain(`integrity session ${redispatched.id} recovered persisted pass review`)
+        expect(result).toContain(`integrity session ${redispatched.id} recovered review report ${attemptID}`)
         expect(integrityRunCalls).toBe(0)
         expect(findAgentCoordinationRequest({ taskID, requestID: request.payload.request_id })?.payload.status).toBe(
           "responded",
@@ -7300,19 +7404,9 @@ describe("orchestrator tools", () => {
           action: "redispatch_worker",
           status: "completed",
           result: {
-            dispatcher: "integrity_stage",
-            stage: "integrity",
             source_session_id: worker.id,
             redispatch_session_id: redispatched.id,
-            spec_snapshot_id: specID,
-            phase: "post_build",
-            verdict: "pass",
-            reviewer_count: 2,
-            findings_count: 0,
-            required_repairs_count: 0,
-            unresolved_disagreements_count: 0,
-            integrity_attempt_id: attemptID,
-            target_kind: "integrity",
+            report_ref: attemptID,
             started: true,
             redispatch_started: true,
             recovered_redispatch: true,
@@ -7327,6 +7421,7 @@ describe("orchestrator tools", () => {
   test("respond_agent_coordination redispatch starts the build stage dispatcher", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })
+    installControlModel()
 
     const now = Date.now()
     const stamp = now.toString(16)
@@ -7458,6 +7553,7 @@ describe("orchestrator tools", () => {
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
+          workflow: WorkflowRegistry.resolveSync("pipeline"),
           signal: new AbortController().signal,
         })
         const request = await createAgentCoordinationRequest({
@@ -7468,7 +7564,7 @@ describe("orchestrator tools", () => {
           summary: "Need replacement build",
           details: "The active build found its current attempt is unrecoverable and needs a fresh attempt.",
           blocking: true,
-          requestedDecision: "redispatch",
+          requestedDecision: "evaluate scheduler-owned stage rerun",
           severity: "blocked",
           goalID,
           goalRunID: sourceGoalRunID,
@@ -7494,7 +7590,7 @@ describe("orchestrator tools", () => {
         expect(findGoalRun(sourceGoalRunID)?.error).toContain("respond_agent_coordination:")
         expect(buildInput.target.id).toBe(goalID)
         expect(buildInput.parentSessionID).toBe(parent.id)
-        expect(buildInput.context?.retryGuidance).toContain("Worker summary: Need replacement build")
+        expect(contextPacketText(buildInput.context, "orchestrator")).toContain("Worker summary: Need replacement build")
         expect(findAgentCoordinationRequest({ taskID, requestID: request.payload.request_id })?.payload.status).toBe(
           "responded",
         )
@@ -7519,12 +7615,10 @@ describe("orchestrator tools", () => {
           status: "completed",
           result: {
             redispatch_binding: {
-              dispatcher: "build_stage",
+              workflow_tool_name: "build",
               stage: "build",
               target_kind: "build",
             },
-            dispatcher: "build_stage",
-            stage: "build",
             source_session_id: source.id,
             source_goal_run_id: sourceGoalRunID,
             source_goal_run_status: "aborted",
@@ -7532,7 +7626,6 @@ describe("orchestrator tools", () => {
             redispatch_goal_run_id: redispatchGoalRun.id,
             build_session_contract_id: contractRow?.id,
             goal_id: goalID,
-            target_kind: "build",
             started: true,
             redispatch_started: true,
             preexisting_build_goal_run_ids: [sourceGoalRunID],
@@ -7636,6 +7729,7 @@ describe("orchestrator tools", () => {
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
+          workflow: WorkflowRegistry.resolveSync("pipeline"),
           signal: new AbortController().signal,
         })
         const request = await createAgentCoordinationRequest({
@@ -7646,7 +7740,7 @@ describe("orchestrator tools", () => {
           summary: "Need build redispatch recovery",
           details: "The source build needs a replacement and the replacement build start already persisted.",
           blocking: true,
-          requestedDecision: "redispatch",
+          requestedDecision: "evaluate scheduler-owned stage rerun",
           severity: "blocked",
           goalID,
           goalRunID: sourceGoalRunID,
@@ -7665,11 +7759,7 @@ describe("orchestrator tools", () => {
           decision: "redispatch",
           reason,
           message: guidance,
-          redispatchBinding: {
-            dispatcher: "build_stage",
-            stage: "build",
-            target_kind: "build",
-          },
+          redispatchWorkflow: workflowDeclaringAgentRole("build", "build"),
         })
         updateGoalRun(sourceGoalRunID, {
           status: "aborted",
@@ -7679,13 +7769,10 @@ describe("orchestrator tools", () => {
           taskID,
           actionID: response.payload.action_id,
           result: {
-            dispatcher: "build_stage",
-            stage: "build",
             source_session_id: source.id,
             source_goal_run_id: sourceGoalRunID,
             source_cancel_summary: ` goal_run ${sourceGoalRunID} aborted.`,
             goal_id: goalID,
-            target_kind: "build",
             redispatch_started: true,
             redispatch_started_at: Date.now(),
             preexisting_build_goal_run_ids: [sourceGoalRunID],
@@ -7755,8 +7842,6 @@ describe("orchestrator tools", () => {
           action: "redispatch_worker",
           status: "completed",
           result: {
-            dispatcher: "build_stage",
-            stage: "build",
             source_session_id: source.id,
             source_goal_run_id: sourceGoalRunID,
             source_goal_run_status: "aborted",
@@ -7768,7 +7853,6 @@ describe("orchestrator tools", () => {
             worktree_dir: tmp.path,
             worktree_branch: sourceWorkspaceBranch,
             goal_id: goalID,
-            target_kind: "build",
             started: true,
             redispatch_started: true,
             recovered_redispatch: true,
@@ -7800,7 +7884,7 @@ describe("orchestrator tools", () => {
       request: "Runtime-contract intent-analysis worker asks for redispatch",
       goalTitle: "Coordinate intent redispatch",
       goalSlug: "coordinate-intent-redispatch",
-      objective: "Redispatch intent analysis through a concrete stage dispatcher binding",
+      objective: "Redispatch intent analysis through a concrete workflow tool binding",
       now,
     })
 
@@ -7847,6 +7931,7 @@ describe("orchestrator tools", () => {
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
+          workflow: WorkflowRegistry.resolveSync("pipeline"),
           signal: new AbortController().signal,
         })
         const request = await createAgentCoordinationRequest({
@@ -7857,7 +7942,7 @@ describe("orchestrator tools", () => {
           summary: "Need intent-analysis redispatch",
           details: "The worker needs a fresh intent-analysis pass before downstream planning.",
           blocking: true,
-          requestedDecision: "redispatch",
+          requestedDecision: "evaluate scheduler-owned stage rerun",
           severity: "blocked",
         })
         const result = toolText(
@@ -7891,16 +7976,13 @@ describe("orchestrator tools", () => {
           status: "completed",
           result: {
             redispatch_binding: {
-              dispatcher: "intent_analysis_stage",
+              workflow_tool_name: "analyze_intent",
               stage: "intent-analysis",
               target_kind: "intent-analysis",
             },
-            dispatcher: "intent_analysis_stage",
-            stage: "intent-analysis",
             source_session_id: worker.id,
             redispatch_session_id: redispatchSessionID,
             decision_entries_count: 2,
-            target_kind: "intent-analysis",
             started: true,
             redispatch_started: true,
             preexisting_intent_analysis_session_ids: [worker.id],
@@ -7958,6 +8040,7 @@ describe("orchestrator tools", () => {
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
+          workflow: WorkflowRegistry.resolveSync("pipeline"),
           signal: new AbortController().signal,
         })
         const request = await createAgentCoordinationRequest({
@@ -7968,7 +8051,7 @@ describe("orchestrator tools", () => {
           summary: "Need intent-analysis redispatch recovery",
           details: "The worker needs a fresh intent pass and the prior redispatch persisted intent evidence.",
           blocking: true,
-          requestedDecision: "redispatch",
+          requestedDecision: "evaluate scheduler-owned stage rerun",
           severity: "blocked",
         })
         const options = await buildPersistedToolOptions({
@@ -7985,20 +8068,13 @@ describe("orchestrator tools", () => {
           decision: "redispatch",
           reason,
           message: guidance,
-          redispatchBinding: {
-            dispatcher: "intent_analysis_stage",
-            stage: "intent-analysis",
-            target_kind: "intent-analysis",
-          },
+          redispatchWorkflow: workflowDeclaringAgentRole("intent-analysis", "analyze_intent"),
         })
         await recordAgentCoordinationActionProgress({
           taskID,
           actionID: response.payload.action_id,
           result: {
-            dispatcher: "intent_analysis_stage",
-            stage: "intent-analysis",
             source_session_id: worker.id,
-            target_kind: "intent-analysis",
             redispatch_started: true,
             redispatch_started_at: Date.now(),
             preexisting_intent_analysis_session_ids: [worker.id],
@@ -8055,14 +8131,11 @@ describe("orchestrator tools", () => {
           action: "redispatch_worker",
           status: "completed",
           result: {
-            dispatcher: "intent_analysis_stage",
-            stage: "intent-analysis",
             source_session_id: worker.id,
             redispatch_session_id: redispatched.id,
             decision_entries_count: 2,
             intent_summary: "feature / medium / confidence=0.94. Recover the mature A2A protocol intent.",
             intent_summary_decision_id: summaryEntry?.id,
-            target_kind: "intent-analysis",
             started: true,
             redispatch_started: true,
             preexisting_intent_analysis_session_ids: [worker.id],
@@ -8094,7 +8167,7 @@ describe("orchestrator tools", () => {
       request: "Runtime-contract explore worker asks for redispatch",
       goalTitle: "Coordinate explore redispatch",
       goalSlug: "coordinate-explore-redispatch",
-      objective: "Redispatch repository investigation through a concrete explore stage dispatcher binding",
+      objective: "Redispatch repository investigation through a concrete explore workflow tool binding",
       now,
     })
 
@@ -8133,6 +8206,7 @@ describe("orchestrator tools", () => {
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
+          workflow: workflowDeclaringAgentRole("explore", "explore"),
           signal: new AbortController().signal,
         })
         const request = await createAgentCoordinationRequest({
@@ -8143,7 +8217,7 @@ describe("orchestrator tools", () => {
           summary: "Need repository investigation",
           details: "Find scheduler/A2A call sites before changing protocol.",
           blocking: true,
-          requestedDecision: "redispatch",
+          requestedDecision: "evaluate scheduler-owned stage rerun",
           severity: "blocked",
         })
         const result = toolText(
@@ -8202,19 +8276,16 @@ describe("orchestrator tools", () => {
           status: "completed",
           result: {
             redispatch_binding: {
-              dispatcher: "explore_stage",
+              workflow_tool_name: "explore",
               stage: "explore",
               target_kind: "explore",
             },
-            dispatcher: "explore_stage",
-            stage: "explore",
             source_session_id: worker.id,
             redispatch_session_id: redispatchSessionID,
             decision_entries_count: 1,
             exploration_artifacts_count: 1,
             explore_decision_id: exploreEntries[0]?.id,
             exploration_artifact_id: explorationArtifacts[0]?.id,
-            target_kind: "explore",
             started: true,
             redispatch_started: true,
             preexisting_explore_session_ids: [worker.id],
@@ -8277,6 +8348,7 @@ describe("orchestrator tools", () => {
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
+          workflow: workflowDeclaringAgentRole("explore", "explore"),
           signal: new AbortController().signal,
         })
         const request = await createAgentCoordinationRequest({
@@ -8287,7 +8359,7 @@ describe("orchestrator tools", () => {
           summary,
           details,
           blocking: true,
-          requestedDecision: "redispatch",
+          requestedDecision: "evaluate scheduler-owned stage rerun",
           severity: "blocked",
         })
         const options = await buildPersistedToolOptions({
@@ -8304,21 +8376,14 @@ describe("orchestrator tools", () => {
           decision: "redispatch",
           reason,
           message: guidance,
-          redispatchBinding: {
-            dispatcher: "explore_stage",
-            stage: "explore",
-            target_kind: "explore",
-          },
+          redispatchWorkflow: workflowDeclaringAgentRole("explore", "explore"),
         })
         await recordAgentCoordinationActionProgress({
           taskID,
           actionID: response.payload.action_id,
           result: {
-            dispatcher: "explore_stage",
-            stage: "explore",
             source_session_id: worker.id,
             question,
-            target_kind: "explore",
             redispatch_started: true,
             redispatch_started_at: Date.now(),
             preexisting_explore_session_ids: [worker.id],
@@ -8392,8 +8457,6 @@ describe("orchestrator tools", () => {
           action: "redispatch_worker",
           status: "completed",
           result: {
-            dispatcher: "explore_stage",
-            stage: "explore",
             source_session_id: worker.id,
             redispatch_session_id: redispatched.id,
             decision_entries_count: 1,
@@ -8401,7 +8464,6 @@ describe("orchestrator tools", () => {
             explore_decision_id: decisionEntry?.id,
             exploration_artifact_id: explorationArtifactID,
             question,
-            target_kind: "explore",
             started: true,
             redispatch_started: true,
             preexisting_explore_session_ids: [worker.id],
@@ -8438,7 +8500,7 @@ describe("orchestrator tools", () => {
           request: "Runtime-contract workload analyst asks for redispatch",
           goalTitle: "Coordinate workload redispatch",
           goalSlug: "coordinate-workload-redispatch",
-          objective: "Redispatch workload analysis through a concrete stage dispatcher binding",
+          objective: "Redispatch workload analysis through a concrete workflow tool binding",
           now,
           insertProject: false,
         })
@@ -8497,6 +8559,7 @@ describe("orchestrator tools", () => {
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
+          workflow: WorkflowRegistry.resolveSync("pipeline"),
           signal: new AbortController().signal,
         })
         const request = await createAgentCoordinationRequest({
@@ -8507,7 +8570,7 @@ describe("orchestrator tools", () => {
           summary: "Need workload analysis redispatch",
           details: "The workload analyst needs a fresh run against the active spec and goal graph.",
           blocking: true,
-          requestedDecision: "redispatch",
+          requestedDecision: "evaluate scheduler-owned stage rerun",
           severity: "blocked",
         })
         const result = toolText(
@@ -8553,12 +8616,10 @@ describe("orchestrator tools", () => {
           status: "completed",
           result: {
             redispatch_binding: {
-              dispatcher: "workload_analysis_stage",
+              workflow_tool_name: "workload_analysis",
               stage: "goal-workload-analyst",
               target_kind: "goal-workload-analyst",
             },
-            dispatcher: "workload_analysis_stage",
-            stage: "goal-workload-analyst",
             source_session_id: worker.id,
             redispatch_session_id: redispatchSessionID,
             goal_workload_artifact_id: workloadArtifacts[0]?.id,
@@ -8566,7 +8627,6 @@ describe("orchestrator tools", () => {
             briefs_count: 1,
             flagged_goals_count: 1,
             expected_goals_count: 1,
-            target_kind: "goal-workload-analyst",
             started: true,
             redispatch_started: true,
             preexisting_goal_workload_session_ids: [worker.id],
@@ -8625,6 +8685,7 @@ describe("orchestrator tools", () => {
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
+          workflow: WorkflowRegistry.resolveSync("pipeline"),
           signal: new AbortController().signal,
         })
         const request = await createAgentCoordinationRequest({
@@ -8635,7 +8696,7 @@ describe("orchestrator tools", () => {
           summary: "Need workload-analysis redispatch recovery",
           details: "The workload analyst persisted its artifact but the A2A action did not complete.",
           blocking: true,
-          requestedDecision: "redispatch",
+          requestedDecision: "evaluate scheduler-owned stage rerun",
           severity: "blocked",
         })
         const options = await buildPersistedToolOptions({
@@ -8652,22 +8713,15 @@ describe("orchestrator tools", () => {
           decision: "redispatch",
           reason,
           message: guidance,
-          redispatchBinding: {
-            dispatcher: "workload_analysis_stage",
-            stage: "goal-workload-analyst",
-            target_kind: "goal-workload-analyst",
-          },
+          redispatchWorkflow: workflowDeclaringAgentRole("goal-workload-analyst", "workload_analysis"),
         })
         await recordAgentCoordinationActionProgress({
           taskID,
           actionID: response.payload.action_id,
           result: {
-            dispatcher: "workload_analysis_stage",
-            stage: "goal-workload-analyst",
             source_session_id: worker.id,
             spec_snapshot_id: specID,
             expected_goals_count: 1,
-            target_kind: "goal-workload-analyst",
             redispatch_started: true,
             redispatch_started_at: Date.now(),
             preexisting_goal_workload_session_ids: [worker.id],
@@ -8750,8 +8804,6 @@ describe("orchestrator tools", () => {
           action: "redispatch_worker",
           status: "completed",
           result: {
-            dispatcher: "workload_analysis_stage",
-            stage: "goal-workload-analyst",
             source_session_id: worker.id,
             redispatch_session_id: redispatched.id,
             goal_workload_artifact_id: artifactID,
@@ -8759,7 +8811,6 @@ describe("orchestrator tools", () => {
             briefs_count: 1,
             flagged_goals_count: 1,
             expected_goals_count: 1,
-            target_kind: "goal-workload-analyst",
             started: true,
             redispatch_started: true,
             preexisting_goal_workload_session_ids: [worker.id],
@@ -8881,6 +8932,7 @@ describe("orchestrator tools", () => {
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
+          workflow: WorkflowRegistry.resolveSync("pipeline"),
           signal: new AbortController().signal,
         })
         const request = await createAgentCoordinationRequest({
@@ -8891,7 +8943,7 @@ describe("orchestrator tools", () => {
           summary: "Need fact-check continuation redispatch",
           details: "The fact-check worker has a terminal finalizer miss and needs same-session continuation.",
           blocking: true,
-          requestedDecision: "redispatch",
+          requestedDecision: "evaluate scheduler-owned stage rerun",
           severity: "blocked",
         })
         const options = await buildPersistedToolOptions({
@@ -8939,12 +8991,10 @@ describe("orchestrator tools", () => {
           status: "completed",
           result: {
             redispatch_binding: {
-              dispatcher: "fact_check_stage",
+              workflow_tool_name: "fact_check",
               stage: "fact-check",
               target_kind: "fact-check",
             },
-            dispatcher: "fact_check_stage",
-            stage: "fact-check",
             source_session_id: worker.id,
             redispatch_session_id: worker.id,
             continuation_artifact_id: continuation.artifactID,
@@ -8961,7 +9011,6 @@ describe("orchestrator tools", () => {
             corrected_count: 0,
             unresolved_count: 0,
             same_session_continuation: true,
-            target_kind: "fact-check",
             started: true,
             redispatch_started: true,
             preexisting_fact_check_attempt_ids: [],
@@ -9065,6 +9114,7 @@ describe("orchestrator tools", () => {
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
+          workflow: WorkflowRegistry.resolveSync("pipeline"),
           signal: new AbortController().signal,
         })
         const request = await createAgentCoordinationRequest({
@@ -9075,7 +9125,7 @@ describe("orchestrator tools", () => {
           summary: "Need fact-check redispatch recovery",
           details: "The fact-check worker persisted its attempt but the A2A action did not complete.",
           blocking: true,
-          requestedDecision: "redispatch",
+          requestedDecision: "evaluate scheduler-owned stage rerun",
           severity: "blocked",
         })
         const options = await buildPersistedToolOptions({
@@ -9092,25 +9142,18 @@ describe("orchestrator tools", () => {
           decision: "redispatch",
           reason,
           message: guidance,
-          redispatchBinding: {
-            dispatcher: "fact_check_stage",
-            stage: "fact-check",
-            target_kind: "fact-check",
-          },
+          redispatchWorkflow: workflowDeclaringAgentRole("fact-check", "fact_check"),
         })
         await recordAgentCoordinationActionProgress({
           taskID,
           actionID: response.payload.action_id,
           result: {
-            dispatcher: "fact_check_stage",
-            stage: "fact-check",
             source_session_id: worker.id,
             continuation_artifact_id: continuation.artifactID,
             target_session_id: normalizedStageInput.target_session_id,
             target_agent: normalizedStageInput.target_agent,
             target_message_id: normalizedStageInput.target_message_id,
             target_message_content_hash: normalizedStageInput.target_message_content_hash,
-            target_kind: "fact-check",
             redispatch_started: true,
             redispatch_started_at: Date.now(),
             preexisting_fact_check_attempt_ids: [],
@@ -9198,12 +9241,10 @@ describe("orchestrator tools", () => {
           status: "completed",
           result: {
             redispatch_binding: {
-              dispatcher: "fact_check_stage",
+              workflow_tool_name: "fact_check",
               stage: "fact-check",
               target_kind: "fact-check",
             },
-            dispatcher: "fact_check_stage",
-            stage: "fact-check",
             source_session_id: worker.id,
             redispatch_session_id: worker.id,
             continuation_artifact_id: continuation.artifactID,
@@ -9220,7 +9261,6 @@ describe("orchestrator tools", () => {
             corrected_count: 0,
             unresolved_count: 0,
             same_session_continuation: true,
-            target_kind: "fact-check",
             started: true,
             redispatch_started: true,
             preexisting_fact_check_attempt_ids: [],
@@ -9274,6 +9314,7 @@ describe("orchestrator tools", () => {
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
+          workflow: WorkflowRegistry.resolveSync("pipeline"),
           signal: new AbortController().signal,
         })
         const request = await createAgentCoordinationRequest({
@@ -9284,7 +9325,7 @@ describe("orchestrator tools", () => {
           summary: "Need redispatch",
           details: "The worker is blocked and asks the orchestrator for a scheduler action.",
           blocking: true,
-          requestedDecision: "redispatch",
+          requestedDecision: "evaluate scheduler-owned stage rerun",
           severity: "blocked",
         })
         const result = toolText(
@@ -11113,10 +11154,13 @@ describe("orchestrator tools", () => {
           )
           expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
 
+          const pipeline = WorkflowRegistry.resolveSync("pipeline")!
           const { tools } = createOrchestratorTools({
             taskID,
             agentSessionID: parent.id,
             signal: new AbortController().signal,
+            workflow: pipeline,
+            workflowState: createWorkflowState(pipeline),
           })
 
           const modifyResult = toolText(
@@ -12222,6 +12266,7 @@ describe("orchestrator tools", () => {
     expect(schema.safeParse({ scope: "decisions" }).success).toBe(true)
     expect(schema.safeParse({ scope: "integrity_history" }).success).toBe(true)
     expect(schema.safeParse({ scope: "fact_checks" }).success).toBe(true)
+    expect(schema.safeParse({ scope: "agent_outcomes" }).success).toBe(true)
   })
 
   test("read_context drilldown scopes bound persisted audit context while preserving pointers", async () => {
@@ -12318,6 +12363,78 @@ describe("orchestrator tools", () => {
           now: now + 3,
           outcome: "completed",
         })
+        Database.use((db) => {
+          db.insert(EngineArtifactTable)
+            .values([
+              {
+                id: `artifact_task_build_outcome_${stamp}`,
+                task_id: taskID,
+                run_id: `run_task_build_outcome_${stamp}`,
+                goal_run_id: null,
+                kind: "build_attempt_outcome",
+                label: "failed",
+                payload: {
+                  task_id: taskID,
+                  goal_id: null,
+                  goal_run_id: null,
+                  run_id: `run_task_build_outcome_${stamp}`,
+                  session_id: `ses_task_build_outcome_${stamp}`,
+                  terminal_status: "failed",
+                  outcome_kind: "failed",
+                  summary: "Direct build failed.",
+                  error: "synthetic read_context direct build failure",
+                  no_diff_reason: null,
+                  build_report: {
+                    status: "failed",
+                    summary: "Direct build failed.",
+                    files_changed: [],
+                    error: "synthetic read_context direct build failure",
+                  },
+                  host_facts: {
+                    contribution_commit_ref: null,
+                    actual_changed_files: [],
+                    reported_changed_files: [],
+                  },
+                },
+                time_created: now + 4,
+                time_updated: now + 4,
+              },
+              {
+                id: `artifact_goal_build_outcome_${stamp}`,
+                task_id: taskID,
+                run_id: `run_goal_build_outcome_${stamp}`,
+                goal_run_id: `glr_read_context_build_${stamp}`,
+                kind: "build_attempt_outcome",
+                label: "no_project_diff",
+                payload: {
+                  task_id: taskID,
+                  goal_id: goalID,
+                  goal_run_id: `glr_read_context_build_${stamp}`,
+                  run_id: `run_goal_build_outcome_${stamp}`,
+                  session_id: `ses_goal_build_outcome_${stamp}`,
+                  terminal_status: "completed",
+                  outcome_kind: "no_project_diff",
+                  summary: "Goal build reported files without host diff.",
+                  error: null,
+                  no_diff_reason: "missing_commit_ref",
+                  build_report: {
+                    status: "passed",
+                    summary: "Goal build reported files without host diff.",
+                    files_changed: [{ path: "src/read-context.ts" }],
+                    commit_ref: "selfreported",
+                  },
+                  host_facts: {
+                    contribution_commit_ref: null,
+                    actual_changed_files: [],
+                    reported_changed_files: ["src/read-context.ts"],
+                  },
+                },
+                time_created: now + 5,
+                time_updated: now + 5,
+              },
+            ])
+            .run()
+        })
 
         const { tools } = createOrchestratorTools({
           taskID,
@@ -12353,6 +12470,23 @@ describe("orchestrator tools", () => {
         expect(factChecks).toContain(`session=\`ses_target_budge`)
         expect(factChecks).toContain("verified=1 corrected=0 unresolved=0")
         expect(factChecks).toContain("(completed)")
+
+        const buildOutcomes = toolText(
+          await tools.read_context.execute({ scope: "agent_outcomes" }, buildToolOptions("read_context")),
+        )
+        expect(buildOutcomes.length).toBeLessThanOrEqual(READ_CONTEXT_OUTPUT_CHAR_BUDGET)
+        expect(buildOutcomes).toContain("## Agent outcomes")
+        expect(buildOutcomes).toContain(
+          `artifact_task_build_outcome_${stamp}: provider=build kind=build_attempt_outcome task-level status=failed/failed`,
+        )
+        expect(buildOutcomes).toContain("error=synthetic read_context direct build failure")
+        expect(buildOutcomes).toContain(
+          `artifact_goal_build_outcome_${stamp}: provider=build kind=build_attempt_outcome goal-level status=completed/no_project_diff`,
+        )
+        expect(buildOutcomes).toContain("actualChangedFiles=0 reportedChangedFiles=1")
+        expect(buildOutcomes).toContain("noDiff=missing_commit_ref")
+        expect(buildOutcomes).toContain(`goalRun=glr_read_context_build_${stamp}`)
+        expect(buildOutcomes).not.toContain("commit=selfreported")
       },
     })
   })
@@ -12600,20 +12734,20 @@ describe("orchestrator tools", () => {
           status: "failed",
           expected: "The market tab row matches the source hierarchy and first-viewport spacing.",
           observed: "The market tab row is clipped and spacing is too loose.",
-          evidence_refs: ["screenshot://local/market-tabs.png", layoutGeometryEvidenceRef, comparisonEvidenceRef],
+          evidence_refs: [layoutGeometryEvidenceRef, comparisonEvidenceRef],
           required_correction: "Restore tab row spacing and hierarchy from the source page.",
         }
         visualQaRecord.report.coverage[0] = {
           ...visualQaRecord.report.coverage[0],
           check_ids: ["check-market-tabs"],
           region: "market tabs",
-          evidence_refs: ["screenshot://local/market-tabs.png", layoutGeometryEvidenceRef, comparisonEvidenceRef],
+          evidence_refs: [layoutGeometryEvidenceRef, comparisonEvidenceRef],
         }
         visualQaRecord.report.evidence[0] = {
           ...visualQaRecord.report.evidence[0],
           check_ids: ["check-market-tabs"],
           type: "screenshot",
-          ref: "screenshot://local/market-tabs.png",
+          ref: comparisonEvidenceRef,
           viewport: { width: 1440, height: 900 },
           note: "Market tab row screenshot shows clipping and loose spacing.",
         }
@@ -12641,7 +12775,7 @@ describe("orchestrator tools", () => {
             impact: "The first viewport reads as a redesigned page instead of a replica.",
             required_correction: "Restore tab row spacing and hierarchy from the source page.",
             source_refs: ["frontend_design:desktop-reference"],
-            evidence_refs: ["screenshot://local/market-tabs.png", layoutGeometryEvidenceRef, comparisonEvidenceRef],
+            evidence_refs: [layoutGeometryEvidenceRef, comparisonEvidenceRef],
           },
         ]
         visualQaRecord.report.problem_dom_regions = [
@@ -12664,7 +12798,7 @@ describe("orchestrator tools", () => {
             computed_style: { display: "flex", gap: "32px", "margin-top": "40px" },
             attributes: { class: "market-tabs loose", "data-testid": "market-tabs" },
             code_search_terms: ["market-tabs", "MarketTabs", "loose"],
-            evidence_refs: ["screenshot://local/market-tabs.png", layoutGeometryEvidenceRef, comparisonEvidenceRef],
+            evidence_refs: [layoutGeometryEvidenceRef, comparisonEvidenceRef],
             annotated_evidence_refs: [annotatedVisualQaRef.url],
             notes: "Repair the tab component before repainting adjacent overview cards.",
           },
@@ -12733,6 +12867,45 @@ describe("orchestrator tools", () => {
         )
 
         expect(toolText(result)).toContain("Build agent finished (status=passed")
+        const directOutcome = Database.use((db) =>
+          db
+            .select()
+            .from(EngineArtifactTable)
+            .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "build_attempt_outcome")))
+            .get(),
+        )
+        expect(directOutcome?.goal_run_id).toBeNull()
+        expect(directOutcome?.run_id).toBeTruthy()
+        expect(directOutcome?.payload).toMatchObject({
+          task_id: taskID,
+          goal_id: null,
+          goal_run_id: null,
+          session_id: `ses_direct_build_feedback_${stamp}`,
+          terminal_status: "completed",
+          outcome_kind: "no_project_diff",
+          no_diff_reason: "missing_commit_ref",
+          build_report: {
+            status: "passed",
+            summary: "Direct build consumed active requirements and Visual QA feedback.",
+            files_changed: [
+              {
+                path: "src/components/MarketTabs.tsx",
+              },
+            ],
+          },
+          host_facts: {
+            contribution_commit_ref: null,
+            actual_changed_files: [],
+            reported_changed_files: ["src/components/MarketTabs.tsx"],
+          },
+        })
+        const parsedDirectOutcome = findBuildOutcomesForTask(taskID)[0]
+        expect(parsedDirectOutcome).toMatchObject({
+          outcome_kind: "no_project_diff",
+          commit_ref: null,
+          changed_files: [],
+          reported_changed_files: ["src/components/MarketTabs.tsx"],
+        })
         await waitForCondition("direct build captured context", () => Boolean(capturedContext))
       },
     })
@@ -12745,34 +12918,36 @@ describe("orchestrator tools", () => {
     expect(capturedRunInput?.managedWorktree).toBeUndefined()
     expect(capturedContext?.requirements?.map((row: any) => row.id)).toEqual(["REQ-visual-replica"])
     expect(capturedContext?.requirements?.[0]?.description).toContain("source page layout density")
-    expect(capturedContext?.visualQaFeedback).toContain("Latest failed Visual QA report for Build repair")
-    expect(capturedContext?.visualQaFeedback).toContain("blocker-market-tabs")
-    expect(capturedContext?.visualQaFeedback).toContain('locator: main [data-testid="market-tabs"]')
-    expect(capturedContext?.visualQaFeedback).toContain("annotated_evidence_refs")
-    expect(capturedContext?.visualQaFeedback).toContain("code_search_terms: market-tabs, MarketTabs, loose")
-    expect(capturedContext?.evidencePack?.visualQaAnnotations).toHaveLength(1)
-    expect(capturedContext?.evidencePack?.visualQaAnnotations?.[0]).toMatchObject({
+    const visualQaPacket = contextPacketText(capturedContext, "visual_qa")
+    expect(visualQaPacket).toContain("Latest failed Visual QA implementation repair evidence")
+    expect(visualQaPacket).toContain("blocker-market-tabs")
+    expect(visualQaPacket).toContain('locator: main [data-testid="market-tabs"]')
+    expect(visualQaPacket).toContain("annotated_evidence_refs")
+    expect(visualQaPacket).toContain("code_search_terms: market-tabs, MarketTabs, loose")
+    const evidencePack = buildEvidencePackFromBuildContext(capturedContext)
+    expect(evidencePack?.visualQaAnnotations).toHaveLength(1)
+    expect(evidencePack?.visualQaAnnotations?.[0]).toMatchObject({
       url: expect.stringContaining("/attachment/"),
       filename: "dom-market-tabs.annotated.png",
       intent: "visual_qa_annotation",
       source: "visual_qa_problem_dom_region",
       label: "dom-market-tabs",
     })
-    expect(capturedContext?.evidencePack?.comparisonArtifacts?.map((item: any) => item.filename)).toEqual([
+    expect(evidencePack?.comparisonArtifacts?.map((item: any) => item.filename)).toEqual([
       `${capturedComparisonEvidenceID}.side_by_side.png`,
       `${capturedComparisonEvidenceID}.diff.png`,
       `${capturedComparisonEvidenceID}.source_crop.png`,
       `${capturedComparisonEvidenceID}.implementation_crop.png`,
     ])
-    expect(capturedContext?.evidencePack?.comparisonArtifacts?.[0]).toMatchObject({
+    expect(evidencePack?.comparisonArtifacts?.[0]).toMatchObject({
       url: expect.stringContaining("/attachment/"),
       mime: "image/png",
       intent: "visual_feedback_comparison",
       source: "browser_preview_reference_comparison",
       label: `${capturedComparisonEvidenceID}:side_by_side`,
     })
-    expect(capturedContext?.evidencePack?.visualQaDiagnostics).toHaveLength(1)
-    expect(capturedContext?.evidencePack?.visualQaDiagnostics?.[0]).toMatchObject({
+    expect(evidencePack?.visualQaDiagnostics).toHaveLength(1)
+    expect(evidencePack?.visualQaDiagnostics?.[0]).toMatchObject({
       url: expect.stringContaining("/attachment/"),
       filename: `${capturedLayoutGeometryEvidenceID}.layout-geometry.json`,
       mime: "application/json",
@@ -12780,7 +12955,111 @@ describe("orchestrator tools", () => {
       source: "browser_preview_layout_geometry",
       label: capturedLayoutGeometryEvidenceID,
     })
-    expect(capturedContext?.acceptanceFeedback).toBeUndefined()
+    expect(contextPacketText(capturedContext, "acceptance")).toBe("")
+  })
+
+  test("task-level direct build records failed outcome when BuildAgent throws", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_direct_build_throw_${stamp}`
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+    const managedBranch = `opencorvus/direct-throw-${stamp}`
+    let baseRef = ""
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "Direct build throw task",
+              request: "Verify task-level direct build throw persists outcome",
+              kind: "workflow",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+        })
+        const parent = await Session.create({ kind: "root", title: "direct build throw test" })
+        baseRef = (await $`git rev-parse HEAD`.cwd(tmp.path).text()).trim()
+        buildAgentRunImpl = async (input: any) => {
+          await fs.writeFile(path.join(tmp.path, "direct-throw-fix.txt"), "direct build changed this file\n", "utf8")
+          await $`git add direct-throw-fix.txt`.cwd(tmp.path).quiet()
+          await $`git commit -m "direct throw worktree change"`.cwd(tmp.path).quiet()
+          await input.onSessionCreated?.(`ses_direct_build_throw_${stamp}`, {
+            worktreeDir: tmp.path,
+            worktreeBranch: managedBranch,
+            worktreeBaseRef: baseRef,
+          })
+          throw new Error("synthetic direct build infrastructure failure")
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState: createWorkflowState(pipeline),
+        })
+
+        await expect(
+          tools.build.execute(
+            {
+              request: "Repair the page after Visual QA feedback.",
+              reason: "Task-level direct build infrastructure failure coverage.",
+              directBuildIntent: "modify_files",
+              worktreeUsage: "managed_worktree",
+            },
+            buildToolOptions("direct_build_throw"),
+          ),
+        ).rejects.toThrow("synthetic direct build infrastructure failure")
+      },
+    })
+
+    const directOutcome = Database.use((db) =>
+      db
+        .select()
+        .from(EngineArtifactTable)
+        .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "build_attempt_outcome")))
+        .get(),
+    )
+    expect(directOutcome?.goal_run_id).toBeNull()
+    expect(directOutcome?.payload).toMatchObject({
+      task_id: taskID,
+      goal_id: null,
+      goal_run_id: null,
+      session_id: `ses_direct_build_throw_${stamp}`,
+      terminal_status: "failed",
+      outcome_kind: "failed",
+      error: "synthetic direct build infrastructure failure",
+      build_report: {
+        status: "failed",
+        files_changed: [],
+        error: "synthetic direct build infrastructure failure",
+      },
+      host_facts: {
+        merge_back_status: "not_invoked",
+        contribution_commit_ref: expect.any(String),
+        diff_base_ref: baseRef.slice(0, 12),
+        diff_head_ref: expect.any(String),
+        worktree_head: expect.any(String),
+        actual_changed_files: expect.arrayContaining([
+          expect.objectContaining({
+            path: "direct-throw-fix.txt",
+            status: "added",
+          }),
+        ]),
+        reported_changed_files: [],
+      },
+    })
   })
 
   test("goal build can run in current project without persisting a managed workspace", async () => {
@@ -13100,9 +13379,11 @@ describe("orchestrator tools", () => {
               "Add focused tests for `packages/app/src/components/GeneratedCard.tsx` because the parent task generated the component without state and long-label coverage.",
             reason:
               "`packages/app/src/components/GeneratedCard.tsx` needs separate quality-hardening after the current request because its generated UI states are not covered by tests.",
-            code_module_reference: {
+            evidence_anchor: {
+              kind: "code_module",
               entity: "packages/app/src/components/GeneratedCard.tsx",
-              problem: "The generated UI states are not covered by tests.",
+              observed_problem: "The generated UI states are not covered by tests.",
+              evidence_refs: ["build_attempt_outcome:out_generated_card"],
             },
             priority: "high",
             kind: "workflow",
@@ -13129,9 +13410,11 @@ describe("orchestrator tools", () => {
               inheritance: "orchestrator_follow_up",
               proposal_reason:
                 "`packages/app/src/components/GeneratedCard.tsx` needs separate quality-hardening after the current request because its generated UI states are not covered by tests.",
-              code_module_reference: {
+              evidence_anchor: {
+                kind: "code_module",
                 entity: "packages/app/src/components/GeneratedCard.tsx",
-                problem: "The generated UI states are not covered by tests.",
+                observed_problem: "The generated UI states are not covered by tests.",
+                evidence_refs: ["build_attempt_outcome:out_generated_card"],
               },
             },
           }),
@@ -13140,7 +13423,134 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("propose_task rejects vague follow-up work without a concrete code module reference", async () => {
+  test("propose_task accepts document and expert-squad evidence anchors", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_propose_anchor_${stamp}`
+    const taskID = `tsk_propose_anchor_${stamp}`
+    const createSpy = spyOn(EngineService, "createSchedulerChildTask")
+      .mockResolvedValueOnce("tsk_document_followup")
+      .mockResolvedValueOnce("tsk_squad_followup")
+
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: tmp.path,
+          name: "propose anchor task project",
+          sandboxes: "[]",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          session_id: null,
+          source: "test",
+          title: "Parent task",
+          request: "Build the initial feature.",
+          kind: "workflow",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+    })
+
+    await fs.writeFile(path.join(tmp.path, "opencorvus.json"), JSON.stringify({ model: "test/model" }))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "propose anchor parent" })
+        Database.use((db) =>
+          db
+            .update(EngineTaskTable)
+            .set({ session_id: parent.id, time_updated: Date.now() })
+            .where(eq(EngineTaskTable.id, taskID))
+            .run(),
+        )
+        const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          workflow: pipeline,
+          workflowState: createWorkflowState(pipeline),
+        })
+
+        await tools.propose_task.execute(
+          {
+            title: "Repair spec index",
+            request:
+              "Repair `specs/records/2026-07/README.md` because the current task evidence shows the new architecture record is not indexed.",
+            reason:
+              "The document-health evidence `document-health:missing-july-record` proves a separate documentation follow-up is needed.",
+            evidence_anchor: {
+              kind: "document",
+              entity: "specs/records/2026-07/README.md",
+              observed_problem: "The new architecture record is not indexed.",
+              evidence_refs: ["document-health:missing-july-record"],
+            },
+            priority: "normal",
+            kind: "workflow",
+          },
+          buildToolOptions(),
+        )
+
+        await tools.propose_task.execute(
+          {
+            title: "Review frontend replica expert squad prompt",
+            request:
+              "Review the frontend-replica expert squad selector because current task evidence shows it exposes workflow stage names outside scheduler scope.",
+            reason:
+              "The expert-squad audit evidence `expert_squad:frontend-replica-selector-workflow-leak` proves a separate prompt-profile follow-up is needed.",
+            evidence_anchor: {
+              kind: "expert_squad",
+              entity: "frontend-replica selector",
+              observed_problem: "It exposes workflow stage names outside scheduler scope.",
+              evidence_refs: ["expert_squad:frontend-replica-selector-workflow-leak"],
+            },
+            priority: "normal",
+            kind: "workflow",
+          },
+          buildToolOptions(),
+        )
+
+        expect(createSpy).toHaveBeenCalledTimes(2)
+        expect(createSpy).toHaveBeenNthCalledWith(
+          1,
+          expect.objectContaining({
+            metadata: expect.objectContaining({
+              evidence_anchor: {
+                kind: "document",
+                entity: "specs/records/2026-07/README.md",
+                observed_problem: "The new architecture record is not indexed.",
+                evidence_refs: ["document-health:missing-july-record"],
+              },
+            }),
+          }),
+        )
+        expect(createSpy).toHaveBeenNthCalledWith(
+          2,
+          expect.objectContaining({
+            metadata: expect.objectContaining({
+              evidence_anchor: {
+                kind: "expert_squad",
+                entity: "frontend-replica selector",
+                observed_problem: "It exposes workflow stage names outside scheduler scope.",
+                evidence_refs: ["expert_squad:frontend-replica-selector-workflow-leak"],
+              },
+            }),
+          }),
+        )
+      },
+    })
+  })
+
+  test("propose_task rejects vague follow-up work without a concrete evidence anchor", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `project_vague_followup_${stamp}`
@@ -13209,8 +13619,28 @@ describe("orchestrator tools", () => {
 
         const text = toolText(result)
         expect(text).toContain("Follow-up task proposal rejected")
-        expect(text).toContain("concrete code module reference entity")
+        expect(text).toContain("concrete evidence anchor")
         expect(text).toContain("no new task was created")
+
+        const noEvidenceResult = await tools.propose_task.execute(
+          {
+            title: "Improve docs",
+            request: "Improve the docs page later.",
+            reason: "The docs page could be clearer.",
+            evidence_anchor: {
+              kind: "document",
+              entity: "docs/usage.md",
+              observed_problem: "The page could be clearer.",
+              evidence_refs: [],
+            },
+            priority: "normal",
+            kind: "workflow",
+          },
+          buildToolOptions(),
+        )
+
+        expect(toolText(noEvidenceResult)).toContain("Follow-up task proposal rejected")
+        expect(toolText(noEvidenceResult)).toContain("evidence_anchor.kind")
         expect(createSpy).not.toHaveBeenCalled()
       },
     })
@@ -13296,9 +13726,11 @@ describe("orchestrator tools", () => {
               "Validate `packages/app/src/release/notes.ts` independently from the existing documentation audit child task because generated release-note rows can omit fixed component names.",
             reason:
               "`packages/app/src/release/notes.ts` uses a separate artifact and does not depend on the existing documentation audit child task.",
-            code_module_reference: {
+            evidence_anchor: {
+              kind: "code_module",
               entity: "packages/app/src/release/notes.ts",
-              problem: "Generated release-note rows can omit fixed component names.",
+              observed_problem: "Generated release-note rows can omit fixed component names.",
+              evidence_refs: ["artifact:release-notes-row-audit"],
             },
             priority: "normal",
             queue: false,
@@ -13325,9 +13757,11 @@ describe("orchestrator tools", () => {
               inheritance: "orchestrator_follow_up",
               proposal_reason:
                 "`packages/app/src/release/notes.ts` uses a separate artifact and does not depend on the existing documentation audit child task.",
-              code_module_reference: {
+              evidence_anchor: {
+                kind: "code_module",
                 entity: "packages/app/src/release/notes.ts",
-                problem: "Generated release-note rows can omit fixed component names.",
+                observed_problem: "Generated release-note rows can omit fixed component names.",
+                evidence_refs: ["artifact:release-notes-row-audit"],
               },
             },
           }),
@@ -13400,9 +13834,11 @@ describe("orchestrator tools", () => {
               "Run a second verification pass for `packages/app/src/components/GeneratedCard.tsx` from the completed parent task and fix any regressions found.",
             reason:
               "`packages/app/src/components/GeneratedCard.tsx` is the concrete module that needs separate follow-up verification after the first task completed.",
-            code_module_reference: {
+            evidence_anchor: {
+              kind: "code_module",
               entity: "packages/app/src/components/GeneratedCard.tsx",
-              problem: "The completed parent task still needs separate follow-up verification for this module.",
+              observed_problem: "The completed parent task still needs separate follow-up verification for this module.",
+              evidence_refs: ["integrity_attempt:completed-parent"],
             },
             priority: "high",
             queue: true,
@@ -13487,9 +13923,11 @@ describe("orchestrator tools", () => {
               "Clean up optional polish in `packages/app/src/components/GeneratedCard.tsx` where generated labels wrap awkwardly.",
             reason:
               "`packages/app/src/components/GeneratedCard.tsx` has a separate optional label-wrapping cleanup that is outside the current task.",
-            code_module_reference: {
+            evidence_anchor: {
+              kind: "code_module",
               entity: "packages/app/src/components/GeneratedCard.tsx",
-              problem: "Generated labels wrap awkwardly.",
+              observed_problem: "Generated labels wrap awkwardly.",
+              evidence_refs: ["visual_qa:label-wrap"],
             },
             priority: "normal",
             kind: "build",
@@ -13856,6 +14294,7 @@ describe("orchestrator tools", () => {
   test("frontend innovate expert squad runs visible skill selection through design, build drafts, visual QA, and integrity", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })
+    await copyRepositoryExpertSquadPackage(tmp.path, "frontend-innovate")
 
     const home = process.env.OPENCORVUS_TEST_HOME
     process.env.OPENCORVUS_TEST_HOME = tmp.path
@@ -13871,6 +14310,7 @@ describe("orchestrator tools", () => {
     let frontendResearchInput: any
     let visualQaInput: any
     let integrityInput: any
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
 
     await fs.writeFile(
       path.join(tmp.path, "reference.html"),
@@ -14024,7 +14464,7 @@ describe("orchestrator tools", () => {
 
           designAnalyzeImpl = async (input) => {
             expect(input.parentSessionID).toBe(parent.id)
-            expect(input.requireFrontendInnovateContract).toBe(true)
+            expect(input.requireDesignDirectionContract).toBe(true)
             expect(input.designResourceManifest?.entries).toHaveLength(1)
             expect(input.designResourceManifest.entries[0]).toMatchObject({
               kind: "html",
@@ -14112,8 +14552,9 @@ describe("orchestrator tools", () => {
           buildAgentRunImpl = async (input: any) => {
             const sessionID = `ses_frontend_innovate_build_${buildSessions.length + 1}_${stamp}`
             buildSessions.push(sessionID)
-            expect(input.context?.frontendDesign).toContain("direction-operator-console")
-            expect(input.context?.frontendDesign).toContain("design_resource_manifest")
+            const frontendDesignPacket = contextPacketText(input.context, "frontend_design")
+            expect(frontendDesignPacket).toContain("direction-operator-console")
+            expect(frontendDesignPacket).toContain("design_resource_manifest")
             await markBuildSlotAcquired(input, sessionID)
             const targetID = input.target?.id ?? "task"
             const changedPath =
@@ -14167,8 +14608,9 @@ describe("orchestrator tools", () => {
               title: "frontend innovate visual qa",
             })
             input.onSessionCreated?.(child.id)
-            expect(input.frontendDesign).toContain("direction-operator-console")
-            expect(input.frontendDesign).toContain("design_resource_manifest")
+            const visualQaFrontendDesignPacket = contextPacketText(input, "frontend_design")
+            expect(visualQaFrontendDesignPacket).toContain("direction-operator-console")
+            expect(visualQaFrontendDesignPacket).toContain("design_resource_manifest")
             return {
               sessionID: child.id,
               report: {
@@ -14178,7 +14620,7 @@ describe("orchestrator tools", () => {
                   {
                     check_ids: ["check-main-surface"],
                     type: "screenshot" as const,
-                    ref: "browser-preview:frontend-innovate-selected",
+                    ref: "browser_preview_evidence:frontend-innovate-selected",
                     viewport: { width: 1280, height: 720 },
                     state: "default",
                     note: "Selected direction rendered the monitor-risk-allocate path with clear hierarchy, keyboard focus, and non-generic component structure.",
@@ -14186,7 +14628,7 @@ describe("orchestrator tools", () => {
                   {
                     check_ids: ["check-main-surface"],
                     type: "other" as const,
-                    ref: "browser-preview:frontend-innovate-keyboard-path",
+                    ref: "browser_preview_evidence:frontend-innovate-keyboard-path",
                     viewport: { width: 1280, height: 720 },
                     state: "keyboard-focus",
                     note: "Keyboard path reached the risk queue, allocation grid, and compliance trail without hidden controls.",
@@ -14214,18 +14656,35 @@ describe("orchestrator tools", () => {
           ]
           reviewIntegrityImpl = async (input: any) => {
             integrityInput = input
-            expect(input.frontendDesign).toContain("direction-operator-console")
-            expect(input.frontendDesign).toContain("anti-slop-generic-cards")
-            expect(input.frontendDesign).toContain("Existing URL Redesign Evidence")
-            expect(input.frontendDesign).toContain("keyboard focus")
-            expect(input.visualQa).toContain("Visual QA Implementation Defect Context")
-            expect(input.visualQa).toContain("report summary")
-            expect(input.visualQa).toContain("This is not a visual acceptance verdict.")
-            expect(input.visualQa).not.toContain("Frontend Innovate selected implementation passed visual QA.")
-            expect(input.visualQa).not.toContain("effective_accepted=true")
-            expect(input.visualQa).not.toContain("reference_comparison_evidence")
-            expect(input.visualQa).not.toContain("visual_feedback_verification")
-            expect(JSON.stringify(input.replayContext)).toContain(selectedImplementationGoalID)
+            const frontendDesign = contextPacketText(input, "frontend_design")
+            const visualQa = contextPacketText(input, "visual_qa")
+            const replayContext = contextPacketStructuredData(
+              input,
+              INTEGRITY_REPLAY_CONTEXT_PACKET_SOURCE,
+              INTEGRITY_REPLAY_CONTEXT_PACKET_SCHEMA,
+            )
+            const implementationEvidence = contextPacketStructuredData(
+              input,
+              IMPLEMENTATION_EVIDENCE_CONTEXT_PACKET_SOURCE,
+              IMPLEMENTATION_EVIDENCE_CONTEXT_PACKET_SCHEMA,
+            )
+            expect(frontendDesign).toContain("direction-operator-console")
+            expect(frontendDesign).toContain("anti-slop-generic-cards")
+            expect(frontendDesign).toContain("Existing URL Redesign Evidence")
+            expect(frontendDesign).toContain("keyboard focus")
+            expect(visualQa).toContain("Visual QA Implementation Defect Context")
+            expect(visualQa).toContain("report summary")
+            expect(visualQa).toContain("This is not a visual acceptance verdict.")
+            expect(visualQa).not.toContain("Frontend Innovate selected implementation passed visual QA.")
+            expect(visualQa).not.toContain("effective_accepted=true")
+            expect(visualQa).not.toContain("reference_comparison_evidence")
+            expect(visualQa).not.toContain("visual_feedback_verification")
+            expect(JSON.stringify(replayContext)).toContain(selectedImplementationGoalID)
+            expect(implementationEvidence.summary).toContain("build/")
+            expect(implementationEvidence.changedFiles).toEqual(
+              replayContext.implementationEvidenceSinceLastReview.changedFiles,
+            )
+            expect(input.replayContext).toBeUndefined()
             return integrityTeamResult({
               sessionID: `ses_integrity_frontend_innovate_${stamp}`,
               verdict: "pass",
@@ -14237,6 +14696,8 @@ describe("orchestrator tools", () => {
             taskID,
             agentSessionID: parent.id,
             signal: new AbortController().signal,
+            workflow: pipeline,
+            workflowState: createWorkflowState(pipeline),
           })
 
           const selected = await tools.select_expert_squad.execute(
@@ -14339,7 +14800,7 @@ describe("orchestrator tools", () => {
             buildToolOptions("frontend_innovate_visual_qa"),
           )
           expect(toolText(visualResult)).toContain("visual_qa complete: effective_accepted=true")
-          expect(visualQaInput.frontendDesign).toContain("direction-operator-console")
+          expect(contextPacketText(visualQaInput, "frontend_design")).toContain("direction-operator-console")
           expect(
             createDecisionLog(taskID)
               .readByPhase("visual_qa")
@@ -14351,7 +14812,7 @@ describe("orchestrator tools", () => {
             buildToolOptions("frontend_innovate_integrity"),
           )
           expect(toolText(integrityResult)).toContain("integrity_attempt_id")
-          expect(integrityInput.frontendDesign).toContain("anti-slop-generic-cards")
+          expect(contextPacketText(integrityInput, "frontend_design")).toContain("anti-slop-generic-cards")
           expect(
             findLatestIntegrityAttemptArtifact({
               taskID,
@@ -15267,8 +15728,10 @@ describe("orchestrator tools", () => {
         expectGoalBuildStarted(result)
         await waitForGoalStatus(goalID, "passed")
         expect(capturedInput.context.inputEvidenceManifest).toBeUndefined()
-        expect(capturedInput.context.evidencePack.targetReferences).toHaveLength(1)
-        expect(capturedInput.context.evidencePack.targetReferences[0]).toMatchObject({
+        expect(capturedInput.context.evidencePack).toBeUndefined()
+        const evidencePack = buildEvidencePackFromBuildContext(capturedInput.context)
+        expect(evidencePack?.targetReferences).toHaveLength(1)
+        expect(evidencePack?.targetReferences?.[0]).toMatchObject({
           url: targetRef.url,
           sha: targetRef.sha,
           mime: targetRef.mime,
@@ -15383,8 +15846,10 @@ describe("orchestrator tools", () => {
         expect(toolText(result)).toContain("Build agent finished (status=failed")
         expect(buildCalls).toBe(1)
         expect(capturedInput.context.inputEvidenceManifest).toBeUndefined()
-        expect(capturedInput.context.evidencePack.targetReferences).toHaveLength(1)
-        expect(capturedInput.context.evidencePack.targetReferences[0]).toMatchObject({
+        expect(capturedInput.context.evidencePack).toBeUndefined()
+        const evidencePack = buildEvidencePackFromBuildContext(capturedInput.context)
+        expect(evidencePack?.targetReferences).toHaveLength(1)
+        expect(evidencePack?.targetReferences?.[0]).toMatchObject({
           url: foreignRef.url,
           sha: foreignRef.sha,
           mime: foreignRef.mime,
@@ -15817,10 +16282,12 @@ describe("orchestrator tools", () => {
         const createNextSpy = spyOn(Session, "createNext")
         buildAgentRunImpl = async (input: any) => {
           observedExistingSessionID = input.existingSessionID
-          observedRetryFeedback = input.context?.retryFeedback
+          observedRetryFeedback = contextPacketText(input.context, "retry")
           expect(input.context?.inputEvidenceManifest).toBeUndefined()
-          expect(JSON.stringify(input.context?.evidencePack)).toContain(currentRefUrl)
-          expect(JSON.stringify(input.context?.evidencePack)).not.toContain(originalRefUrl)
+          expect(input.context?.evidencePack).toBeUndefined()
+          const evidencePack = buildEvidencePackFromBuildContext(input.context)
+          expect(JSON.stringify(evidencePack)).toContain(currentRefUrl)
+          expect(JSON.stringify(evidencePack)).not.toContain(originalRefUrl)
           await markBuildSlotAcquired(input, priorSessionID)
           return {
             result: {
@@ -15949,7 +16416,7 @@ describe("orchestrator tools", () => {
         buildAgentRunImpl = async (input: any) => {
           observedExistingSessionID = input.existingSessionID
           observedWorktreeDir = input.managedWorktree.directory
-          observedRetryFeedback = String(input.context?.retryFeedback ?? "")
+          observedRetryFeedback = contextPacketText(input.context, "retry")
           await markBuildSlotAcquired(input, freshSessionID)
           return {
             result: {
@@ -16066,7 +16533,7 @@ describe("orchestrator tools", () => {
         buildAgentRunImpl = async (input: any) => {
           observedExistingSessionID = input.existingSessionID
           observedWorktreeDir = input.managedWorktree.directory
-          observedRetryFeedback = String(input.context?.retryFeedback ?? "")
+          observedRetryFeedback = contextPacketText(input.context, "retry")
           await markBuildSlotAcquired(input, freshSessionID)
           return {
             result: {
@@ -16199,7 +16666,7 @@ describe("orchestrator tools", () => {
           buildAgentRunImpl = async (input: any) => {
             observedExistingSessionID = input.existingSessionID
             observedWorktreeDir = input.managedWorktree.directory
-            observedRetryFeedback = String(input.context?.retryFeedback ?? "")
+            observedRetryFeedback = contextPacketText(input.context, "retry")
             await markBuildSlotAcquired(input, freshSessionID)
             return {
               result: {
@@ -16312,7 +16779,7 @@ describe("orchestrator tools", () => {
         buildAgentRunImpl = async (input: any) => {
           observedExistingSessionID = input.existingSessionID
           observedWorktreeDir = input.managedWorktree.directory
-          observedRetryFeedback = String(input.context?.retryFeedback ?? "")
+          observedRetryFeedback = contextPacketText(input.context, "retry")
           await markBuildSlotAcquired(input, freshSessionID)
           return {
             result: {
@@ -16403,7 +16870,7 @@ describe("orchestrator tools", () => {
         buildAgentRunImpl = async (input: any) => {
           observedExistingSessionID = input.existingSessionID
           observedWorktreeDir = input.managedWorktree.directory
-          observedRetryFeedback = String(input.context?.retryFeedback ?? "")
+          observedRetryFeedback = contextPacketText(input.context, "retry")
           await markBuildSlotAcquired(input, `ses_fresh_retry_${stamp}`)
           return {
             result: {
@@ -16447,8 +16914,9 @@ describe("orchestrator tools", () => {
   })
 
   test("external goal build retry opens a fresh session on the same worktree when provider resume ref is missing", async () => {
+    installControlModel()
     await tmp?.[Symbol.asyncDispose]?.()
-    tmp = await tmpdir({ git: true })
+    tmp = await tmpdir({ git: true, config: { model: "mock-control/control" } })
 
     const now = Date.now()
     const stamp = now.toString(16)
@@ -16499,7 +16967,7 @@ describe("orchestrator tools", () => {
         buildAgentRunImpl = async (input: any) => {
           observedExistingSessionID = input.existingSessionID
           observedWorktreeDir = input.managedWorktree.directory
-          observedRetryFeedback = String(input.context?.retryFeedback ?? "")
+          observedRetryFeedback = contextPacketText(input.context, "retry")
           await markBuildSlotAcquired(input, `ses_fresh_external_retry_${stamp}`)
           return {
             result: {
@@ -17363,14 +17831,15 @@ describe("orchestrator tools", () => {
 
         expectGoalBuildStarted(result)
         await waitForGoalStatus(goalID, "passed")
-        expect(capturedContext?.evidencePack?.targetReferences).toHaveLength(1)
-        expect(capturedContext.evidencePack.targetReferences[0]).toMatchObject({
+        const evidencePack = buildEvidencePackFromBuildContext(capturedContext)
+        expect(evidencePack?.targetReferences).toHaveLength(1)
+        expect(evidencePack?.targetReferences?.[0]).toMatchObject({
           url: screenshot.url,
           label: "material-reference.png",
           intent: "visual_reference",
           source: "material",
         })
-        expect(capturedContext.evidencePack.previousOutputs ?? []).toEqual([])
+        expect(evidencePack?.previousOutputs ?? []).toEqual([])
       },
     })
     },
@@ -17497,9 +17966,10 @@ describe("orchestrator tools", () => {
 
         expectGoalBuildStarted(result)
         await waitForGoalStatus(goalID, "passed")
-        expect(capturedContext?.evidencePack?.previousOutputs).toHaveLength(1)
-        expect(capturedContext?.evidencePack?.targetReferences ?? []).toEqual([])
-        const previousOutput = capturedContext!.evidencePack!.previousOutputs![0]
+        const evidencePack = buildEvidencePackFromBuildContext(capturedContext)
+        expect(evidencePack?.previousOutputs).toHaveLength(1)
+        expect(evidencePack?.targetReferences ?? []).toEqual([])
+        const previousOutput = evidencePack!.previousOutputs![0]
         expect(previousOutput.url).toBe(rendered.url)
         expect(previousOutput.url).toStartWith(`/attachment/${Instance.project.id}/`)
         expect(previousOutput.intent).toBe("rendered_output")

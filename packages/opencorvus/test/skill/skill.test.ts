@@ -481,7 +481,7 @@ test("registers builtin research-report skill without stage routing metadata", a
   }
 })
 
-test("registers builtin orchestrator expert-squad skills without stage routing metadata", async () => {
+test("does not register migrated expert-squad selectors as builtin skills", async () => {
   await using tmp = await tmpdir({ git: true })
   const home = process.env.OPENCORVUS_TEST_HOME
   const opencorvusHome = process.env.OPENCORVUS_HOME
@@ -498,13 +498,7 @@ test("registers builtin orchestrator expert-squad skills without stage routing m
           "frontend-automation-debug-expert-squad",
         ] as const) {
           const skill = await Skill.get(name)
-          expect(skill).toBeDefined()
-          expect(skill!.builtin).toBe(true)
-          expect(skill!.location).toContain(path.join("builtin-skills", name, "SKILL.md"))
-          expect(skill!.agents).toEqual(["orchestrator"])
-          expect(skill!.mounted_agents).toEqual(["orchestrator"])
-          expect(skill!.required_tools).toEqual(["select_expert_squad"])
-          expect("stage" in skill!).toBe(false)
+          expect(skill).toBeUndefined()
         }
       },
     })

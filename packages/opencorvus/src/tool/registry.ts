@@ -19,6 +19,20 @@ export namespace ToolRegistry {
 
   export const state = lazyInstanceState(async () => {
     const custom = [] as Tool.Info[]
+    const customOrigins = new Map<string, string>()
+
+    function registerCustomTool(id: string, def: ToolDefinition, origin: string) {
+      const canonical = AgentToolPool.canonicalToolIDs()
+      if (canonical.has(id)) {
+        throw new Error(`Custom registry tool "${id}" from ${origin} collides with a built-in OpenCorvus tool ID.`)
+      }
+      const existing = customOrigins.get(id)
+      if (existing) {
+        throw new Error(`Custom registry tool "${id}" from ${origin} duplicates custom tool from ${existing}.`)
+      }
+      customOrigins.set(id, origin)
+      custom.push(fromPlugin(id, def))
+    }
 
     const matches = await Config.directories().then((dirs) =>
       dirs.flatMap((dir) =>
@@ -28,20 +42,22 @@ export namespace ToolRegistry {
     if (matches.length) await Config.waitForDependencies()
     for (const match of matches) {
       const namespace = path.basename(match, path.extname(match))
+      let mod: Record<string, ToolDefinition>
       try {
-        const mod = await import(pathToFileURL(match).href)
-        for (const [id, def] of Object.entries<ToolDefinition>(mod)) {
-          custom.push(fromPlugin(id === "default" ? namespace : `${namespace}_${id}`, def))
-        }
+        mod = await import(pathToFileURL(match).href)
       } catch (err) {
         log.warn("failed to load custom tool", { path: match, error: err })
+        continue
+      }
+      for (const [id, def] of Object.entries<ToolDefinition>(mod)) {
+        registerCustomTool(id === "default" ? namespace : `${namespace}_${id}`, def, match)
       }
     }
 
-    const plugins = await Plugin.list()
+    const plugins = await Plugin.toolHooks()
     for (const plugin of plugins) {
-      for (const [id, def] of Object.entries(plugin.tool ?? {})) {
-        custom.push(fromPlugin(id, def))
+      for (const [id, def] of Object.entries(plugin.tool)) {
+        registerCustomTool(id, def, `plugin:${plugin.specifier}`)
       }
     }
 
@@ -73,6 +89,9 @@ export namespace ToolRegistry {
   }
 
   export async function register(tool: Tool.Info) {
+    if (AgentToolPool.canonicalToolIDs().has(tool.id)) {
+      throw new Error(`Custom registry tool "${tool.id}" collides with a built-in OpenCorvus tool ID.`)
+    }
     const { custom } = await state()
     const idx = custom.findIndex((t) => t.id === tool.id)
     if (idx >= 0) {

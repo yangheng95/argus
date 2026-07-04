@@ -2,13 +2,14 @@ import { afterEach, expect, test } from "bun:test"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { Agent } from "../../src/agent/agent"
-import { PromptProfile } from "../../src/agent/prompt-profile"
 import { AgentRoleContract } from "../../src/agent/role-contract"
 import { AgentToolPool } from "../../src/agent/tool-pool-contract"
 import { PromptCatalog } from "../../src/config/prompt-catalog"
 import { Config } from "../../src/config/config"
+import { PromptProfileResolver } from "../../src/expert-squad/prompt-profile-resolver"
 import { Instance } from "../../src/project/instance"
 import { PermissionNext } from "../../src/permission/next"
+import { copyRepositoryExpertSquadPackage } from "../fixture/expert-squad"
 import { tmpdir } from "../fixture/fixture"
 import BUILD_CORE from "../../src/prompt/core/build-core.txt"
 import VISUAL_QA_CORE from "../../src/prompt/core/visual-qa-core.txt"
@@ -21,6 +22,16 @@ afterEach(async () => {
 
 function visibleToolIDs(agent: Agent.Info | undefined): Set<string> {
   return AgentToolPool.visibleToolIDs(agent?.tools)
+}
+
+async function frontendReplicaOverlay(projectDirectory: string, agentID: string): Promise<string> {
+  const overlay = await PromptProfileResolver.overlayFor({
+    projectDirectory,
+    agentID,
+    config: Config.Info.parse({ prompt_profile: { active: "frontend-replica" } }),
+  })
+  expect(overlay, `frontend-replica.${agentID}`).toBeDefined()
+  return overlay!
 }
 
 test("every role contract id has a matching registered agent (no silent missing registrations)", async () => {
@@ -71,8 +82,9 @@ test("editable native prompt catalog entries have non-empty defaults", async () 
 })
 
 test("build prompt catalog default matches the runtime build core prompt", async () => {
-  const buildOverlay = PromptProfile.builtIns["frontend-replica"].agents.build
   await using tmp = await tmpdir({ git: true, config: { prompt_profile: { active: "frontend-replica" } } })
+  await copyRepositoryExpertSquadPackage(tmp.path, "frontend-replica")
+  const buildOverlay = await frontendReplicaOverlay(tmp.path, "build")
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
@@ -93,8 +105,9 @@ test("build prompt catalog default matches the runtime build core prompt", async
 })
 
 test("visual-qa prompt catalog default matches the runtime visual QA core prompt", async () => {
-  const visualQaOverlay = PromptProfile.builtIns["frontend-replica"].agents["visual-qa"]
   await using tmp = await tmpdir({ git: true, config: { prompt_profile: { active: "frontend-replica" } } })
+  await copyRepositoryExpertSquadPackage(tmp.path, "frontend-replica")
+  const visualQaOverlay = await frontendReplicaOverlay(tmp.path, "visual-qa")
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
@@ -116,8 +129,9 @@ test("visual-qa prompt catalog default matches the runtime visual QA core prompt
 })
 
 test("coding prompt catalog default matches the direct assistant prompt", async () => {
-  const codingOverlay = PromptProfile.builtIns["frontend-replica"].agents.coding
   await using tmp = await tmpdir({ git: true, config: { prompt_profile: { active: "frontend-replica" } } })
+  await copyRepositoryExpertSquadPackage(tmp.path, "frontend-replica")
+  const codingOverlay = await frontendReplicaOverlay(tmp.path, "coding")
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
@@ -137,8 +151,6 @@ test("coding prompt catalog default matches the direct assistant prompt", async 
 })
 
 test("coding override and build append catalog entries stay distinct", async () => {
-  const codingOverlay = PromptProfile.builtIns["frontend-replica"].agents.coding
-  const buildOverlay = PromptProfile.builtIns["frontend-replica"].agents.build
   await using tmp = await tmpdir({
     git: true,
     config: {
@@ -149,6 +161,9 @@ test("coding override and build append catalog entries stay distinct", async () 
       },
     },
   })
+  await copyRepositoryExpertSquadPackage(tmp.path, "frontend-replica")
+  const codingOverlay = await frontendReplicaOverlay(tmp.path, "coding")
+  const buildOverlay = await frontendReplicaOverlay(tmp.path, "build")
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {

@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { PromptProfile } from "../../src/agent/prompt-profile"
+import { EngineConfig } from "../../src/engine/config"
+import { WorkflowRegistry } from "../../src/engine/workflow"
 import { builtInPackageSources } from "../../src/expert-squad/builtin"
 import { ExpertSquadRegistry } from "../../src/expert-squad/registry"
 import { tmpdir } from "../fixture/fixture"
@@ -83,8 +85,8 @@ async function writeValidPackage(root: string, overrides: Record<string, unknown
     packageRoot,
     "agents/orchestrator/mcp/browser.jsonc",
     JSON.stringify({
-      command: "node",
-      args: ["browser.js"],
+      type: "local",
+      command: ["node", "browser.js"],
       capabilities: {
         tools: ["snapshot"],
         prompts: ["inspect"],
@@ -117,16 +119,56 @@ describe("ExpertSquadRegistry", () => {
     expect(loaded.packageMcpToolRefs.has("frontend-replica/orchestrator/browser/tool/snapshot")).toBe(true)
     expect(loaded.packageMcpPromptRefs.has("frontend-replica/orchestrator/browser/prompt/inspect")).toBe(true)
     expect(loaded.packageMcpResourceRefs.has("frontend-replica/orchestrator/browser/resource/dom")).toBe(true)
+    expect(loaded.manifest.capability_projection.scheduler.package_mcp_prompt_refs).toEqual([
+      "frontend-replica/orchestrator/browser/prompt/inspect",
+    ])
+    expect(loaded.manifest.capability_projection.scheduler.package_mcp_resource_refs).toEqual([
+      "frontend-replica/orchestrator/browser/resource/dom",
+    ])
     expect(loaded.projectedWorkflowTools).toEqual(["build"])
+    expect(loaded.readmeContent).toBe("# Frontend Replica")
   })
 
   test("discovers packages under .opencorvus expert-squads", async () => {
     await using tmp = await tmpdir()
-    await writeValidPackage(tmp.path)
+    await writeValidPackage(tmp.path, {
+      selector: {
+        summary: "Use for replica tasks.",
+        selection_guidance: "Call select_expert_squad with profile_id frontend-replica.",
+        instructions: "selector.md",
+      },
+    })
+    await writeFile(
+      path.join(tmp.path, ".opencorvus", "expert-squads", "frontend-replica"),
+      "selector.md",
+      "# Selector Instructions\n\nUse the detailed source-backed replica selector.",
+    )
 
     const loaded = await ExpertSquadRegistry.discover(tmp.path)
 
     expect(loaded.map((item) => item.id)).toEqual(["frontend-replica"])
+    expect(loaded[0]?.selectorInstructions).toContain("detailed source-backed replica selector")
+  })
+
+  test("rejects catalog selector instructions that point into production package files", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, {
+      selector: {
+        summary: "Use for replica tasks.",
+        selection_guidance: "Call select_expert_squad with profile_id frontend-replica.",
+        instructions: "agents/orchestrator/system.md",
+      },
+    })
+
+    await expect(ExpertSquadRegistry.discover(tmp.path)).rejects.toThrow(
+      "selector instructions must be top-level selector.md",
+    )
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(
+      "selector instructions must be top-level selector.md",
+    )
+    await expect(ExpertSquadRegistry.loadSourcePackage(packageRoot)).rejects.toThrow(
+      "selector instructions must be top-level selector.md",
+    )
   })
 
   test("loads every built-in expert squad package through the registry parser", async () => {
@@ -143,7 +185,16 @@ describe("ExpertSquadRegistry", () => {
       expect(loaded.manifest).toEqual(embedded.manifest)
       expect(PromptProfile.builtIns[loaded.id]).toEqual(embedded.promptProfile)
       expect(loaded.readmePath.endsWith(path.join(source.id, "README.md"))).toBe(true)
+      expect(loaded.readmeContent).toBe(embedded.readmeContent)
     }
+  })
+
+  test("rejects blank README because it is Orchestrator prompt content", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path)
+    await writeFile(packageRoot, "README.md", " \n")
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/readme: referenced file is blank/)
   })
 
   test("discovers selector metadata without parsing inactive package MCP definitions", async () => {
@@ -334,7 +385,7 @@ describe("ExpertSquadRegistry", () => {
     expect(loaded.selector).toBeUndefined()
   })
 
-  test("allows manifest-declared selector instructions as a top-level package file", async () => {
+  test("allows manifest-declared selector instructions only as top-level selector.md", async () => {
     await using tmp = await tmpdir()
     const packageRoot = await writeValidPackage(tmp.path, {
       selector: {
@@ -347,6 +398,20 @@ describe("ExpertSquadRegistry", () => {
     const loaded = await ExpertSquadRegistry.loadPackage(packageRoot)
 
     expect(loaded.selector?.ref).toBe("selector/frontend-replica")
+  })
+
+  test("rejects README as selector instructions because README is Orchestrator prompt content", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, {
+      selector: {
+        ...manifest().selector,
+        instructions: "README.md",
+      },
+    })
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(
+      "selector instructions must be top-level selector.md",
+    )
   })
 
   test("rejects missing manifest-declared selector instructions", async () => {
@@ -417,6 +482,39 @@ describe("ExpertSquadRegistry", () => {
 
     await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(
       /requires capability_projection\.agents\.build/,
+    )
+  })
+
+  test("validates workflow dispatch tool owners from the active scheduler workflow list", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path)
+    const workflowBindings = WorkflowRegistry.schedulerAgentWorkflowBindingsForEngineConfig(
+      EngineConfig.fromAssistantConfig({
+        workflows: [
+          {
+            id: "custom-owner-map",
+            name: "Custom owner map",
+            description: "Test workflow that binds build tool ownership to integrity.",
+            steps: [
+              {
+                id: "integrity-owned-build",
+                tool: "build",
+                agentRole: "integrity",
+                label: "Integrity-owned build",
+                hint: "Test only.",
+                scope: "goal",
+                skippable: false,
+                after: [],
+              },
+            ],
+            goalLoopStepIDs: ["integrity-owned-build"],
+          },
+        ],
+      }),
+    )
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot, { workflowBindings })).rejects.toThrow(
+      /requires capability_projection\.agents\.integrity/,
     )
   })
 
@@ -527,16 +625,86 @@ describe("ExpertSquadRegistry", () => {
     await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/is not declared in this package/)
   })
 
+  test("rejects typed package MCP prompt refs not statically declared by the package MCP definition", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, {
+      capability_projection: {
+        ...manifest().capability_projection,
+        scheduler: {
+          ...manifest().capability_projection.scheduler,
+          package_mcp_prompt_refs: ["frontend-replica/orchestrator/browser/prompt/missing"],
+        },
+      },
+    })
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/is not declared in this package/)
+  })
+
+  test("rejects typed package MCP resource refs owned by another agent", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, {
+      capability_projection: {
+        ...manifest().capability_projection,
+        agents: {
+          build: {
+            ...manifest().capability_projection.agents.build,
+            package_mcp_resource_refs: ["frontend-replica/orchestrator/browser/resource/dom"],
+          },
+        },
+      },
+    })
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/owned by agents\.build/)
+  })
+
+  test("rejects malformed default MCP prompt and resource refs", async () => {
+    await using tmp = await tmpdir()
+    const promptPackageRoot = await writeValidPackage(tmp.path, {
+      capability_projection: {
+        ...manifest().capability_projection,
+        scheduler: {
+          ...manifest().capability_projection.scheduler,
+          default_mcp_prompt_refs: ["default/mcp/browser"],
+        },
+      },
+    })
+    await expect(ExpertSquadRegistry.loadPackage(promptPackageRoot)).rejects.toThrow(/invalid default MCP prompt ref/)
+
+    await using second = await tmpdir()
+    const resourcePackageRoot = await writeValidPackage(second.path, {
+      capability_projection: {
+        ...manifest().capability_projection,
+        scheduler: {
+          ...manifest().capability_projection.scheduler,
+          default_mcp_resource_refs: ["default/mcp/browser/tool/snapshot"],
+        },
+      },
+    })
+    await expect(ExpertSquadRegistry.loadPackage(resourcePackageRoot)).rejects.toThrow(/invalid default MCP resource ref/)
+  })
+
   test("rejects MCP capability names that cannot form canonical refs", async () => {
     await using tmp = await tmpdir()
     const packageRoot = await writeValidPackage(tmp.path)
     await writeFile(
       packageRoot,
       "agents/orchestrator/mcp/browser.jsonc",
-      JSON.stringify({ command: "node", args: ["browser.js"], capabilities: { tools: ["bad/name"] } }),
+      JSON.stringify({ type: "local", command: ["node", "browser.js"], capabilities: { tools: ["bad/name"] } }),
     )
 
     await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/canonical ref segments/)
+  })
+
+  test("rejects package MCP definitions outside the Config.Mcp schema", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path)
+    await writeFile(
+      packageRoot,
+      "agents/orchestrator/mcp/browser.jsonc",
+      JSON.stringify({ command: "node", args: ["browser.js"], capabilities: { tools: ["snapshot"] } }),
+    )
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow()
   })
 
   test("rejects tool files with empty canonical ref segments", async () => {
@@ -576,7 +744,7 @@ describe("ExpertSquadRegistry", () => {
     await writeFile(
       packageRoot,
       "mcp/browser.jsonc",
-      JSON.stringify({ command: "node", args: ["browser.js"], capabilities: { tools: ["snapshot"] } }),
+      JSON.stringify({ type: "local", command: ["node", "browser.js"], capabilities: { tools: ["snapshot"] } }),
     )
 
     const loaded = await ExpertSquadRegistry.loadPackage(packageRoot)

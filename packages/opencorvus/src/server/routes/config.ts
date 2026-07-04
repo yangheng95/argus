@@ -128,6 +128,7 @@ export const ConfigRoutes = lazy(() =>
           await PromptProfileResolver.assertKnownProfileID({
             projectDirectory: Instance.directory,
             profileID: PromptProfile.activeID(parsedPreview.data),
+            config: parsedPreview.data,
           })
         } catch (error) {
           return c.json(badRequestBody(error instanceof Error ? error.message : String(error)), 400)
@@ -193,15 +194,31 @@ export const ConfigRoutes = lazy(() =>
           },
         },
       }),
+      validator(
+        "query",
+        z.object({
+          sessionID: z
+            .string()
+            .optional()
+            .meta({ description: "Optional root or child session id for session-effective prompt catalog view" }),
+        }),
+      ),
       async (c) => {
-        return c.json(await PromptCatalog.list())
+        const query = c.req.valid("query")
+        if (!query.sessionID) return c.json(await PromptCatalog.list())
+        const [config, projectDirectory] = await Promise.all([
+          EffectiveConfig.effective({ sessionID: query.sessionID }),
+          EffectiveConfig.directory({ sessionID: query.sessionID }),
+        ])
+        return c.json(await PromptCatalog.list({ config, projectDirectory }))
       },
     )
     .get(
       "/prompt-profile",
       describeRoute({
-        summary: "List prompt profiles",
-        description: "Returns the active expert-squad prompt profile and available package-backed prompt profiles.",
+        summary: "List prompt profiles and expert-squad package projections",
+        description:
+          "Returns the single active prompt_profile.active value, project/session active sources, built-in general profile, and current-project .opencorvus/expert-squads/<id> package-backed profiles with capability projections.",
         operationId: "config.promptProfile",
         responses: {
           200: {

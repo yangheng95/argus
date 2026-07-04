@@ -919,10 +919,21 @@ export class Config extends HeyApiClient {
   public prompt<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
+      sessionID?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "sessionID" },
+          ],
+        },
+      ],
+    )
     return (options?.client ?? this.client).get<ConfigPromptResponses, unknown, ThrowOnError>({
       url: "/config/prompt",
       ...options,
@@ -931,9 +942,9 @@ export class Config extends HeyApiClient {
   }
 
   /**
-   * List prompt profiles
+   * List prompt profiles and expert-squad package projections
    *
-   * Returns the active expert-squad prompt profile and available package-backed prompt profiles.
+   * Returns the single active prompt_profile.active value, project/session active sources, built-in general profile, and current-project .opencorvus/expert-squads/<id> package-backed profiles with capability projections.
    */
   public promptProfile<ThrowOnError extends boolean = false>(
     parameters?: {

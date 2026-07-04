@@ -37,7 +37,10 @@ code_review.txt
 
 
 # Local dev files
-.opencorvus/
+.opencorvus/*
+!.opencorvus/
+!.opencorvus/expert-squads/
+!.opencorvus/expert-squads/**
 .opencorvus-worktrees/
 .opencorvus-meta.json
 /opencorvus.json
@@ -58,6 +61,10 @@ build/
 # the OpenCorvus build *agent* (post phase-3 of the isomorphic-agent
 # refactor), not a build-output directory.
 !packages/opencorvus/src/build/
+# Expert-squad packages are source definitions. Their `agents/build/` prompt
+# folders must not be hidden by the generic build-output ignore rule above.
+!.opencorvus/expert-squads/**/agents/build/
+!.opencorvus/expert-squads/**/agents/build/**
 .output/
 .next/
 .nuxt/

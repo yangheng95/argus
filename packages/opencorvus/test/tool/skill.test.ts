@@ -12,7 +12,11 @@ import { SkillTool } from "../../src/tool/skill"
 import { ToolRegistry } from "../../src/tool/registry"
 import { Config } from "../../src/config/config"
 import { PromptProfileResolver } from "../../src/expert-squad/prompt-profile-resolver"
-import { PROJECT_EXPERT_SQUAD_ID, writeProjectExpertSquadPackage } from "../fixture/expert-squad"
+import {
+  copyRepositoryExpertSquadPackage,
+  PROJECT_EXPERT_SQUAD_ID,
+  writeProjectExpertSquadPackage,
+} from "../fixture/expert-squad"
 import { tmpdir } from "../fixture/fixture"
 
 const baseCtx: Omit<Tool.Context, "ask"> = {
@@ -371,8 +375,10 @@ Use this skill.
     }
   })
 
-  test("orchestrator can search and load builtin expert-squad skills", async () => {
+  test("orchestrator can search and load project expert-squad selector skills", async () => {
     await using tmp = await tmpdir({ git: true })
+    await copyRepositoryExpertSquadPackage(tmp.path, "frontend-replica")
+    await copyRepositoryExpertSquadPackage(tmp.path, "frontend-innovate")
     const home = process.env.OPENCORVUS_TEST_HOME
     process.env.OPENCORVUS_TEST_HOME = tmp.path
 
@@ -432,6 +438,7 @@ Use this skill.
 
           expect(loaded.output).toContain(`<skill_content name="${PROJECT_EXPERT_SQUAD_ID}-expert-squad">`)
           expect(loaded.output).toContain(`profile_id ${PROJECT_EXPERT_SQUAD_ID}`)
+          expect(loaded.output).not.toContain("PROJECT_README_ORCHESTRATOR_APPEND_ONLY")
           expect(loaded.output).not.toContain("Base directory for this skill")
           expect(loaded.output).not.toContain(`${path.sep}agents${path.sep}`)
           expect(loaded.output).not.toContain(`${path.sep}tools${path.sep}`)

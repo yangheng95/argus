@@ -4,6 +4,9 @@ import { cp, lstat, mkdir, readdir, rename, rm } from "fs/promises"
 import path from "path"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Filesystem } from "@/util/filesystem"
+import { Config } from "@/config/config"
+import { EngineConfig } from "@/engine/config"
+import { WorkflowRegistry } from "@/engine/workflow"
 import { builtInPromptProfiles } from "./builtin"
 import { ExpertSquadRegistry } from "./registry"
 
@@ -64,6 +67,17 @@ export namespace ExpertSquadPackageManager {
 
   function targetRoot(projectDirectory: string, id: string) {
     return path.join(canonicalBase(projectDirectory), id)
+  }
+
+  async function packageLoadOptions(
+    projectDirectory: string,
+  ): Promise<Parameters<typeof ExpertSquadRegistry.loadPackage>[1]> {
+    const config = await Config.snapshotForProject(projectDirectory)
+    return {
+      workflowBindings: WorkflowRegistry.schedulerAgentWorkflowBindingsForEngineConfig(
+        EngineConfig.fromAssistantConfig(config.assistant),
+      ),
+    }
   }
 
   async function withPackageInstallLock<T>(lockKey: string, run: () => Promise<T>): Promise<T> {
@@ -273,7 +287,8 @@ export namespace ExpertSquadPackageManager {
   }): Promise<ImportResult> {
     assertSourceNotRuntimeInternal(input.projectDirectory, input.sourceDirectory)
     const source = Filesystem.resolve(input.sourceDirectory)
-    const loaded = await ExpertSquadRegistry.loadSourcePackage(source)
+    const loadOptions = await packageLoadOptions(input.projectDirectory)
+    const loaded = await ExpertSquadRegistry.loadSourcePackage(source, loadOptions)
     assertNoBuiltInCollision(loaded.id)
     const target = targetRoot(input.projectDirectory, loaded.id)
     return withPackageInstallLock(Filesystem.normalizePath(target), async () => {
@@ -310,7 +325,7 @@ export namespace ExpertSquadPackageManager {
           errorOnExist: true,
           verbatimSymlinks: true,
         })
-        const staged = await ExpertSquadRegistry.loadSourcePackage(staging)
+        const staged = await ExpertSquadRegistry.loadSourcePackage(staging, loadOptions)
         if (staged.id !== loaded.id) {
           throw new Error(`Expert squad package id changed during import: expected ${loaded.id}, got ${staged.id}`)
         }
@@ -321,7 +336,7 @@ export namespace ExpertSquadPackageManager {
         }
         await rename(staging, target)
         targetInstalled = true
-        await ExpertSquadRegistry.loadPackage(target)
+        await ExpertSquadRegistry.loadPackage(target, loadOptions)
         await rm(backup, { recursive: true, force: true })
         return {
           id: loaded.id,
@@ -403,7 +418,7 @@ export namespace ExpertSquadPackageManager {
     const base = canonicalBase(input.projectDirectory)
     const root = targetRoot(input.projectDirectory, id)
     assertInside(base, root, "expert squad export root")
-    const loaded = await ExpertSquadRegistry.loadPackage(root)
+    const loaded = await ExpertSquadRegistry.loadPackage(root, await packageLoadOptions(input.projectDirectory))
     const zip = new ZipWriter(new BlobWriter("application/zip"))
     const files = await collectPackageFiles(root)
     for (const file of files) {

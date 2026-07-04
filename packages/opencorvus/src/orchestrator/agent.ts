@@ -71,7 +71,7 @@ import { cancelSessionPromptInScope } from "@/engine/cancellation-scope"
 import { toolGuard } from "@/util/tool-guard"
 import { createOrchestratorTools } from "./tools"
 import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
-import { AttachmentStore } from "@/storage/attachment-store"
+import { attachmentContextPacket, renderAgentContextPacketSection } from "@/agent/context-packet"
 import { renderUserRequestSection } from "@/intent/request-prompt"
 import { readIterationHistory as readHistForPrompt } from "@/metrics/store"
 import {
@@ -83,6 +83,7 @@ import {
   updateTask,
   WorkflowRegistry,
   createWorkflowState,
+  workflowSelectionSnapshot,
   renderWorkflowPrompt,
 } from "@/engine"
 import { EngineProtocol } from "@/engine/protocol"
@@ -642,28 +643,26 @@ export namespace Orchestrator {
         return
       }
 
-      // Phase-6-f-3-bis-b: workflow_state is no longer persisted. Every
-      // wake re-resolves the default workflow (pipeline). Tools.ts's
-      // switchToDirectWorkflowIfEligible mutates `input.workflow` /
-      // `input.workflowState` in-memory when the task turns out to be a
-      // direct-build case; that mutation does not escape the current
-      // orchestrator loop, which is fine — the eligibility check is
-      // deterministic from DB state and will reach the same verdict on
-      // the next wake if the task continues in the same shape.
-      //
+      // workflow_state is no longer persisted. Every wake asks the scheduler
+      // registry for the workflow that applies to this task kind, then derives
+      // step status from artifacts instead of mutating a cached FSM cell.
       // "First wake" detection now reads task.time_started (stamped by
       // the serial queue when it picks the task up). Per rule 23 the
       // LLM reads describe output for actual phase identification, not
       // a cached step-FSM cell.
-      const workflowID = task.kind === "build" ? "direct" : await WorkflowRegistry.defaultID()
-      const workflow = (await WorkflowRegistry.resolve(workflowID)) ?? WorkflowRegistry.resolveSync("pipeline")
-      const workflowState: WorkflowState | undefined = workflow ? createWorkflowState(workflow) : undefined
+      const workflowID = await WorkflowRegistry.defaultIDForTaskKind(task.kind)
+      const workflow = await WorkflowRegistry.resolve(workflowID)
+      if (!workflow) {
+        throw new Error(`Orchestrator workflow "${workflowID}" is not registered`)
+      }
+      const workflowState: WorkflowState = createWorkflowState(workflow)
       const isFirstWake = !task.time_started
-      if (isFirstWake && workflow) {
+      if (isFirstWake) {
         EngineProtocol.emit(EngineEvent.WorkflowSelected, {
           taskID,
           workflowID: workflow.id,
           workflowName: workflow.name,
+          workflow: workflowSelectionSnapshot(workflow),
           summary: `Workflow "${workflow.name}" selected`,
         })
       }
@@ -716,6 +715,7 @@ export namespace Orchestrator {
       const tools = await PromptProfileResolver.projectOrchestratorTools(rawTools, schedulerCapability, {
         projectDirectory: schedulerProjectDirectory,
         signal: ctrl.signal,
+        workflow,
       })
       const guard = toolGuard(tools)
       const enableMap: Record<string, boolean> = Object.fromEntries(
@@ -732,26 +732,8 @@ export namespace Orchestrator {
         event?.note || event?.operatorMessage || !(await sessionHasUserMessage(agentSession.id)),
       )
       const userText = appendUserMessage ? orchestratorUserText(task, event) : ""
-      // Build multimodal content when task has file attachments. Real user
-      // wakes persist file parts on the visible user message. Internal engine
-      // wakes do not create a hidden model-only user message; they refresh the
-      // textual inventory through runtime system context and rely on the
-      // originally persisted file parts for bytes.
-      // AttachmentStore.partition routes image/audio/video/pdf to inline
-      // file parts and text/* / json to a URL-only reference list; see
-      // helper comments for the silent-rejection rationale. Inline parts
-      // are additionally gated by the resolved model's input modality
-      // capabilities so non-vision coding models don't receive bytes the
-      // upstream API would silently drop.
-      const wakeAttachments = Array.isArray(task.attachments)
-        ? (task.attachments as Array<{ sha?: string; url?: string; mime?: string; size?: number; filename?: string }>)
-        : undefined
-      const inlineFileParts = appendUserMessage
-        ? await AttachmentStore.inlineFileParts(wakeAttachments, {
-            capabilities: model.capabilities,
-            agent: "orchestrator",
-          })
-        : []
+      // Build attachment inventory when the task has file attachments. Wakes
+      // carry link/index refs only; no hidden model-only file parts are added.
       // Orchestrator does NOT own a `read` tool. Attachments are forwarded
       // automatically to every sub-agent it dispatches (requirements /
       // frontend_design / architect / build / refine — see orchestrator/tools.ts
@@ -764,29 +746,20 @@ export namespace Orchestrator {
       const allAttachments = Array.isArray(task.attachments)
         ? (task.attachments as Array<{ sha?: string; url?: string; mime?: string; size?: number; filename?: string }>)
         : undefined
-      const visionCapable =
-        model.capabilities.input.image ||
-        model.capabilities.input.pdf ||
-        model.capabilities.input.audio ||
-        model.capabilities.input.video
-      const inlinedNote =
-        inlineFileParts.length > 0
-          ? "Multimodal items (image / pdf / audio / video) below are inlined as file parts in this wake's user message — you can see and reason about them directly."
-          : !appendUserMessage
-            ? "This is an internal engine wake, so no new user message is created and no hidden file parts are injected. Use this inventory to cite task attachments; do not claim pixel-level inspection unless the visible conversation already contains the file parts."
-            : visionCapable
-              ? "No multimodal items are inlined in this wake (the task carries no image / pdf / audio / video attachments, or none was inlinable)."
-              : "Your current model does NOT accept image / pdf / audio / video input — multimodal items below are listed by filename ONLY; you cannot see their pixels. Do NOT pretend you saw them; describe them only via the textual context the user provided in prose, and rely on `frontend_design` / sub-agents whose models DO support vision for visual reasoning."
-      const inventoryText = AttachmentStore.renderAttachmentInventory(allAttachments, {
-        header: "## Task Attachments (forwarded to sub-agents automatically)",
-        hint:
+      const inlinedNote = !appendUserMessage
+        ? "This is an internal engine wake, so no new user message is created. Use this inventory to cite task attachments; do not claim pixel-level inspection unless visible tool/evidence output proves it."
+        : "Multimodal items are refs, not hidden prompt bytes. Do not claim pixel-level inspection unless a visible tool/evidence output proves it."
+      const attachmentPacket = attachmentContextPacket(allAttachments, {
+        title: "Task Attachments (forwarded to sub-agents automatically)",
+        note:
           "The user attached the files below to this task. " +
           inlinedNote +
           " " +
-          "Reference-only items (text / json) are not inlined; sub-agents read them via their `read` tool. " +
+          "Text/json refs can be read by sub-agents that expose attachment-reading tools. " +
           "You do NOT have a `read` tool yourself — do not attempt to fetch reference content. " +
           "When you call `requirements` / `frontend_design` / `architect` / `build` / `refine`, the engine forwards every attachment to the sub-agent automatically — but the sub-agent's prompt only cites them when YOU mention them by filename in your dispatch instructions. ALWAYS cite the relevant attachments by EXACT filename and explain their relevance. NEVER reference an attachment that is not listed below — if this section is empty, the user attached nothing in this wake and any phrase implying you saw a file is a hallucination.",
       })
+      const inventoryText = renderAgentContextPacketSection(attachmentPacket ? [attachmentPacket] : []) ?? ""
       const enrichedUserText = appendUserMessage ? userText + inventoryText : ""
       const internalWakeNotice = [
         "## Wake Provenance",
@@ -796,12 +769,11 @@ export namespace Orchestrator {
       const runtimeSystem = appendUserMessage
         ? system
         : [...system, internalWakeNotice, ...(inventoryText.trim() ? [inventoryText] : [])]
-      // Build PromptInput.parts. Text first, then any multimodal attachments
-      // as FilePart (data URL) so Session.saveMessage can persist the part
-      // without re-resolving a local file path.
-      const parts: Array<
-        { type: "text"; text: string } | { type: "file"; url: string; mime: string; filename?: string }
-      > = appendUserMessage ? [{ type: "text", text: enrichedUserText }, ...inlineFileParts] : []
+      // Build PromptInput.parts. Text only; attachment media is referenced by
+      // URL/index in the prompt inventory.
+      const parts: Array<{ type: "text"; text: string }> = appendUserMessage
+        ? [{ type: "text", text: enrichedUserText }]
+        : []
       const partsWithIds = parts.map((p) => ({ ...p, id: Identifier.ascending("part") }))
 
       log.info("orchestrator starting", {
@@ -890,6 +862,9 @@ export namespace Orchestrator {
           identity: {
             sessionID: agentSession.id,
             agentKind: "orchestrator",
+            promptProfileID: schedulerCapability.promptProfileID,
+            capabilityProfileID: schedulerCapability.capabilityProfileID,
+            projectionHash: schedulerCapability.projectionHash,
             contractKind: "orchestrator-wake",
             installedAt: Date.now(),
           },

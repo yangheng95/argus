@@ -9,7 +9,71 @@
     "scheduler": {
       "role_base": true
     },
-    "agents": {}
+    "agents": {
+      "coding": {
+        "role_base": true
+      },
+      "coding-assistant": {
+        "role_base": true
+      },
+      "build": {
+        "role_base": true
+      },
+      "visual-qa": {
+        "role_base": true
+      },
+      "general": {
+        "role_base": true
+      },
+      "explore": {
+        "role_base": true
+      },
+      "compaction": {
+        "role_base": true
+      },
+      "title": {
+        "role_base": true
+      },
+      "summary": {
+        "role_base": true
+      },
+      "control": {
+        "role_base": true
+      },
+      "orchestrator": {
+        "role_base": true
+      },
+      "mission": {
+        "role_base": true
+      },
+      "requirements": {
+        "role_base": true
+      },
+      "architect": {
+        "role_base": true
+      },
+      "frontend-design": {
+        "role_base": true
+      },
+      "intent-analysis": {
+        "role_base": true
+      },
+      "integrity": {
+        "role_base": true
+      },
+      "fact-check": {
+        "role_base": true
+      },
+      "deep-research": {
+        "role_base": true
+      },
+      "frontend-research": {
+        "role_base": true
+      },
+      "goal-workload-analyst": {
+        "role_base": true
+      }
+    }
   },
   "agents": {}
 }

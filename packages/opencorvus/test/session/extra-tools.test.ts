@@ -24,6 +24,7 @@ import { SessionPromptState } from "../../src/session/prompt/state"
 import { SkillTool } from "../../src/tool/skill"
 import { MCP } from "../../src/mcp"
 import { Config } from "../../src/config/config"
+import { copyRepositoryExpertSquadPackage } from "../fixture/expert-squad"
 
 const dummyTool = () =>
   tool({
@@ -99,6 +100,50 @@ describe("SessionLoop session runtime contract", () => {
     SessionLoop.clearSessionRuntimeContract(sessionID)
   })
 
+  test("runtime contract filters registry tools through projected worker tool IDs", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const sessionID = `ses_runtime_${Date.now()}_projected_registry`
+        SessionLoop.setSessionRuntimeContract(
+          sessionID,
+          runtimeContract(sessionID, {
+            tools: { persistent: dummyTool() },
+            includeMcpTools: false,
+            projectedRegistryToolIDs: ["read"],
+          }),
+        )
+        try {
+          const resolved = await SessionLoop.resolveTools({
+            agent: (await Agent.get("build"))!,
+            model: {
+              providerID: "test",
+              id: "test",
+              api: { id: "test", npm: "@ai-sdk/openai" },
+              capabilities: { input: {}, reasoning: false },
+            } as any,
+            session: { id: sessionID, kind: "build", permission: [] } as any,
+            processor: {
+              message: { id: "msg_test" },
+              partFromToolCall: () => undefined,
+              ensureToolPart: async () => undefined,
+            } as any,
+            bypassAgentCheck: false,
+            messages: [],
+            config: Config.Info.parse(await Config.get()),
+          })
+
+          expect(resolved.read).toBeDefined()
+          expect(resolved.write).toBeUndefined()
+          expect(resolved.persistent).toBeDefined()
+        } finally {
+          SessionLoop.clearSessionRuntimeContract(sessionID)
+        }
+      },
+    })
+  })
+
   test("build runtime contract includes Model Context Protocol tools by default", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -152,6 +197,67 @@ describe("SessionLoop session runtime contract", () => {
     })
 
     expect(SessionLoop.usesExactRuntimeContractTools("build", contract)).toBe(true)
+  })
+
+  test("worker descriptor capability mismatch is rejected before continuation", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "build", title: "capability mismatch" })
+        const sessionID = session.id
+        const descriptor = WorkerTurnDescriptor.create({
+          sessionID,
+          payload: {
+            agent: "build",
+            roleContractID: "build",
+            model: { providerID: "test", modelID: "test" },
+            prompt: { systemMode: "complete", rawSystemPrompt: false },
+            tools: { enabled: [], switches: {} },
+            capability: {
+              promptProfileID: "old-profile",
+              capabilityProfileID: "old-profile",
+              projectionHash: "old-hash",
+            },
+            output: { format: "text", resultMode: "reply" },
+            workflow: { sessionKind: "build" },
+          },
+        })
+        SessionLoop.setSessionRuntimeContract(
+          sessionID,
+          runtimeContract(sessionID, {
+            identity: {
+              sessionID,
+              agentKind: "build",
+              contractKind: "stage-attempt",
+              goalID: undefined,
+              goalRunID: undefined,
+              attemptID: undefined,
+              workerTurnDescriptorID: descriptor.id,
+              workerTurnDescriptorHash: descriptor.hash,
+              promptProfileID: "new-profile",
+              capabilityProfileID: "new-profile",
+              projectionHash: "new-hash",
+            },
+            tools: {},
+            system: ["capability mismatch test"],
+          }),
+        )
+        try {
+          expect(() =>
+            SessionLoop.validateSessionRuntimeContractForContinuation({
+              sessionID,
+              sessionKind: "build",
+              expectedAgentKind: "build",
+              requireWorkerTurnDescriptor: true,
+              requireRuntimeContract: true,
+            }),
+          ).toThrow(/prompt profile mismatch/)
+        } finally {
+          SessionLoop.clearSessionRuntimeContract(sessionID)
+        }
+      },
+    })
   })
 
   test("SessionPrompt.cancel preserves runtime contract until the owning loop settles", async () => {
@@ -581,7 +687,8 @@ describe("extras execute-return normalisation (integration via resolveTools)", (
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const sessionID = `ses_runtime_${Date.now()}_orchestrator_exact`
+        const session = await Session.create({ kind: "orchestrator", title: "orchestrator exact" })
+        const sessionID = session.id
         SessionLoop.setSessionRuntimeContract(
           sessionID,
           runtimeContract(sessionID, {
@@ -601,7 +708,7 @@ describe("extras execute-return normalisation (integration via resolveTools)", (
             api: { id: "test", npm: "@ai-sdk/openai" },
             capabilities: { input: {}, reasoning: false },
           } as any,
-          session: { id: sessionID, kind: "orchestrator", permission: [] } as any,
+          session: { ...session, permission: [] } as any,
           processor: {
             message: { id: "msg_test" },
             partFromToolCall: () => undefined,
@@ -620,6 +727,9 @@ describe("extras execute-return normalisation (integration via resolveTools)", (
 
   test("orchestrator resolveTools preserves runtime expert-squad skill under exact wake contracts", async () => {
     await using tmp = await tmpdir({ git: true })
+    await copyRepositoryExpertSquadPackage(tmp.path, "frontend-replica")
+    await copyRepositoryExpertSquadPackage(tmp.path, "frontend-innovate")
+    await copyRepositoryExpertSquadPackage(tmp.path, "frontend-automation-debug")
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {

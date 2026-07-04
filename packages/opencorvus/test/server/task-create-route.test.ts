@@ -265,12 +265,14 @@ describe("task creation route", () => {
         executor: "opencorvus",
         requestID: "route-create-malformed-attachment",
         source: "panel",
-        promptProfile: "frontend-automation-debug",
+        promptProfile: "general",
         attachments: [{ mime: "image/png", filename: "bad.png", data: "not base64!*" }],
       }),
     })
 
+    const responseText = await response.text()
     expect(response.status).not.toBe(202)
+    expect(responseText).toContain("invalid base64 payload")
     expect(writeAttachment).not.toHaveBeenCalled()
     expect(runTaskLoop).not.toHaveBeenCalled()
     const malformedTasks = Database.use((db) =>

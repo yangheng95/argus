@@ -5,7 +5,10 @@ import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js"
 import {
+  type CallToolResult,
   CallToolResultSchema,
+  GetPromptResultSchema,
+  ReadResourceResultSchema,
   type Tool as MCPToolDef,
   ToolListChangedNotificationSchema,
 } from "@modelcontextprotocol/sdk/types.js"
@@ -159,16 +162,19 @@ export namespace MCP {
   }
 
   // Convert MCP tool definition to AI SDK Tool type
-  async function convertMcpTool(mcpTool: MCPToolDef, client: MCPClient, timeout: number): Promise<Tool> {
+  function inputSchemaForMcpTool(mcpTool: MCPToolDef): JSONSchema7 {
     const inputSchema = mcpTool.inputSchema
 
-    // Spread first, then override type to ensure it's always "object"
-    const schema: JSONSchema7 = {
+    return {
       ...(inputSchema as JSONSchema7),
       type: "object",
       properties: (inputSchema.properties ?? {}) as JSONSchema7["properties"],
       additionalProperties: false,
     }
+  }
+
+  async function convertMcpTool(mcpTool: MCPToolDef, client: MCPClient, timeout: number): Promise<Tool> {
+    const schema = inputSchemaForMcpTool(mcpTool)
 
     return dynamicTool({
       description: mcpTool.description ?? "",
@@ -186,12 +192,156 @@ export namespace MCP {
     })
   }
 
+  export interface ScopedConnectionInput {
+    key: string
+    mcp: Config.Mcp
+    cwd: string
+  }
+
+  export interface ScopedToolInput extends ScopedConnectionInput {
+    toolName: string
+  }
+
+  export interface ScopedPromptInput extends ScopedConnectionInput {
+    promptName: string
+  }
+
+  export interface ScopedResourceInput extends ScopedConnectionInput {
+    resourceName: string
+  }
+
+  export async function scopedTool(input: ScopedToolInput): Promise<Tool> {
+    const mcpTool = await scopedToolInfo(input)
+    const schema = inputSchemaForMcpTool(mcpTool)
+    return dynamicTool({
+      description: mcpTool.description ?? "",
+      inputSchema: jsonSchema(schema),
+      execute: async (args: unknown) =>
+        callScopedTool({
+          ...input,
+          args: (args || {}) as Record<string, unknown>,
+        }),
+    })
+  }
+
+  export async function scopedToolInfo(input: ScopedToolInput): Promise<MCPToolDef> {
+    return withScopedClient(input, async (client, timeout) => {
+      const result = await client.listTools(undefined, mcpRequestOptions(timeout))
+      const mcpTool = result.tools.find((item) => item.name === input.toolName)
+      if (!mcpTool) throw new Error(`Scoped MCP server ${input.key} does not expose tool ${input.toolName}`)
+      return mcpTool
+    })
+  }
+
+  export async function callScopedTool(
+    input: ScopedToolInput & { args: Record<string, unknown> },
+  ): Promise<CallToolResult> {
+    return withScopedClient(input, async (client, timeout) =>
+      CallToolResultSchema.parse(
+        await client.callTool(
+          {
+            name: input.toolName,
+            arguments: input.args,
+          },
+          undefined,
+          mcpRequestOptions(timeout),
+        ),
+      ),
+    )
+  }
+
+  async function scopedPromptInfoFromClient(
+    client: MCPClient,
+    timeout: number,
+    input: ScopedPromptInput,
+  ): Promise<PromptInfo> {
+    if (!client.getServerCapabilities()?.prompts) {
+      throw new Error(`Scoped MCP server ${input.key} does not expose prompts`)
+    }
+    const result = await client.listPrompts(undefined, mcpRequestOptions(timeout))
+    const prompt = result.prompts.find((item) => item.name === input.promptName)
+    if (!prompt) throw new Error(`Scoped MCP server ${input.key} does not expose prompt ${input.promptName}`)
+    return prompt
+  }
+
+  export async function scopedPromptInfo(input: ScopedPromptInput): Promise<PromptInfo> {
+    return withScopedClient(input, async (client, timeout) => scopedPromptInfoFromClient(client, timeout, input))
+  }
+
+  export async function getScopedPrompt(
+    input: ScopedPromptInput & { args?: Record<string, string> },
+  ): Promise<GetPromptResult> {
+    return withScopedClient(input, async (client, timeout) =>
+      GetPromptResultSchema.parse(
+        await client.getPrompt(
+          {
+            name: input.promptName,
+            arguments: input.args,
+          },
+          mcpRequestOptions(timeout),
+        ),
+      ),
+    )
+  }
+
+  async function scopedResourceInfoFromClient(
+    client: MCPClient,
+    timeout: number,
+    input: ScopedResourceInput,
+  ): Promise<ResourceInfo> {
+    if (!client.getServerCapabilities()?.resources) {
+      throw new Error(`Scoped MCP server ${input.key} does not expose resources`)
+    }
+    const result = await client.listResources(undefined, mcpRequestOptions(timeout))
+    const resource = result.resources.find((item) => item.name === input.resourceName)
+    if (!resource) throw new Error(`Scoped MCP server ${input.key} does not expose resource ${input.resourceName}`)
+    return resource
+  }
+
+  export async function scopedResourceInfo(input: ScopedResourceInput): Promise<ResourceInfo> {
+    return withScopedClient(input, async (client, timeout) => scopedResourceInfoFromClient(client, timeout, input))
+  }
+
+  export async function readScopedResource(input: ScopedResourceInput): Promise<ReadResourceResult> {
+    return withScopedClient(input, async (client, timeout) => {
+      const resource = await scopedResourceInfoFromClient(client, timeout, input)
+      return ReadResourceResultSchema.parse(
+        await client.readResource(
+          {
+            uri: resource.uri,
+          },
+          mcpRequestOptions(timeout),
+        ),
+      )
+    })
+  }
+
+  async function withScopedClient<T>(
+    input: ScopedConnectionInput,
+    run: (client: MCPClient, timeout: number) => Promise<T>,
+  ): Promise<T> {
+    const result = await createSafely(input.key, input.mcp, { cwd: input.cwd, authKey: false })
+    if (!result.mcpConnection) {
+      const status = result.status
+      const detail = "error" in status ? `: ${status.error}` : `: ${status.status}`
+      throw new Error(`Scoped MCP server ${input.key} did not connect${detail}`)
+    }
+    try {
+      const timeout = effectiveTimeout(input.mcp)
+      return await run(result.mcpConnection.client, timeout)
+    } finally {
+      await closeConnection(input.key, result.mcpConnection)
+    }
+  }
+
   const pendingOAuthFlows = new Set<string>()
 
   // Prompt cache types
-  type PromptInfo = Awaited<ReturnType<MCPClient["listPrompts"]>>["prompts"][number]
+  export type PromptInfo = Awaited<ReturnType<MCPClient["listPrompts"]>>["prompts"][number]
+  export type GetPromptResult = Awaited<ReturnType<MCPClient["getPrompt"]>>
 
-  type ResourceInfo = Awaited<ReturnType<MCPClient["listResources"]>>["resources"][number]
+  export type ResourceInfo = Awaited<ReturnType<MCPClient["listResources"]>>["resources"][number]
+  export type ReadResourceResult = Awaited<ReturnType<MCPClient["readResource"]>>
   type McpEntry = NonNullable<Config.Info["mcp"]>[string]
   export type RemoteMcpConfig = Extract<Config.Mcp, { type: "remote" }>
   function isMcpConfigured(entry: McpEntry): entry is Config.Mcp {
@@ -302,6 +452,12 @@ export namespace MCP {
     sharedProjectScoped: boolean
   }
 
+  interface CreateOptions {
+    cwd?: string
+    authKey?: string | false
+    globalTimeout?: number
+  }
+
   async function closeConnection(name: string, connection: McpConnection | undefined) {
     if (!connection) return
     await connection.client.close().catch((error) => {
@@ -314,9 +470,9 @@ export namespace MCP {
     }
   }
 
-  async function createSafely(key: string, mcp: Config.Mcp) {
+  async function createSafely(key: string, mcp: Config.Mcp, options: CreateOptions = {}) {
     try {
-      return await create(key, mcp)
+      return await create(key, mcp, options)
     } catch (error) {
       const message = errorMessage(error)
       log.error("mcp startup failed before status was available", {
@@ -560,7 +716,7 @@ export namespace MCP {
     }
   }
 
-  async function create(key: string, mcp: Config.Mcp) {
+  async function create(key: string, mcp: Config.Mcp, options: CreateOptions = {}) {
     if (mcp.enabled === false) {
       log.info("mcp server disabled", { key })
       return {
@@ -570,8 +726,8 @@ export namespace MCP {
       }
     }
 
-    const cfg = await Config.get()
-    const globalTimeout = cfg.experimental?.mcp_timeout
+    const cfg = options.cwd ? undefined : await Config.get()
+    const globalTimeout = options.globalTimeout ?? cfg?.experimental?.mcp_timeout
     const requestTimeout = effectiveTimeout(mcp, globalTimeout)
 
     log.info("found", { key, type: mcp.type })
@@ -584,7 +740,7 @@ export namespace MCP {
       // OAuth is enabled by default for remote servers unless explicitly disabled with oauth: false
       const oauthDisabled = mcp.oauth === false
       const oauthConfig = typeof mcp.oauth === "object" ? mcp.oauth : undefined
-      const authKey = oauthDisabled ? undefined : mcpAuthKey(key)
+      const authKey = oauthDisabled ? undefined : options.authKey === false ? undefined : (options.authKey ?? mcpAuthKey(key))
       let authProvider: McpOAuthProvider | undefined
 
       if (authKey) {
@@ -688,7 +844,7 @@ export namespace MCP {
 
     if (mcp.type === "local") {
       const [cmd, ...args] = mcp.command
-      const cwd = Instance.directory
+      const cwd = options.cwd ?? Instance.directory
       connectionCwd = cwd
       const env = await localMcpEnvironment(key, cmd, mcp)
       const transport = new StdioClientTransport({

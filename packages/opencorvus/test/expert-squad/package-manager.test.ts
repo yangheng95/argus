@@ -24,7 +24,40 @@ async function readJsonFile(file: string) {
 async function writePromptProfileConfig(projectRoot: string) {
   const value = {
     prompt_profile: {
-      active: "backend",
+      active: "general",
+    },
+  }
+  const file = path.join(projectRoot, "opencorvus.json")
+  await fs.writeFile(file, JSON.stringify(value, null, 2))
+  return { file, value }
+}
+
+async function writeIntegrityOwnedWorkflowConfig(projectRoot: string) {
+  const value = {
+    prompt_profile: {
+      active: "general",
+    },
+    assistant: {
+      workflows: [
+        {
+          id: "custom-owner-map",
+          name: "Custom owner map",
+          description: "Test workflow that binds build tool ownership to integrity.",
+          steps: [
+            {
+              id: "integrity-owned-build",
+              tool: "build",
+              agentRole: "integrity",
+              label: "Integrity-owned build",
+              hint: "Test only.",
+              scope: "goal",
+              skippable: false,
+              after: [],
+            },
+          ],
+          goalLoopStepIDs: ["integrity-owned-build"],
+        },
+      ],
     },
   }
   const file = path.join(projectRoot, "opencorvus.json")
@@ -131,7 +164,7 @@ describe("ExpertSquadPackageManager", () => {
     await using source = await tmpdir()
     const sourceRoot = await writeSourcePackage(source.path, "arbitrary-upload-name")
     const projectConfig = await writePromptProfileConfig(project.path)
-    const sessionOverlay = { prompt_profile: { active: "frontend-innovate" } } as const
+    const sessionOverlay = { prompt_profile: { active: "general" } } as const
 
     const imported = await Instance.provide({
       directory: project.path,
@@ -157,6 +190,108 @@ describe("ExpertSquadPackageManager", () => {
     expect(await ExpertSquadRegistry.discover(project.path)).toHaveLength(1)
   })
 
+  test("imports and exports packages using active project workflow bindings", async () => {
+    await using project = await tmpdir({ git: true })
+    await using source = await tmpdir()
+    await writeIntegrityOwnedWorkflowConfig(project.path)
+    const sourceRoot = await writeSourcePackage(source.path, "integrity-owned-upload")
+    const sourceManifest = manifest({
+      capability_projection: {
+        scheduler: {
+          role_base: true,
+          built_in_tool_ids: ["select_expert_squad", "skill", "build"],
+          package_tool_refs: [`${PACKAGE_ID}/orchestrator/source-evidence`],
+          package_skill_refs: [`${PACKAGE_ID}/orchestrator/scheduler`],
+        },
+        agents: {
+          integrity: {
+            role_base: true,
+          },
+        },
+      },
+      agents: {
+        orchestrator: {
+          prompt: "agents/orchestrator/system.md",
+          skill_refs: [`${PACKAGE_ID}/orchestrator/scheduler`],
+          tool_refs: [`${PACKAGE_ID}/orchestrator/source-evidence`],
+        },
+        integrity: {
+          prompt: "agents/integrity/system.md",
+        },
+      },
+    })
+    await fs.rm(path.join(sourceRoot, "agents", "build"), { recursive: true, force: true })
+    await writeFile(sourceRoot, "agents/integrity/system.md", "integrity overlay")
+    await writeFile(sourceRoot, ExpertSquadRegistry.MANIFEST, JSON.stringify(sourceManifest, null, 2))
+
+    const imported = await ExpertSquadPackageManager.importDirectory({
+      projectDirectory: project.path,
+      sourceDirectory: sourceRoot,
+      replace: false,
+    })
+    expect(imported.id).toBe(PACKAGE_ID)
+
+    const exported = await ExpertSquadPackageManager.exportArchive({ projectDirectory: project.path, id: PACKAGE_ID })
+    expect(exported.id).toBe(PACKAGE_ID)
+    const entries = await zipEntries(exported.bytes)
+    expect(entries.has(`${PACKAGE_ID}/agents/integrity/system.md`)).toBe(true)
+  })
+
+  test("imports packages using workflow config discovered from OPENCORVUS_CONFIG_DIR", async () => {
+    await using project = await tmpdir({ git: true })
+    await using configDir = await tmpdir()
+    await using source = await tmpdir()
+    await writeIntegrityOwnedWorkflowConfig(configDir.path)
+    const sourceRoot = await writeSourcePackage(source.path, "parent-config-owned-upload")
+    const sourceManifest = manifest({
+      capability_projection: {
+        scheduler: {
+          role_base: true,
+          built_in_tool_ids: ["select_expert_squad", "skill", "build"],
+          package_tool_refs: [`${PACKAGE_ID}/orchestrator/source-evidence`],
+          package_skill_refs: [`${PACKAGE_ID}/orchestrator/scheduler`],
+        },
+        agents: {
+          integrity: {
+            role_base: true,
+          },
+        },
+      },
+      agents: {
+        orchestrator: {
+          prompt: "agents/orchestrator/system.md",
+          skill_refs: [`${PACKAGE_ID}/orchestrator/scheduler`],
+          tool_refs: [`${PACKAGE_ID}/orchestrator/source-evidence`],
+        },
+        integrity: {
+          prompt: "agents/integrity/system.md",
+        },
+      },
+    })
+    await fs.rm(path.join(sourceRoot, "agents", "build"), { recursive: true, force: true })
+    await writeFile(sourceRoot, "agents/integrity/system.md", "integrity overlay")
+    await writeFile(sourceRoot, ExpertSquadRegistry.MANIFEST, JSON.stringify(sourceManifest, null, 2))
+    await expect(fs.lstat(path.join(project.path, ".gitignore"))).rejects.toMatchObject({ code: "ENOENT" })
+
+    const previousConfigDir = process.env.OPENCORVUS_CONFIG_DIR
+    process.env.OPENCORVUS_CONFIG_DIR = configDir.path
+    let imported: ExpertSquadPackageManager.ImportResult
+    try {
+      imported = await ExpertSquadPackageManager.importDirectory({
+        projectDirectory: project.path,
+        sourceDirectory: sourceRoot,
+        replace: false,
+      })
+    } finally {
+      if (previousConfigDir === undefined) delete process.env.OPENCORVUS_CONFIG_DIR
+      else process.env.OPENCORVUS_CONFIG_DIR = previousConfigDir
+    }
+
+    expect(imported.id).toBe(PACKAGE_ID)
+    expect(imported.targetRoot).toBe(path.join(project.path, ".opencorvus", "expert-squads", PACKAGE_ID))
+    await expect(fs.lstat(path.join(project.path, ".gitignore"))).rejects.toMatchObject({ code: "ENOENT" })
+  })
+
   test("imports a ZIP archive with an arbitrary wrapper folder", async () => {
     await using project = await tmpdir()
     const projectConfig = await writePromptProfileConfig(project.path)
@@ -178,13 +313,13 @@ describe("ExpertSquadPackageManager", () => {
     await using project = await tmpdir()
     await using source = await tmpdir()
     const sourceRoot = await writeSourcePackage(source.path, "built-in-collision", {
-      [ExpertSquadRegistry.MANIFEST]: JSON.stringify(manifest({ id: "frontend-replica" }), null, 2),
+      [ExpertSquadRegistry.MANIFEST]: JSON.stringify(manifest({ id: "general" }), null, 2),
     })
 
     await expect(
       ExpertSquadPackageManager.importDirectory({ projectDirectory: project.path, sourceDirectory: sourceRoot, replace: false }),
     ).rejects.toThrow(/collides with a built-in expert squad id/)
-    await expect(fs.lstat(path.join(project.path, ".opencorvus", "expert-squads", "frontend-replica"))).rejects.toMatchObject({
+    await expect(fs.lstat(path.join(project.path, ".opencorvus", "expert-squads", "general"))).rejects.toMatchObject({
       code: "ENOENT",
     })
   })
@@ -442,6 +577,22 @@ describe("ExpertSquadPackageManager", () => {
 
     await expect(ExpertSquadPackageManager.exportArchive({ projectDirectory: project.path, id: `../${PACKAGE_ID}` })).rejects.toThrow(
       /invalid expert squad id/,
+    )
+  })
+
+  test("rejects export when an installed package contains OpenCorvus runtime internals", async () => {
+    await using project = await tmpdir()
+    await using source = await tmpdir()
+    const sourceRoot = await writeSourcePackage(source.path)
+    const imported = await ExpertSquadPackageManager.importDirectory({
+      projectDirectory: project.path,
+      sourceDirectory: sourceRoot,
+      replace: false,
+    })
+    await writeFile(imported.targetRoot, ".opencorvus/r/runtime/worktrees/.opencorvus-meta.json", "{}")
+
+    await expect(ExpertSquadPackageManager.exportArchive({ projectDirectory: project.path, id: PACKAGE_ID })).rejects.toThrow(
+      /runtime-internal entry ".opencorvus" is not allowed/,
     )
   })
 

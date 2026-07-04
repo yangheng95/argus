@@ -1,5 +1,6 @@
-import { AgentRoleContract, type AgentRoleID, type OrchestratorWorkflowToolName } from "@/agent/role-contract"
-import { AgentToolPool } from "@/agent/tool-pool-contract"
+import { AgentRoleContract, type AgentRoleID } from "@/agent/role-contract"
+import { McpConfigSchema } from "@/config/mcp-schema"
+import type { OrchestratorWorkflowToolName, SchedulerAgentWorkflowBinding } from "@/engine/workflow"
 import { Filesystem } from "@/util/filesystem"
 import type { Dirent } from "fs"
 import { lstat, readdir, realpath } from "fs/promises"
@@ -64,6 +65,20 @@ export namespace ExpertSquadRegistry {
     })
     .strict()
 
+  const FrontendDesignDynamicAttributes = z
+    .object({
+      require_design_direction_contract: z.boolean().optional().default(false),
+    })
+    .strict()
+
+  const DynamicAttributes = z
+    .object({
+      frontend_design: FrontendDesignDynamicAttributes.optional().default({
+        require_design_direction_contract: false,
+      }),
+    })
+    .strict()
+
   const Manifest = z
     .object({
       schema_version: z.literal(1),
@@ -74,6 +89,9 @@ export namespace ExpertSquadRegistry {
       readme: z.literal("README.md"),
       selector: Selector,
       capability_projection: CapabilityProjection,
+      dynamic_attributes: DynamicAttributes.optional().default({
+        frontend_design: { require_design_direction_contract: false },
+      }),
       agents: z.record(z.string(), AgentDefinition).default({}),
     })
     .strict()
@@ -106,12 +124,14 @@ export namespace ExpertSquadRegistry {
     description?: string
     version?: string
     selector?: SelectorMetadata
+    selectorInstructions?: string
   }
 
   export interface PackageLocation extends PackageCatalogEntry {
     root: string
     manifestPath: string
     readmePath: string
+    readmeContent: string
   }
 
   export interface LoadedPackage extends PackageLocation {
@@ -131,6 +151,16 @@ export namespace ExpertSquadRegistry {
     projectedWorkflowTools: OrchestratorWorkflowToolName[]
   }
 
+  export interface CatalogPackage extends PackageLocation {
+    manifest: Manifest
+    selectorInstructions?: string
+    promptProfile: {
+      label: string
+      description?: string
+      agents: Record<string, string>
+    }
+  }
+
   export interface EmbeddedPackageSource {
     id: string
     manifestText: string
@@ -144,6 +174,7 @@ export namespace ExpertSquadRegistry {
     version?: string
     selector?: SelectorMetadata
     manifest: Manifest
+    readmeContent: string
     selectorInstructions?: string
     promptProfile: {
       label: string
@@ -198,6 +229,13 @@ export namespace ExpertSquadRegistry {
       segments.some((segment) => !segment || segment === "." || segment === "..")
     ) {
       throw new Error(`${context}: unsafe relative path "${relativePath}"`)
+    }
+  }
+
+  function assertSelectorInstructionsPath(relativePath: string, context: string) {
+    assertSafeManifestRelativePath(relativePath, context)
+    if (relativePath !== "selector.md") {
+      throw new Error(`${context}: selector instructions must be top-level selector.md, got "${relativePath}"`)
     }
   }
 
@@ -390,19 +428,25 @@ export namespace ExpertSquadRegistry {
     return { skillRefs, toolRefs, mcpServerRefs, mcpToolRefs, mcpPromptRefs, mcpResourceRefs }
   }
 
-  const McpCapabilityManifest = z
+  const McpCapabilities = z
     .object({
-      capabilities: z
-        .object({
-          tools: z.array(RefSegment).optional().default([]),
-          prompts: z.array(RefSegment).optional().default([]),
-          resources: z.array(RefSegment).optional().default([]),
-        })
-        .strict()
-        .optional()
-        .default({ tools: [], prompts: [], resources: [] }),
+      tools: z.array(RefSegment).optional().default([]),
+      prompts: z.array(RefSegment).optional().default([]),
+      resources: z.array(RefSegment).optional().default([]),
     })
-    .passthrough()
+    .strict()
+    .optional()
+    .default({ tools: [], prompts: [], resources: [] })
+
+  export const McpDefinition = z.discriminatedUnion("type", [
+    McpConfigSchema.McpLocal.extend({ capabilities: McpCapabilities }),
+    McpConfigSchema.McpRemote.extend({ capabilities: McpCapabilities }),
+  ])
+  export type McpDefinition = z.infer<typeof McpDefinition>
+
+  export function parseMcpDefinitionText(text: string, source: string): McpDefinition {
+    return McpDefinition.parse(parseJsoncText(text, source))
+  }
 
   async function collectMcpRefs(
     dir: string,
@@ -421,7 +465,7 @@ export namespace ExpertSquadRegistry {
       const serverRef = `${refBase}/${serverID}`
       addRef(sets.mcpServerRefs, serverRef, dir)
       const raw = await readJsoncFile(path.join(dir, file))
-      const capabilities = McpCapabilityManifest.parse(raw).capabilities
+      const capabilities = McpDefinition.parse(raw).capabilities
       for (const tool of capabilities.tools) addRef(sets.mcpToolRefs, `${serverRef}/tool/${tool}`, `${serverRef}.tools`)
       for (const prompt of capabilities.prompts) {
         addRef(sets.mcpPromptRefs, `${serverRef}/prompt/${prompt}`, `${serverRef}.prompts`)
@@ -502,11 +546,17 @@ export namespace ExpertSquadRegistry {
     }
   }
 
-  function workflowToolToRole(): Map<OrchestratorWorkflowToolName, AgentRoleID> {
+  type LoadPackageOptions = {
+    workflowBindings?: readonly SchedulerAgentWorkflowBinding[]
+  }
+
+  async function workflowToolToRole(
+    bindings?: readonly SchedulerAgentWorkflowBinding[],
+  ): Promise<Map<OrchestratorWorkflowToolName, AgentRoleID>> {
+    const { WorkflowRegistry } = await import("@/engine/workflow")
     const result = new Map<OrchestratorWorkflowToolName, AgentRoleID>()
-    for (const role of AgentRoleContract.ids) {
-      const workflowTool = AgentRoleContract.orchestratorWorkflowToolName(role)
-      if (workflowTool) result.set(workflowTool, role)
+    for (const binding of bindings ?? WorkflowRegistry.schedulerAgentWorkflowBindingsSync()) {
+      result.set(binding.workflow_tool_name, binding.stage)
     }
     return result
   }
@@ -621,11 +671,14 @@ export namespace ExpertSquadRegistry {
     }
 
     const readmePath = await assertFile(normalizedRoot, manifest.readme, "readme")
+    const readmeContent = (await Filesystem.readText(readmePath)).trim()
+    if (!readmeContent) throw new Error("readme: referenced file is blank")
     return {
       id: manifest.id,
       root: normalizedRoot,
       manifestPath,
       readmePath,
+      readmeContent,
       label: manifest.label,
       description: manifest.description,
       version: manifest.version,
@@ -634,13 +687,22 @@ export namespace ExpertSquadRegistry {
     }
   }
 
-  function publicMetadata(metadata: ParsedPackageMetadata): PackageCatalogEntry {
+  async function readCatalogSelectorInstructions(metadata: ParsedPackageMetadata): Promise<string | undefined> {
+    const instructions = metadata.manifest.selector?.instructions
+    if (!instructions) return undefined
+    assertSelectorInstructionsPath(instructions, "selector.instructions")
+    const selectorPath = await assertNonBlankFile(metadata.root, instructions, "selector.instructions")
+    return (await Filesystem.readText(selectorPath)).trim()
+  }
+
+  async function publicMetadata(metadata: ParsedPackageMetadata): Promise<PackageCatalogEntry> {
     return {
       id: metadata.id,
       label: metadata.label,
       description: metadata.description,
       version: metadata.version,
       selector: metadata.selector,
+      selectorInstructions: await readCatalogSelectorInstructions(metadata),
     }
   }
 
@@ -662,13 +724,18 @@ export namespace ExpertSquadRegistry {
     if (manifest.id !== source.id) {
       throw new Error(`built-in expert squad source id "${source.id}" does not match manifest id "${manifest.id}"`)
     }
-    if (typeof source.files[manifest.readme] !== "string") {
+    const readmeContent = source.files[manifest.readme]
+    if (typeof readmeContent !== "string") {
       throw new Error(`built-in expert squad ${manifest.id}: missing ${manifest.readme}`)
+    }
+    const trimmedReadme = readmeContent.trim()
+    if (!trimmedReadme) {
+      throw new Error(`built-in expert squad ${manifest.id}: blank ${manifest.readme}`)
     }
 
     let selectorInstructions: string | undefined
     if (manifest.selector?.instructions) {
-      assertSafeManifestRelativePath(manifest.selector.instructions, `built-in expert squad ${manifest.id}.selector.instructions`)
+      assertSelectorInstructionsPath(manifest.selector.instructions, `built-in expert squad ${manifest.id}.selector.instructions`)
       const instructions = source.files[manifest.selector.instructions]
       if (typeof instructions !== "string") {
         throw new Error(`built-in expert squad ${manifest.id}: missing selector instructions ${manifest.selector.instructions}`)
@@ -700,6 +767,7 @@ export namespace ExpertSquadRegistry {
       version: manifest.version,
       selector: selectorMetadata(manifest),
       manifest,
+      readmeContent: trimmedReadme,
       selectorInstructions,
       promptProfile: {
         label: manifest.label,
@@ -790,7 +858,10 @@ export namespace ExpertSquadRegistry {
     }
   }
 
-  async function loadValidatedPackage(root: string, options: { canonicalFolder: boolean }): Promise<LoadedPackage> {
+  async function loadValidatedPackage(
+    root: string,
+    options: { canonicalFolder: boolean } & LoadPackageOptions,
+  ): Promise<LoadedPackage> {
     const metadata = await readPackageMetadata(root, options)
     const { manifest } = metadata
 
@@ -798,15 +869,15 @@ export namespace ExpertSquadRegistry {
       assertRoleID(agentID, `agents.${agentID}`)
       if (agent.prompt) await assertFile(metadata.root, agent.prompt, `agents.${agentID}.prompt`)
     }
-    let selectorInstructions: string | undefined
-    if (manifest.selector?.instructions) {
-      const selectorPath = await assertNonBlankFile(metadata.root, manifest.selector.instructions, "selector.instructions")
-      selectorInstructions = (await Filesystem.readText(selectorPath)).trim()
-    }
+    const selectorInstructions = await readCatalogSelectorInstructions(metadata)
 
     const refs = await collectPackageRefs(metadata.root, manifest.id)
     const declaredRefs = collectDeclaredRefs(manifest, refs)
 
+    const [{ AgentToolPool }, workflowByTool] = await Promise.all([
+      import("@/agent/tool-pool-contract"),
+      workflowToolToRole(options.workflowBindings),
+    ])
     const canonicalToolIDs = AgentToolPool.canonicalToolIDs()
     validateProjection({
       id: manifest.id,
@@ -830,7 +901,6 @@ export namespace ExpertSquadRegistry {
       })
     }
 
-    const workflowByTool = workflowToolToRole()
     const projectedWorkflowTools = manifest.capability_projection.scheduler.built_in_tool_ids.filter(
       (toolID): toolID is OrchestratorWorkflowToolName => workflowByTool.has(toolID as OrchestratorWorkflowToolName),
     )
@@ -858,12 +928,21 @@ export namespace ExpertSquadRegistry {
     }
   }
 
-  export async function loadPackage(root: string): Promise<LoadedPackage> {
-    return loadValidatedPackage(root, { canonicalFolder: true })
+  export async function loadPackage(root: string, options: LoadPackageOptions = {}): Promise<LoadedPackage> {
+    return loadValidatedPackage(root, { canonicalFolder: true, ...options })
   }
 
-  export async function loadSourcePackage(root: string): Promise<LoadedPackage> {
-    return loadValidatedPackage(root, { canonicalFolder: false })
+  export async function loadSourcePackage(root: string, options: LoadPackageOptions = {}): Promise<LoadedPackage> {
+    return loadValidatedPackage(root, { canonicalFolder: false, ...options })
+  }
+
+  export async function loadCatalogPackage(root: string): Promise<CatalogPackage> {
+    const metadata = await readPackageMetadata(root, { canonicalFolder: true })
+    return {
+      ...metadata,
+      selectorInstructions: await readCatalogSelectorInstructions(metadata),
+      promptProfile: await readPromptProfile(metadata),
+    }
   }
 
   export async function discover(root: string): Promise<PackageCatalogEntry[]> {
@@ -876,7 +955,7 @@ export namespace ExpertSquadRegistry {
       const pkg = await readPackageMetadata(packageRoot, { canonicalFolder: true })
       if (seen.has(pkg.id)) throw new Error(`duplicate expert squad id "${pkg.id}"`)
       seen.add(pkg.id)
-      packages.push(publicMetadata(pkg))
+      packages.push(await publicMetadata(pkg))
     }
     return packages
   }

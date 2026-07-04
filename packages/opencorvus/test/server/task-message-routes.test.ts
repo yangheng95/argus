@@ -1661,12 +1661,14 @@ describe("task message routes", () => {
           body: JSON.stringify({
             text: "参考这个坏附件。",
             source: "panel",
-            promptProfile: "frontend-automation-debug",
+            promptProfile: "general",
             attachments: [{ mime: "image/png", filename: "bad.png", data: "not base64!*" }],
           }),
         })
 
+        const responseText = await response.text()
         expect(response.status).not.toBe(200)
+        expect(responseText).toContain("invalid base64 payload")
         expect(writeAttachment).not.toHaveBeenCalled()
         expect(dispatchTaskLoop).not.toHaveBeenCalled()
         const task = Database.use((db) =>

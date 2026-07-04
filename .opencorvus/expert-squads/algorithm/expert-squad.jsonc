@@ -1,15 +1,10 @@
 {
   "schema_version": 1,
-  "id": "frontend-innovate",
-  "label": "Frontend Innovate",
-  "description": "Frontend design-resource synthesis, task-first redesign philosophy, named direction comparison, selected implementation handoff, and rendered evidence review expert squad.",
+  "id": "algorithm",
+  "label": "Algorithm",
+  "description": "Correctness, complexity, benchmark, and adversarial-case focused expert squad.",
   "version": "2026.07.03",
   "readme": "README.md",
-  "selector": {
-    "summary": "Frontend design-resource synthesis, task-first redesign philosophy, named direction comparison, selected implementation handoff, and rendered evidence review expert squad.",
-    "selection_guidance": "Use select_expert_squad with profile_id frontend-innovate when the user request matches this expert squad.",
-    "instructions": "selector.md"
-  },
   "capability_projection": {
     "scheduler": {
       "role_base": true,
@@ -17,12 +12,9 @@
         "analyze_intent",
         "requirements",
         "architect",
-        "frontend_research",
-        "frontend_design",
         "deep_research",
         "workload_analysis",
         "build",
-        "visual_qa",
         "integrity",
         "fact_check",
         "explore",
@@ -32,7 +24,6 @@
         "delete_goal",
         "propose_task",
         "refine",
-        "browser_preview",
         "bash"
       ]
     },
@@ -41,6 +32,18 @@
         "role_base": true
       },
       "coding-assistant": {
+        "role_base": true
+      },
+      "compaction": {
+        "role_base": true
+      },
+      "title": {
+        "role_base": true
+      },
+      "summary": {
+        "role_base": true
+      },
+      "control": {
         "role_base": true
       },
       "general": {
@@ -61,16 +64,7 @@
       "architect": {
         "role_base": true
       },
-      "frontend-design": {
-        "role_base": true
-      },
-      "frontend-research": {
-        "role_base": true
-      },
       "build": {
-        "role_base": true
-      },
-      "visual-qa": {
         "role_base": true
       },
       "deep-research": {
@@ -115,17 +109,8 @@
     "architect": {
       "prompt": "agents/architect/system.md"
     },
-    "frontend-design": {
-      "prompt": "agents/frontend-design/system.md"
-    },
-    "frontend-research": {
-      "prompt": "agents/frontend-research/system.md"
-    },
     "build": {
       "prompt": "agents/build/system.md"
-    },
-    "visual-qa": {
-      "prompt": "agents/visual-qa/system.md"
     },
     "deep-research": {
       "prompt": "agents/deep-research/system.md"

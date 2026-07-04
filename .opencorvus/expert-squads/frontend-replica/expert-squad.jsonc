@@ -1,10 +1,15 @@
 {
   "schema_version": 1,
-  "id": "backend",
-  "label": "Backend",
-  "description": "API, state, data, integration, and operational correctness focused expert squad.",
+  "id": "frontend-replica",
+  "label": "Frontend Replica",
+  "description": "Source URL/reference-screenshot replica, desktop surface ledger, bounded evidence-backed acceptance, source evidence, and rendered proof expert squad.",
   "version": "2026.07.03",
   "readme": "README.md",
+  "selector": {
+    "summary": "Source URL/reference-screenshot replica, desktop surface ledger, bounded evidence-backed acceptance, source evidence, and rendered proof expert squad.",
+    "selection_guidance": "Use select_expert_squad with profile_id frontend-replica when the user request matches this expert squad.",
+    "instructions": "selector.md"
+  },
   "capability_projection": {
     "scheduler": {
       "role_base": true,
@@ -12,11 +17,12 @@
         "analyze_intent",
         "requirements",
         "architect",
-        "deep_research",
+        "frontend_research",
+        "frontend_design",
         "workload_analysis",
         "build",
+        "visual_qa",
         "integrity",
-        "fact_check",
         "explore",
         "add_goal",
         "modify_goal",
@@ -24,6 +30,7 @@
         "delete_goal",
         "propose_task",
         "refine",
+        "browser_preview",
         "bash"
       ]
     },
@@ -32,6 +39,18 @@
         "role_base": true
       },
       "coding-assistant": {
+        "role_base": true
+      },
+      "compaction": {
+        "role_base": true
+      },
+      "title": {
+        "role_base": true
+      },
+      "summary": {
+        "role_base": true
+      },
+      "control": {
         "role_base": true
       },
       "general": {
@@ -52,16 +71,19 @@
       "architect": {
         "role_base": true
       },
-      "build": {
+      "frontend-design": {
         "role_base": true
       },
-      "deep-research": {
-        "role_base": true
-      },
-      "fact-check": {
+      "frontend-research": {
         "role_base": true
       },
       "goal-workload-analyst": {
+        "role_base": true
+      },
+      "build": {
+        "role_base": true
+      },
+      "visual-qa": {
         "role_base": true
       },
       "integrity": {
@@ -97,14 +119,17 @@
     "architect": {
       "prompt": "agents/architect/system.md"
     },
+    "frontend-design": {
+      "prompt": "agents/frontend-design/system.md"
+    },
+    "frontend-research": {
+      "prompt": "agents/frontend-research/system.md"
+    },
     "build": {
       "prompt": "agents/build/system.md"
     },
-    "deep-research": {
-      "prompt": "agents/deep-research/system.md"
-    },
-    "fact-check": {
-      "prompt": "agents/fact-check/system.md"
+    "visual-qa": {
+      "prompt": "agents/visual-qa/system.md"
     },
     "integrity": {
       "prompt": "agents/integrity/system.md"

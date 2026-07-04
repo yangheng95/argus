@@ -54,7 +54,7 @@ OpenAPI 只会给项目作用域操作标注 `directory` query 参数。单个 T
 | GET | `/config` | Get configuration | `config.get` |
 | PATCH | `/config` | Update configuration (JSON Merge Patch) 错误: `BadRequestError`. | `config.update` |
 | GET | `/config/prompt` | List prompt catalog | `config.prompt` |
-| GET | `/config/prompt-profile` | List prompt profiles | `config.promptProfile` |
+| GET | `/config/prompt-profile` | List prompt profiles and expert-squad package projections | `config.promptProfile` |
 | GET | `/config/providers` | List config providers | `config.providers` |
 | POST | `/config/proxy/test` | Test network proxy 错误: `NetworkProxyTestResponse`. | `config.proxy.test` |
 | GET | `/formatter` | Get formatter status | `formatter.status` |

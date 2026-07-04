@@ -1,6 +1,7 @@
 import z from "zod"
 import { AgentRoleContract, type AgentRoleID } from "@/agent/role-contract"
-import { builtInPromptProfiles } from "@/expert-squad/builtin"
+import { builtInPromptProfiles, loadedBuiltInPackages } from "@/expert-squad/builtin"
+import { catalogProfileFromPackage } from "@/expert-squad/catalog-profile"
 
 export const DEFAULT_PROMPT_PROFILE_ID = "general"
 export const PROMPT_PROFILE_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
@@ -60,6 +61,31 @@ export const PromptProfileTargetCatalogEntrySchema = z
   })
   .strict()
 
+export const PromptProfileCapabilityProjectionEntrySchema = z
+  .object({
+    built_in_tool_ids: z.array(z.string()),
+    default_skill_refs: z.array(z.string()),
+    package_skill_refs: z.array(z.string()),
+    default_tool_refs: z.array(z.string()),
+    package_tool_refs: z.array(z.string()),
+    default_mcp_server_refs: z.array(z.string()),
+    package_mcp_server_refs: z.array(z.string()),
+    default_mcp_tool_refs: z.array(z.string()),
+    package_mcp_tool_refs: z.array(z.string()),
+    default_mcp_prompt_refs: z.array(z.string()),
+    package_mcp_prompt_refs: z.array(z.string()),
+    default_mcp_resource_refs: z.array(z.string()),
+    package_mcp_resource_refs: z.array(z.string()),
+  })
+  .strict()
+
+export const PromptProfileCapabilityProjectionSchema = z
+  .object({
+    scheduler: PromptProfileCapabilityProjectionEntrySchema,
+    agents: z.record(z.string(), PromptProfileCapabilityProjectionEntrySchema),
+  })
+  .strict()
+
 export const PromptProfileCatalogProfileSchema = z
   .object({
     id: z.string(),
@@ -68,6 +94,10 @@ export const PromptProfileCatalogProfileSchema = z
     built_in: z.boolean(),
     editable: z.boolean(),
     agents: z.record(z.string(), z.string()),
+    capability_profile_id: z.string(),
+    projection_hash: z.string(),
+    projected_agents: z.array(z.string()),
+    capability_projection: PromptProfileCapabilityProjectionSchema,
   })
   .strict()
 
@@ -143,16 +173,16 @@ export namespace PromptProfile {
       projectActive?: string
       sessionActive?: string | null
     } = {},
-  ) {
+  ): PromptProfileCatalog {
     const active = activeID(config)
-    const profiles = Object.entries(catalog(config)).map(([id, profile]) => ({
-      id,
-      label: profile.label,
-      description: profile.description,
-      built_in: Object.hasOwn(builtIns, id),
-      editable: !Object.hasOwn(builtIns, id),
-      agents: { ...(profile.agents ?? {}) },
-    }))
+    const profiles = loadedBuiltInPackages.map((pkg) =>
+      catalogProfileFromPackage({
+        id: pkg.id,
+        pkg,
+        builtIn: true,
+        builtInToolIDs: pkg.manifest.capability_projection.scheduler.built_in_tool_ids,
+      }),
+    )
     return PromptProfileCatalogSchema.parse({
       active,
       project_active: opts.projectActive ?? active,

@@ -12,7 +12,7 @@ The reason must cite task evidence, such as source URL, reference screenshot, de
 
 ## Dispatch discipline
 
-- Treat frontend replica as a workflow / pipeline task, not a direct single Build task. The normal path is source evidence, Requirements, Architect goals, per-goal Build, Visual QA, Integrity, then Orchestrator lifecycle decision.
+- Treat frontend replica as a multi-agent source-evidence implementation task, not as a single blind Build pass. The normal scheduler-declared path is source evidence, Requirements, Architect goals, per-goal Build, Visual QA, Integrity, then Orchestrator lifecycle decision.
 - Treat `frontend_research` as source-page investigation and page-skeleton evidence ownership.
 - Treat `frontend_design` as a single-shot task-scope handoff producer for the replica contract, material inventory, source handoff, and layout/style/data/interaction constraints.
 - Treat `architect` and `build` as consumers of that evidence, not as replacements for source investigation.
@@ -62,14 +62,14 @@ The reason must cite task evidence, such as source URL, reference screenshot, de
 
 ## Visual QA and Integrity feedback consumption
 
-- Build repair after Visual QA or Integrity must consume the latest blocker evidence before claiming pass. The repair report must cite consumed diagnostic refs, affected source regions, target files changed, and fresh rendered proof.
+- Implementation repair after Visual QA or Integrity must consume the latest blocker evidence before claiming pass. The repair report from the current workflow implementation owner must cite consumed diagnostic refs, affected source regions, target files changed, and fresh rendered proof.
 - Visual QA must carry unresolved prior blockers forward unless fresh rendered evidence proves they are fixed. A clean new screenshot that does not inspect the blocked region is not proof of repair.
 - Integrity must review the implementation evidence ledger, not just the latest optimistic report. Repeated implementation blockers across attempts are delivery facts, and the second evidence-backed implementation non-pass round should recommend not accepted instead of another generic repair. Do not let Integrity re-judge the rendered visual verdict.
 - Annotated Visual QA screenshots and DOM diagnostics are repair inputs. They do not replace source/reference proof, and they must stay separate from target reference evidence.
 
 ## Browser preview evidence ownership
 
-- Build owns changed-region module binding proof for implemented desktop replica regions: when source/reference evidence and local implementation regions exist, it must call `browser_preview_reference_regions` and inspect the single returned source/local module comparison attachment.
+- The current workflow implementation owner owns changed-region module binding proof for implemented desktop replica regions: when source/reference evidence and local implementation regions exist, it must call `browser_preview_reference_regions` and inspect the single returned source/local module comparison attachment.
 - Visual QA owns independent final rendered parity review as source-to-target review: it must use Browser MCP screenshot/observe tools for ordinary screenshots and browser operations, call `browser_preview_reference_regions` only for one module source-binding comparison, and call `browser_preview_compare_scroll_slices` only for supporting page-slice `visual_diff` evidence.
 - `browser_preview_reference_regions` is for concrete component or module regions, not first-viewport slices, whole-page screenshots, body/main/app roots, or page-shell locators. It does not run a second `reference-comparison` pass and does not auto-call slice or screenshot tools on bind failure. First-viewport and screen-by-screen checks use `browser_preview_compare_scroll_slices` with aligned `scrollY` and `sliceHeight`.
 - Every returned comparison artifact must be inspected with `comparison_guidance`: LEFT is the source/reference image, RIGHT is the rendered/local implementation, and the checklist covers layout alignment, region order, icons/assets, colors, spacing/density, typography, content hallucinations or omissions, component family drift, chart/table/map geometry, state visuals, layering, scoped desktop viewport drift, and placeholder/fake UI.

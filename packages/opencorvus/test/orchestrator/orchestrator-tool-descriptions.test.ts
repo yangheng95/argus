@@ -30,8 +30,9 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.propose_task.description).toContain("artifact state")
     expect(tools.propose_task.description).toContain("Independent child tasks may run in parallel")
     expect(tools.propose_task.description).toContain("Dependent follow-up work must queue")
-    expect(tools.propose_task.description).toContain("very specific code-module problem")
-    expect(tools.propose_task.description).toContain("concrete code module reference entity")
+    expect(tools.propose_task.description).toContain("very specific evidence-anchored problem")
+    expect(tools.propose_task.description).toContain("evidence_anchor")
+    expect(tools.propose_task.description).toContain("current-task evidence refs")
     expect(tools.propose_task.description).toContain("Refuse generic follow-up work")
     expect(tools.propose_task.description).toContain("active workflow contract is fundamentally wrong")
     expect(tools.propose_task.description).toContain("instead of rerunning requirements/plan/executor")
@@ -72,8 +73,8 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
 
   test("respond_agent_coordination does not advertise generic same-kind redispatch", () => {
     const decision = tools.respond_agent_coordination.inputSchema!.shape.decision as { description?: string }
-    expect(decision.description).toContain("concrete stage/tool dispatcher binding")
-    expect(decision.description).toContain("Generic same-kind session redispatch is rejected")
+    expect(decision.description).toContain("concrete scheduler workflow tool")
+    expect(decision.description).toContain("Same-session replay without that workflow tool binding is rejected")
     expect(decision.description).not.toContain("same-kind or stage-specific")
   })
 
@@ -101,7 +102,9 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.select_expert_squad.description).toContain("infer the profile from keywords")
     expect(tools.select_expert_squad.description).not.toContain("change tools")
     const profileID = tools.select_expert_squad.inputSchema!.shape.profile_id as { description?: string }
-    expect(profileID.description).toContain("frontend-innovate")
+    expect(profileID.description).toContain("backend prompt-profile catalog")
+    expect(profileID.description).toContain("loaded current-project expert-squad selector skill")
+    expect(profileID.description).not.toContain("frontend-innovate")
 
     expect(tools.skill.description).toContain("Scheduler-only")
     expect(tools.skill.description).toContain("mounted Orchestrator expert-squad skills")
@@ -265,7 +268,7 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.visual_qa.description).toContain("frontend visual GUI and functional product review agent")
     expect(tools.visual_qa.description).toContain("GUI means Graphical User Interface")
     expect(tools.visual_qa.description).toContain("Use once near task completion")
-    expect(tools.visual_qa.description).toContain("after all blocking build work is terminal")
+    expect(tools.visual_qa.description).toContain("after all blocking implementation work is terminal")
     expect(tools.visual_qa.description).toContain("Visual QA and integrity are peer review agents")
     expect(tools.visual_qa.description).toContain("component truth and visible functionality first")
     expect(tools.visual_qa.description).toContain("layout/composition second")

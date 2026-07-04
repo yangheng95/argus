@@ -11,7 +11,11 @@ import { Message } from "../../src/session/message"
 import { SessionPrompt } from "../../src/session/prompt"
 import { Database } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
-import { PROJECT_EXPERT_SQUAD_ID, writeProjectExpertSquadPackage } from "../fixture/expert-squad"
+import {
+  copyRepositoryExpertSquadPackage,
+  PROJECT_EXPERT_SQUAD_ID,
+  writeProjectExpertSquadPackage,
+} from "../fixture/expert-squad"
 import { tmpdir } from "../fixture/fixture"
 import { installControlModel } from "../workspace/mock-control-model"
 
@@ -38,10 +42,19 @@ type CapturedRuntimeContract = {
     agentKind?: string
     contractKind?: string
     sessionID?: string
+    promptProfileID?: string
+    capabilityProfileID?: string
+    projectionHash?: string
   }
 }
 
-function insertWorkflowTask(input: { taskID: string; rootSessionID: string; now: number; title: string }) {
+function insertWorkflowTask(input: {
+  taskID: string
+  rootSessionID: string
+  now: number
+  title: string
+  kind?: "workflow" | "build"
+}) {
   Database.use((db) => {
     db.insert(EngineTaskTable)
       .values({
@@ -51,7 +64,7 @@ function insertWorkflowTask(input: { taskID: string; rootSessionID: string; now:
         source: "test",
         title: input.title,
         request: input.title,
-        kind: "workflow",
+        kind: input.kind ?? "workflow",
         priority: "normal",
         time_created: input.now,
         time_updated: input.now,
@@ -114,6 +127,8 @@ function toolText(result: unknown): string {
 async function captureOrchestratorRuntimeContract(input: {
   profileID: string
   writeProjectPackage?: boolean
+  repositoryPackageID?: string
+  taskKind?: "workflow" | "build"
 }): Promise<CapturedRuntimeContract> {
   installControlModel()
   await using tmp = await tmpdir({ git: true, config: { model: "mock-control/control" } })
@@ -123,6 +138,7 @@ async function captureOrchestratorRuntimeContract(input: {
     directory: tmp.path,
     fn: async () => {
       if (input.writeProjectPackage) await writeProjectExpertSquadPackage(tmp.path)
+      if (input.repositoryPackageID) await copyRepositoryExpertSquadPackage(tmp.path, input.repositoryPackageID)
       const now = Date.now()
       const taskID = Identifier.ascending("task")
       const root = await Session.create({ kind: "root", title: `scheduler projection ${input.profileID}` })
@@ -138,6 +154,7 @@ async function captureOrchestratorRuntimeContract(input: {
         rootSessionID: root.id,
         now,
         title: `scheduler projection ${input.profileID}`,
+        kind: input.taskKind,
       })
 
       spyOn(SessionPrompt, "prompt").mockImplementation((async (promptInput) => {
@@ -149,6 +166,9 @@ async function captureOrchestratorRuntimeContract(input: {
             agentKind: contract?.identity.agentKind,
             contractKind: contract?.identity.contractKind,
             sessionID: contract?.identity.sessionID,
+            promptProfileID: contract?.identity.promptProfileID,
+            capabilityProfileID: contract?.identity.capabilityProfileID,
+            projectionHash: contract?.identity.projectionHash,
           },
         }
         return toolCallFinish(promptInput.sessionID)
@@ -173,6 +193,9 @@ describe("orchestrator scheduler capability projection", () => {
 
     expect(captured.identity.agentKind).toBe("orchestrator")
     expect(captured.identity.contractKind).toBe("orchestrator-wake")
+    expect(captured.identity.promptProfileID).toBe("general")
+    expect(captured.identity.capabilityProfileID).toBe("general")
+    expect(captured.identity.projectionHash).toMatch(/^[a-f0-9]{64}$/)
     expect(captured.includeMcpTools).toBe(false)
     expect(captured.toolIDs).toEqual([...expectedSchedulerRoleBaseToolIDs])
     expect(captured.toolIDs).not.toContain("build")
@@ -196,8 +219,11 @@ describe("orchestrator scheduler capability projection", () => {
     expect(captured.toolIDs).not.toContain("source-evidence")
   })
 
-  test("frontend automation debug wake installs its active built-in projected workflow tools", async () => {
-    const captured = await captureOrchestratorRuntimeContract({ profileID: "frontend-automation-debug" })
+  test("frontend automation debug project package wake installs its active projected workflow tools", async () => {
+    const captured = await captureOrchestratorRuntimeContract({
+      profileID: "frontend-automation-debug",
+      repositoryPackageID: "frontend-automation-debug",
+    })
 
     expect(captured.includeMcpTools).toBe(false)
     expect(captured.toolIDs.slice(0, expectedSchedulerRoleBaseToolIDs.length)).toEqual([
@@ -208,6 +234,38 @@ describe("orchestrator scheduler capability projection", () => {
     expect(captured.toolIDs).toContain("visual_qa")
     expect(captured.toolIDs).toContain("browser_preview")
     expect(captured.toolIDs).not.toContain("deep_research")
+  })
+
+  test("direct build workflow hides profile-declared pipeline workflow tools", async () => {
+    const captured = await captureOrchestratorRuntimeContract({
+      profileID: "frontend-innovate",
+      repositoryPackageID: "frontend-innovate",
+      taskKind: "build",
+    })
+
+    expect(captured.includeMcpTools).toBe(false)
+    expect(captured.identity.promptProfileID).toBe("frontend-innovate")
+    expect(captured.identity.capabilityProfileID).toBe("frontend-innovate")
+    expect(captured.identity.projectionHash).toMatch(/^[a-f0-9]{64}$/)
+    expect(captured.toolIDs).toContain("select_expert_squad")
+    expect(captured.toolIDs).toContain("skill")
+    expect(captured.toolIDs).toContain("build")
+    expect(captured.toolIDs).toContain("bash")
+    expect(captured.toolIDs).toContain("browser_preview")
+    for (const hidden of [
+      "requirements",
+      "architect",
+      "frontend_design",
+      "frontend_research",
+      "deep_research",
+      "visual_qa",
+      "workload_analysis",
+      "integrity",
+      "fact_check",
+      "explore",
+    ]) {
+      expect(captured.toolIDs, `direct workflow must not expose ${hidden}`).not.toContain(hidden)
+    }
   })
 
   test("project package wake installs scheduler package tools without MCP activation", async () => {
@@ -230,9 +288,44 @@ describe("orchestrator scheduler capability projection", () => {
     expect(captured.toolIDs).not.toContain("package-browser")
   })
 
+  test("select_expert_squad rejects migrated profile IDs when the project package is absent", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "mock-control/control" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const taskID = Identifier.ascending("task")
+        const root = await Session.create({ kind: "root", title: "scheduler missing migrated package" })
+        insertWorkflowTask({
+          taskID,
+          rootSessionID: root.id,
+          now,
+          title: "scheduler missing migrated package",
+        })
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: root.id,
+          signal: new AbortController().signal,
+        })
+
+        await expect(
+          tools.select_expert_squad.execute(
+            {
+              profile_id: "frontend-replica",
+              reason: "Migrated expert squad IDs must come from project packages.",
+            },
+            toolOptions("select_expert_squad_missing_migrated_package"),
+          ),
+        ).rejects.toThrow('Unknown prompt profile "frontend-replica"')
+      },
+    })
+  })
+
   test("select_expert_squad continuation wake installs selected profile projected tool table", async () => {
     installControlModel()
     await using tmp = await tmpdir({ git: true, config: { model: "mock-control/control" } })
+    await copyRepositoryExpertSquadPackage(tmp.path, "frontend-replica")
     let captured: CapturedRuntimeContract | undefined
 
     await Instance.provide({
@@ -264,6 +357,9 @@ describe("orchestrator scheduler capability projection", () => {
               agentKind: contract?.identity.agentKind,
               contractKind: contract?.identity.contractKind,
               sessionID: contract?.identity.sessionID,
+              promptProfileID: contract?.identity.promptProfileID,
+              capabilityProfileID: contract?.identity.capabilityProfileID,
+              projectionHash: contract?.identity.projectionHash,
             },
           }
           return toolCallFinish(promptInput.sessionID)
@@ -288,6 +384,9 @@ describe("orchestrator scheduler capability projection", () => {
     })
 
     expect(captured).toBeDefined()
+    expect(captured?.identity.promptProfileID).toBe("frontend-replica")
+    expect(captured?.identity.capabilityProfileID).toBe("frontend-replica")
+    expect(captured?.identity.projectionHash).toMatch(/^[a-f0-9]{64}$/)
     expect(captured?.includeMcpTools).toBe(false)
     expect(captured?.toolIDs).toContain("select_expert_squad")
     expect(captured?.toolIDs).toContain("skill")

@@ -1159,6 +1159,10 @@ export type Config = {
          */
         tool: string
         /**
+         * Scheduler-owned agent role dispatched by this tool
+         */
+        agentRole?: string
+        /**
          * UI display label
          */
         label: string
@@ -1178,6 +1182,10 @@ export type Config = {
          * Prerequisite step IDs
          */
         after?: Array<string>
+        /**
+         * Task-level agent outcome capability that marks this step complete
+         */
+        outcomeCapability?: string
       }>
       /**
        * Step IDs forming the per-goal loop (for UI grouping)
@@ -3189,6 +3197,28 @@ export type EventWorkflowSelected = {
     taskID: string
     workflowID: string
     workflowName: string
+    workflow?: {
+      id: string
+      name: string
+      description: string
+      steps: Array<{
+        id: string
+        tool: string
+        agentRole?: string
+        label: string
+        hint: string
+        scope: "task" | "goal"
+        skippable: boolean
+        after: Array<string>
+        outcomeCapability?: string
+        phases?: Array<{
+          id: string
+          label: string
+          sessionKind: string
+        }>
+      }>
+      goalLoopStepIDs: Array<string>
+    }
     summary: string
   }
 }
@@ -4542,6 +4572,10 @@ export type ConfigPromptData = {
      * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
      */
     directory?: string
+    /**
+     * Optional root or child session id for session-effective prompt catalog view
+     */
+    sessionID?: string
   }
   url: "/config/prompt"
 }
@@ -4595,6 +4629,43 @@ export type ConfigPromptProfileResponses = {
       editable: boolean
       agents: {
         [key: string]: string
+      }
+      capability_profile_id: string
+      projection_hash: string
+      projected_agents: Array<string>
+      capability_projection: {
+        scheduler: {
+          built_in_tool_ids: Array<string>
+          default_skill_refs: Array<string>
+          package_skill_refs: Array<string>
+          default_tool_refs: Array<string>
+          package_tool_refs: Array<string>
+          default_mcp_server_refs: Array<string>
+          package_mcp_server_refs: Array<string>
+          default_mcp_tool_refs: Array<string>
+          package_mcp_tool_refs: Array<string>
+          default_mcp_prompt_refs: Array<string>
+          package_mcp_prompt_refs: Array<string>
+          default_mcp_resource_refs: Array<string>
+          package_mcp_resource_refs: Array<string>
+        }
+        agents: {
+          [key: string]: {
+            built_in_tool_ids: Array<string>
+            default_skill_refs: Array<string>
+            package_skill_refs: Array<string>
+            default_tool_refs: Array<string>
+            package_tool_refs: Array<string>
+            default_mcp_server_refs: Array<string>
+            package_mcp_server_refs: Array<string>
+            default_mcp_tool_refs: Array<string>
+            package_mcp_tool_refs: Array<string>
+            default_mcp_prompt_refs: Array<string>
+            package_mcp_prompt_refs: Array<string>
+            default_mcp_resource_refs: Array<string>
+            package_mcp_resource_refs: Array<string>
+          }
+        }
       }
     }>
   }
@@ -11008,6 +11079,23 @@ export type MissionStatusResponses = {
           }>
         }>
       }>
+      taskAgentOutcomes?: Array<{
+        id: string
+        provider: string
+        artifactKind: string
+        scope: "task" | "goal"
+        capabilities?: Array<string>
+        runID?: string
+        sessionID?: string
+        status: string
+        result?: string
+        summary?: string
+        error?: string
+        time: {
+          created: number
+          updated: number
+        }
+      }>
       time: {
         created: number
         updated: number
@@ -13390,6 +13478,23 @@ export type TaskStatusResponses = {
         }>
       }>
     }>
+    taskAgentOutcomes?: Array<{
+      id: string
+      provider: string
+      artifactKind: string
+      scope: "task" | "goal"
+      capabilities?: Array<string>
+      runID?: string
+      sessionID?: string
+      status: string
+      result?: string
+      summary?: string
+      error?: string
+      time: {
+        created: number
+        updated: number
+      }
+    }>
     time: {
       created: number
       updated: number
@@ -14415,6 +14520,23 @@ export type TaskConversationResponses = {
            */
           trigger?: "on_goal" | "on_integrity"
         }>
+      }>
+      taskAgentOutcomes?: Array<{
+        id: string
+        provider: string
+        artifactKind: string
+        scope: "task" | "goal"
+        capabilities?: Array<string>
+        runID?: string
+        sessionID?: string
+        status: string
+        result?: string
+        summary?: string
+        error?: string
+        time: {
+          created: number
+          updated: number
+        }
       }>
       criteriaResults?: Array<{
         name: string
@@ -15603,6 +15725,23 @@ export type TaskBoardResponses = {
          */
         trigger?: "on_goal" | "on_integrity"
       }>
+    }>
+    taskAgentOutcomes?: Array<{
+      id: string
+      provider: string
+      artifactKind: string
+      scope: "task" | "goal"
+      capabilities?: Array<string>
+      runID?: string
+      sessionID?: string
+      status: string
+      result?: string
+      summary?: string
+      error?: string
+      time: {
+        created: number
+        updated: number
+      }
     }>
     criteriaResults?: Array<{
       name: string

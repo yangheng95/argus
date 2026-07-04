@@ -43,6 +43,11 @@ export namespace PromptCatalog {
     description?: string
   }
 
+  export interface ListInput {
+    config?: Config.Info
+    projectDirectory?: string
+  }
+
   /** Static metadata for system-scope prompt slots.
    *  Only two truly system-wide slots remain — they apply to every LLM call
    *  regardless of which agent is running. Per-agent override prompts live on
@@ -89,11 +94,11 @@ export namespace PromptCatalog {
     return "primary_agent"
   }
 
-  export async function list(): Promise<Entry[]> {
-    const cfg = await Config.get()
+  export async function list(input: ListInput = {}): Promise<Entry[]> {
+    const cfg = input.config ?? (await Config.get())
     const configPrompts = cfg.prompt ?? {}
     const activeProfile = PromptProfile.activeID(cfg)
-    const projectDirectory = Instance.directory
+    const projectDirectory = input.projectDirectory ?? Instance.directory
     const agents = await Agent.list()
 
     const entries: Entry[] = []

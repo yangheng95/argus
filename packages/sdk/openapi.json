@@ -1354,6 +1354,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "sessionID",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional root or child session id for session-effective prompt catalog view"
           }
         ],
         "x-codeSamples": [
@@ -1367,8 +1375,8 @@
     "/config/prompt-profile": {
       "get": {
         "operationId": "config.promptProfile",
-        "summary": "List prompt profiles",
-        "description": "Returns the active expert-squad prompt profile and available package-backed prompt profiles.",
+        "summary": "List prompt profiles and expert-squad package projections",
+        "description": "Returns the single active prompt_profile.active value, project/session active sources, built-in general profile, and current-project .opencorvus/expert-squads/<id> package-backed profiles with capability projections.",
         "responses": {
           "200": {
             "description": "Prompt profile catalog",
@@ -1454,6 +1462,232 @@
                             "additionalProperties": {
                               "type": "string"
                             }
+                          },
+                          "capability_profile_id": {
+                            "type": "string"
+                          },
+                          "projection_hash": {
+                            "type": "string"
+                          },
+                          "projected_agents": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "capability_projection": {
+                            "type": "object",
+                            "properties": {
+                              "scheduler": {
+                                "type": "object",
+                                "properties": {
+                                  "built_in_tool_ids": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "default_skill_refs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "package_skill_refs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "default_tool_refs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "package_tool_refs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "default_mcp_server_refs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "package_mcp_server_refs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "default_mcp_tool_refs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "package_mcp_tool_refs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "default_mcp_prompt_refs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "package_mcp_prompt_refs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "default_mcp_resource_refs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "package_mcp_resource_refs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "built_in_tool_ids",
+                                  "default_skill_refs",
+                                  "package_skill_refs",
+                                  "default_tool_refs",
+                                  "package_tool_refs",
+                                  "default_mcp_server_refs",
+                                  "package_mcp_server_refs",
+                                  "default_mcp_tool_refs",
+                                  "package_mcp_tool_refs",
+                                  "default_mcp_prompt_refs",
+                                  "package_mcp_prompt_refs",
+                                  "default_mcp_resource_refs",
+                                  "package_mcp_resource_refs"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "agents": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {
+                                  "type": "object",
+                                  "properties": {
+                                    "built_in_tool_ids": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "default_skill_refs": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "package_skill_refs": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "default_tool_refs": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "package_tool_refs": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "default_mcp_server_refs": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "package_mcp_server_refs": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "default_mcp_tool_refs": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "package_mcp_tool_refs": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "default_mcp_prompt_refs": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "package_mcp_prompt_refs": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "default_mcp_resource_refs": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "package_mcp_resource_refs": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "built_in_tool_ids",
+                                    "default_skill_refs",
+                                    "package_skill_refs",
+                                    "default_tool_refs",
+                                    "package_tool_refs",
+                                    "default_mcp_server_refs",
+                                    "package_mcp_server_refs",
+                                    "default_mcp_tool_refs",
+                                    "package_mcp_tool_refs",
+                                    "default_mcp_prompt_refs",
+                                    "package_mcp_prompt_refs",
+                                    "default_mcp_resource_refs",
+                                    "package_mcp_resource_refs"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              }
+                            },
+                            "required": [
+                              "scheduler",
+                              "agents"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "required": [
@@ -1461,7 +1695,11 @@
                           "label",
                           "built_in",
                           "editable",
-                          "agents"
+                          "agents",
+                          "capability_profile_id",
+                          "projection_hash",
+                          "projected_agents",
+                          "capability_projection"
                         ],
                         "additionalProperties": false
                       }
@@ -18994,6 +19232,78 @@
                               ]
                             }
                           },
+                          "taskAgentOutcomes": {
+                            "default": [],
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "provider": {
+                                  "type": "string"
+                                },
+                                "artifactKind": {
+                                  "type": "string"
+                                },
+                                "scope": {
+                                  "type": "string",
+                                  "enum": [
+                                    "task",
+                                    "goal"
+                                  ]
+                                },
+                                "capabilities": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "runID": {
+                                  "type": "string"
+                                },
+                                "sessionID": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "type": "string"
+                                },
+                                "result": {
+                                  "type": "string"
+                                },
+                                "summary": {
+                                  "type": "string"
+                                },
+                                "error": {
+                                  "type": "string"
+                                },
+                                "time": {
+                                  "type": "object",
+                                  "properties": {
+                                    "created": {
+                                      "type": "number"
+                                    },
+                                    "updated": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "created",
+                                    "updated"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "provider",
+                                "artifactKind",
+                                "scope",
+                                "status",
+                                "time"
+                              ]
+                            }
+                          },
                           "time": {
                             "type": "object",
                             "properties": {
@@ -27124,6 +27434,78 @@
                         ]
                       }
                     },
+                    "taskAgentOutcomes": {
+                      "default": [],
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "provider": {
+                            "type": "string"
+                          },
+                          "artifactKind": {
+                            "type": "string"
+                          },
+                          "scope": {
+                            "type": "string",
+                            "enum": [
+                              "task",
+                              "goal"
+                            ]
+                          },
+                          "capabilities": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "runID": {
+                            "type": "string"
+                          },
+                          "sessionID": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "result": {
+                            "type": "string"
+                          },
+                          "summary": {
+                            "type": "string"
+                          },
+                          "error": {
+                            "type": "string"
+                          },
+                          "time": {
+                            "type": "object",
+                            "properties": {
+                              "created": {
+                                "type": "number"
+                              },
+                              "updated": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "created",
+                              "updated"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "provider",
+                          "artifactKind",
+                          "scope",
+                          "status",
+                          "time"
+                        ]
+                      }
+                    },
                     "time": {
                       "type": "object",
                       "properties": {
@@ -31050,6 +31432,77 @@
                               "retryCount",
                               "priority",
                               "steps"
+                            ]
+                          }
+                        },
+                        "taskAgentOutcomes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "provider": {
+                                "type": "string"
+                              },
+                              "artifactKind": {
+                                "type": "string"
+                              },
+                              "scope": {
+                                "type": "string",
+                                "enum": [
+                                  "task",
+                                  "goal"
+                                ]
+                              },
+                              "capabilities": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "runID": {
+                                "type": "string"
+                              },
+                              "sessionID": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "result": {
+                                "type": "string"
+                              },
+                              "summary": {
+                                "type": "string"
+                              },
+                              "error": {
+                                "type": "string"
+                              },
+                              "time": {
+                                "type": "object",
+                                "properties": {
+                                  "created": {
+                                    "type": "number"
+                                  },
+                                  "updated": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "created",
+                                  "updated"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "provider",
+                              "artifactKind",
+                              "scope",
+                              "status",
+                              "time"
                             ]
                           }
                         },
@@ -35748,6 +36201,77 @@
                           "retryCount",
                           "priority",
                           "steps"
+                        ]
+                      }
+                    },
+                    "taskAgentOutcomes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "provider": {
+                            "type": "string"
+                          },
+                          "artifactKind": {
+                            "type": "string"
+                          },
+                          "scope": {
+                            "type": "string",
+                            "enum": [
+                              "task",
+                              "goal"
+                            ]
+                          },
+                          "capabilities": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "runID": {
+                            "type": "string"
+                          },
+                          "sessionID": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "result": {
+                            "type": "string"
+                          },
+                          "summary": {
+                            "type": "string"
+                          },
+                          "error": {
+                            "type": "string"
+                          },
+                          "time": {
+                            "type": "object",
+                            "properties": {
+                              "created": {
+                                "type": "number"
+                              },
+                              "updated": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "created",
+                              "updated"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "provider",
+                          "artifactKind",
+                          "scope",
+                          "status",
+                          "time"
                         ]
                       }
                     },
@@ -48798,6 +49322,10 @@
                             "description": "Orchestrator tool name this step maps to",
                             "type": "string"
                           },
+                          "agentRole": {
+                            "description": "Scheduler-owned agent role dispatched by this tool",
+                            "type": "string"
+                          },
                           "label": {
                             "description": "UI display label",
                             "type": "string"
@@ -48824,6 +49352,10 @@
                             "items": {
                               "type": "string"
                             }
+                          },
+                          "outcomeCapability": {
+                            "description": "Task-level agent outcome capability that marks this step complete",
+                            "type": "string"
                           }
                         },
                         "required": [
@@ -55887,6 +56419,106 @@
               },
               "workflowName": {
                 "type": "string"
+              },
+              "workflow": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "steps": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "tool": {
+                          "type": "string"
+                        },
+                        "agentRole": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "hint": {
+                          "type": "string"
+                        },
+                        "scope": {
+                          "type": "string",
+                          "enum": [
+                            "task",
+                            "goal"
+                          ]
+                        },
+                        "skippable": {
+                          "type": "boolean"
+                        },
+                        "after": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "outcomeCapability": {
+                          "type": "string"
+                        },
+                        "phases": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "sessionKind": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "label",
+                              "sessionKind"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "tool",
+                        "label",
+                        "hint",
+                        "scope",
+                        "skippable",
+                        "after"
+                      ]
+                    }
+                  },
+                  "goalLoopStepIDs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "description",
+                  "steps",
+                  "goalLoopStepIDs"
+                ]
               },
               "summary": {
                 "type": "string"

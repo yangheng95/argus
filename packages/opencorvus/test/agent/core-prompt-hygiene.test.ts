@@ -181,11 +181,12 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("Use the visible `skill` tool only to search or load mounted Orchestrator")
     expect(normalized).toContain("call `select_expert_squad` with the named `profile_id`")
     expect(normalized).toContain("before dispatching downstream specialists")
-    expect(normalized).toContain("frontend replica expert-squad skill")
-    expect(normalized).toContain("frontend innovate expert-squad skill")
-    expect(normalized).toContain("design-resource synthesis")
-    expect(normalized).toContain("selected-direction convergence")
-    expect(normalized).toContain("frontend automation debug expert-squad skill")
+    expect(normalized).toContain("current-project expert-squad selector skills")
+    expect(normalized).toContain("select the exact profile ID named by that loaded selector")
+    expect(normalized).toContain("If no mounted selector matches")
+    expect(normalized).not.toContain("frontend replica expert-squad skill")
+    expect(normalized).not.toContain("frontend innovate expert-squad skill")
+    expect(normalized).not.toContain("frontend automation debug expert-squad skill")
     expect(normalized).toContain("Do not use host-side keyword classifiers")
     expect(normalized).toContain("hidden skill injection")
     expect(normalized).toContain("per-agent prompt mutation")
@@ -276,7 +277,7 @@ describe("core prompt hygiene", () => {
 
     expect(overlays).toContain("## Webpage Clone Source-Baseline Overlay")
     expect(overlays).toContain("web-clone-source/")
-    expect(overlays).toContain("source_baseline_input")
+    expect(overlays).toContain("project_mode=source_baseline")
     expect(overlays).toContain("do not hide it by starting a freehand rebuild")
     expect(overlays).toContain("do not search sibling worktrees")
   })
@@ -401,7 +402,8 @@ describe("core prompt hygiene", () => {
     expect(flat).toContain("implement product behavior")
     expect(flat).toContain("replace a worker session")
     expect(flat).toContain("Build remains the code and implementation owner")
-    expect(flat).toContain("Visual QA remains the GUI review/repair owner")
+    expect(flat).toContain("Visual QA remains the GUI report-only review owner")
+    expect(flat).not.toContain("Visual QA remains the GUI review/repair owner")
     expect(flat).toContain("Integrity remains review evidence")
     expect(flat).toContain("Requirements/Architect/Research/Design agents remain")
     expect(flat).toContain("If the answer is \"this produces the user's deliverable\"")
@@ -641,7 +643,7 @@ describe("core prompt hygiene", () => {
 
   test("build prompt accepts explicit investigation deliverables without reopening ad-hoc exploration", async () => {
     const build = await readPrompt("build")
-    expect(build).toContain("direct-path workflow")
+    expect(build).toContain("task-level request path selected by the scheduler")
     expect(build).toContain("investigation report")
     expect(build).toContain("research brief")
     expect(build).toContain("detailed multi-section report")
@@ -901,17 +903,18 @@ describe("core prompt hygiene", () => {
     expect(build).not.toContain("frontend-design")
     expect(build).not.toContain("baseline_replacement_plan")
     expect(buildOverlays).toContain("## Webpage Clone Source-Baseline Overlay")
-    expect(buildOverlays).toContain("## Frontend Research Build Pointers")
-    expect(buildOverlays).toContain("compact pointer data from frontend_research")
-    expect(buildOverlays).toContain("do not treat it as completed PRD facts or an implementation template")
-    expect(buildOverlays).toContain("use the compact pointers")
+    expect(buildOverlays).not.toContain("## Frontend Research Build Pointers")
+    expect(buildOverlays).not.toContain("compact pointer data from frontend_research")
+    expect(buildOverlays).toContain("compact upstream packet pointers")
+    expect(buildOverlays).toContain("do not treat them as completed PRD facts or an implementation template")
+    expect(buildOverlays).toContain("use schema-bearing context refs and compact pointers")
     expect(buildOverlays).toContain("chart, map, heatmap, table/grid")
     expect(buildOverlays).toContain("do not flatten it into SVG/image markup")
     expect(buildOverlays).toContain(
-      "Use requirements, architect contracts, and frontend_design as the binding implementation contract",
+      "Use requirements, architect contracts, and schema-bearing visual handoff packets as the binding implementation contract",
     )
     expect(buildOverlays).toContain("web-clone-source/")
-    expect(buildOverlays).toContain("source_baseline_input")
+    expect(buildOverlays).toContain("project_mode=source_baseline")
     expect(buildOverlays).toContain("source package files named by the handoff")
     expect(buildOverlays).toContain("web-clone-source/source-ir/style-profile.json")
     expect(buildOverlays).toContain("do not hide it by starting a freehand rebuild")
@@ -943,7 +946,7 @@ describe("core prompt hygiene", () => {
     expect(integrity).not.toContain("visual acceptance virtual gate")
     expect(orchestrator).toContain("Routine web-clone policy belongs to internal agent/tool prompts")
     expect(design).toContain("recurring webpage-clone workflow as internal policy")
-    expect(buildOverlays).toContain("This overlay applies because the frontend_design handoff names")
+    expect(buildOverlays).toContain("This overlay applies because the frontend_design handoff supplies")
 
     const frontendDesignOwnedTokens = [
       "SourceDomPage",
@@ -1020,12 +1023,13 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("GUI means Graphical User Interface")
     expect(normalized).toContain("picky professional product designer and design QA reviewer")
     expect(normalized).toContain("Do not give draft-quality")
-    expect(normalized).toContain("peer post-build review agents")
+    expect(normalized).toContain("peer post-implementation review agents")
     expect(normalized).toContain("Test the real running product")
     expect(normalized).toContain(
-      "complete task frontend surface and all terminal blocking build evidence as the primary review surface",
+      "complete task frontend surface and all terminal blocking implementation evidence from context packets as the primary review surface",
     )
-    expect(normalized).toContain("Repair coarse-to-fine")
+    expect(normalized).toContain("Review and implementation-repair feedback routing")
+    expect(normalized).toContain("Review coarse-to-fine")
     expect(normalized).toContain("fake or placeholder widgets")
     expect(normalized).toContain("static mock charts")
     expect(normalized).toContain("layout/composition")
@@ -1036,6 +1040,8 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("fresh evidence")
     expect(normalized).toContain("previous visual report")
     expect(normalized).toContain("reproduce every prior blocking finding")
+    expect(normalized).toContain("before accepting the implementation repair")
+    expect(normalized).toContain("Do not claim file changes or commits")
     expect(normalized).not.toContain("same capability level as Build")
     expect(normalized).not.toContain("full-function frontend visual quality agent")
     expect(normalized).toContain("accepted=true")
@@ -1072,8 +1078,8 @@ describe("core prompt hygiene", () => {
     expect(text).not.toContain("Direct build is supported:")
     const normalized = text.replace(/\s+/g, " ")
     expect(normalized).not.toContain('`build({ request, directBuildIntent: "modify_files" })` is still supported')
-    expect(normalized).toContain("The system delivers a project through its specialist agent team")
-    expect(normalized).toContain("Bypassing the workflow is prohibited in principle")
+    expect(normalized).toContain("The system delivers a project through the specialist agent team declared by the current scheduler workflow")
+    expect(normalized).toContain("Bypassing the current workflow is prohibited in principle")
     expect(normalized).toContain("you MUST NOT jump straight to `build({ request })`")
     expect(normalized).toContain(
       'Direct `build({ request, directBuildIntent: "modify_files" })` is the narrow exception',
@@ -1083,17 +1089,21 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain(
       "Repository investigation belongs to `analyze_intent`, `requirements`, or the registered `explore` subagent surface",
     )
-    expect(normalized).toContain("call `visual_qa` once near task completion after all blocking build work is terminal")
-    expect(normalized).toContain("peer post-build review agents")
+    expect(normalized).toContain("use the scheduler-projected visual review tool when it is visible and appropriate")
+    expect(normalized).toContain("peer post-implementation review agents")
     expect(normalized).toContain("component truth and visible functionality first")
     expect(normalized).toContain("static mock charts must become real chart implementations")
+    expect(normalized).toContain("structured report-only Visual QA review")
+    expect(normalized).toContain("not a repair agent")
+    expect(normalized).toContain("coarse-to-fine review feedback for the current workflow's implementation owner")
+    expect(normalized).toContain("effective_accepted=false")
     expect(normalized).toContain("visual_feedback_verification_failed_attempts=1")
     expect(normalized).toContain("failed twice consecutively")
     expect(normalized).toContain("instead of sending the visual verdict to Integrity")
-    expect(normalized).toContain("Use `integrity` as an optional system-completeness review report")
+    expect(normalized).toContain("Use the scheduler-projected system-completeness review tool")
     expect(normalized).toContain("If it reports unresolved_code_module_problems")
     expect(normalized).toContain(
-      "the scheduler must decide whether same-task repair, question, fail_task, or `propose_task`",
+      "the scheduler must decide whether same-task implementation repair, question, fail_task, or `propose_task`",
     )
     expect(normalized).not.toContain("run `integrity` first")
     expect(normalized).not.toContain("call `visual_qa` after integrity")
@@ -1119,7 +1129,10 @@ describe("core prompt hygiene", () => {
     const toolsSource = await readSource("orchestrator/tools.ts")
     const normalized = text.replace(/\s+/g, " ")
     const toolsNormalized = toolsSource.replace(/\s+/g, " ")
-    expect(normalized).toContain("After a successful `requirements` result, call `architect` next")
+    expect(normalized).toContain(
+      "When both `requirements` and `architect` are visible in the current workflow",
+    )
+    expect(normalized).toContain("a successful `requirements` result normally makes `architect` the next planning owner")
     expect(normalized).toContain(
       "Before any execution has begun, call `requirements` again only when a real operator message changed scope",
     )
@@ -1199,13 +1212,49 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("inheriting follow-up task creation")
     expect(normalized).toContain("execution evidence, artifact state, integrity history, or the obvious product path")
     expect(normalized).toContain("If visual QA reports unresolved_code_module_problems")
-    expect(normalized).toContain("the scheduler can name the concrete module/problem in `code_module_reference`")
+    expect(normalized).toContain("cite the registered evidence refs in `evidence_anchor`")
     expect(normalized).toContain("Supplemental features, deeper implementation detail")
     expect(normalized).toContain("project improvement suggestions")
-    expect(normalized).toContain("specific code-module problem")
-    expect(normalized).toContain("concrete code module reference entity")
+    expect(normalized).toContain("specific evidence-anchored problem")
+    expect(normalized).toContain("concrete evidence anchor")
     expect(normalized).toContain("refuse to create a child task")
     expect(normalized).toContain("Never call generic `task` or control-plane `panel`")
+  })
+
+  test("orchestrator runtime prompt does not hard-code workflow topology", async () => {
+    const source = await readSource("agent/agent.ts")
+    expect(source).toContain("current scheduler-projected workflow tools")
+    expect(source).not.toContain(
+      "explicit workflow tools such as `requirements`, `frontend_design`, `visual_qa`, `architect`, `build`, `integrity`, and `refine`",
+    )
+  })
+
+  test("non-scheduler core prompts do not declare fixed workflow stage order", async () => {
+    const architect = await readPrompt("architect")
+    const requirements = await readPrompt("requirements")
+    const frontendDesign = await readPrompt("frontendDesign")
+    const mission = await Bun.file(path.join(coreDir, sharedPromptFiles.mission)).text()
+    const orchestrator = await readPrompt("orchestrator")
+
+    expect(architect).toContain("current scheduler workflow delegates graph design")
+    expect(architect).not.toContain("between Requirements and per-goal Build dispatch")
+    expect(requirements).toContain("the current scheduler workflow decides the next owner")
+    expect(requirements).not.toContain("the Architect takes over from here")
+    expect(frontendDesign).toContain("current scheduler workflow's downstream consumers")
+    expect(frontendDesign).toContain("downstream scheduler-projected agents")
+    expect(frontendDesign).not.toContain("before requirements, architect, and build run")
+    expect(frontendDesign).not.toContain("requirements, architect, build, visual_qa, and integrity can")
+    expect(mission).toContain("scheduler-declared squad/team own the execution workflow visible to that task")
+    expect(mission).not.toContain("requirements → architect → build → integrity")
+    expect(mission).not.toContain("full executor pipeline")
+    expect(orchestrator).toContain("current scheduler-projected workflow tools")
+    expect(orchestrator).toContain("currently declared responsible agents")
+    expect(orchestrator).toContain("scheduler-projected visual review tool")
+    expect(orchestrator).toContain("scheduler-projected system-completeness review tool")
+    expect(orchestrator).not.toContain("requirements, architect, build, visual_qa, or integrity")
+    expect(orchestrator).not.toContain("move through requirements, architect, build, visual_qa, and integrity")
+    expect(orchestrator).not.toContain("call `visual_qa` once near task completion")
+    expect(orchestrator).not.toContain("Use `integrity` as an optional system-completeness review report")
   })
 
   test("orchestrator prompt forbids plain-text claims when pending goals need dispatch", async () => {
@@ -1223,7 +1272,7 @@ describe("core prompt hygiene", () => {
     )
     expect(normalized).toContain("dispatch `build({ goalID })` for the first eligible pending goal")
     expect(normalized).toContain(
-      "After a successful `architect` result has created pending goals and no build attempt exists yet",
+      "After a successful declared `architect` result has created pending goals and no build attempt exists yet",
     )
     expect(normalized).toContain("do not re-run `architect` just because implementation has not started")
     expect(normalized).toContain("dispatch `build({ goalID })` for the first eligible pending goal")
@@ -1276,7 +1325,7 @@ describe("core prompt hygiene", () => {
     const text = await readPrompt("orchestrator")
     const normalized = text.replace(/\s+/g, " ")
     expect(normalized).toContain(
-      "Pipeline workflow tasks complete only when you, the Orchestrator, decide the current durable task evidence satisfies the user request",
+      "Workflow tasks complete only when you, the Orchestrator, decide the current durable task evidence satisfies the user request",
     )
     expect(normalized).toContain("There is no `deliver` or `publish_acceptance` tool")
     expect(normalized).toContain("call `complete_task` with a concrete completion summary")
@@ -1295,7 +1344,9 @@ describe("core prompt hygiene", () => {
   test("orchestrator prompt keeps visual workflow ordering and verification-goal lifecycle coherent", async () => {
     const text = await readPrompt("orchestrator")
     const normalized = text.replace(/\s+/g, " ")
-    expect(normalized).toContain("decide whether `frontend_design`, `frontend_research`, both, or neither are needed")
+    expect(normalized).toContain(
+      "decide from the current workflow's visible tools whether a source-page investigation stage",
+    )
     expect(normalized).toContain("UI replication from visual reference")
     expect(normalized).toContain("These tools are bounded evidence producers, not fixed lifecycle stages")
     expect(normalized).not.toContain("fixed lifecycle gates")
@@ -1401,7 +1452,7 @@ describe("core prompt hygiene", () => {
     expect(orchestrator).toContain("late-stage requirements-mining and system-integrity review")
     expect(orchestrator.replace(/\s+/g, " ")).toContain("produces review evidence")
     expect(orchestrator.replace(/\s+/g, " ")).toContain(
-      "Pipeline workflow tasks complete only when you, the Orchestrator, decide the current durable task evidence satisfies the user request",
+      "Workflow tasks complete only when you, the Orchestrator, decide the current durable task evidence satisfies the user request",
     )
     expect(architect).toContain(
       "workflow review report to audit the original user request, requirements extraction, and built system",

@@ -563,7 +563,7 @@ describe("skill routes", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        await Config.update({ prompt_profile: { active: "backend" } })
+        await Config.update({ prompt_profile: { active: "general" } })
         const root = await Session.create({ kind: "root", title: "skill projection root" })
         await Session.mergeConfigOverlay({
           sessionID: root.id,
@@ -597,7 +597,7 @@ describe("skill routes", () => {
         expect(body.active_profile).toBe(PROJECT_EXPERT_SQUAD_ID)
         expect(body.capability_profile_id).toBe(PROJECT_EXPERT_SQUAD_ID)
         expect(body.projection_hash).toMatch(/^[a-f0-9]{64}$/)
-        expect(body.projected_tool_ids).toContain("build")
+        expect(body.projected_tool_ids).not.toContain("build")
         expect(body.projected_tool_ids).not.toContain("source-evidence")
         expect(body.projected_agents).toEqual(["orchestrator", "build"])
         expect(body.selector_skill_names).toEqual([`${PROJECT_EXPERT_SQUAD_ID}-expert-squad`])

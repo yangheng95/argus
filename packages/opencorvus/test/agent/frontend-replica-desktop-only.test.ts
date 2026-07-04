@@ -1,65 +1,85 @@
 import { describe, expect, test } from "bun:test"
-import { PromptProfile } from "../../src/agent/prompt-profile"
-import { builtInSelectorSkillSources } from "../../src/expert-squad/builtin"
+import { Config } from "../../src/config/config"
+import { PromptProfileResolver } from "../../src/expert-squad/prompt-profile-resolver"
+import { REPOSITORY_ROOT } from "../fixture/expert-squad"
 
 function readSource(relativePath: string) {
   return Bun.file(new URL(relativePath, import.meta.url)).text()
 }
 
+async function frontendReplicaSelectorSkill(): Promise<string> {
+  const projection = await PromptProfileResolver.resolveSkillProjection({
+    projectDirectory: REPOSITORY_ROOT,
+    config: Config.Info.parse({ prompt_profile: { active: "general" } }),
+    defaultSkills: [],
+  })
+  const skill = projection.skills.find((source) => source.name === "frontend-replica-expert-squad")
+  expect(skill).toBeDefined()
+  return skill!.content
+}
+
+async function frontendReplicaAgents() {
+  const definitions = await PromptProfileResolver.definitions(REPOSITORY_ROOT)
+  const profile = definitions["frontend-replica"]
+  expect(profile).toBeDefined()
+  return profile!.agents
+}
+
 describe("frontend replica desktop-only generation scope", () => {
   test("expert squad forbids default tablet/mobile requirements, goals, and build work", async () => {
-    const skill = builtInSelectorSkillSources.find((source) => source.id === "frontend-replica-expert-squad")?.skill
-    expect(skill).toBeDefined()
+    const skill = await frontendReplicaSelectorSkill()
 
-    expect(skill!).toContain("## Desktop-only replica scope")
-    expect(skill!).toContain("Frontend replica, clone, visual parity, and source-page recreation tasks")
-    expect(skill!).toContain("Do not ask Requirements, Architect, Build, Visual QA, or Integrity")
-    expect(skill!).toContain("requirements, goals, acceptance specs, build objectives")
-    expect(skill!).toContain("Tablet/mobile/responsive wording")
-    expect(skill!).toContain("multiple desktop-class viewport widths")
-    expect(skill!).toContain("Keep those checks under desktop scope")
-    expect(skill!).toContain('profile_id: "frontend-replica"')
-    expect(skill!).toContain("## Browser preview evidence ownership")
-    expect(skill!).toContain("workflow / pipeline task")
-    expect(skill!).toContain("not a direct single Build task")
-    expect(skill!).toContain("After an agent has already produced its task-scope artifact")
-    expect(skill!).toContain("explicit retry of a failed/incomplete call")
-    expect(skill!).toContain("Build implementation or repair")
-    expect(skill!).toContain("Visual QA review or re-review")
-    expect(skill!).toContain("Integrity review or re-review after repair")
-    expect(skill!).toContain("Do not re-run Requirements, Architect, `frontend_research`, `frontend_design`, or the whole workflow")
-    expect(skill!).toContain("## Source authority")
-    expect(skill!).toContain("Source URL/screenshot/DOM/computed-style/interaction evidence defines the replica contract")
-    expect(skill!).toContain("## Replica surface model")
-    expect(skill!).toContain("current Visual QA / Integrity blockers, and acceptance-attempt count")
-    expect(skill!).toContain("A Build result with no target project diff")
-    expect(skill!).toContain("## Acceptance attempt budget")
-    expect(skill!).toContain("evidence-backed non-pass rounds")
-    expect(skill!).toContain("After the second consecutive evidence-backed rendered-feedback non-pass round")
-    expect(skill!).toContain("Integrity non-pass rows are implementation completeness evidence")
-    expect(skill!).toContain("mark the surface/task not accepted")
-    expect(skill!).toContain("## Goal decomposition discipline")
-    expect(skill!).toContain("default to one user-visible implementation component or meaningful source-backed page region per Build goal")
-    expect(skill!).toContain("Source rows, visual-source rows, style-profile rows, DOM records, evidence-table rows")
-    expect(skill!).toContain("Do not register them as Build goal titles")
-    expect(skill!).toContain("Do not mix several user-visible source components")
-    expect(skill!).toContain("generally needs 10 or more goals")
-    expect(skill!).toContain("source registry or shared mock contracts")
-    expect(skill!).toContain("Do not accept `no_project_diff`, documentation-only output")
-    expect(skill!).toContain("## Failure taxonomy")
-    expect(skill!).toContain("Implementation non-delivery")
-    expect(skill!).toContain("Verification blocker")
-    expect(skill!).toContain("## Visual QA and Integrity feedback consumption")
-    expect(skill!).toContain("Build repair after Visual QA or Integrity must consume the latest blocker evidence")
-    expect(skill!).toContain("Annotated Visual QA screenshots and DOM diagnostics are repair inputs")
-    expect(skill!).toContain("Build owns changed-region module binding proof")
-    expect(skill!).toContain("Visual QA owns independent final rendered parity review")
-    expect(skill!).toContain("Browser MCP screenshot/observe tools")
-    expect(skill!).toContain("browser_preview_reference_regions")
-    expect(skill!).toContain("browser_preview_compare_scroll_slices")
-    expect(skill!).toContain("not first-viewport slices")
-    expect(skill!).toContain("page-shell locators")
-    expect(skill!).toContain("does not run a second `reference-comparison` pass")
+    expect(skill).toContain("## Desktop-only replica scope")
+    expect(skill).toContain("Frontend replica, clone, visual parity, and source-page recreation tasks")
+    expect(skill).toContain("Do not ask Requirements, Architect, Build, Visual QA, or Integrity")
+    expect(skill).toContain("requirements, goals, acceptance specs, build objectives")
+    expect(skill).toContain("Tablet/mobile/responsive wording")
+    expect(skill).toContain("multiple desktop-class viewport widths")
+    expect(skill).toContain("Keep those checks under desktop scope")
+    expect(skill).toContain('profile_id: "frontend-replica"')
+    expect(skill).toContain("## Browser preview evidence ownership")
+    expect(skill).toContain("multi-agent source-evidence implementation task")
+    expect(skill).toContain("not as a single blind Build pass")
+    expect(skill).not.toContain("workflow / pipeline task")
+    expect(skill).not.toContain("direct single Build task")
+    expect(skill).toContain("After an agent has already produced its task-scope artifact")
+    expect(skill).toContain("explicit retry of a failed/incomplete call")
+    expect(skill).toContain("Build implementation or repair")
+    expect(skill).toContain("Visual QA review or re-review")
+    expect(skill).toContain("Integrity review or re-review after repair")
+    expect(skill).toContain("Do not re-run Requirements, Architect, `frontend_research`, `frontend_design`, or the whole workflow")
+    expect(skill).toContain("## Source authority")
+    expect(skill).toContain("Source URL/screenshot/DOM/computed-style/interaction evidence defines the replica contract")
+    expect(skill).toContain("## Replica surface model")
+    expect(skill).toContain("current Visual QA / Integrity blockers, and acceptance-attempt count")
+    expect(skill).toContain("A Build result with no target project diff")
+    expect(skill).toContain("## Acceptance attempt budget")
+    expect(skill).toContain("evidence-backed non-pass rounds")
+    expect(skill).toContain("After the second consecutive evidence-backed rendered-feedback non-pass round")
+    expect(skill).toContain("Integrity non-pass rows are implementation completeness evidence")
+    expect(skill).toContain("mark the surface/task not accepted")
+    expect(skill).toContain("## Goal decomposition discipline")
+    expect(skill).toContain("default to one user-visible implementation component or meaningful source-backed page region per Build goal")
+    expect(skill).toContain("Source rows, visual-source rows, style-profile rows, DOM records, evidence-table rows")
+    expect(skill).toContain("Do not register them as Build goal titles")
+    expect(skill).toContain("Do not mix several user-visible source components")
+    expect(skill).toContain("generally needs 10 or more goals")
+    expect(skill).toContain("source registry or shared mock contracts")
+    expect(skill).toContain("Do not accept `no_project_diff`, documentation-only output")
+    expect(skill).toContain("## Failure taxonomy")
+    expect(skill).toContain("Implementation non-delivery")
+    expect(skill).toContain("Verification blocker")
+    expect(skill).toContain("## Visual QA and Integrity feedback consumption")
+    expect(skill).toContain("Implementation repair after Visual QA or Integrity must consume the latest blocker evidence")
+    expect(skill).toContain("Annotated Visual QA screenshots and DOM diagnostics are repair inputs")
+    expect(skill).toContain("current workflow implementation owner owns changed-region module binding proof")
+    expect(skill).toContain("Visual QA owns independent final rendered parity review")
+    expect(skill).toContain("Browser MCP screenshot/observe tools")
+    expect(skill).toContain("browser_preview_reference_regions")
+    expect(skill).toContain("browser_preview_compare_scroll_slices")
+    expect(skill).toContain("not first-viewport slices")
+    expect(skill).toContain("page-shell locators")
+    expect(skill).toContain("does not run a second `reference-comparison` pass")
     expect(skill).toContain("aligned `scrollY` and `sliceHeight`")
     expect(skill).toContain("comparison_guidance")
     expect(skill).toContain("LEFT is the source/reference image")
@@ -78,8 +98,8 @@ describe("frontend replica desktop-only generation scope", () => {
     expect(skill).not.toContain("responsive state")
   })
 
-  test("frontend replica profile overlays protect every model decision surface", () => {
-    const agents = PromptProfile.builtIns["frontend-replica"].agents
+  test("frontend replica profile overlays protect every model decision surface", async () => {
+    const agents = await frontendReplicaAgents()
 
     expect(agents.coding).toContain("desktop source information architecture")
     expect(agents.requirements).toContain("Do not create tablet/mobile/non-desktop REQ rows")

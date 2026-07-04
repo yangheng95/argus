@@ -14,6 +14,7 @@ import { WorkerTurnDescriptor } from "../../src/agent/worker-turn-descriptor"
 import { AgentRuntimeMetadata } from "../../src/session/agent-runtime-metadata"
 import type { SessionKind } from "../../src/session/session.sql"
 import { PROJECT_EXPERT_SQUAD_ID, writeProjectExpertSquadPackage } from "../fixture/expert-squad"
+import { PromptProfileResolver } from "../../src/expert-squad/prompt-profile-resolver"
 import {
   claimStageContinuationRequest,
   createStageContinuationRequest,
@@ -49,6 +50,9 @@ test(
       },
     })
     await writeProjectExpertSquadPackage(tmp.path)
+    const packageToolProviderName = PromptProfileResolver.packageToolProviderName(
+      `${PROJECT_EXPERT_SQUAD_ID}/build/build-evidence`,
+    )
 
     const promptCalls: Array<Parameters<typeof SessionPrompt.prompt>[0]> = []
     spyOn(SessionPrompt, "prompt").mockImplementation(async (input) => {
@@ -115,7 +119,7 @@ test(
     expect(descriptor?.payload.model).toEqual({ providerID: "test", modelID: "mock" })
     expect(descriptor?.payload.workflow.sessionKind).toBe("build")
     expect(descriptor?.payload.output.resultMode).toBe("reply")
-    expect(descriptor?.payload.tools.enabled).toEqual([])
+    expect(descriptor?.payload.tools.enabled).toEqual([packageToolProviderName])
     expect(descriptor?.payload.tools.switches).toMatchObject({
       skill: true,
       task: false,
@@ -127,6 +131,114 @@ test(
       goal_report: false,
     })
     expect((promptCalls[0].extra?.workerTurnDescriptor as { id: string }).id).toBe(descriptor?.id)
+  },
+  { timeout: RUNNER_PROMPT_TEST_TIMEOUT_MILLISECONDS },
+)
+
+test(
+  "runAgentSession installs worker capability projection into descriptor and runtime contract",
+  async () => {
+    mock.module("@/agent/model", () => ({
+      resolveAgentModel: async () => ({
+        providerID: "test",
+        api: { id: "mock" },
+      }),
+    }))
+    const { runAgentSession } = await import("../../src/agent/runner")
+
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID },
+      },
+    })
+    await writeProjectExpertSquadPackage(tmp.path)
+    const packageToolProviderName = PromptProfileResolver.packageToolProviderName(
+      `${PROJECT_EXPERT_SQUAD_ID}/build/build-evidence`,
+    )
+
+    const promptCalls: Array<Parameters<typeof SessionPrompt.prompt>[0]> = []
+    spyOn(SessionPrompt, "prompt").mockImplementation(async (input) => {
+      promptCalls.push(input)
+      return {
+        info: {
+          id: "msg_runner_worker_capability_assistant",
+          sessionID: input.sessionID,
+          role: "assistant",
+          parentID: input.messageID,
+          time: { created: Date.now() },
+          agent: input.agent ?? "build",
+          providerID: input.model?.providerID ?? "test",
+          modelID: input.model?.modelID ?? "mock",
+          cost: 0,
+          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          path: { cwd: tmp.path, root: tmp.path },
+        },
+        parts: [
+          {
+            id: "prt_runner_worker_capability_assistant",
+            sessionID: input.sessionID,
+            messageID: "msg_runner_worker_capability_assistant",
+            type: "text",
+            text: "done",
+          },
+        ],
+      } as Awaited<ReturnType<typeof SessionPrompt.prompt>>
+    })
+
+    const toolKit: AgentToolKit<Record<string, never>> = {
+      tools: {
+        read: tool({
+          description: "Projected worker read tool.",
+          inputSchema: z.object({}),
+          execute: async () => "read",
+        }),
+        complete_task: tool({
+          description: "Orchestrator-only task completion tool.",
+          inputSchema: z.object({}),
+          execute: async () => "complete",
+        }),
+      },
+      getCollector: () => ({}),
+      buildReport: () => ({ summary: "ok", detail: "ok" }),
+    }
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const capability = await PromptProfileResolver.resolveWorkerCapability({
+          projectDirectory: tmp.path,
+          agentID: "build",
+          config: Config.Info.parse({ prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } }),
+        })
+        const out = await runAgentSession({
+          kind: "build",
+          core: BUILD_CORE,
+          sessionTitle: "worker capability projection",
+          toolKit,
+          buildUserPrompt: () => "implement the request",
+        })
+
+        const descriptor = WorkerTurnDescriptor.latestForSession(out.session.id)
+        const contract = SessionPrompt.getSessionRuntimeContract(out.session.id)
+        expect(descriptor?.payload.capability).toEqual({
+          promptProfileID: capability.promptProfileID,
+          capabilityProfileID: capability.capabilityProfileID,
+          projectionHash: capability.projectionHash,
+        })
+        expect(contract?.identity.promptProfileID).toBe(capability.promptProfileID)
+        expect(contract?.identity.capabilityProfileID).toBe(capability.capabilityProfileID)
+        expect(contract?.identity.projectionHash).toBe(capability.projectionHash)
+        expect(contract?.projectedRegistryToolIDs).toEqual(capability.builtInToolIDs)
+        expect(Object.keys(contract?.tools ?? {}).sort()).toEqual(["read", packageToolProviderName].sort())
+        expect(descriptor?.payload.tools.enabled).toEqual(["read", packageToolProviderName].sort())
+        expect(contract?.tools).not.toHaveProperty("complete_task")
+        expect(contract?.includeMcpTools).toBe(false)
+        SessionPrompt.clearSessionRuntimeContract(out.session.id)
+      },
+    })
+
+    expect(promptCalls).toHaveLength(1)
   },
   { timeout: RUNNER_PROMPT_TEST_TIMEOUT_MILLISECONDS },
 )

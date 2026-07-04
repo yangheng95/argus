@@ -6,7 +6,11 @@ import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
 import { resetDatabase } from "../fixture/db"
-import { PROJECT_EXPERT_SQUAD_ID, writeProjectExpertSquadPackage } from "../fixture/expert-squad"
+import {
+  copyRepositoryExpertSquadPackage,
+  PROJECT_EXPERT_SQUAD_ID,
+  writeProjectExpertSquadPackage,
+} from "../fixture/expert-squad"
 import { tmpdir } from "../fixture/fixture"
 
 const ROOT = path.resolve(import.meta.dir, "..", "..", "..", "..")
@@ -169,6 +173,15 @@ describe("config prompt routes", () => {
 
   test("GET /config/prompt-profile returns full active profile catalog", async () => {
     await using tmp = await tmpdir({ git: true })
+    for (const id of [
+      "algorithm",
+      "backend",
+      "frontend-automation-debug",
+      "frontend-innovate",
+      "frontend-replica",
+    ] as const) {
+      await copyRepositoryExpertSquadPackage(tmp.path, id)
+    }
 
     await Instance.provide({
       directory: tmp.path,
@@ -231,6 +244,13 @@ describe("config prompt routes", () => {
             built_in: boolean
             editable: boolean
             agents: Record<string, string>
+            capability_profile_id: string
+            projection_hash: string
+            projected_agents: string[]
+            capability_projection: {
+              scheduler: { built_in_tool_ids: string[]; package_tool_refs: string[] }
+              agents: Record<string, { built_in_tool_ids: string[]; package_tool_refs: string[] }>
+            }
           }>
         }
         expect(body.active).toBe("backend")
@@ -249,28 +269,88 @@ describe("config prompt routes", () => {
         })
         expect(body.profiles.map((profile) => profile.id)).toEqual([
           "general",
-          "frontend-replica",
-          "frontend-innovate",
-          "backend",
           "algorithm",
+          "backend",
           "frontend-automation-debug",
+          "frontend-innovate",
+          "frontend-replica",
         ])
-        expect(body.profiles.find((profile) => profile.id === "frontend-replica")).toMatchObject({
+        const frontendReplicaProfile = body.profiles.find((profile) => profile.id === "frontend-replica")
+        expect(frontendReplicaProfile).toMatchObject({
           label: "Frontend Replica",
-          built_in: true,
+          built_in: false,
           editable: false,
+          capability_profile_id: "frontend-replica",
         })
+        expect(frontendReplicaProfile?.projection_hash).toMatch(/^[a-f0-9]{64}$/)
+        expect(frontendReplicaProfile?.projected_agents).toContain("build")
+        expect(frontendReplicaProfile?.capability_projection.scheduler.built_in_tool_ids).toContain("build")
         expect(body.profiles.find((profile) => profile.id === "frontend-innovate")).toMatchObject({
           label: "Frontend Innovate",
-          built_in: true,
+          built_in: false,
           editable: false,
         })
         expect(body.profiles.find((profile) => profile.id === "frontend-automation-debug")).toMatchObject({
           label: "Frontend Automation Debug",
-          built_in: true,
+          built_in: false,
           editable: false,
         })
-        expect(body.profiles.every((profile) => profile.built_in && !profile.editable)).toBe(true)
+        expect(body.profiles.find((profile) => profile.id === "general")).toMatchObject({
+          built_in: true,
+          editable: false,
+          capability_profile_id: "general",
+        })
+        expect(body.profiles.every((profile) => !profile.editable)).toBe(true)
+      },
+    })
+  })
+
+  test("GET /config/prompt-profile does not parse inactive package MCP definitions", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const inactiveRoot = await writeProjectExpertSquadPackage(tmp.path)
+    await Bun.write(path.join(inactiveRoot, "mcp", "broken.jsonc"), "{")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const response = await app.request("/config/prompt-profile", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(response.status).toBe(200)
+        const body = (await response.json()) as {
+          active: string
+          profiles: Array<{
+            id: string
+            built_in: boolean
+            capability_profile_id: string
+            agents: Record<string, string>
+          }>
+        }
+        expect(body.active).toBe("general")
+        expect(body.profiles.find((profile) => profile.id === PROJECT_EXPERT_SQUAD_ID)).toMatchObject({
+          built_in: false,
+          capability_profile_id: PROJECT_EXPERT_SQUAD_ID,
+          agents: { build: "project build overlay" },
+        })
+
+        const patchResponse = await app.request("/config", {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            prompt_profile: {
+              active: PROJECT_EXPERT_SQUAD_ID,
+            },
+          }),
+        })
+        expect(patchResponse.status).toBe(400)
+        expect(await patchResponse.text()).toContain("invalid JSONC")
       },
     })
   })
@@ -284,7 +364,7 @@ describe("config prompt routes", () => {
       fn: async () => {
         await Config.update({
           prompt_profile: {
-            active: "backend",
+            active: "general",
           },
         })
         const root = await Session.create({ kind: "root", title: "profile scope root" })
@@ -309,22 +389,89 @@ describe("config prompt routes", () => {
           active: string
           project_active: string
           session_active: string | null
-          profiles: Array<{ id: string; built_in: boolean; editable: boolean; agents: Record<string, string> }>
+          profiles: Array<{
+            id: string
+            built_in: boolean
+            editable: boolean
+            agents: Record<string, string>
+            capability_profile_id: string
+            projection_hash: string
+            projected_agents: string[]
+            capability_projection: {
+              scheduler: { built_in_tool_ids: string[]; package_tool_refs: string[] }
+              agents: Record<string, { package_tool_refs: string[] }>
+            }
+          }>
         }
         expect(body.active).toBe(PROJECT_EXPERT_SQUAD_ID)
-        expect(body.project_active).toBe("backend")
+        expect(body.project_active).toBe("general")
         expect(body.session_active).toBe(PROJECT_EXPERT_SQUAD_ID)
         expect(body.profiles.find((profile) => profile.id === PROJECT_EXPERT_SQUAD_ID)).toMatchObject({
           built_in: false,
           editable: false,
+          capability_profile_id: PROJECT_EXPERT_SQUAD_ID,
+          projected_agents: ["build"],
           agents: { build: "project build overlay" },
         })
+        const projectProfile = body.profiles.find((profile) => profile.id === PROJECT_EXPERT_SQUAD_ID)
+        expect(projectProfile?.projection_hash).toMatch(/^[a-f0-9]{64}$/)
+        expect(projectProfile?.capability_projection.scheduler.package_tool_refs).toEqual([
+          `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/source-evidence`,
+        ])
+        expect(projectProfile?.capability_projection.agents.build.package_tool_refs).toEqual([
+          `${PROJECT_EXPERT_SQUAD_ID}/build/build-evidence`,
+        ])
       },
     })
   })
 
-  test("PATCH /config accepts the built-in frontend automation debug profile and prompt preview uses it", async () => {
+  test("GET /config/prompt returns session-effective project package prompt when sessionID is supplied", async () => {
     await using tmp = await tmpdir({ git: true })
+    await writeProjectExpertSquadPackage(tmp.path)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Config.update({
+          prompt_profile: {
+            active: "general",
+          },
+        })
+        const root = await Session.create({ kind: "root", title: "prompt catalog scope root" })
+        await Session.mergeConfigOverlay({
+          sessionID: root.id,
+          patch: {
+            prompt_profile: {
+              active: PROJECT_EXPERT_SQUAD_ID,
+            },
+          },
+        })
+
+        const app = Server.App()
+        const response = await app.request(`/config/prompt?sessionID=${encodeURIComponent(root.id)}`, {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(response.status).toBe(200)
+        const body = (await response.json()) as Array<{
+          key: string
+          active_profile: string
+          profile_prompt: string | null
+          effective_prompt: string
+        }>
+        const build = body.find((item) => item.key === "build")
+        expect(build?.active_profile).toBe(PROJECT_EXPERT_SQUAD_ID)
+        expect(build?.profile_prompt).toBe("project build overlay")
+        expect(build?.effective_prompt).toContain("project build overlay")
+      },
+    })
+  })
+
+  test("PATCH /config accepts a repository project frontend automation debug profile and prompt preview uses it", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await copyRepositoryExpertSquadPackage(tmp.path, "frontend-automation-debug")
 
     await Instance.provide({
       directory: tmp.path,

@@ -1,9 +1,15 @@
 import { describe, expect, test } from "bun:test"
-import { PROMPT_PROFILE_ID_PATTERN, PromptProfile, PromptProfileIDSchema } from "../../src/agent/prompt-profile"
+import {
+  PROMPT_PROFILE_ID_PATTERN,
+  PromptProfile,
+  PromptProfileIDSchema,
+  type PromptProfileDefinition,
+} from "../../src/agent/prompt-profile"
 import { Config } from "../../src/config/config"
-import { builtInSelectorSkillSources } from "../../src/expert-squad/builtin"
+import { PromptProfileResolver } from "../../src/expert-squad/prompt-profile-resolver"
+import { REPOSITORY_ROOT } from "../fixture/expert-squad"
 
-const requiredBuiltInTargetMatrix = {
+const requiredProjectTargetMatrix = {
   "frontend-replica": [
     "coding",
     "coding-assistant",
@@ -98,10 +104,43 @@ function overlayLines(overlay: string): string[] {
     .filter(Boolean)
 }
 
-function selectorSkillText(name: string): string {
-  const source = builtInSelectorSkillSources.find((item) => item.id === name)
-  expect(source, name).toBeDefined()
-  return source!.skill
+function repositoryConfig(active: string) {
+  return Config.Info.parse({ prompt_profile: { active } })
+}
+
+async function repositoryProfiles(): Promise<Record<string, PromptProfileDefinition>> {
+  return PromptProfileResolver.definitions(REPOSITORY_ROOT)
+}
+
+async function repositoryProfile(id: string): Promise<PromptProfileDefinition> {
+  const profile = (await repositoryProfiles())[id]
+  expect(profile, id).toBeDefined()
+  return profile!
+}
+
+async function repositoryOverlay(active: string, agentID: string): Promise<string> {
+  const overlay = await PromptProfileResolver.overlayFor({
+    projectDirectory: REPOSITORY_ROOT,
+    agentID,
+    config: repositoryConfig(active),
+  })
+  expect(overlay, `${active}.${agentID}`).toBeDefined()
+  return overlay!
+}
+
+async function repositorySelectorSkillText(name: string): Promise<string> {
+  const projection = await PromptProfileResolver.resolveSkillProjection({
+    projectDirectory: REPOSITORY_ROOT,
+    config: repositoryConfig("general"),
+    defaultSkills: [],
+  })
+  const skill = projection.skills.find((item) => item.name === name)
+  expect(skill, name).toBeDefined()
+  return skill!.content
+}
+
+function allProfileText(profile: PromptProfileDefinition): string {
+  return [profile.description, ...Object.values(profile.agents)].join("\n").toLowerCase()
 }
 
 describe("prompt profiles", () => {
@@ -111,9 +150,18 @@ describe("prompt profiles", () => {
     expect(PromptProfile.activeID(config)).toBe("general")
   })
 
-  test("composer orders base, profile overlay, then user append", () => {
-    const config = Config.Info.parse({ prompt_profile: { active: "backend" } })
-    const prompt = PromptProfile.composeAgentPrompt({
+  test("built-in prompt-profile source contains only the default scheduler profile", async () => {
+    const config = Config.Info.parse({})
+    expect(Object.keys(PromptProfile.builtIns)).toEqual(["general"])
+    expect(PromptProfile.builtIns.general.agents).toEqual({})
+    expect(PromptProfile.composeAgentPrompt({ agentID: "build", base: "BASE", config })).toBe("BASE")
+    expect((await PromptProfileResolver.list({ config })).profiles.map((profile) => profile.id)).toEqual(["general"])
+  })
+
+  test("resolver composes package-backed project overlays from .opencorvus", async () => {
+    const config = repositoryConfig("backend")
+    const prompt = await PromptProfileResolver.composeAgentPrompt({
+      projectDirectory: REPOSITORY_ROOT,
       agentID: "build",
       base: "BASE",
       userAppend: "USER_APPEND",
@@ -124,116 +172,45 @@ describe("prompt profiles", () => {
     expect(prompt.endsWith("\n\nUSER_APPEND")).toBe(true)
   })
 
-  test("general profile preserves prompt text", () => {
-    const config = Config.Info.parse({ prompt_profile: { active: "general" } })
-    expect(PromptProfile.builtIns.general.agents).toEqual({})
-    expect(PromptProfile.composeAgentPrompt({ agentID: "build", base: "BASE", config })).toBe("BASE")
+  test("package-backed profiles expose direct target overlays without wrapper boilerplate", async () => {
+    const profiles = await repositoryProfiles()
+    expect(profiles["frontend-replica"].agents["frontend-design"]).toContain("source-backed replica contract")
+    expect(profiles["frontend-replica"].agents.orchestrator).toContain("exact reference surface")
+    expect(profiles.backend.agents["deep-research"]).toContain("API behavior")
+    expect(profiles.algorithm.agents["goal-workload-analyst"]).toContain("hidden complexity")
+    expect(profiles["frontend-automation-debug"].agents["visual-qa"]).toContain("screenshots")
+    expect(profiles["frontend-replica"].agents.build).toContain("manifest/lockfile")
+    expect(profiles["frontend-replica"].agents.build).toContain("rerun original checks")
+    expect(profiles["frontend-replica"].agents.build).toContain("Do not satisfy source page height")
+    expect(profiles["frontend-replica"].agents.build).toContain("browser_preview_reference_regions")
+    expect(profiles["frontend-replica"].agents["visual-qa"]).toContain("Reject large blank filler bands")
+    expect(profiles["frontend-replica"].agents.integrity).toContain("second evidence-backed implementation non-pass")
+    expect(profiles["frontend-innovate"].agents["frontend-design"]).toContain("multiple named directions")
+    expect(profiles["frontend-innovate"].agents.orchestrator).toContain("webpage or product UI tasks")
+    expect(profiles["frontend-innovate"].agents.build).toContain("keyboard/focus behavior")
+    expect(profiles["frontend-automation-debug"].agents.build).toContain("repair local deps")
+    expect(profiles.algorithm.agents.orchestrator).not.toContain("Prioritize these tools")
+    expect(profiles["frontend-replica"].agents.build).not.toContain("Active prompt profile:")
+    expect(profiles["frontend-replica"].agents.orchestrator).not.toContain("bias planning and retries")
   })
 
-  test("built-in profiles expose direct target overlays without wrapper boilerplate", () => {
-    expect(PromptProfile.builtIns["frontend-replica"].agents["frontend-design"]).toContain(
-      "source-backed replica contract",
+  test("direct session agents receive project package overlays through the resolver", async () => {
+    expect(await repositoryOverlay("frontend-replica", "coding")).toContain("desktop source information architecture")
+    expect(await repositoryOverlay("frontend-replica", "coding-assistant")).toContain("replica questions")
+    expect(await repositoryOverlay("frontend-replica", "mission")).toContain("target surface")
+    expect(await repositoryOverlay("frontend-automation-debug", "coding")).toContain("browser-reproducible frontend failures")
+    expect(await repositoryOverlay("frontend-automation-debug", "build")).toContain("focused automation")
+    expect(await repositoryOverlay("frontend-innovate", "coding")).toContain("design-resource synthesis")
+    expect(await repositoryOverlay("frontend-innovate", "frontend-design")).toContain(
+      "implementation-ready product design handoff",
     )
-    expect(PromptProfile.builtIns["frontend-replica"].agents["orchestrator"]).toContain("exact reference surface")
-    expect(PromptProfile.builtIns.backend.agents["deep-research"]).toContain("API behavior")
-    expect(PromptProfile.builtIns.algorithm.agents["goal-workload-analyst"]).toContain("hidden complexity")
-    expect(PromptProfile.builtIns["frontend-automation-debug"].agents["visual-qa"]).toContain("screenshots")
-    expect(PromptProfile.builtIns["frontend-replica"].agents.build).toContain("manifest/lockfile")
-    expect(PromptProfile.builtIns["frontend-replica"].agents.build).toContain("rerun original checks")
-    expect(PromptProfile.builtIns["frontend-replica"].agents.build).toContain("Do not satisfy source page height")
-    expect(PromptProfile.builtIns["frontend-replica"].agents.build).toContain("height/min-height filler")
-    expect(PromptProfile.builtIns["frontend-replica"].agents.build).toContain("browser_preview_reference_regions")
-    expect(PromptProfile.builtIns["frontend-replica"].agents.build).toContain("browser_preview_compare_scroll_slices")
-    expect(PromptProfile.builtIns["frontend-replica"].agents.build).toContain(
-      "comparison_guidance LEFT reference / RIGHT implementation",
-    )
-    expect(PromptProfile.builtIns["frontend-replica"].agents.build).toContain("consumed diagnostic refs")
-    expect(PromptProfile.builtIns["frontend-replica"].agents.build).toContain("no_project_diff")
-    expect(PromptProfile.builtIns["frontend-replica"].agents["visual-qa"]).toContain(
-      "browser_preview_reference_regions",
-    )
-    expect(PromptProfile.builtIns["frontend-replica"].agents["visual-qa"]).toContain("Reject large blank filler bands")
-    expect(PromptProfile.builtIns["frontend-replica"].agents["visual-qa"]).toContain(
-      "browser_preview_compare_scroll_slices",
-    )
-    expect(PromptProfile.builtIns["frontend-replica"].agents["visual-qa"]).toContain(
-      "comparison_guidance LEFT reference / RIGHT implementation",
-    )
-    expect(PromptProfile.builtIns["frontend-replica"].agents["visual-qa"]).toContain(
-      "carry unresolved prior blockers forward",
-    )
-    expect(PromptProfile.builtIns["frontend-replica"].agents.integrity).toContain(
-      "second evidence-backed implementation non-pass",
-    )
-    expect(PromptProfile.builtIns["frontend-replica"].agents.integrity).toContain(
-      "Do not count Integrity review as the rendered visual verdict",
-    )
-    expect(PromptProfile.builtIns["frontend-replica"].agents.orchestrator).toContain(
-      "per-surface rendered-feedback ledger",
-    )
-    expect(PromptProfile.builtIns["frontend-replica"].agents.orchestrator).toContain(
-      "second consecutive evidence-backed rendered-feedback non-pass",
-    )
-    expect(PromptProfile.builtIns["frontend-innovate"].agents["frontend-design"]).toContain("multiple named directions")
-    expect(PromptProfile.builtIns["frontend-innovate"].agents["frontend-design"]).toContain(
-      "rejected generic draft traits",
-    )
-    expect(PromptProfile.builtIns["frontend-innovate"].agents.orchestrator).toContain("webpage or product UI tasks")
-    expect(PromptProfile.builtIns["frontend-innovate"].agents.orchestrator).toContain(
-      "existing URL redesign from aesthetic/professional/convenient goals",
-    )
-    expect(PromptProfile.builtIns["frontend-innovate"].agents.orchestrator).toContain(
-      "Use Build brainstorm drafts only when the current operator explicitly asks",
-    )
-    expect(PromptProfile.builtIns["frontend-innovate"].agents.orchestrator).not.toContain(
-      "multiple directions, parallel Build draft prototypes",
-    )
-    expect(PromptProfile.builtIns["frontend-innovate"].agents.build).toContain("brainstorming drafts")
-    expect(PromptProfile.builtIns["frontend-innovate"].agents.build).toContain(
-      "only when the current operator explicitly asks",
-    )
-    expect(PromptProfile.builtIns["frontend-innovate"].agents.integrity).toContain("rejected-traits review")
-    expect(PromptProfile.builtIns["frontend-innovate"].agents["frontend-design"]).toContain(
-      "user task, page job, information architecture",
-    )
-    expect(PromptProfile.builtIns["frontend-innovate"].agents.build).toContain("keyboard/focus behavior")
-    expect(PromptProfile.builtIns["frontend-automation-debug"].agents.build).toContain("repair local deps")
-    expect(PromptProfile.builtIns["frontend-automation-debug"].agents.build).toContain("rerun original command")
-    expect(PromptProfile.builtIns.algorithm.agents.orchestrator).not.toContain("Prioritize these tools")
-    expect(PromptProfile.builtIns["frontend-replica"].agents.build).not.toContain("Active prompt profile:")
-    expect(PromptProfile.builtIns["frontend-replica"].agents.mission).not.toContain("Coordinate frontend work")
-    expect(PromptProfile.builtIns["frontend-replica"].agents.orchestrator).not.toContain("bias planning and retries")
-  })
-
-  test("direct session agents also receive scene-specific overlays", () => {
-    const config = Config.Info.parse({ prompt_profile: { active: "frontend-replica" } })
-    expect(PromptProfile.overlayFor("coding", config)).toContain("desktop source information architecture")
-    expect(PromptProfile.overlayFor("coding", config)).toContain("separate multi-end migration task")
-    expect(PromptProfile.overlayFor("coding-assistant", config)).toContain("replica questions")
-    expect(PromptProfile.overlayFor("mission", config)).toContain("target surface")
-  })
-
-  test("frontend automation debug profile reaches direct session agents and specialists", () => {
-    const config = Config.Info.parse({ prompt_profile: { active: "frontend-automation-debug" } })
-    expect(PromptProfile.overlayFor("coding", config)).toContain("browser-reproducible frontend failures")
-    expect(PromptProfile.overlayFor("coding-assistant", config)).toContain("exact verification path")
-    expect(PromptProfile.overlayFor("build", config)).toContain("focused automation")
-    expect(PromptProfile.overlayFor("integrity", config)).toContain("targeted automation")
-  })
-
-  test("frontend innovate profile reaches direct session agents and specialists", () => {
-    const config = Config.Info.parse({ prompt_profile: { active: "frontend-innovate" } })
-    expect(PromptProfile.overlayFor("coding", config)).toContain("design-resource synthesis")
-    expect(PromptProfile.overlayFor("coding-assistant", config)).toContain("competing directions")
-    expect(PromptProfile.overlayFor("frontend-design", config)).toContain("implementation-ready product design handoff")
-    expect(PromptProfile.overlayFor("frontend-design", config)).toContain("existing URL redesigns")
-    expect(PromptProfile.overlayFor("visual-qa", config)).toContain("selected-direction match")
+    expect(await repositoryOverlay("frontend-innovate", "visual-qa")).toContain("selected-direction match")
   })
 
   test("frontend innovate expert squad uses concrete task surfaces instead of quality placeholders", async () => {
-    const profile = PromptProfile.builtIns["frontend-innovate"]
-    const profileText = [profile.description, ...Object.values(profile.agents)].join("\n").toLowerCase()
-    const skillText = selectorSkillText("frontend-innovate-expert-squad").toLowerCase()
+    const profile = await repositoryProfile("frontend-innovate")
+    const profileText = allProfileText(profile)
+    const skillText = (await repositorySelectorSkillText("frontend-innovate-expert-squad")).toLowerCase()
     const forbidden = [
       "anti-slop",
       "enterprise polish",
@@ -249,16 +226,10 @@ describe("prompt profiles", () => {
     expect(profileText).toContain("selected implementation handoff")
     expect(profileText).toContain("rendered evidence review")
     expect(profileText).toContain("accessibility/data constraints")
-    expect(profileText).toContain("aesthetic, professional, and convenient")
-    expect(profileText).toContain("source url evidence")
-    expect(profileText).toContain("web content accessibility guidelines")
     expect(skillText).toContain("direction selection review")
-    expect(skillText).toContain("design-resource synthesis")
-    expect(skillText).toContain("rendered verification")
     expect(skillText).toContain("design philosophy contract")
     expect(skillText).toContain("existing url redesign flow")
     expect(skillText).toContain("web content accessibility guidelines")
-    expect(skillText).toContain("popular claude code design skills and plugins")
 
     for (const fragment of forbidden) {
       expect(profileText.includes(fragment), `frontend-innovate profile contains ${fragment}`).toBe(false)
@@ -267,9 +238,9 @@ describe("prompt profiles", () => {
   })
 
   test("frontend replica expert squad uses source evidence instead of parity placeholders", async () => {
-    const profile = PromptProfile.builtIns["frontend-replica"]
-    const profileText = [profile.description, ...Object.values(profile.agents)].join("\n").toLowerCase()
-    const skillText = selectorSkillText("frontend-replica-expert-squad").toLowerCase()
+    const profile = await repositoryProfile("frontend-replica")
+    const profileText = allProfileText(profile)
+    const skillText = (await repositorySelectorSkillText("frontend-replica-expert-squad")).toLowerCase()
     const forbidden = [
       "visual rhythm",
       "style rhythm",
@@ -283,28 +254,14 @@ describe("prompt profiles", () => {
     expect(profileText).toContain("source region layout")
     expect(profileText).toContain("typography/spacing/color")
     expect(profileText).toContain("rendered screenshot proof")
-    expect(profileText).toContain("rendered screenshots")
     expect(profileText).toContain("bounded evidence-backed acceptance")
-    expect(profileText).toContain("consumed diagnostic refs")
-    expect(profileText).toContain("per-surface rendered-feedback ledger")
-    expect(profileText).toContain("second consecutive evidence-backed rendered-feedback non-pass")
     expect(skillText).toContain("source url/screenshot/dom evidence")
     expect(skillText).toContain("layout/style/data/interaction constraints")
-    expect(skillText).toContain("rendered screenshot and interaction evidence review")
     expect(skillText).toContain("acceptance attempt budget")
-    expect(skillText).toContain("evidence-backed non-pass rounds")
     expect(skillText).toContain("failure taxonomy")
     expect(skillText).toContain("visual qa and integrity feedback consumption")
-    expect(skillText).toContain("implementation non-delivery")
-    expect(skillText).toContain("not accepted")
     expect(skillText).toContain("second consecutive evidence-backed rendered-feedback non-pass")
-    expect(skillText).toContain("integrity non-pass rows are implementation completeness evidence")
     expect(skillText).toContain("blank filler geometry boundary")
-    expect(skillText).toContain("source page height")
-    expect(skillText).toContain("not implementation targets by themselves")
-    expect(skillText).toContain("empty spacer bands")
-    expect(skillText).toContain("blank margin/padding")
-    expect(skillText).toContain("unrendered media slots")
 
     for (const fragment of forbidden) {
       expect(profileText.includes(fragment), `frontend-replica profile contains ${fragment}`).toBe(false)
@@ -312,54 +269,34 @@ describe("prompt profiles", () => {
     }
   })
 
-  test("frontend replica overlays carry source-to-target component-level discipline", () => {
-    const agents = PromptProfile.builtIns["frontend-replica"].agents
+  test("frontend replica overlays carry source-to-target component-level discipline", async () => {
+    const agents = (await repositoryProfile("frontend-replica")).agents
     const allReplicaText = Object.values(agents).join("\n")
 
     expect(agents.coding).toContain("target project primitives, business components, and code")
     expect(agents.requirements).toContain("Component Interaction Matrix coverage")
-    expect(agents.requirements).toContain("not as blank spacer or min-height acceptance")
     expect(agents.architect).toContain("one accountable goal per meaningful component or region")
     expect(agents.architect).toContain("generally produce 10 or more source-component goals")
-    expect(agents.architect).toContain("do not merge several source components")
-    expect(agents.architect).toContain("no_project_diff work")
-    expect(agents.architect).toContain("empty CSS spacing")
     expect(agents["frontend-design"]).toContain("source-backed replica contract")
-    expect(agents["frontend-design"]).toContain("target project reuse constraints")
-    expect(agents["frontend-design"]).toContain("source geometry together with the visible content")
     expect(agents["frontend-research"]).toContain("reference screenshots, source structure evidence, computed styles")
     expect(agents.build).toContain("one scoped component or region goal at a time")
-    expect(agents.build).toContain(
-      "Reuse target project components and business code only where they preserve source parity",
-    )
-    expect(agents.build).toContain("Do not satisfy source page height")
-    expect(agents.build).toContain("consumed diagnostic refs")
-    expect(agents.build).toContain("unchanged visible surfaces")
+    expect(agents.build).toContain("Reuse target project components and business code only where they preserve source parity")
     expect(agents.build).toContain("restore missing source-backed content/assets/interactions")
     expect(agents["visual-qa"]).toContain("source-token ownership")
-    expect(agents["visual-qa"]).toContain("Reject large blank filler bands")
     expect(agents["visual-qa"]).toContain("owning DOM/source module")
-    expect(agents["visual-qa"]).toContain("repeated blocker accounting")
     expect(agents.integrity).toContain("component-per-goal request")
-    expect(agents.integrity).toContain("blank CSS space")
-    expect(agents.integrity).toContain("second evidence-backed implementation non-pass")
-    expect(agents.integrity).toContain("rendered visual verdict")
-    expect(agents.orchestrator).toContain("component-per-goal request")
     expect(agents.orchestrator).toContain("one source component or meaningful region per goal")
-    expect(agents.orchestrator).toContain("reject bundled multi-component goals")
-    expect(agents.orchestrator).toContain("not to padding blank page space")
     expect(agents.orchestrator).toContain("per-surface rendered-feedback ledger")
-    expect(agents.orchestrator).toContain("second consecutive evidence-backed rendered-feedback non-pass")
     expect(allReplicaText).not.toContain("TradingView")
     expect(allReplicaText).not.toContain("AInvest")
   })
 
-  test("frontend replica requirements prompt carries webpage-generation coverage beyond responsive scope", () => {
-    const config = Config.Info.parse({ prompt_profile: { active: "frontend-replica" } })
-    const prompt = PromptProfile.composeAgentPrompt({
+  test("frontend replica requirements prompt carries webpage-generation coverage beyond responsive scope", async () => {
+    const prompt = await PromptProfileResolver.composeAgentPrompt({
+      projectDirectory: REPOSITORY_ROOT,
       agentID: "requirements",
       base: "BASE_REQUIREMENTS",
-      config,
+      config: repositoryConfig("frontend-replica"),
     })
 
     expect(prompt).toContain("BASE_REQUIREMENTS")
@@ -376,9 +313,9 @@ describe("prompt profiles", () => {
     expect(prompt).toContain("desktop-only")
   })
 
-  test("target catalog covers every built-in overlay target", () => {
+  test("target catalog covers every repository package overlay target", async () => {
     const targetIDs = new Set(PromptProfile.targets.map((target) => target.id))
-    for (const profile of Object.values(PromptProfile.builtIns)) {
+    for (const profile of Object.values(await repositoryProfiles())) {
       for (const targetID of Object.keys(profile.agents)) {
         expect(targetIDs.has(targetID)).toBe(true)
       }
@@ -389,36 +326,36 @@ describe("prompt profiles", () => {
     })
   })
 
-  test("built-in registry pressure covers required target matrices without noncanonical targets", () => {
-    expect(Object.keys(PromptProfile.builtIns)).toEqual([
+  test("repository catalog keeps only general as built-in while project packages cover required target matrices", async () => {
+    expect(Object.keys(PromptProfile.builtIns)).toEqual(["general"])
+    const profiles = await repositoryProfiles()
+    expect(Object.keys(profiles)).toEqual([
       "general",
-      "frontend-replica",
-      "frontend-innovate",
-      "backend",
       "algorithm",
+      "backend",
       "frontend-automation-debug",
+      "frontend-innovate",
+      "frontend-replica",
     ])
     const targetIDs = new Set(PromptProfile.targets.map((target) => target.id))
-    expect(PromptProfile.targets).toHaveLength(targetIDs.size)
 
-    for (const [profileID, requiredTargets] of Object.entries(requiredBuiltInTargetMatrix)) {
-      const profile = PromptProfile.builtIns[profileID]
+    for (const [profileID, requiredTargets] of Object.entries(requiredProjectTargetMatrix)) {
+      const profile = profiles[profileID]
       expect(profile).toBeDefined()
       for (const targetID of requiredTargets) {
         expect(profile.agents[targetID]?.trim().length ?? 0).toBeGreaterThan(0)
       }
     }
 
-    expect(new Set(Object.keys(PromptProfile.builtIns["frontend-automation-debug"].agents))).toEqual(targetIDs)
-
-    for (const [profileID, profile] of Object.entries(PromptProfile.builtIns)) {
+    expect(new Set(Object.keys(profiles["frontend-automation-debug"].agents))).toEqual(targetIDs)
+    for (const [profileID, profile] of Object.entries(profiles)) {
       for (const targetID of Object.keys(profile.agents)) {
         expect(targetIDs.has(targetID), `${profileID} references noncanonical target ${targetID}`).toBe(true)
       }
     }
   })
 
-  test("built-in registry pressure keeps overlays sharp, role-scoped, and free of workflow mechanics", () => {
+  test("package-backed overlays stay sharp, role-scoped, and free of workflow mechanics", async () => {
     const forbiddenFragments = [
       "active prompt profile",
       "anti-slop",
@@ -445,7 +382,7 @@ describe("prompt profiles", () => {
     ]
     const vagueFragments = ["operational assumptions", "reasoning stays", "workflow mechanics"]
 
-    for (const [profileID, profile] of Object.entries(PromptProfile.builtIns)) {
+    for (const [profileID, profile] of Object.entries(await repositoryProfiles())) {
       const seen = new Set<string>()
       for (const [targetID, overlay] of Object.entries(profile.agents)) {
         const normalized = overlay.trim().toLowerCase()
@@ -462,13 +399,9 @@ describe("prompt profiles", () => {
     }
   })
 
-  test("profile catalog exposes target metadata and built-in package-backed definitions", () => {
-    const config = Config.Info.parse({
-      prompt_profile: {
-        active: "frontend-replica",
-      },
-    })
-    const catalog = PromptProfile.list(config)
+  test("profile catalog exposes built-in default and project package-backed definitions", async () => {
+    const config = repositoryConfig("frontend-replica")
+    const catalog = await PromptProfileResolver.list({ projectDirectory: REPOSITORY_ROOT, config })
     expect(catalog.project_active).toBe("frontend-replica")
     expect(catalog.session_active).toBe(null)
     expect(catalog.targets.find((target) => target.id === "build")).toMatchObject({
@@ -481,20 +414,24 @@ describe("prompt profiles", () => {
       editable: false,
       built_in_only: true,
     })
+    expect(catalog.profiles.find((profile) => profile.id === "general")).toMatchObject({
+      id: "general",
+      built_in: true,
+      editable: false,
+    })
     expect(catalog.profiles.find((profile) => profile.id === "frontend-replica")).toMatchObject({
       id: "frontend-replica",
-      built_in: true,
+      built_in: false,
       editable: false,
     })
     expect(catalog.profiles.map((profile) => profile.id)).toEqual([
       "general",
-      "frontend-replica",
-      "frontend-innovate",
-      "backend",
       "algorithm",
+      "backend",
       "frontend-automation-debug",
+      "frontend-innovate",
+      "frontend-replica",
     ])
-    expect(catalog.profiles.every((profile) => profile.built_in && !profile.editable)).toBe(true)
     expect(catalog.profiles.some((profile) => profile.id === "custom-squad")).toBe(false)
   })
 

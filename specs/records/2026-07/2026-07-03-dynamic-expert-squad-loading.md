@@ -2,7 +2,7 @@
 
 Date: 2026-07-03
 
-Status: phase 1 registry landed; phase 2 package manager service implemented; phase 3 routes landed; phase 4 built-in package source landed; phase 5 custom prompt-profile source removed; phase 6 project package prompt-profile resolution landed; runtime capability projection pending.
+Status: dynamic expert-squad package loading, active README Orchestrator append, runtime capability projection, scoped MCP tool/prompt/resource projection, built-in `general`-only source boundary, overlay prompt-profile fixture cleanup, API documentation sync, browser-preview fixture contract correction, expert-squad Git ignore completeness repair, and focused validation landed.
 
 Glossary:
 
@@ -266,7 +266,7 @@ Required directory rules:
 - The canonical directory name must equal `expert_squad_id`.
 - Agent folder names must be legal `AgentRoleID` values in phase 1.
 - Package-defined custom agents are explicitly out of scope in phase 1. Supporting them later requires a separate design for role contract, session kind, tool pool, permissions, dispatch, worker lifecycle, and UI catalog scope.
-- `README.md` documents the agent communication relationship. It is human-facing architecture documentation, not executable routing data.
+- `README.md` documents the agent communication relationship and is appended to the active Orchestrator prompt when that expert squad is selected. It is not selector catalog data and must not expose inactive squad production content.
 - `agents/<agent_id>/system.md` is a role-scoped expert-squad prompt overlay for built-in roles. It does not replace OpenCorvus core role contracts.
 - Agent-local `skills/`, `tools/`, and `mcp/` belong only to that agent inside this expert squad.
 - Squad-level `skills/`, `tools/`, and `mcp/` are shared only inside the active expert squad.
@@ -591,6 +591,14 @@ This replaces the earlier coarse `include_mcp_tools` boolean. A boolean may rema
 ## Agent Prompt And Communication README
 
 `README.md` is required for every expert-squad package.
+
+Runtime meaning:
+
+- The root `README.md` is the active expert-squad communication overview for the Orchestrator.
+- It is appended only when `prompt_profile.active` equals this package's manifest `id`.
+- It is not used to discover/select inactive squads; inactive discovery uses manifest selector metadata and optional top-level `selector.md`.
+- `agents/orchestrator/system.md` remains the active Orchestrator behavior overlay, while README explains the squad-wide communication map.
+- README content must come from the canonical package root's top-level `README.md`, not from an arbitrary manifest path, agent production file, folder name, or ZIP name.
 
 It must document:
 
@@ -1791,3 +1799,604 @@ Phase 9 Recall, 2026-07-04:
 - `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts packages/opencorvus/test/orchestrator/scheduler-capability-projection.test.ts packages/opencorvus/test/tool/skill.test.ts packages/opencorvus/test/tool/registry.test.ts` passed: 38 pass, 400 expect calls.
 - `bun test --timeout=2147483647 packages/opencorvus/test/script/historical-docs-links.test.ts` passed: 19 pass.
 - `git diff --check` passed. It emitted CRLF warnings for unrelated pre-existing dirty files outside the Phase 9 staged set; no whitespace errors were reported.
+
+## Phase 10 Recall, 2026-07-04
+
+### User Request
+
+- Built-in expert squads must contain only the scheduler/default squad.
+- All other expert squads must move to `.opencorvus`.
+- Continue scanning and resolve residual problems after the move.
+
+### Acceptance Criteria For This Slice
+
+- `packages/opencorvus/src/expert-squad/builtin` embeds only the default scheduler package, currently manifest ID `general`.
+- `frontend-replica`, `frontend-innovate`, `frontend-automation-debug`, `backend`, and `algorithm` live as clear-text packages under `.opencorvus/expert-squads/<id>`.
+- `.gitignore` versions `.opencorvus/expert-squads/**` while keeping runtime and local entries such as `.opencorvus/r`, `.opencorvus/runtime`, preview logs, local config, and process markers ignored.
+- `PromptProfile.builtIns` and built-in package collision checks recognize only the scheduler/default package as built in.
+- Project-scoped package discovery remains the only source for non-default expert-squad profiles and selector skills.
+- Orchestrator and tool descriptions do not hardcode non-default expert squads as built-in facts; concrete IDs come from the prompt-profile catalog or mounted selector skills.
+- Tests prove the default built-in boundary, project package catalog/selector visibility, and absence of built-in domain package imports.
+
+### Hard Constraints
+
+- No fallback loading, compatibility aliases, name guessing, host-side gates, hidden routing, or double-source expert-squad definitions.
+- Do not rename the scheduler/default package ID in this slice. `general` remains the default ID because it is already the active config default and changing it would be a separate identity migration.
+- Do not create a new worktree, run `git reset`, or disturb unrelated dirty files.
+- Do not restart, refresh, or kill running OpenCorvus or overlay processes.
+- Any TypeScript or test change in this slice must receive focused tests and typecheck validation.
+
+### Sources Read
+
+- `AGENTS.md`
+- `C:/Users/chuan/.codex/skills/opencorvus-expert-squad-creator/SKILL.md`
+- `C:/Users/chuan/.codex/skills/opencorvus-expert-squad-creator/references/open-corvus-expert-squad-checklist.md`
+- `specs/README.md`
+- `specs/records/2026-07/README.md`
+- `specs/records/2026-07/2026-07-03-dynamic-expert-squad-loading.md`
+- `.gitignore`
+- `packages/opencorvus/src/expert-squad/builtin/index.ts`
+- `packages/opencorvus/src/expert-squad/manager.ts`
+- `packages/opencorvus/src/expert-squad/prompt-profile-resolver.ts`
+- `packages/opencorvus/src/agent/prompt-profile.ts`
+- `packages/opencorvus/src/skill/skill.ts`
+- `packages/opencorvus/src/prompt/core/orchestrator-core.txt`
+- `packages/opencorvus/src/orchestrator/tools.ts`
+- `packages/opencorvus/test/agent/prompt-profile.test.ts`
+- `packages/opencorvus/test/agent/frontend-replica-desktop-only.test.ts`
+- `packages/opencorvus/test/agent/role-contract.test.ts`
+- `packages/opencorvus/test/expert-squad/package-manager.test.ts`
+
+### Repository Search Evidence
+
+- `rg -n "builtInPackageSources|loadedBuiltInPackages|builtInPromptProfiles|builtInSelectorSkillSources" packages/opencorvus/src packages/opencorvus/test -g "*.ts"`: hardcoded built-in source consumption is limited to `builtin/index.ts`, `PromptProfile`, `PromptProfileResolver`, `Skill`, and focused tests.
+- `rg -n "src/expert-squad/builtin|expert-squad/builtin|builtin/(frontend-replica|frontend-innovate|frontend-automation-debug|backend|algorithm)|frontend-replica/selector|frontend-innovate/selector|frontend-automation-debug/selector" packages/opencorvus/src packages/opencorvus/test specs/current specs/records/2026-07 -g "*.ts" -g "*.md"`: production domain package imports exist only in `builtin/index.ts`; historical specs mention old locations and should be superseded by this phase record rather than rewritten.
+- `rg -n "PromptProfile\\.builtIns|PromptProfile\\.list|prompt_profile\\.active|assertKnownProfileID|frontend-replica|frontend-innovate|frontend-automation-debug|\\bbackend\\b|\\balgorithm\\b" packages/opencorvus/src packages/opencorvus/test -g "*.ts" -g "*.txt"`: residual built-in assumptions live mainly in prompt-profile tests, role-contract prompt catalog tests, Orchestrator prompt/tool copy, skill tests, session extra-tools tests, and Orchestrator tool tests.
+- `rg -n "resolveSkillProjection|SystemPrompt\\.skills|skill projection|selectorSkillNames|builtin-skills|expert-squad" packages/opencorvus/src packages/opencorvus/test -g "*.ts"`: selector skills are already projected from project packages by `PromptProfileResolver.resolveSkillProjection`; tests still expect the old built-in selector set.
+- `.opencorvus` currently contains local/runtime entries `preview-logs`, `r`, `dev-server.pid`, and `opencorvus.jsonc`, so only `.opencorvus/expert-squads/**` may be unignored.
+
+### Independent Agent Feedback
+
+- Rawls is running a read-only audit of residual code/test assumptions that treat domain expert squads as built-in.
+- Hubble is running a read-only audit of `.opencorvus` versioning, registry, package-manager, and selector/catalog consequences.
+- Their findings must be reviewed before final validation and recorded in this section.
+
+### Phase 10 Planned Boundary
+
+- Move domain package directories from `packages/opencorvus/src/expert-squad/builtin/<id>` to `.opencorvus/expert-squads/<id>`.
+- Keep `packages/opencorvus/src/expert-squad/builtin/general` as the only embedded package source.
+- Update `.gitignore` so the repo tracks the moved packages without tracking local `.opencorvus` runtime or config entries.
+- Update production copy and tests so built-in means `general` only, while root project packages provide domain catalog and selector behavior.
+- Add focused assertions proving no non-default package remains in `builtInPackageSources` or `PromptProfile.builtIns`.
+
+### Phase 10 Implementation Result
+
+- Domain expert-squad packages `frontend-replica`, `frontend-innovate`, `frontend-automation-debug`, `backend`, and `algorithm` now live under `.opencorvus/expert-squads/<id>`.
+- `packages/opencorvus/src/expert-squad/builtin` embeds only `general`; built-in prompt profile and selector exports are derived from that one package.
+- `.gitignore` tracks `.opencorvus/expert-squads/**` while leaving `.opencorvus` runtime/config entries ignored.
+- Orchestrator selection copy and tool schema copy now refer to catalog/loaded selector skills rather than hardcoding non-default squads as built-ins.
+- Test fixtures copy repository expert-squad packages into temp project `.opencorvus/expert-squads` when they need domain profiles.
+
+### Phase 10 Residual Scan
+
+- `rg -n "packages/opencorvus/src/expert-squad/builtin/(frontend-replica|frontend-innovate|frontend-automation-debug|backend|algorithm)|expert-squad/builtin/(frontend-replica|frontend-innovate|frontend-automation-debug|backend|algorithm)|builtin/(frontend-replica|frontend-innovate|frontend-automation-debug|backend|algorithm)" packages/opencorvus/src packages/opencorvus/test specs/current specs/records/2026-07 -g "*.ts" -g "*.md" -g "*.txt"`: production/test references to old embedded domain package paths are gone; remaining hits are historical specs that record older work.
+- `rg -n "frontend-replica|frontend-innovate|frontend-automation-debug|\\bbackend\\b|\\balgorithm\\b" packages/opencorvus/src/expert-squad packages/opencorvus/src/agent/prompt-profile.ts packages/opencorvus/src/skill/skill.ts packages/opencorvus/src/prompt/core/orchestrator-core.txt packages/opencorvus/src/orchestrator/tools.ts -g "*.ts" -g "*.txt"`: remaining production hits are generic wording or runtime task-domain text, not built-in package loading.
+
+### Phase 10 Validation
+
+- `bun run --cwd packages/opencorvus typecheck` passed.
+- `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/registry.test.ts packages/opencorvus/test/expert-squad/package-manager.test.ts packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts` passed: 74 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/tool/skill.test.ts packages/opencorvus/test/session/extra-tools.test.ts packages/opencorvus/test/server/config-routes.test.ts packages/opencorvus/test/server/skill-routes.test.ts packages/opencorvus/test/server/task-create-route.test.ts packages/opencorvus/test/server/task-message-routes.test.ts` passed: 123 pass, 1 skip.
+- `bun test --timeout=2147483647 packages/opencorvus/test/agent/prompt-profile.test.ts packages/opencorvus/test/agent/frontend-replica-desktop-only.test.ts packages/opencorvus/test/agent/core-prompt-hygiene.test.ts packages/opencorvus/test/orchestrator/orchestrator-tool-descriptions.test.ts packages/opencorvus/test/orchestrator/scheduler-capability-projection.test.ts` passed: 107 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/orchestrator/tools.test.ts -t "select_expert_squad writes only active profile|frontend innovate expert squad runs visible skill selection"` passed: 2 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts` passed: 65 pass.
+- `bun run api:routes-check` passed.
+- `git diff --check` passed with CRLF warnings only.
+
+## Phase 20 MCP Prompt/Resource Prompt-Composition Closure, 2026-07-04
+
+### Recall
+
+- Current objective remains the full dynamic expert-squad source refactor: built-in source keeps only `general`; domain squads load from `.opencorvus/expert-squads/<id>` by manifest `id`; active README is the Orchestrator append prompt; dynamic package tools, skills, and MCP definitions are projected from the active expert-squad capability without fallback, inactive leakage, or double-source behavior.
+- Continuation audit found a real runtime gap after Phase 14: `PromptProfileResolver.projectSchedulerMcpPrompts()`, `projectWorkerMcpPrompts()`, `projectSchedulerMcpResources()`, and `projectWorkerMcpResources()` had tests, but production prompt composition did not call them. The model could receive projected MCP tools, but projected MCP prompt/resource refs did not enter the final scheduler or worker system prompt.
+- Current acceptance for this slice: when an active scheduler or worker capability projects MCP prompts/resources, `PromptProfileResolver.composeAgentPrompt()` must load those scoped MCP prompt/resource payloads and append them to the final composed prompt; inactive package MCP prompts/resources must still stay absent from global `MCP.prompts()`, `MCP.resources()`, `MCP.serverPrompts()`, and `MCP.serverResources()`.
+- Hard constraints: no global registration of package MCP prompt/resource definitions, no fallback to inactive packages, no name-only MCP lookup, no UI-only filtering, no prompt-composition opt-out switch, and no hidden compatibility path.
+
+### Search Evidence
+
+- `rg -n "MCP\\.(status|connect|disconnect|serverTools|serverPrompts|serverResources|tools\\(|prompts\\(|resources\\(|callTool)|projectSchedulerMcpPrompts|projectWorkerMcpPrompts|projectSchedulerMcpResources|projectWorkerMcpResources|scopedPromptInfo|scopedResourceInfo|getScopedPrompt|readScopedResource" packages/opencorvus/src packages/opencorvus/test -g "*.ts"` showed production calls for global MCP lists and tests for scoped prompt/resource projection, but no production call from final prompt composition into the projected scoped prompt/resource functions.
+- `rg -n "projectSchedulerMcpPrompts|projectSchedulerMcpResources|projectWorkerMcpPrompts|projectWorkerMcpResources|composeAgentPrompt" packages/opencorvus/src/orchestrator/agent.ts packages/opencorvus/src/agent/runner.ts packages/opencorvus/src/session/system.ts packages/opencorvus/src/session/loop.ts packages/opencorvus/test -g "*.ts"` showed `composeAgentPrompt()` was the single prompt-composition boundary used by Orchestrator and worker agents.
+- `packages/opencorvus/test/fixture/package-mcp-server.ts` exposes a real `inspect` prompt and `dom` resource fixture, so the regression can prove real scoped MCP prompt/resource payloads enter composed prompt text instead of only validating schema metadata.
+
+### Finding
+
+- Phase 14 implemented scoped MCP prompt/resource proxy functions but stopped at resolver-level projection. That was not enough for runtime support because final model context is assembled through `PromptProfileResolver.composeAgentPrompt()`.
+- Treating the resolver tests as runtime evidence would have left a false-green gap: a manifest could project `package_mcp_prompt_refs` or `package_mcp_resource_refs`, those refs could pass validation and direct resolver tests, yet the scheduler/worker model would never receive the projected prompt/resource content.
+
+### Implementation
+
+- `PromptProfileResolver.composeAgentPrompt()` now resolves the active scheduler capability for `orchestrator`, or the active worker capability for known agent roles, and appends a `## Projected MCP Context` section when that capability projects MCP prompts/resources.
+- The MCP context is built only from `projectSchedulerMcpPrompts()`, `projectWorkerMcpPrompts()`, `projectSchedulerMcpResources()`, and `projectWorkerMcpResources()`, preserving active capability as the single runtime source.
+- Package MCP prompt/resource definitions still use scoped clients from the active package definition file and remain absent from global MCP prompt/resource/server proxy lists.
+- No-argument MCP prompts are invoked with explicit `{}`. Prompts with required arguments still fail through the MCP server's real validation rather than being skipped.
+- Custom agent names that are not `AgentRoleContract` roles are not pulled into expert-squad capability projection. Known role agents remain fail-fast if the active package does not define the required worker capability.
+
+### Validation
+
+- `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts` initially failed when no-argument prompt invocation sent `undefined`; this exposed the real MCP SDK argument contract.
+- After changing no-argument projected prompt reads to pass `{}`, `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts` passed: 31 pass.
+- `bun run --cwd packages/opencorvus typecheck` passed.
+- `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/registry.test.ts packages/opencorvus/test/expert-squad/package-manager.test.ts packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts` passed: 93 pass.
+- A combined `bun test --timeout=2147483647 packages/opencorvus/test/agent/prompt-profile.test.ts packages/opencorvus/test/agent/runner-prompt.test.ts packages/opencorvus/test/skill/skill.test.ts packages/opencorvus/test/tool/skill.test.ts` run timed out at the outer command after 184 seconds while running under parallel validation pressure and produced no failing assertion. The same coverage was split and rerun:
+  - `bun test --timeout=2147483647 packages/opencorvus/test/agent/prompt-profile.test.ts packages/opencorvus/test/agent/runner-prompt.test.ts` passed: 30 pass.
+  - `bun test --timeout=2147483647 packages/opencorvus/test/skill/skill.test.ts packages/opencorvus/test/tool/skill.test.ts` passed: 38 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/historical-docs-links.test.ts` passed: 66 pass.
+
+## Phase 18 Browser Preview Fixture Contract Closure, 2026-07-04
+
+### Recall
+
+- Current user request remains: only the scheduler/default expert squad is built in, all other expert squads load from `.opencorvus/expert-squads/<id>`, and residual issues after the move must be scanned and fixed rather than waived.
+- The expert-squad `README.md` runtime design remains unchanged: the active package root README is appended only to the Orchestrator prompt; inactive discovery uses manifest selector metadata and optional `selector.md`; agent role behavior remains in `agents/<agent_id>/system.md`.
+- Sources reread before this correction: `AGENTS.md`, `specs/README.md`, `specs/records/2026-07/README.md`, this record's Phase 11 and Phase 17 Recall sections, and `specs/records/2026-07/2026-07-02-runtime-status-timing-root-repair.md`.
+
+### Search Evidence
+
+- `rg -n "__taskRowSelectDebug|__selectTaskFromTaskListDebug|__selectTaskDebug|__browserPreviewStressClicks|directSolidClickDiagnostics|otherTaskClickDiagnostics|handlerKeys|hasSolidClick|hasInlineClick" packages/overlay/src packages/overlay/test/browser/browser-preview-visual-stress.test.ts` returned no hits after diagnostic cleanup.
+- Runtime diagnostics captured during the failing browser test showed `/log` entry `task tsk_browserpreview_visual_stress runtime activity requires a positive task.time.started timestamp`.
+- `packages/overlay/src/services/task-runtime-activity.ts` treats missing or invalid active runtime timestamps as a data-contract error.
+- `specs/records/2026-07/2026-07-02-runtime-status-timing-root-repair.md` records that runtime timing must use persisted task timestamps and reject invalid data rather than infer a wall-clock fallback.
+
+### Causal Chain
+
+- Observable failure: after selecting stale preview target `art_previewtarget_visual_stale`, clicking the second task row did not reach "No browser preview target is saved for this task."; the Browser panel remained in the old selection-failed state.
+- Direct trigger: task switching calls `stopSSE()` for the previously selected active task, and that path restored runtime activity from the selected task.
+- Deep cause: the stress-test fixture declared active tasks without positive `time.started` values. That violated the selected-task runtime timing contract and caused the switch handler to throw before the selected task state could change.
+- Why this is not a product fallback fix: production code is correct to reject invalid active runtime data. Adding a missing-time fallback would violate the July 2 timing repair and hide corrupted task records.
+
+### Implementation
+
+- Added positive `time.started` values to both active tasks in `packages/overlay/test/browser/browser-preview-visual-stress.test.ts`.
+- Kept focused failure diagnostics that report selected source, selected board task ID, active row task ID, settings directory, request log, and `/log` bodies when the cross-task Browser Preview assertion fails.
+- Left product code unchanged; temporary click-handler diagnostics were removed.
+
+### Validation
+
+- `node test/browser-runner.mjs test/browser/browser-preview-visual-stress.test.ts` passed: 1 pass.
+- Visual review of `packages/overlay/.scratch/browser-preview-visual-stress/05-cross-task-missing-clears-selection.png` confirmed the Browser panel shows the current task's "No browser preview target is saved for this task." empty state and no stale selection-failed panel.
+- `bun run --cwd packages/overlay typecheck` passed.
+- `bun test --timeout=2147483647 packages/overlay/test/sse-active-elapsed.test.ts packages/overlay/test/browser-preview-panel.test.ts packages/overlay/test/prompt-profile-task-session-owner.test.ts` passed: 22 pass.
+
+## Phase 19 Expert-Squad Git Ignore Completeness Repair, 2026-07-04
+
+### Recall
+
+- Current objective remains the full expert-squad source refactor: built-in source keeps only `general`; domain squads are repository packages under `.opencorvus/expert-squads/<id>`; package IDs come from `expert-squad.jsonc`; package README is active Orchestrator append prompt; dynamic package tool, skill, and MCP projections stay scoped to the active expert-squad ID.
+- Acceptance for this slice: every manifest-referenced source file in repository `.opencorvus/expert-squads/**` must be visible to Git, including agent folders named `build`; generic build-output ignore rules must not hide expert-squad source definitions.
+- Sources reread before implementation: `AGENTS.md`, `specs/README.md`, `specs/records/2026-07/README.md`, this record's Recall and Phase 18, `C:/Users/chuan/.codex/skills/opencorvus-expert-squad-creator/SKILL.md`, and its `open-corvus-expert-squad-checklist.md`.
+
+### Search Evidence
+
+- `Get-ChildItem -Recurse -File .opencorvus/expert-squads` showed each migrated domain package contains `agents/build/system.md`.
+- `git status --short -- .opencorvus/expert-squads/*/agents/build/system.md` initially returned no entries, while `git check-ignore -v .opencorvus/expert-squads/algorithm/agents/build/system.md` showed `.gitignore:59:build/`.
+- The domain manifests reference these files, for example `agents.build.prompt = "agents/build/system.md"` in `algorithm`, `backend`, `frontend-replica`, `frontend-innovate`, and `frontend-automation-debug`.
+- `git ls-files --ignored --others --exclude-standard -- .opencorvus/expert-squads` returned no files after the repair.
+
+### Finding
+
+- The top-level `.gitignore` correctly unignored `.opencorvus/expert-squads/**` near the local `.opencorvus/*` rule, but a later generic `build/` output rule re-ignored nested directories named `agents/build/`.
+- This would make the checkout miss manifest-referenced Build agent prompt overlays even though local validation passed on the developer machine. The result would be an incomplete repository package source and a false sense that the migration was committed.
+
+### Implementation
+
+- Added explicit `.gitignore` unignore rules after the generic `build/` rule for `.opencorvus/expert-squads/**/agents/build/` and its contents.
+- Added a `document-health` regression that enumerates repository expert-squad packages and uses `git check-ignore -v --no-index` to assert no `agents/build/system.md` path is hidden by a positive ignore rule.
+
+### Validation
+
+- `bun test --timeout=2147483647 packages/opencorvus/test/script/document-health.test.ts -t "expert-squad build agent prompts"` passed: 1 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/historical-docs-links.test.ts` passed: 66 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/registry.test.ts packages/opencorvus/test/expert-squad/package-manager.test.ts` passed: 62 pass.
+- `git diff --check` passed with CRLF warnings only.
+
+## Phase 17 Overlay Fixture And API Residual Closure, 2026-07-04
+
+### Recall
+
+- Current user request: only the scheduler/general expert squad remains built in; all other expert squads live under `.opencorvus/expert-squads/<id>`; continue scanning and solve residual issues.
+- The user also clarified that expert-squad `README.md` is scheduler/Orchestrator append prompt content. Phase 11 remains the accepted design: active package README appends only to the Orchestrator prompt, while `selector.md` remains inactive discovery text.
+- Sources reread before this slice: `AGENTS.md`, `specs/README.md`, `specs/records/2026-07/README.md`, this record's Phase 11/12 Recall, and `opencorvus-expert-squad-creator` with its checklist.
+- Independent follow-up review inputs:
+  - Boyle found no live-code blocker in package source, identity, import, or export; noted package export should reject installed packages containing `.opencorvus/r` runtime internals.
+  - Confucius found runtime projection uses active `prompt_profile.active` and no direct projection blocker remained.
+  - Tesla found stale overlay browser fixtures still represented domain profiles as `built_in: true`, and API docs did not clearly expose project package-backed prompt profiles.
+
+### Search Evidence
+
+- `Get-ChildItem packages/opencorvus/src/expert-squad/builtin -Force` showed only `general/` and `index.ts`.
+- `rg -n 'expert-squad/builtin/(algorithm|backend|frontend-|frontend)|builtin/(algorithm|backend|frontend-)|PromptProfile\.builtIns\["(frontend|backend|algorithm)' packages/opencorvus/src packages/opencorvus/test -g '*.ts' -g '*.md' -g '*.txt'` returned no live hits.
+- `rg -n 'id: "(frontend-replica|frontend-innovate|frontend-automation-debug|backend|algorithm)"[\s\S]{0,240}?built_in: true|built_in: true[\s\S]{0,240}?id: "(frontend-replica|frontend-innovate|frontend-automation-debug|backend|algorithm)"' packages/overlay/test/browser -g '*.test.ts'` returned no hits.
+- A broader grep still finds historical records that mention old built-in files and current `source_baseline_input` frontend-design data roles. Those are not expert-squad source residuals.
+
+### Implementation
+
+- Added `packages/overlay/test/browser/prompt-profile-fixture.ts` so browser fixtures use the current prompt-profile catalog shape with `project_active`, `session_active`, `capability_profile_id`, `projection_hash`, `projected_agents`, and full capability projection arrays.
+- Replaced stale overlay browser prompt-profile fixtures so domain/project profiles such as `frontend-replica`, `frontend-innovate`, `frontend-automation-debug`, `backend`, and `algorithm` are represented as package-backed `built_in: false`; only `general` remains built in.
+- Added package-manager regression coverage that an installed expert-squad package containing OpenCorvus runtime internals such as `.opencorvus/r` is rejected before export.
+- Updated `/config/prompt-profile` OpenAPI route summary and description to state the single active `prompt_profile.active` value, built-in `general`, and current-project `.opencorvus/expert-squads/<id>` package-backed profiles with capability projections.
+- Regenerated `packages/sdk/openapi.json`, SDK generated types, and English/Chinese API reference docs.
+- Fixed `workspace-terminal-open.test.ts` fixture SSE handling for `/task/events`; the missing `text/event-stream` response caused browser error collection to throw during `browser.close()` and left Node test children behind.
+
+### Validation
+
+- `bun run --cwd packages/opencorvus typecheck` passed.
+- `bun run --cwd packages/overlay typecheck` passed after the overlay fixture edits.
+- `bun run --cwd packages/sdk/js build` passed and regenerated SDK sources.
+- `bun run typecheck` passed across the workspace, including SDK import and AI runtime checks.
+- `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/package-manager.test.ts` passed: 19 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/registry.test.ts packages/opencorvus/test/expert-squad/package-manager.test.ts packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts` passed: 93 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts` passed: 65 pass.
+- `bun run api:routes-check` passed.
+- `bun run docs:check` passed.
+- `git diff --check` passed with CRLF warnings only.
+- Overlay browser validations using Node runner passed:
+  - `node test/browser-runner.mjs test/browser/config-dialog-resizer.test.ts`: 1 pass.
+  - `node test/browser-runner.mjs test/browser/command-palette.test.ts`: 1 pass.
+  - `node test/browser-runner.mjs test/browser/workspace-terminal-open.test.ts`: 3 pass.
+  - `node test/browser-runner.mjs test/browser/prompt-profile-selector-browser.test.ts`: 2 pass.
+  - `node test/browser-runner.mjs test/browser/prompt-profile-panel.test.ts`: 1 pass.
+  - `node test/browser-runner.mjs test/browser/executor-selector-redesign.test.ts`: 1 pass.
+  - `node test/browser-runner.mjs test/browser/screenshot-browser-panel-browser.test.ts`: 1 pass.
+  - `node test/browser-runner.mjs test/browser/config-dialog-resizer.test.ts test/browser/command-palette.test.ts`: 2 pass.
+
+### Formerly Unaccepted Evidence, Closed In Phase 18
+
+- `node test/browser-runner.mjs test/browser/browser-preview-visual-stress.test.ts` failed twice at the same cross-task preview-state assertion.
+- Observable failure: after selecting stale preview target `art_previewtarget_visual_stale`, clicking the other task row does not reach the expected "No browser preview target is saved for this task." state before the no-activity assertion. The UI remains on `browser-preview-selection-failed` for `tsk_browserpreview_visual_stress`.
+- Phase 18 closes this residual as a fixture contract error rather than a product browser-preview state reset bug. The active test tasks lacked positive `time.started` values, so selected-task Server-Sent Events runtime restoration threw before task selection could switch.
+- The corrected fixture and visual screenshot are now accepted evidence for this residual closure.
+
+## Phase 16 Static Selector Contract Residual, 2026-07-04
+
+### Recall
+
+- Current user request: continue checking code changes after moving all non-`general` expert squads to `.opencorvus`, and preserve the clarified README design where the active expert-squad README is appended only to the Orchestrator prompt.
+- Current acceptance for this slice: static regression tests must protect the catalog-only selector discovery path. General selector discovery and general prompt/config catalog paths must not require full package loading of inactive expert squads.
+- Hard constraints: no fallback, no compatibility alias, no second active selection field, no folder-name identity, no inactive production capability leakage, and no stale test that reintroduces full inactive package loading.
+
+### Sources And Search Evidence
+
+- Reread before implementation: this record's Recall and Phase 15 catalog/full-load split, `C:/Users/chuan/.codex/skills/opencorvus-expert-squad-creator/SKILL.md`, `C:/Users/chuan/.codex/skills/opencorvus-expert-squad-creator/references/open-corvus-expert-squad-checklist.md`, `packages/opencorvus/src/expert-squad/prompt-profile-resolver.ts`, `packages/opencorvus/src/expert-squad/registry.ts`, and `packages/opencorvus/test/agent/subagent-infrastructure-homogeneity.test.ts`.
+- `rg -n "README|readme|selector|append|prompt-profile|expert-squad" packages/opencorvus/src packages/opencorvus/test specs/records/2026-07/2026-07-03-dynamic-expert-squad-loading.md` confirmed the README runtime design remains active-Orchestrator-only and selector discovery uses selector metadata.
+- `packages/opencorvus/test/agent/subagent-infrastructure-homogeneity.test.ts` still asserted `ExpertSquadRegistry.loadPackage(path.join(canonicalBase(projectDirectory), entry.id), options)` inside `selectorCatalog()`, which is the retired full inactive package load path from before Phase 15.
+
+### Finding
+
+- The static homogeneity test was stale. It was protecting the old behavior that general selector discovery must fully load every project package, directly contradicting the Phase 15 fix that inactive broken MCP definitions must not break general selector/catalog behavior.
+
+### Planned Implementation
+
+- Update the static test to assert `selectorCatalog()` discovers package metadata and does not call `ExpertSquadRegistry.loadPackage()` in that function.
+- Keep full `loadPackage()` assertions out of selector discovery; active project selection still uses `loadProjectPackageByID()` and fails visibly on broken production definitions.
+- Run the focused homogeneity test and the expert-squad resolver tests after the change.
+
+### Independent Review Feedback
+
+- Ramanujan found no Axis-A production blocker: built-in expert-squad source imports only `general`; import/export use manifest `id` and canonical folder validation. He flagged `backend` and `algorithm` as package-backed but not selector-skill discoverable, matching the existing intentional boundary pending product decision.
+- Kant found a real runtime isolation bug: active non-`general` skill projection still called the all-project `selectorCatalog()` and `loadProjectPackageByID()` still used all-project `discover()`, so inactive selector failures or inactive selector skill-name collisions could break the active package projection. He also flagged global MCP serve and MCP resource attachment paths as broader MCP projection-boundary risks.
+- Aristotle found overlay and current-doc residuals: `main.tsx` preserved a local `activePromptProfile` instead of syncing to `catalog.active`; overlay projection types omitted MCP prompt/resource refs; browser fixtures still represented domain squads as built-ins; current architecture HTML still showed stale `tool_ids` / `skill_names` / `include_mcp_tools` wording.
+
+### Validation
+
+- Resolver implementation:
+  - `resolveSkillProjection()` now calls `selectorCatalog()` only for the `general` selection surface.
+  - Active non-`general` packages project only their own selector metadata, production skills, and capability refs.
+  - `loadProjectPackageByID()` now loads `.opencorvus/expert-squads/<profileID>` directly and relies on `loadPackage()` to enforce manifest/folder ID equality, instead of discovering every project package first.
+  - Added regression tests proving active project package skill projection ignores inactive blank `selector.md` and ignores selector-name collisions from inactive packages.
+- Overlay implementation:
+  - `refreshPromptProfiles()` now sets composer active profile from `catalog.active`.
+  - Removed the extra `appStore.config.prompt_profile.active` effect that could overwrite the catalog value after the backend selected a different root-session profile.
+  - Added MCP prompt/resource ref arrays to the overlay `PromptProfileCapabilityProjectionEntry` type.
+  - Updated prompt-profile browser fixtures to return complete catalog profiles and to mark non-`general` squads as package-backed (`built_in: false`).
+- Current docs implementation:
+  - Updated `specs/current/architecture/17-agent-team-infrastructure.html` to describe explicit `built_in_tool_ids`, skill/tool refs, MCP typed refs, projected agents, and `projection_hash`.
+  - Removed the stale `tool_ids`, `skill_names`, and `include_mcp_tools` shorthand from the current architecture HTML.
+- Focused validation passed:
+  - `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts --test-name-pattern "active project package skill projection ignores inactive selector catalog failures|active project package selector collision checks only projected selector skills|rejects ordinary builtin skill collision with a project selector name|resolves general skill projection"`: 4 pass.
+  - `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts --test-name-pattern "rejects unknown project profile IDs with project context|non-general expert squads resolve only from project packages|general selector projection does not parse inactive package MCP definitions"`: 3 pass.
+  - `bun test --timeout=2147483647 packages/opencorvus/test/agent/subagent-infrastructure-homogeneity.test.ts`: 33 pass.
+  - `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts`: 29 pass before the follow-up selector-isolation tests, then focused selector-isolation tests passed after the direct active package load fix.
+  - `bun test --timeout=2147483647 packages/opencorvus/test/server/config-routes.test.ts --test-name-pattern "prompt-profile|inactive package MCP"`: 3 pass.
+  - `bun test --timeout=2147483647 packages/overlay/test/prompt-profile-task-session-owner.test.ts`: 11 pass.
+  - `bun run --cwd packages/overlay typecheck`: passed.
+  - `node test/browser-runner.mjs test/browser/prompt-profile-selector-browser.test.ts`: 2 pass.
+  - `node test/browser-runner.mjs test/browser/prompt-profile-panel.test.ts`: 1 pass.
+  - `bun test --timeout=2147483647 packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts --test-name-pattern "architecture|Expert|doc|current"`: 65 pass.
+- Continuation validation after independent review:
+  - Kant re-reviewed `resolveSkillProjection()` and found no remaining blocker for active non-`general` projection. He classified global MCP serve and session resource attachment as broader MCP projection boundaries, not direct inactive package projection regressions.
+  - Aristotle found one remaining overlay fixture issue: two unit-test catalog responses still used `{ id, label }` profiles. `packages/overlay/test/prompt-profile-task-session-owner.test.ts` now uses a complete `catalogProfile()` helper for both responses and marks `frontend-replica` as `built_in: false`.
+  - Aristotle re-reviewed the fixture fix and reported no blocker.
+  - `packages/opencorvus/test/agent/subagent-infrastructure-homogeneity.test.ts` was corrected to assert the new active package load contract: `loadProjectPackageByID()` parses `profileID`, constructs canonical `packageRoot`, uses `lstat(packageRoot)`, calls `ExpertSquadRegistry.loadPackage(packageRoot, options)`, and does not discover every project package.
+  - `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/registry.test.ts packages/opencorvus/test/expert-squad/package-manager.test.ts packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts`: 92 pass.
+  - `bun run --cwd packages/opencorvus typecheck`: passed.
+  - `bun test --timeout=2147483647 packages/opencorvus/test/server/config-routes.test.ts packages/opencorvus/test/server/skill-routes.test.ts packages/opencorvus/test/tool/skill.test.ts`: 45 pass, 1 skip.
+  - `bun test --timeout=2147483647 packages/overlay/test/prompt-profile-task-session-owner.test.ts`: 11 pass.
+  - `bun run --cwd packages/overlay typecheck`: passed.
+  - `node test/browser-runner.mjs test/browser/prompt-profile-selector-browser.test.ts`: 2 pass.
+  - `node test/browser-runner.mjs test/browser/prompt-profile-panel.test.ts`: 1 pass.
+  - `bun test --timeout=2147483647 packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts`: 65 pass.
+  - `bun test --timeout=2147483647 packages/opencorvus/test/agent/subagent-infrastructure-homogeneity.test.ts`: 33 pass.
+  - `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts --test-name-pattern "active project package skill projection ignores inactive selector catalog failures|active project package selector collision checks only projected selector skills|general selector projection does not parse inactive package MCP definitions"`: 3 pass.
+  - `bun test --timeout=2147483647 packages/opencorvus/test/mcp/serve.test.ts ./packages/opencorvus/test/mcp/prompt-resource-fail-fast.isolated.ts`: 32 pass.
+  - `bun test --timeout=2147483647 packages/opencorvus/test/tool/skill.test.ts --test-name-pattern "active project package prompt profile keeps package tools outside skill and registry surfaces|project expert-squad selector load does not sample package production files"`: 2 pass.
+  - `git diff --check`: passed with CRLF warnings only.
+- Clarified MCP boundary from Kant:
+  - `MCP.serverTools()`, `MCP.serverPrompts()`, `MCP.serverResources()`, and `session/prompt/parts.ts` still operate on the global configured MCP collection because those paths do not carry a prompt-profile/session projection input. Treating them as active expert-squad projected without adding an explicit session/profile parameter would create hidden active state or a second active source.
+  - Current package-level expert-squad MCP isolation is closed for this phase: package MCP definitions are loaded only through active scheduler/worker projections and remain absent from global `MCP.tools()`, `MCP.prompts()`, `MCP.resources()`, and OpenCorvus-as-MCP-server proxied lists.
+  - If product requirements later want OpenCorvus-as-MCP-server or user-attached MCP resources to become expert-squad scoped, that must be a separate explicit contract change that carries session/profile identity through the API rather than sampling global `prompt_profile.active`.
+
+## Phase 15 Inactive Package Runtime Isolation, 2026-07-04
+
+### Recall
+
+- Current user request remains the full dynamic expert-squad refactor: built-in source keeps only the default scheduler package (`general`), domain expert squads live under `.opencorvus/expert-squads/<id>`, active package README is scheduler append prompt content, and active package tools/skills/MCP definitions are projected only from the selected expert-squad ID.
+- Current acceptance for this slice: general runtime paths and selector discovery must not load inactive package production definitions. In particular, a project package with invalid MCP JSONC must still be selectable by metadata while `general` is active, but must fail visibly if that broken package is actually selected as active.
+- Hard constraints: no fallback, no compatibility alias, no second active field, no hidden route/gate, no folder-name identity, and no global registration of inactive package production skills/tools/MCP definitions.
+
+### Sources And Search Evidence
+
+- Reread before implementation: `AGENTS.md`, `C:/Users/chuan/.codex/skills/opencorvus-expert-squad-creator/SKILL.md`, `C:/Users/chuan/.codex/skills/opencorvus-expert-squad-creator/references/open-corvus-expert-squad-checklist.md`, `specs/README.md`, `specs/records/2026-07/README.md`, this record's Recall, `packages/opencorvus/src/expert-squad/prompt-profile-resolver.ts`, `packages/opencorvus/src/expert-squad/registry.ts`, `packages/opencorvus/src/tool/skill.ts`, `packages/opencorvus/src/skill/mounts.ts`, and `packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts`.
+- `rg -n 'PromptProfile\.(catalog|list|assertKnownProfileID|validateConfig|composeAgentPrompt|overlayFor|builtIns|activeID|targets)|from "@/agent/prompt-profile"|from "../../src/agent/prompt-profile"' packages/opencorvus/src packages/opencorvus/test -g '*.ts'` showed production package-aware paths use `PromptProfileResolver`, while the static `PromptProfile` API remains built-in-only.
+- `rg -n 'assertKnownProfileID|validateConfig\(|PromptProfile\.list\(|PromptProfile\.catalog\(|PromptProfileResolver\.list|PromptProfileResolver\.assertKnownProfileID' packages/opencorvus/src packages/opencorvus/test -g '*.ts'` showed profile ID validation and session/config routes already call the resolver.
+- `rg -n 'discover\(' packages/opencorvus/src/expert-squad/registry.ts packages/opencorvus/src/expert-squad/prompt-profile-resolver.ts packages/opencorvus/test/expert-squad packages/opencorvus/test/server packages/opencorvus/test/tool packages/opencorvus/test/skill -g '*.ts'` exposed that `selectorCatalog()` called `discover()` and then `loadPackage()` for every project package.
+
+### Finding
+
+- `resolveSkillProjection()` used `selectorCatalog()` to build selector skills, but `selectorCatalog()` loaded every project package. That parsed inactive package MCP definitions and production refs even when the active profile was `general`.
+- `packageForActiveProfile()` also loaded all project packages before checking whether the active profile was built-in. That made general scheduler capability and prompt composition fail on inactive package production errors.
+- `overlayFor()` and `assertKnownProfileID()` were still using a full definitions map, which loaded every project package for runtime prompt composition and built-in profile validation.
+
+### Implementation
+
+- Added metadata-only project package discovery helpers in `PromptProfileResolver`.
+- Changed active package resolution so built-in active profiles only use `ExpertSquadRegistry.discover()` to detect ID collisions, and project active profiles load only the requested package ID.
+- Changed `overlayFor()` to read the active package prompt profile from `packageForActiveProfile()` instead of a full project definitions map.
+- Changed `assertKnownProfileID()` so built-in IDs validate through metadata-only collision checks, while project IDs load only the requested package.
+- Changed selector projection so project selector skills are rendered from `PackageCatalogEntry` metadata plus the canonical `selector.md` or manifest location, without `loadPackage()` and without production MCP/tool/skill parsing.
+- Removed the now-unused internal `definitionsForScope()` helper so runtime code cannot accidentally reintroduce full-package active resolution.
+- Poincare review found one remaining Phase 15 hole: `PromptProfileResolver.list()` still used full `loadPackage()` via `projectPackages()`, so `/config/prompt-profile` could fail on inactive package MCP JSONC while `general` was active.
+- Added `ExpertSquadRegistry.loadCatalogPackage()` as the catalog-only package surface. It reads manifest, `README.md`, `selector.md`, and agent prompt overlays needed by catalog output, but does not collect or parse package tools, skills, or MCP definitions.
+- Switched `PromptProfileResolver.list()` and `definitions()` to project catalog packages instead of full loaded packages. Active package resolution still uses `loadPackage()` and therefore still fails visibly on broken production definitions when that package is selected.
+
+### Validation
+
+- Added `PromptProfileResolver > general selector projection does not parse inactive package MCP definitions`. The fixture writes invalid inactive `mcp/broken.jsonc`, proves `general` profile validation, Orchestrator prompt composition, and selector skill projection still work from metadata only, and proves selecting the broken project package fails with `invalid JSONC`.
+- `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts --test-name-pattern "general selector projection does not parse inactive package MCP definitions"` passed: 1 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts` passed: 29 pass.
+- `bun run --cwd packages/opencorvus typecheck` passed.
+- `bun test --timeout=2147483647 packages/opencorvus/test/script/historical-docs-links.test.ts` passed: 19 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/registry.test.ts packages/opencorvus/test/expert-squad/package-manager.test.ts packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts` passed: 90 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/tool/skill.test.ts packages/opencorvus/test/skill/skill.test.ts` passed: 38 pass.
+- `git diff --check` passed with CRLF warnings only.
+- Added direct resolver catalog coverage and HTTP route coverage for Poincare's finding:
+  - `PromptProfileResolver.list()` now proves an inactive package with invalid `mcp/broken.jsonc` remains listed while `general` is active.
+  - `GET /config/prompt-profile` now proves the route returns 200 and includes the inactive package catalog entry, while `PATCH /config` selecting that package returns 400 with the visible `invalid JSONC` error.
+- `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts --test-name-pattern "general selector projection does not parse inactive package MCP definitions"` passed after catalog-surface coverage: 1 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/server/config-routes.test.ts --test-name-pattern "GET /config/prompt-profile does not parse inactive package MCP definitions"` passed: 1 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts` passed after the catalog fix: 29 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/server/config-routes.test.ts` passed after the catalog fix: 11 pass.
+- `bun run --cwd packages/opencorvus typecheck` passed after the catalog fix.
+- `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/registry.test.ts packages/opencorvus/test/expert-squad/package-manager.test.ts packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts` passed after the catalog fix: 90 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/server/config-routes.test.ts packages/opencorvus/test/server/session-routes.test.ts packages/opencorvus/test/server/skill-routes.test.ts` passed after the catalog fix: 38 pass, 1 skip.
+- `bun test --timeout=2147483647 packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts` passed after the catalog fix: 65 pass.
+- `git diff --check` passed after the catalog fix with CRLF warnings only.
+- Heisenberg follow-up read-only review found no remaining issue in the catalog/full-load split: catalog paths use `loadCatalogPackage()`, active selection still uses `loadPackage()`, tests cover inactive broken MCP catalog behavior and visible active-selection failure.
+
+## Phase 13 MCP Prompt/Resource Projection Correction, 2026-07-04
+
+### Recall
+
+- Current user request remains the full expert-squad source refactor: built-in source keeps only `general`, all domain expert squads live under `.opencorvus/expert-squads/<id>`, package identity comes from manifest `id`, README is active Orchestrator append prompt, and package-specific prompts/skills/tools/MCP definitions are projected without fallback or double-source behavior.
+- New residual found during continuation audit: Phase 12 claimed `catalog_projection` included MCP prompt/resource ref arrays, but hard-disk code still accepted and emitted only MCP server/tool refs.
+- Current acceptance for this slice: manifest `capability_projection` must accept and validate `default_mcp_prompt_refs`, `package_mcp_prompt_refs`, `default_mcp_resource_refs`, and `package_mcp_resource_refs`; catalog schema and emitted profiles must expose the same arrays; package prompt/resource refs must be declared by the package MCP definition and obey shared-or-agent-owned ref rules; malformed default prompt/resource refs must fail.
+- Hard constraints: no fallback MCP source, no global registration of inactive package MCP definitions, no folder-name identity, no UI-only filtering, and no claim that scoped MCP prompt/resource runtime proxy is complete until a dedicated runtime surface wires it.
+
+### Sources And Search Evidence
+
+- Reread sources before this correction: `AGENTS.md`, `specs/README.md`, `specs/records/2026-07/README.md`, this record's Phase 12 Recall, `packages/opencorvus/src/agent/prompt-profile.ts`, `packages/opencorvus/src/expert-squad/registry.ts`, `packages/opencorvus/src/expert-squad/catalog-profile.ts`, `packages/opencorvus/src/expert-squad/prompt-profile-resolver.ts`, `packages/opencorvus/src/mcp/index.ts`, `packages/opencorvus/src/mcp/serve.ts`, `packages/opencorvus/src/session/loop.ts`, and the expert-squad fixture/tests.
+- `rg -n "default_mcp_prompt_refs|package_mcp_prompt_refs|default_mcp_resource_refs|package_mcp_resource_refs|MCP prompt|MCP resource" packages/opencorvus/src packages/opencorvus/test specs/current specs/records/2026-07/2026-07-03-dynamic-expert-squad-loading.md -g "*.ts" -g "*.md" -g "*.html"` showed the spec required prompt/resource refs while code only had server/tool refs.
+- `rg -n "export async function (tools|prompts|resources|serverTools|callTool|callScopedTool|scopedTool)|MCP\\.(prompts|resources|tools|serverTools|callTool)" packages/opencorvus/src/mcp packages/opencorvus/src/server packages/opencorvus/src/session packages/opencorvus/src/tool -g "*.ts"` showed global MCP prompt/resource surfaces exist, but package-scoped runtime functions currently exist only for tools.
+- `rg -n "SessionRuntimeContract|includeMcpTools|projectedRegistryToolIDs|setSessionRuntimeContract" packages/opencorvus/src/session packages/opencorvus/src/agent packages/opencorvus/src/orchestrator packages/opencorvus/test/session -g "*.ts"` showed session runtime contracts carry tool projection, not MCP prompt/resource proxy projection.
+
+### Independent Review Feedback
+
+- Gauss found this was a real completion gap, not merely stale early-design prose: `PromptProfileCapabilityProjectionEntrySchema`, manifest `Projection`, `catalog-profile.ts`, and resolver capability types lacked prompt/resource arrays even though registry collected MCP prompt/resource capabilities from package MCP definitions.
+- Euclid found no current production residual for hardcoded domain expert squads: `builtin/index.ts` imports only `general`, generated selector skills derive from expert-squad package sources, and remaining old built-in mentions are historical records or tests asserting the migration contract.
+
+### Implementation
+
+- Added MCP prompt/resource projection arrays to `ExpertSquadRegistry.Projection`, `PromptProfileCapabilityProjectionEntrySchema`, and `catalogProjectionEntry()`.
+- Added registry validation for default MCP prompt/resource ref shapes and package MCP prompt/resource refs.
+- Reused the existing package MCP typed-ref ownership model so prompt/resource refs must be declared by the package MCP definition and must be shared or owned by the projected agent.
+- Extended the expert-squad test fixture to construct scheduler/build default and package MCP prompt/resource projection refs.
+- Added registry tests for valid prompt/resource projection, undeclared package MCP prompt refs, cross-agent package MCP resource ownership, and malformed default MCP prompt/resource refs.
+- Added catalog tests proving prompt/resource ref arrays appear in emitted package profile capability projection.
+
+### Runtime Boundary
+
+- This phase closes the manifest/schema/catalog projection gap.
+- It does not claim that package MCP prompts/resources are globally registered in `MCP.prompts()`, `MCP.resources()`, `MCP.serverPrompts()`, or `MCP.serverResources()`. Existing tests still require inactive package MCP prompts/resources to stay absent from global MCP lists.
+- Scoped package MCP tool runtime projection remains implemented through `PromptProfileResolver.project*Tools()` and `MCP.scopedTool()`. Scoped MCP prompt/resource runtime proxy needs a separate design before it can be called complete.
+
+### Validation
+
+- `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/registry.test.ts` passed: 43 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts` passed: 25 pass.
+- Follow-up `bun run --cwd packages/opencorvus typecheck` initially exposed unrelated dirty-worktree type errors in `packages/opencorvus/src/panel/capability.ts` and `packages/opencorvus/src/tool/registry.ts`; those were fixed by validating actor capability lists against the canonical panel registry and by reading plugin tool hook `specifier` from `Plugin.toolHooks()` instead of a non-existent plugin hook `name` field.
+- `bun run --cwd packages/opencorvus typecheck` passed after the correction.
+- `bun run typecheck` passed across the workspace after SDK regeneration.
+- `bun test --timeout=2147483647 packages/opencorvus/test/panel/actor-whitelist.test.ts` passed: 24 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/agent/prompt-profile.test.ts` passed: 18 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/server/config-routes.test.ts` passed: 10 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/tool/skill.test.ts` passed: 13 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/registry.test.ts packages/opencorvus/test/expert-squad/package-manager.test.ts packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts` passed: 84 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/tool/registry.test.ts` passed: 8 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts` passed: 65 pass.
+- `bun run --cwd packages/sdk/js build` passed and regenerated SDK types so MCP prompt/resource projection fields are present in `packages/sdk/js/src/gen/types.gen.ts`.
+- `bun run api:routes-check` passed.
+- `bun run docs:check` passed.
+- `git diff --check` passed with CRLF warnings only.
+
+## Phase 14 Scoped MCP Prompt/Resource Runtime Proxy, 2026-07-04
+
+### Recall
+
+- Current user request remains the full dynamic expert-squad refactor: built-in source keeps only `general`, all domain expert squads load from `.opencorvus/expert-squads/<id>` by manifest `id`, active README is the Orchestrator append prompt, and package-specific prompts, skills, tools, and MCP definitions are projected as active expert-squad capability without fallback or double-source behavior.
+- Phase 13 closed manifest, registry, catalog, SDK, and validation schema support for MCP prompt/resource refs, but explicitly left runtime prompt/resource proxy incomplete.
+- Current acceptance for this slice: active scheduler and worker capability objects must carry projected default/package MCP prompt/resource refs; scoped runtime helpers must list/fetch active projected MCP prompts and list/read active projected MCP resources; package MCP prompt/resource access must stay absent from global `MCP.prompts()`, `MCP.resources()`, `MCP.serverPrompts()`, and `MCP.serverResources()`.
+- Hard constraints: no global registration of package MCP prompt/resource definitions, no fallback to inactive package definitions, no arbitrary ref loader that bypasses active projection, no folder-name identity, no hidden gate, and no widening of global MCP command/session resource behavior.
+
+### Sources And Search Evidence
+
+- Reread sources before implementation: `AGENTS.md`, `specs/README.md`, `specs/records/2026-07/README.md`, this record's Phase 13 Recall, `packages/opencorvus/src/mcp/index.ts`, `packages/opencorvus/src/mcp/serve.ts`, `packages/opencorvus/src/command/index.ts`, `packages/opencorvus/src/session/prompt/parts.ts`, `packages/opencorvus/src/expert-squad/prompt-profile-resolver.ts`, `packages/opencorvus/src/expert-squad/catalog-profile.ts`, `packages/opencorvus/src/expert-squad/registry.ts`, `packages/opencorvus/test/fixture/expert-squad.ts`, and `packages/opencorvus/test/fixture/package-mcp-server.ts`.
+- `rg -n "MCP\\.(prompts|resources|getPrompt|readResource|serverPrompts|serverResources)|prompts\\(|resources\\(|getPrompt\\(|readResource\\(" packages/opencorvus/src packages/opencorvus/test -g "*.ts"` showed global MCP prompt/resource consumers in CLI command loading, external MCP serve proxy, experimental resource route, and user-attached session resources.
+- `rg -n "interface .*Capability|resolveSchedulerCapability|resolveWorkerCapability|defaultMcpToolRefs|packageMcpToolRefs|projectOrchestratorTools|projectWorkerTools|ScopedTool|scopedTool|callScopedTool" packages/opencorvus/src/expert-squad/prompt-profile-resolver.ts packages/opencorvus/src/mcp/index.ts` showed scoped runtime support exists only for MCP tools.
+- `rg -n "package_mcp_prompt_refs|package_mcp_resource_refs|default_mcp_prompt_refs|default_mcp_resource_refs" packages/opencorvus/src packages/opencorvus/test -g "*.ts"` showed registry and fixtures already validate projection refs, while resolver capability types still omit runtime prompt/resource refs.
+- SDK inspection under `packages/opencorvus/node_modules/@modelcontextprotocol/sdk/dist/esm/**` confirmed the current SDK exposes `registerPrompt`, `registerResource`, `GetPromptResultSchema`, and `ReadResourceResultSchema`.
+
+### Planned Boundary
+
+- Extend `MCP.withScopedClient()` usage from tool-only to a base scoped MCP connection input, then add `scopedPromptInfo`, `getScopedPrompt`, `scopedResourceInfo`, and `readScopedResource`.
+- Extend scheduler and worker resolved capability with default/package MCP prompt/resource ref arrays and default MCP server configs derived from all projected default MCP refs, not only tool refs.
+- Add resolver functions that operate from an already resolved active capability:
+  - list/get scheduler and worker projected MCP prompts;
+  - list/read scheduler and worker projected MCP resources.
+- Package refs must be resolved through the active package root and validated loaded package sets; default refs must be resolved through the effective config. Resource refs match the declared MCP resource name and then read the actual listed resource URI.
+- Tests must prove scoped prompt/resource calls work for both scheduler/package and worker/default paths, and that package prompt/resource entries remain absent from global MCP prompt/resource lists.
+
+### Implementation
+
+- Generalized the MCP scoped connection input so tool, prompt, and resource calls share the same scoped connect/close lifecycle without registering package MCP servers globally.
+- Added `MCP.scopedPromptInfo()`, `MCP.getScopedPrompt()`, `MCP.scopedResourceInfo()`, and `MCP.readScopedResource()`. Prompt and resource result payloads are parsed with the MCP SDK result schemas.
+- Extended scheduler and worker capability resolution with default/package MCP prompt/resource refs, provider names, and default MCP server configs collected from all default MCP typed refs.
+- Added `PromptProfileResolver.projectSchedulerMcpPrompts()`, `projectWorkerMcpPrompts()`, `projectSchedulerMcpResources()`, and `projectWorkerMcpResources()`.
+- Package MCP prompt/resource projection reloads only the active package root, verifies the ref is present in the loaded package ref set, reads the package MCP definition file under that package root, and creates a scoped MCP client from that definition.
+- Default MCP prompt/resource projection uses only the effective config server referenced by the active projection.
+- Scoped resource reads first list resources by declared resource name, then read the returned resource URI. The ref resource segment is not treated as the URI.
+- The MCP fixture server now exposes real `inspect` prompt and `dom` resource handlers in addition to the existing `snapshot` tool.
+
+### Validation
+
+- `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts` passed: 28 pass.
+- `bun run --cwd packages/opencorvus typecheck` passed.
+- `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/registry.test.ts packages/opencorvus/test/expert-squad/package-manager.test.ts packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts` passed: 88 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/tool/skill.test.ts` passed: 13 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/mcp/serve.test.ts packages/opencorvus/test/mcp/prompt-resource-fail-fast.isolated.ts` only ran `serve.test.ts` because Bun treats the isolated filename as a filter unless the path starts with `./`; `serve.test.ts` passed: 14 pass.
+- `bun test --timeout=2147483647 ./packages/opencorvus/test/mcp/prompt-resource-fail-fast.isolated.ts` passed: 18 pass.
+- `bun run typecheck` passed across the workspace.
+- `bun test --timeout=2147483647 packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts` passed: 65 pass.
+- `git diff --check` passed with CRLF warnings only.
+- `bun run api:routes-check` passed.
+- `bun run docs:check` passed.
+
+## Phase 11 Recall, 2026-07-04
+
+### User Request
+
+- Clarify the current design for expert-squad `README.md`.
+- The user confirmed `README.md` is intended for the scheduler/Orchestrator append prompt, not just package documentation.
+
+### Acceptance Criteria For This Slice
+
+- `README.md` has one runtime meaning: active expert-squad communication overview appended to the Orchestrator prompt.
+- Inactive expert-squad READMEs do not enter general selector discovery, generated selector skills, ordinary skill loading, or non-Orchestrator agent prompts.
+- `selector.md` remains the inactive-discovery selector instruction source.
+- `agents/orchestrator/system.md` remains the active Orchestrator behavioral overlay.
+- Tests prove the active Orchestrator prompt contains the active README and role overlay, while non-Orchestrator prompts and inactive/general prompts do not receive project READMEs.
+
+### Hard Constraints
+
+- No fallback prompt source, compatibility alias, folder-name identity, UI-only filtering, or hidden routing.
+- The manifest already pins `readme` to top-level `README.md`; keep that canonical path rather than allowing arbitrary production files to become scheduler prompt content.
+
+### Sources Read
+
+- `specs/records/2026-07/2026-07-03-dynamic-expert-squad-loading.md`
+- `packages/opencorvus/src/expert-squad/registry.ts`
+- `packages/opencorvus/src/expert-squad/prompt-profile-resolver.ts`
+- `packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts`
+- `packages/opencorvus/test/fixture/expert-squad.ts`
+
+### Repository Search Evidence
+
+- `rg -n "README|readme|selectorInstructions|composeAgentPrompt|agents/orchestrator|projectOrchestratorTools|packageForActiveProfile" specs/records/2026-07/2026-07-03-dynamic-expert-squad-loading.md packages/opencorvus/src/expert-squad/registry.ts packages/opencorvus/src/expert-squad/prompt-profile-resolver.ts packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts packages/opencorvus/test/expert-squad/registry.test.ts`: README is required and manifest-pinned but currently only exposed as `readmePath`; prompt composition currently appends only `agents.<role>.prompt`.
+
+### Phase 11 Planned Boundary
+
+- Add loaded `readmeContent` to filesystem and embedded expert-squad packages.
+- Append the active package README only for `agentID === "orchestrator"` inside `PromptProfileResolver.composeAgentPrompt()`.
+- Preserve prompt order as base prompt, active README communication overview, role overlay, then user append.
+- Add resolver tests for active README inclusion and inactive/non-Orchestrator exclusion.
+
+### Phase 11 Implementation Result
+
+- `ExpertSquadRegistry.LoadedPackage` and embedded package records now expose trimmed `readmeContent`.
+- Blank package READMEs fail validation because README is prompt content.
+- `PromptProfileResolver.composeAgentPrompt()` appends the active package README only for the Orchestrator. Worker prompts still receive only base prompt, role overlay, and user append.
+- Active project README content is absent from the `general` Orchestrator prompt even when the package exists under the project.
+- `selector.md` remains the selector skill body source; README is not used for inactive discovery.
+- `selector.instructions` now has one accepted value, top-level `selector.md`, across discover, load, source-load, and import validation paths. Production prompt paths such as `agents/orchestrator/system.md` and README paths are rejected before a package can load.
+
+### Phase 11 Independent Review Result
+
+- Plato found one blocking selector-boundary bug: `discover()` rejected production prompt paths for `selector.instructions`, but `loadPackage()` and `loadSourcePackage()` did not. The fix introduced shared `selector.instructions` validation in `ExpertSquadRegistry`.
+- Plato also requested a sharper README leak test. The fixture README now contains `PROJECT_README_ORCHESTRATOR_APPEND_ONLY`; active Orchestrator prompt includes it, while worker/general prompts and selector skill load output reject it.
+- Singer found the runtime built-in boundary correct, but noted repository `.opencorvus/expert-squads/**` files must be staged before delivery and `specs/current/architecture/17-agent-team-infrastructure.html` still described domain squads as built-in. The current architecture HTML was updated to say built-in is `general` only and project squads live in `.opencorvus/expert-squads`.
+- Singer's non-blocking note that `backend` and `algorithm` have no selector remains intentional for now: those packages are catalog/active-profile loadable, but not selector-skill discoverable until a product decision adds selector metadata and tests.
+
+### Phase 11 Validation
+
+- Focused README tests passed:
+  - `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/registry.test.ts -t "README|loads a valid package|built-in expert squad"`: 3 pass.
+  - `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts -t "loads project package profiles"`: 1 pass.
+- Focused selector-boundary tests passed:
+  - `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/registry.test.ts -t "selector instructions|README|production package files"`: 6 pass.
+  - `bun test --timeout=2147483647 packages/opencorvus/test/tool/skill.test.ts -t "project expert-squad selector load"`: 1 pass.
+- The broader Phase 10 validation suite above also passed after the README runtime change.
+
+## Phase 12 Final Residual Closure, 2026-07-04
+
+### Recall
+
+- Current user request: continue scanning and solve residual issues after moving all non-`general` expert squads to `.opencorvus`, and clarify the runtime design for expert-squad `README.md`.
+- Current acceptance: built-in source contains only `general`; migrated squads load only from `.opencorvus/expert-squads/<id>` by manifest ID; active README is appended only to the Orchestrator prompt; `selector.md` is the inactive-discovery text; `agents/orchestrator/system.md` is the active scheduler behavior overlay; no fallback, folder-name identity, or dual prompt source remains.
+- Sources reread before final edits: `AGENTS.md`, `specs/README.md`, `specs/records/2026-07/README.md`, this record's Phase 11 Recall, and `opencorvus-expert-squad-creator` checklist as stale-but-useful checklist context.
+- Final residual search evidence:
+  - `rg -n "PromptProfile\.list|PromptProfile\.catalog|PromptProfile\.composeAgentPrompt|PromptProfile\.overlayFor|PromptProfile\.assertKnownProfileID|PromptProfile\.validateConfig|PromptProfile\.builtIns|PromptProfile\.activeID" packages/opencorvus/src packages/opencorvus/test -g "*.ts"` showed production uses the resolver for package-aware behavior and the static `PromptProfile.list()` path was still a tested exported catalog surface.
+  - `rg -n "source_baseline_input|project_mode|visual_handoff" packages/opencorvus/src packages/opencorvus/test specs -g "*.ts" -g "*.md" -g "*.jsonc"` showed Build overlay tests were asserting the retired prose marker while current handoff authority is structured `project_mode=source_baseline`.
+  - `rg -n "PromptProfile\.builtIns|内置档：frontend|src/agent/prompt-profile.ts|src/expert-squad/builtin/\*|builtin/.*frontend|built-in.*frontend|source_baseline_input" specs/current/architecture/17-agent-team-infrastructure.html packages/opencorvus/test/agent/core-prompt-hygiene.test.ts packages/opencorvus/src/build/prompt-context.ts` had no remaining live hits.
+
+### Implementation
+
+- Added `packages/opencorvus/src/expert-squad/catalog-profile.ts` as the single helper for prompt-catalog profile projection, projection hashes, and package/default provider names. `PromptProfileResolver` and the static `PromptProfile.list()` now use that same helper instead of keeping separate catalog shapes.
+- Restored `PromptProfile.list()` as a built-in-only catalog surface for `general`, with the same capability projection fields as resolver-backed catalogs. It does not load project packages; package-aware production paths remain under `PromptProfileResolver`.
+- Fixed the catalog projection shape to include MCP prompt/resource ref arrays, matching `PromptProfileCapabilityProjectionEntrySchema`.
+- Broadened resolver `ConfigLike.mcp` to the full `Config.Info["mcp"]` shape so explicit disabled MCP entries remain type-valid; actual MCP use still parses selected servers through `Config.Mcp`.
+- Updated Build prompt hygiene tests from old `source_baseline_input` prose marker assertions to structured `project_mode=source_baseline` and the current visual handoff overlay wording.
+- Corrected the direct-build scheduler projection test to use the real migrated `frontend-innovate` project package and assert `frontend-innovate` identity, rather than expecting the test fixture package ID.
+- Regenerated `packages/sdk/openapi.json` from the current route schema after `/config/prompt*` query schema drift.
+
+### Final Validation
+
+- `bun run --cwd packages/opencorvus typecheck` passed.
+- `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/registry.test.ts packages/opencorvus/test/expert-squad/package-manager.test.ts packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts` passed: 79 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/agent/prompt-profile.test.ts packages/opencorvus/test/agent/frontend-replica-desktop-only.test.ts packages/opencorvus/test/agent/core-prompt-hygiene.test.ts packages/opencorvus/test/orchestrator/orchestrator-tool-descriptions.test.ts packages/opencorvus/test/orchestrator/scheduler-capability-projection.test.ts` passed: 107 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/tool/skill.test.ts` passed: 13 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/session/extra-tools.test.ts` passed: 45 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/server/config-routes.test.ts packages/opencorvus/test/server/skill-routes.test.ts` passed: 31 pass, 1 skip.
+- `bun test --timeout=2147483647 packages/opencorvus/test/server/task-create-route.test.ts` passed: 10 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/server/task-message-routes.test.ts` passed: 25 pass.
+- Combined `task-create-route` plus `task-message-routes` previously hit a 15s per-test timeout on `POST /task accepts omitted queue and starts immediately` under parallel route-server pressure; the same test and the full file passed when rerun alone, so it is recorded as validation scheduling contention rather than a product regression.
+- `bun test --timeout=2147483647 packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts` passed: 65 pass.
+- `bun run api:routes-check` passed.
+- `git diff --check` passed with CRLF warnings only.

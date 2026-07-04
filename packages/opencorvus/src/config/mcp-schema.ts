@@ -1,0 +1,71 @@
+import z from "zod"
+
+export namespace McpConfigSchema {
+  export const McpLocal = z
+    .object({
+      type: z.literal("local").describe("Type of MCP server connection"),
+      command: z.string().array().describe("Command and arguments to run the MCP server"),
+      environment: z
+        .record(z.string(), z.string())
+        .optional()
+        .describe("Environment variables to set when running the MCP server"),
+      enabled: z.boolean().optional().describe("Enable or disable the MCP server on startup"),
+      timeout: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe("Timeout in ms for MCP server requests. Defaults to 30000 (30 seconds) if not specified."),
+    })
+    .strict()
+    .meta({
+      ref: "McpLocalConfig",
+    })
+
+  export const McpOAuth = z
+    .object({
+      clientId: z
+        .string()
+        .optional()
+        .describe("OAuth client ID. If not provided, dynamic client registration (RFC 7591) will be attempted."),
+      clientSecret: z.string().optional().describe("OAuth client secret (if required by the authorization server)"),
+      scope: z.string().optional().describe("OAuth scopes to request during authorization"),
+    })
+    .strict()
+    .meta({
+      ref: "McpOAuthConfig",
+    })
+  export type McpOAuth = z.infer<typeof McpOAuth>
+
+  export const McpRemote = z
+    .object({
+      type: z.literal("remote").describe("Type of MCP server connection"),
+      url: z.string().describe("URL of the remote MCP server"),
+      transport: z
+        .enum(["streamable-http", "sse"])
+        .describe(
+          "Remote MCP transport. Use streamable-http for standard remote MCP endpoints or sse for SSE-only servers.",
+        ),
+      enabled: z.boolean().optional().describe("Enable or disable the MCP server on startup"),
+      headers: z.record(z.string(), z.string()).optional().describe("Headers to send with the request"),
+      oauth: z
+        .union([McpOAuth, z.literal(false)])
+        .optional()
+        .describe(
+          "OAuth authentication configuration for the MCP server. Set to false to disable OAuth auto-detection.",
+        ),
+      timeout: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe("Timeout in ms for MCP server requests. Defaults to 30000 (30 seconds) if not specified."),
+    })
+    .strict()
+    .meta({
+      ref: "McpRemoteConfig",
+    })
+
+  export const Mcp = z.discriminatedUnion("type", [McpLocal, McpRemote])
+  export type Mcp = z.infer<typeof Mcp>
+}
