@@ -375,6 +375,46 @@ async function screenshotAgentRail(page: OverlayPage, name: string) {
   return { file, stats }
 }
 
+async function locateAgentRailSession(
+  page: OverlayPage,
+  input: {
+    sessionID: string
+    expectedTargetMessageID: string
+    expectedMarkers: string[]
+  },
+) {
+  const selector = `.conversation-agent-rail .oc-button[data-ui="conversation-agent-rail-locate"][data-session-id="${input.sessionID}"]`
+  await page.waitForSelector(selector, { visible: true, timeout: 15_000 })
+  const state = await page.$eval(selector, (element: HTMLElement) => {
+    element.scrollIntoView({ block: "nearest", inline: "nearest" })
+    return {
+      sessionID: element.dataset.sessionId || "",
+      targetMessageID: element.dataset.targetMessageId || "",
+      renderedCardID: element.dataset.renderedCardId || "",
+      title: element.getAttribute("title") || "",
+    }
+  })
+  assert.equal(
+    state.targetMessageID,
+    input.expectedTargetMessageID,
+    `unexpected rail target for ${input.sessionID}: ${JSON.stringify(state)}`,
+  )
+  assert.ok(state.renderedCardID, `rail row ${input.sessionID} must carry a rendered card target`)
+  await page.click(selector)
+  await page.waitForSelector(`[data-card-id="${state.renderedCardID}"].conversation-agent-target--pulse`, {
+    visible: true,
+    timeout: 15_000,
+  })
+  const cardText = await page.$eval(`[data-card-id="${state.renderedCardID}"]`, (element: HTMLElement) => element.textContent || "")
+  for (const marker of input.expectedMarkers) {
+    assert.ok(
+      cardText.includes(marker),
+      `located card for ${input.sessionID} should include ${marker}: ${JSON.stringify({ state, cardText })}`,
+    )
+  }
+  return { ...state, cardText }
+}
+
 async function focusAgentRailLocateButton(page: OverlayPage) {
   const selector = '.conversation-agent-rail .oc-button[data-ui="conversation-agent-rail-locate"]'
   await page.waitForSelector(selector, { visible: true })
@@ -617,6 +657,7 @@ test(
     const progressFile = resolve(SCREENSHOT_DIR, "progress.log")
     const reportFile = resolve(SCREENSHOT_DIR, "report.json")
     const screenshots: Array<{ name: string; file: string; stats: Awaited<ReturnType<typeof analyzePng>> }> = []
+    const railStates: Record<string, unknown> = {}
     const snapshots: Record<string, VisualSnapshot> = {}
     const mark = (stage: string, extra: Record<string, unknown> = {}) => {
       appendFileSync(progressFile, `${new Date().toISOString()} ${stage} ${JSON.stringify(extra)}\n`)
@@ -1138,8 +1179,14 @@ test(
       assertNoLayoutBreakage(snapshot)
       assertChronology(snapshot, ["AGC-LIVE-COMPACT-SUMMARY", "AGC-LIVE-RESUME-AFTER-COMPACT"])
       snapshots["02-live-timing"] = snapshot
+      railStates["02-live-timing"] = await locateAgentRailSession(page, {
+        sessionID: liveSessionID,
+        expectedTargetMessageID: "msg_live_resume_after_compact",
+        expectedMarkers: ["AGC-LIVE-COMPACT-SUMMARY", "AGC-LIVE-RESUME-AFTER-COMPACT"],
+      })
       await scrollMarkerIntoView(page, "AGC-LIVE-COMPACT-SUMMARY")
       screenshots.push({ name: "02-live-timing", ...(await screenshotPanel(page, "02-live-timing")) })
+      screenshots.push({ name: "02-live-timing-rail", ...(await screenshotAgentRail(page, "02-live-timing-rail")) })
       mark("live-timing-complete")
 
       sequence += 1
@@ -1199,8 +1246,14 @@ test(
         "AGC-VALIDATION-FAILURE",
       ])
       snapshots["05-reload-resume"] = snapshot
+      railStates["05-reload-resume"] = await locateAgentRailSession(page, {
+        sessionID: liveSessionID,
+        expectedTargetMessageID: "msg_live_resume_after_compact",
+        expectedMarkers: ["AGC-LIVE-COMPACT-SUMMARY", "AGC-LIVE-RESUME-AFTER-COMPACT"],
+      })
       await scrollMarkerIntoView(page, "AGC-LIVE-COMPACT-SUMMARY")
       screenshots.push({ name: "05-reload-resume", ...(await screenshotPanel(page, "05-reload-resume")) })
+      screenshots.push({ name: "05-reload-resume-rail", ...(await screenshotAgentRail(page, "05-reload-resume-rail")) })
       mark("reload-complete")
 
       snapshots["06-large-handoff"] = snapshot
@@ -1238,6 +1291,7 @@ test(
             requestLog,
             streamLog,
             screenshots,
+            railStates,
             snapshots: Object.fromEntries(
               Object.entries(snapshots).map(([name, snapshot]) => [
                 name,

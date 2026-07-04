@@ -11,7 +11,7 @@
 import { configure as configureApi, apiJsonWithTimeout } from "./api"
 import { installComposerAttachSubscription } from "./composer-attach"
 import { checkConnection as checkServerConnection, startConnectionMonitor, stopConnectionMonitor } from "./connection"
-import { startTaskListSSE, stopTaskListSSE } from "./sse"
+import { startTaskListSSE, stopSSE, stopTaskListSSE } from "./sse"
 import { loadAllLocales, setLocale } from "../utils/i18n"
 import {
   loadSettings,
@@ -57,6 +57,12 @@ export interface InitOptions {
    * Reconnect poll interval in ms. Defaults to 10 000 (10 s).
    */
   reconnectInterval?: number
+}
+
+let initLifecycleGeneration = 0
+
+function isCurrentInitLifecycle(generation: number): boolean {
+  return generation === initLifecycleGeneration
 }
 
 /**
@@ -132,6 +138,7 @@ async function loadInitialData(): Promise<boolean> {
  */
 export async function initApp(options: InitOptions = {}): Promise<void> {
   const { onConnected, onSettingsLoaded, onReconnect, reconnectInterval = 10_000 } = options
+  const lifecycleGeneration = ++initLifecycleGeneration
 
   // 0. Install host → webview ui-command subscriptions (composer.attach
   //    from VS Code "Attach Current File"; no-op in Tauri). Done first so
@@ -142,35 +149,49 @@ export async function initApp(options: InitOptions = {}): Promise<void> {
 
   // 1. Load settings into the Solid store
   await loadSettings()
+  if (!isCurrentInitLifecycle(lifecycleGeneration)) return
   await onSettingsLoaded?.()
+  if (!isCurrentInitLifecycle(lifecycleGeneration)) return
 
   // 2. Push settings into the API client (server URL + auth)
   syncApiConfig()
 
   // 3. Load i18n locale bundles
   await loadAllLocales()
+  if (!isCurrentInitLifecycle(lifecycleGeneration)) return
 
   // 4. Apply locale from settings
   await setLocale(settingsStore.locale)
+  if (!isCurrentInitLifecycle(lifecycleGeneration)) return
 
   // 5. Check connection
   const connected = await checkServerConnection()
+  if (!isCurrentInitLifecycle(lifecycleGeneration)) return
 
   if (connected) {
     // 6. Load initial data
     const loaded = await loadInitialData()
+    if (!isCurrentInitLifecycle(lifecycleGeneration)) return
     if (loaded) await restoreInitialTaskSelection()
+    if (!isCurrentInitLifecycle(lifecycleGeneration)) return
     await onConnected?.()
+    if (!isCurrentInitLifecycle(lifecycleGeneration)) return
     if (loaded) startTaskListSSE()
   }
+
+  if (!isCurrentInitLifecycle(lifecycleGeneration)) return
 
   // 7. Start reconnect loop
   stopConnectionMonitor()
   startConnectionMonitor(async () => {
+    if (!isCurrentInitLifecycle(lifecycleGeneration)) return
     syncApiConfig()
     const loaded = await loadInitialData()
+    if (!isCurrentInitLifecycle(lifecycleGeneration)) return
     if (loaded) await restoreInitialWorkspace()
+    if (!isCurrentInitLifecycle(lifecycleGeneration)) return
     await onReconnect?.()
+    if (!isCurrentInitLifecycle(lifecycleGeneration)) return
     if (loaded) startTaskListSSE()
   }, reconnectInterval)
 }
@@ -180,7 +201,9 @@ export async function initApp(options: InitOptions = {}): Promise<void> {
  * Call on `beforeunload` or component cleanup.
  */
 export function teardownApp(): void {
+  initLifecycleGeneration += 1
   stopConnectionMonitor()
+  stopSSE()
   stopTaskListSSE()
 }
 

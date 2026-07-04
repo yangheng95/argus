@@ -9,6 +9,8 @@ export interface MonitorTickDeps {
   isHidden: () => boolean
   /** True when the overlay considers itself online — skip checkConnection. */
   isConnected: () => boolean
+  /** False when the owning monitor has been stopped or superseded. */
+  isCurrent?: () => boolean
   /** Probe the server. Resolves true on success, false on failure. */
   check: () => Promise<boolean>
   /** Optional post-success hook (reload tasks, etc.). */
@@ -31,13 +33,17 @@ export interface MonitorTickDeps {
 export function makeMonitorTick(deps: MonitorTickDeps): () => Promise<void> {
   let inFlight = false
   const warn = deps.warn ?? ((...a: unknown[]) => console.warn(...a))
+  const isCurrent = deps.isCurrent ?? (() => true)
   return async () => {
+    if (!isCurrent()) return
     if (deps.isHidden()) return
     if (inFlight) return
     inFlight = true
     try {
+      if (!isCurrent()) return
       if (!deps.isConnected()) {
         const ok = await deps.check()
+        if (!isCurrent()) return
         if (ok) {
           await deps.onReconnect?.()
         }

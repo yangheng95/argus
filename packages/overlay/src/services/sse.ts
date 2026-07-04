@@ -44,6 +44,7 @@ let sseRetryTimer: any = null
 let sseWatchdogTimer: ReturnType<typeof setTimeout> | null = null
 let sseTaskID = ""
 let sseSource: BoardSource | null = null
+let selectedTaskStreamGeneration = 0
 
 // audit-2026-04-29 W2-V10 — reconnect tick extracted so the regression
 // test can exercise restart failures and task-switch races directly, without
@@ -54,6 +55,7 @@ export interface SseReconnectDeps {
   directory: string
   after: number
   currentTaskID: () => string
+  isCurrent?: () => boolean
   resumeAfter: () => number
   restart: (source: BoardSource, after: number, options?: SseStartOptions) => void
   scheduleRetry: (fn: () => void, ms: number) => void
@@ -113,7 +115,9 @@ function eventProperties(event: any): Record<string, any> {
 function selectedTaskRuntimeKey(taskID: string): string {
   const boardTask = boardStore.board?.task
   if (!taskID || boardTask?.id !== taskID) return ""
-  return taskRuntimeActivityKey({ taskID, startedAt: Number(boardTask?.time?.started) })
+  const startedAt = Number(boardTask?.time?.started)
+  if (!Number.isFinite(startedAt) || startedAt <= 0) return ""
+  return taskRuntimeActivityKey({ taskID, startedAt })
 }
 
 function recordSelectedTaskSseUpdate(event: any, taskID: string): void {
@@ -191,7 +195,7 @@ function logMalformedSsePayload(input: {
 }
 
 export async function performSseReconnect(deps: SseReconnectDeps): Promise<void> {
-  if (deps.currentTaskID() !== deps.taskID) return
+  if (deps.isCurrent?.() === false || deps.currentTaskID() !== deps.taskID) return
   const startedAt = Date.now()
   recordConversationRecoveryStarted({
     channel: "sse-reconnect",
@@ -200,7 +204,7 @@ export async function performSseReconnect(deps: SseReconnectDeps): Promise<void>
     source: "sse-reconnect",
   })
   const nextSequence = Math.max(0, Math.floor(Number(deps.resumeAfter()) || 0))
-  if (deps.currentTaskID() !== deps.taskID) {
+  if (deps.isCurrent?.() === false || deps.currentTaskID() !== deps.taskID) {
     recordConversationRecoveryAborted({
       channel: "sse-reconnect",
       reason: "sse stream reconnect",
@@ -215,7 +219,7 @@ export async function performSseReconnect(deps: SseReconnectDeps): Promise<void>
     const directory = deps.directory.trim()
     if (!directory) throw new Error("SSE reconnect requires a project directory")
     await deps.beforeRestart?.(deps.taskID, nextSequence)
-    if (deps.currentTaskID() !== deps.taskID) {
+    if (deps.isCurrent?.() === false || deps.currentTaskID() !== deps.taskID) {
       throw new DOMException("task changed before restart", "AbortError")
     }
     deps.restart(
@@ -245,9 +249,9 @@ export async function performSseReconnect(deps: SseReconnectDeps): Promise<void>
       notificationMessage: `Failed to reopen the SSE stream for task ${deps.taskID}. Retrying in ${Math.round(deps.retryDelayMs / 1000)}s.`,
       notificationDetails: formatErrorDetails(err),
     })
-    if (deps.currentTaskID() !== deps.taskID) return
+    if (deps.isCurrent?.() === false || deps.currentTaskID() !== deps.taskID) return
     deps.scheduleRetry(() => {
-      if (deps.currentTaskID() !== deps.taskID) return
+      if (deps.isCurrent?.() === false || deps.currentTaskID() !== deps.taskID) return
       observeSseReconnect("scheduled-retry", performSseReconnect(deps))
     }, deps.retryDelayMs)
     return
@@ -289,6 +293,7 @@ export function isSelectedTaskSSEConnected(taskID: string): boolean {
 
 export function startSSE(source: BoardSource, after = 0, options: SseStartOptions = {}) {
   stopSSE()
+  const streamGeneration = ++selectedTaskStreamGeneration
   setSseConnected(false)
   sseSource = source
   const taskID = source.kind === "task" ? source.id : ""
@@ -321,7 +326,7 @@ export function startSSE(source: BoardSource, after = 0, options: SseStartOption
     // Permanent close: re-open from the current selected task sequence.
     // Same-task full hydrate is intentionally forbidden here because it
     // clears cardTreeStore and produces the visible scroll jump.
-    if (handle !== sseHandle) return
+    if (streamGeneration !== selectedTaskStreamGeneration || handle !== sseHandle) return
     clearSelectedStreamWatchdog()
     pauseSelectedTaskSseStreamActivity(taskID)
     setSseConnected(false)
@@ -339,6 +344,7 @@ export function startSSE(source: BoardSource, after = 0, options: SseStartOption
           directory,
           after,
           currentTaskID: () => activeTaskID(),
+          isCurrent: () => streamGeneration === selectedTaskStreamGeneration,
           resumeAfter: () => boardStore.taskSequence,
           restart: startSSE,
           replayLive: liveReplayExpiredClose ? false : replayLive,
@@ -432,6 +438,7 @@ export function startSSE(source: BoardSource, after = 0, options: SseStartOption
 }
 
 export function stopSSE() {
+  selectedTaskStreamGeneration += 1
   if (sseRetryTimer) {
     clearTimeout(sseRetryTimer)
     sseRetryTimer = null

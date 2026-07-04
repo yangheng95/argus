@@ -84,6 +84,29 @@ describe("makeMonitorTick (audit W2-V24)", () => {
     expect(reconnects).toBe(0)
   })
 
+  test("stopped monitor after probe resolves skips onReconnect", async () => {
+    const checkDeferred = deferred<boolean>()
+    let reconnects = 0
+    let current = true
+    const tick = makeMonitorTick({
+      isHidden: () => false,
+      isConnected: () => false,
+      isCurrent: () => current,
+      check: async () => checkDeferred.promise,
+      onReconnect: async () => {
+        reconnects++
+      },
+    })
+
+    const run = tick()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    current = false
+    checkDeferred.resolve(true)
+    await run
+
+    expect(reconnects).toBe(0)
+  })
+
   test("REGRESSION: overlapping ticks while previous is in-flight are dropped", async () => {
     // The exact scenario the V24 fix covers: tick #2 fires before
     // tick #1's `await check()` resolves. Pre-fix tick #2 would

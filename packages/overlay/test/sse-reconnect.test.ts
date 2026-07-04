@@ -13,6 +13,7 @@ import {
   type SseReconnectDeps,
   type SseStartOptions,
 } from "../src/services/sse"
+import { teardownApp } from "../src/services/init"
 import {
   HOST_CAPABILITIES,
   __setHostTransportForTest,
@@ -82,6 +83,7 @@ function makeDeps(opts: {
   taskID: string
   after: number
   currentTaskID: () => string
+  isCurrent?: () => boolean
   resumeAfter: () => number
   restart?: (source: BoardSource, after: number, options?: SseStartOptions) => void
   retryDelayMs?: number
@@ -99,6 +101,7 @@ function makeDeps(opts: {
     directory: TEST_DIRECTORY,
     after: opts.after,
     currentTaskID: opts.currentTaskID,
+    isCurrent: opts.isCurrent,
     resumeAfter: () => {
       spy.resumeAfterCalls++
       return opts.resumeAfter()
@@ -375,6 +378,48 @@ describe("performSseReconnect (audit W2-V10)", () => {
     expect(spy.resumeAfterCalls).toBe(1)
     expect(spy.retryCalls).toBe(0)
     expect(spy.restartCalls).toEqual([[{ kind: "task", id: "tsk_f" }, 8, { directory: TEST_DIRECTORY }]])
+  })
+
+  test("invalidated reconnect before restart does not reopen the stale stream", async () => {
+    let current = true
+    const { deps, spy } = makeDeps({
+      taskID: "tsk_invalidate_before_restart",
+      after: 0,
+      currentTaskID: () => "tsk_invalidate_before_restart",
+      isCurrent: () => current,
+      resumeAfter: () => 9,
+    })
+    deps.beforeRestart = async () => {
+      current = false
+    }
+
+    await expect(performSseReconnect(deps)).resolves.toBeUndefined()
+
+    expect(spy.resumeAfterCalls).toBe(1)
+    expect(spy.restartCalls).toEqual([])
+    expect(spy.retryCalls).toBe(0)
+  })
+
+  test("invalidated reconnect after restart failure does not schedule a stale retry", async () => {
+    let current = true
+    installLogTransport()
+    const { deps, spy } = makeDeps({
+      taskID: "tsk_invalidate_failed_retry",
+      after: 0,
+      currentTaskID: () => "tsk_invalidate_failed_retry",
+      isCurrent: () => current,
+      resumeAfter: () => 10,
+      restart: () => {
+        current = false
+        throw new Error("network down")
+      },
+    })
+
+    await expect(performSseReconnect(deps)).resolves.toBeUndefined()
+
+    expect(spy.resumeAfterCalls).toBe(1)
+    expect(spy.restartCalls).toEqual([[{ kind: "task", id: "tsk_invalidate_failed_retry" }, 10, { directory: TEST_DIRECTORY }]])
+    expect(spy.retryCalls).toBe(0)
   })
 })
 
@@ -852,6 +897,67 @@ describe("startSSE stream error handling", () => {
       globalThis.setTimeout = originalSetTimeout
       globalThis.clearTimeout = originalClearTimeout
       setSettingsStore("directory", "")
+    }
+  })
+
+  test("teardownApp stops the selected-task stream without scheduling reconnect", () => {
+    const originalSetTimeout = globalThis.setTimeout
+    const originalClearTimeout = globalThis.clearTimeout
+    const timeoutCalls: number[] = []
+    let closeCalls = 0
+
+    globalThis.setTimeout = ((handler: TimerHandler, timeout?: number) => {
+      timeoutCalls.push(Number(timeout))
+      return timeoutCalls.length as unknown as ReturnType<typeof setTimeout>
+    }) as typeof globalThis.setTimeout
+    globalThis.clearTimeout = ((_handle?: ReturnType<typeof setTimeout>) => {}) as typeof globalThis.clearTimeout
+
+    try {
+      const transport = {
+        kind: "tauri",
+        capabilities: HOST_CAPABILITIES.tauri,
+        request: async <T>(_input: TransportRequest) => ({ status: 200, ok: true, headers: {}, body: null as T }),
+        openStream: (_input: StreamOpenRequest, h: StreamHandlers) => {
+          return {
+            close: () => {
+              closeCalls++
+              h.onClose?.("teardown")
+            },
+          }
+        },
+        native: async () => null,
+        subscribeUiCommand: () => ({ unsubscribe() {} }),
+      } satisfies HostTransport
+
+      __setHostTransportForTest(transport)
+      setBoardStore("selectedSource", { kind: "task", id: "tsk_teardown" })
+      setBoardStore("board", {
+        snapshotVersion: "board:teardown",
+        task: {
+          id: "tsk_teardown",
+          sessionID: "ses_teardown",
+          status: "active",
+          request: "teardown coverage",
+          time: { created: 1_776_000_000_000 },
+          attachments: [],
+        },
+        goalWorkflows: [],
+        interactions: [],
+      })
+
+      startSSE({ kind: "task", id: "tsk_teardown" }, 4, { directory: TEST_DIRECTORY })
+      teardownApp()
+
+      expect(closeCalls).toBe(1)
+      expect(timeoutCalls).toContain(SELECTED_TASK_STREAM_STALL_MS)
+      expect(timeoutCalls).not.toContain(3000)
+    } finally {
+      stopSSE()
+      __setHostTransportForTest(undefined)
+      globalThis.setTimeout = originalSetTimeout
+      globalThis.clearTimeout = originalClearTimeout
+      setBoardStore("board", null)
+      setBoardStore("selectedSource", null)
     }
   })
 })

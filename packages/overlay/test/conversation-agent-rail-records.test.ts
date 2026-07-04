@@ -437,7 +437,7 @@ test("hydrated agent records target the latest canonical display message", () =>
 })
 
 test("hydrated top-level execution records do not require a display message target", () => {
-  resetConversationAgentView()
+  resetRailAndProjection()
   hydrateConversationAgentView("task:tsk", {
     sessions: [
       {
@@ -459,6 +459,7 @@ test("hydrated top-level execution records do not require a display message targ
   expect(conversationAgentStore.records[0]?.status).toBe("running")
   expect(conversationAgentStore.records[0]?.startedAt).toBe(90)
   expect(conversationAgentStore.records[0]?.lastObservedAt).toBe(210)
+  expect(conversationAgentStore.records[0]?.targetMessageID).toBe("msg_latest")
   expect(conversationAgentStore.records[0]?.renderedCardID).toBeUndefined()
 })
 
@@ -549,7 +550,7 @@ test("live goal-phase lifecycle-only status targets only a projected phase card"
   expect(records[0]?.phaseID).toBe("build")
 })
 
-test("live goal-phase lifecycle-only status rejects a non-owner phase session", () => {
+test("live goal-phase lifecycle-only status keeps a non-owner session unprojected instead of throwing", () => {
   resetRailAndProjection()
   projectGoalPhaseCard({
     goalID: "goal_live_lifecycle_owner",
@@ -559,21 +560,31 @@ test("live goal-phase lifecycle-only status rejects a non-owner phase session", 
     startedAt: 1_779_100_005_000,
   })
 
-  expect(() =>
-    applyLiveConversationAgentSessionStatus("task:tsk_live_lifecycle_owner", {
-      type: "session.status",
-      orderKey: sessionOrderKey("ses_stale_phase_owner", 1_779_100_005_100),
-      emittedAt: 1_779_100_005_100,
-      properties: {
-        sessionID: "ses_stale_phase_owner",
-        channel: "build",
-        resolvedRole: "build",
-        parentSessionID: "ses_goal_root",
-        goalID: "goal_live_lifecycle_owner",
-        status: { type: "streaming" },
-      },
+  applyLiveConversationAgentSessionStatus("task:tsk_live_lifecycle_owner", {
+    type: "session.status",
+    orderKey: sessionOrderKey("ses_stale_phase_owner", 1_779_100_005_100),
+    emittedAt: 1_779_100_005_100,
+    properties: {
+      sessionID: "ses_stale_phase_owner",
+      channel: "build",
+      resolvedRole: "build",
+      parentSessionID: "ses_goal_root",
+      goalID: "goal_live_lifecycle_owner",
+      status: { type: "streaming" },
+    },
+  })
+
+  const records = conversationAgentRecordsForSource({ kind: "task", id: "tsk_live_lifecycle_owner" })
+  expect(records[0]).toEqual(
+    expect.objectContaining({
+      sessionID: "ses_stale_phase_owner",
+      goalID: "goal_live_lifecycle_owner",
     }),
-  ).toThrow("goal phase goal_live_lifecycle_owner/build/build expected session ses_current_phase_owner, got ses_stale_phase_owner")
+  )
+  expect(records[0]?.cardID).toBeUndefined()
+  expect(records[0]?.renderedCardID).toBeUndefined()
+  expect(records[0]?.stepID).toBeUndefined()
+  expect(records[0]?.phaseID).toBeUndefined()
 })
 
 test("rendered goal-phase targets require projected card time evidence", () => {
@@ -795,6 +806,112 @@ test("live session.status creates a rail record without waiting for hydrate", ()
   expect(records[0]?.status).toBe("running")
   expect(records[0]?.renderedCardID).toBeUndefined()
   expect(records[0]?.targetMessageID).toBe("")
+})
+
+test("hydrate keeps a live build rail record when backend agentView lags behind SSE", () => {
+  resetConversationAgentView()
+  applyLiveConversationAgentSessionStatus("task:tsk_live_hydrate_gap", liveSessionStatus("ses_live_build"))
+
+  hydrateConversationAgentView("task:tsk_live_hydrate_gap", {
+    sessions: [],
+    messages: [],
+  })
+
+  const records = conversationAgentRecordsForSource({ kind: "task", id: "tsk_live_hydrate_gap" })
+  expect(records.map((item) => item.sessionID)).toEqual(["ses_live_build"])
+  expect(records[0]?.status).toBe("running")
+  expect(records[0]?.renderedCardID).toBeUndefined()
+  expect(records[0]?.targetMessageID).toBe("")
+})
+
+test("hydrate keeps the current live build message target when the session snapshot has not caught up", () => {
+  resetRailAndProjection()
+  applyLiveConversationAgentSessionStatus("task:tsk_live_hydrate_target", liveSessionStatus("ses_live_build"))
+  projectAndApplyVisibleLiveMessageUpdated(
+    "task:tsk_live_hydrate_target",
+    liveMessageUpdated({
+      id: "msg_live_hydrate_target",
+      sessionID: "ses_live_build",
+      channel: "build",
+      orderKey: messageOrderKey("msg_live_hydrate_target", 1_779_100_000_100),
+      time: { created: 1_779_100_000_100 },
+    }),
+  )
+
+  hydrateConversationAgentView("task:tsk_live_hydrate_target", {
+    sessions: [
+      {
+        sessionID: "ses_live_build",
+        stage: "build",
+        messageIDs: [],
+        orderKey: sessionOrderKey("ses_live_build", 1_779_099_999_000),
+        firstMessageTime: 1_779_099_999_000,
+        lastMessageTime: 1_779_099_999_000,
+        firstObservedAt: 1_779_099_999_000,
+        lastObservedAt: 1_779_099_999_000,
+        status: "running",
+        placement: "top_level",
+      },
+    ],
+    messages: [],
+  })
+
+  const records = conversationAgentRecordsForSource({ kind: "task", id: "tsk_live_hydrate_target" })
+  expect(records.map((item) => item.sessionID)).toEqual(["ses_live_build"])
+  expect(records[0]?.status).toBe("running")
+  expect(records[0]?.targetMessageID).toBe("msg_live_hydrate_target")
+  expect(records[0]?.renderedCardID).toBe("build:session:ses_live_build:message:msg_live_hydrate_target")
+})
+
+test("hydrate prefers a newer hydrated canonical build target over an older live target with newer lifecycle time", () => {
+  resetRailAndProjection()
+  applyLiveConversationAgentSessionStatus("task:tsk_live_hydrate_newer_target", liveSessionStatus("ses_live_build"))
+  projectAndApplyVisibleLiveMessageUpdated(
+    "task:tsk_live_hydrate_newer_target",
+    liveMessageUpdated({
+      id: "msg_live_old_target",
+      sessionID: "ses_live_build",
+      channel: "build",
+      orderKey: messageOrderKey("msg_live_old_target", 1_779_100_000_100),
+      time: { created: 1_779_100_000_100 },
+    }),
+  )
+  applyLiveConversationAgentSessionStatus(
+    "task:tsk_live_hydrate_newer_target",
+    liveSessionStatus("ses_live_build", { type: "streaming" }, 1_779_100_000_300),
+  )
+  projectVisibleMessage(
+    liveMessageUpdated({
+      id: "msg_hydrated_new_target",
+      sessionID: "ses_live_build",
+      channel: "build",
+      orderKey: messageOrderKey("msg_hydrated_new_target", 1_779_100_000_250),
+      time: { created: 1_779_100_000_250 },
+    }),
+  )
+
+  hydrateConversationAgentView("task:tsk_live_hydrate_newer_target", {
+    sessions: [
+      {
+        sessionID: "ses_live_build",
+        stage: "build",
+        messageIDs: ["msg_live_old_target", "msg_hydrated_new_target"],
+        lastDisplayMessageID: "msg_hydrated_new_target",
+        orderKey: sessionOrderKey("ses_live_build", 1_779_100_000_000),
+        firstMessageTime: 1_779_100_000_100,
+        lastMessageTime: 1_779_100_000_250,
+        firstObservedAt: 1_779_100_000_000,
+        lastObservedAt: 1_779_100_000_250,
+        status: "running",
+        placement: "top_level",
+      },
+    ],
+    messages: [],
+  })
+
+  const records = conversationAgentRecordsForSource({ kind: "task", id: "tsk_live_hydrate_newer_target" })
+  expect(records.map((item) => item.sessionID)).toEqual(["ses_live_build"])
+  expect(records[0]?.targetMessageID).toBe("msg_hydrated_new_target")
 })
 
 test("live message target is retained until session.status creates rail existence", () => {

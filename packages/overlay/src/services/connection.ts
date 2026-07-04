@@ -235,6 +235,7 @@ export async function checkConnection(): Promise<boolean> {
 // ── Connection monitor ──
 
 let _monitorTimer: VisibilityInterval | null = null
+let _monitorGeneration = 0
 
 /**
  * Start a periodic connection monitor that attempts reconnection every 10 s
@@ -247,14 +248,23 @@ let _monitorTimer: VisibilityInterval | null = null
  */
 export function startConnectionMonitor(onReconnect?: () => void | Promise<void>, intervalMs = 10_000): void {
   stopConnectionMonitor()
+  const generation = ++_monitorGeneration
+  const isCurrent = () => generation === _monitorGeneration
   // audit-2026-04-29 W2-V24 — re-entrance-guarded tick lives in
   // services/monitor-tick.ts so the no-overlap contract is
   // testable.
   const tick = makeMonitorTick({
+    isCurrent,
     isHidden: () => typeof document !== "undefined" && document.hidden,
     isConnected: () => appStore.connected,
-    check: () => checkConnection(),
-    onReconnect,
+    check: async () => {
+      const ok = await checkConnection()
+      return isCurrent() ? ok : false
+    },
+    onReconnect: async () => {
+      if (!isCurrent()) return
+      await onReconnect?.()
+    },
   })
   _monitorTimer = createVisibilityInterval(tick, intervalMs)
   _monitorTimer.start()
@@ -265,6 +275,7 @@ export function startConnectionMonitor(onReconnect?: () => void | Promise<void>,
  * Safe to call even when no monitor is running.
  */
 export function stopConnectionMonitor(): void {
+  _monitorGeneration += 1
   if (_monitorTimer !== null) {
     _monitorTimer.dispose()
     _monitorTimer = null

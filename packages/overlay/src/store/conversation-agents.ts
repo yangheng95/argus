@@ -66,10 +66,12 @@ type ConversationAgentTargetRecord = Pick<
   | "agentName"
   | "stage"
   | "rawStage"
+  | "viewSource"
   | "orderKey"
   | "startedAt"
   | "lastObservedAt"
   | "targetMessageID"
+  | "targetObservedAt"
   | "goalID"
   | "stepID"
   | "phaseID"
@@ -133,6 +135,14 @@ function renderedTargetForPhaseSession(session: ConversationAgentSessionView, ra
   return target ? agentRenderedTargetFromProjection(target) : null
 }
 
+function sessionDisplayMessageID(session: ConversationAgentSessionView): string {
+  const explicit = String(session?.lastDisplayMessageID || "")
+  if (explicit) return explicit
+  const messageIDs = Array.isArray(session?.messageIDs) ? session.messageIDs : []
+  const lastMessageID = messageIDs.at(-1)
+  return typeof lastMessageID === "string" ? lastMessageID : ""
+}
+
 function renderedTargetForSession(
   session: ConversationAgentSessionView,
   stage: string,
@@ -140,7 +150,7 @@ function renderedTargetForSession(
 ): AgentRenderedTarget | null {
   const phaseTarget = renderedTargetForPhaseSession(session, rawStage)
   if (phaseTarget) return phaseTarget
-  const messageID = String(session?.lastDisplayMessageID || "")
+  const messageID = sessionDisplayMessageID(session)
   if (!messageID) return null
   if (!stage) return null
   const target = renderedConversationCardTargetForMessage(messageID)
@@ -164,8 +174,9 @@ function agentRecordFromSession(session: ConversationAgentSessionView): AgentWor
     return null
   }
   const target = renderedTargetForSession(session, stage, rawStage)
-  const lastDisplayMessageID = String(session?.lastDisplayMessageID || "")
-  const targetMessageID = renderedConversationCardTargetForMessage(lastDisplayMessageID) ? lastDisplayMessageID : ""
+  const lastDisplayMessageID = sessionDisplayMessageID(session)
+  const targetMessageID = lastDisplayMessageID
+  const targetObservedAt = targetMessageID ? Math.max(0, Number(session?.lastMessageTime ?? 0)) : 0
   const lastObservedAt = Math.max(startedAt, Number(session?.lastObservedAt ?? session?.lastMessageTime ?? 0))
   const status = session.status || "pending"
   const terminal = status === "completed" || status === "error" || status === "skipped"
@@ -176,6 +187,7 @@ function agentRecordFromSession(session: ConversationAgentSessionView): AgentWor
     agentName: stage,
     stage,
     rawStage,
+    viewSource: "hydrate",
     status,
     orderKey,
     startedAt,
@@ -184,6 +196,7 @@ function agentRecordFromSession(session: ConversationAgentSessionView): AgentWor
     attempts: 1,
     depth: 0,
     targetMessageID,
+    ...(targetObservedAt > 0 ? { targetObservedAt } : {}),
     goalID: session?.goalID,
     stepID: session?.phase?.stepID,
     phaseID: session?.phase?.phaseID,
@@ -250,6 +263,7 @@ function clearRecordTarget(record: AgentWorkflowRecord): AgentWorkflowRecord {
     renderedCardID: _renderedCardID,
     stepID: _stepID,
     phaseID: _phaseID,
+    targetObservedAt: _targetObservedAt,
     ...rest
   } = record
   return {
@@ -258,14 +272,52 @@ function clearRecordTarget(record: AgentWorkflowRecord): AgentWorkflowRecord {
   }
 }
 
+function clearRecordRenderedProjection(record: AgentWorkflowRecord): AgentWorkflowRecord {
+  const { cardID: _cardID, renderedCardID: _renderedCardID, ...rest } = record
+  return { ...rest }
+}
+
+function canonicalTargetObservedAt(
+  record: Pick<AgentWorkflowRecord, "targetMessageID" | "targetObservedAt" | "lastObservedAt">,
+): number {
+  if (!String(record.targetMessageID || "")) return 0
+  const explicit = Number(record.targetObservedAt || 0)
+  if (Number.isFinite(explicit) && explicit > 0) return explicit
+  const fallback = Number(record.lastObservedAt || 0)
+  return Number.isFinite(fallback) && fallback > 0 ? fallback : 0
+}
+
 function recordWithCurrentProjection(record: AgentWorkflowRecord): AgentWorkflowRecord {
   const projected = projectedTargetForRecord(record)
   if (!projected) {
     return record.targetMessageID || record.cardID || record.renderedCardID ? clearRecordTarget(record) : record
   }
+  const targetMessageID = String(projected.targetMessageID || record.targetMessageID || "")
+  const targetObservedAt = targetMessageID ? canonicalTargetObservedAt(record) : 0
   return {
     ...record,
-    targetMessageID: projected.targetMessageID,
+    targetMessageID,
+    ...(targetObservedAt > 0 ? { targetObservedAt } : {}),
+    cardID: projected.target.cardID,
+    renderedCardID: projected.target.renderedCardID,
+    stepID: projected.target.stepID,
+    phaseID: projected.target.phaseID,
+  }
+}
+
+function recordWithCurrentProjectionPreservingCanonicalTarget(record: AgentWorkflowRecord): AgentWorkflowRecord {
+  const projected = projectedTargetForRecord(record)
+  if (!projected) {
+    return record.targetMessageID || record.cardID || record.renderedCardID
+      ? clearRecordRenderedProjection(record)
+      : record
+  }
+  const targetMessageID = String(projected.targetMessageID || record.targetMessageID || "")
+  const targetObservedAt = targetMessageID ? canonicalTargetObservedAt(record) : 0
+  return {
+    ...record,
+    targetMessageID,
+    ...(targetObservedAt > 0 ? { targetObservedAt } : {}),
     cardID: projected.target.cardID,
     renderedCardID: projected.target.renderedCardID,
     stepID: projected.target.stepID,
@@ -306,12 +358,16 @@ function mergeTargetIntoRecord(
     agentName: target.agentName || existing.agentName,
     stage: target.stage || existing.stage,
     rawStage: target.rawStage || existing.rawStage,
+    viewSource: target.viewSource || existing.viewSource,
     goalID: target.goalID || existing.goalID,
     stepID: target.stepID || existing.stepID,
     phaseID: target.phaseID || existing.phaseID,
     ...(replaceTarget
       ? {
-          targetMessageID: incomingProjection.targetMessageID,
+          targetMessageID: incomingProjection.targetMessageID || target.targetMessageID || "",
+          ...(incomingProjection.targetMessageID && (target.targetObservedAt || 0) > 0
+            ? { targetObservedAt: target.targetObservedAt }
+            : {}),
           cardID: incomingProjection.target.cardID,
           renderedCardID: incomingProjection.target.renderedCardID,
           stepID: incomingProjection.target.stepID,
@@ -319,7 +375,10 @@ function mergeTargetIntoRecord(
         }
       : existingProjection
         ? {
-            targetMessageID: existingProjection.targetMessageID,
+            targetMessageID: existingProjection.targetMessageID || existing.targetMessageID || "",
+            ...(existingProjection.targetMessageID && canonicalTargetObservedAt(existing) > 0
+              ? { targetObservedAt: canonicalTargetObservedAt(existing) }
+              : {}),
             cardID: existingProjection.target.cardID,
             renderedCardID: existingProjection.target.renderedCardID,
             stepID: existingProjection.target.stepID,
@@ -451,6 +510,7 @@ function agentTargetRecordsFromMessages(messages: ConversationAgentMessageView[]
         startedAt: observedAt,
         lastObservedAt: observedAt,
         targetMessageID: String(message.messageID || ""),
+        targetObservedAt: observedAt,
         goalID: message.goalID,
         stepID: message.phase?.stepID,
         phaseID: message.phase?.phaseID,
@@ -468,6 +528,7 @@ function agentTargetRecordsFromMessages(messages: ConversationAgentMessageView[]
       existing.rawStage = rawStage
       existing.parentSessionID = String(message?.parentSessionID || existing.parentSessionID || "")
       existing.targetMessageID = String(message.messageID || "")
+      existing.targetObservedAt = observedAt
       existing.goalID = message.goalID || existing.goalID
       existing.stepID = message.phase?.stepID || existing.stepID
       existing.phaseID = message.phase?.phaseID || existing.phaseID
@@ -495,6 +556,127 @@ function applyDepth(records: AgentWorkflowRecord[]): AgentWorkflowRecord[] {
   return records.map((record) => ({ ...record, depth: depthOf(record.sessionID) }))
 }
 
+function statusRank(status: AgentWorkflowStatus): number {
+  const rank: Record<AgentWorkflowStatus, number> = {
+    pending: 0,
+    idle: 1,
+    skipped: 2,
+    running: 3,
+    completed: 4,
+    error: 5,
+  }
+  return rank[status]
+}
+
+function statusKeepsCompletedAt(status: AgentWorkflowStatus): boolean {
+  return status === "completed" || status === "error" || status === "skipped" || status === "idle"
+}
+
+function existingRecordOwnsLifecycle(existing: AgentWorkflowRecord, hydrated: AgentWorkflowRecord): boolean {
+  if (existing.lastObservedAt !== hydrated.lastObservedAt) {
+    return existing.lastObservedAt > hydrated.lastObservedAt
+  }
+  return statusRank(existing.status) >= statusRank(hydrated.status)
+}
+
+function targetRecordFromCurrentRecord(record: AgentWorkflowRecord): ConversationAgentTargetRecord | null {
+  const projected = projectedTargetForRecord(record)
+  if (!projected) return null
+  return {
+    sessionID: record.sessionID,
+    parentSessionID: record.parentSessionID,
+    agentName: record.agentName,
+    stage: record.stage,
+    rawStage: record.rawStage,
+    orderKey: projected.orderKey,
+    startedAt: record.startedAt,
+    lastObservedAt: record.lastObservedAt,
+    targetMessageID: projected.targetMessageID,
+    targetObservedAt: projected.targetMessageID ? canonicalTargetObservedAt(record) : undefined,
+    goalID: record.goalID,
+    stepID: projected.target.stepID || record.stepID,
+    phaseID: projected.target.phaseID || record.phaseID,
+    ...(projected.target.cardID ? { cardID: projected.target.cardID } : {}),
+    renderedCardID: projected.target.renderedCardID,
+  }
+}
+
+function mergeHydratedRecordWithCurrentRecord(
+  hydrated: AgentWorkflowRecord,
+  current: AgentWorkflowRecord,
+): AgentWorkflowRecord {
+  const keepCurrentLifecycle = existingRecordOwnsLifecycle(current, hydrated)
+  const status = keepCurrentLifecycle ? current.status : hydrated.status
+  let merged: AgentWorkflowRecord = {
+    ...hydrated,
+    viewSource: current.viewSource,
+    parentSessionID: hydrated.parentSessionID || current.parentSessionID,
+    goalID: hydrated.goalID || current.goalID,
+    goalDescription: hydrated.goalDescription || current.goalDescription,
+    round: hydrated.round ?? current.round,
+    attempt: hydrated.attempt ?? current.attempt,
+    stepID: hydrated.stepID || current.stepID,
+    phaseID: hydrated.phaseID || current.phaseID,
+    startedAt: Math.min(hydrated.startedAt, current.startedAt),
+    lastObservedAt: Math.max(hydrated.lastObservedAt, current.lastObservedAt),
+    attempts: Math.max(hydrated.attempts, current.attempts),
+    orderKey:
+      compareTimelineOrderKeys(current.orderKey, hydrated.orderKey, "conversation agent hydrate merge") < 0
+        ? current.orderKey
+        : hydrated.orderKey,
+    model: hydrated.model || current.model,
+    traceReport: hydrated.traceReport || current.traceReport,
+    displaySummary: hydrated.displaySummary || current.displaySummary,
+    status,
+    ...(statusKeepsCompletedAt(status)
+      ? {
+          completedAt: Math.max(hydrated.completedAt || 0, current.completedAt || 0),
+        }
+      : {}),
+  }
+  const currentTarget = targetRecordFromCurrentRecord(current)
+  if (currentTarget) merged = mergeTargetIntoRecord(merged, currentTarget)
+  const hydratedTargetMessageID = String(hydrated.targetMessageID || "")
+  const currentTargetMessageID = String(current.targetMessageID || "")
+  const hydratedTargetObservedAt = canonicalTargetObservedAt(hydrated)
+  const currentTargetObservedAt = canonicalTargetObservedAt(current)
+  if (
+    currentTargetMessageID &&
+    (!hydratedTargetMessageID || currentTargetObservedAt > hydratedTargetObservedAt)
+  ) {
+    merged = {
+      ...merged,
+      targetMessageID: currentTargetMessageID,
+      ...(currentTargetObservedAt > 0 ? { targetObservedAt: currentTargetObservedAt } : {}),
+    }
+  } else if (hydratedTargetMessageID) {
+    merged = {
+      ...merged,
+      targetMessageID: hydratedTargetMessageID,
+      ...(hydratedTargetObservedAt > 0 ? { targetObservedAt: hydratedTargetObservedAt } : {}),
+    }
+  }
+  return recordWithCurrentProjectionPreservingCanonicalTarget(merged)
+}
+
+function mergeHydratedRecordsWithCurrentSource(
+  sourceKey: string,
+  recordsBySession: Map<string, AgentWorkflowRecord>,
+): Map<string, AgentWorkflowRecord> {
+  if (conversationAgentStore.taskID !== sourceKey) return recordsBySession
+  const merged = new Map(recordsBySession)
+  for (const currentRecord of conversationAgentStore.records.map(recordWithCurrentProjectionPreservingCanonicalTarget)) {
+    if (currentRecord.viewSource !== "live") continue
+    const hydratedRecord = merged.get(currentRecord.sessionID)
+    if (!hydratedRecord) {
+      merged.set(currentRecord.sessionID, { ...currentRecord })
+      continue
+    }
+    merged.set(currentRecord.sessionID, mergeHydratedRecordWithCurrentRecord(hydratedRecord, currentRecord))
+  }
+  return merged
+}
+
 export function resetConversationAgentView(): void {
   pendingTargetsBySource.clear()
   setConversationAgentStore({ taskID: "", records: [] })
@@ -511,12 +693,12 @@ export function clearConversationAgentRenderedTargets(sourceKeyInput?: string): 
   if (!conversationAgentStore.taskID) return
   setConversationAgentStore({
     taskID: conversationAgentStore.taskID,
-    records: applyDepth(sortAgentRecords(conversationAgentStore.records.map(clearRecordTarget))),
+    records: applyDepth(sortAgentRecords(conversationAgentStore.records.map(clearRecordRenderedProjection))),
   })
 }
 
 export function hydrateConversationAgentView(taskID: string, view: ConversationAgentView): void {
-  const recordsBySession = new Map<string, AgentWorkflowRecord>()
+  let recordsBySession = new Map<string, AgentWorkflowRecord>()
   const sessionRecords = (Array.isArray(view?.sessions) ? view.sessions : [])
     .map(agentRecordFromSession)
     .filter((record): record is AgentWorkflowRecord => !!record)
@@ -526,6 +708,7 @@ export function hydrateConversationAgentView(taskID: string, view: ConversationA
     if (!existing) continue
     recordsBySession.set(target.sessionID, mergeTargetIntoRecord(existing, target))
   }
+  recordsBySession = mergeHydratedRecordsWithCurrentSource(taskID, recordsBySession)
   const sourcePendingTargets = pendingTargetsForCurrentRecords(taskID, [...recordsBySession.values()])
   for (const target of sourcePendingTargets) {
     const existing = recordsBySession.get(target.sessionID)
@@ -632,10 +815,12 @@ export function applyLiveConversationAgentMessageUpdated(sourceKeyInput: string,
       agentName: stage,
       stage,
       rawStage,
+      viewSource: "live",
       orderKey,
       startedAt: observedAt,
       lastObservedAt: nextObservedAt,
       targetMessageID: messageID,
+      targetObservedAt: observedAt,
       goalID: goalID || undefined,
       ...target,
     },
@@ -680,10 +865,12 @@ export function applyLiveConversationAgentPartUpdated(sourceKeyInput: string, ev
       agentName: stage,
       stage,
       rawStage,
+      viewSource: "live",
       orderKey,
       startedAt: observedAt,
       lastObservedAt: observedAt,
       targetMessageID: messageID,
+      targetObservedAt: observedAt,
       goalID: goalID || undefined,
       ...target,
     },
@@ -741,6 +928,7 @@ export function applyLiveConversationAgentSessionStatus(sourceKeyInput: string, 
       agentName: stage,
       stage,
       rawStage,
+      viewSource: "live",
       status,
       orderKey,
       startedAt: observedAt,
@@ -764,6 +952,7 @@ export function applyLiveConversationAgentSessionStatus(sourceKeyInput: string, 
       agentName: stage,
       stage,
       rawStage,
+      viewSource: "live",
       status,
       orderKey:
         existing.orderKey &&
@@ -781,6 +970,7 @@ export function applyLiveConversationAgentSessionStatus(sourceKeyInput: string, 
           parentSessionID: updated.parentSessionID,
           agentName: stage,
           stage,
+          viewSource: "live",
           orderKey,
           startedAt: observedAt,
           lastObservedAt: observedAt,
