@@ -239,7 +239,8 @@
   flex-direction: column;
   gap: calc(8px * var(--ui-scale));
   padding: calc(8px * var(--ui-scale));
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .sidebar-tool-panel .extension-settings-group[data-compact="true"] .extension-settings-body {
@@ -247,7 +248,7 @@
 }
 
 .sidebar-tool-panel .extension-settings-group[data-compact="true"] .agent-capability-layout {
-  flex: 0 1 calc(168px * var(--ui-scale));
+  flex: 0 0 auto;
 }
 
 .sidebar-tool-panel .extension-settings-group[data-compact="true"] .extension-settings-body > .extension-list {
@@ -257,7 +258,7 @@
 .sidebar-tool-panel .extension-settings-group[data-compact="true"] .capability-pool,
 .sidebar-tool-panel .extension-settings-group[data-compact="true"] .agent-skill-pool {
   flex: 0 0 auto;
-  max-height: calc(220px * var(--ui-scale));
+  max-height: none;
 }
 
 .sidebar-tool-panel .config-status-box {

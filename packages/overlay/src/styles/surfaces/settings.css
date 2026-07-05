@@ -1014,14 +1014,30 @@ button.s-row:focus-visible {
   min-height: 0;
 }
 
-.agent-skill-tab-layout,
-.extension-settings-group[data-compact="true"] .agent-capability-layout {
+.agent-skill-tab-layout {
   flex: 1 1 0;
   min-height: calc(170px * var(--ui-scale));
 }
 
 .extension-settings-group[data-compact="true"] .agent-capability-layout {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: calc(8px * var(--ui-scale));
+  grid-template-columns: none;
   min-height: 0;
+}
+
+.extension-settings-group[data-compact="true"] .agent-capability-tabs,
+.extension-settings-group[data-compact="true"] .agent-capability-detail {
+  flex: 0 0 auto;
+  overflow: visible;
+  padding-right: 0;
+}
+
+.extension-settings-group[data-compact="true"] .agent-capability-detail {
+  padding-top: calc(7px * var(--ui-scale));
+  border-top: var(--oc-border-width) solid color-mix(in srgb, var(--divider-soft) 62%, transparent);
 }
 
 .agent-capability-tabs {
@@ -1179,6 +1195,11 @@ button.s-row:focus-visible {
   gap: calc(6px * var(--ui-scale));
   padding-top: calc(7px * var(--ui-scale));
   border-top: var(--oc-border-width) solid color-mix(in srgb, var(--divider-soft) 62%, transparent);
+}
+
+.extension-settings-group[data-compact="true"] .capability-pool,
+.extension-settings-group[data-compact="true"] .agent-skill-pool {
+  max-height: none;
 }
 
 .capability-pool__head {

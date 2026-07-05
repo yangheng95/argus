@@ -570,7 +570,7 @@ function ExtensionSettingsPanel(props: {
   const [activeCapabilityAgent, setActiveCapabilityAgent] = createSignal("")
   const activeCapability = createMemo(() => {
     const agents = capabilityAgents()
-    return agents.find((agent) => agent.id === activeCapabilityAgent()) ?? agents[0]
+    return agents.find((agent) => agent.id === activeCapabilityAgent()) ?? (props.compact ? undefined : agents[0])
   })
   const poolSkills = createMemo(() => mounts()?.skills ?? [])
   const agentRows = createMemo(() => {
@@ -587,7 +587,7 @@ function ExtensionSettingsPanel(props: {
   const [activeSkillAgent, setActiveSkillAgent] = createSignal("")
   const activeSkillAgentRow = createMemo(() => {
     const rows = agentRows()
-    return rows.find((agent) => agent.name === activeSkillAgent()) ?? rows[0]
+    return rows.find((agent) => agent.name === activeSkillAgent()) ?? (props.compact ? undefined : rows[0])
   })
   const mountedSkillLookupByAgent = createMemo(() => {
     const lookup = new Map<string, Map<string, MountedSkillItem>>()
@@ -617,7 +617,9 @@ function ExtensionSettingsPanel(props: {
       setActiveCapabilityAgent("")
       return
     }
-    if (!ids.includes(activeCapabilityAgent())) setActiveCapabilityAgent(ids[0]!)
+    const current = activeCapabilityAgent()
+    if (!current && !props.compact) setActiveCapabilityAgent(ids[0]!)
+    else if (current && !ids.includes(current)) setActiveCapabilityAgent(props.compact ? "" : ids[0]!)
   })
 
   createEffect(() => {
@@ -626,7 +628,9 @@ function ExtensionSettingsPanel(props: {
       setActiveSkillAgent("")
       return
     }
-    if (!names.includes(activeSkillAgent())) setActiveSkillAgent(names[0]!)
+    const current = activeSkillAgent()
+    if (!current && !props.compact) setActiveSkillAgent(names[0]!)
+    else if (current && !names.includes(current)) setActiveSkillAgent(props.compact ? "" : names[0]!)
   })
 
   createEffect(() => {
@@ -1185,7 +1189,8 @@ function ExtensionSettingsPanel(props: {
                 role="tab"
                 data-agent-name={agent.id}
                 aria-selected={active()?.id === agent.id ? "true" : "false"}
-                onClick={() => setActiveCapabilityAgent(agent.id)}
+                aria-expanded={active()?.id === agent.id ? "true" : "false"}
+                onClick={() => setActiveCapabilityAgent((current) => (current === agent.id ? "" : agent.id))}
               >
                 <span>{agent.id}</span>
                 <SettingsPill tone="neutral">
@@ -1409,7 +1414,8 @@ function ExtensionSettingsPanel(props: {
                           data-agent-name={agent.name}
                           data-skill-tool={agent.skill_tool_available ? "true" : "false"}
                           aria-selected={activeSkillAgentRow()?.name === agent.name ? "true" : "false"}
-                          onClick={() => setActiveSkillAgent(agent.name)}
+                          aria-expanded={activeSkillAgentRow()?.name === agent.name ? "true" : "false"}
+                          onClick={() => setActiveSkillAgent((current) => (current === agent.name ? "" : agent.name))}
                           onDragOver={(event) => {
                             if (!agent.skill_tool_available) return
                             event.preventDefault()

@@ -281,6 +281,13 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
     )
     const skillName = await page.$eval("#leftPanelSkills .agent-skill-pool-row strong", (node) => node.textContent || "")
     assert.equal(skillName, "project-review")
+    await page.click('#leftPanelSkills .agent-capability-tab[data-agent-name="requirements"]')
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector('#leftPanelSkills .agent-capability-tab[data-agent-name="requirements"]')
+          ?.getAttribute("aria-selected") === "true",
+    )
     const skillPanelMetrics = await page.$eval("#leftPanelSkills .agent-skill-matrix", (node) => {
       const rect = node.getBoundingClientRect()
       return {
