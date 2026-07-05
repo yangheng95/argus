@@ -113,6 +113,7 @@ test("browser preview panel uses native WebView surface with task evidence as th
   expect(tauriMain).toContain('Some("history.forward();")')
   expect(tauriMain).toContain("webview.reload()")
   expect(tauriMain).toContain("overlay_browser_preview_close")
+  expect(tauriMain).toContain("webview.hide()")
 
   expect(css).toContain(".browser-preview-browser-controls")
   expect(css).toContain(".browser-preview-live")

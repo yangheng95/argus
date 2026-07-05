@@ -163,7 +163,7 @@ test("browser preview native surface owns browser navigation without PNG live ro
     sessionID: "ses_native_surface",
     request: "Verify native browser preview surface",
     title: "Verify native browser preview surface",
-    time: { created: now - 10_000, updated: now - 1_000 },
+    time: { created: now - 10_000, started: now - 9_000, updated: now - 1_000 },
   }
   const board = {
     snapshotVersion: "native-surface-board",

@@ -101,6 +101,11 @@ test(
       if (path === "/expert-squad/catalog") return send(expertSquadCatalog())
       if (path === "/config") return send({ model: "" })
       if (path === "/mission") return send([])
+      if (path === "/channel") return send([])
+      if (path === "/executor") return send([])
+      if (path === "/skill/mounts")
+        return send({ scope: "project", skills: [], agents: [], matrix: [], project_mounts: {}, unmounted_count: 0 })
+      if (path === "/mcp") return send({})
       if (path === "/panel/knowledge/memory") return send([])
       if (path === "/panel/knowledge/preference") return send([])
       if (path === "/coding/cli/profiles") {
@@ -282,6 +287,11 @@ test(
       if (path === "/expert-squad/catalog") return send(expertSquadCatalog())
       if (path === "/config") return send({ model: "" })
       if (path === "/mission") return send([])
+      if (path === "/channel") return send([])
+      if (path === "/executor") return send([])
+      if (path === "/skill/mounts")
+        return send({ scope: "project", skills: [], agents: [], matrix: [], project_mounts: {}, unmounted_count: 0 })
+      if (path === "/mcp") return send({})
       if (path === "/panel/knowledge/memory") return send([])
       if (path === "/panel/knowledge/preference") return send([])
       if (path === "/coding/cli/profiles") {

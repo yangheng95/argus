@@ -29,6 +29,7 @@ export namespace SystemTerminal {
     command: string
     args: string[]
     detached?: boolean
+    windowsVerbatimArguments?: boolean
   }
 
   export interface BuildOptions {
@@ -146,26 +147,41 @@ export namespace SystemTerminal {
     return `${prefix}; exec ${command}`
   }
 
-  function windowsCommandProfileArgs(options: BuildOptions, argv: string[]): string[] {
+  function windowsExternalCommandSpec(options: BuildOptions, argv: string[]): CommandSpec {
     if (!options.profile) {
       throw new ConfigError({ message: "System terminal profile is required to open a command" })
     }
     const profileCommand = unwrapCommandQuotes(options.profile.command)
-    const keepFlag = options.keepOpen ? "/k" : "/c"
     if (options.profile.icon === "powershell") {
+      // Launch the coding CLI as PowerShell's foreground command so the CLI
+      // owns the session instead of relying on a brittle wrapper shell.
       const command = `& ${argv.map(powerShellQuote).join(" ")}`
-      return [profileCommand, ...options.profile.args, ...(options.keepOpen ? ["-NoExit"] : []), "-Command", command]
+      return {
+        command: profileCommand,
+        args: [...options.profile.args, "-Command", command],
+        windowsVerbatimArguments: true,
+      }
     }
     if (options.profile.icon === "bash") {
-      return [profileCommand, ...options.profile.args, "-lc", shellLine(options)]
+      return {
+        command: profileCommand,
+        args: [...options.profile.args, "-lc", shellLine({ ...options, keepOpen: true })],
+      }
     }
-    return [profileCommand, ...options.profile.args, "/d", "/s", keepFlag, cmdCommandLine(argv)]
+    return {
+      command: profileCommand,
+      args: [...options.profile.args, "/d", "/s", "/k", cmdCommandLine(argv)],
+      windowsVerbatimArguments: true,
+    }
   }
 
   export function buildCommand(options: BuildOptions): CommandSpec {
     const argv = commandArgv(options)
     if (options.platform === "win32") {
-      const command = options.command ? windowsCommandProfileArgs(options, argv) : windowsInteractiveArgv(options)
+      if (options.command) {
+        return windowsExternalCommandSpec(options, argv)
+      }
+      const command = windowsInteractiveArgv(options)
       const launcher = windowsConsoleLauncherArgs(options, command)
       return { command: launcher[0], args: launcher.slice(1), detached: true }
     }
@@ -186,12 +202,12 @@ export namespace SystemTerminal {
     }
   }
 
-  async function launchDetached(spec: CommandSpec, cwd: string, env: Record<string, string>): Promise<OpenResponse> {
+  async function launchChildProcess(spec: CommandSpec, cwd: string, env: Record<string, string>): Promise<OpenResponse> {
     let child
     try {
       child = spawnChildProcess(spec.command, spec.args, {
         cwd,
-        detached: true,
+        detached: spec.detached ?? false,
         env: {
           ...process.env,
           ...env,
@@ -199,6 +215,7 @@ export namespace SystemTerminal {
         shell: false,
         stdio: "ignore",
         windowsHide: false,
+        windowsVerbatimArguments: spec.windowsVerbatimArguments ?? false,
       })
     } catch (error) {
       throw new ConfigError({ message: error instanceof Error ? error.message : String(error) })
@@ -238,7 +255,7 @@ export namespace SystemTerminal {
   }
 
   async function launch(spec: CommandSpec, cwd: string, env: Record<string, string>): Promise<OpenResponse> {
-    if (spec.detached) return await launchDetached(spec, cwd, env)
+    if (spec.detached || spec.windowsVerbatimArguments) return await launchChildProcess(spec, cwd, env)
 
     let child: Bun.Subprocess<"ignore", "ignore", "ignore">
     try {

@@ -34,11 +34,12 @@ describe("system terminal external launch command", () => {
     expect(command.args).toEqual([
       "/d",
       "/s",
-      "/c",
-      'start "" /D "C:\\repo" "cmd.exe" "/d" "/s" "/k" """C:\\Tools\\Codex CLI\\codex.cmd"" ""--dangerously-bypass-approvals-and-sandbox"""',
+      "/k",
+      '"C:\\Tools\\Codex CLI\\codex.cmd" "--dangerously-bypass-approvals-and-sandbox"',
     ])
-    expect(command.detached).toBe(true)
+    expect(command.windowsVerbatimArguments).toBe(true)
     expect(command.args.join(" ")).not.toContain("pty")
+    expect(command.args.join(" ")).not.toContain("start")
   })
 
   test("Windows command prompt profile keeps metacharacters inside one escaped command string", () => {
@@ -56,11 +57,11 @@ describe("system terminal external launch command", () => {
     expect(command.args).toEqual([
       "/d",
       "/s",
-      "/c",
-      'start "" /D "C:\\repo & whoami | sort" "cmd.exe" "/d" "/s" "/k" """C:\\Tools\\Codex & CLI\\codex%%%%.cmd"" ""--filter=a|b"" ""100%%%%"""',
+      "/k",
+      '"C:\\Tools\\Codex & CLI\\codex%%.cmd" "--filter=a|b" "100%%"',
     ])
-    expect(command.detached).toBe(true)
-    expect(command.args.at(-1)).toContain('/D "C:\\repo & whoami | sort"')
+    expect(command.windowsVerbatimArguments).toBe(true)
+    expect(command.args.at(-1)).not.toContain("start")
   })
 
   test("Windows coding CLI unwraps user-supplied executable quotes before argv handoff", () => {
@@ -74,7 +75,7 @@ describe("system terminal external launch command", () => {
       keepOpen: true,
     })
 
-    expect(command.args.at(-1)).toContain('"""C:\\Users\\hengu\\.local\\bin\\claude.exe"""')
+    expect(command.args.at(-1)).toContain('"C:\\Users\\hengu\\.local\\bin\\claude.exe"')
     expect(command.args.at(-1)).not.toContain("'")
   })
 
@@ -90,13 +91,12 @@ describe("system terminal external launch command", () => {
     })
 
     expect(command.args).toEqual([
-      "/d",
-      "/s",
-      "/c",
-      'start "" /D "C:\\repo" "powershell.exe" "-NoLogo" "-NoExit" "-Command" "& \'C:\\Users\\chuan\\.local\\bin\\claude.exe\' \'--version\'"',
+      "-NoLogo",
+      "-Command",
+      "& 'C:\\Users\\chuan\\.local\\bin\\claude.exe' '--version'",
     ])
-    expect(command.command).toBe("cmd.exe")
-    expect(command.detached).toBe(true)
+    expect(command.command).toBe("powershell.exe")
+    expect(command.windowsVerbatimArguments).toBe(true)
   })
 
   test("macOS opens Terminal.app through osascript", () => {

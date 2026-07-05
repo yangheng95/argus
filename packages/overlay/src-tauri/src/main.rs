@@ -751,7 +751,12 @@ fn overlay_browser_preview_navigate<R: Runtime>(
 #[tauri::command]
 fn overlay_browser_preview_close<R: Runtime>(app: AppHandle<R>) -> Result<bool, String> {
     if let Some(webview) = app.get_webview(BROWSER_PREVIEW_WEBVIEW_LABEL) {
-        webview.close().map_err(|err| err.to_string())?;
+        // Reuse the single preview child webview across scope changes. Tauri's
+        // `close()` removes the manager entry before native teardown finishes,
+        // which can race a same-label `add_child(...)` and surface
+        // "webview ... already exists" on fast reopen. Hiding keeps the label
+        // stable and lets `sync` show/navigate/resize the same surface.
+        webview.hide().map_err(|err| err.to_string())?;
         return Ok(true);
     }
     Ok(false)
