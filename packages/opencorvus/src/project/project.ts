@@ -305,6 +305,26 @@ export namespace Project {
     return cached
   }
 
+  async function resolveNonGitDirectoryIdentity(input: {
+    directory: string
+    dotgit: string
+    local: boolean
+  }): Promise<{ id: string; sandbox: string; worktree: string }> {
+    const localID = generated(input.dotgit)
+    const markerPath = marker(input.dotgit)
+    const cached = await Filesystem.readText(markerPath)
+      .then((x) => x.trim())
+      .catch(() => undefined)
+    const selectedRow = findExactWorktreeRow(input.directory, [cached ?? "", localID])
+    const id = selectedRow?.id ?? (cached && cached !== "global" ? cached : localID)
+    if (input.local && id !== cached) await Filesystem.write(markerPath, id).catch(() => undefined)
+    return {
+      id,
+      sandbox: input.directory,
+      worktree: input.directory,
+    }
+  }
+
   export class WorktreeIdentityConflictError extends Error {
     constructor(input: { projectID: string; existingWorktree: string; nextWorktree: string }) {
       super(
@@ -416,20 +436,7 @@ export namespace Project {
       const local = await Filesystem.exists(dotgit)
 
       if (!gitBinary) {
-        const localID = generated(dotgit)
-        const markerPath = marker(dotgit)
-        const cached = await Filesystem.readText(markerPath)
-          .then((x) => x.trim())
-          .catch(() => undefined)
-        const selectedRow = findExactWorktreeRow(directory, [cached ?? "", localID])
-        const id = selectedRow?.id ?? (cached && cached !== "global" ? cached : localID)
-        if (local && id !== cached) await Filesystem.write(markerPath, id).catch(() => undefined)
-
-        return {
-          id,
-          sandbox: directory,
-          worktree: directory,
-        }
+        return resolveNonGitDirectoryIdentity({ directory, dotgit, local })
       }
 
       // Note (W2-V32): a previous version auto-ran `git init` here when the
@@ -464,11 +471,7 @@ export namespace Project {
         }
       }
 
-      return {
-        id: directoryProjectID(directory),
-        worktree: directory,
-        sandbox: directory,
-      }
+      return resolveNonGitDirectoryIdentity({ directory, dotgit, local: false })
     })
 
     const row = Database.use((db) => db.select().from(ProjectTable).where(eq(ProjectTable.id, data.id)).get())

@@ -8,7 +8,7 @@ import { tmpdir } from "../fixture/fixture"
 import { Filesystem } from "../../src/util/filesystem"
 import { GlobalBus } from "../../src/bus/global"
 import { resetDatabase } from "../fixture/db"
-import { Database, sql } from "../../src/storage/db"
+import { Database, eq, sql } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
 import { Memory } from "../../src/memory"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
@@ -614,6 +614,50 @@ describe("Project.fromDirectory", () => {
     expect(after.project.id).toBe(before.project.id)
     expect(after.project.worktree).toBe(tmp.path)
     expect(Project.get(before.project.id)?.worktree).toBe(tmp.path)
+  })
+
+  test("converges duplicate exact non-git rows by local directory identity", async () => {
+    const p = await loadProject()
+    await using tmp = await tmpdir()
+    const localID = Project.directoryProjectID(tmp.path)
+    const duplicateID = "project_non_git_exact_duplicate"
+    const now = Date.now()
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values([
+          { id: localID, worktree: tmp.path, time_created: now, time_updated: now, sandboxes: [] },
+          { id: duplicateID, worktree: tmp.path, time_created: now - 10, time_updated: now - 10, sandboxes: [] },
+        ])
+        .run()
+    })
+
+    const resolved = await p.fromDirectory(tmp.path)
+
+    expect(resolved.project.id).toBe(localID)
+    expect(resolved.project.worktree).toBe(tmp.path)
+    expect(Project.get(duplicateID)).toBeUndefined()
+    expect(Database.use((db) => db.select().from(ProjectTable).where(eq(ProjectTable.worktree, tmp.path)).all())).toHaveLength(1)
+  })
+
+  test("keeps an existing exact project identity after the local git directory disappears", async () => {
+    const p = await loadProject()
+    await using tmp = await tmpdir({ git: true })
+    const existingID = "project_non_git_existing_exact"
+    await Filesystem.write(path.join(tmp.path, ".git", "opencorvus"), existingID)
+
+    const before = await p.fromDirectory(tmp.path)
+    expect(before.project.id).toBe(existingID)
+    expect(Project.get(existingID)?.worktree).toBe(tmp.path)
+
+    await fs.rm(path.join(tmp.path, ".git"), { recursive: true, force: true })
+
+    const after = await p.fromDirectory(tmp.path)
+
+    expect(after.project.id).toBe(existingID)
+    expect(after.project.worktree).toBe(tmp.path)
+    expect(Project.get(existingID)?.worktree).toBe(tmp.path)
+    expect(Project.get(Project.directoryProjectID(tmp.path))).toBeUndefined()
+    expect(Database.use((db) => db.select().from(ProjectTable).where(eq(ProjectTable.worktree, tmp.path)).all())).toHaveLength(1)
   })
 
   test("rewrites legacy global marker before inserting project row", async () => {

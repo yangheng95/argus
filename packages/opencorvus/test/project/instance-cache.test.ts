@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from "bun:test"
 import { $ } from "bun"
+import fs from "node:fs/promises"
 import { Instance } from "../../src/project/instance"
 import { Project } from "../../src/project/project"
 import { Worktree } from "../../src/worktree"
@@ -43,6 +44,32 @@ test("refreshes a cached directory project when the directory becomes a git repo
       } finally {
         await Worktree.remove({ directory: info.directory })
       }
+    },
+  })
+}, 15_000)
+
+test("refreshes a cached git directory project when the git directory disappears", async () => {
+  await using tmp = await tmpdir({ git: true })
+  let initialProjectID = ""
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: () => {
+      initialProjectID = Instance.project.id
+      expect(Instance.current()?.git).toBe(true)
+    },
+  })
+
+  await fs.rm(`${tmp.path}/.git`, { recursive: true, force: true })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn() {
+      expect(Instance.project.id).toBe(initialProjectID)
+      expect(Instance.directory).toBe(tmp.path)
+      expect(Instance.worktree).toBe(tmp.path)
+      expect(Instance.project.worktree).toBe(tmp.path)
+      expect(Instance.current()?.git).toBe(false)
     },
   })
 }, 15_000)

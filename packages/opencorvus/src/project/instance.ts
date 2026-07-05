@@ -53,7 +53,8 @@ function instanceCacheKey(directory: string) {
 }
 
 function needsProjectRefresh(ctx: Context) {
-  return (ctx.project.id === "global" || ctx.worktree === "/" || !ctx.git) && Project.isGitRepo(ctx.directory)
+  const hasGit = Project.isGitRepo(ctx.directory)
+  return hasGit !== ctx.git || ((ctx.project.id === "global" || ctx.worktree === "/") && hasGit)
 }
 
 async function bootstrapContext(ctx: Context, init?: InstanceInit) {
