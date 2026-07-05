@@ -19,7 +19,6 @@ export namespace AgentToolPool {
 
   const BUILD_PRIVATE_TOOL_IDS = [
     "browser_preview_reference_regions",
-    "browser_preview_compare_scroll_slices",
   ] as const
 
   const BUILD_DEFAULT_DISABLED_RUNTIME_TOOL_IDS = [

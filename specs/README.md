@@ -7,7 +7,7 @@ This directory is the single source for OpenCorvus specs and spec-adjacent task 
 | Surface                                | Source                                                                  |
 | -------------------------------------- | ----------------------------------------------------------------------- |
 | Current architecture                   | `specs/current/architecture/README.md`                                  |
-| July 2026 task records and repair logs | `specs/records/2026-07/README.md`                                       |
+| July 2026 task records, repair logs, and tool-surface retirements | `specs/records/2026-07/README.md`                                       |
 | June 2026 task records                 | `specs/records/2026-06/README.md`                                       |
 | Prompt and product-reference artifacts | `specs/artifacts/`                                                      |
 | Public product docs                    | `packages/web/src/content/docs/**`                                      |

@@ -146,7 +146,7 @@ describe("tool.browser_preview", () => {
           expect(buildIDs).not.toContain("browser_preview_bind_local_module")
           expect(buildIDs).not.toContain("browser_preview_compare_regions")
           expect(buildIDs).toContain("browser_preview_reference_regions")
-          expect(buildIDs).toContain("browser_preview_compare_scroll_slices")
+          expect(buildIDs).not.toContain("browser_preview_compare_scroll_slices")
         },
       })
     },

@@ -114,7 +114,8 @@ describe("frontend replica desktop-only generation scope", () => {
     expect(agents["frontend-design"]).toContain("visible content, assets, canvas/image captures")
     expect(agents["frontend-design"]).toContain("instead of emitting page-height or min-height filler instructions")
     expect(agents.build).toContain("browser_preview_reference_regions")
-    expect(agents.build).toContain("browser_preview_compare_scroll_slices")
+    expect(agents.build).not.toContain("browser_preview_compare_scroll_slices")
+    expect(agents.build).toContain("leave screen-by-screen scroll-slice visual_diff to Visual QA")
     expect(agents.build).toContain("comparison_guidance LEFT reference / RIGHT implementation")
     expect(agents.build).toContain("content hallucinations")
     expect(agents.build).toContain("consumed diagnostic refs")
@@ -151,7 +152,7 @@ describe("frontend replica desktop-only generation scope", () => {
     expect(agents.orchestrator).toContain("per-surface rendered-feedback ledger")
     expect(agents.orchestrator?.toLowerCase()).toContain("keep template mobile text out of goals")
     expect(agents.orchestrator).toContain("scoped desktop adaptive viewport checks")
-    expect(agents.orchestrator).toContain("reference-region proof and scroll-slice supporting evidence")
+    expect(agents.orchestrator).toContain("Build produces reference-region proof while Visual QA owns scroll-slice supporting evidence")
     expect(agents.coding).not.toContain("responsive behavior")
   })
 

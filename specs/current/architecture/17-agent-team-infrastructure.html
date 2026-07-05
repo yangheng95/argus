@@ -1316,7 +1316,7 @@
             <ul>
               <li>聚焦桌面源信息架构、模块顺序、密度、状态与可见 parity。</li>
               <li>除非 operator 明确要求多端迁移，否则不引入 tablet / mobile 作用域。</li>
-              <li>build 用 <code>browser_preview_reference_regions</code> 取证、<code>browser_preview_compare_scroll_slices</code> 做 visual_diff。</li>
+              <li>build 用 <code>browser_preview_reference_regions</code> 做模块绑定取证，普通截图走 Browser MCP；<code>browser_preview_compare_scroll_slices</code> 的逐屏 visual_diff 留给 visual-qa。</li>
             </ul>
             <p>在 2026-07-03 capability-profile design 中，它是一块 PromptProfile 积木：既提供 role-scoped prompt overlays，也定义该专家团的 scheduler capability projection。当前页面是图例更新，不等同于 runtime 实现验收。</p>`
         },

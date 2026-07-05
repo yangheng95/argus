@@ -108,6 +108,7 @@ test("build agent has correct default properties", async () => {
       expect(visible.has("web_clone_prepare_context")).toBe(false)
       expect(visible.has("web_clone_generate_source_project")).toBe(false)
       expect(visible.has("browser_preview_reference_regions")).toBe(true)
+      expect(visible.has("browser_preview_compare_scroll_slices")).toBe(false)
       expect(visible.has("browser_preview_layout_geometry")).toBe(false)
 
       const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, build)
@@ -118,7 +119,7 @@ test("build agent has correct default properties", async () => {
       expect(ids.has("browser_preview_bind_local_module")).toBe(false)
       expect(ids.has("browser_preview_compare_regions")).toBe(false)
       expect(ids.has("browser_preview_reference_regions")).toBe(true)
-      expect(ids.has("browser_preview_compare_scroll_slices")).toBe(true)
+      expect(ids.has("browser_preview_compare_scroll_slices")).toBe(false)
       expect(ids.has("browser_preview_layout_geometry")).toBe(false)
     },
   })
