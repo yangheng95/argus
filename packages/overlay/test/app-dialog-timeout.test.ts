@@ -13,7 +13,7 @@ afterEach(() => {
   dismissAppDialog()
 })
 
-describe("app dialog countdown authority", () => {
+describe("app dialog choice value authority", () => {
   test("select dialogs reject missing selectValue before opening", () => {
     expect(() =>
       showAppDialog({
@@ -65,23 +65,6 @@ describe("app dialog countdown authority", () => {
     await expect(result).resolves.toEqual({ confirmed: true, value: "b" })
   })
 
-  test("task decision dialogs reject invalid stored choice values", () => {
-    expect(() =>
-      showAppDialog({
-        kind: "task-queue-decision",
-        title: "Queue",
-        message: "Choose",
-        selectValue: "later",
-        countdownSeconds: 30,
-        selectOptions: [
-          { value: "start", label: "Start" },
-          { value: "queue", label: "Queue" },
-        ],
-      }),
-    ).toThrow("is not in selectOptions")
-    expect(dialogStore.app.open).toBe(false)
-  })
-
   test("nativeSelect requires its caller to provide an explicit valid value", async () => {
     await expect(
       nativeSelect("Pick one", {
@@ -107,40 +90,16 @@ describe("app dialog countdown authority", () => {
     expect(dialogStore.app.open).toBe(false)
   })
 
-  test("countdown dialogs auto-settle without relying on the dialog component", async () => {
-    const result = await showAppDialog({
-      kind: "task-queue-decision",
-      title: "Queue",
-      message: "Choose",
-      inputLabel: "Input",
-      selectLabel: "Choice",
-      okLabel: "OK",
-      cancelLabel: "Cancel",
-      recommendedValue: "start",
-      selectValue: "start",
-      countdownSeconds: 0.01,
-      selectOptions: [
-        { value: "start", label: "Start" },
-        { value: "queue", label: "Queue" },
-      ],
-    })
-
-    expect(result).toEqual({ confirmed: true, value: "start" })
-    expect(dialogStore.app.open).toBe(false)
-  })
-
-  test("opening a new dialog resolves the previous countdown dialog as cancelled", async () => {
+  test("opening a new dialog resolves the previous select dialog as cancelled", async () => {
     const first = showAppDialog({
-      kind: "task-queue-decision",
       title: "Queue",
       message: "Queue?",
+      select: true,
       inputLabel: "Input",
       selectLabel: "Choice",
       okLabel: "OK",
       cancelLabel: "Cancel",
-      recommendedValue: "start",
       selectValue: "start",
-      countdownSeconds: 30,
       selectOptions: [
         { value: "start", label: "Start" },
         { value: "queue", label: "Queue" },

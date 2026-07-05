@@ -9,13 +9,11 @@ import type { HostTransport, TransportRequest, TransportResponse } from "../src/
 // any other failure (or a declined prompt) must propagate unchanged.
 
 let dialogResponse: { confirmed: boolean } = { confirmed: true }
-let queueDialogResponse: { confirmed: boolean; value: string | null } = { confirmed: true, value: "start" }
 const dialogCalls: Array<{
   title?: string
   message?: string
   select?: boolean
   kind?: string
-  countdownSeconds?: number
 }> = []
 const initCalls: number[] = []
 let initResult = true
@@ -41,9 +39,7 @@ mock.module("../src/services/app-dialog", () => ({
       message: options?.message,
       select: options?.select === true,
       kind: options?.kind,
-      countdownSeconds: options?.countdownSeconds,
     })
-    if (options?.kind === "task-queue-decision") return queueDialogResponse
     return { confirmed: dialogResponse.confirmed, value: null }
   },
   nativeMessage: async (message: string, options: any = {}) => {
@@ -61,6 +57,9 @@ mock.module("../src/utils/git", () => ({
 
 const { createTask } = await import("../src/services/task")
 const { ApiError } = await import("../src/services/api")
+const { configure } = await import("../src/services/api")
+
+const PROJECT_DIRECTORY = "D:/repo/task-init-git"
 
 type Responder = (req: TransportRequest) => TransportResponse<unknown>
 function fakeTransport(responder: Responder): HostTransport {
@@ -85,11 +84,14 @@ beforeEach(() => {
   dialogCalls.length = 0
   initCalls.length = 0
   dialogResponse = { confirmed: true }
-  queueDialogResponse = { confirmed: true, value: "start" }
   initResult = true
+  configure({ directory: PROJECT_DIRECTORY })
 })
 
-afterEach(() => __setHostTransportForTest(undefined))
+afterEach(() => {
+  __setHostTransportForTest(undefined)
+  configure({ directory: "" })
+})
 
 describe("createTask + WorktreeNotGitError init-git retry", () => {
   test("412 WorktreeNotGitError → confirm dialog → init git → retry succeeds", async () => {
@@ -136,8 +138,8 @@ describe("createTask + WorktreeNotGitError init-git retry", () => {
     let caught: unknown
     try {
       await createTask({ text: "hello", queue: false, kind: "workflow" })
-    } catch (e) {
-      caught = e
+    } catch (error) {
+      caught = error
     }
     expect(caught).toBeInstanceOf(ApiError)
     expect((caught as InstanceType<typeof ApiError>).status).toBe(412)
@@ -145,7 +147,7 @@ describe("createTask + WorktreeNotGitError init-git retry", () => {
     expect(initCalls.length).toBe(0)
   })
 
-  test("412 with a different error name does NOT trigger the retry", async () => {
+  test("412 with a different error name does not trigger the retry", async () => {
     __setHostTransportForTest(
       fakeTransport(() => ({
         status: 412,
@@ -158,8 +160,8 @@ describe("createTask + WorktreeNotGitError init-git retry", () => {
     let caught: unknown
     try {
       await createTask({ text: "hello", queue: false, kind: "workflow" })
-    } catch (e) {
-      caught = e
+    } catch (error) {
+      caught = error
     }
     expect(caught).toBeInstanceOf(ApiError)
     expect(dialogCalls.length).toBe(0)
@@ -179,8 +181,8 @@ describe("createTask + WorktreeNotGitError init-git retry", () => {
     let caught: unknown
     try {
       await createTask({ text: "hello", queue: false, kind: "workflow" })
-    } catch (e) {
-      caught = e
+    } catch (error) {
+      caught = error
     }
     expect(caught).toBeInstanceOf(ApiError)
     expect((caught as InstanceType<typeof ApiError>).status).toBe(500)
@@ -188,38 +190,36 @@ describe("createTask + WorktreeNotGitError init-git retry", () => {
     expect(initCalls.length).toBe(0)
   })
 
-  test("missing queue decision opens a card decision dialog and defaults to immediate eligibility", async () => {
+  test("missing queue defaults to immediate start without opening a queue dialog", async () => {
     let posted: any
     __setHostTransportForTest(
       fakeTransport((req) => {
         posted = req.body?.kind === "json" ? req.body.value : JSON.parse(String(req.body))
-        return { status: 200, ok: true, headers: {}, body: { task_id: "tsk_queue_choice" } }
+        return { status: 200, ok: true, headers: {}, body: { task_id: "tsk_queue_default" } }
       }),
     )
 
     const taskID = await createTask({ text: "hello", kind: "workflow" })
 
-    expect(taskID).toBe("tsk_queue_choice")
-    expect(dialogCalls.some((item) => item.kind === "task-queue-decision")).toBe(true)
-    expect(dialogCalls.some((item) => item.kind === "task-queue-decision" && item.select === true)).toBe(false)
-    expect(dialogCalls.find((item) => item.kind === "task-queue-decision")?.countdownSeconds).toBe(8)
+    expect(taskID).toBe("tsk_queue_default")
     expect(posted.queue).toBe(false)
+    expect(dialogCalls.length).toBe(0)
   })
 
-  test("queue decision posts true when the user chooses queue", async () => {
+  test("explicit queue true still posts true", async () => {
     let posted: any
-    queueDialogResponse = { confirmed: true, value: "queue" }
     __setHostTransportForTest(
       fakeTransport((req) => {
         posted = req.body?.kind === "json" ? req.body.value : JSON.parse(String(req.body))
-        return { status: 200, ok: true, headers: {}, body: { task_id: "tsk_queue_choice" } }
+        return { status: 200, ok: true, headers: {}, body: { task_id: "tsk_queue_explicit" } }
       }),
     )
 
-    const taskID = await createTask({ text: "hello", kind: "workflow" })
+    const taskID = await createTask({ text: "hello", queue: true, kind: "workflow" })
 
-    expect(taskID).toBe("tsk_queue_choice")
+    expect(taskID).toBe("tsk_queue_explicit")
     expect(posted.queue).toBe(true)
+    expect(dialogCalls.length).toBe(0)
   })
 
   test("missing task kind defaults to workflow without opening the removed route dialog", async () => {

@@ -82,7 +82,7 @@ export interface CreateTaskOptions {
   executor?: "opencorvus" | "codex" | "claude-code"
   /** Optional OpenCorvus model override for this new task. */
   model?: string
-  /** Optional prompt profile for the task root session overlay. */
+  /** Optional expert squad id forwarded through the existing task overlay field. */
   promptProfile?: string
   /** Title override. Server falls back to the request body when omitted. */
   title?: string
@@ -200,7 +200,6 @@ export function panelRequestBody(
 // field polluted with a filesystem path. Fail loudly so the call stack points
 // directly at the source instead of triggering silent 400-request floods.
 const TASK_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/
-const TASK_DECISION_COUNTDOWN_SECONDS = 8
 const TASK_SELECTION_INITIAL_TAIL_LIMIT = 8
 
 function isAbortError(error: unknown): boolean {
@@ -617,34 +616,6 @@ async function offerInitGitAndRetry(): Promise<boolean> {
   return await initGitCurrent({ notify: false })
 }
 
-async function resolveTaskQueueDecision(input: { queue?: boolean; signal?: AbortSignal }): Promise<boolean> {
-  if (typeof input.queue === "boolean") return input.queue
-  if (input.signal?.aborted) {
-    throw input.signal.reason instanceof Error
-      ? input.signal.reason
-      : new DOMException("Task creation aborted", "AbortError")
-  }
-  const result = await showAppDialog({
-    kind: "task-queue-decision",
-    title: t("task.queue_decision.title"),
-    message: t("task.queue_decision.message"),
-    selectLabel: t("task.queue_decision.label"),
-    selectValue: "start",
-    recommendedValue: "start",
-    countdownSeconds: TASK_DECISION_COUNTDOWN_SECONDS,
-    selectOptions: [
-      { value: "start", label: t("task.queue_decision.start") },
-      { value: "queue", label: t("task.queue_decision.queue") },
-    ],
-  })
-  if (!result.confirmed) {
-    throw new DOMException("Task creation cancelled before queue decision", "AbortError")
-  }
-  if (result.value === "start") return false
-  if (result.value === "queue") return true
-  throw new Error(`Unknown task queue decision: ${String(result.value)}`)
-}
-
 async function resolveTaskKindDecision(input: {
   kind?: "workflow" | "build"
   signal?: AbortSignal
@@ -666,7 +637,7 @@ export async function createTask(options: CreateTaskOptions): Promise<string> {
   const { text, attachments = [], metadata = {}, signal, budget } = options
   if (!text) throw new Error("createTask: text is required")
   const kind = await resolveTaskKindDecision({ kind: options.kind, signal })
-  const queue = await resolveTaskQueueDecision({ queue: options.queue, signal })
+  const queue = options.queue ?? false
   const requestID = crypto.randomUUID()
   // Caller-provided executor wins when supplied (e.g. Mission-dispatched
   // task carries its own executor pick); otherwise inherit the

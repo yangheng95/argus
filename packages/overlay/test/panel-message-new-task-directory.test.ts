@@ -8,10 +8,7 @@ const hydrateCalls: Array<{ taskID: string; options: any }> = []
 const startedStreams: Array<{ kind: string; id: string; sequence: number; options?: any }> = []
 
 mock.module("../src/services/app-dialog", () => ({
-  showAppDialog: async (options: any) => {
-    if (options?.kind === "task-queue-decision") return { confirmed: true, value: "start" }
-    return { confirmed: true, value: null }
-  },
+  showAppDialog: async () => ({ confirmed: true, value: null }),
   nativeMessage: async () => ({ confirmed: true, value: null }),
 }))
 

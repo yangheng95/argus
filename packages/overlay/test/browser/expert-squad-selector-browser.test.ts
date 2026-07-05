@@ -253,14 +253,16 @@ test("expert squad selector clears stale catalog state before task submit after 
       return !!send && !send.disabled
     })
     await page.click("#chatSend")
-    await page.waitForSelector('#appDialogBody[data-kind="task-queue-decision"] .app-dialog-decision__choice[data-value="start"]', {
-      visible: true,
-    })
-    await page.keyboard.press("Enter")
     for (let i = 0; i < 40 && taskBodies.length === 0; i += 1) {
       await new Promise((resolve) => setTimeout(resolve, 50))
     }
+    await waitForPageState(
+      page,
+      "retired queue dialog remains absent",
+      () => !document.querySelector('#appDialogBody[data-kind="task-queue-decision"]'),
+    )
     assert.equal(taskBodies.length, 1)
+    assert.equal((taskBodies[0] as Record<string, unknown>).queue, false)
     assert.equal((taskBodies[0] as Record<string, unknown>).promptProfile, undefined)
     assert.equal(JSON.stringify(taskBodies[0]).includes("frontend-replica"), false)
     errors.assertNoUnexpectedErrors()

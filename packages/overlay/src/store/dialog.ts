@@ -45,7 +45,6 @@ export const CONFIG_SECTIONS: readonly ConfigSection[] = [
 export interface AppDialogState extends AppDialogOptions {
   open: boolean
   epoch: number
-  countdownDeadlineMs: number
 }
 
 export interface SessionDialogState {
@@ -95,9 +94,6 @@ const DEFAULT_DIALOG_STATE: DialogState = {
     selectLabel: "",
     selectValue: "",
     selectOptions: [],
-    recommendedValue: "",
-    countdownSeconds: 0,
-    countdownDeadlineMs: 0,
   },
   session: {
     open: false,
