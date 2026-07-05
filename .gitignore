@@ -151,3 +151,7 @@ packages/opencorvus/script/cache-probe/out/
 
 # Auto-added by OpenCorvus
 .opencorvus/r/
+
+# Auto-added by OpenCorvus
+# Expert-squad packages are source definitions. Their agents/build prompt
+!.env.example
