@@ -1,5 +1,5 @@
 import { appStore } from "../store/app"
-import { activeSessionID, activeTaskID, boardStore, rootTaskSessionID } from "../store/board"
+import { activeTaskID, boardStore, rootTaskSessionID } from "../store/board"
 import { settingsStore } from "../store/settings"
 import { expertSquadCatalogRefreshToken, type ExpertSquadCatalogScope } from "./expert-squad"
 import { taskOwningDirectory } from "./task-directory"
@@ -27,8 +27,7 @@ export function expertSquadCatalogScope(): ExpertSquadCatalogScopeState {
     const sessionID = rootTaskSessionID().trim()
     return sessionID ? { kind: "session", sessionID, directory } : { kind: "pending", taskID, directory }
   }
-  const sessionID = activeSessionID().trim()
-  return sessionID ? { kind: "session", sessionID, directory } : { kind: "project", directory }
+  return { kind: "project", directory }
 }
 
 export function expertSquadCatalogRequestKey(): string {

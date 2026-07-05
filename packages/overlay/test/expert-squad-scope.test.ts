@@ -185,19 +185,24 @@ describe("expert squad task session owner", () => {
     expect(expertSquadCatalogRequestKey()).toBe(key)
   })
 
-  test("project and standalone session scopes keep distinct request keys", () => {
+  test("project catalog ignores stale standalone sessions after the project directory changes", async () => {
     resetStores()
-    const projectKey = expertSquadCatalogRequestKey()
-
     setBoardStore("selectedSource", { kind: "session", id: "ses_direct" })
+    setSettingsStore("directory", "D:/repo/new-project")
+    const requests = installCatalogTransport()
 
-    expect(projectKey).toMatch(/^expert-squad:catalog:D:\/repo\/project:project:\d+$/)
-    expect(expertSquadCatalogScope()).toEqual({
-      kind: "session",
-      sessionID: "ses_direct",
-      directory: "D:/repo/project",
-    })
-    expect(expertSquadCatalogRequestKey()).toMatch(/^expert-squad:catalog:D:\/repo\/project:session:ses_direct:\d+$/)
+    const scope = expertSquadCatalogScope()
+
+    expect(scope).toEqual({ kind: "project", directory: "D:/repo/new-project" })
+    expect(expertSquadCatalogRequestKey()).toMatch(/^expert-squad:catalog:D:\/repo\/new-project:project:\d+$/)
+    if (scope.kind !== "project" && scope.kind !== "session") throw new Error("catalog scope did not resolve")
+
+    await loadExpertSquadCatalog(scope)
+
+    expect(requests).toHaveLength(1)
+    expect(requests[0]!.path).toBe("expert-squad/catalog")
+    expect(requests[0]!.query?.directory).toBe("D:/repo/new-project")
+    expect(requests[0]!.query?.sessionID).toBeUndefined()
   })
 
   test("expert squad catalog loaders require an explicit project or session scope", () => {
