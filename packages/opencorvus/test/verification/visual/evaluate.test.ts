@@ -1,8 +1,7 @@
 import { describe, test, expect } from "bun:test"
 import { PNG } from "pngjs"
 import {
-  WEBPAGE_EVALUATE_PASS_SCORE,
-  WEBPAGE_HIGH_FIDELITY_PASS_SCORE,
+  WEBPAGE_REFERENCE_COMPARISON_SSIM_PASS_THRESHOLD,
   evaluateVisual,
   EvaluationReportSchema,
   isEvaluationReportPassing,
@@ -104,12 +103,10 @@ describe("evaluateVisual", () => {
     expect(events).toContain("score")
   })
 
-  test("webpage numeric pass threshold defaults to 85 and supports >95 acceptance", () => {
-    expect(WEBPAGE_EVALUATE_PASS_SCORE).toBe(85)
-    expect(WEBPAGE_HIGH_FIDELITY_PASS_SCORE).toBe(96)
-    expect(isEvaluationReportPassing({ overallScore: 85 })).toBe(true)
-    expect(isEvaluationReportPassing({ overallScore: 84 })).toBe(false)
-    expect(isEvaluationReportPassing({ overallScore: 95 }, WEBPAGE_HIGH_FIDELITY_PASS_SCORE)).toBe(false)
-    expect(isEvaluationReportPassing({ overallScore: 96 }, WEBPAGE_HIGH_FIDELITY_PASS_SCORE)).toBe(true)
+  test("webpage visual comparison pass uses strict SSIM greater than 95 percent", () => {
+    expect(WEBPAGE_REFERENCE_COMPARISON_SSIM_PASS_THRESHOLD).toBe(0.95)
+    expect(isEvaluationReportPassing({ ssimScore: 0.9501 })).toBe(true)
+    expect(isEvaluationReportPassing({ ssimScore: 0.95 })).toBe(false)
+    expect(isEvaluationReportPassing({ ssimScore: 0.949 })).toBe(false)
   })
 })

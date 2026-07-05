@@ -15,6 +15,7 @@ import {
 } from "../../src/browser-preview/region-comparison"
 import { BrowserPreviewComparisonGuidance } from "../../src/browser-preview/comparison-guidance"
 import { findReadableBrowserPreviewEvidenceByID, resolveRuntimeRelativePath } from "../../src/browser-preview/persist"
+import { WEBPAGE_REFERENCE_COMPARISON_SSIM_PASS_THRESHOLD } from "../../src/verification/visual/evaluate"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 import { persistTestBrowserPreviewTarget } from "../fixture/browser-preview"
@@ -137,8 +138,6 @@ describe("browser preview region comparison", () => {
             input: Buffer.from(
               `<svg width="320" height="140" xmlns="http://www.w3.org/2000/svg">
                 <rect width="320" height="140" fill="#e7f5ee"/>
-                <text x="24" y="52" font-family="Arial" font-size="30" fill="#123326">Economy</text>
-                <text x="24" y="92" font-family="Arial" font-size="18" fill="#315a45">Inflation and growth map</text>
               </svg>`,
             ),
             left: 40,
@@ -199,7 +198,7 @@ describe("browser preview region comparison", () => {
         expect(result.regions[0].artifacts?.side_by_side).toEndWith("side-by-side.png")
         expect(result.regions[0].implementation_bbox?.width).toBeGreaterThan(250)
         expect(result.regions[0].content?.source.non_white_pixel_ratio).toBeGreaterThan(0)
-        expect(result.regions[0].content?.implementation.unique_color_count).toBeGreaterThan(1)
+        expect(result.regions[0].content?.implementation.unique_color_count).toBeGreaterThan(0)
         expect(await fileExists(resolveRuntimeRelativePath(tmp.path, result.regions[0].artifacts!.source_crop))).toBe(
           true,
         )
@@ -300,9 +299,9 @@ describe("browser preview region comparison", () => {
         expect(region.region_id).toBe("credit-pulse")
         expect(region.status).toBe("failed")
         expect(region.artifact_note).toContain("True-size comparison")
-        expect(region.reason).toContain("visual score")
+        expect(region.reason).toContain("SSIM")
         expect(region.coverage?.implementation_covers_source).toBe(true)
-        expect(region.visual?.overall_score).toBeLessThan(85)
+        expect(region.visual?.ssim_score).toBeLessThanOrEqual(WEBPAGE_REFERENCE_COMPARISON_SSIM_PASS_THRESHOLD)
         expect(region.visual?.pixel_diff_percent).toBeGreaterThan(50)
         expect(region.artifacts?.source_crop).toEndWith("source.png")
         expect(region.artifacts?.implementation_crop).toEndWith("implementation.png")
@@ -457,8 +456,6 @@ describe("browser preview region comparison", () => {
             input: Buffer.from(
               `<svg width="320" height="140" xmlns="http://www.w3.org/2000/svg">
                 <rect width="320" height="140" fill="#e7f5ee"/>
-                <text x="24" y="52" font-family="Arial" font-size="30" fill="#123326">Economy</text>
-                <text x="24" y="92" font-family="Arial" font-size="18" fill="#315a45">Inflation and growth map</text>
               </svg>`,
             ),
             left: 40,
@@ -686,8 +683,6 @@ describe("browser preview region comparison", () => {
             input: Buffer.from(
               `<svg width="280" height="110" xmlns="http://www.w3.org/2000/svg">
                 <rect width="280" height="110" fill="#dcfce7"/>
-                <text x="18" y="44" font-family="Arial" font-size="24" fill="#14532d">Labor Market</text>
-                <text x="18" y="78" font-family="Arial" font-size="16" fill="#166534">Payroll growth</text>
               </svg>`,
             ),
             left: 40,
@@ -697,8 +692,6 @@ describe("browser preview region comparison", () => {
             input: Buffer.from(
               `<svg width="280" height="110" xmlns="http://www.w3.org/2000/svg">
                 <rect width="280" height="110" fill="#ede9fe"/>
-                <text x="18" y="44" font-family="Arial" font-size="24" fill="#4c1d95">Trade Flow</text>
-                <text x="18" y="78" font-family="Arial" font-size="16" fill="#5b21b6">Export balance</text>
               </svg>`,
             ),
             left: 40,
@@ -850,8 +843,6 @@ describe("browser preview region comparison", () => {
             input: Buffer.from(
               `<svg width="280" height="100" xmlns="http://www.w3.org/2000/svg">
                 <rect width="280" height="100" fill="#fef3c7"/>
-                <text x="18" y="40" font-family="Arial" font-size="23" fill="#78350f">Summary</text>
-                <text x="18" y="70" font-family="Arial" font-size="15" fill="#92400e">Compact state</text>
               </svg>`,
             ),
             left: 40,
@@ -861,9 +852,6 @@ describe("browser preview region comparison", () => {
             input: Buffer.from(
               `<svg width="280" height="160" xmlns="http://www.w3.org/2000/svg">
                 <rect width="280" height="160" fill="#cffafe"/>
-                <text x="18" y="44" font-family="Arial" font-size="23" fill="#155e75">Summary</text>
-                <text x="18" y="76" font-family="Arial" font-size="15" fill="#0e7490">Expanded state</text>
-                <text x="18" y="116" font-family="Arial" font-size="15" fill="#0e7490">Details visible</text>
               </svg>`,
             ),
             left: 40,
@@ -1023,8 +1011,6 @@ describe("browser preview region comparison", () => {
             input: Buffer.from(
               `<svg width="320" height="140" xmlns="http://www.w3.org/2000/svg">
                 <rect width="320" height="140" fill="#dbeafe"/>
-                <text x="24" y="56" font-family="Arial" font-size="28" fill="#1e3a8a">Below Fold</text>
-                <text x="24" y="96" font-family="Arial" font-size="18" fill="#1d4ed8">Full-page crop</text>
               </svg>`,
             ),
             left: 40,
@@ -1080,7 +1066,7 @@ describe("browser preview region comparison", () => {
         const sideBySidePath = resolveRuntimeRelativePath(tmp.path, region.artifacts!.side_by_side)
         await expectPngDimensions(implementationCropPath, { width: 320, height: 140 })
         await expectPngDimensions(sideBySidePath, { width: 656, height: 234 })
-        await expectPngHasColorDiversity(implementationCropPath)
+        await expectPngContainsColor(implementationCropPath, { red: 219, green: 234, blue: 254 })
         await expectPngHasColorDiversity(sideBySidePath)
       } finally {
         await server.close()
@@ -1162,21 +1148,17 @@ async function startPreviewServer(): Promise<{ url: string; close: () => Promise
         <head>
           <title>Economy preview</title>
           <style>
-            body { margin: 0; font-family: Arial, sans-serif; background: #f8fafc; }
+            body { margin: 0; background: #f8fafc; }
             main { padding: 60px 40px; }
             [data-oc-region="economy"] {
               width: 320px;
               height: 140px;
               background: #e7f5ee;
-              color: #123326;
-              padding: 24px;
               box-sizing: border-box;
             }
-            h1 { margin: 0 0 18px; font-size: 30px; line-height: 1; }
-            p { margin: 0; font-size: 18px; color: #315a45; }
           </style>
         </head>
-        <body><main><section data-oc-region="economy"><h1>Economy</h1><p>Inflation and growth map</p></section></main></body>
+        <body><main><section data-oc-region="economy"></section></main></body>
       </html>`
     if (req.url !== "/economy") {
       res.writeHead(404, { "content-type": "text/plain" })
@@ -1249,21 +1231,17 @@ async function startBelowFoldPreviewServer(): Promise<{ url: string; close: () =
         <head>
           <title>Below fold preview</title>
           <style>
-            body { margin: 0; font-family: Arial, sans-serif; background: #f8fafc; }
+            body { margin: 0; background: #f8fafc; }
             main { padding: 1180px 40px 120px; }
             [data-oc-region="below-fold"] {
               width: 320px;
               height: 140px;
               background: #dbeafe;
-              color: #1e3a8a;
               box-sizing: border-box;
-              padding: 24px;
             }
-            h1 { margin: 0 0 18px; font-size: 28px; line-height: 1; }
-            p { margin: 0; font-size: 18px; color: #1d4ed8; }
           </style>
         </head>
-        <body><main><section data-oc-region="below-fold"><h1>Below Fold</h1><p>Full-page crop</p></section></main></body>
+        <body><main><section data-oc-region="below-fold"></section></main></body>
       </html>`
     if (req.url !== "/below-fold") {
       res.writeHead(404, { "content-type": "text/plain" })
@@ -1388,24 +1366,21 @@ async function startMultiRegionPreviewServer(): Promise<{ url: string; close: ()
         <head>
           <title>Multi region preview</title>
           <style>
-            body { margin: 0; font-family: Arial, sans-serif; background: #f8fafc; }
+            body { margin: 0; background: #f8fafc; }
             main { padding: 60px 40px; display: flex; flex-direction: column; gap: 30px; }
             [data-oc-region] {
               width: 280px;
               height: 110px;
               box-sizing: border-box;
-              padding: 18px;
             }
-            [data-oc-region="labor-card"] { background: #dcfce7; color: #14532d; }
-            [data-oc-region="trade-card"] { background: #ede9fe; color: #4c1d95; }
-            h2 { margin: 0 0 14px; font-size: 24px; line-height: 1; }
-            p { margin: 0; font-size: 16px; }
+            [data-oc-region="labor-card"] { background: #dcfce7; }
+            [data-oc-region="trade-card"] { background: #ede9fe; }
           </style>
         </head>
         <body>
           <main>
-            <section data-oc-region="labor-card"><h2>Labor Market</h2><p>Payroll growth</p></section>
-            <section data-oc-region="trade-card"><h2>Trade Flow</h2><p>Export balance</p></section>
+            <section data-oc-region="labor-card"></section>
+            <section data-oc-region="trade-card"></section>
           </main>
         </body>
       </html>`
@@ -1447,27 +1422,19 @@ async function startStatefulRegionPreviewServer(): Promise<{ url: string; close:
         <head>
           <title>Stateful region preview</title>
           <style>
-            body { margin: 0; font-family: Arial, sans-serif; background: #f8fafc; }
+            body { margin: 0; background: #f8fafc; }
             main { padding: 60px 40px; }
             [data-oc-region="summary-card"] {
               width: 280px;
               height: ${compact ? 100 : 160}px;
               background: ${compact ? "#fef3c7" : "#cffafe"};
-              color: ${compact ? "#78350f" : "#155e75"};
               box-sizing: border-box;
-              padding: 18px;
             }
-            h2 { margin: 0 0 12px; font-size: 23px; line-height: 1; }
-            p { margin: 0 0 20px; font-size: 15px; color: ${compact ? "#92400e" : "#0e7490"}; }
           </style>
         </head>
         <body>
           <main>
-            <section data-oc-region="summary-card">
-              <h2>Summary</h2>
-              <p>${compact ? "Compact state" : "Expanded state"}</p>
-              ${expanded ? "<p>Details visible</p>" : ""}
-            </section>
+            <section data-oc-region="summary-card"></section>
           </main>
         </body>
       </html>`

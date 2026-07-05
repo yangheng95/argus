@@ -6,7 +6,11 @@ import { Identifier } from "@/id/id"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { requireRuntimePackage } from "@/runtime/package-require"
 import { decodePNG, nonWhiteDensity, uniqueColorBucketCount } from "@/util/pixel-stats"
-import { evaluateVisual, WEBPAGE_EVALUATE_PASS_SCORE } from "@/verification/visual/evaluate"
+import {
+  evaluateVisual,
+  isEvaluationReportPassing,
+  WEBPAGE_REFERENCE_COMPARISON_SSIM_PASS_THRESHOLD,
+} from "@/verification/visual/evaluate"
 import { runBrowserPreviewRegionComparisonCapture } from "./evidence-runner"
 import { browserPreviewViewportByID, BrowserPreviewViewport, BrowserPreviewViewportID } from "./viewport"
 import { findBrowserPreviewTargetByID, normalizeRuntimePathRefs, persistBrowserPreviewEvidence } from "./persist"
@@ -481,12 +485,12 @@ async function materializeRegionComparison(input: {
     source: await measureRegionContent(sourceCrop),
     implementation: await measureRegionContent(implementationCrop),
   }
-  const visualPassed = visualReport.overallScore >= WEBPAGE_EVALUATE_PASS_SCORE
+  const visualPassed = isEvaluationReportPassing({ ssimScore: visualReport.ssimScore })
   const completed = coverage.implementation_matches_source_size && visualPassed
   const reason = coverage.implementation_matches_source_size
     ? visualPassed
       ? undefined
-      : `Reference comparison visual score ${visualReport.overallScore}/100 is below required ${WEBPAGE_EVALUATE_PASS_SCORE}/100.`
+      : `Reference comparison SSIM ${visualReport.ssimScore.toFixed(3)} is not greater than ${WEBPAGE_REFERENCE_COMPARISON_SSIM_PASS_THRESHOLD.toFixed(2)}. Overall score ${visualReport.overallScore}/100 is diagnostic only.`
     : `Implementation crop size does not match source region: source=${coverage.source_width}x${coverage.source_height} implementation=${coverage.implementation_width}x${coverage.implementation_height}.`
   return {
     region_id: input.binding.region_id,
@@ -510,7 +514,7 @@ async function materializeRegionComparison(input: {
     diagnostics: [
       TRUE_SIZE_COMPARISON_ARTIFACT_NOTE,
       completed
-        ? `reference comparison completed for ${input.binding.region_id}: implementation crop size matches source region and visual score ${visualReport.overallScore}/100 meets ${WEBPAGE_EVALUATE_PASS_SCORE}/100`
+        ? `reference comparison passed for ${input.binding.region_id}: implementation crop size matches source region and SSIM ${visualReport.ssimScore.toFixed(3)} is greater than ${WEBPAGE_REFERENCE_COMPARISON_SSIM_PASS_THRESHOLD.toFixed(2)}`
         : `reference comparison failed for ${input.binding.region_id}: ${reason}`,
     ],
   }

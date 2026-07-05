@@ -7,6 +7,10 @@ import { BrowserRuntime } from "@/browser/runtime"
 import { Identifier } from "@/id/id"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { requireRuntimePackage } from "@/runtime/package-require"
+import {
+  isEvaluationReportPassing,
+  WEBPAGE_REFERENCE_COMPARISON_SSIM_PASS_THRESHOLD,
+} from "@/verification/visual/evaluate"
 import { findBrowserPreviewTargetByID, normalizeRuntimePathRefs } from "./persist"
 import { BrowserPreviewSourceReferenceArtifactID } from "./region-schema"
 import { resolveSourceReferencePath } from "./source-reference"
@@ -48,7 +52,7 @@ export type BrowserPreviewScrollSliceComparisonRequest = z.infer<typeof BrowserP
 
 export const BrowserPreviewScrollSliceComparisonResult = z
   .object({
-    status: z.enum(["completed", "failed"]),
+    status: z.enum(["passed", "failed"]),
     operation: z.literal("scroll-slice-comparison"),
     manifestPath: z.string(),
     jobID: z.string(),
@@ -162,6 +166,7 @@ export async function compareBrowserPreviewScrollSlice(
   }
 
   const visual = await evaluateSliceVisual(sourceCrop, implementationCrop)
+  const ssimPassed = isEvaluationReportPassing({ ssimScore: visual.ssimScore })
   const lowSsimWarning = buildLowSsimLayoutWarning(visual.ssimScore)
   await makeScrollSliceSideBySide({
     leftPath: sourceCrop,
@@ -184,7 +189,7 @@ export async function compareBrowserPreviewScrollSlice(
   }
 
   const result: BrowserPreviewScrollSliceComparisonResult = {
-    status: "completed",
+    status: ssimPassed ? "passed" : "failed",
     operation: "scroll-slice-comparison",
     manifestPath: path.join(outDir, "manifest.json"),
     jobID,
@@ -211,6 +216,9 @@ export async function compareBrowserPreviewScrollSlice(
     diagnostics: [
       "Scroll-slice comparison is supporting Visual QA evidence only.",
       "It is not reference-comparison proof.",
+      ssimPassed
+        ? `Scroll-slice SSIM ${visual.ssimScore.toFixed(3)} is greater than ${WEBPAGE_REFERENCE_COMPARISON_SSIM_PASS_THRESHOLD.toFixed(2)}.`
+        : `Scroll-slice SSIM ${visual.ssimScore.toFixed(3)} is not greater than ${WEBPAGE_REFERENCE_COMPARISON_SSIM_PASS_THRESHOLD.toFixed(2)}.`,
       ...(lowSsimWarning ? [lowSsimWarning] : []),
     ],
   }

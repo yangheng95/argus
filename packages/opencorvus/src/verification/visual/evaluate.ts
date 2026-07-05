@@ -46,14 +46,15 @@ export const EvaluationReportSchema = z.object({
 })
 export type EvaluationReport = z.infer<typeof EvaluationReportSchema>
 
-export const WEBPAGE_EVALUATE_PASS_SCORE = 85
-export const WEBPAGE_HIGH_FIDELITY_PASS_SCORE = 96
+// SSIM means Structural Similarity Index Measure. Frontend replica visual
+// comparison tool results pass only above this threshold; equality is failure.
+export const WEBPAGE_REFERENCE_COMPARISON_SSIM_PASS_THRESHOLD = 0.95
 
 export function isEvaluationReportPassing(
-  report: Pick<EvaluationReport, "overallScore">,
-  threshold = WEBPAGE_EVALUATE_PASS_SCORE,
+  report: Pick<EvaluationReport, "ssimScore">,
+  threshold = WEBPAGE_REFERENCE_COMPARISON_SSIM_PASS_THRESHOLD,
 ): boolean {
-  return report.overallScore >= threshold
+  return report.ssimScore > threshold
 }
 
 // ─── Internal helpers ────────────────────────────────────────────────────

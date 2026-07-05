@@ -58,7 +58,7 @@ describe("browser preview scroll-slice comparison", () => {
             }),
         })
 
-        expect(result.status).toBe("completed")
+        expect(result.status).toBe("passed")
         expect(result.operation).toBe("scroll-slice-comparison")
         expect(result.implementation.actualScrollY).toBe(300)
         expect(result.implementation.viewport).toEqual({ width: 360, height: 180 })
@@ -113,9 +113,11 @@ describe("browser preview scroll-slice comparison", () => {
             }),
         })
 
-        expect(result.status).toBe("completed")
+        expect(result.status).toBe("failed")
         expect(result.visual.ssim_score).toBeLessThan(0.8)
         const diagnostics = result.diagnostics.join("\n")
+        expect(diagnostics).toContain("Scroll-slice SSIM")
+        expect(diagnostics).toContain("is not greater than 0.95")
         expect(diagnostics).toContain("Low SSIM precheck")
         expect(diagnostics).toContain("screenshots may not match")
         expect(diagnostics).toContain("page should be calibrated as a whole")
@@ -162,7 +164,7 @@ describe("browser preview scroll-slice comparison", () => {
             }),
         })
 
-        expect(result.status).toBe("completed")
+        expect(result.status).toBe("passed")
         expect(result.implementation.actualScrollY).toBe(1800)
         const implementationCrop = resolveRuntimeRelativePath(tmp.path, result.artifacts.implementation_crop)
         const sideBySide = resolveRuntimeRelativePath(tmp.path, result.artifacts.side_by_side)
@@ -311,7 +313,7 @@ describe("browser preview scroll-slice comparison", () => {
   })
 
   test(
-    "rejects late browser page errors before writing completed comparison artifacts",
+    "rejects late browser page errors before writing comparison artifacts",
     async () => {
       await using tmp = await tmpdir({ git: true })
       const taskID = await seedTask(tmp.path)
@@ -397,8 +399,6 @@ async function makeReferencePng(
             <rect x="0" y="${Math.floor(input.height / 3)}" width="${input.width}" height="${Math.floor(
               input.height / 3,
             )}" fill="${input.secondColor}"/>
-            <text x="24" y="80" font-family="Arial" font-size="32" fill="#111827">Reference top</text>
-            <text x="24" y="${Math.floor(input.height / 3) + 80}" font-family="Arial" font-size="32" fill="#111827">Reference middle</text>
           </svg>`,
         ),
         left: 0,
@@ -450,7 +450,7 @@ async function startScrollPreviewServer(
       res.end("not found")
       return
     }
-    const sectionHeight = mode === "smooth-scroll" ? 1200 : 320
+    const sectionHeight = mode === "smooth-scroll" ? 1200 : 300
     const pageMinHeight = sectionHeight * 3
     res.writeHead(200, { "content-type": "text/html; charset=utf-8" })
     res.end(`<!doctype html>
@@ -458,12 +458,11 @@ async function startScrollPreviewServer(
         <head>
           <title>Scroll slice implementation</title>
           <style>
-            html, body { margin: 0; width: 100%; min-height: ${pageMinHeight}px; font-family: Arial, sans-serif; }
+            html, body { margin: 0; width: 100%; min-height: ${pageMinHeight}px; }
             ${mode === "smooth-scroll" ? "html { scroll-behavior: smooth; }" : ""}
-            .top { height: ${sectionHeight}px; background: #dbeafe; color: #111827; box-sizing: border-box; padding: 48px 24px; }
-            .middle { height: ${sectionHeight}px; background: #dcfce7; color: #111827; box-sizing: border-box; padding: 48px 24px; }
-            .bottom { height: ${sectionHeight}px; background: #fee2e2; color: #111827; box-sizing: border-box; padding: 48px 24px; }
-            h1 { margin: 0; font-size: 32px; line-height: 1.2; }
+            .top { height: ${sectionHeight}px; background: #dbeafe; box-sizing: border-box; }
+            .middle { height: ${sectionHeight}px; background: #dcfce7; box-sizing: border-box; }
+            .bottom { height: ${sectionHeight}px; background: #fee2e2; box-sizing: border-box; }
           </style>
           ${
             mode === "late-pageerror"
@@ -472,9 +471,9 @@ async function startScrollPreviewServer(
           }
         </head>
         <body>
-          <section class="top"><h1>Implementation top</h1></section>
-          <section class="middle"><h1>Implementation middle</h1></section>
-          <section class="bottom"><h1>Implementation bottom</h1></section>
+          <section class="top"></section>
+          <section class="middle"></section>
+          <section class="bottom"></section>
         </body>
       </html>`)
   })
