@@ -28,7 +28,6 @@ The Orchestrator owns visible selection and scheduling through the existing Open
 
 Projected package tools:
 
-- `software-testing/shared/test-artifact-inventory`: inspect software-testing artifacts through the parsed OpenTest protocol contract.
 - `software-testing/shared/opentest-protocol-engine`: expose the parsed external contract, inventory, and validation results.
 
 Projected agents:
@@ -36,4 +35,4 @@ Projected agents:
 - `build` as virtual agent `opentest-implementer`.
 - `integrity` as virtual agent `opentest-reviewer`.
 
-The Orchestrator prompt overlay is `agents/orchestrator/system.md`. Build and Integrity prompts are virtual-agent prompts under `virtual-agents/`.
+The Orchestrator prompt overlay is `agents/orchestrator/system.md`. Build and Integrity prompts and role-scoped package skills are virtual-agent resources under `virtual-agents/`.

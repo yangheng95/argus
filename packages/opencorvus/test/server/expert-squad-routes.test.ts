@@ -178,20 +178,14 @@ describe("expert-squad routes", () => {
               base_role: "build",
               virtual_agent_id: "opentest-implementer",
               package_skill_refs: ["software-testing/build/test-implementation"],
-              package_tool_refs: [
-                "software-testing/shared/test-artifact-inventory",
-                "software-testing/shared/opentest-protocol-engine",
-              ],
+              package_tool_refs: ["software-testing/shared/opentest-protocol-engine"],
               package_mcp_server_refs: [],
             }),
             expect.objectContaining({
               base_role: "integrity",
               virtual_agent_id: "opentest-reviewer",
               package_skill_refs: ["software-testing/integrity/test-review"],
-              package_tool_refs: [
-                "software-testing/shared/test-artifact-inventory",
-                "software-testing/shared/opentest-protocol-engine",
-              ],
+              package_tool_refs: ["software-testing/shared/opentest-protocol-engine"],
               package_mcp_server_refs: [],
             }),
           ]),

@@ -65,6 +65,9 @@ build/
 # folders must not be hidden by the generic build-output ignore rule above.
 !.opencorvus/expert-squads/**/agents/build/
 !.opencorvus/expert-squads/**/agents/build/**
+# Virtual-agent package sources may also be owned by the base `build` role.
+!.opencorvus/expert-squads/**/virtual-agents/build/
+!.opencorvus/expert-squads/**/virtual-agents/build/**
 .output/
 .next/
 .nuxt/

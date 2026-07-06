@@ -70,7 +70,9 @@ Orchestrator build tool → build/agent.ts (`build.worktreeUsage` 由 LLM 选择
 Expert squad 是 OpenCorvus 内部的 scenario / agent capability package，不是外部
 Codex skill。运行时内置 package 只保留通用 `general`；非通用 squad 的分发形态是
 payload，必须先释放成项目目录 `.opencorvus/expert-squads/<id>/`，再通过普通
-package discovery / catalog 进入运行时：
+package discovery / catalog 进入运行时。分发 payload 由
+`packages/opencorvus/script/generate-expert-squad-payload.ts` 在构建前从仓库
+`.opencorvus/expert-squads/<id>/` 明文包生成，禁止手写平行清单：
 
 - `expert-squad.jsonc` 声明 profile identity、agent prompt overlays、skills、
   package tools、package MCP servers/tools；
@@ -80,6 +82,11 @@ package discovery / catalog 进入运行时：
 - `PromptProfileResolver` 负责把当前 active expert squad 投影成 scheduler
   capability、worker capability、visible selector skills、skills、package tools
   和 scoped package MCP providers；
+- 普通 `agents/<role>` 目录必须由 `expert-squad.jsonc` 的 `agents.<role>`
+  声明，禁止保留未声明 role 的空目录或资源目录；
+- 声明了 `virtual_agents.<role>` 的 package-owned agent 使用
+  `virtual-agents/<role>/system.md` 及同目录下的 `skills/`、`tools/`、`mcp/`
+  作为 role-scoped package resource；同 role 的 `agents/<role>` 目录不得同时存在；
 - workflow 仍由 scheduler scope 的 `WorkflowRegistry` 声明。Expert squad 可以声明
   可见能力和 role overlays，但不能创建第二套 workflow、dispatch、context packet
   或 broad task-manipulation tool。

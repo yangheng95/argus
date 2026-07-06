@@ -1,6 +1,6 @@
 ---
 name: software-test-review
-description: Use when reviewing whether software-testing artifacts and evidence satisfy the requested quality goal.
+description: Use when reviewing whether WuJiang/OpenTest artifacts and evidence satisfy the requested quality goal.
 ---
 
 # Software Test Review

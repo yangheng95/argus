@@ -1,6 +1,6 @@
 ---
 name: software-test-implementation
-description: Use when creating, repairing, running, or debugging executable software-test artifacts.
+description: Use when creating, repairing, running, or debugging executable WuJiang/OpenTest artifacts.
 ---
 
 # Software Test Implementation

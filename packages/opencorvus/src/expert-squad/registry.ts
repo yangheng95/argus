@@ -432,32 +432,86 @@ export namespace ExpertSquadRegistry {
     await walk(root, rootEntries)
   }
 
-  async function collectPackageRefs(root: string, id: string) {
+  async function collectRolePackageRefs(input: {
+    roleRoot: string
+    refBase: string
+    skillRefs: Set<string>
+    toolRefs: Set<string>
+    mcpServerRefs: Set<string>
+    mcpToolRefs: Set<string>
+    mcpPromptRefs: Set<string>
+    mcpResourceRefs: Set<string>
+    context: string
+  }) {
+    await collectSkillRefs(path.join(input.roleRoot, "skills"), input.refBase, input.skillRefs, `${input.context}.skills`)
+    for (const tool of await collectFileEntries(path.join(input.roleRoot, "tools"), `${input.context}.tools`)) {
+      if (!/\.(?:js|ts)$/.test(tool)) throw new Error(`${input.context}.tools.${tool}: unsupported tool extension`)
+      const toolID = tool.replace(/\.(?:js|ts)$/, "")
+      assertCanonicalRefSegment(toolID, `${input.context}.tools.${tool}`)
+      addRef(input.toolRefs, `${input.refBase}/${toolID}`, `${input.context}.tools`)
+    }
+    await collectMcpRefs(path.join(input.roleRoot, "mcp"), input.refBase, {
+      mcpServerRefs: input.mcpServerRefs,
+      mcpToolRefs: input.mcpToolRefs,
+      mcpPromptRefs: input.mcpPromptRefs,
+      mcpResourceRefs: input.mcpResourceRefs,
+    })
+  }
+
+  async function collectPackageRefs(root: string, manifest: Manifest) {
     const skillRefs = new Set<string>()
     const toolRefs = new Set<string>()
     const mcpServerRefs = new Set<string>()
     const mcpToolRefs = new Set<string>()
     const mcpPromptRefs = new Set<string>()
     const mcpResourceRefs = new Set<string>()
+    const id = manifest.id
 
     const agentRoot = path.join(root, "agents")
     for (const agentEntry of await readOptionalDirectoryEntries(agentRoot, "agents")) {
       if (!agentEntry.isDirectory()) throw new Error(`agents.${agentEntry.name}: expected directory`)
       const agent = agentEntry.name
       assertRoleID(agent, `agents.${agent}`)
-      const base = `${id}/${agent}`
-      await collectSkillRefs(path.join(agentRoot, agent, "skills"), base, skillRefs, `agents.${agent}.skills`)
-      for (const tool of await collectFileEntries(path.join(agentRoot, agent, "tools"), `agents.${agent}.tools`)) {
-        if (!/\.(?:js|ts)$/.test(tool)) throw new Error(`agents.${agent}.tools.${tool}: unsupported tool extension`)
-        const toolID = tool.replace(/\.(?:js|ts)$/, "")
-        assertCanonicalRefSegment(toolID, `agents.${agent}.tools.${tool}`)
-        addRef(toolRefs, `${base}/${toolID}`, `agents.${agent}.tools`)
+      if (Object.hasOwn(manifest.virtual_agents, agent)) {
+        throw new Error(
+          `agents.${agent}: directory must be absent when virtual_agents.${agent} is declared; use virtual-agents/${agent} for package resources`,
+        )
       }
-      await collectMcpRefs(path.join(agentRoot, agent, "mcp"), `${base}`, {
+      if (!Object.hasOwn(manifest.agents, agent)) {
+        throw new Error(`agents.${agent}: directory must be declared in agents.${agent}`)
+      }
+      const base = `${id}/${agent}`
+      await collectRolePackageRefs({
+        roleRoot: path.join(agentRoot, agent),
+        refBase: base,
+        skillRefs,
+        toolRefs,
         mcpServerRefs,
         mcpToolRefs,
         mcpPromptRefs,
         mcpResourceRefs,
+        context: `agents.${agent}`,
+      })
+    }
+
+    const virtualRoot = path.join(root, "virtual-agents")
+    for (const roleEntry of await readOptionalDirectoryEntries(virtualRoot, "virtual-agents")) {
+      if (!roleEntry.isDirectory()) throw new Error(`virtual-agents.${roleEntry.name}: expected directory`)
+      const role = roleEntry.name
+      assertRoleID(role, `virtual-agents.${role}`)
+      if (!Object.hasOwn(manifest.virtual_agents, role)) {
+        throw new Error(`virtual-agents.${role}: directory must be declared in virtual_agents.${role}`)
+      }
+      await collectRolePackageRefs({
+        roleRoot: path.join(virtualRoot, role),
+        refBase: `${id}/${role}`,
+        skillRefs,
+        toolRefs,
+        mcpServerRefs,
+        mcpToolRefs,
+        mcpPromptRefs,
+        mcpResourceRefs,
+        context: `virtual-agents.${role}`,
       })
     }
 
@@ -1061,7 +1115,7 @@ export namespace ExpertSquadRegistry {
     await validateVirtualAgentFiles(metadata)
     const selectorInstructions = await readCatalogSelectorInstructions(metadata)
 
-    const refs = await collectPackageRefs(metadata.root, manifest.id)
+    const refs = await collectPackageRefs(metadata.root, manifest)
     const declaredRefs = collectDeclaredRefs(manifest, refs)
 
     const [{ AgentToolPool }, workflowByTool] = await Promise.all([

@@ -374,11 +374,18 @@ export namespace PromptProfileResolver {
     return { owner, name: parts.join("/") }
   }
 
+  function packageRoleResourceRoot(pkg: ExpertSquadRegistry.LoadedPackage, owner: string): string {
+    if (owner === "shared") return pkg.root
+    return Object.hasOwn(pkg.manifest.virtual_agents, owner)
+      ? path.join(pkg.root, "virtual-agents", owner)
+      : path.join(pkg.root, "agents", owner)
+  }
+
   function packageSkillDigestPath(pkg: ExpertSquadRegistry.LoadedPackage, ref: string) {
     const { owner, name } = packageRefParts(pkg.id, ref)
     return owner === "shared"
       ? path.join(pkg.root, "skills", name, "SKILL.md")
-      : path.join(pkg.root, "agents", owner, "skills", name, "SKILL.md")
+      : path.join(packageRoleResourceRoot(pkg, owner), "skills", name, "SKILL.md")
   }
 
   async function packageTextFileDigest(paths: string[], ref: string): Promise<{ ref: string; path: string; sha256: string }> {
@@ -407,7 +414,7 @@ export namespace PromptProfileResolver {
     const base =
       owner === "shared"
         ? path.join(pkg.root, "tools", name)
-        : path.join(pkg.root, "agents", owner, "tools", name)
+        : path.join(packageRoleResourceRoot(pkg, owner), "tools", name)
     return [`${base}.ts`, `${base}.js`]
   }
 
@@ -425,7 +432,7 @@ export namespace PromptProfileResolver {
     const base =
       owner === "shared"
         ? path.join(pkg.root, "mcp", name)
-        : path.join(pkg.root, "agents", owner, "mcp", name)
+        : path.join(packageRoleResourceRoot(pkg, owner), "mcp", name)
     return [`${base}.jsonc`, `${base}.json`]
   }
 
@@ -2477,7 +2484,7 @@ export namespace PromptProfileResolver {
 
   function packageSkillPath(pkg: ExpertSquadRegistry.LoadedPackage, ref: string): string {
     const { owner, parts } = packageSkillRefParts(pkg, ref)
-    const base = owner === "shared" ? path.join(pkg.root, "skills") : path.join(pkg.root, "agents", owner, "skills")
+    const base = owner === "shared" ? path.join(pkg.root, "skills") : path.join(packageRoleResourceRoot(pkg, owner), "skills")
     return path.join(base, ...parts, "SKILL.md")
   }
 

@@ -37,11 +37,15 @@ import { copyRuntimeNodeModules, writePackagedRuntimePackageJson } from "./build
 import { copyRipgrepRuntime, findExecutableOnPath } from "./build-runtime-binaries"
 import { cleanBuildDist } from "./build-clean"
 import { resolveModelsSnapshotData } from "./models-snapshot"
+import { generateExpertSquadPayloadModule } from "./generate-expert-squad-payload"
 
 const modelsUrl = process.env.OPENCORVUS_MODELS_URL || "https://models.dev"
 const modelsSnapshotPath = path.join(dir, "src/provider/models-snapshot.ts")
 const repoRoot = path.resolve(dir, "../..")
 const OVERLAY_PAYLOAD_STAMP_FILE = ".opencorvus-overlay-payload.stamp"
+
+await generateExpertSquadPayloadModule(repoRoot)
+console.log("Generated expert-squad payload module")
 
 async function collectOverlayPayloadFiles(root: string): Promise<string[]> {
   const files: string[] = []

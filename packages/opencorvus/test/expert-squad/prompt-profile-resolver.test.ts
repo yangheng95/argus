@@ -494,15 +494,15 @@ describe("PromptProfileResolver", () => {
     await using project = await tmpdir({ git: true })
     await copyRepositoryExpertSquadPackage(project.path, SOFTWARE_TESTING_EXPERT_SQUAD_ID)
     const testCaseRoot = path.join(project.path, "cases", "login")
-    await fs.mkdir(path.join(testCaseRoot, ".opentest"), { recursive: true })
-    await fs.mkdir(path.join(testCaseRoot, ".opentest", "runs", "2026-07-06"), { recursive: true })
+    await fs.mkdir(testCaseRoot, { recursive: true })
+    await fs.mkdir(path.join(project.path, ".opencorvus", "opentest", "runs", "batch-2026-07-06", "login-case"), { recursive: true })
     await fs.writeFile(
       path.join(testCaseRoot, "script.ts"),
       [
         "export const steps = [",
-        "  async (ctx: { mark_point(name: string): Promise<void> }) => {",
-        '    await ctx.mark_point("login accepts valid user")',
-        '    await ctx.mark_point("renders home")',
+        "  async (ctx: { mark_point(params: { name: string; passed: boolean; error?: string }): Promise<void> }) => {",
+        '    await ctx.mark_point({ name: "login accepts valid user", passed: true })',
+        '    await ctx.mark_point({ name: "renders home", passed: true })',
         "  },",
         "]",
         "",
@@ -513,6 +513,7 @@ describe("PromptProfileResolver", () => {
       [
         "---",
         "testName: Login regression",
+        "description: Covers the primary login path",
         "status: active",
         "testPoints:",
         "  - name: login accepts valid user",
@@ -522,9 +523,16 @@ describe("PromptProfileResolver", () => {
         "",
       ].join("\n"),
     )
-    await fs.writeFile(path.join(testCaseRoot, ".opentest", "ctx.d.ts"), "export interface TestContext { click(selector: string): Promise<void> }\n")
-    await fs.writeFile(path.join(testCaseRoot, ".opentest", "runs", "2026-07-06", "result.json"), '{"status":"passed"}\n')
-    await fs.writeFile(path.join(testCaseRoot, ".opentest", "acceptance.json"), '{"status":"accepted"}\n')
+    await fs.writeFile(
+      path.join(project.path, ".opencorvus", "opentest", "ctx.d.ts"),
+      "interface Ctx { mark_point(params: { name: string; passed: boolean; error?: string }): Promise<void> }\n",
+    )
+    await fs.writeFile(path.join(project.path, ".opencorvus", "opentest", "runs.db"), "")
+    await fs.writeFile(
+      path.join(project.path, ".opencorvus", "opentest", "runs", "batch-2026-07-06", "login-case", "result.json"),
+      JSON.stringify({ testPath: testCaseRoot, passed: true }, null, 2),
+    )
+    await fs.writeFile(path.join(project.path, ".opencorvus", "opentest", "acceptance.json"), '{"items":[]}\n')
     await fs.writeFile(
       path.join(project.path, "package.json"),
       JSON.stringify({ scripts: { test: "bun test", "test:e2e": "playwright test" } }, null, 2),
@@ -553,9 +561,7 @@ describe("PromptProfileResolver", () => {
       expect.arrayContaining(["software-testing-workflow", "software-test-implementation", "software-test-review"]),
     )
 
-    const inventoryRef = `${SOFTWARE_TESTING_EXPERT_SQUAD_ID}/shared/test-artifact-inventory`
     const protocolRef = `${SOFTWARE_TESTING_EXPERT_SQUAD_ID}/shared/opentest-protocol-engine`
-    const inventoryProviderName = PromptProfileResolver.packageToolProviderName(inventoryRef)
     const protocolProviderName = PromptProfileResolver.packageToolProviderName(protocolRef)
     const schedulerCapability = await PromptProfileResolver.resolveSchedulerCapability({
       projectDirectory: project.path,
@@ -569,8 +575,8 @@ describe("PromptProfileResolver", () => {
     for (const unusedTool of ["requirements", "architect", "visual_qa", "fact_check"]) {
       expect(schedulerCapability.builtInToolIDs).not.toContain(unusedTool)
     }
-    expect(schedulerCapability.packageToolRefs).toEqual([inventoryRef, protocolRef])
-    expect(schedulerCapability.packageToolProviderNames).toEqual([inventoryProviderName, protocolProviderName])
+    expect(schedulerCapability.packageToolRefs).toEqual([protocolRef])
+    expect(schedulerCapability.packageToolProviderNames).toEqual([protocolProviderName])
 
     const { tools: rawTools } = createOrchestratorTools({
       taskID: "tsk_software_testing_projection",
@@ -621,7 +627,7 @@ describe("PromptProfileResolver", () => {
       agentID: "build",
       config,
     })
-    expect(buildCapability.packageToolRefs).toEqual([inventoryRef, protocolRef])
+    expect(buildCapability.packageToolRefs).toEqual([protocolRef])
     expect(buildCapability.virtualAgent).toMatchObject({
       baseRole: "build",
       virtualAgentID: "opentest-implementer",
@@ -635,11 +641,11 @@ describe("PromptProfileResolver", () => {
       { projectDirectory: project.path },
     )
     expect(Object.hasOwn(workerTools, "read")).toBe(true)
-    expect(Object.hasOwn(workerTools, inventoryProviderName)).toBe(true)
-    expect(Object.hasOwn(workerTools, inventoryRef)).toBe(false)
+    expect(Object.hasOwn(workerTools, protocolProviderName)).toBe(true)
+    expect(Object.hasOwn(workerTools, protocolRef)).toBe(false)
 
-    const inventoryResult = await (workerTools[inventoryProviderName] as any).execute(
-      { root: ".", max_files: 400 },
+    const inventoryResult = await (workerTools[protocolProviderName] as any).execute(
+      { mode: "inventory", root: ".", max_files: 400 },
       {
         toolCallId: "call_software_testing_inventory",
         opencorvus: {
@@ -656,10 +662,12 @@ describe("PromptProfileResolver", () => {
         script_ts: string | null
         context_contract: string | null
         acceptance: string | null
+        run_database: string | null
         run_results: string[]
       }>
       context_files: string[]
       run_results: string[]
+      run_databases: string[]
       acceptance_files: string[]
       package_scripts: Array<{ script: string; command: string }>
     }
@@ -668,21 +676,23 @@ describe("PromptProfileResolver", () => {
         directory: "cases/login",
         test_md: "cases/login/TEST.md",
         script_ts: "cases/login/script.ts",
-        context_contract: "cases/login/.opentest/ctx.d.ts",
-        acceptance: "cases/login/.opentest/acceptance.json",
-        run_results: ["cases/login/.opentest/runs/2026-07-06/result.json"],
+        context_contract: ".opencorvus/opentest/ctx.d.ts",
+        acceptance: ".opencorvus/opentest/acceptance.json",
+        run_database: ".opencorvus/opentest/runs.db",
+        run_results: [".opencorvus/opentest/runs/batch-2026-07-06/login-case/result.json"],
       }),
     )
-    expect(inventory.context_files).toContain("cases/login/.opentest/ctx.d.ts")
-    expect(inventory.run_results).toContain("cases/login/.opentest/runs/2026-07-06/result.json")
-    expect(inventory.acceptance_files).toContain("cases/login/.opentest/acceptance.json")
+    expect(inventory.context_files).toContain(".opencorvus/opentest/ctx.d.ts")
+    expect(inventory.run_results).toContain(".opencorvus/opentest/runs/batch-2026-07-06/login-case/result.json")
+    expect(inventory.acceptance_files).toContain(".opencorvus/opentest/acceptance.json")
+    expect(inventory.run_databases).toContain(".opencorvus/opentest/runs.db")
     expect(inventory.package_scripts).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ script: "test", command: "bun test" }),
         expect.objectContaining({ script: "test:e2e", command: "playwright test" }),
       ]),
     )
-    expect(inventoryResult.metadata.package_tool_ref).toBe(inventoryRef)
+    expect(inventoryResult.metadata.package_tool_ref).toBe(protocolRef)
 
     const validationResult = await (workerTools[protocolProviderName] as any).execute(
       { mode: "validate", test_directory: "cases/login" },
@@ -699,14 +709,15 @@ describe("PromptProfileResolver", () => {
       valid: boolean
       test_points: string[]
       mark_points: string[]
-      artifacts: { context_contract: string | null; acceptance: string | null; run_results: string[] }
+      artifacts: { context_contract: string | null; acceptance: string | null; run_database: string | null; run_results: string[] }
     }
     expect(validation.valid).toBe(true)
     expect(validation.test_points).toEqual(["login accepts valid user", "renders home"])
     expect(validation.mark_points).toEqual(["login accepts valid user", "renders home"])
-    expect(validation.artifacts.context_contract).toBe("cases/login/.opentest/ctx.d.ts")
-    expect(validation.artifacts.acceptance).toBe("cases/login/.opentest/acceptance.json")
-    expect(validation.artifacts.run_results).toEqual(["cases/login/.opentest/runs/2026-07-06/result.json"])
+    expect(validation.artifacts.context_contract).toBe(".opencorvus/opentest/ctx.d.ts")
+    expect(validation.artifacts.acceptance).toBe(".opencorvus/opentest/acceptance.json")
+    expect(validation.artifacts.run_database).toBe(".opencorvus/opentest/runs.db")
+    expect(validation.artifacts.run_results).toEqual([".opencorvus/opentest/runs/batch-2026-07-06/login-case/result.json"])
   })
 
   test("active virtual worker projection hash follows virtual prompt and package resource content", async () => {
@@ -735,7 +746,7 @@ describe("PromptProfileResolver", () => {
     expect(afterVirtualPrompt.virtualAgent?.projectionHash).not.toBe(before.virtualAgent?.projectionHash)
 
     await fs.writeFile(
-      path.join(packageRoot, "agents", "build", "skills", "test-implementation", "SKILL.md"),
+      path.join(packageRoot, "virtual-agents", "build", "skills", "test-implementation", "SKILL.md"),
       "---\nname: software-test-implementation\n---\nChanged package skill content.\n",
     )
     const afterSkill = await PromptProfileResolver.resolveWorkerCapability({

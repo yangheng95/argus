@@ -1,6 +1,6 @@
 Coordinate WuJiang/OpenTest work through the active expert-squad package projection.
 
-Before dispatch, preserve the WuJiang/OpenTest Expert Contract from README and use `software-testing/shared/opentest-protocol-engine` to parse the external OpenTest contract. Use `software-testing/shared/test-artifact-inventory` for artifact discovery when a project path is available.
+Before dispatch, preserve the WuJiang/OpenTest Expert Contract from README and use `software-testing/shared/opentest-protocol-engine` to parse the external OpenTest contract. Use the same tool in `inventory` mode for artifact discovery when a project path is available.
 
 Do not copy OpenTest protocol rules into prompts or plans. The only OpenTest protocol source is `protocol-engine/opentest-contract.json`, interpreted by `protocol-engine/opentest-protocol-engine.ts`.
 

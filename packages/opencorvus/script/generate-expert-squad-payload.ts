@@ -1,0 +1,163 @@
+#!/usr/bin/env bun
+
+import { ExpertSquadRegistry } from "../src/expert-squad/registry"
+import fs from "node:fs"
+import path from "node:path"
+import { fileURLToPath } from "node:url"
+
+interface PayloadPackageInput {
+  id: string
+  root: string
+  files: string[]
+}
+
+export function resolveRepositoryExpertSquadsRoot(repoRoot: string): string {
+  return path.join(repoRoot, ".opencorvus", ExpertSquadRegistry.DIRECTORY)
+}
+
+export function resolveExpertSquadPayloadModulePath(repoRoot: string): string {
+  return path.join(repoRoot, "packages", "opencorvus", "src", "expert-squad", "payload.ts")
+}
+
+function comparePath(a: string, b: string): number {
+  return a.localeCompare(b)
+}
+
+function moduleImportSpecifier(modulePath: string, sourcePath: string): string {
+  const relative = path.relative(path.dirname(modulePath), sourcePath).replaceAll(path.sep, "/")
+  return relative.startsWith(".") ? relative : `./${relative}`
+}
+
+function payloadImportIdentifier(packageID: string, relativePath: string): string {
+  return `payload_${packageID}_${relativePath}`.replace(/[^A-Za-z0-9_]/g, "_")
+}
+
+async function collectPackageFiles(packageRoot: string): Promise<string[]> {
+  const files: string[] = []
+
+  async function walk(current: string): Promise<void> {
+    const entries = (await fs.promises.readdir(current, { withFileTypes: true })).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    )
+    for (const entry of entries) {
+      if (entry.isSymbolicLink()) throw new Error(`Expert squad payload generation rejects symbolic link: ${entry.name}`)
+      if (ExpertSquadRegistry.isRuntimeInternalEntry(entry.name, entry.isDirectory())) {
+        throw new Error(`Expert squad payload generation rejects runtime entry: ${entry.name}`)
+      }
+      const absolute = path.join(current, entry.name)
+      if (entry.isDirectory()) {
+        await walk(absolute)
+        continue
+      }
+      if (!entry.isFile()) continue
+      files.push(path.relative(packageRoot, absolute).replaceAll(path.sep, "/"))
+    }
+  }
+
+  await walk(packageRoot)
+  if (!files.includes(ExpertSquadRegistry.MANIFEST)) {
+    throw new Error(`Expert squad payload generation found package without ${ExpertSquadRegistry.MANIFEST}: ${packageRoot}`)
+  }
+  return files.sort(comparePath)
+}
+
+export async function discoverExpertSquadPayloadPackages(repoRoot: string): Promise<PayloadPackageInput[]> {
+  const sourceRoot = resolveRepositoryExpertSquadsRoot(repoRoot)
+  const entries = (await fs.promises.readdir(sourceRoot, { withFileTypes: true })).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  )
+  const packages: PayloadPackageInput[] = []
+  const seen = new Set<string>()
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) {
+      throw new Error(`Expert squad payload generation expected package directory: ${path.join(sourceRoot, entry.name)}`)
+    }
+    if (ExpertSquadRegistry.isRuntimeInternalEntry(entry.name, true)) {
+      throw new Error(`Expert squad payload generation rejects runtime directory: ${entry.name}`)
+    }
+    const root = path.join(sourceRoot, entry.name)
+    const loaded = await ExpertSquadRegistry.loadPackage(root)
+    if (seen.has(loaded.id)) throw new Error(`Expert squad payload generation found duplicate id: ${loaded.id}`)
+    seen.add(loaded.id)
+    packages.push({
+      id: loaded.id,
+      root,
+      files: await collectPackageFiles(root),
+    })
+  }
+
+  return packages.sort((a, b) => a.id.localeCompare(b.id))
+}
+
+export async function renderExpertSquadPayloadModule(repoRoot: string): Promise<string> {
+  const modulePath = resolveExpertSquadPayloadModulePath(repoRoot)
+  const packages = await discoverExpertSquadPayloadPackages(repoRoot)
+  const imports: string[] = []
+  const blocks: string[] = []
+
+  for (const pkg of packages) {
+    const identifiers = new Map<string, string>()
+    for (const relativePath of pkg.files) {
+      const identifier = payloadImportIdentifier(pkg.id, relativePath)
+      identifiers.set(relativePath, identifier)
+      const sourcePath = path.join(pkg.root, ...relativePath.split("/"))
+      imports.push(
+        `import ${identifier} from ${JSON.stringify(moduleImportSpecifier(modulePath, sourcePath))} with { type: "text" }`,
+      )
+    }
+
+    const manifestIdentifier = identifiers.get(ExpertSquadRegistry.MANIFEST)
+    if (!manifestIdentifier) throw new Error(`Expert squad payload generation lost manifest for ${pkg.id}`)
+    blocks.push(
+      [
+        "  {",
+        `    id: ${JSON.stringify(pkg.id)},`,
+        `    manifestText: textPayload(${manifestIdentifier}),`,
+        "    files: {",
+        ...pkg.files.map((relativePath) => {
+          const identifier = identifiers.get(relativePath)
+          if (!identifier) throw new Error(`Expert squad payload generation lost file ${pkg.id}/${relativePath}`)
+          return `      ${JSON.stringify(relativePath)}: textPayload(${identifier}),`
+        }),
+        "    },",
+        "  },",
+      ].join("\n"),
+    )
+  }
+
+  return [
+    "// Auto-generated by packages/opencorvus/script/generate-expert-squad-payload.ts. Do not edit.",
+    ...imports,
+    "",
+    'import type { ExpertSquadRegistry } from "./registry"',
+    "",
+    "const textPayload = (value: unknown): string => value as string",
+    "",
+    "export const payloadPackageSources: readonly ExpertSquadRegistry.EmbeddedPackageSource[] = [",
+    ...blocks,
+    "]",
+    "",
+  ].join("\n")
+}
+
+export async function generateExpertSquadPayloadModule(repoRoot: string): Promise<string> {
+  const modulePath = resolveExpertSquadPayloadModulePath(repoRoot)
+  const content = await renderExpertSquadPayloadModule(repoRoot)
+  const current = await fs.promises.readFile(modulePath, "utf8").catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return undefined
+    throw error
+  })
+  if (current !== content) await fs.promises.writeFile(modulePath, content)
+  return modulePath
+}
+
+async function main(): Promise<void> {
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..")
+  const modulePath = await generateExpertSquadPayloadModule(repoRoot)
+  console.log(`Generated ${path.relative(repoRoot, modulePath).replaceAll(path.sep, "/")}`)
+}
+
+if (import.meta.main) {
+  await main()
+}

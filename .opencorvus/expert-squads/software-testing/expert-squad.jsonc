@@ -37,7 +37,6 @@
         "software-testing/orchestrator/workflow"
       ],
       "package_tool_refs": [
-        "software-testing/shared/test-artifact-inventory",
         "software-testing/shared/opentest-protocol-engine"
       ]
     },
@@ -48,7 +47,6 @@
           "software-testing/build/test-implementation"
         ],
         "package_tool_refs": [
-          "software-testing/shared/test-artifact-inventory",
           "software-testing/shared/opentest-protocol-engine"
         ]
       },
@@ -58,7 +56,6 @@
           "software-testing/integrity/test-review"
         ],
         "package_tool_refs": [
-          "software-testing/shared/test-artifact-inventory",
           "software-testing/shared/opentest-protocol-engine"
         ]
       }
@@ -71,7 +68,6 @@
         "software-testing/orchestrator/workflow"
       ],
       "tool_refs": [
-        "software-testing/shared/test-artifact-inventory",
         "software-testing/shared/opentest-protocol-engine"
       ]
     }
