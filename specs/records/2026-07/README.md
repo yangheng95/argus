@@ -1,5 +1,6 @@
 # July 2026 Records
 
+- [2026-07-06-visual-qa-diagnostic-image-annotation-repair.md](2026-07-06-visual-qa-diagnostic-image-annotation-repair.md) records the Visual QA diagnostic image annotation repair that keeps accepted evidence strict while allowing DOM problem annotations to use image-bearing source-binding and scroll-slice Browser Preview evidence with accurate coordinate transforms.
 - [2026-07-06-cache-aware-build-session-retry-repair.md](2026-07-06-cache-aware-build-session-retry-repair.md) records the Build retry repair that removes raw transcript replay pressure as a fresh-session decision source after provider cache evidence proved valid sessions should be continued by appending real retry messages.
 - [2026-07-06-dsw-33987-agents-commit-rule.md](2026-07-06-dsw-33987-agents-commit-rule.md) records the `AGENTS.md` rule update that requires the current `v0.0.1beta` git-cc delivery line to use the `dsw-33987` commit subject prefix and removes the temporary `dsw-0000` subject from the latest pushed commit.
 - [2026-07-06-expert-squad-readme-display-prefix.md](2026-07-06-expert-squad-readme-display-prefix.md) records the expert-squad display-prefix design so preset squads show `Builtin/` and third-party packages can declare display prefixes through README metadata without changing manifest identity or active selection.

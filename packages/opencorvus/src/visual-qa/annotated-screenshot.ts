@@ -2,8 +2,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import {
   browserPreviewEvidenceIDFromRef,
-  findReadableBrowserPreviewEvidenceArtifactPath,
-  findReadableBrowserPreviewEvidenceCapturePath,
+  findReadableBrowserPreviewEvidenceByID,
   resolveRuntimeRelativePath,
 } from "@/browser-preview/persist"
 import { Instance } from "@/project/instance"
@@ -19,6 +18,7 @@ type VisualQaProblemDomRegion = VisualQaReport["problem_dom_regions"][number]
 interface ResolvedImageEvidence {
   sourceRef: string
   absPath: string
+  bboxOverride?: ImageBox
 }
 
 export interface VisualQaProblemDomAnnotationResult {
@@ -60,7 +60,7 @@ export async function annotateVisualQaProblemDomRegion(input: {
   const diagnostics: string[] = []
   const resolved: ResolvedImageEvidence[] = []
   for (const ref of input.region.evidence_refs) {
-    const candidate = await resolveImageEvidenceRef({ projectRoot, taskID, ref })
+    const candidate = await resolveImageEvidenceRef({ projectRoot, taskID, ref, region: input.region })
     if ("issue" in candidate) {
       diagnostics.push(candidate.issue)
       continue
@@ -89,6 +89,7 @@ export async function annotateVisualQaProblemDomRegion(input: {
       outputPath,
       sourceRef: evidence.sourceRef,
       region: input.region,
+      bboxOverride: evidence.bboxOverride,
     })
     diagnostics.push(...render.diagnostics)
     const attachment = await AttachmentStore.writeFromPath(projectID, outputPath, "image/png", filename)
@@ -102,6 +103,7 @@ async function resolveImageEvidenceRef(input: {
   projectRoot: string
   taskID: string
   ref: string
+  region?: VisualQaProblemDomRegion
 }): Promise<ResolvedImageEvidence | { issue: string }> {
   const ref = input.ref.trim()
   const attachment = AttachmentStore.nameFromUrl(ref)
@@ -119,8 +121,10 @@ async function resolveImageEvidenceRef(input: {
       taskID: input.taskID,
       evidenceID,
       sourceRef: ref,
+      region: input.region,
     })
-    if (resolved) return resolved
+    if ("issue" in resolved) return resolved
+    return resolved
   }
 
   return { issue: `Visual QA evidence ref is not a resolvable screenshot image: ${ref}` }
@@ -131,32 +135,162 @@ async function resolveBrowserPreviewEvidenceImage(input: {
   taskID: string
   evidenceID: string
   sourceRef: string
-}): Promise<ResolvedImageEvidence | undefined> {
-  const capturePath = await findReadableBrowserPreviewEvidenceCapturePath({
+  region?: VisualQaProblemDomRegion
+}): Promise<ResolvedImageEvidence | { issue: string }> {
+  const evidence = await findReadableBrowserPreviewEvidenceByID({
     projectRoot: input.projectRoot,
     taskID: input.taskID,
     evidenceID: input.evidenceID,
   })
-  if (capturePath) {
-    return {
-      sourceRef: input.sourceRef,
-      absPath: resolveRuntimeRelativePath(input.projectRoot, capturePath),
-    }
+  if (!evidence) {
+    return { issue: `Visual QA evidence ref does not resolve to task browser_preview_evidence: ${input.sourceRef}` }
   }
-  for (const artifactName of ["implementation", "side-by-side", "diff", "source"] as const) {
-    const artifactPath = await findReadableBrowserPreviewEvidenceArtifactPath({
+
+  const capturePath = firstCaptureImagePath(evidence.capture)
+  if (capturePath) {
+    const absPath = resolveBrowserPreviewImagePath(input.projectRoot, capturePath)
+    await assertReadableFile(absPath)
+    return { sourceRef: input.sourceRef, absPath }
+  }
+
+  if (evidence.operationKind === "scroll-slice-comparison") {
+    const artifactPath = evidence.artifactPaths?.implementation_crop
+    if (!artifactPath) {
+      return { issue: `scroll-slice evidence has no implementation image artifact: ${input.sourceRef}` }
+    }
+    const offset = await readScrollSliceOffset({
       projectRoot: input.projectRoot,
-      taskID: input.taskID,
-      evidenceID: input.evidenceID,
-      artifactName,
+      manifestPath: evidence.manifestPath,
+      sourceRef: input.sourceRef,
     })
-    if (!artifactPath) continue
+    if ("issue" in offset) return offset
+    const bbox = input.region?.bbox
     return {
       sourceRef: input.sourceRef,
       absPath: resolveRuntimeRelativePath(input.projectRoot, artifactPath),
+      bboxOverride: bbox
+        ? {
+            x: bbox.x,
+            y: bbox.y - offset.scrollY,
+            width: bbox.width,
+            height: bbox.height,
+          }
+        : undefined,
     }
   }
-  return undefined
+
+  if (evidence.operationKind === "source-binding") {
+    const artifactPath = evidence.artifactPaths?.implementation_crop
+    const localBox = sourceBindingLocalCaptureBox(evidence.capture)
+    const bbox = input.region?.bbox
+    if (artifactPath && localBox && bbox) {
+      return {
+        sourceRef: input.sourceRef,
+        absPath: resolveRuntimeRelativePath(input.projectRoot, artifactPath),
+        bboxOverride: {
+          x: bbox.x - localBox.x,
+          y: bbox.y - localBox.y,
+          width: bbox.width,
+          height: bbox.height,
+        },
+      }
+    }
+    return { issue: `source-binding evidence has no local screenshot or local bbox for annotation: ${input.sourceRef}` }
+  }
+
+  if (evidence.operationKind === "reference-comparison") {
+    const artifactPath = evidence.artifactPaths?.implementation_crop ?? evidence.artifactPaths?.side_by_side
+    if (artifactPath) return { sourceRef: input.sourceRef, absPath: resolveRuntimeRelativePath(input.projectRoot, artifactPath) }
+  }
+
+  if (evidence.operationKind === "layout-geometry") {
+    return { issue: `layout-geometry evidence is diagnostic data, not screenshot evidence: ${input.sourceRef}` }
+  }
+
+  return { issue: `Visual QA evidence ref is not a resolvable screenshot image: ${input.sourceRef}` }
+}
+
+function firstCaptureImagePath(capture: unknown): string | undefined {
+  return collectCaptureImagePaths(capture)[0]
+}
+
+function collectCaptureImagePaths(capture: unknown): string[] {
+  const paths: string[] = []
+  const seen = new Set<object>()
+  const visit = (value: unknown, depth: number) => {
+    if (!value || typeof value !== "object" || depth > 8 || seen.has(value)) return
+    seen.add(value)
+    const record = value as Record<string, unknown>
+    for (const key of [
+      "screenshotPath",
+      "screenshot_path",
+      "implementationScreenshotPath",
+      "implementation_screenshot_path",
+    ]) {
+      const candidate = record[key]
+      if (typeof candidate === "string" && candidate.trim()) paths.push(candidate)
+    }
+    for (const child of Object.values(record)) visit(child, depth + 1)
+  }
+  visit(capture, 0)
+  return paths
+}
+
+function resolveBrowserPreviewImagePath(projectRoot: string, imagePath: string): string {
+  if (path.isAbsolute(imagePath)) {
+    const absolute = path.resolve(imagePath)
+    const runtimeRoot = path.resolve(ProjectRuntimePaths.projectRuntimeRoot(projectRoot))
+    if (absolute !== runtimeRoot && !absolute.startsWith(runtimeRoot + path.sep)) {
+      throw new Error(`browser preview screenshot evidence path is outside project runtime: ${imagePath}`)
+    }
+    return absolute
+  }
+  return resolveRuntimeRelativePath(projectRoot, imagePath)
+}
+
+async function readScrollSliceOffset(input: {
+  projectRoot: string
+  manifestPath?: string
+  sourceRef: string
+}): Promise<{ scrollY: number } | { issue: string }> {
+  if (!input.manifestPath) {
+    return { issue: `scroll-slice evidence has no manifest for coordinate mapping: ${input.sourceRef}` }
+  }
+  try {
+    const manifestPath = resolveRuntimeRelativePath(input.projectRoot, input.manifestPath)
+    const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8")) as unknown
+    const record = manifest && typeof manifest === "object" ? (manifest as Record<string, unknown>) : {}
+    const scrollY = typeof record.scrollY === "number" ? record.scrollY : undefined
+    if (scrollY === undefined) {
+      return { issue: `scroll-slice manifest has no numeric scrollY for coordinate mapping: ${input.sourceRef}` }
+    }
+    return { scrollY }
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    return { issue: `scroll-slice manifest is unreadable for annotation: ${input.sourceRef}: ${detail}` }
+  }
+}
+
+function sourceBindingLocalCaptureBox(capture: unknown): ImageBox | undefined {
+  const localCapture = asRecord(capture).localCapture
+  const bbox = asRecord(localCapture).bbox
+  return parseImageBox(bbox)
+}
+
+function parseImageBox(value: unknown): ImageBox | undefined {
+  const record = asRecord(value)
+  const x = record.x
+  const y = record.y
+  const width = record.width
+  const height = record.height
+  if (typeof x !== "number" || typeof y !== "number" || typeof width !== "number" || typeof height !== "number") {
+    return undefined
+  }
+  return { x, y, width, height }
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
 }
 
 async function assertReadableFile(absPath: string): Promise<void> {
@@ -181,6 +315,7 @@ async function renderAnnotatedPng(input: {
   outputPath: string
   sourceRef: string
   region: VisualQaProblemDomRegion
+  bboxOverride?: ImageBox
 }): Promise<{ diagnostics: string[] }> {
   const image = sharp(input.inputPath, { failOn: "error" })
   const metadata = await image.metadata()
@@ -189,7 +324,7 @@ async function renderAnnotatedPng(input: {
   if (!width || !height) throw new Error(`screenshot evidence has no readable dimensions: ${input.inputPath}`)
 
   const mapped = mapDomBoxToImage({
-    bbox: input.region.bbox!,
+    bbox: input.bboxOverride ?? input.region.bbox!,
     viewport: input.region.viewport,
     imageWidth: width,
     imageHeight: height,

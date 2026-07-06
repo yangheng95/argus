@@ -338,6 +338,53 @@ async function seedReferenceComparisonEvidence(input: {
   return `browser_preview_evidence:${evidenceID}`
 }
 
+function insertVisualQaTask(taskID: string): void {
+  Database.use((db) =>
+    db
+      .insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: Instance.project.id,
+        title: "Visual QA diagnostic annotation",
+        request: "Verify Visual QA diagnostic annotation evidence",
+        source: "test",
+        time_created: Date.now(),
+        time_updated: Date.now(),
+      })
+      .run(),
+  )
+}
+
+async function writeTestPng(filePath: string, width: number, height: number): Promise<void> {
+  await fs.mkdir(path.dirname(filePath), { recursive: true })
+  await sharp({
+    create: {
+      width,
+      height,
+      channels: 4,
+      background: { r: 255, g: 255, b: 255, alpha: 1 },
+    },
+  })
+    .png()
+    .toFile(filePath)
+}
+
+async function expectRedAnnotationPixels(attachmentUrl: string, minPixels: number): Promise<void> {
+  const located = AttachmentStore.nameFromUrl(attachmentUrl)
+  expect(located).toBeDefined()
+  const absolute = AttachmentStore.resolveAbsolute(located!.projectID, located!.name)
+  expect(absolute).toBeDefined()
+  const raw = await sharp(absolute!).raw().toBuffer({ resolveWithObject: true })
+  let redPixels = 0
+  for (let offset = 0; offset < raw.data.length; offset += raw.info.channels) {
+    const r = raw.data[offset] ?? 0
+    const g = raw.data[offset + 1] ?? 0
+    const b = raw.data[offset + 2] ?? 0
+    if (r > 220 && g < 80 && b < 120) redPixels++
+  }
+  expect(redPixels).toBeGreaterThan(minPixels)
+}
+
 describe("visual-qa output tools", () => {
   test("rejects accepted report with evidence refs that were not registered", async () => {
     const kit = createVisualQaOutputTools()
@@ -517,6 +564,254 @@ describe("visual-qa output tools", () => {
             if (r > 220 && g < 80 && b < 120) redPixels++
           }
           expect(redPixels).toBeGreaterThan(100)
+        },
+      })
+    } finally {
+      await tmp[Symbol.asyncDispose]?.()
+    }
+  })
+
+  test("materializes problem DOM annotations from source-binding local screenshots", async () => {
+    const tmp = await tmpdir()
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const taskID = `tsk_visual_qa_source_binding_annotation_${Date.now().toString(16)}`
+          insertVisualQaTask(taskID)
+          const artifactDir = ProjectRuntimePaths.taskAbsolute(tmp.path, taskID, "bp", "source-binding")
+          const fullPagePath = path.join(artifactDir, "local-fullpage.png")
+          const implementationPath = path.join(artifactDir, "implementation-crop.png")
+          const sourcePath = path.join(artifactDir, "source-crop.png")
+          const sideBySidePath = path.join(artifactDir, "module-comparison.png")
+          await writeTestPng(fullPagePath, 640, 1200)
+          await writeTestPng(implementationPath, 220, 140)
+          await writeTestPng(sourcePath, 220, 140)
+          await writeTestPng(sideBySidePath, 440, 140)
+          const target = await persistTestBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:4173/futures/" })
+          const evidenceID = persistBrowserPreviewEvidence({
+            projectRoot: tmp.path,
+            taskID,
+            targetID: target.id,
+            viewportID: "desktop",
+            operationKind: "source-binding",
+            regionID: "quotes",
+            status: "passed",
+            summary: "local module quotes bound to source region",
+            artifactPaths: {
+              source_crop: sourcePath,
+              implementation_crop: implementationPath,
+              side_by_side: sideBySidePath,
+            },
+            capture: {
+              localCapture: {
+                bbox: { x: 100, y: 240, width: 220, height: 140 },
+                screenshotPath: fullPagePath,
+              },
+            },
+            diagnostics: [],
+          })
+          const evidenceRef = `browser_preview_evidence:${evidenceID}`
+          const kit = createVisualQaOutputTools({
+            taskID,
+            projectRoot: tmp.path,
+            projectID: Instance.project.id,
+          })
+          await callTool(
+            kit.tools,
+            "register_visual_qa_check_item",
+            checkItem({
+              id: "check_source_binding_annotation",
+              status: "failed",
+              region: "quotes",
+              evidence_refs: [evidenceRef],
+              required_correction: "Remove the duplicate quotes section.",
+            }),
+          )
+          const result = await callTool(kit.tools, "register_visual_qa_problem_dom_region", {
+            id: "dom-duplicate-quotes",
+            check_ids: ["check_source_binding_annotation"],
+            blocker_ids: ["blocker-duplicate-quotes"],
+            region: "quotes",
+            route: "/futures/",
+            viewport: { width: 640, height: 480 },
+            locator: "#quotes",
+            dom_path: "main > section#quotes",
+            outer_html_excerpt: '<section id="quotes">Futures quotes</section>',
+            bbox: { x: 100, y: 240, width: 220, height: 140 },
+            computed_style: { display: "block" },
+            attributes: { id: "quotes" },
+            code_search_terms: ["quotes"],
+            evidence_refs: [evidenceRef],
+            notes: "Source-binding evidence carries the local full-page screenshot needed for annotation.",
+          })
+
+          expect(result).toContain("annotated_evidence_refs=/attachment/")
+          const region = kit.getCollector().problem_dom_regions[0]
+          expect(region?.annotated_evidence_refs).toHaveLength(1)
+          const located = AttachmentStore.nameFromUrl(region!.annotated_evidence_refs[0]!)
+          const absolute = AttachmentStore.resolveAbsolute(located!.projectID, located!.name)
+          const metadata = await sharp(absolute!).metadata()
+          expect(metadata.width).toBe(640)
+          expect(metadata.height).toBe(1200)
+          await expectRedAnnotationPixels(region!.annotated_evidence_refs[0]!, 100)
+        },
+      })
+    } finally {
+      await tmp[Symbol.asyncDispose]?.()
+    }
+  })
+
+  test("materializes problem DOM annotations from failed scroll-slice implementation images", async () => {
+    const tmp = await tmpdir()
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const taskID = `tsk_visual_qa_scroll_slice_annotation_${Date.now().toString(16)}`
+          insertVisualQaTask(taskID)
+          const artifactDir = ProjectRuntimePaths.taskAbsolute(tmp.path, taskID, "bp", "scroll-slice")
+          const implementationPath = path.join(artifactDir, "implementation-slice.png")
+          const sourcePath = path.join(artifactDir, "source-slice.png")
+          const sideBySidePath = path.join(artifactDir, "side-by-side.png")
+          const manifestPath = path.join(artifactDir, "manifest.json")
+          await writeTestPng(implementationPath, 640, 300)
+          await writeTestPng(sourcePath, 640, 300)
+          await writeTestPng(sideBySidePath, 1280, 300)
+          await fs.writeFile(
+            manifestPath,
+            JSON.stringify({ operation: "scroll-slice-comparison", scrollY: 200, sliceHeight: 300 }),
+          )
+          const target = await persistTestBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:4173/futures/" })
+          const evidenceID = persistBrowserPreviewEvidence({
+            projectRoot: tmp.path,
+            taskID,
+            targetID: target.id,
+            viewportID: "desktop",
+            operationKind: "scroll-slice-comparison",
+            status: "failed",
+            summary: "Scroll-slice comparison failed for desktop scrollY=200.",
+            manifestPath,
+            artifactPaths: {
+              source_crop: sourcePath,
+              implementation_crop: implementationPath,
+              side_by_side: sideBySidePath,
+            },
+            diagnostics: ["Scroll-slice SSIM 0.83 is not greater than 0.95."],
+          })
+          const evidenceRef = `browser_preview_evidence:${evidenceID}`
+          const kit = createVisualQaOutputTools({
+            taskID,
+            projectRoot: tmp.path,
+            projectID: Instance.project.id,
+          })
+          await callTool(
+            kit.tools,
+            "register_visual_qa_check_item",
+            checkItem({
+              id: "check_scroll_slice_annotation",
+              status: "failed",
+              region: "quotes",
+              evidence_refs: [evidenceRef],
+              required_correction: "Repair the visible scroll-slice drift.",
+            }),
+          )
+          const result = await callTool(kit.tools, "register_visual_qa_problem_dom_region", {
+            id: "dom-scroll-quotes",
+            check_ids: ["check_scroll_slice_annotation"],
+            blocker_ids: ["blocker-scroll-quotes"],
+            region: "quotes",
+            route: "/futures/",
+            viewport: { width: 640, height: 300 },
+            locator: "#quotes",
+            dom_path: "main > section#quotes",
+            outer_html_excerpt: '<section id="quotes">Futures quotes</section>',
+            bbox: { x: 80, y: 240, width: 160, height: 80 },
+            computed_style: { display: "block" },
+            attributes: { id: "quotes" },
+            code_search_terms: ["quotes"],
+            evidence_refs: [evidenceRef],
+            notes: "Scroll-slice evidence is failed pass evidence but still a valid diagnostic image.",
+          })
+
+          expect(result).toContain("annotated_evidence_refs=/attachment/")
+          const region = kit.getCollector().problem_dom_regions[0]
+          expect(region?.annotated_evidence_refs).toHaveLength(1)
+          const located = AttachmentStore.nameFromUrl(region!.annotated_evidence_refs[0]!)
+          const absolute = AttachmentStore.resolveAbsolute(located!.projectID, located!.name)
+          const metadata = await sharp(absolute!).metadata()
+          expect(metadata.width).toBe(640)
+          expect(metadata.height).toBe(300)
+          await expectRedAnnotationPixels(region!.annotated_evidence_refs[0]!, 100)
+        },
+      })
+    } finally {
+      await tmp[Symbol.asyncDispose]?.()
+    }
+  })
+
+  test("keeps layout-geometry evidence out of screenshot annotation", async () => {
+    const tmp = await tmpdir()
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const taskID = `tsk_visual_qa_layout_geometry_annotation_${Date.now().toString(16)}`
+          insertVisualQaTask(taskID)
+          const artifactDir = ProjectRuntimePaths.taskAbsolute(tmp.path, taskID, "bp", "layout-geometry")
+          const manifestPath = path.join(artifactDir, "layout-geometry.json")
+          await fs.mkdir(artifactDir, { recursive: true })
+          await fs.writeFile(manifestPath, JSON.stringify({ operation: "layout-geometry" }))
+          const target = await persistTestBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:4173/futures/" })
+          const evidenceID = persistBrowserPreviewEvidence({
+            projectRoot: tmp.path,
+            taskID,
+            targetID: target.id,
+            viewportID: "desktop",
+            operationKind: "layout-geometry",
+            status: "passed",
+            summary: "layout geometry captured",
+            artifactPaths: { manifest: manifestPath },
+            diagnostics: [],
+          })
+          const evidenceRef = `browser_preview_evidence:${evidenceID}`
+          const kit = createVisualQaOutputTools({
+            taskID,
+            projectRoot: tmp.path,
+            projectID: Instance.project.id,
+          })
+          await callTool(
+            kit.tools,
+            "register_visual_qa_check_item",
+            checkItem({
+              id: "check_layout_geometry_annotation",
+              status: "failed",
+              region: "quotes",
+              evidence_refs: [evidenceRef],
+              required_correction: "Use screenshot evidence for DOM annotation.",
+            }),
+          )
+          const result = await callTool(kit.tools, "register_visual_qa_problem_dom_region", {
+            id: "dom-layout-geometry",
+            check_ids: ["check_layout_geometry_annotation"],
+            blocker_ids: ["blocker-layout-geometry"],
+            region: "quotes",
+            route: "/futures/",
+            viewport: { width: 640, height: 300 },
+            locator: "#quotes",
+            dom_path: "main > section#quotes",
+            outer_html_excerpt: '<section id="quotes">Futures quotes</section>',
+            bbox: { x: 80, y: 240, width: 160, height: 80 },
+            computed_style: { display: "block" },
+            attributes: { id: "quotes" },
+            code_search_terms: ["quotes"],
+            evidence_refs: [evidenceRef],
+            notes: "Layout geometry is manifest-only diagnostic evidence.",
+          })
+
+          expect(result).toContain("has no resolvable screenshot evidence to annotate")
+          expect(result).toContain("layout-geometry evidence is diagnostic data, not screenshot evidence")
+          expect(kit.getCollector().problem_dom_regions).toHaveLength(0)
         },
       })
     } finally {
