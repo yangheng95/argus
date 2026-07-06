@@ -148,7 +148,7 @@ async function resolveBrowserPreviewEvidenceImage(input: {
 
   const capturePath = firstCaptureImagePath(evidence.capture)
   if (capturePath) {
-    const absPath = resolveBrowserPreviewImagePath(input.projectRoot, capturePath)
+    const absPath = resolveRuntimeRelativePath(input.projectRoot, capturePath)
     await assertReadableFile(absPath)
     return { sourceRef: input.sourceRef, absPath }
   }
@@ -234,18 +234,6 @@ function collectCaptureImagePaths(capture: unknown): string[] {
   }
   visit(capture, 0)
   return paths
-}
-
-function resolveBrowserPreviewImagePath(projectRoot: string, imagePath: string): string {
-  if (path.isAbsolute(imagePath)) {
-    const absolute = path.resolve(imagePath)
-    const runtimeRoot = path.resolve(ProjectRuntimePaths.projectRuntimeRoot(projectRoot))
-    if (absolute !== runtimeRoot && !absolute.startsWith(runtimeRoot + path.sep)) {
-      throw new Error(`browser preview screenshot evidence path is outside project runtime: ${imagePath}`)
-    }
-    return absolute
-  }
-  return resolveRuntimeRelativePath(projectRoot, imagePath)
 }
 
 async function readScrollSliceOffset(input: {

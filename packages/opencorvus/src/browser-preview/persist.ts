@@ -609,7 +609,12 @@ function browserPreviewCaptureArtifacts(capture: unknown): Array<{ path: string;
         sha: typeof record.sha === "string" && record.sha.trim() ? record.sha : undefined,
       })
     }
-    for (const key of ["screenshot_path", "implementation_screenshot_path"]) {
+    for (const key of [
+      "screenshotPath",
+      "screenshot_path",
+      "implementationScreenshotPath",
+      "implementation_screenshot_path",
+    ]) {
       const directPath = record[key]
       if (typeof directPath === "string" && directPath.trim()) {
         artifacts.push({ path: directPath })
@@ -770,7 +775,9 @@ export function collectRuntimePathRefs(input: unknown): string[] {
 function isPathRefKey(key: string): boolean {
   return (
     key === "path" ||
+    key === "screenshotPath" ||
     key === "screenshot_path" ||
+    key === "implementationScreenshotPath" ||
     key === "implementation_screenshot_path" ||
     key === "manifestPath" ||
     key === "manifest_path" ||

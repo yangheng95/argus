@@ -1,5 +1,6 @@
 # July 2026 Records
 
+- [2026-07-06-agent-base-runtime-contract-projection.md](2026-07-06-agent-base-runtime-contract-projection.md) records the read-only base-runtime projection derived from `AgentRoleContract`, `AgentToolPool`, and `WorkflowRegistry` without creating a second role contract.
 - [2026-07-06-self-contained-expert-squad-runtime.md](2026-07-06-self-contained-expert-squad-runtime.md) records the implementation of self-contained expert-squad runtime projection where active package-local MCP server refs are expanded by `PromptProfileResolver` without migrating existing package protocols.
 - [2026-07-06-global-virtual-agent-opentest-adaptation.md](2026-07-06-global-virtual-agent-opentest-adaptation.md) records the implementation goal for the global expert-squad virtual-agent refactor followed by the software-testing OpenTest protocol-engine adaptation.
 - [2026-07-06-opentest-contract-engine.md](2026-07-06-opentest-contract-engine.md) records the software-testing OpenTest contract-engine decision that keeps the protocol definition in an external JSON file parsed by the engine instead of embedded in prompts or tool code.

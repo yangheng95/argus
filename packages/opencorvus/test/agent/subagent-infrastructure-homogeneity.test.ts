@@ -393,13 +393,22 @@ describe("sub-agent infrastructure homogeneity manifest", () => {
     const selectorCatalogSource = source.slice(selectorStart, selectorEnd)
 
     expect(selectorCatalogSource).toContain("Promise<ProjectSelectorPackage[]>")
-    expect(selectorCatalogSource).toContain("ExpertSquadRegistry.discover(projectDirectory)")
+    expect(selectorCatalogSource).toContain("discoverProjectPackages(projectDirectory)")
     expect(selectorCatalogSource).toContain("assertNoBuiltInCollision(entry.id)")
     expect(selectorCatalogSource).toContain("if (!entry.selector) continue")
     expect(selectorCatalogSource).toContain('path.join(packageRoot, "selector.md")')
     expect(selectorCatalogSource).not.toContain("ExpertSquadRegistry.MANIFEST")
     expect(selectorCatalogSource).not.toContain("ExpertSquadRegistry.loadPackage")
     expect(selectorCatalogSource).not.toContain("ExpertSquadRegistry.loadCatalogPackage")
+
+    const discoverStart = source.indexOf("async function discoverProjectPackages")
+    const discoverEnd = source.indexOf("async function projectCatalogPackages", discoverStart)
+    expect(discoverStart).toBeGreaterThanOrEqual(0)
+    expect(discoverEnd).toBeGreaterThan(discoverStart)
+    const discoverSource = source.slice(discoverStart, discoverEnd)
+    expect(discoverSource).toContain("ExpertSquadRegistry.discover(projectDirectory)")
+    expect(discoverSource).toContain("assertNoBuiltInCollision(entry.id)")
+    expect(discoverSource).not.toContain("ExpertSquadRegistry.loadPackage")
 
     const loadProjectStart = source.indexOf("async function loadProjectPackageByID")
     const loadProjectEnd = source.indexOf("async function projectPromptProfiles", loadProjectStart)
