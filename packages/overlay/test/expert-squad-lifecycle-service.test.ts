@@ -10,6 +10,7 @@ const { configure } = await import("../src/services/api")
 const { __setHostTransportForTest } = await import("../src/services/host-transport")
 const { setAppStore } = await import("../src/store/app")
 const {
+  clearSessionExpertSquadOverride,
   exportExpertSquadArchive,
   importExpertSquadArchive,
   importExpertSquadFolder,
@@ -92,7 +93,7 @@ describe("expert squad lifecycle service", () => {
     )
   })
 
-  test("project and session activation write only prompt_profile.active", async () => {
+  test("project activation, session override, and clearing write only prompt_profile state", async () => {
     setAppStore({
       connected: true,
       config: {
@@ -119,6 +120,7 @@ describe("expert squad lifecycle service", () => {
 
     await setProjectExpertSquadActive("frontend-replica", "D:/repo/project")
     await setSessionExpertSquadActive("ses_root", "backend", "D:/repo/task")
+    await clearSessionExpertSquadOverride("ses_root", "D:/repo/task")
 
     const patchRequests = requests.filter((request) => request.method === "PATCH")
     expect(patchRequests[0]!.path).toBe("config")
@@ -127,6 +129,9 @@ describe("expert squad lifecycle service", () => {
     expect(patchRequests[1]!.path).toBe("session/ses_root/config")
     expect(patchRequests[1]!.query?.directory).toBe("D:/repo/task")
     expect((patchRequests[1]!.body as any).value).toEqual({ prompt_profile: { active: "backend" } })
+    expect(patchRequests[2]!.path).toBe("session/ses_root/config")
+    expect(patchRequests[2]!.query?.directory).toBe("D:/repo/task")
+    expect((patchRequests[2]!.body as any).value).toEqual({ prompt_profile: null })
   })
 
   test("import, explicit replace, and export bind to the viewed directory", async () => {
@@ -144,16 +149,21 @@ describe("expert squad lifecycle service", () => {
         status: 200,
         ok: true,
         headers: {},
-        body: { id: "frontend-replica", targetRoot: "D:/repo/.opencorvus/expert-squads/frontend-replica", replaced: true },
+        body: {
+          namespace: "builtin",
+          id: "frontend-replica",
+          targetRoot: "D:/repo/.opencorvus/expert-squads/builtin/frontend-replica",
+          replaced: true,
+        },
       }
     })
 
-    await importExpertSquadFolder({
+    const folderImport = await importExpertSquadFolder({
       directory: "D:/repo/project",
       sourceDirectory: "D:/incoming/frontend-replica",
       replace: false,
     })
-    await importExpertSquadArchive({
+    const fileImport = await importExpertSquadArchive({
       directory: "D:/repo/project",
       archiveBase64: "eA==",
       filename: "frontend-replica.zip",
@@ -177,6 +187,14 @@ describe("expert squad lifecycle service", () => {
       replace: true,
     })
     expect((requests[2]!.body as any).value).toEqual({ id: "frontend-replica" })
+    expect(folderImport).toMatchObject({
+      namespace: "builtin",
+      targetRoot: "D:/repo/.opencorvus/expert-squads/builtin/frontend-replica",
+    })
+    expect(fileImport).toMatchObject({
+      namespace: "builtin",
+      targetRoot: "D:/repo/.opencorvus/expert-squads/builtin/frontend-replica",
+    })
   })
 
   test("service source allows prompt_profile.active but no custom prompt-profile definitions", () => {

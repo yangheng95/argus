@@ -19,10 +19,28 @@ async function frontendReplicaSelectorSkill(): Promise<string> {
 }
 
 async function frontendReplicaAgents() {
-  const definitions = await PromptProfileResolver.definitions(REPOSITORY_ROOT)
-  const profile = definitions["frontend-replica"]
-  expect(profile).toBeDefined()
-  return profile!.agents
+  const agents: Record<string, string> = {}
+  const config = Config.Info.parse({ prompt_profile: { active: "frontend-replica" } })
+  for (const target of [
+    "coding",
+    "requirements",
+    "architect",
+    "frontend-design",
+    "frontend-research",
+    "build",
+    "visual-qa",
+    "integrity",
+    "orchestrator",
+  ]) {
+    const overlay = await PromptProfileResolver.overlayFor({
+      projectDirectory: REPOSITORY_ROOT,
+      agentID: target,
+      config,
+    })
+    expect(overlay, target).toBeDefined()
+    agents[target] = overlay!
+  }
+  return agents
 }
 
 describe("frontend replica desktop-only generation scope", () => {
@@ -121,23 +139,23 @@ describe("frontend replica desktop-only generation scope", () => {
     expect(agents["frontend-design"]).toContain("reference_region_key")
     expect(agents["frontend-design"]).toContain("instead of emitting page-height or min-height filler instructions")
     expect(agents.architect).toContain("reference_coverage.reference_regions")
-    expect(agents.architect).toContain("source_reference_artifact")
+    expect(agents.architect).toContain("source artifact")
     expect(agents.build).toContain("browser_preview_reference_regions")
-    expect(agents.build).toContain("goal-scoped target reference crops")
+    expect(agents.build).toContain("goal-scoped crops")
     expect(agents.build).toContain("missing `reference_region_key` blocker")
     expect(agents.build).not.toContain("browser_preview_compare_scroll_slices")
-    expect(agents.build).toContain("leave screen-by-screen scroll-slice visual_diff to Visual QA")
-    expect(agents.build).toContain("comparison_guidance LEFT reference / RIGHT implementation")
-    expect(agents.build).toContain("content hallucinations")
-    expect(agents.build).toContain("consumed diagnostic refs")
+    expect(agents.build).toContain("leave scroll-slice visual_diff to Visual QA")
+    expect(agents.build).toContain("LEFT reference / RIGHT implementation")
+    expect(agents.build).toContain("hallucinated content")
+    expect(agents.build).toContain("cite diagnostics")
     expect(agents.build).toContain("no_project_diff")
-    expect(agents.build).toContain("unchanged visible surfaces")
-    expect(agents.build).toContain("Do not use page-shell/whole-page/body/main/app-root locators")
-    expect(agents.build).toContain("first-viewport reference-region proof")
-    expect(agents.build).toContain("multiple desktop-class widths")
+    expect(agents.build).toContain("unchanged surfaces")
+    expect(agents.build).toContain("Avoid page-shell/whole-page/body/main/app-root locators")
+    expect(agents.build).toContain("region proof")
+    expect(agents.build).toContain("desktop-width proof")
     expect(agents.build).toContain("Treat non-desktop goals as scope defects")
     expect(agents.build).toContain("Do not satisfy source page height")
-    expect(agents.build).toContain("blank margin, padding, height/min-height filler")
+    expect(agents.build).toContain("blank margin/padding, height filler")
     expect(agents.build).toContain("restore missing source-backed content/assets/interactions")
     expect(agents["visual-qa"]).toContain("Do not require mobile/tablet evidence")
     expect(agents["visual-qa"]).toContain("inspect multiple desktop-class widths")
@@ -153,17 +171,17 @@ describe("frontend replica desktop-only generation scope", () => {
     expect(agents.integrity).toContain("blank CSS space")
     expect(agents.integrity).toContain("second evidence-backed implementation non-pass")
     expect(agents.integrity).toContain("Do not count Integrity review as the rendered visual verdict")
-    expect(agents.orchestrator).toContain("not to padding blank page space")
+    expect(agents.orchestrator).toContain("not padding blank page space")
     expect(agents.orchestrator).toContain("one source component or meaningful region per goal")
     expect(agents.orchestrator).toContain("generally 10 or more goals")
     expect(agents.orchestrator).toContain("raw source-row goals")
-    expect(agents.orchestrator).toContain("reject bundled multi-component goals")
+    expect(agents.orchestrator).toContain("reject bundled multi-component or raw source-row goals")
     expect(agents.orchestrator).toContain("per-surface rendered-feedback ledger")
-    expect(agents.orchestrator).toContain("second consecutive evidence-backed rendered-feedback non-pass")
+    expect(agents.orchestrator).toContain("second consecutive rendered-feedback non-pass")
     expect(agents.orchestrator).toContain("per-surface rendered-feedback ledger")
     expect(agents.orchestrator?.toLowerCase()).toContain("keep template mobile text out of goals")
     expect(agents.orchestrator).toContain("scoped desktop adaptive viewport checks")
-    expect(agents.orchestrator).toContain("Build produces reference-region proof while Visual QA owns scroll-slice supporting evidence")
+    expect(agents.orchestrator).toContain("Build produces reference-region proof while Visual QA owns scroll-slice evidence")
     expect(agents.coding).not.toContain("responsive behavior")
   })
 

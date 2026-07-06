@@ -69,13 +69,15 @@ Orchestrator build tool → build/agent.ts (`build.worktreeUsage` 由 LLM 选择
 
 Expert squad 是 OpenCorvus 内部的 scenario / agent capability package，不是外部
 Codex skill。运行时内置 package 只保留通用 `general`；非通用 squad 的分发形态是
-payload，必须先释放成项目目录 `.opencorvus/expert-squads/<id>/`，再通过普通
+payload，必须先释放成项目目录 `.opencorvus/expert-squads/<namespace>/<id>/`，再通过普通
 package discovery / catalog 进入运行时。分发 payload 由
 `packages/opencorvus/script/generate-expert-squad-payload.ts` 在构建前从仓库
-`.opencorvus/expert-squads/<id>/` 明文包生成，禁止手写平行清单：
+`.opencorvus/expert-squads/<namespace>/<id>/` 明文包生成，禁止手写平行清单。
+当前仓库源分区包括 `builtin/<id>` 和 `wujiang/opentest`。`namespace` 是来源和安装分区，
+不是 active identity；`prompt_profile.active` 仍然使用 manifest `id`：
 
 - `expert-squad.jsonc` 声明 profile identity、agent prompt overlays、skills、
-  package tools、package MCP servers/tools；
+  package tools、package MCP servers/tools，且 `namespace` 必须匹配父目录；
 - `selector.md` 是 Orchestrator-visible selector skill 的完整说明来源；
 - `PromptProfile.builtIns` 只保留通用内置 profile；非通用 squad 即使随应用分发，
   也先释放为明文项目 package，再通过 package 发现 / 加载进入 catalog；

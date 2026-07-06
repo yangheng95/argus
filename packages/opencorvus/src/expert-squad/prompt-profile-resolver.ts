@@ -18,7 +18,6 @@ import {
 import { AgentRoleContract, type AgentRoleID } from "@/agent/role-contract"
 import { AgentToolPool } from "@/agent/tool-pool-contract"
 import { Config } from "@/config/config"
-import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Instance } from "@/project/instance"
 import { runtimePackageRequire } from "@/runtime/package-require"
 import { Skill } from "@/skill/skill"
@@ -56,7 +55,6 @@ import {
   workerBuiltInToolIDsFromProjection,
 } from "./catalog-profile"
 import { ExpertSquadRegistry } from "./registry"
-import { ExpertSquadPackageManager } from "./manager"
 
 type ConfigLike = {
   prompt_profile?: PromptProfileConfig
@@ -229,10 +227,6 @@ export namespace PromptProfileResolver {
     (typeof loadedBuiltInPackages)[number]
   >
 
-  function canonicalBase(projectDirectory: string) {
-    return path.join(ProjectRuntimePaths.projectConfigRoot(Filesystem.resolve(projectDirectory)), ExpertSquadRegistry.DIRECTORY)
-  }
-
   function assertNoBuiltInCollision(profileID: string) {
     if (Object.hasOwn(PromptProfile.builtIns, profileID)) {
       throw new Error(`Project expert squad package id ${JSON.stringify(profileID)} collides with a built-in expert squad id.`)
@@ -248,7 +242,6 @@ export namespace PromptProfileResolver {
   }
 
   async function discoverProjectPackages(projectDirectory: string): Promise<ExpertSquadRegistry.PackageCatalogEntry[]> {
-    await ExpertSquadPackageManager.releasePayloadPackages({ projectDirectory })
     const entries = await ExpertSquadRegistry.discover(projectDirectory)
     for (const entry of entries) assertNoBuiltInCollision(entry.id)
     return entries
@@ -256,14 +249,10 @@ export namespace PromptProfileResolver {
 
   async function projectCatalogPackages(
     projectDirectory: string,
-    config?: ConfigLike,
-  ): Promise<Record<string, ExpertSquadRegistry.LoadedPackage>> {
-    const result: Record<string, ExpertSquadRegistry.LoadedPackage> = {}
+  ): Promise<Record<string, ExpertSquadRegistry.CatalogPackage>> {
+    const result: Record<string, ExpertSquadRegistry.CatalogPackage> = {}
     for (const entry of await discoverProjectPackages(projectDirectory)) {
-      const loaded = await ExpertSquadRegistry.loadPackage(
-        path.join(canonicalBase(projectDirectory), entry.id),
-        config ? packageLoadOptions(config) : {},
-      )
+      const loaded = await ExpertSquadRegistry.loadCatalogPackage(entry.root)
       assertNoBuiltInCollision(loaded.id)
       result[loaded.id] = loaded
     }
@@ -276,20 +265,14 @@ export namespace PromptProfileResolver {
     options?: Parameters<typeof ExpertSquadRegistry.loadPackage>[1],
   ): Promise<ExpertSquadRegistry.LoadedPackage | undefined> {
     ExpertSquadRegistry.parseID(profileID)
-    const packageRoot = path.join(canonicalBase(projectDirectory), profileID)
-    let info = await lstat(packageRoot).catch((error: NodeJS.ErrnoException) => {
+    const entry = (await ExpertSquadRegistry.discover(projectDirectory)).find((candidate) => candidate.id === profileID)
+    if (!entry) return undefined
+    const info = await lstat(entry.root).catch((error: NodeJS.ErrnoException) => {
       if (error.code === "ENOENT") return undefined
       throw error
     })
-    if (!info) {
-      await ExpertSquadPackageManager.releasePayloadPackages({ projectDirectory })
-      info = await lstat(packageRoot).catch((error: NodeJS.ErrnoException) => {
-        if (error.code === "ENOENT") return undefined
-        throw error
-      })
-    }
     if (!info) return undefined
-    const loaded = await ExpertSquadRegistry.loadPackage(packageRoot, options)
+    const loaded = await ExpertSquadRegistry.loadPackage(entry.root, options)
     assertNoBuiltInCollision(loaded.id)
     return loaded
   }
@@ -374,7 +357,9 @@ export namespace PromptProfileResolver {
     return { owner, name: parts.join("/") }
   }
 
-  function packageRoleResourceRoot(pkg: ExpertSquadRegistry.LoadedPackage, owner: string): string {
+  type PackageRoleResourceRoot = Pick<ExpertSquadRegistry.LoadedPackage, "root" | "manifest">
+
+  function packageRoleResourceRoot(pkg: PackageRoleResourceRoot, owner: string): string {
     if (owner === "shared") return pkg.root
     return Object.hasOwn(pkg.manifest.virtual_agents, owner)
       ? path.join(pkg.root, "virtual-agents", owner)
@@ -518,17 +503,32 @@ export namespace PromptProfileResolver {
     }
   }
 
-  function activeVirtualAgents(active: ActiveProfilePackage): ResolvedVirtualAgent[] {
-    return Object.keys(active.pkg.promptProfile.virtualAgents)
+  async function activeVirtualAgents(active: ActiveProfilePackage): Promise<ResolvedVirtualAgent[]> {
+    return await Promise.all(
+      Object.keys(active.pkg.promptProfile.virtualAgents)
       .sort()
-      .map((role) => {
+      .map(async (role) => {
         if (!AgentRoleContract.isRoleID(role)) {
           throw new Error(`Active expert squad ${active.profileID} has invalid virtual agent base role ${JSON.stringify(role)}`)
         }
-        const projected = virtualAgentForRole({ active, role })
+        const projection = active.pkg.manifest.capability_projection.agents[role]
+        if (!projection) {
+          throw new Error(
+            `Active expert squad ${active.profileID} virtual_agents.${role} requires capability_projection.agents.${role}`,
+          )
+        }
+        const rawVirtualAgent = active.pkg.promptProfile.virtualAgents[role]
+        const resourceFingerprint = await projectedPackageResourceFingerprint({
+          active,
+          projection,
+          virtualAgent: rawVirtualAgent,
+          includeReadme: role === "orchestrator",
+        })
+        const projected = virtualAgentForRole({ active, role, resourceFingerprint })
         if (!projected) throw new Error(`Active expert squad ${active.profileID} lost virtual agent projection for ${role}`)
         return projected
-      })
+      }),
+    )
   }
 
   function catalogProfileFromPackage(input: {
@@ -926,7 +926,10 @@ export namespace PromptProfileResolver {
     return { sessionID, messageID, toolCallID }
   }
 
-  function packageToolPath(pkg: Pick<ExpertSquadRegistry.LoadedPackage, "id" | "root" | "packageToolRefs">, ref: string): string {
+  function packageToolPath(
+    pkg: Pick<ExpertSquadRegistry.LoadedPackage, "id" | "root" | "manifest" | "packageToolRefs">,
+    ref: string,
+  ): string {
     if (!pkg.packageToolRefs.has(ref)) {
       throw new Error(`Active expert squad ${pkg.id} projects missing package tool ${ref}.`)
     }
@@ -935,12 +938,12 @@ export namespace PromptProfileResolver {
     const parts = ref.slice(prefix.length).split("/")
     if (parts.length !== 2 || !parts[0] || !parts[1]) throw new Error(`Invalid package tool ref ${JSON.stringify(ref)}`)
     const [owner, toolID] = parts
-    const base = owner === "shared" ? path.join(pkg.root, "tools") : path.join(pkg.root, "agents", owner, "tools")
+    const base = owner === "shared" ? path.join(pkg.root, "tools") : path.join(packageRoleResourceRoot(pkg, owner), "tools")
     return path.join(base, `${toolID}.ts`)
   }
 
   async function resolvePackageToolFile(
-    pkg: Pick<ExpertSquadRegistry.LoadedPackage, "id" | "root" | "packageToolRefs">,
+    pkg: Pick<ExpertSquadRegistry.LoadedPackage, "id" | "root" | "manifest" | "packageToolRefs">,
     ref: string,
   ) {
     const tsPath = packageToolPath(pkg, ref)
@@ -1024,7 +1027,7 @@ export namespace PromptProfileResolver {
   }
 
   async function packageToolFromDefinition(input: {
-    pkg: Pick<ExpertSquadRegistry.LoadedPackage, "id" | "root" | "packageToolRefs">
+    pkg: Pick<ExpertSquadRegistry.LoadedPackage, "id" | "root" | "manifest" | "packageToolRefs">
     ref: string
     providerName: string
     agentID: AgentRoleID
@@ -1188,7 +1191,7 @@ export namespace PromptProfileResolver {
   }
 
   function packageMcpServerPath(
-    pkg: Pick<ExpertSquadRegistry.LoadedPackage, "id" | "root" | "packageMcpServerRefs">,
+    pkg: Pick<ExpertSquadRegistry.LoadedPackage, "id" | "root" | "manifest" | "packageMcpServerRefs">,
     serverRef: string,
   ): string {
     if (!pkg.packageMcpServerRefs.has(serverRef)) {
@@ -1203,12 +1206,12 @@ export namespace PromptProfileResolver {
       throw new Error(`Invalid package MCP server ref ${JSON.stringify(serverRef)}`)
     }
     const [owner, serverID] = parts
-    const base = owner === "shared" ? path.join(pkg.root, "mcp") : path.join(pkg.root, "agents", owner, "mcp")
+    const base = owner === "shared" ? path.join(pkg.root, "mcp") : path.join(packageRoleResourceRoot(pkg, owner), "mcp")
     return path.join(base, `${serverID}.jsonc`)
   }
 
   async function resolvePackageMcpDefinitionFile(
-    pkg: Pick<ExpertSquadRegistry.LoadedPackage, "id" | "root" | "packageMcpServerRefs">,
+    pkg: Pick<ExpertSquadRegistry.LoadedPackage, "id" | "root" | "manifest" | "packageMcpServerRefs">,
     serverRef: string,
   ) {
     const jsoncPath = packageMcpServerPath(pkg, serverRef)
@@ -1328,7 +1331,7 @@ export namespace PromptProfileResolver {
   async function packageMcpPromptFromDefinition(input: {
     pkg: Pick<
       ExpertSquadRegistry.LoadedPackage,
-      "id" | "root" | "packageMcpServerRefs" | "packageMcpPromptRefs"
+      "id" | "root" | "manifest" | "packageMcpServerRefs" | "packageMcpPromptRefs"
     >
     ref: string
     providerName: string
@@ -1375,7 +1378,7 @@ export namespace PromptProfileResolver {
   async function packageMcpResourceFromDefinition(input: {
     pkg: Pick<
       ExpertSquadRegistry.LoadedPackage,
-      "id" | "root" | "packageMcpServerRefs" | "packageMcpResourceRefs"
+      "id" | "root" | "manifest" | "packageMcpServerRefs" | "packageMcpResourceRefs"
     >
     ref: string
     providerName: string
@@ -1420,7 +1423,7 @@ export namespace PromptProfileResolver {
   async function packageMcpToolFromDefinition(input: {
     pkg: Pick<
       ExpertSquadRegistry.LoadedPackage,
-      "id" | "root" | "packageMcpServerRefs" | "packageMcpToolRefs"
+      "id" | "root" | "manifest" | "packageMcpServerRefs" | "packageMcpToolRefs"
     >
     ref: string
     providerName: string
@@ -2566,15 +2569,14 @@ export namespace PromptProfileResolver {
 
   async function selectorCatalog(projectDirectory: string | undefined): Promise<ProjectSelectorPackage[]> {
     if (!projectDirectory) return []
-    const base = canonicalBase(projectDirectory)
     const selectors: ProjectSelectorPackage[] = []
     for (const entry of await discoverProjectPackages(projectDirectory)) {
       assertNoBuiltInCollision(entry.id)
       if (!entry.selector) continue
-      const packageRoot = path.join(base, entry.id)
+      const selectorInstructions = await ExpertSquadRegistry.readSelectorInstructions(entry)
       selectors.push({
-        pkg: entry,
-        location: path.join(packageRoot, "selector.md"),
+        pkg: { ...entry, selectorInstructions },
+        location: path.join(entry.root, "selector.md"),
       })
     }
     return selectors
@@ -2689,7 +2691,7 @@ export namespace PromptProfileResolver {
     const selectorSkillNames = selectorSkills.map((skill) => skill.name)
     const projectedSkills = [...projected.values()].map((entry) => entry.skill)
     const skillSurfaceAgentIDs = skillProjectionAgentIDs(active.profileID, projectedAgentIDs, projectedSkills)
-    const virtualAgents = activeVirtualAgents(active).filter((virtualAgent) =>
+    const virtualAgents = (await activeVirtualAgents(active)).filter((virtualAgent) =>
       skillSurfaceAgentIDs.includes(virtualAgent.baseRole),
     )
     const uniqueProductionSkillNames = [...projected.entries()]
@@ -2706,6 +2708,23 @@ export namespace PromptProfileResolver {
         },
       ]),
     )
+    const projectedSkillFingerprints = [...projected.entries()]
+      .map(([name, entry]) => ({
+        name,
+        source: entry.source,
+        builtin: entry.skill.builtin,
+        location: entry.skill.location,
+        description: entry.skill.description,
+        content: entry.skill.content,
+        platforms: entry.skill.platforms,
+        auto_detect: entry.skill.auto_detect,
+        priority: entry.skill.priority,
+        required_tools: entry.skill.required_tools,
+        agents: entry.skill.agents,
+        mounted_agents: entry.skill.mounted_agents,
+        expires_at: entry.skill.expires_at,
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name))
     return {
       activeProfile: capability.promptProfileID,
       expertSquadID: capability.expertSquadID,
@@ -2723,6 +2742,7 @@ export namespace PromptProfileResolver {
             productionSkillNames: uniqueProductionSkillNames,
             projectedSkillNames,
             projectedSkillMounts,
+            projectedSkillFingerprints,
           }),
         )
         .digest("hex"),
@@ -2784,11 +2804,11 @@ export namespace PromptProfileResolver {
     throw new Error(`Unknown prompt profile ${JSON.stringify(input.profileID)}`)
   }
 
-  function activeAgentProjection(input: {
+  async function activeAgentProjection(input: {
     active: ActiveProfilePackage
     promptProfileActive: string
-  }): ExpertSquadCatalog["active_agent_projection"] {
-    const agents = activeVirtualAgents(input.active).map((virtualAgent) => {
+  }): Promise<ExpertSquadCatalog["active_agent_projection"]> {
+    const agents = (await activeVirtualAgents(input.active)).map((virtualAgent) => {
       const projection = input.active.pkg.manifest.capability_projection.agents[virtualAgent.baseRole]
       if (!projection) {
         throw new Error(
@@ -2825,7 +2845,7 @@ export namespace PromptProfileResolver {
   export async function catalog(input: ExpertSquadCatalogInput): Promise<ExpertSquadCatalog> {
     const active = PromptProfile.activeID(input.config)
     const projectDirectory = input.scope.directory
-    const projectPackagesByID = await projectCatalogPackages(projectDirectory, input.config)
+    const projectPackagesByID = await projectCatalogPackages(projectDirectory)
     const squads: ExpertSquadCatalogSummary[] = [
       ...Object.entries(builtInPackages).map(([id, pkg]) =>
         catalogSummaryFromPackage({
@@ -2873,7 +2893,7 @@ export namespace PromptProfileResolver {
       scope: input.scope,
       targets: PromptProfile.targets,
       squads,
-      active_agent_projection: activeAgentProjection({
+      active_agent_projection: await activeAgentProjection({
         active: activePackage,
         promptProfileActive: active,
       }),

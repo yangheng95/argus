@@ -4,6 +4,8 @@ Date: 2026-07-06
 Status: Implementation record
 Owner: Codex
 
+Supersession note: this record describes the payload generator before the later namespaced package-source layout. The current canonical source and install path is `.opencorvus/expert-squads/<namespace>/<id>/`; WuJiang OpenTest now uses manifest ID `opentest` under `.opencorvus/expert-squads/wujiang/opentest/`.
+
 ## Glossary
 
 - ID: Identifier, the stable machine identity of an expert-squad package.

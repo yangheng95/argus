@@ -1,5 +1,6 @@
 {
   "schema_version": 1,
+  "namespace": "builtin",
   "id": "general",
   "label": "General",
   "description": "No domain-specific expert overlay.",

@@ -27,6 +27,7 @@ async function removeAgentRoleDirectory(packageRoot: string, role: string) {
 function manifest(overrides: Record<string, unknown> = {}) {
   return {
     schema_version: 1,
+    namespace: "project",
     id: "frontend-replica",
     label: "Frontend Replica",
     description: "Replica squad",
@@ -75,7 +76,11 @@ function manifest(overrides: Record<string, unknown> = {}) {
   }
 }
 
-async function writeValidPackage(root: string, overrides: Record<string, unknown> = {}, folder = "frontend-replica") {
+async function writeValidPackage(
+  root: string,
+  overrides: Record<string, unknown> = {},
+  folder = "project/frontend-replica",
+) {
   const packageRoot = path.join(root, ".opencorvus", "expert-squads", folder)
   await writeFile(packageRoot, "README.md", "# Frontend Replica\n")
   await writeFile(packageRoot, "selector.md", "# Frontend Replica Selector\n")
@@ -161,7 +166,7 @@ describe("ExpertSquadRegistry", () => {
 
   test("discovers packages under .opencorvus expert-squads", async () => {
     await using tmp = await tmpdir()
-    await writeValidPackage(tmp.path, {
+    const packageRoot = await writeValidPackage(tmp.path, {
       selector: {
         summary: "Use for replica tasks.",
         selection_guidance: "Call select_expert_squad with profile_id frontend-replica.",
@@ -169,7 +174,7 @@ describe("ExpertSquadRegistry", () => {
       },
     })
     await writeFile(
-      path.join(tmp.path, ".opencorvus", "expert-squads", "frontend-replica"),
+      packageRoot,
       "selector.md",
       "# Selector Instructions\n\nUse the detailed source-backed replica selector.",
     )
@@ -177,7 +182,22 @@ describe("ExpertSquadRegistry", () => {
     const loaded = await ExpertSquadRegistry.discover(tmp.path)
 
     expect(loaded.map((item) => item.id)).toEqual(["frontend-replica"])
-    expect(loaded[0]?.selectorInstructions).toContain("detailed source-backed replica selector")
+    expect(loaded[0]?.namespace).toBe("project")
+    expect(loaded[0]?.root).toBe(packageRoot)
+    expect(loaded[0]?.selector).toMatchObject({ id: "frontend-replica" })
+    expect(loaded[0]?.selectorInstructions).toBeUndefined()
+
+    const catalogPackage = await ExpertSquadRegistry.loadCatalogPackage(packageRoot)
+    expect(catalogPackage.selectorInstructions).toContain("detailed source-backed replica selector")
+  })
+
+  test("rejects old direct-child package roots during discovery", async () => {
+    await using tmp = await tmpdir()
+    await writeValidPackage(tmp.path, {}, "frontend-replica")
+
+    await expect(ExpertSquadRegistry.discover(tmp.path)).rejects.toThrow(
+      /direct package roots are not supported; expected <namespace>\/<id>/,
+    )
   })
 
   test("rejects catalog selector instructions that point into production package files", async () => {
@@ -205,7 +225,7 @@ describe("ExpertSquadRegistry", () => {
     await using tmp = await tmpdir()
 
     for (const source of builtInPackageSources) {
-      const packageRoot = path.join(tmp.path, ".opencorvus", "expert-squads", source.id)
+      const packageRoot = path.join(tmp.path, ".opencorvus", "expert-squads", source.namespace, source.id)
       await writeEmbeddedPackage(packageRoot, source)
 
       const loaded = await ExpertSquadRegistry.loadPackage(packageRoot)
@@ -214,32 +234,81 @@ describe("ExpertSquadRegistry", () => {
       expect(loaded.id).toBe(source.id)
       expect(loaded.manifest).toEqual(embedded.manifest)
       expect(PromptProfile.builtIns[loaded.id]).toEqual(embedded.promptProfile)
-      expect(loaded.readmePath.endsWith(path.join(source.id, "README.md"))).toBe(true)
+      expect(loaded.readmePath.endsWith(path.join(source.namespace, source.id, "README.md"))).toBe(true)
       expect(loaded.readmeContent).toBe(embedded.readmeContent)
       expect(loaded.displayPrefix).toBe(embedded.displayPrefix)
     }
   })
 
-  test("loads the repository software-testing package with workflow and package tool refs", async () => {
-    const packageRoot = repositoryExpertSquadRoot("software-testing")
+  test("built-in expert-squad agent projections are backed by prompts, capabilities, virtual agents, or workflow dispatch", async () => {
+    const repositoryRoot = path.resolve(import.meta.dirname, "../../../..")
+    const workflowBindings = WorkflowRegistry.schedulerAgentWorkflowBindingsForEngineConfig(
+      EngineConfig.fromAssistantConfig({}),
+    )
+    const workflowRoleByTool = new Map(
+      workflowBindings.map((binding) => [binding.workflow_tool_name, binding.target_kind] as const),
+    )
+    const projectionRefKeys = [
+      "built_in_tool_ids",
+      "default_skill_refs",
+      "package_skill_refs",
+      "default_tool_refs",
+      "package_tool_refs",
+      "default_mcp_server_refs",
+      "package_mcp_server_refs",
+      "default_mcp_tool_refs",
+      "package_mcp_tool_refs",
+      "default_mcp_prompt_refs",
+      "package_mcp_prompt_refs",
+      "default_mcp_resource_refs",
+      "package_mcp_resource_refs",
+    ] as const
+    const unbacked: string[] = []
+
+    for (const entry of await ExpertSquadRegistry.discover(repositoryRoot)) {
+      if (entry.namespace !== "builtin") continue
+      const loaded = await ExpertSquadRegistry.loadPackage(entry.root)
+      const schedulerTools = loaded.manifest.capability_projection.scheduler.built_in_tool_ids
+      const workflowTargetRoles = new Set(
+        schedulerTools.map((tool) => workflowRoleByTool.get(tool)).filter((role): role is string => typeof role === "string"),
+      )
+
+      for (const [role, projection] of Object.entries(loaded.manifest.capability_projection.agents)) {
+        const hasPromptOverlay = Object.hasOwn(loaded.manifest.agents, role)
+        const hasVirtualAgent = Object.hasOwn(loaded.manifest.virtual_agents, role)
+        const hasConcreteCapability = projectionRefKeys.some((key) => projection[key].length > 0)
+        const hasWorkflowDispatch = workflowTargetRoles.has(role)
+        if (!hasPromptOverlay && !hasVirtualAgent && !hasConcreteCapability && !hasWorkflowDispatch) {
+          unbacked.push(`${loaded.id}:${role}`)
+        }
+      }
+    }
+
+    expect(unbacked).toEqual([])
+  })
+
+  test("loads the repository opentest package with workflow and package tool refs", async () => {
+    const packageRoot = repositoryExpertSquadRoot("opentest")
     const loaded = await ExpertSquadRegistry.loadPackage(packageRoot)
     const agentRoleDirectories = (await fs.readdir(path.join(packageRoot, "agents"), { withFileTypes: true }))
       .filter((entry) => entry.isDirectory())
       .map((entry) => entry.name)
       .sort()
 
-    expect(loaded.id).toBe("software-testing")
-    expect(loaded.label).toBe("WuJiang/OpenTest")
-    expect(loaded.promptProfile.label).toBe("WuJiang/OpenTest")
-    expect(loaded.selector?.ref).toBe("selector/software-testing")
-    expect(loaded.selector?.label).toBe("WuJiang/OpenTest")
-    expect(loaded.packageSkillRefs.has("software-testing/orchestrator/workflow")).toBe(true)
-    expect(loaded.packageSkillRefs.has("software-testing/build/test-implementation")).toBe(true)
-    expect(loaded.packageSkillRefs.has("software-testing/integrity/test-review")).toBe(true)
-    expect(loaded.packageToolRefs.has("software-testing/shared/test-artifact-inventory")).toBe(false)
-    expect(loaded.packageToolRefs.has("software-testing/shared/opentest-protocol-engine")).toBe(true)
+    expect(loaded.id).toBe("opentest")
+    expect(loaded.namespace).toBe("wujiang")
+    expect(loaded.label).toBe("OpenTest")
+    expect(loaded.displayPrefix).toBe("WuJiang")
+    expect(loaded.promptProfile.label).toBe("OpenTest")
+    expect(loaded.selector?.ref).toBe("selector/opentest")
+    expect(loaded.selector?.label).toBe("OpenTest")
+    expect(loaded.packageSkillRefs.has("opentest/orchestrator/workflow")).toBe(true)
+    expect(loaded.packageSkillRefs.has("opentest/build/test-implementation")).toBe(true)
+    expect(loaded.packageSkillRefs.has("opentest/integrity/test-review")).toBe(true)
+    expect(loaded.packageToolRefs.has("opentest/shared/test-artifact-inventory")).toBe(false)
+    expect(loaded.packageToolRefs.has("opentest/shared/opentest-protocol-engine")).toBe(true)
     expect(loaded.manifest.capability_projection.scheduler.package_tool_refs).toEqual([
-      "software-testing/shared/opentest-protocol-engine",
+      "opentest/shared/opentest-protocol-engine",
     ])
     expect(loaded.explicitSchedulerWorkflowTools).toEqual(["build", "integrity"])
     expect(Object.keys(loaded.manifest.capability_projection.agents).sort()).toEqual(["build", "integrity"])
@@ -247,12 +316,23 @@ describe("ExpertSquadRegistry", () => {
     expect(agentRoleDirectories).toEqual(["orchestrator"])
     expect(loaded.promptProfile.virtualAgents.build?.id).toBe("opentest-implementer")
     expect(loaded.promptProfile.virtualAgents.integrity?.id).toBe("opentest-reviewer")
-    expect(loaded.promptProfile.virtualAgents.build?.promptContent).toContain("protocol-engine/opentest-contract.json")
+    expect(loaded.promptProfile.virtualAgents.build?.promptContent).toContain(
+      ".opencorvus/expert-squads/wujiang/opentest/protocol-engine/opentest-contract.json",
+    )
+    expect(loaded.promptProfile.virtualAgents.integrity?.promptContent).toContain(
+      ".opencorvus/expert-squads/wujiang/opentest/protocol-engine/opentest-contract.json",
+    )
+    expect(loaded.promptProfile.virtualAgents.build?.promptContent).not.toContain(
+      ".opencorvus/expert-squads/opentest/",
+    )
+    expect(loaded.promptProfile.virtualAgents.integrity?.promptContent).not.toContain(
+      ".opencorvus/expert-squads/opentest/",
+    )
   })
 
-  test("software-testing OpenTest protocol engine parses the external contract and validates artifacts", async () => {
+  test("opentest OpenTest protocol engine parses the external contract and validates artifacts", async () => {
     await using tmp = await tmpdir()
-    const packageRoot = repositoryExpertSquadRoot("software-testing")
+    const packageRoot = repositoryExpertSquadRoot("opentest")
     const engine = await import(pathToFileURL(path.join(packageRoot, "protocol-engine", "opentest-protocol-engine.ts")).href)
     const contractText = await fs.readFile(path.join(packageRoot, "protocol-engine", "opentest-contract.json"), "utf8")
     const contract = engine.parseProtocolContract(contractText)
@@ -644,12 +724,11 @@ describe("ExpertSquadRegistry", () => {
     await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/readme: referenced file is blank/)
   })
 
-  test("discovers selector metadata without parsing inactive package MCP definitions", async () => {
+  test("discovers selector metadata without parsing inactive package prompts or MCP definitions", async () => {
     await using tmp = await tmpdir()
     await writeValidPackage(tmp.path)
-    const inactiveRoot = path.join(tmp.path, ".opencorvus", "expert-squads", "backend-debug")
+    const inactiveRoot = path.join(tmp.path, ".opencorvus", "expert-squads", "project", "backend-debug")
     await writeFile(inactiveRoot, "README.md", "# Backend Debug\n")
-    await writeFile(inactiveRoot, "agents/general/system.md", "general overlay")
     await writeFile(inactiveRoot, "mcp/broken.jsonc", "{")
     await writeFile(
       inactiveRoot,
@@ -682,6 +761,10 @@ describe("ExpertSquadRegistry", () => {
 
     expect(loaded.map((item) => item.id)).toEqual(["backend-debug", "frontend-replica"])
     expect(loaded.find((item) => item.id === "backend-debug")?.selector?.ref).toBe("selector/backend-debug")
+    await expect(ExpertSquadRegistry.loadCatalogPackage(inactiveRoot)).resolves.toMatchObject({
+      id: "backend-debug",
+      promptProfile: { label: "Backend Debug", agents: {} },
+    })
   })
 
   test("rejects id and folder mismatch", async () => {
@@ -1050,9 +1133,11 @@ describe("ExpertSquadRegistry", () => {
 
     expect(metadata.selector?.summary).toBe("Use for replica tasks.")
     expect(JSON.stringify(metadata.selector)).not.toContain("inactive production skill content")
-    expect("root" in metadata).toBe(false)
-    expect("manifestPath" in metadata).toBe(false)
-    expect("readmePath" in metadata).toBe(false)
+    expect(metadata.root).toBe(packageRoot)
+    expect(metadata.manifestPath).toBe(path.join(packageRoot, ExpertSquadRegistry.MANIFEST))
+    expect(metadata.readmePath).toBe(path.join(packageRoot, "README.md"))
+    expect("readmeContent" in metadata).toBe(false)
+    expect("manifest" in metadata).toBe(false)
     expect("packageSkillRefs" in metadata).toBe(false)
     expect(loaded.packageSkillRefs.has("selector/frontend-replica")).toBe(false)
   })
@@ -1209,6 +1294,21 @@ describe("ExpertSquadRegistry", () => {
     })
 
     await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/must match default\/mcp\/<name>/)
+  })
+
+  test("rejects default MCP server refs without runtime expansion semantics", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, {
+      capability_projection: {
+        ...manifest().capability_projection,
+        scheduler: {
+          ...manifest().capability_projection.scheduler,
+          default_mcp_server_refs: ["default/mcp/browser"],
+        },
+      },
+    })
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/default_mcp_server_refs is not supported/)
   })
 
   test("rejects typed MCP refs not statically declared by the package MCP definition", async () => {

@@ -288,7 +288,7 @@ describe("orchestrator scheduler capability projection", () => {
     expect(captured.toolIDs).not.toContain("package-browser")
   })
 
-  test("select_expert_squad accepts payload-released profile IDs when the project package is absent", async () => {
+  test("select_expert_squad accepts explicitly installed project package profile IDs", async () => {
     await using tmp = await tmpdir({ git: true, config: { model: "mock-control/control" } })
 
     await Instance.provide({
@@ -297,7 +297,7 @@ describe("orchestrator scheduler capability projection", () => {
         await copyRepositoryExpertSquadPackage(tmp.path, "frontend-replica")
         const now = Date.now()
         const taskID = Identifier.ascending("task")
-        const root = await Session.create({ kind: "root", title: "scheduler payload package release" })
+        const root = await Session.create({ kind: "root", title: "scheduler installed package selection" })
         await Session.mergeConfigOverlay({
           sessionID: root.id,
           patch: {
@@ -308,7 +308,7 @@ describe("orchestrator scheduler capability projection", () => {
           taskID,
           rootSessionID: root.id,
           now,
-          title: "scheduler payload package release",
+          title: "scheduler installed package selection",
         })
         const { tools } = createOrchestratorTools({
           taskID,
@@ -319,7 +319,7 @@ describe("orchestrator scheduler capability projection", () => {
         const result = await tools.select_expert_squad.execute(
           {
             profile_id: "frontend-replica",
-            reason: "Payload expert squad IDs are released into the project before profile validation.",
+            reason: "The frontend-replica package is explicitly installed in the project before profile validation.",
           },
           toolOptions("select_expert_squad_payload_package"),
         )

@@ -13267,6 +13267,9 @@
                                     "type": "string",
                                     "const": "project_package"
                                   },
+                                  "namespace": {
+                                    "type": "string"
+                                  },
                                   "root": {
                                     "type": "string"
                                   },
@@ -13279,6 +13282,7 @@
                                 },
                                 "required": [
                                   "kind",
+                                  "namespace",
                                   "root",
                                   "manifest_path",
                                   "readme_path"
@@ -13563,6 +13567,77 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "const": "NotFoundError"
+                        },
+                        "data": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "data"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "const": "LogFileNotFoundError"
+                        },
+                        "data": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "data"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnknownError"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -13592,6 +13667,127 @@
         ]
       }
     },
+    "/expert-squad/release-payload": {
+      "post": {
+        "operationId": "expertSquad.releasePayload",
+        "summary": "Release bundled expert-squad packages",
+        "description": "Explicitly provisions bundled expert-squad payload packages into the current project's namespaced .opencorvus expert-squads catalog without overwriting existing packages.",
+        "responses": {
+          "200": {
+            "description": "Bundled expert-squad package release result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "installed": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "namespace": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "targetRoot": {
+                            "type": "string"
+                          },
+                          "replaced": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "namespace",
+                          "id",
+                          "targetRoot",
+                          "replaced"
+                        ]
+                      }
+                    },
+                    "skipped": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "namespace": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "targetRoot": {
+                            "type": "string"
+                          },
+                          "replaced": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "namespace",
+                          "id",
+                          "targetRoot",
+                          "replaced"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "installed",
+                    "skipped"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Expert squad package release rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "const": "ExpertSquadPackageError"
+                    },
+                    "data": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.expertSquad.releasePayload({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/expert-squad/import-folder": {
       "post": {
         "operationId": "expertSquad.importFolder",
@@ -13605,6 +13801,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "namespace": {
+                      "type": "string"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -13616,6 +13815,7 @@
                     }
                   },
                   "required": [
+                    "namespace",
                     "id",
                     "targetRoot",
                     "replaced"
@@ -13708,6 +13908,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "namespace": {
+                      "type": "string"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -13719,6 +13922,7 @@
                     }
                   },
                   "required": [
+                    "namespace",
                     "id",
                     "targetRoot",
                     "replaced"

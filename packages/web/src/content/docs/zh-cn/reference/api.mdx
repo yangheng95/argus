@@ -242,10 +242,11 @@ OpenAPI 只会给项目作用域操作标注 `directory` query 参数。单个 T
 
 | Method | 路径 | 说明 | operationId |
 |---|---|---|---|
-| GET | `/expert-squad/catalog` | List expert squads and active capability projection | `expertSquad.catalog` |
+| GET | `/expert-squad/catalog` | List expert squads and active capability projection 错误: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`, `UnknownError`. | `expertSquad.catalog` |
 | POST | `/expert-squad/export` | Export an expert squad ZIP archive 请求体: `id`; 错误: `ExpertSquadPackageError`. | `expertSquad.export` |
 | POST | `/expert-squad/import-file` | Import an expert squad ZIP archive 请求体: `archiveBase64`, `filename`, `replace`; 错误: `ExpertSquadPackageError`. | `expertSquad.importFile` |
 | POST | `/expert-squad/import-folder` | Import an expert squad folder 请求体: `replace`, `sourceDirectory`; 错误: `ExpertSquadPackageError`. | `expertSquad.importFolder` |
+| POST | `/expert-squad/release-payload` | Release bundled expert-squad packages 错误: `ExpertSquadPackageError`. | `expertSquad.releasePayload` |
 
 ### Skill
 

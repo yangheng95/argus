@@ -1,6 +1,9 @@
+import type { ExpertSquadCatalog } from "../../src/services/expert-squad"
+
 export interface ExpertSquadFixture {
   id: string
   label: string
+  namespace?: string
   description?: string
   display_prefix?: string
   built_in?: boolean
@@ -51,11 +54,17 @@ export function emptyExpertSquadProjectionEntry() {
   }
 }
 
+function projectPackageRoot(namespace: string, id: string): string {
+  return `D:/repo/.opencorvus/expert-squads/${namespace}/${id}`
+}
+
 export function expertSquadOptionFixture(squad: ExpertSquadFixture) {
   const agents = squad.agents ?? {}
   const builtIn = squad.built_in ?? squad.id === "general"
   const displayLabel = squad.display_prefix ? `${squad.display_prefix}/${squad.label}` : squad.label
   const virtualAgents = squad.virtual_agents ?? []
+  const namespace = squad.namespace ?? "project"
+  const root = projectPackageRoot(namespace, squad.id)
   return {
     id: squad.id,
     label: squad.label,
@@ -73,10 +82,6 @@ export function expertSquadOptionFixture(squad: ExpertSquadFixture) {
       virtual_agent_id: agent.virtual_agent_id,
       label: agent.label,
       description: agent.description,
-      projection_hash: agent.projection_hash ?? `test-${squad.id}-${agent.base_role}`,
-      package_skill_refs: agent.package_skill_refs ?? [],
-      package_tool_refs: agent.package_tool_refs ?? [],
-      package_mcp_server_refs: agent.package_mcp_server_refs ?? [],
     })),
     capability_projection: {
       scheduler: emptyExpertSquadProjectionEntry(),
@@ -86,9 +91,10 @@ export function expertSquadOptionFixture(squad: ExpertSquadFixture) {
       ? { kind: "built_in" }
       : {
           kind: "project_package",
-          root: `D:/repo/.opencorvus/expert-squads/${squad.id}`,
-          manifest_path: `D:/repo/.opencorvus/expert-squads/${squad.id}/expert-squad.jsonc`,
-          readme_path: `D:/repo/.opencorvus/expert-squads/${squad.id}/README.md`,
+          namespace,
+          root,
+          manifest_path: `${root}/expert-squad.jsonc`,
+          readme_path: `${root}/README.md`,
         },
     readme: {
       path: "README.md",
@@ -116,7 +122,17 @@ export function expertSquadCatalogFixture(input: ExpertSquadCatalogFixtureInput 
       },
     ]
   const squadOptions = squads.map(expertSquadOptionFixture)
-  const activeOption = squadOptions.find((squad) => squad.id === active)
+  const activeFixture = squads.find((squad) => squad.id === active)
+  const activeProjectedAgents = (activeFixture?.virtual_agents ?? []).map((agent) => ({
+    base_role: agent.base_role,
+    virtual_agent_id: agent.virtual_agent_id,
+    label: agent.label,
+    description: agent.description,
+    projection_hash: agent.projection_hash ?? `test-${active}-${agent.base_role}`,
+    package_skill_refs: agent.package_skill_refs ?? [],
+    package_tool_refs: agent.package_tool_refs ?? [],
+    package_mcp_server_refs: agent.package_mcp_server_refs ?? [],
+  }))
   return {
     active: {
       effective: active,
@@ -135,7 +151,7 @@ export function expertSquadCatalogFixture(input: ExpertSquadCatalogFixtureInput 
       source_expert_squad_id: active,
       prompt_profile_active: active,
       projection_hash: `test-${active}`,
-      agents: activeOption?.virtual_agents ?? [],
+      agents: activeProjectedAgents,
     },
     active_skill_projection: {
       active_squad_id: active,
@@ -149,7 +165,7 @@ export function expertSquadCatalogFixture(input: ExpertSquadCatalogFixtureInput 
       projected_skill_names: [],
       skills: [],
     },
-  }
+  } satisfies ExpertSquadCatalog
 }
 
 export function generalExpertSquadCatalog() {

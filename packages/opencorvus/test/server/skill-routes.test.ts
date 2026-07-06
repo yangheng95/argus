@@ -648,14 +648,14 @@ describe("skill routes", () => {
     })
   }, 20000)
 
-  test("GET /skill/mounts exposes software-testing virtual agents as base-role metadata", async () => {
+  test("GET /skill/mounts exposes opentest virtual agents as base-role metadata", async () => {
     await using tmp = await tmpdir({ git: true })
-    await copyRepositoryExpertSquadPackage(tmp.path, "software-testing")
+    await copyRepositoryExpertSquadPackage(tmp.path, "opentest")
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        await Config.update({ prompt_profile: { active: "software-testing" } })
+        await Config.update({ prompt_profile: { active: "opentest" } })
         const app = Server.App()
         const response = await app.request("/skill/mounts", {
           headers: {
@@ -670,7 +670,7 @@ describe("skill routes", () => {
           agents: Array<{ name: string; virtual_agent?: { id: string; label: string; projection_hash: string } }>
           project_mounts: { agents?: Record<string, string[]> }
         }
-        expect(body.active_profile).toBe("software-testing")
+        expect(body.active_profile).toBe("opentest")
         expect(body.projected_agents).toEqual(expect.arrayContaining(["orchestrator", "build", "integrity"]))
         expect(body.projected_agents).not.toContain("opentest-implementer")
         expect(body.projected_agents).not.toContain("opentest-reviewer")

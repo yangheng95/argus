@@ -1311,7 +1311,7 @@
         },
         "squad-frontend-replica": {
           kicker: "Expert Squad", title: "Frontend Replica",
-          src: ".opencorvus/expert-squads/frontend-replica",
+          src: ".opencorvus/expert-squads/builtin/frontend-replica",
           html: `<p>参照复刻、网页复制、视觉证据与设计系统聚焦的专家团。</p>
             <ul>
               <li>聚焦桌面源信息架构、模块顺序、密度、状态与可见 parity。</li>
@@ -1322,7 +1322,7 @@
         },
         "squad-frontend-innovate": {
           kicker: "Expert Squad", title: "Frontend Innovate",
-          src: ".opencorvus/expert-squads/frontend-innovate",
+          src: ".opencorvus/expert-squads/builtin/frontend-innovate",
           html: `<p>企业 / 产品级前端设计综合：构思、对比、收敛与 anti-slop 复核。</p>
             <ul>
               <li>frontend-design 产出多个命名方向，拒绝浅稿，再提交一份可实现的产品设计 handoff。</li>
@@ -1332,7 +1332,7 @@
         },
         "squad-backend": {
           kicker: "Expert Squad", title: "Backend",
-          src: ".opencorvus/expert-squads/backend",
+          src: ".opencorvus/expert-squads/builtin/backend",
           html: `<p>API / 状态 / 数据 / 集成与运行正确性聚焦。</p>
             <ul>
               <li>优先请求与数据契约、状态归属、持久化边界、可观测性与确定性失败处理。</li>
@@ -1341,7 +1341,7 @@
         },
         "squad-algorithm": {
           kicker: "Expert Squad", title: "Algorithm",
-          src: ".opencorvus/expert-squads/algorithm",
+          src: ".opencorvus/expert-squads/builtin/algorithm",
           html: `<p>正确性、复杂度、benchmark 与对抗用例聚焦。</p>
             <ul>
               <li>需求写成证明目标：不变量、界、边界用例、验收指标与可度量性能义务。</li>
@@ -1350,7 +1350,7 @@
         },
         "squad-automation-debug": {
           kicker: "Expert Squad", title: "Frontend Automation Debug",
-          src: ".opencorvus/expert-squads/frontend-automation-debug",
+          src: ".opencorvus/expert-squads/builtin/frontend-automation-debug",
           html: `<p>前端自动化、浏览器运行时调试、视觉回归与可复现证据聚焦。</p>
             <ul>
               <li>把渲染面当可执行检查：交互、布局状态、可访问性信号与截图必须支撑每条验收主张。</li>
@@ -1450,7 +1450,7 @@
         "wiring-catalog": {
           kicker: "专家团积木 · ② 目录", title: "ExpertSquad packages",
           src: "src/expert-squad/builtin/general · .opencorvus/expert-squads · src/expert-squad/prompt-profile-resolver.ts",
-          html: `<p>专家团目录是一组 package-backed <b>PromptProfile</b>。内置目录只保留 <code>general</code>；领域专家团从项目 <code>.opencorvus/expert-squads/&lt;id&gt;</code> 动态加载。新的积木模型要求它同时拥有 prompt overlays 与 capability projection，不能让 UI、SkillMount 或 Orchestrator 各造一套规则。</p>
+          html: `<p>专家团目录是一组 package-backed <b>PromptProfile</b>。内置目录只保留 <code>general</code>；领域专家团从项目 <code>.opencorvus/expert-squads/&lt;namespace&gt;/&lt;id&gt;</code> 动态加载，例如 <code>builtin/frontend-replica</code> 或 <code>wujiang/opentest</code>。新的积木模型要求它同时拥有 prompt overlays 与 capability projection，不能让 UI、SkillMount 或 Orchestrator 各造一套规则。</p>
             <div class="kv"><div><b>Prompt</b><span>{ agents: { agentID → prompt overlay } }</span></div>
             <div><b>Capability</b><span>{ scheduler, agents: built_in_tool_ids + default/package skill/tool/MCP refs }</span></div></div>
             <p>内置档：general。项目包：frontend-replica · frontend-innovate · backend · algorithm · frontend-automation-debug。</p>

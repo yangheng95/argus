@@ -4,6 +4,8 @@ Date: 2026-07-06
 Status: Implementation record
 Owner: Codex
 
+Supersession note: `2026-07-06-expert-squad-namespaced-source-layout.md` supersedes this record's direct-child package path. Non-`general` expert squads now live under `.opencorvus/expert-squads/<namespace>/<id>/`; the rest of this record remains historical runtime-projection context.
+
 ## Glossary
 
 - API: Application Programming Interface, the route or TypeScript contract between modules.

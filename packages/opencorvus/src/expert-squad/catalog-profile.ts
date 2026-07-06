@@ -6,6 +6,7 @@ import type { ExpertSquadCatalogSummary } from "@/expert-squad/catalog"
 import type { ExpertSquadRegistry } from "@/expert-squad/registry"
 
 export type ExpertSquadCatalogPackage = {
+  namespace: string
   id: string
   version?: string
   displayPrefix?: string
@@ -253,6 +254,7 @@ export function catalogSummaryFromPackage(input: {
         }
         return {
           kind: "project_package" as const,
+          namespace: input.pkg.namespace,
           root: input.pkg.root,
           manifest_path: input.pkg.manifestPath,
           readme_path: input.pkg.readmePath,

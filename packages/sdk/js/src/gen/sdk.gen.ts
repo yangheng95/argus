@@ -94,6 +94,7 @@ import type {
   ExperimentalWorkspaceListResponses,
   ExperimentalWorkspaceRemoveErrors,
   ExperimentalWorkspaceRemoveResponses,
+  ExpertSquadCatalogErrors,
   ExpertSquadCatalogResponses,
   ExpertSquadExportErrors,
   ExpertSquadExportResponses,
@@ -101,6 +102,8 @@ import type {
   ExpertSquadImportFileResponses,
   ExpertSquadImportFolderErrors,
   ExpertSquadImportFolderResponses,
+  ExpertSquadReleasePayloadErrors,
+  ExpertSquadReleasePayloadResponses,
   ExportSessionErrors,
   ExportSessionResponses,
   FileCopyErrors,
@@ -4041,8 +4044,31 @@ export class ExpertSquad extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).get<ExpertSquadCatalogResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).get<ExpertSquadCatalogResponses, ExpertSquadCatalogErrors, ThrowOnError>({
       url: "/expert-squad/catalog",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Release bundled expert-squad packages
+   *
+   * Explicitly provisions bundled expert-squad payload packages into the current project's namespaced .opencorvus expert-squads catalog without overwriting existing packages.
+   */
+  public releasePayload<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).post<
+      ExpertSquadReleasePayloadResponses,
+      ExpertSquadReleasePayloadErrors,
+      ThrowOnError
+    >({
+      url: "/expert-squad/release-payload",
       ...options,
       ...params,
     })

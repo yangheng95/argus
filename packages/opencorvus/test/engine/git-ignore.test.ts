@@ -174,7 +174,7 @@ describe("ensureGitignore", () => {
 
   test("appends expert-squad build unignore rules for existing projects with generic build ignore", async () => {
     await using tmp = await tmpdir({ git: true })
-    const promptPath = ".opencorvus/expert-squads/frontend-replica/agents/build/system.md"
+    const promptPath = ".opencorvus/expert-squads/builtin/frontend-replica/agents/build/system.md"
     await fs.mkdir(path.dirname(path.join(tmp.path, promptPath)), { recursive: true })
     await Bun.write(path.join(tmp.path, promptPath), "build overlay\n")
     await Bun.write(path.join(tmp.path, ".gitignore"), "node_modules/\nbuild/\n")

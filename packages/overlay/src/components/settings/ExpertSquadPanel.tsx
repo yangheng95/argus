@@ -7,6 +7,7 @@ import { t } from "../../utils/i18n"
 import { renderMarkdown } from "../../utils/markdown"
 import { pickDirectory } from "../../services/workspace"
 import {
+  clearSessionExpertSquadOverride,
   exportExpertSquadArchive,
   importExpertSquadArchive,
   importExpertSquadFolder,
@@ -217,6 +218,17 @@ export default function ExpertSquadPanel() {
       await setSessionExpertSquadActive(sessionID, squad.id, directory)
       await refreshCatalog(squad.id)
       showNotice(t("expert_squad.activated_session"), "active")
+    })
+  }
+
+  async function clearSessionOverride() {
+    const sessionID = currentScopeSessionID()
+    const directory = expertSquadCatalogDirectory()
+    if (!sessionID || !directory || !sessionOverrideID()) return
+    await runBusy("clear-session-override", async () => {
+      await clearSessionExpertSquadOverride(sessionID, directory)
+      await refreshCatalog(projectActiveID())
+      showNotice(t("expert_squad.cleared_session_override"), "active")
     })
   }
 
@@ -466,19 +478,33 @@ export default function ExpertSquadPanel() {
                           {projectActiveID() === squad.id ? t("expert_squad.project_active") : t("expert_squad.activate_project")}
                         </Button>
                         <Show when={currentScopeSessionID()}>
-                          <Button
-                            type="button"
-                            variant={sessionOverrideID() === squad.id ? "ghost" : "solid"}
-                            size="sm"
-                            tone={sessionOverrideID() === squad.id ? "neutral" : "accent"}
-                            data-ui="expert-squad-activate-session"
-                            disabled={!!busy() || sessionOverrideID() === squad.id}
-                            onClick={activateSession}
-                          >
-                            {sessionOverrideID() === squad.id
-                              ? t("expert_squad.session_override")
-                              : t("expert_squad.activate_session")}
-                          </Button>
+                          <>
+                            <Button
+                              type="button"
+                              variant={sessionOverrideID() === squad.id ? "ghost" : "solid"}
+                              size="sm"
+                              tone={sessionOverrideID() === squad.id ? "neutral" : "accent"}
+                              data-ui="expert-squad-activate-session"
+                              disabled={!!busy() || sessionOverrideID() === squad.id}
+                              onClick={activateSession}
+                            >
+                              {sessionOverrideID() === squad.id
+                                ? t("expert_squad.session_override")
+                                : t("expert_squad.activate_session")}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              tone="neutral"
+                              data-ui="expert-squad-clear-session-override"
+                              disabled={!!busy() || !sessionOverrideID()}
+                              onClick={clearSessionOverride}
+                            >
+                              <Icon name="rewind" size={13} />
+                              {t("expert_squad.clear_session_override")}
+                            </Button>
+                          </>
                         </Show>
                         <Button
                           type="button"
@@ -573,7 +599,7 @@ export default function ExpertSquadPanel() {
                         {(selector) => (
                           <div class="expert-squad-section">
                             <div class="expert-squad-section-head">
-                              <strong>{t("expert_squad.selector_title")}</strong>
+                              <strong>{t("expert_squad.selector_instructions_title")}</strong>
                               <SettingsPill tone="muted">{selector().ref}</SettingsPill>
                             </div>
                             <div class="expert-squad-selector-summary">

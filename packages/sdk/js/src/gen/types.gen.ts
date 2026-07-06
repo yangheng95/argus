@@ -1103,10 +1103,6 @@ export type Config = {
        * Maximum agentic steps for build agent
        */
       max_steps?: number
-      /**
-       * Maximum estimated provider replay tokens for reusing a previous Build session on retry. When omitted, OpenCorvus derives the limit from the Build model output window and existing context budget.
-       */
-      retry_replay_token_limit?: number
     }
     /**
      * Chunk-driven inactivity thresholds. Single source of truth for streaming layers (session LLM, executor events, task queue).
@@ -8850,6 +8846,35 @@ export type ExpertSquadCatalogData = {
   url: "/expert-squad/catalog"
 }
 
+export type ExpertSquadCatalogErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+  /**
+   * Internal server error
+   */
+  500: UnknownError
+}
+
+export type ExpertSquadCatalogError = ExpertSquadCatalogErrors[keyof ExpertSquadCatalogErrors]
+
 export type ExpertSquadCatalogResponses = {
   /**
    * Expert squad catalog
@@ -8934,6 +8959,7 @@ export type ExpertSquadCatalogResponses = {
           }
         | {
             kind: "project_package"
+            namespace: string
             root: string
             manifest_path: string
             readme_path: string
@@ -8996,6 +9022,55 @@ export type ExpertSquadCatalogResponses = {
 
 export type ExpertSquadCatalogResponse = ExpertSquadCatalogResponses[keyof ExpertSquadCatalogResponses]
 
+export type ExpertSquadReleasePayloadData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/expert-squad/release-payload"
+}
+
+export type ExpertSquadReleasePayloadErrors = {
+  /**
+   * Expert squad package release rejected
+   */
+  400: {
+    name: "ExpertSquadPackageError"
+    data: {
+      [key: string]: unknown
+    }
+  }
+}
+
+export type ExpertSquadReleasePayloadError = ExpertSquadReleasePayloadErrors[keyof ExpertSquadReleasePayloadErrors]
+
+export type ExpertSquadReleasePayloadResponses = {
+  /**
+   * Bundled expert-squad package release result
+   */
+  200: {
+    installed: Array<{
+      namespace: string
+      id: string
+      targetRoot: string
+      replaced: boolean
+    }>
+    skipped: Array<{
+      namespace: string
+      id: string
+      targetRoot: string
+      replaced: boolean
+    }>
+  }
+}
+
+export type ExpertSquadReleasePayloadResponse =
+  ExpertSquadReleasePayloadResponses[keyof ExpertSquadReleasePayloadResponses]
+
 export type ExpertSquadImportFolderData = {
   body: {
     sourceDirectory: string
@@ -9030,6 +9105,7 @@ export type ExpertSquadImportFolderResponses = {
    * Imported expert squad package
    */
   200: {
+    namespace: string
     id: string
     targetRoot: string
     replaced: boolean
@@ -9073,6 +9149,7 @@ export type ExpertSquadImportFileResponses = {
    * Imported expert squad package
    */
   200: {
+    namespace: string
     id: string
     targetRoot: string
     replaced: boolean

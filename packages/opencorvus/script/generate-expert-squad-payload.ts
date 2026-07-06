@@ -6,6 +6,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 
 interface PayloadPackageInput {
+  namespace: string
   id: string
   root: string
   files: string[]
@@ -63,28 +64,54 @@ async function collectPackageFiles(packageRoot: string): Promise<string[]> {
 
 export async function discoverExpertSquadPayloadPackages(repoRoot: string): Promise<PayloadPackageInput[]> {
   const sourceRoot = resolveRepositoryExpertSquadsRoot(repoRoot)
-  const entries = (await fs.promises.readdir(sourceRoot, { withFileTypes: true })).sort((a, b) =>
+  const namespaceEntries = (await fs.promises.readdir(sourceRoot, { withFileTypes: true })).sort((a, b) =>
     a.name.localeCompare(b.name),
   )
   const packages: PayloadPackageInput[] = []
   const seen = new Set<string>()
 
-  for (const entry of entries) {
-    if (!entry.isDirectory()) {
-      throw new Error(`Expert squad payload generation expected package directory: ${path.join(sourceRoot, entry.name)}`)
+  for (const namespaceEntry of namespaceEntries) {
+    if (!namespaceEntry.isDirectory()) {
+      throw new Error(
+        `Expert squad payload generation expected namespace directory: ${path.join(sourceRoot, namespaceEntry.name)}`,
+      )
     }
-    if (ExpertSquadRegistry.isRuntimeInternalEntry(entry.name, true)) {
-      throw new Error(`Expert squad payload generation rejects runtime directory: ${entry.name}`)
+    if (ExpertSquadRegistry.isRuntimeInternalEntry(namespaceEntry.name, true)) {
+      throw new Error(`Expert squad payload generation rejects runtime directory: ${namespaceEntry.name}`)
     }
-    const root = path.join(sourceRoot, entry.name)
-    const loaded = await ExpertSquadRegistry.loadPackage(root)
-    if (seen.has(loaded.id)) throw new Error(`Expert squad payload generation found duplicate id: ${loaded.id}`)
-    seen.add(loaded.id)
-    packages.push({
-      id: loaded.id,
-      root,
-      files: await collectPackageFiles(root),
-    })
+    const namespaceRoot = path.join(sourceRoot, namespaceEntry.name)
+    const namespaceManifest = path.join(namespaceRoot, ExpertSquadRegistry.MANIFEST)
+    if (await fs.promises.stat(namespaceManifest).then(() => true, (error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return false
+      throw error
+    })) {
+      throw new Error(
+        `Expert squad payload generation rejects direct package root ${path.join(sourceRoot, namespaceEntry.name)}; expected <namespace>/<id>`,
+      )
+    }
+    const packageEntries = (await fs.promises.readdir(namespaceRoot, { withFileTypes: true })).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    )
+    for (const entry of packageEntries) {
+      if (!entry.isDirectory()) {
+        throw new Error(
+          `Expert squad payload generation expected package directory: ${path.join(namespaceRoot, entry.name)}`,
+        )
+      }
+      if (ExpertSquadRegistry.isRuntimeInternalEntry(entry.name, true)) {
+        throw new Error(`Expert squad payload generation rejects runtime directory: ${entry.name}`)
+      }
+      const root = path.join(namespaceRoot, entry.name)
+      const loaded = await ExpertSquadRegistry.loadPackage(root)
+      if (seen.has(loaded.id)) throw new Error(`Expert squad payload generation found duplicate id: ${loaded.id}`)
+      seen.add(loaded.id)
+      packages.push({
+        namespace: loaded.namespace,
+        id: loaded.id,
+        root,
+        files: await collectPackageFiles(root),
+      })
+    }
   }
 
   return packages.sort((a, b) => a.id.localeCompare(b.id))
@@ -112,6 +139,7 @@ export async function renderExpertSquadPayloadModule(repoRoot: string): Promise<
     blocks.push(
       [
         "  {",
+        `    namespace: ${JSON.stringify(pkg.namespace)},`,
         `    id: ${JSON.stringify(pkg.id)},`,
         `    manifestText: textPayload(${manifestIdentifier}),`,
         "    files: {",

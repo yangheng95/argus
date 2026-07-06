@@ -331,7 +331,7 @@ describe("executor settings", () => {
     expect(CHAT_COMPOSER_SOURCE).not.toContain("<Select.Root")
     expect(CHAT_COMPOSER_SOURCE).not.toContain("<Select.HiddenSelect")
     expect(CHAT_COMPOSER_SOURCE).not.toContain("function expertSquadselectOptionItem")
-    expect(CHAT_COMPOSER_SOURCE).toContain("selectedExpertSquad()?.label ?? props.expertSquadID")
+    expect(CHAT_COMPOSER_SOURCE).toContain("selectedExpertSquad()?.display_label ?? props.expertSquadID")
     expect(COMPOSER_CSS_SOURCE).toContain(".expert-squad-select-trigger.oc-select-trigger")
     expect(CHAT_COMPOSER_SOURCE).not.toContain("<select")
     expect(CHAT_COMPOSER_SOURCE).not.toContain("<option")

@@ -46,6 +46,93 @@ function eventStream() {
   })
 }
 
+const SESSION_TASK_ID = "expert-squad-session-scope"
+const SESSION_ID = "ses_expert_squad_root"
+const DIRECTORY = "D:/overlay/workspace/app"
+const SESSION_TASK_TIME = 1_777_000_000_000
+
+function orderKey(domain: string, rank: number, time: number, id: string, sequence = 0): string {
+  return `v1:${String(time).padStart(16, "0")}:${String(rank).padStart(16, "0")}:${String(sequence).padStart(16, "0")}:${domain}:${id}`
+}
+
+function taskOrderKey(id: string, time: number): string {
+  return orderKey("task", 10, time, id)
+}
+
+function taskItem() {
+  return {
+    updated_at: SESSION_TASK_TIME + 1,
+    pending_interactions: 0,
+    overview: { headline: "Expert squad session scope", summary: "Expert squad session scope" },
+    task: {
+      id: SESSION_TASK_ID,
+      requestID: "req-expert-squad-session-scope",
+      title: "Expert squad session scope",
+      request: "Expert squad session scope",
+      directory: DIRECTORY,
+      status: "active",
+      sessionID: SESSION_ID,
+      orderKey: taskOrderKey(SESSION_TASK_ID, SESSION_TASK_TIME),
+      time: { created: SESSION_TASK_TIME, started: SESSION_TASK_TIME + 1, updated: SESSION_TASK_TIME + 2 },
+    },
+  }
+}
+
+function conversationForTask(item: ReturnType<typeof taskItem>) {
+  return {
+    board: {
+      task: item.task,
+      overview: item.overview,
+      goalWorkflows: [],
+      interactions: [],
+      lastSequence: 1,
+      snapshotVersion: `snapshot-${item.task.id}`,
+    },
+    transcript: [],
+    timeline: [],
+    events: [],
+    view: { topLevelSessionIDs: [], sessions: [], messages: [] },
+    agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
+    eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
+    history: { hasMore: false, oldestTimestamp: null, oldestMessageID: null, limit: 160 },
+    messageWatermark: 0,
+    lastSequence: 0,
+  }
+}
+
+function panelCatalog(sessionOverride: string | null) {
+  return expertSquadCatalogFixture({
+    active: sessionOverride ?? "frontend-replica",
+    projectActive: "frontend-replica",
+    sessionOverride,
+    squads: [
+      {
+        id: "general",
+        label: "General",
+        display_prefix: "Builtin",
+        description: "Baseline expert squad.",
+        built_in: true,
+      },
+      {
+        id: "frontend-replica",
+        label: "Frontend Replica",
+        namespace: "builtin",
+        display_prefix: "Builtin",
+        description: "Visual UI verification squad.",
+        built_in: false,
+      },
+      {
+        id: "backend",
+        label: "Backend",
+        namespace: "builtin",
+        display_prefix: "Builtin",
+        description: "Route and persistence squad.",
+        built_in: false,
+      },
+    ],
+  })
+}
+
 test("expert squads settings renders package identity, projections, lifecycle actions, and active-only writes", async () => {
   assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
   assert.equal(typeof globalThis.Bun, "undefined")
@@ -186,8 +273,9 @@ test("expert squads settings renders package identity, projections, lifecycle ac
         return send({ id: body.id, filename: `${body.id}.zip`, archiveBase64: "eA==", fileCount: 1 })
       }
       return send({
+        namespace: "builtin",
         id: "frontend-replica",
-        targetRoot: "D:/overlay/workspace/app/.opencorvus/expert-squads/frontend-replica",
+        targetRoot: "D:/overlay/workspace/app/.opencorvus/expert-squads/builtin/frontend-replica",
         replaced: Boolean(body.replace),
       })
     }
@@ -272,6 +360,12 @@ test("expert squads settings renders package identity, projections, lifecycle ac
         projection: text('[data-kind="projection"]'),
         list,
         readme: text(".expert-squad-markdown"),
+        selectorHeading:
+          Array.from(document.querySelectorAll<HTMLElement>(".expert-squad-section"))
+            .find((node) => node.querySelector(".expert-squad-selector-summary"))
+            ?.querySelector<HTMLElement>(".expert-squad-section-head strong")
+            ?.textContent?.replace(/\s+/g, " ")
+            .trim() ?? "",
         selector: text(".expert-squad-selector-summary"),
         projectionRows: Array.from(document.querySelectorAll<HTMLElement>(".expert-squad-projection-row")).map((node) =>
           node.textContent?.replace(/\s+/g, " ").trim() ?? "",
@@ -318,6 +412,7 @@ test("expert squads settings renders package identity, projections, lifecycle ac
       { label: "Builtin/Backend", active: "false", current: "", tag: "BUTTON" },
     ])
     assert.match(state.readme, /Frontend Replica/)
+    assert.equal(state.selectorHeading, "Selector Guidance")
     assert.match(state.selector, /desktop UI parity/)
     assert.equal(state.projectionRows.some((row) => row.includes("package_tool_refs") && row.includes("source-evidence")), true)
     assert.equal(state.virtualAgents.some((row) => row.includes("frontend-replica-builder") && row.includes("build")), true)
@@ -367,6 +462,202 @@ test("expert squads settings renders package identity, projections, lifecycle ac
       lifecycleRequests.every((request) => request.query.directory === "D:/overlay/workspace/app"),
       true,
     )
+  } finally {
+    await browser.close()
+    await server.close()
+  }
+})
+
+test("expert squads settings clears a session override back to project inheritance", async () => {
+  assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
+  assert.equal(typeof globalThis.Bun, "undefined")
+
+  const item = taskItem()
+  let sessionOverride: string | null = "backend"
+  const catalogRequests: Array<Record<string, string>> = []
+  const sessionConfigPatches: unknown[] = []
+  const badResponses: string[] = []
+
+  const server = await startBrowserFixture(async (req) => {
+    const url = new URL(req.url)
+    const path = route(url)
+    if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
+    if (path === "/" || path === "/ui" || path === "/ui/") return Response.redirect(`${url.origin}/ui/index.html`, 302)
+    const staticResponse = await overlayStaticResponse(path)
+    if (staticResponse) return staticResponse
+    if (path === "/global/health") return send({ version: "1.2.3" })
+    if (path === "/global/tasks") return send({ tasks: [item] })
+    if (path === "/global/projects/discover")
+      return send({ root: "D:/overlay", defaultDirectory: DIRECTORY, projects: [] })
+    if (path === "/session") return send([])
+    if (path === "/mission") return send([])
+    if (path === "/project/current/worktrees") return send([])
+    if (path === "/path") return send({ directory: DIRECTORY, exists: true, git: true })
+    if (path === "/vcs")
+      return send({
+        branch: "dev",
+        clean: true,
+        dirty: false,
+        staged: 0,
+        modified: 0,
+        untracked: 0,
+        conflicts: 0,
+        ahead: 0,
+        behind: 0,
+      })
+    if (path === "/provider") return send({ all: [], connected: [], default: {} })
+    if (path === "/provider/auth") return send({})
+    if (path === "/config/providers") return send({ providers: [], default: {} })
+    if (path === "/config/prompt") return send([])
+    if (path === "/config")
+      return send({ server: {}, provider: {}, channel: {}, mcp: {}, model: "", directory: DIRECTORY })
+    if (path === "/expert-squad/catalog") {
+      catalogRequests.push(Object.fromEntries(url.searchParams))
+      return send(panelCatalog(sessionOverride))
+    }
+    if (path === `/session/${SESSION_ID}/config` && req.method === "PATCH") {
+      const body = await req.json()
+      sessionConfigPatches.push(body)
+      if ((body as Record<string, unknown>).prompt_profile === null) sessionOverride = null
+      return send({ config: { prompt_profile: sessionOverride ? { active: sessionOverride } : undefined } })
+    }
+    if (path === `/session/${SESSION_ID}/config`) {
+      return send({ config: { prompt_profile: { active: sessionOverride } } })
+    }
+    if (path === "/task/events" || path === `/task/${SESSION_TASK_ID}/events`) return eventStream()
+    if (path === `/task/${SESSION_TASK_ID}/conversation`) return send(conversationForTask(item))
+    if (/^\/task\/[^/]+\/operator-model-context$/.test(path)) {
+      return send({ taskID: SESSION_TASK_ID, sessionID: SESSION_ID, agent: "orchestrator", model: null })
+    }
+    if (/^\/task\/[^/]+\/browser-preview$/.test(path))
+      return send({
+        taskID: SESSION_TASK_ID,
+        kind: "missing",
+        status: "missing",
+        projectRoot: DIRECTORY,
+        viewports: [],
+        diagnostics: [],
+        candidates: [],
+        source: "none",
+      })
+    if (/^\/task\/[^/]+\/followup$/.test(path)) return send({ followup: null })
+    if (path === "/coding/sessions") return send({ sessions: [], nextCursor: null })
+    if (path === "/coding/cli/profiles" || path === "/terminal/profiles") return send({ profiles: [] })
+    if (path === "/agent") return send([])
+    if (path === "/channel") return send([])
+    if (path === "/executor") return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
+    if (path === "/skill/installed" || path === "/skill") return send([])
+    if (path === "/skill/mounts")
+      return send({ scope: "project", skills: [], agents: [], matrix: [], project_mounts: { agents: {} }, unmounted_count: 0 })
+    if (path === "/mcp") return send({})
+    if (path === "/panel/knowledge/memory") return send([])
+    if (path === "/panel/knowledge/preference") return send([])
+    if (path === "/log" && req.method === "POST") return send({ ok: true })
+    return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
+  })
+
+  const browser = await launchBrowser(["--disable-dev-shm-usage"])
+  try {
+    const page = await browser.newPage()
+    page.on("response", (response: any) => {
+      if (response.status() >= 400) badResponses.push(`${response.status()} ${response.url()}`)
+    })
+    await page.setViewport({ width: 1440, height: 960 })
+    await page.evaluateOnNewDocument(
+      ({ serverUrl, directory }) => {
+        ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
+        localStorage.setItem("oc_locale", "en-US")
+        ;(window as any).__TAURI__ = {
+          core: {
+            invoke: async (command: string) => {
+              if (command === "overlay_settings_load") {
+                return {
+                  serverUrl,
+                  autoServer: false,
+                  locale: "en-US",
+                  directory,
+                }
+              }
+              if (command === "overlay_settings_save") return true
+              return null
+            },
+          },
+          window: {
+            getCurrentWindow() {
+              return {
+                close: async () => undefined,
+                hide: async () => undefined,
+                minimize: async () => undefined,
+                startDragging: async () => undefined,
+                isMaximized: async () => false,
+                onResized: async () => ({ unlisten: async () => undefined }),
+              }
+            },
+          },
+        }
+      },
+      { serverUrl: server.origin, directory: DIRECTORY },
+    )
+
+    await page.goto(`${server.origin}/ui/index.html?taskID=${encodeURIComponent(SESSION_TASK_ID)}`, { waitUntil: "load" })
+    await page.waitForFunction(
+      (taskID: string) =>
+        (window as any).boardStore?.selectedSource?.kind === "task" &&
+        (window as any).boardStore.selectedSource.id === taskID,
+      { timeout: 15_000 },
+      SESSION_TASK_ID,
+    )
+    await page.waitForSelector('[data-menu-trigger="settings"]')
+    await page.click('[data-menu-trigger="settings"]')
+    await page.waitForSelector('[data-testid="titlebar-settings-expert-squad"]')
+    await page.click('[data-testid="titlebar-settings-expert-squad"]')
+    await page.waitForSelector('[data-config-panel="expert-squad"] [data-ui="expert-squad-clear-session-override"]:not([disabled])')
+
+    const before = await page.evaluate(() => ({
+      scope: document.querySelector('[data-kind="scope"]')?.textContent?.replace(/\s+/g, " ").trim(),
+      projectActive: document.querySelector('[data-kind="project-active"]')?.textContent?.replace(/\s+/g, " ").trim(),
+      effectiveActive: document.querySelector('[data-kind="effective-active"]')?.textContent?.replace(/\s+/g, " ").trim(),
+      sessionOverride: document.querySelector('[data-kind="session-override"]')?.textContent?.replace(/\s+/g, " ").trim(),
+      clearButton: document
+        .querySelector('[data-ui="expert-squad-clear-session-override"]')
+        ?.textContent?.replace(/\s+/g, " ")
+        .trim(),
+      clearDisabled: document.querySelector<HTMLButtonElement>('[data-ui="expert-squad-clear-session-override"]')?.disabled,
+    }))
+    assert.match(before.scope ?? "", /session/i)
+    assert.match(before.projectActive ?? "", /Frontend Replica/)
+    assert.match(before.effectiveActive ?? "", /Backend/)
+    assert.match(before.sessionOverride ?? "", /Backend/)
+    assert.equal(before.clearButton, "Inherit Project")
+    assert.equal(before.clearDisabled, false)
+
+    mkdirSync(resolve(".scratch"), { recursive: true })
+    const panel = await page.$("#expertSquadBody")
+    assert.ok(panel)
+    writeFileSync(resolve(".scratch/expert-squad-session-clear-before.png"), await panel.screenshot({}))
+
+    await page.click('[data-ui="expert-squad-clear-session-override"]')
+    await page.waitForFunction(() =>
+      /inherits project/i.test(document.querySelector('[data-kind="session-override"]')?.textContent ?? ""),
+    )
+
+    const after = await page.evaluate(() => ({
+      effectiveActive: document.querySelector('[data-kind="effective-active"]')?.textContent?.replace(/\s+/g, " ").trim(),
+      sessionOverride: document.querySelector('[data-kind="session-override"]')?.textContent?.replace(/\s+/g, " ").trim(),
+      clearDisabled: document.querySelector<HTMLButtonElement>('[data-ui="expert-squad-clear-session-override"]')?.disabled,
+      notice: document.querySelector(".config-status-box")?.textContent?.replace(/\s+/g, " ").trim(),
+    }))
+    assert.equal(
+      catalogRequests.some((request) => request.directory === DIRECTORY && request.sessionID === SESSION_ID),
+      true,
+    )
+    assert.deepEqual(sessionConfigPatches, [{ prompt_profile: null }])
+    assert.match(after.effectiveActive ?? "", /Frontend Replica/)
+    assert.match(after.sessionOverride ?? "", /inherits project/i)
+    assert.equal(after.clearDisabled, true)
+    assert.match(after.notice ?? "", /inherits project/)
+    assert.deepEqual(badResponses, [])
+    writeFileSync(resolve(".scratch/expert-squad-session-clear-after.png"), await panel.screenshot({}))
   } finally {
     await browser.close()
     await server.close()

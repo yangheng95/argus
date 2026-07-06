@@ -67,6 +67,15 @@ describe("build-artifact", () => {
     }
   })
 
+  test("supported compile build scripts regenerate expert-squad payloads before Bun compile", () => {
+    const buildSource = readFileSync(resolve(import.meta.dir, "../../script/build.ts"), "utf8")
+    const localBuildSource = readFileSync(resolve(import.meta.dir, "../../script/build.local.ts"), "utf8")
+    for (const source of [buildSource, localBuildSource]) {
+      expect(source).toContain('import { generateExpertSquadPayloadModule } from "./generate-expert-squad-payload"')
+      expect(source.indexOf("await generateExpertSquadPayloadModule(repoRoot)")).toBeLessThan(source.indexOf("await Bun.build("))
+    }
+  })
+
   test("overlay-server build scripts do not package the removed coding agent TUI plugin", () => {
     const buildSource = readFileSync(resolve(import.meta.dir, "../../script/build.ts"), "utf8")
     const localBuildSource = readFileSync(resolve(import.meta.dir, "../../script/build.local.ts"), "utf8")

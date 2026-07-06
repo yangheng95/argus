@@ -4,6 +4,8 @@ Date: 2026-07-06
 Status: Implementation record
 Owner: Codex
 
+Supersession note: this record documents the intermediate display-only rename where the manifest ID remained `software-testing`. `2026-07-06-expert-squad-namespaced-source-layout.md` supersedes that identity model: WuJiang OpenTest now lives at `.opencorvus/expert-squads/wujiang/opentest/` with manifest `id = "opentest"`, while `prompt_profile.active` still uses the manifest ID only.
+
 ## Glossary
 
 - ID: Identifier, the stable machine identity of an expert-squad package.

@@ -260,10 +260,10 @@ test(
     await using tmp = await tmpdir({
       git: true,
       config: {
-        prompt_profile: { active: "software-testing" },
+        prompt_profile: { active: "opentest" },
       },
     })
-    await copyRepositoryExpertSquadPackage(tmp.path, "software-testing")
+    await copyRepositoryExpertSquadPackage(tmp.path, "opentest")
 
     const toolKit: AgentToolKit<Record<string, never>> = {
       tools: {},
@@ -291,7 +291,7 @@ test(
 )
 
 test(
-  "runAgentSession keeps base role identity while attaching software-testing virtual metadata",
+  "runAgentSession keeps base role identity while attaching opentest virtual metadata",
   async () => {
     mock.module("@/agent/model", () => ({
       resolveAgentModel: async () => ({
@@ -304,15 +304,12 @@ test(
     await using tmp = await tmpdir({
       git: true,
       config: {
-        prompt_profile: { active: "software-testing" },
+        prompt_profile: { active: "opentest" },
       },
     })
-    await copyRepositoryExpertSquadPackage(tmp.path, "software-testing")
-    const inventoryProviderName = PromptProfileResolver.packageToolProviderName(
-      "software-testing/shared/test-artifact-inventory",
-    )
+    await copyRepositoryExpertSquadPackage(tmp.path, "opentest")
     const protocolProviderName = PromptProfileResolver.packageToolProviderName(
-      "software-testing/shared/opentest-protocol-engine",
+      "opentest/shared/opentest-protocol-engine",
     )
 
     const promptCalls: Array<Parameters<typeof SessionPrompt.prompt>[0]> = []
@@ -362,12 +359,12 @@ test(
         const capability = await PromptProfileResolver.resolveWorkerCapability({
           projectDirectory: tmp.path,
           agentID: "build",
-          config: Config.Info.parse({ prompt_profile: { active: "software-testing" } }),
+          config: Config.Info.parse({ prompt_profile: { active: "opentest" } }),
         })
         const out = await runAgentSession({
           kind: "build",
           core: BUILD_CORE,
-          sessionTitle: "software-testing virtual worker metadata",
+          sessionTitle: "opentest virtual worker metadata",
           toolKit,
           buildUserPrompt: () => "implement the request",
         })
@@ -381,8 +378,8 @@ test(
         expect(descriptor?.payload.workflow.sessionKind).toBe("build")
         expect(contract?.identity.agentKind).toBe("build")
         expect(descriptor?.payload.capability).toMatchObject({
-          promptProfileID: "software-testing",
-          capabilityProfileID: "software-testing",
+          promptProfileID: "opentest",
+          capabilityProfileID: "opentest",
           projectionHash: capability.projectionHash,
           virtualAgent: expect.objectContaining({
             baseRole: "build",
@@ -391,8 +388,8 @@ test(
           }),
         })
         expect(contract?.identity).toMatchObject({
-          promptProfileID: "software-testing",
-          capabilityProfileID: "software-testing",
+          promptProfileID: "opentest",
+          capabilityProfileID: "opentest",
           projectionHash: capability.projectionHash,
           virtualAgent: expect.objectContaining({
             baseRole: "build",
@@ -400,7 +397,7 @@ test(
           }),
         })
         expect(Object.keys(contract?.tools ?? {}).sort()).toEqual(
-          ["read", inventoryProviderName, protocolProviderName].sort(),
+          ["read", protocolProviderName].sort(),
         )
         SessionPrompt.clearSessionRuntimeContract(out.session.id)
       },

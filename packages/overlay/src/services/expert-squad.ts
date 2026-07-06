@@ -24,12 +24,17 @@ export interface ExpertSquadCapabilityProjection {
   agents: Record<string, ExpertSquadCapabilityProjectionEntry>
 }
 
-export interface ExpertSquadCatalogSource {
-  kind: "built_in" | "project_package"
-  root?: string
-  manifest_path?: string
-  readme_path?: string
-}
+export type ExpertSquadCatalogSource =
+  | {
+      kind: "built_in"
+    }
+  | {
+      kind: "project_package"
+      namespace: string
+      root: string
+      manifest_path: string
+      readme_path: string
+    }
 
 export interface ExpertSquadCatalogReadme {
   path: "README.md"
@@ -150,9 +155,15 @@ export interface ExpertSquadImportFileInput {
 }
 
 export interface ExpertSquadImportResult {
+  namespace: string
   id: string
   targetRoot: string
   replaced: boolean
+}
+
+export interface ExpertSquadReleasePayloadResult {
+  installed: ExpertSquadImportResult[]
+  skipped: ExpertSquadImportResult[]
 }
 
 export interface ExpertSquadExportResult {
@@ -237,6 +248,15 @@ export async function setSessionExpertSquadActive(
   return saved
 }
 
+export async function clearSessionExpertSquadOverride(
+  sessionID: string,
+  directory: string,
+): Promise<SessionConfigResponse> {
+  const saved = await patchSessionConfig({ sessionID, directory, diff: { prompt_profile: null } })
+  markExpertSquadCatalogStale()
+  return saved
+}
+
 export async function importExpertSquadFolder(input: ExpertSquadImportFolderInput): Promise<ExpertSquadImportResult> {
   const sourceDirectory = input.sourceDirectory.trim()
   if (!sourceDirectory) throw new Error("importExpertSquadFolder: sourceDirectory is required")
@@ -264,6 +284,14 @@ export async function importExpertSquadArchive(input: ExpertSquadImportFileInput
       replace: input.replace,
     }),
   })) as ExpertSquadImportResult
+  markExpertSquadCatalogStale()
+  return result
+}
+
+export async function releaseExpertSquadPayload(directory: string): Promise<ExpertSquadReleasePayloadResult> {
+  const result = (await apiJson(directoryScopedPath("expert-squad/release-payload", directory, "releaseExpertSquadPayload"), {
+    method: "POST",
+  })) as ExpertSquadReleasePayloadResult
   markExpertSquadCatalogStale()
   return result
 }

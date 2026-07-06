@@ -242,10 +242,11 @@ OpenAPI marks project-scoped operations with a `directory` query parameter. Thes
 
 | Method | Path | Summary | operationId |
 |---|---|---|---|
-| GET | `/expert-squad/catalog` | List expert squads and active capability projection | `expertSquad.catalog` |
+| GET | `/expert-squad/catalog` | List expert squads and active capability projection Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`, `UnknownError`. | `expertSquad.catalog` |
 | POST | `/expert-squad/export` | Export an expert squad ZIP archive Body: `id`; Errors: `ExpertSquadPackageError`. | `expertSquad.export` |
 | POST | `/expert-squad/import-file` | Import an expert squad ZIP archive Body: `archiveBase64`, `filename`, `replace`; Errors: `ExpertSquadPackageError`. | `expertSquad.importFile` |
 | POST | `/expert-squad/import-folder` | Import an expert squad folder Body: `replace`, `sourceDirectory`; Errors: `ExpertSquadPackageError`. | `expertSquad.importFolder` |
+| POST | `/expert-squad/release-payload` | Release bundled expert-squad packages Errors: `ExpertSquadPackageError`. | `expertSquad.releasePayload` |
 
 ### Skill
 

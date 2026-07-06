@@ -76,7 +76,7 @@ build agent 处理任何前端页面、组件、可视化、overlay、preview、
 
 **15.1（专家团解耦边界 — 2026-07-06）.** 专家团是 OpenCorvus 内部 scenario / agent capability package，不是全局 core prompt、普通 Codex skill、plugin、UI filter 或旧 `PromptProfile.builtIns` 的别名集合。
 
-- 非 `general` 专家团只能以 `.opencorvus/expert-squads/<id>/` 项目 package 存在；随应用分发的非通用专家团也必须先 release 成这个明文项目 package，再走普通 discovery / catalog / resolver 路径。运行时内置 package 默认只保留 `general`，除非当前任务明确重开这一架构边界。
+- 非 `general` 专家团只能以 `.opencorvus/expert-squads/<namespace>/<id>/` 项目 package 存在；随应用分发的非通用专家团也必须先 release 成这个明文项目 package，再走普通 discovery / catalog / resolver 路径。`namespace` 是来源和安装分区，不是 active identity；运行时内置 package 默认只保留 `general`，除非当前任务明确重开这一架构边界。
 - `expert-squad.jsonc` 的 manifest `id` 是唯一专家团身份；目录名、ZIP 文件名、显示 label、selector skill 名、MCP server 名或相似命名都不能决定身份，禁止为改名/相似名增加 fallback、兼容 alias、猜测加载或 UI-only 过滤。
 - `prompt_profile.active` 是唯一 active expert-squad 选择来源；禁止新增第二个 active squad 字段、session shadow state、隐藏消息或合成配置来表达“当前专家团”。
 - `PromptProfileResolver` 是唯一运行时投影面，负责把 active expert squad 投影到 scheduler capability、worker capability、visible selector skills、skills、package tools、scoped MCP providers、catalog 和 skill-mount surface。禁止让 catalog、overlay、SkillTool、MCP 或 worker 各自扫描 inactive package 资源形成多源投影。

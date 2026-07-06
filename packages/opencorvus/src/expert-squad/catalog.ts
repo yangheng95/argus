@@ -13,6 +13,7 @@ export const ExpertSquadCatalogSourceSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("project_package"),
+      namespace: z.string(),
       root: z.string(),
       manifest_path: z.string(),
       readme_path: z.string(),

@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "id": "frontend-replica",
+  "label": "Frontend Replica",
+  "description": "Source URL/reference-screenshot replica, desktop surface ledger, bounded evidence-backed acceptance, source evidence, and rendered proof expert squad.",
+  "version": "2026.07.05",
+  "readme": "README.md",
+  "selector": {
+    "summary": "Source URL/reference-screenshot replica, desktop surface ledger, bounded evidence-backed acceptance, source evidence, and rendered proof expert squad.",
+    "selection_guidance": "Use select_expert_squad with profile_id frontend-replica when the user request matches this expert squad.",
+    "instructions": "selector.md"
+  },
+  "capability_projection": {
+    "scheduler": {
+      "role_base": true,
+      "built_in_tool_ids": [
+        "analyze_intent",
+        "requirements",
+        "architect",
+        "frontend_research",
+        "frontend_design",
+        "workload_analysis",
+        "build",
+        "visual_qa",
+        "integrity",
+        "explore",
+        "add_goal",
+        "modify_goal",
+        "complete_goal",
+        "delete_goal",
+        "propose_task",
+        "refine",
+        "browser_preview",
+        "bash"
+      ]
+    },
+    "agents": {
+      "coding": {
+        "role_base": true
+      },
+      "coding-assistant": {
+        "role_base": true
+      },
+      "general": {
+        "role_base": true
+      },
+      "explore": {
+        "role_base": true
+      },
+      "mission": {
+        "role_base": true
+      },
+      "intent-analysis": {
+        "role_base": true
+      },
+      "requirements": {
+        "role_base": true
+      },
+      "architect": {
+        "role_base": true
+      },
+      "frontend-design": {
+        "role_base": true
+      },
+      "frontend-research": {
+        "role_base": true
+      },
+      "goal-workload-analyst": {
+        "role_base": true
+      },
+      "build": {
+        "role_base": true
+      },
+      "visual-qa": {
+        "role_base": true
+      },
+      "integrity": {
+        "role_base": true
+      },
+      "orchestrator": {
+        "role_base": true
+      }
+    }
+  },
+  "agents": {
+    "coding": {
+      "prompt": "agents/coding/system.md"
+    },
+    "coding-assistant": {
+      "prompt": "agents/coding-assistant/system.md"
+    },
+    "general": {
+      "prompt": "agents/general/system.md"
+    },
+    "explore": {
+      "prompt": "agents/explore/system.md"
+    },
+    "mission": {
+      "prompt": "agents/mission/system.md"
+    },
+    "intent-analysis": {
+      "prompt": "agents/intent-analysis/system.md"
+    },
+    "requirements": {
+      "prompt": "agents/requirements/system.md"
+    },
+    "architect": {
+      "prompt": "agents/architect/system.md"
+    },
+    "frontend-design": {
+      "prompt": "agents/frontend-design/system.md"
+    },
+    "frontend-research": {
+      "prompt": "agents/frontend-research/system.md"
+    },
+    "build": {
+      "prompt": "agents/build/system.md"
+    },
+    "visual-qa": {
+      "prompt": "agents/visual-qa/system.md"
+    },
+    "integrity": {
+      "prompt": "agents/integrity/system.md"
+    },
+    "orchestrator": {
+      "prompt": "agents/orchestrator/system.md"
+    }
+  },
+  "namespace": "builtin"
+}

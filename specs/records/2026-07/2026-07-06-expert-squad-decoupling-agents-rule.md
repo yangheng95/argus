@@ -3,6 +3,8 @@
 Date: 2026-07-06
 Status: Implemented
 
+Supersession note: `2026-07-06-expert-squad-namespaced-source-layout.md` supersedes this record's direct-child package path wording. Current non-`general` packages live under `.opencorvus/expert-squads/<namespace>/<id>/`, with `builtin/<id>` and `wujiang/opentest` as concrete source partitions. Manifest `id`, not namespace or directory name, remains the expert-squad identity.
+
 ## Recall
 
 | Item | Details |
@@ -20,7 +22,7 @@ Add `15.1（专家团解耦边界 — 2026-07-06）` to `AGENTS.md` under projec
 
 The rule captures:
 
-- Non-general expert squads are `.opencorvus/expert-squads/<id>` packages or payloads released into that same project package path.
+- Non-general expert squads are `.opencorvus/expert-squads/<namespace>/<id>` packages or payloads released into that same project package path.
 - `general` remains the only built-in runtime package unless the architecture is explicitly reopened.
 - Manifest `id` is the only expert-squad identity.
 - `prompt_profile.active` remains the only active expert-squad source.

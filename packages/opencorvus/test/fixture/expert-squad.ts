@@ -1,13 +1,24 @@
+import nodeFs from "node:fs"
 import fs from "fs/promises"
 import path from "node:path"
+import { ExpertSquadRegistry } from "../../src/expert-squad/registry"
 
 export const PROJECT_EXPERT_SQUAD_ID = "project-replica"
+export const PROJECT_EXPERT_SQUAD_NAMESPACE = "project"
 export const REPOSITORY_ROOT = path.resolve(import.meta.dir, "../../../..")
 const EXPERT_SQUAD_DIRECTORY = "expert-squads"
 const EXPERT_SQUAD_MANIFEST = "expert-squad.jsonc"
 
 export function repositoryExpertSquadRoot(id: string): string {
-  return path.join(REPOSITORY_ROOT, ".opencorvus", EXPERT_SQUAD_DIRECTORY, id)
+  const base = path.join(REPOSITORY_ROOT, ".opencorvus", EXPERT_SQUAD_DIRECTORY)
+  const matches: string[] = []
+  for (const namespaceEntry of nodeFs.readdirSync(base, { withFileTypes: true })) {
+    if (!namespaceEntry.isDirectory()) continue
+    const candidate = path.join(base, namespaceEntry.name, id)
+    if (nodeFs.existsSync(path.join(candidate, EXPERT_SQUAD_MANIFEST))) matches.push(candidate)
+  }
+  if (matches.length !== 1) throw new Error(`Expected one repository expert squad package for ${id}, found ${matches.length}`)
+  return matches[0]!
 }
 
 export interface ProjectExpertSquadManifestOptions {
@@ -81,6 +92,7 @@ export function projectExpertSquadManifest(id = PROJECT_EXPERT_SQUAD_ID, options
   )
   return {
     schema_version: 1,
+    namespace: PROJECT_EXPERT_SQUAD_NAMESPACE,
     id,
     label: "Project Replica",
     description: "Project-local replica squad",
@@ -214,7 +226,7 @@ export async function writeProjectExpertSquadPackage(
   id = PROJECT_EXPERT_SQUAD_ID,
   options: ProjectExpertSquadManifestOptions = {},
 ): Promise<string> {
-  const packageRoot = path.join(projectRoot, ".opencorvus", EXPERT_SQUAD_DIRECTORY, id)
+  const packageRoot = path.join(projectRoot, ".opencorvus", EXPERT_SQUAD_DIRECTORY, PROJECT_EXPERT_SQUAD_NAMESPACE, id)
   for (const [relativePath, content] of Object.entries(projectExpertSquadFiles(id, "", options))) {
     const target = path.join(packageRoot, relativePath)
     await fs.mkdir(path.dirname(target), { recursive: true })
@@ -225,7 +237,8 @@ export async function writeProjectExpertSquadPackage(
 
 export async function copyRepositoryExpertSquadPackage(projectRoot: string, id: string): Promise<string> {
   const sourceRoot = repositoryExpertSquadRoot(id)
-  const targetRoot = path.join(projectRoot, ".opencorvus", EXPERT_SQUAD_DIRECTORY, id)
+  const loaded = await ExpertSquadRegistry.loadPackage(sourceRoot)
+  const targetRoot = path.join(projectRoot, ".opencorvus", EXPERT_SQUAD_DIRECTORY, loaded.namespace, loaded.id)
   await fs.mkdir(path.dirname(targetRoot), { recursive: true })
   await fs.cp(sourceRoot, targetRoot, {
     recursive: true,

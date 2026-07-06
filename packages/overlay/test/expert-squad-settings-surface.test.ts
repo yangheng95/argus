@@ -52,7 +52,9 @@ describe("expert squad settings surface", () => {
     expect(expertSquadPanel).toContain('data-ui="expert-squad-import-folder"')
     expect(expertSquadPanel).toContain('data-ui="expert-squad-import-archive"')
     expect(expertSquadPanel).toContain('data-ui="expert-squad-export"')
+    expect(expertSquadPanel).toContain('data-ui="expert-squad-clear-session-override"')
     expect(expertSquadPanel).toContain("loadExpertSquadCatalog")
+    expect(expertSquadPanel).toContain("clearSessionExpertSquadOverride")
     expect(expertSquadPanel).toContain("importExpertSquadFolder")
     expect(expertSquadPanel).toContain("importExpertSquadArchive")
     expect(expertSquadPanel).toContain("exportExpertSquadArchive")
@@ -62,6 +64,7 @@ describe("expert squad settings surface", () => {
     expect(expertSquadPanel).toContain("squad.display_label")
     expect(expertSquadPanel).toContain("squad.readme.content")
     expect(expertSquadPanel).toContain("squad.selector")
+    expect(expertSquadPanel).toContain("selector_instructions_title")
     expect(expertSquadPanel).toContain("squad.capability_projection.scheduler")
     expect(chatComposer).toContain("option.display_label")
   })
@@ -85,6 +88,7 @@ describe("expert squad settings surface", () => {
     expect(exports.has("loadExpertSquadCatalog")).toBe(true)
     expect(exports.has("setProjectExpertSquadActive")).toBe(true)
     expect(exports.has("setSessionExpertSquadActive")).toBe(true)
+    expect(exports.has("clearSessionExpertSquadOverride")).toBe(true)
     expect(exports.has("importExpertSquadFolder")).toBe(true)
     expect(exports.has("importExpertSquadArchive")).toBe(true)
     expect(exports.has("exportExpertSquadArchive")).toBe(true)
@@ -100,9 +104,12 @@ describe("expert squad settings surface", () => {
       "expert_squad.replace_existing",
       "expert_squad.catalog_failed",
       "expert_squad.session_override",
+      "expert_squad.clear_session_override",
+      "expert_squad.cleared_session_override",
       "expert_squad.inherits_project",
       "expert_squad.readme_title",
       "expert_squad.selector_title",
+      "expert_squad.selector_instructions_title",
       "expert_squad.capability_projection",
       "expert_squad.export",
     ]) {

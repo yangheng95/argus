@@ -9,7 +9,7 @@ import { NamedError } from "@opencorvus-ai/util/error"
 import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
-import { namedErrorResponse } from "../error"
+import { errors, namedErrorResponse } from "../error"
 import { ExpertSquadCatalogSchema } from "@/expert-squad/catalog"
 import { assertActiveProjectSession } from "../active-project-session"
 
@@ -41,10 +41,18 @@ const ExportInput = z
   })
   .strict()
 
+const ReleasePayloadInput = z.object({}).strict()
+
 const ImportResult = z.object({
+  namespace: z.string(),
   id: z.string(),
   targetRoot: z.string(),
   replaced: z.boolean(),
+})
+
+const ReleasePayloadResult = z.object({
+  installed: z.array(ImportResult),
+  skipped: z.array(ImportResult),
 })
 
 const ExportResult = z.object({
@@ -84,6 +92,28 @@ async function packageRoute<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
+async function assertEmptyJsonBody(input: { header: (name: string) => string | undefined; json: () => Promise<unknown> }) {
+  const contentType = input.header("content-type") ?? ""
+  if (!contentType.toLowerCase().includes("application/json")) return
+  let body: unknown
+  try {
+    body = await input.json()
+  } catch (error) {
+    throw new ExpertSquadPackageError(
+      {
+        message: "Expert squad payload release requires valid JSON when the content type is application/json",
+      },
+      { cause: error },
+    )
+  }
+  const parsed = ReleasePayloadInput.safeParse(body)
+  if (!parsed.success) {
+    throw new ExpertSquadPackageError({
+      message: "Expert squad payload release does not accept request body fields",
+    })
+  }
+}
+
 export function ExpertSquadRoutes() {
   return new Hono()
     .get(
@@ -102,6 +132,7 @@ export function ExpertSquadRoutes() {
               },
             },
           },
+          ...errors(400, 404, 500),
         },
       }),
       validator(
@@ -148,6 +179,36 @@ export function ExpertSquadRoutes() {
               sessionID: owner.id,
             },
           }),
+        )
+      },
+    )
+    .post(
+      "/release-payload",
+      describeRoute({
+        summary: "Release bundled expert-squad packages",
+        description:
+          "Explicitly provisions bundled expert-squad payload packages into the current project's namespaced .opencorvus expert-squads catalog without overwriting existing packages.",
+        operationId: "expertSquad.releasePayload",
+        responses: {
+          200: {
+            description: "Bundled expert-squad package release result",
+            content: {
+              "application/json": {
+                schema: resolver(ReleasePayloadResult),
+              },
+            },
+          },
+          400: namedErrorResponse("Expert squad package release rejected", "ExpertSquadPackageError"),
+        },
+      }),
+      async (c) => {
+        await assertEmptyJsonBody(c.req)
+        return c.json(
+          await packageRoute(() =>
+            ExpertSquadPackageManager.releasePayloadPackages({
+              projectDirectory: Instance.directory,
+            }),
+          ),
         )
       },
     )

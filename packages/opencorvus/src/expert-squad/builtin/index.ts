@@ -4,6 +4,7 @@ import general_README_md from "./general/README.md" with { type: "text" }
 
 export const builtInPackageSources = [
   {
+    namespace: "builtin",
     id: "general",
     manifestText: general_expert_squad_jsonc,
     files: {

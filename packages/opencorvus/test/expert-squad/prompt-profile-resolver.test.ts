@@ -12,6 +12,7 @@ import { WorkflowRegistry, type OrchestratorWorkflowToolName } from "../../src/e
 import {
   copyRepositoryExpertSquadPackage,
   PROJECT_EXPERT_SQUAD_ID,
+  PROJECT_EXPERT_SQUAD_NAMESPACE,
   writeProjectExpertSquadPackage,
 } from "../fixture/expert-squad"
 import { tmpdir } from "../fixture/fixture"
@@ -36,8 +37,31 @@ const pipelineWorkflow = WorkflowRegistry.resolveSync("pipeline")!
 const directWorkflow = WorkflowRegistry.resolveSync("direct")!
 
 const retiredStaticProfileIDs = ["frontend-replica", "frontend-automation-debug", "frontend-innovate", "backend", "algorithm"] as const
-const SOFTWARE_TESTING_EXPERT_SQUAD_ID = "software-testing"
+const OPENTEST_EXPERT_SQUAD_ID = "opentest"
+const VIRTUAL_RUNTIME_EXPERT_SQUAD_ID = "virtual-runtime"
 const packageMcpServerPath = path.join(import.meta.dir, "../fixture/package-mcp-server.ts")
+
+async function withPromptProfileResolverInactivityTimeout<T>(
+  label: string,
+  inactivityTimeoutMilliseconds: number,
+  run: (activity: (step: string) => void) => Promise<T>,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let lastActivity = "start"
+  return await new Promise<T>((resolve, reject) => {
+    const reset = (step: string) => {
+      lastActivity = step
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => {
+        reject(new Error(`${label}: inactive for ${inactivityTimeoutMilliseconds}ms after ${lastActivity}`))
+      }, inactivityTimeoutMilliseconds)
+    }
+    reset(lastActivity)
+    run(reset).then(resolve, reject).finally(() => {
+      if (timer) clearTimeout(timer)
+    })
+  })
+}
 
 function packageMcpDefinition(capabilities: { prompts?: string[]; resources?: string[] }) {
   return {
@@ -67,6 +91,89 @@ async function composeSchedulerPromptWithPackageMcp(input: {
     base: "BASE",
     config: Config.Info.parse({ prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } }),
   })
+}
+
+async function writeVirtualAgentRuntimePackage(projectRoot: string): Promise<string> {
+  const packageRoot = path.join(
+    projectRoot,
+    ".opencorvus",
+    "expert-squads",
+    PROJECT_EXPERT_SQUAD_NAMESPACE,
+    VIRTUAL_RUNTIME_EXPERT_SQUAD_ID,
+  )
+  const packageMcpServerRef = `${VIRTUAL_RUNTIME_EXPERT_SQUAD_ID}/build/package-browser`
+  const files: Record<string, string> = {
+    "README.md": "# Virtual Runtime\n",
+    "selector.md": "# Virtual Runtime Selector\n",
+    "agents/orchestrator/system.md": "virtual runtime orchestrator overlay",
+    "virtual-agents/build/system.md": "virtual runtime build overlay",
+    "virtual-agents/build/tools/virtual-evidence.ts": [
+      'import { tool } from "@opencorvus-ai/plugin"',
+      "",
+      "export default tool({",
+      '  description: "Virtual build evidence tool.",',
+      "  args: {},",
+      "  async execute(_args, context) {",
+      "    return `virtual-evidence:${context.agent}:${context.directory}`",
+      "  },",
+      "})",
+      "",
+    ].join("\n"),
+    "virtual-agents/build/mcp/package-browser.jsonc": JSON.stringify(
+      packageMcpDefinition({ tools: ["snapshot"] }),
+      null,
+      2,
+    ),
+    "expert-squad.jsonc": JSON.stringify(
+      {
+        schema_version: 1,
+        namespace: PROJECT_EXPERT_SQUAD_NAMESPACE,
+        id: VIRTUAL_RUNTIME_EXPERT_SQUAD_ID,
+        label: "Virtual Runtime",
+        description: "Runtime package with virtual-agent resources.",
+        version: "2026.07.06",
+        readme: "README.md",
+        selector: {
+          summary: "Use for virtual-agent runtime path tests.",
+          selection_guidance: `Call select_expert_squad with profile_id ${VIRTUAL_RUNTIME_EXPERT_SQUAD_ID}.`,
+          instructions: "selector.md",
+        },
+        capability_projection: {
+          scheduler: {
+            role_base: true,
+            built_in_tool_ids: ["select_expert_squad", "skill", "build"],
+          },
+          agents: {
+            build: {
+              role_base: true,
+              package_tool_refs: [`${VIRTUAL_RUNTIME_EXPERT_SQUAD_ID}/build/virtual-evidence`],
+              package_mcp_server_refs: [packageMcpServerRef],
+            },
+          },
+        },
+        agents: {
+          orchestrator: {
+            prompt: "agents/orchestrator/system.md",
+          },
+        },
+        virtual_agents: {
+          build: {
+            id: "virtual-build",
+            label: "Virtual Build",
+            prompt: "virtual-agents/build/system.md",
+          },
+        },
+      },
+      null,
+      2,
+    ),
+  }
+  for (const [relativePath, content] of Object.entries(files)) {
+    const target = path.join(packageRoot, relativePath)
+    await fs.mkdir(path.dirname(target), { recursive: true })
+    await fs.writeFile(target, content)
+  }
+  return packageRoot
 }
 
 describe("PromptProfileResolver", () => {
@@ -127,13 +234,10 @@ describe("PromptProfileResolver", () => {
       editable: false,
       capability_profile_id: PROJECT_EXPERT_SQUAD_ID,
       projected_agents: ["build", "general"],
-      agents: {
-        build: "project build overlay",
-        general: "project general overlay",
-        orchestrator: "project orchestrator overlay",
-      },
-      virtual_agents: {},
+      agents: {},
+      virtual_agents: [],
     })
+    expect(profile?.agents).not.toHaveProperty("build", "project build overlay")
     expect(profile?.projection_hash).toMatch(/^[a-f0-9]{64}$/)
     expect(profile?.capability_projection.scheduler.built_in_tool_ids).toContain("build")
     expect(profile?.capability_projection.scheduler.package_tool_refs).toEqual([
@@ -176,35 +280,40 @@ describe("PromptProfileResolver", () => {
     expect(capability.packageMcpResourceRefs).toEqual([schedulerPackageMcpResourceRef])
   })
 
-  test("composes project package build overlays with default MCP context", async () => {
-    await using project = await tmpdir({ git: true })
-    const buildDefaultMcpPromptRef = "default/mcp/package-browser/prompt/inspect"
-    const buildDefaultMcpResourceRef = "default/mcp/package-browser/resource/dom"
-    await writeProjectExpertSquadPackage(project.path, PROJECT_EXPERT_SQUAD_ID, {
-      buildDefaultMcpPromptRefs: [buildDefaultMcpPromptRef],
-      buildDefaultMcpResourceRefs: [buildDefaultMcpResourceRef],
-    })
-    const config = Config.Info.parse({
-      prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID },
-      mcp: {
-        "package-browser": {
-          type: "local",
-          command: [process.execPath, packageMcpServerPath],
+  test("composes project package build overlays with default MCP context", { timeout: 0 }, async () => {
+    await withPromptProfileResolverInactivityTimeout("composes project package build overlays with default MCP context", 15_000, async (activity) => {
+      await using project = await tmpdir({ git: true })
+      activity("created temporary project")
+      const buildDefaultMcpPromptRef = "default/mcp/package-browser/prompt/inspect"
+      const buildDefaultMcpResourceRef = "default/mcp/package-browser/resource/dom"
+      await writeProjectExpertSquadPackage(project.path, PROJECT_EXPERT_SQUAD_ID, {
+        buildDefaultMcpPromptRefs: [buildDefaultMcpPromptRef],
+        buildDefaultMcpResourceRefs: [buildDefaultMcpResourceRef],
+      })
+      activity("wrote project package")
+      const config = Config.Info.parse({
+        prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID },
+        mcp: {
+          "package-browser": {
+            type: "local",
+            command: [process.execPath, packageMcpServerPath],
+          },
         },
-      },
-    })
+      })
 
-    const buildPrompt = await PromptProfileResolver.composeAgentPrompt({
-      projectDirectory: project.path,
-      agentID: "build",
-      base: "BASE",
-      userAppend: "USER APPEND",
-      config,
+      const buildPrompt = await PromptProfileResolver.composeAgentPrompt({
+        projectDirectory: project.path,
+        agentID: "build",
+        base: "BASE",
+        userAppend: "USER APPEND",
+        config,
+      })
+      activity("composed build prompt")
+      expect(buildPrompt).toContain("BASE\n\nproject build overlay\n\n## Projected MCP Context")
+      expect(buildPrompt).toContain("package-mcp-prompt::")
+      expect(buildPrompt).toContain("package-mcp-resource:")
+      expect(buildPrompt.endsWith("USER APPEND")).toBe(true)
     })
-    expect(buildPrompt).toContain("BASE\n\nproject build overlay\n\n## Projected MCP Context")
-    expect(buildPrompt).toContain("package-mcp-prompt::")
-    expect(buildPrompt).toContain("package-mcp-resource:")
-    expect(buildPrompt.endsWith("USER APPEND")).toBe(true)
   })
 
   test("composes project package Orchestrator overlay with package MCP context", async () => {
@@ -357,7 +466,7 @@ describe("PromptProfileResolver", () => {
     }
   })
 
-  test("non-general expert squads require project context and auto-release from payload packages", async () => {
+  test("non-general expert squads require an explicitly installed project package", async () => {
     for (const profileID of retiredStaticProfileIDs) {
       await expect(
         PromptProfileResolver.resolveSchedulerCapability({
@@ -367,6 +476,17 @@ describe("PromptProfileResolver", () => {
     }
 
     await using project = await tmpdir({ git: true })
+    await expect(
+      PromptProfileResolver.resolveSchedulerCapability({
+        projectDirectory: project.path,
+        config: Config.Info.parse({ prompt_profile: { active: "frontend-replica" } }),
+      }),
+    ).rejects.toThrow(`Unknown prompt profile "frontend-replica"`)
+    await expect(
+      fs.lstat(path.join(project.path, ".opencorvus", "expert-squads", "builtin", "frontend-replica")),
+    ).rejects.toMatchObject({ code: "ENOENT" })
+
+    await copyRepositoryExpertSquadPackage(project.path, "frontend-replica")
     const capability = await PromptProfileResolver.resolveSchedulerCapability({
       projectDirectory: project.path,
       config: Config.Info.parse({ prompt_profile: { active: "frontend-replica" } }),
@@ -376,7 +496,9 @@ describe("PromptProfileResolver", () => {
     expect(capability.builtIn).toBe(false)
     expect(capability.builtInToolIDs).toContain("build")
     expect(capability.packageToolRefs).toEqual([])
-    await expect(fs.lstat(path.join(project.path, ".opencorvus", "expert-squads", "frontend-replica"))).resolves.toMatchObject({
+    await expect(
+      fs.lstat(path.join(project.path, ".opencorvus", "expert-squads", "builtin", "frontend-replica")),
+    ).resolves.toMatchObject({
       isDirectory: expect.any(Function),
     })
   })
@@ -388,6 +510,7 @@ describe("PromptProfileResolver", () => {
     expect(generalAttributes.requireDesignDirectionContract).toBe(false)
 
     await using project = await tmpdir({ git: true })
+    await copyRepositoryExpertSquadPackage(project.path, "frontend-innovate")
     const frontendInnovateAttributes = await PromptProfileResolver.resolveFrontendDesignDynamicAttributes({
       projectDirectory: project.path,
       config: Config.Info.parse({ prompt_profile: { active: "frontend-innovate" } }),
@@ -490,9 +613,9 @@ describe("PromptProfileResolver", () => {
     expect(packageToolResult.metadata.provider_tool_name).toBe(packageToolProviderName)
   })
 
-  test("projects repository software-testing selector, scheduler tools, and worker tools", async () => {
+  test("projects repository opentest selector, scheduler tools, and worker tools", async () => {
     await using project = await tmpdir({ git: true })
-    await copyRepositoryExpertSquadPackage(project.path, SOFTWARE_TESTING_EXPERT_SQUAD_ID)
+    const packageRoot = await copyRepositoryExpertSquadPackage(project.path, OPENTEST_EXPERT_SQUAD_ID)
     const testCaseRoot = path.join(project.path, "cases", "login")
     await fs.mkdir(testCaseRoot, { recursive: true })
     await fs.mkdir(path.join(project.path, ".opencorvus", "opentest", "runs", "batch-2026-07-06", "login-case"), { recursive: true })
@@ -544,31 +667,31 @@ describe("PromptProfileResolver", () => {
       defaultSkills: [],
       agentIDs: ["orchestrator"],
     })
-    expect(generalProjection.selectorSkillNames).toContain("software-testing-expert-squad")
-    expect(generalProjection.skills.find((skill) => skill.name === "software-testing-expert-squad")?.content).toContain(
+    expect(generalProjection.selectorSkillNames).toContain("opentest-expert-squad")
+    expect(generalProjection.skills.find((skill) => skill.name === "opentest-expert-squad")?.content).toContain(
       "WuJiang/OpenTest Expert Squad Selector",
     )
 
-    const config = Config.Info.parse({ prompt_profile: { active: SOFTWARE_TESTING_EXPERT_SQUAD_ID } })
+    const config = Config.Info.parse({ prompt_profile: { active: OPENTEST_EXPERT_SQUAD_ID } })
     const activeProjection = await PromptProfileResolver.resolveSkillProjection({
       projectDirectory: project.path,
       config,
       defaultSkills: [],
       agentIDs: ["orchestrator", "build", "integrity"],
     })
-    expect(activeProjection.selectorSkillNames).toEqual(["software-testing-expert-squad"])
+    expect(activeProjection.selectorSkillNames).toEqual(["opentest-expert-squad"])
     expect(activeProjection.productionSkillNames).toEqual(
-      expect.arrayContaining(["software-testing-workflow", "software-test-implementation", "software-test-review"]),
+      expect.arrayContaining(["opentest-workflow", "software-test-implementation", "software-test-review"]),
     )
 
-    const protocolRef = `${SOFTWARE_TESTING_EXPERT_SQUAD_ID}/shared/opentest-protocol-engine`
+    const protocolRef = `${OPENTEST_EXPERT_SQUAD_ID}/shared/opentest-protocol-engine`
     const protocolProviderName = PromptProfileResolver.packageToolProviderName(protocolRef)
     const schedulerCapability = await PromptProfileResolver.resolveSchedulerCapability({
       projectDirectory: project.path,
       config,
     })
 
-    expect(schedulerCapability.promptProfileID).toBe(SOFTWARE_TESTING_EXPERT_SQUAD_ID)
+    expect(schedulerCapability.promptProfileID).toBe(OPENTEST_EXPERT_SQUAD_ID)
     expect(schedulerCapability.builtInToolIDs).toEqual(
       expect.arrayContaining(["build", "integrity"]),
     )
@@ -579,8 +702,8 @@ describe("PromptProfileResolver", () => {
     expect(schedulerCapability.packageToolProviderNames).toEqual([protocolProviderName])
 
     const { tools: rawTools } = createOrchestratorTools({
-      taskID: "tsk_software_testing_projection",
-      agentSessionID: "ses_software_testing_projection",
+      taskID: "tsk_opentest_projection",
+      agentSessionID: "ses_opentest_projection",
     })
     const schedulerTools = await PromptProfileResolver.projectOrchestratorTools(rawTools, schedulerCapability, {
       projectDirectory: project.path,
@@ -600,11 +723,11 @@ describe("PromptProfileResolver", () => {
         mode: "contract",
       },
       {
-        toolCallId: "call_software_testing_protocol",
+        toolCallId: "call_opentest_protocol",
         opencorvus: {
-          sessionID: "ses_software_testing_projection",
-          messageID: "msg_software_testing_projection",
-          toolCallID: "call_software_testing_protocol",
+          sessionID: "ses_opentest_projection",
+          messageID: "msg_opentest_projection",
+          toolCallID: "call_opentest_protocol",
         },
       },
     )
@@ -632,7 +755,7 @@ describe("PromptProfileResolver", () => {
       baseRole: "build",
       virtualAgentID: "opentest-implementer",
       label: "OpenTest Implementer",
-      expertSquadID: SOFTWARE_TESTING_EXPERT_SQUAD_ID,
+      expertSquadID: OPENTEST_EXPERT_SQUAD_ID,
     })
 
     const workerTools = await PromptProfileResolver.projectWorkerTools(
@@ -647,11 +770,11 @@ describe("PromptProfileResolver", () => {
     const inventoryResult = await (workerTools[protocolProviderName] as any).execute(
       { mode: "inventory", root: ".", max_files: 400 },
       {
-        toolCallId: "call_software_testing_inventory",
+        toolCallId: "call_opentest_inventory",
         opencorvus: {
-          sessionID: "ses_software_testing_worker",
-          messageID: "msg_software_testing_worker",
-          toolCallID: "call_software_testing_inventory",
+          sessionID: "ses_opentest_worker",
+          messageID: "msg_opentest_worker",
+          toolCallID: "call_opentest_inventory",
         },
       },
     )
@@ -697,11 +820,11 @@ describe("PromptProfileResolver", () => {
     const validationResult = await (workerTools[protocolProviderName] as any).execute(
       { mode: "validate", test_directory: "cases/login" },
       {
-        toolCallId: "call_software_testing_validate",
+        toolCallId: "call_opentest_validate",
         opencorvus: {
-          sessionID: "ses_software_testing_worker",
-          messageID: "msg_software_testing_worker",
-          toolCallID: "call_software_testing_validate",
+          sessionID: "ses_opentest_worker",
+          messageID: "msg_opentest_worker",
+          toolCallID: "call_opentest_validate",
         },
       },
     )
@@ -720,52 +843,134 @@ describe("PromptProfileResolver", () => {
     expect(validation.artifacts.run_results).toEqual([".opencorvus/opentest/runs/batch-2026-07-06/login-case/result.json"])
   })
 
-  test("active virtual worker projection hash follows virtual prompt and package resource content", async () => {
-    await using project = await tmpdir({ git: true })
-    await copyRepositoryExpertSquadPackage(project.path, SOFTWARE_TESTING_EXPERT_SQUAD_ID)
-    const config = Config.Info.parse({ prompt_profile: { active: SOFTWARE_TESTING_EXPERT_SQUAD_ID } })
+  test("active virtual worker projection hash follows virtual prompt and package resource content", { timeout: 0 }, async () => {
+    await withPromptProfileResolverInactivityTimeout("active virtual worker projection hash", 15_000, async (activity) => {
+      await using project = await tmpdir({ git: true })
+      activity("created temporary project")
+      const packageRoot = await copyRepositoryExpertSquadPackage(project.path, OPENTEST_EXPERT_SQUAD_ID)
+      activity("copied opentest package")
+      const config = Config.Info.parse({ prompt_profile: { active: OPENTEST_EXPERT_SQUAD_ID } })
 
-    const before = await PromptProfileResolver.resolveWorkerCapability({
-      projectDirectory: project.path,
-      agentID: "build",
-      config,
-    })
-    expect(before.virtualAgent?.virtualAgentID).toBe("opentest-implementer")
+      const before = await PromptProfileResolver.resolveWorkerCapability({
+        projectDirectory: project.path,
+        agentID: "build",
+        config,
+      })
+      activity("resolved initial worker capability")
+      expect(before.virtualAgent?.virtualAgentID).toBe("opentest-implementer")
+      const catalog = await PromptProfileResolver.catalog({
+        config,
+        projectActive: OPENTEST_EXPERT_SQUAD_ID,
+        sessionOverride: null,
+        scope: { kind: "project", directory: project.path },
+        agentIDs: ["build", "integrity"],
+        defaultSkills: [],
+      })
+      activity("resolved catalog")
+      const skillProjection = await PromptProfileResolver.resolveSkillProjection({
+        projectDirectory: project.path,
+        agentIDs: ["build", "integrity"],
+        config,
+        defaultSkills: [],
+      })
+      activity("resolved skill projection")
+      expect(catalog.active_agent_projection.agents.find((agent) => agent.base_role === "build")?.projection_hash).toBe(
+        before.virtualAgent?.projectionHash,
+      )
+      expect(skillProjection.virtualAgents.find((agent) => agent.baseRole === "build")?.projectionHash).toBe(
+        before.virtualAgent?.projectionHash,
+      )
 
-    const packageRoot = path.join(project.path, ".opencorvus", "expert-squads", SOFTWARE_TESTING_EXPERT_SQUAD_ID)
-    await fs.writeFile(
-      path.join(packageRoot, "virtual-agents", "build", "system.md"),
-      `${before.virtualAgent?.label}\nChanged virtual prompt content.\n`,
-    )
-    const afterVirtualPrompt = await PromptProfileResolver.resolveWorkerCapability({
-      projectDirectory: project.path,
-      agentID: "build",
-      config,
-    })
-    expect(afterVirtualPrompt.projectionHash).not.toBe(before.projectionHash)
-    expect(afterVirtualPrompt.virtualAgent?.projectionHash).not.toBe(before.virtualAgent?.projectionHash)
+      await fs.writeFile(
+        path.join(packageRoot, "virtual-agents", "build", "system.md"),
+        `${before.virtualAgent?.label}\nChanged virtual prompt content.\n`,
+      )
+      activity("changed virtual prompt")
+      const afterVirtualPrompt = await PromptProfileResolver.resolveWorkerCapability({
+        projectDirectory: project.path,
+        agentID: "build",
+        config,
+      })
+      activity("resolved worker capability after virtual prompt change")
+      expect(afterVirtualPrompt.projectionHash).not.toBe(before.projectionHash)
+      expect(afterVirtualPrompt.virtualAgent?.projectionHash).not.toBe(before.virtualAgent?.projectionHash)
 
-    await fs.writeFile(
-      path.join(packageRoot, "virtual-agents", "build", "skills", "test-implementation", "SKILL.md"),
-      "---\nname: software-test-implementation\n---\nChanged package skill content.\n",
-    )
-    const afterSkill = await PromptProfileResolver.resolveWorkerCapability({
-      projectDirectory: project.path,
-      agentID: "build",
-      config,
-    })
-    expect(afterSkill.projectionHash).not.toBe(afterVirtualPrompt.projectionHash)
+      await fs.writeFile(
+        path.join(packageRoot, "virtual-agents", "build", "skills", "test-implementation", "SKILL.md"),
+        "---\nname: software-test-implementation\n---\nChanged package skill content.\n",
+      )
+      activity("changed package skill")
+      const afterSkill = await PromptProfileResolver.resolveWorkerCapability({
+        projectDirectory: project.path,
+        agentID: "build",
+        config,
+      })
+      activity("resolved worker capability after package skill change")
+      expect(afterSkill.projectionHash).not.toBe(afterVirtualPrompt.projectionHash)
 
-    await fs.writeFile(
-      path.join(packageRoot, "tools", "opentest-protocol-engine.ts"),
-      "export default null\n// changed package tool source\n",
-    )
-    const afterTool = await PromptProfileResolver.resolveWorkerCapability({
-      projectDirectory: project.path,
-      agentID: "build",
-      config,
+      await fs.writeFile(
+        path.join(packageRoot, "tools", "opentest-protocol-engine.ts"),
+        "export default null\n// changed package tool source\n",
+      )
+      activity("changed package tool")
+      const afterTool = await PromptProfileResolver.resolveWorkerCapability({
+        projectDirectory: project.path,
+        agentID: "build",
+        config,
+      })
+      activity("resolved worker capability after package tool change")
+      expect(afterTool.projectionHash).not.toBe(afterSkill.projectionHash)
     })
-    expect(afterTool.projectionHash).not.toBe(afterSkill.projectionHash)
+  })
+
+  test("active skill projection hash follows projected package skill content and metadata", { timeout: 0 }, async () => {
+    await withPromptProfileResolverInactivityTimeout("active skill projection hash", 15_000, async (activity) => {
+      await using project = await tmpdir({ git: true })
+      activity("created temporary project")
+      const packageRoot = await copyRepositoryExpertSquadPackage(project.path, OPENTEST_EXPERT_SQUAD_ID)
+      activity("copied opentest package")
+      const config = Config.Info.parse({ prompt_profile: { active: OPENTEST_EXPERT_SQUAD_ID } })
+
+      const before = await PromptProfileResolver.resolveSkillProjection({
+        projectDirectory: project.path,
+        agentIDs: ["build", "integrity"],
+        config,
+        defaultSkills: [],
+      })
+      activity("resolved initial skill projection")
+      expect(before.projectedSkillNames).toContain("software-test-implementation")
+
+      await fs.writeFile(
+        path.join(packageRoot, "virtual-agents", "build", "skills", "test-implementation", "SKILL.md"),
+        [
+          "---",
+          "name: software-test-implementation",
+          "description: Changed projected package skill metadata.",
+          "required_tools:",
+          "  - bash",
+          "---",
+          "",
+          "# Changed Software Test Implementation",
+          "",
+          "Changed projected package skill body.",
+          "",
+        ].join("\n"),
+      )
+      activity("changed projected package skill")
+
+      const after = await PromptProfileResolver.resolveSkillProjection({
+        projectDirectory: project.path,
+        agentIDs: ["build", "integrity"],
+        config,
+        defaultSkills: [],
+      })
+      activity("resolved changed skill projection")
+      expect(after.projectionHash).not.toBe(before.projectionHash)
+      const changedSkill = after.skills.find((skill) => skill.name === "software-test-implementation")
+      expect(changedSkill?.description).toBe("Changed projected package skill metadata.")
+      expect(changedSkill?.required_tools).toEqual(["bash"])
+      expect(changedSkill?.content).toContain("Changed projected package skill body.")
+    })
   })
 
   test("projects scheduler default tool refs from the runtime tool map", async () => {
@@ -801,59 +1006,66 @@ describe("PromptProfileResolver", () => {
     expect(Object.hasOwn(projectedTools, PromptProfileResolver.packageToolProviderName(`${PROJECT_EXPERT_SQUAD_ID}/orchestrator/source-evidence`))).toBe(false)
   })
 
-  test("projects active package MCP tools as scoped runtime providers without global MCP registration", async () => {
-    await using project = await tmpdir({ git: true })
-    const packageMcpServerRef = `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/package-browser`
-    const packageMcpToolRef = `${packageMcpServerRef}/tool/snapshot`
-    await writeProjectExpertSquadPackage(project.path, PROJECT_EXPERT_SQUAD_ID, {
-      schedulerPackageMcpServerRefs: [packageMcpServerRef],
-      packageMcpDefinition: {
-        type: "local",
-        command: [process.execPath, path.join(import.meta.dir, "../fixture/package-mcp-server.ts")],
-        capabilities: { tools: ["snapshot"] },
-      },
-    })
-    const packageMcpProviderName = PromptProfileResolver.packageMcpToolProviderName(packageMcpToolRef)
-    const capability = await PromptProfileResolver.resolveSchedulerCapability({
-      projectDirectory: project.path,
-      config: Config.Info.parse({ prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } }),
-    })
+  test("projects active package MCP tools as scoped runtime providers without global MCP registration", { timeout: 0 }, async () => {
+    await withPromptProfileResolverInactivityTimeout("projects active package MCP tools as scoped runtime providers", 15_000, async (activity) => {
+      await using project = await tmpdir({ git: true })
+      activity("created temporary project")
+      const packageMcpServerRef = `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/package-browser`
+      const packageMcpToolRef = `${packageMcpServerRef}/tool/snapshot`
+      await writeProjectExpertSquadPackage(project.path, PROJECT_EXPERT_SQUAD_ID, {
+        schedulerPackageMcpServerRefs: [packageMcpServerRef],
+        packageMcpDefinition: {
+          type: "local",
+          command: [process.execPath, path.join(import.meta.dir, "../fixture/package-mcp-server.ts")],
+          capabilities: { tools: ["snapshot"] },
+        },
+      })
+      activity("wrote project package")
+      const packageMcpProviderName = PromptProfileResolver.packageMcpToolProviderName(packageMcpToolRef)
+      const capability = await PromptProfileResolver.resolveSchedulerCapability({
+        projectDirectory: project.path,
+        config: Config.Info.parse({ prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } }),
+      })
+      activity("resolved scheduler capability")
 
-    expect(capability.packageMcpToolRefs).toEqual([packageMcpToolRef])
-    expect(capability.packageMcpToolProviderNames).toEqual([packageMcpProviderName])
-    expect(capability.includeMcpTools).toBe(false)
+      expect(capability.packageMcpToolRefs).toEqual([packageMcpToolRef])
+      expect(capability.packageMcpToolProviderNames).toEqual([packageMcpProviderName])
+      expect(capability.includeMcpTools).toBe(false)
 
-    const { tools: rawTools } = createOrchestratorTools({
-      taskID: "tsk_project_mcp_projection",
-      agentSessionID: "ses_project_mcp_projection",
-    })
-    const projectedTools = await PromptProfileResolver.projectOrchestratorTools(rawTools, capability, {
-      projectDirectory: project.path,
-      workflow: pipelineWorkflow,
-    })
+      const { tools: rawTools } = createOrchestratorTools({
+        taskID: "tsk_project_mcp_projection",
+        agentSessionID: "ses_project_mcp_projection",
+      })
+      const projectedTools = await PromptProfileResolver.projectOrchestratorTools(rawTools, capability, {
+        projectDirectory: project.path,
+        workflow: pipelineWorkflow,
+      })
+      activity("projected orchestrator tools")
 
-    expect(Object.hasOwn(projectedTools, packageMcpProviderName)).toBe(true)
-    expect(Object.hasOwn(projectedTools, "package-browser_snapshot")).toBe(false)
+      expect(Object.hasOwn(projectedTools, packageMcpProviderName)).toBe(true)
+      expect(Object.hasOwn(projectedTools, "package-browser_snapshot")).toBe(false)
 
-    const packageMcpResult = await Instance.provide({
-      directory: project.path,
-      fn: () =>
-        (projectedTools[packageMcpProviderName] as any).execute(
-          { label: "active" },
-          {
-            toolCallId: "call_project_package_mcp_tool",
-            opencorvus: {
-              projectID: "prj_project_mcp_projection",
-              sessionID: "ses_project_mcp_projection",
-              messageID: "msg_project_mcp_projection",
-              toolCallID: "call_project_package_mcp_tool",
+      const packageMcpResult = await Instance.provide({
+        directory: project.path,
+        fn: () =>
+          (projectedTools[packageMcpProviderName] as any).execute(
+            { label: "active" },
+            {
+              toolCallId: "call_project_package_mcp_tool",
+              opencorvus: {
+                projectID: "prj_project_mcp_projection",
+                sessionID: "ses_project_mcp_projection",
+                messageID: "msg_project_mcp_projection",
+                toolCallID: "call_project_package_mcp_tool",
+              },
             },
-          },
-        ),
+          ),
+      })
+      activity("executed package MCP provider")
+      expect(packageMcpResult.output).toContain("package-mcp-snapshot:active:")
+      expect(packageMcpResult.metadata.package_mcp_tool_ref).toBe(packageMcpToolRef)
+      expect(packageMcpResult.metadata.provider_tool_name).toBe(packageMcpProviderName)
     })
-    expect(packageMcpResult.output).toContain("package-mcp-snapshot:active:")
-    expect(packageMcpResult.metadata.package_mcp_tool_ref).toBe(packageMcpToolRef)
-    expect(packageMcpResult.metadata.provider_tool_name).toBe(packageMcpProviderName)
   })
 
   test("rejects duplicate package MCP projection through server and typed refs", async () => {
@@ -878,59 +1090,66 @@ describe("PromptProfileResolver", () => {
     ).rejects.toThrow(/already mounted by package_mcp_server_refs/)
   })
 
-  test("projects scheduler default MCP tool refs from the effective config", async () => {
-    await using project = await tmpdir({ git: true })
-    const defaultMcpToolRef = "default/mcp/package-browser/tool/snapshot"
-    await writeProjectExpertSquadPackage(project.path, PROJECT_EXPERT_SQUAD_ID, {
-      schedulerDefaultMcpToolRefs: [defaultMcpToolRef],
-      schedulerPackageToolRefs: [],
-    })
-    const defaultMcpProviderName = PromptProfileResolver.defaultMcpToolProviderName(defaultMcpToolRef)
-    const capability = await PromptProfileResolver.resolveSchedulerCapability({
-      projectDirectory: project.path,
-      config: Config.Info.parse({
-        prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID },
-        mcp: {
-          "package-browser": {
-            type: "local",
-            command: [process.execPath, path.join(import.meta.dir, "../fixture/package-mcp-server.ts")],
-          },
-        },
-      }),
-    })
-
-    expect(capability.defaultMcpToolRefs).toEqual([defaultMcpToolRef])
-    expect(capability.defaultMcpToolProviderNames).toEqual([defaultMcpProviderName])
-
-    const { tools: rawTools } = createOrchestratorTools({
-      taskID: "tsk_default_mcp_projection",
-      agentSessionID: "ses_default_mcp_projection",
-    })
-    const projectedTools = await PromptProfileResolver.projectOrchestratorTools(rawTools, capability, {
-      projectDirectory: project.path,
-      workflow: pipelineWorkflow,
-    })
-
-    expect(Object.hasOwn(projectedTools, defaultMcpProviderName)).toBe(true)
-    const defaultMcpResult = await Instance.provide({
-      directory: project.path,
-      fn: () =>
-        (projectedTools[defaultMcpProviderName] as any).execute(
-          { label: "default" },
-          {
-            toolCallId: "call_default_mcp_tool",
-            opencorvus: {
-              projectID: "prj_default_mcp_projection",
-              sessionID: "ses_default_mcp_projection",
-              messageID: "msg_default_mcp_projection",
-              toolCallID: "call_default_mcp_tool",
+  test("projects scheduler default MCP tool refs from the effective config", { timeout: 0 }, async () => {
+    await withPromptProfileResolverInactivityTimeout("projects scheduler default MCP tool refs from the effective config", 15_000, async (activity) => {
+      await using project = await tmpdir({ git: true })
+      activity("created temporary project")
+      const defaultMcpToolRef = "default/mcp/package-browser/tool/snapshot"
+      await writeProjectExpertSquadPackage(project.path, PROJECT_EXPERT_SQUAD_ID, {
+        schedulerDefaultMcpToolRefs: [defaultMcpToolRef],
+        schedulerPackageToolRefs: [],
+      })
+      activity("wrote project package")
+      const defaultMcpProviderName = PromptProfileResolver.defaultMcpToolProviderName(defaultMcpToolRef)
+      const capability = await PromptProfileResolver.resolveSchedulerCapability({
+        projectDirectory: project.path,
+        config: Config.Info.parse({
+          prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID },
+          mcp: {
+            "package-browser": {
+              type: "local",
+              command: [process.execPath, path.join(import.meta.dir, "../fixture/package-mcp-server.ts")],
             },
           },
-        ),
+        }),
+      })
+      activity("resolved scheduler capability")
+
+      expect(capability.defaultMcpToolRefs).toEqual([defaultMcpToolRef])
+      expect(capability.defaultMcpToolProviderNames).toEqual([defaultMcpProviderName])
+
+      const { tools: rawTools } = createOrchestratorTools({
+        taskID: "tsk_default_mcp_projection",
+        agentSessionID: "ses_default_mcp_projection",
+      })
+      const projectedTools = await PromptProfileResolver.projectOrchestratorTools(rawTools, capability, {
+        projectDirectory: project.path,
+        workflow: pipelineWorkflow,
+      })
+      activity("projected orchestrator tools")
+
+      expect(Object.hasOwn(projectedTools, defaultMcpProviderName)).toBe(true)
+      const defaultMcpResult = await Instance.provide({
+        directory: project.path,
+        fn: () =>
+          (projectedTools[defaultMcpProviderName] as any).execute(
+            { label: "default" },
+            {
+              toolCallId: "call_default_mcp_tool",
+              opencorvus: {
+                projectID: "prj_default_mcp_projection",
+                sessionID: "ses_default_mcp_projection",
+                messageID: "msg_default_mcp_projection",
+                toolCallID: "call_default_mcp_tool",
+              },
+            },
+          ),
+      })
+      activity("executed default MCP provider")
+      expect(defaultMcpResult.output).toContain("package-mcp-snapshot:default:")
+      expect(defaultMcpResult.metadata.default_mcp_tool_ref).toBe(defaultMcpToolRef)
+      expect(defaultMcpResult.metadata.provider_tool_name).toBe(defaultMcpProviderName)
     })
-    expect(defaultMcpResult.output).toContain("package-mcp-snapshot:default:")
-    expect(defaultMcpResult.metadata.default_mcp_tool_ref).toBe(defaultMcpToolRef)
-    expect(defaultMcpResult.metadata.provider_tool_name).toBe(defaultMcpProviderName)
   })
 
   test("projects active package MCP prompts and resources as scoped runtime providers", async () => {
@@ -1600,6 +1819,38 @@ describe("PromptProfileResolver", () => {
     expect(Object.hasOwn(projectedTools, "package-browser_snapshot")).toBe(false)
   })
 
+  test("projects virtual-agent package tools and MCP providers from the virtual-agent resource root", async () => {
+    await using project = await tmpdir({ git: true })
+    await writeVirtualAgentRuntimePackage(project.path)
+    const packageToolRef = `${VIRTUAL_RUNTIME_EXPERT_SQUAD_ID}/build/virtual-evidence`
+    const packageMcpToolRef = `${VIRTUAL_RUNTIME_EXPERT_SQUAD_ID}/build/package-browser/tool/snapshot`
+    const packageToolProviderName = PromptProfileResolver.packageToolProviderName(packageToolRef)
+    const packageMcpProviderName = PromptProfileResolver.packageMcpToolProviderName(packageMcpToolRef)
+
+    const capability = await PromptProfileResolver.resolveWorkerCapability({
+      projectDirectory: project.path,
+      agentID: "build",
+      config: Config.Info.parse({ prompt_profile: { active: VIRTUAL_RUNTIME_EXPERT_SQUAD_ID } }),
+    })
+
+    expect(capability.virtualAgent).toMatchObject({
+      baseRole: "build",
+      virtualAgentID: "virtual-build",
+      expertSquadID: VIRTUAL_RUNTIME_EXPERT_SQUAD_ID,
+    })
+    expect(capability.packageToolRefs).toEqual([packageToolRef])
+    expect(capability.packageMcpToolRefs).toEqual([packageMcpToolRef])
+
+    const projectedTools = await PromptProfileResolver.projectWorkerTools(
+      { read: { kind: "dummy" } },
+      capability,
+      { projectDirectory: project.path },
+    )
+
+    expect(Object.hasOwn(projectedTools, packageToolProviderName)).toBe(true)
+    expect(Object.hasOwn(projectedTools, packageMcpProviderName)).toBe(true)
+  })
+
   test("executes active package worker MCP tool providers in project scope", async () => {
     await using project = await tmpdir({ git: true })
     const packageMcpServerRef = `${PROJECT_EXPERT_SQUAD_ID}/build/package-browser`
@@ -1745,7 +1996,7 @@ describe("PromptProfileResolver", () => {
     ).resolves.toBeDefined()
   })
 
-  test("general catalog rejects invalid inactive package while selector projection avoids inactive MCP parsing", async () => {
+  test("general catalog and selector projection avoid inactive MCP parsing", async () => {
     await using project = await tmpdir({ git: true })
     const inactiveRoot = await writeProjectExpertSquadPackage(project.path)
     await Bun.write(path.join(inactiveRoot, "mcp", "broken.jsonc"), "{")
@@ -1768,15 +2019,14 @@ describe("PromptProfileResolver", () => {
     expect(generalPrompt).toContain("# General")
     expect(generalPrompt).not.toContain("PROJECT_README_ORCHESTRATOR_APPEND_ONLY")
 
-    await expect(
-      PromptProfileResolver.catalog({
-        config: generalConfig,
-        projectActive: "general",
-        sessionOverride: null,
-        scope: { kind: "project", directory: project.path },
-        defaultSkills: [],
-      }),
-    ).rejects.toThrow(/invalid JSONC/)
+    const catalog = await PromptProfileResolver.catalog({
+      config: generalConfig,
+      projectActive: "general",
+      sessionOverride: null,
+      scope: { kind: "project", directory: project.path },
+      defaultSkills: [],
+    })
+    expect(catalog.squads.some((squad) => squad.id === PROJECT_EXPERT_SQUAD_ID)).toBe(true)
 
     const selectorProjection = await PromptProfileResolver.resolveSkillProjection({
       projectDirectory: project.path,
@@ -1849,14 +2099,7 @@ describe("PromptProfileResolver", () => {
 
         expect(projection.activeProfile).toBe("general")
         expect(projection.projectedAgentIDs).toEqual(["orchestrator", "build"])
-        expect(projection.selectorSkillNames).toEqual(
-          expect.arrayContaining([
-            "frontend-automation-debug-expert-squad",
-            "frontend-innovate-expert-squad",
-            "frontend-replica-expert-squad",
-            `${PROJECT_EXPERT_SQUAD_ID}-expert-squad`,
-          ]),
-        )
+        expect(projection.selectorSkillNames).toEqual([`${PROJECT_EXPERT_SQUAD_ID}-expert-squad`])
         expect(projection.productionSkillNames).toContain("unreferenced-default")
         expect(projection.projectedSkillNames).toEqual(projection.skills.map((skill) => skill.name))
         expect(projection.projectedSkillNames).toContain(`${PROJECT_EXPERT_SQUAD_ID}-expert-squad`)
@@ -1871,8 +2114,32 @@ describe("PromptProfileResolver", () => {
     })
   })
 
-  test("releases payload package selectors for general skill projection in an empty project", async () => {
+  test("projects selector skills only from explicitly installed project packages", async () => {
     await using project = await tmpdir({ git: true })
+
+    const emptyProjection = await PromptProfileResolver.resolveSkillProjection({
+      projectDirectory: project.path,
+      config: Config.Info.parse({ prompt_profile: { active: "general" } }),
+      defaultSkills: [],
+      agentIDs: ["orchestrator"],
+    })
+
+    expect(emptyProjection.selectorSkillNames).not.toEqual(
+      expect.arrayContaining([
+        "frontend-automation-debug-expert-squad",
+        "frontend-innovate-expert-squad",
+        "frontend-replica-expert-squad",
+        "opentest-expert-squad",
+      ]),
+    )
+    await expect(
+      fs.lstat(path.join(project.path, ".opencorvus", "expert-squads", "builtin", "frontend-replica")),
+    ).rejects.toMatchObject({ code: "ENOENT" })
+
+    await copyRepositoryExpertSquadPackage(project.path, "frontend-automation-debug")
+    await copyRepositoryExpertSquadPackage(project.path, "frontend-innovate")
+    await copyRepositoryExpertSquadPackage(project.path, "frontend-replica")
+    await copyRepositoryExpertSquadPackage(project.path, "opentest")
 
     const projection = await PromptProfileResolver.resolveSkillProjection({
       projectDirectory: project.path,
@@ -1886,7 +2153,7 @@ describe("PromptProfileResolver", () => {
         "frontend-automation-debug-expert-squad",
         "frontend-innovate-expert-squad",
         "frontend-replica-expert-squad",
-        "software-testing-expert-squad",
+        "opentest-expert-squad",
       ]),
     )
     const frontendAutomationSelector = projection.skills.find((skill) => skill.name === "frontend-automation-debug-expert-squad")
@@ -1901,10 +2168,10 @@ describe("PromptProfileResolver", () => {
     expect(frontendReplicaSelector?.content).toContain("## Expert Contract")
     expect(frontendReplicaSelector?.content).toContain("source-to-render model")
     expect(frontendReplicaSelector?.content).toContain("Do not accept source-row prose")
-    const softwareTestingSelector = projection.skills.find((skill) => skill.name === "software-testing-expert-squad")
-    expect(softwareTestingSelector?.content).toContain("## Expert Contract")
-    expect(softwareTestingSelector?.content).toContain("test-validity model")
-    expect(softwareTestingSelector?.content).toContain("Do not accept tests that were not run")
+    const opentestSelector = projection.skills.find((skill) => skill.name === "opentest-expert-squad")
+    expect(opentestSelector?.content).toContain("## Expert Contract")
+    expect(opentestSelector?.content).toContain("test-validity model")
+    expect(opentestSelector?.content).toContain("Do not accept tests that were not run")
     expect(frontendReplicaSelector).toMatchObject({
       required_tools: ["select_expert_squad"],
       mounted_agents: ["orchestrator"],
@@ -1913,12 +2180,13 @@ describe("PromptProfileResolver", () => {
         project.path,
         ".opencorvus",
         "expert-squads",
+        "builtin",
         "frontend-replica",
         "selector.md",
       ),
     })
     const selectorFile = await fs.lstat(
-      path.join(project.path, ".opencorvus", "expert-squads", "frontend-replica", "selector.md"),
+      path.join(project.path, ".opencorvus", "expert-squads", "builtin", "frontend-replica", "selector.md"),
     )
     expect(selectorFile.isFile()).toBe(true)
   })
@@ -2014,6 +2282,7 @@ describe("PromptProfileResolver", () => {
         project.path,
         ".opencorvus",
         "expert-squads",
+        PROJECT_EXPERT_SQUAD_NAMESPACE,
         PROJECT_EXPERT_SQUAD_ID,
         "agents",
         "build",
@@ -2028,6 +2297,7 @@ describe("PromptProfileResolver", () => {
         project.path,
         ".opencorvus",
         "expert-squads",
+        PROJECT_EXPERT_SQUAD_NAMESPACE,
         PROJECT_EXPERT_SQUAD_ID,
         "skills",
         "shared-brief",
@@ -2090,7 +2360,13 @@ describe("PromptProfileResolver", () => {
   test("projects package shared skills only through explicit package skill refs", async () => {
     await using project = await tmpdir({ git: true })
     await writeProjectExpertSquadPackage(project.path)
-    const packageRoot = path.join(project.path, ".opencorvus", "expert-squads", PROJECT_EXPERT_SQUAD_ID)
+    const packageRoot = path.join(
+      project.path,
+      ".opencorvus",
+      "expert-squads",
+      PROJECT_EXPERT_SQUAD_NAMESPACE,
+      PROJECT_EXPERT_SQUAD_ID,
+    )
     await Bun.write(
       path.join(packageRoot, "skills", "shared-brief", "SKILL.md"),
       "---\nname: shared-brief\ndescription: Explicit shared package skill.\n---\n",

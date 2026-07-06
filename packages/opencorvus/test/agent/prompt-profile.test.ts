@@ -6,6 +6,7 @@ import {
   type PromptProfileDefinition,
 } from "../../src/agent/prompt-profile"
 import { Config } from "../../src/config/config"
+import { ExpertSquadPackageManager } from "../../src/expert-squad/manager"
 import { PromptProfileResolver } from "../../src/expert-squad/prompt-profile-resolver"
 import { REPOSITORY_ROOT } from "../fixture/expert-squad"
 import { tmpdir } from "../fixture/fixture"
@@ -99,6 +100,7 @@ const expectedCatalogSquadIDs = [
   "frontend-automation-debug",
   "frontend-innovate",
   "frontend-replica",
+  "opentest",
 ] as const
 
 function expectConfigRejected(input: unknown, expectedMessage: string) {
@@ -149,8 +151,28 @@ async function repositorySelectorSkillText(name: string): Promise<string> {
   return skill!.content
 }
 
-function allProfileText(profile: PromptProfileDefinition): string {
-  return [profile.description, ...Object.values(profile.agents)].join("\n").toLowerCase()
+async function repositoryOverlayEntries(profileID: string): Promise<Array<[string, string]>> {
+  const entries: Array<[string, string]> = []
+  for (const target of PromptProfile.targets) {
+    const overlay = await PromptProfileResolver.overlayFor({
+      projectDirectory: REPOSITORY_ROOT,
+      agentID: target.id,
+      config: repositoryConfig(profileID),
+    })
+    if (overlay) entries.push([target.id, overlay])
+  }
+  return entries
+}
+
+async function repositoryOverlayMap(profileID: string): Promise<Record<string, string>> {
+  return Object.fromEntries(await repositoryOverlayEntries(profileID))
+}
+
+async function allRepositoryOverlayText(profileID: string): Promise<string> {
+  const profile = await repositoryProfile(profileID)
+  return [profile.description, ...(await repositoryOverlayEntries(profileID)).map(([, overlay]) => overlay)]
+    .join("\n")
+    .toLowerCase()
 }
 
 describe("prompt profiles", () => {
@@ -160,12 +182,13 @@ describe("prompt profiles", () => {
     expect(PromptProfile.activeID(config)).toBe("general")
   })
 
-  test("built-in prompt-profile source contains only general while payloads seed project catalog", async () => {
+  test("built-in prompt-profile source contains only general while released payloads seed project catalog", async () => {
     await using project = await tmpdir({ git: true })
     const config = Config.Info.parse({})
     expect(Object.keys(PromptProfile.builtIns)).toEqual(["general"])
     expect(PromptProfile.builtIns.general.agents).toEqual({})
     expect(PromptProfile.composeAgentPrompt({ agentID: "build", base: "BASE", config })).toBe("BASE")
+    await ExpertSquadPackageManager.releasePayloadPackages({ projectDirectory: project.path })
     const catalog = await PromptProfileResolver.catalog({
       config,
       projectActive: "general",
@@ -197,26 +220,30 @@ describe("prompt profiles", () => {
   })
 
   test("package-backed profiles expose direct target overlays without wrapper boilerplate", async () => {
-    const profiles = await repositoryProfiles()
-    expect(profiles["frontend-replica"].agents["frontend-design"]).toContain("source-backed replica contract")
-    expect(profiles["frontend-replica"].agents.orchestrator).toContain("exact reference surface")
-    expect(profiles.backend.agents["deep-research"]).toContain("API behavior")
-    expect(profiles.algorithm.agents["goal-workload-analyst"]).toContain("hidden complexity")
-    expect(profiles["frontend-automation-debug"].agents["visual-qa"]).toContain("screenshots")
-    expect(profiles["frontend-replica"].agents.build).toContain("manifest/lockfile")
-    expect(profiles["frontend-replica"].agents.build).toContain("rerun original checks")
-    expect(profiles["frontend-replica"].agents.build).toContain("Do not satisfy source page height")
-    expect(profiles["frontend-replica"].agents.build).toContain("browser_preview_reference_regions")
-    expect(profiles["frontend-replica"].agents.build).not.toContain("browser_preview_compare_scroll_slices")
-    expect(profiles["frontend-replica"].agents["visual-qa"]).toContain("Reject large blank filler bands")
-    expect(profiles["frontend-replica"].agents.integrity).toContain("second evidence-backed implementation non-pass")
-    expect(profiles["frontend-innovate"].agents["frontend-design"]).toContain("multiple named directions")
-    expect(profiles["frontend-innovate"].agents.orchestrator).toContain("webpage or product UI tasks")
-    expect(profiles["frontend-innovate"].agents.build).toContain("keyboard/focus behavior")
-    expect(profiles["frontend-automation-debug"].agents.build).toContain("repair local deps")
-    expect(profiles.algorithm.agents.orchestrator).not.toContain("Prioritize these tools")
-    expect(profiles["frontend-replica"].agents.build).not.toContain("Active prompt profile:")
-    expect(profiles["frontend-replica"].agents.orchestrator).not.toContain("bias planning and retries")
+    const replica = await repositoryOverlayMap("frontend-replica")
+    const backend = await repositoryOverlayMap("backend")
+    const algorithm = await repositoryOverlayMap("algorithm")
+    const automationDebug = await repositoryOverlayMap("frontend-automation-debug")
+    const innovate = await repositoryOverlayMap("frontend-innovate")
+    expect(replica["frontend-design"]).toContain("source-backed replica contract")
+    expect(replica.orchestrator).toContain("exact reference surface")
+    expect(backend["deep-research"]).toContain("API behavior")
+    expect(algorithm["goal-workload-analyst"]).toContain("hidden complexity")
+    expect(automationDebug["visual-qa"]).toContain("screenshots")
+    expect(replica.build).toContain("manifest/lockfile")
+    expect(replica.build).toContain("rerun original checks")
+    expect(replica.build).toContain("Do not satisfy source page height")
+    expect(replica.build).toContain("browser_preview_reference_regions")
+    expect(replica.build).not.toContain("browser_preview_compare_scroll_slices")
+    expect(replica["visual-qa"]).toContain("Reject large blank filler bands")
+    expect(replica.integrity).toContain("second evidence-backed implementation non-pass")
+    expect(innovate["frontend-design"]).toContain("multiple named directions")
+    expect(innovate.orchestrator).toContain("webpage or product UI tasks")
+    expect(innovate.build).toContain("keyboard/focus behavior")
+    expect(automationDebug.build).toContain("repair local dependencies")
+    expect(algorithm.orchestrator).not.toContain("Prioritize these tools")
+    expect(replica.build).not.toContain("Active prompt profile:")
+    expect(replica.orchestrator).not.toContain("bias planning and retries")
   })
 
   test("direct session agents receive project package overlays through the resolver", async () => {
@@ -224,7 +251,7 @@ describe("prompt profiles", () => {
     expect(await repositoryOverlay("frontend-replica", "coding-assistant")).toContain("replica questions")
     expect(await repositoryOverlay("frontend-replica", "mission")).toContain("target surface")
     expect(await repositoryOverlay("frontend-automation-debug", "coding")).toContain("browser-reproducible frontend failures")
-    expect(await repositoryOverlay("frontend-automation-debug", "build")).toContain("focused automation")
+    expect(await repositoryOverlay("frontend-automation-debug", "build")).toContain("evidence identifies the responsible layer")
     expect(await repositoryOverlay("frontend-innovate", "coding")).toContain("design-resource synthesis")
     expect(await repositoryOverlay("frontend-innovate", "frontend-design")).toContain(
       "implementation-ready product design handoff",
@@ -233,8 +260,7 @@ describe("prompt profiles", () => {
   })
 
   test("frontend innovate expert squad uses concrete task surfaces instead of quality placeholders", async () => {
-    const profile = await repositoryProfile("frontend-innovate")
-    const profileText = allProfileText(profile)
+    const profileText = await allRepositoryOverlayText("frontend-innovate")
     const skillText = (await repositorySelectorSkillText("frontend-innovate-expert-squad")).toLowerCase()
     const forbidden = [
       "anti-slop",
@@ -263,8 +289,7 @@ describe("prompt profiles", () => {
   })
 
   test("frontend replica expert squad uses source evidence instead of parity placeholders", async () => {
-    const profile = await repositoryProfile("frontend-replica")
-    const profileText = allProfileText(profile)
+    const profileText = await allRepositoryOverlayText("frontend-replica")
     const skillText = (await repositorySelectorSkillText("frontend-replica-expert-squad")).toLowerCase()
     const forbidden = [
       "visual rhythm",
@@ -295,7 +320,7 @@ describe("prompt profiles", () => {
   })
 
   test("frontend replica overlays carry source-to-target component-level discipline", async () => {
-    const agents = (await repositoryProfile("frontend-replica")).agents
+    const agents = await repositoryOverlayMap("frontend-replica")
     const allReplicaText = Object.values(agents).join("\n")
 
     expect(agents.coding).toContain("target project primitives, business components, and code")
@@ -340,8 +365,9 @@ describe("prompt profiles", () => {
 
   test("target catalog covers every repository package overlay target", async () => {
     const targetIDs = new Set(PromptProfile.targets.map((target) => target.id))
-    for (const profile of Object.values(await repositoryProfiles())) {
-      for (const targetID of Object.keys(profile.agents)) {
+    for (const profileID of expectedCatalogSquadIDs) {
+      if (profileID === "general") continue
+      for (const [targetID] of await repositoryOverlayEntries(profileID)) {
         expect(targetIDs.has(targetID)).toBe(true)
       }
     }
@@ -356,18 +382,29 @@ describe("prompt profiles", () => {
     const profiles = await repositoryProfiles()
     expect(Object.keys(profiles)).toEqual([...expectedCatalogSquadIDs])
     const targetIDs = new Set(PromptProfile.targets.map((target) => target.id))
+    const catalog = await PromptProfileResolver.catalog({
+      config: repositoryConfig("general"),
+      projectActive: "general",
+      sessionOverride: null,
+      scope: { kind: "project", directory: REPOSITORY_ROOT },
+      defaultSkills: [],
+    })
+    const squads = new Map(catalog.squads.map((squad) => [squad.id, squad]))
 
     for (const [profileID, requiredTargets] of Object.entries(requiredProjectTargetMatrix)) {
       const profile = profiles[profileID]
       expect(profile).toBeDefined()
+      const squad = squads.get(profileID)
+      expect(squad).toBeDefined()
       for (const targetID of requiredTargets) {
-        expect(profile.agents[targetID]?.trim().length ?? 0).toBeGreaterThan(0)
+        expect(squad!.projected_agents).toContain(targetID)
       }
     }
 
-    expect(new Set(Object.keys(profiles["frontend-automation-debug"].agents))).toEqual(targetIDs)
-    for (const [profileID, profile] of Object.entries(profiles)) {
-      for (const targetID of Object.keys(profile.agents)) {
+    expect(new Set(squads.get("frontend-automation-debug")?.projected_agents)).toEqual(targetIDs)
+    for (const [profileID, squad] of squads) {
+      if (profileID === "general") continue
+      for (const targetID of squad.projected_agents) {
         expect(targetIDs.has(targetID), `${profileID} references noncanonical target ${targetID}`).toBe(true)
       }
     }
@@ -400,9 +437,10 @@ describe("prompt profiles", () => {
     ]
     const vagueFragments = ["operational assumptions", "reasoning stays", "workflow mechanics"]
 
-    for (const [profileID, profile] of Object.entries(await repositoryProfiles())) {
+    for (const profileID of expectedCatalogSquadIDs) {
+      if (profileID === "general") continue
       const seen = new Set<string>()
-      for (const [targetID, overlay] of Object.entries(profile.agents)) {
+      for (const [targetID, overlay] of await repositoryOverlayEntries(profileID)) {
         const normalized = overlay.trim().toLowerCase()
         const lines = overlayLines(overlay)
         expect(lines.length, `${profileID}.${targetID} must be multi-line expert guidance`).toBeGreaterThanOrEqual(3)

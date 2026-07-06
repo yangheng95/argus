@@ -18,6 +18,7 @@ export namespace ExpertSquadRegistry {
   const RUNTIME_INTERNAL_ENTRIES = new Set([".opencorvus", "r", "runtime", "worktrees", ".opencorvus-meta.json"])
 
   const ID = z.string().regex(/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/, "id must be kebab-case")
+  const Namespace = ID
   const RelativePath = z.string().min(1)
   const Ref = z.string().min(1)
   const RefSegment = z.string().min(1).regex(/^[^/\\]+$/, "canonical ref segments cannot contain / or \\")
@@ -105,6 +106,7 @@ export namespace ExpertSquadRegistry {
   const Manifest = z
     .object({
       schema_version: z.literal(1),
+      namespace: Namespace,
       id: ID,
       label: z.string().min(1),
       description: z.string().optional(),
@@ -144,7 +146,11 @@ export namespace ExpertSquadRegistry {
   }
 
   export interface PackageCatalogEntry {
+    namespace: string
     id: string
+    root: string
+    manifestPath: string
+    readmePath: string
     label: string
     description?: string
     version?: string
@@ -154,9 +160,6 @@ export namespace ExpertSquadRegistry {
   }
 
   export interface PackageLocation extends PackageCatalogEntry {
-    root: string
-    manifestPath: string
-    readmePath: string
     readmeContent: string
   }
 
@@ -185,17 +188,18 @@ export namespace ExpertSquadRegistry {
       label: string
       description?: string
       agents: Record<string, string>
-      virtualAgents: Record<string, VirtualAgentDefinition & { promptContent: string }>
     }
   }
 
   export interface EmbeddedPackageSource {
+    namespace: string
     id: string
     manifestText: string
     files: Record<string, string>
   }
 
   export interface EmbeddedPackage {
+    namespace: string
     id: string
     label: string
     description?: string
@@ -316,6 +320,14 @@ export namespace ExpertSquadRegistry {
     const content = await Filesystem.readText(resolved)
     if (!content.trim()) throw new Error(`${context}: referenced file is blank`)
     return resolved
+  }
+
+  async function fileExists(file: string): Promise<boolean> {
+    const info = await lstat(file).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return undefined
+      throw error
+    })
+    return !!info
   }
 
   function assertNoRuntimeInternalEntry(entry: Dirent, context: string) {
@@ -706,6 +718,11 @@ export namespace ExpertSquadRegistry {
     for (const ref of projection.default_skill_refs) assertDefaultRef(ref, "skill", context)
     for (const ref of projection.default_tool_refs) assertDefaultRef(ref, "tool", context)
     for (const ref of projection.default_mcp_server_refs) assertDefaultRef(ref, "mcp", context)
+    if (projection.default_mcp_server_refs.length > 0) {
+      throw new Error(
+        `${context}: default_mcp_server_refs is not supported; project default_mcp_tool_refs, default_mcp_prompt_refs, or default_mcp_resource_refs instead`,
+      )
+    }
     for (const ref of projection.default_mcp_tool_refs) {
       if (!/^default\/mcp\/[^/\\]+\/tool\/[^/\\]+$/.test(ref)) {
         throw new Error(`${context}: invalid default MCP tool ref "${ref}"`)
@@ -828,14 +845,19 @@ export namespace ExpertSquadRegistry {
     const manifest = Manifest.parse(rawManifest)
 
     const folderID = path.basename(normalizedRoot)
+    const folderNamespace = path.basename(path.dirname(normalizedRoot))
     if (options.canonicalFolder && manifest.id !== folderID) {
       throw new Error(`expert squad id "${manifest.id}" must match folder "${folderID}"`)
+    }
+    if (options.canonicalFolder && manifest.namespace !== folderNamespace) {
+      throw new Error(`expert squad namespace "${manifest.namespace}" must match folder "${folderNamespace}"`)
     }
 
     const readmePath = await assertFile(normalizedRoot, manifest.readme, "readme")
     const readme = parseReadmeText(await Filesystem.readText(readmePath), "readme")
     return {
       id: manifest.id,
+      namespace: manifest.namespace,
       root: normalizedRoot,
       manifestPath,
       readmePath,
@@ -860,13 +882,24 @@ export namespace ExpertSquadRegistry {
   async function publicMetadata(metadata: ParsedPackageMetadata): Promise<PackageCatalogEntry> {
     return {
       id: metadata.id,
+      namespace: metadata.namespace,
+      root: metadata.root,
+      manifestPath: metadata.manifestPath,
+      readmePath: metadata.readmePath,
       label: metadata.label,
       description: metadata.description,
       version: metadata.version,
       displayPrefix: metadata.displayPrefix,
       selector: metadata.selector,
-      selectorInstructions: await readCatalogSelectorInstructions(metadata),
     }
+  }
+
+  export async function readSelectorInstructions(
+    pkg: Pick<PackageCatalogEntry, "root" | "id" | "selector">,
+  ): Promise<string | undefined> {
+    if (!pkg.selector) return undefined
+    const selectorPath = await assertNonBlankFile(pkg.root, "selector.md", "selector.instructions")
+    return (await Filesystem.readText(selectorPath)).trim()
   }
 
   function selectorMetadata(manifest: Manifest): SelectorMetadata | undefined {
@@ -886,6 +919,11 @@ export namespace ExpertSquadRegistry {
     const manifest = parseManifestText(source.manifestText, `built-in expert squad ${source.id}/${MANIFEST}`)
     if (manifest.id !== source.id) {
       throw new Error(`built-in expert squad source id "${source.id}" does not match manifest id "${manifest.id}"`)
+    }
+    if (manifest.namespace !== source.namespace) {
+      throw new Error(
+        `built-in expert squad source namespace "${source.namespace}" does not match manifest namespace "${manifest.namespace}"`,
+      )
     }
     const readmeContent = source.files[manifest.readme]
     if (typeof readmeContent !== "string") {
@@ -950,6 +988,7 @@ export namespace ExpertSquadRegistry {
 
     return {
       id: manifest.id,
+      namespace: manifest.namespace,
       label: manifest.label,
       description: manifest.description,
       version: manifest.version,
@@ -1071,6 +1110,28 @@ export namespace ExpertSquadRegistry {
     }
   }
 
+  function validatePromptProfileManifest(manifest: Manifest) {
+    const virtualAgentIDs = new Map<string, AgentRoleID>()
+    for (const [agentID, agent] of Object.entries(manifest.agents)) {
+      assertRoleID(agentID, `agents.${agentID}`)
+      if (agent.prompt) assertSafeManifestRelativePath(agent.prompt, `agents.${agentID}.prompt`)
+    }
+    for (const [role, virtualAgent] of Object.entries(manifest.virtual_agents)) {
+      assertRoleID(role, `virtual_agents.${role}`)
+      if (Object.hasOwn(manifest.agents, role)) {
+        throw new Error(`virtual_agents.${role}: agents.${role} must be absent when a virtual agent is declared`)
+      }
+      if (virtualAgent.prompt !== virtualAgentPromptPath(role)) {
+        throw new Error(`virtual_agents.${role}.prompt must be ${virtualAgentPromptPath(role)}`)
+      }
+      const previousRole = virtualAgentIDs.get(virtualAgent.id)
+      if (previousRole) {
+        throw new Error(`virtual_agents.${role}.id duplicates virtual_agents.${previousRole}.id "${virtualAgent.id}"`)
+      }
+      virtualAgentIDs.set(virtualAgent.id, role)
+    }
+  }
+
   async function readPromptProfile(metadata: ParsedPackageMetadata): Promise<LoadedPackage["promptProfile"]> {
     const agents: Record<string, string> = {}
     for (const [agentID, agent] of Object.entries(metadata.manifest.agents)) {
@@ -1187,20 +1248,49 @@ export namespace ExpertSquadRegistry {
   }
 
   export async function loadCatalogPackage(root: string): Promise<CatalogPackage> {
-    return loadValidatedPackage(root, { canonicalFolder: true })
+    const metadata = await readPackageMetadata(root, { canonicalFolder: true })
+    const { manifest } = metadata
+    validatePromptProfileManifest(manifest)
+    const selectorInstructions = await readCatalogSelectorInstructions(metadata)
+    return {
+      ...metadata,
+      manifest,
+      selectorInstructions,
+      promptProfile: {
+        label: metadata.label,
+        description: metadata.description,
+        agents: {},
+      },
+    }
   }
 
   export async function discover(root: string): Promise<PackageCatalogEntry[]> {
     const base = path.join(root, ".opencorvus", DIRECTORY)
     const packages: PackageCatalogEntry[] = []
     const seen = new Set<string>()
-    for (const entry of await readOptionalDirectoryEntries(base, ".opencorvus/expert-squads")) {
-      if (!entry.isDirectory()) throw new Error(`.opencorvus/expert-squads.${entry.name}: expected directory`)
-      const packageRoot = path.join(base, entry.name)
-      const pkg = await readPackageMetadata(packageRoot, { canonicalFolder: true })
-      if (seen.has(pkg.id)) throw new Error(`duplicate expert squad id "${pkg.id}"`)
-      seen.add(pkg.id)
-      packages.push(await publicMetadata(pkg))
+    for (const namespaceEntry of await readOptionalDirectoryEntries(base, ".opencorvus/expert-squads")) {
+      if (!namespaceEntry.isDirectory()) {
+        throw new Error(`.opencorvus/expert-squads.${namespaceEntry.name}: expected namespace directory`)
+      }
+      const namespaceRoot = path.join(base, namespaceEntry.name)
+      if (await fileExists(path.join(namespaceRoot, MANIFEST))) {
+        throw new Error(
+          `.opencorvus/expert-squads/${namespaceEntry.name}: direct package roots are not supported; expected <namespace>/<id>`,
+        )
+      }
+      for (const entry of await readOptionalDirectoryEntries(
+        namespaceRoot,
+        `.opencorvus/expert-squads/${namespaceEntry.name}`,
+      )) {
+        if (!entry.isDirectory()) {
+          throw new Error(`.opencorvus/expert-squads/${namespaceEntry.name}.${entry.name}: expected package directory`)
+        }
+        const packageRoot = path.join(namespaceRoot, entry.name)
+        const pkg = await readPackageMetadata(packageRoot, { canonicalFolder: true })
+        if (seen.has(pkg.id)) throw new Error(`duplicate expert squad id "${pkg.id}"`)
+        seen.add(pkg.id)
+        packages.push(await publicMetadata(pkg))
+      }
     }
     return packages
   }

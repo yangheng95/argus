@@ -9,6 +9,17 @@ function read(relativePath: string) {
   return fs.readFileSync(path.join(repoRoot, relativePath), "utf8")
 }
 
+function gitLsFiles(pathspec?: string) {
+  const result = Bun.spawnSync({
+    cmd: pathspec ? ["git", "ls-files", pathspec] : ["git", "ls-files"],
+    cwd: repoRoot,
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+  expect(result.exitCode).toBe(0)
+  return new TextDecoder().decode(result.stdout).split(/\r?\n/).filter(Boolean)
+}
+
 function gitCheckIgnorePositiveNoIndex(relativePath: string) {
   const result = Bun.spawnSync({
     cmd: ["git", "check-ignore", "-v", "--no-index", relativePath],
@@ -1718,16 +1729,25 @@ describe("document health audit regressions", () => {
   })
 
   test("tracked example visual checks are not bound to one developer machine", () => {
-    const visualCheck = read("examples/tradingview-world-economy/test/visual-check.mjs")
-    const server = read("examples/tradingview-world-economy/server.mjs")
+    const visualChecks = gitLsFiles("examples").filter(
+      (file) => file.endsWith("/test/visual-check.mjs") && fs.existsSync(path.join(repoRoot, file)),
+    )
 
-    expect(visualCheck).not.toContain("packages/overlay/node_modules/playwright")
-    expect(visualCheck).not.toContain("C:/Program Files")
-    expect(visualCheck).not.toContain("chrome.exe")
-    expect(visualCheck).not.toContain("const port = 4197")
-    expect(visualCheck).toContain('PORT: "0"')
-    expect(visualCheck).toContain('createRequire(new URL("../../../packages/overlay/package.json", import.meta.url))')
-    expect(server).toContain("server.address()")
+    for (const visualCheckPath of visualChecks) {
+      const visualCheck = read(visualCheckPath)
+      const exampleRoot = path.posix.dirname(path.posix.dirname(visualCheckPath))
+      const serverPath = `${exampleRoot}/server.mjs`
+
+      expect(visualCheck).not.toContain("packages/overlay/node_modules/playwright")
+      expect(visualCheck).not.toContain("C:/Program Files")
+      expect(visualCheck).not.toContain("chrome.exe")
+      expect(visualCheck).not.toContain("const port = 4197")
+      expect(visualCheck).toContain('PORT: "0"')
+      expect(visualCheck).toContain('createRequire(new URL("../../../packages/overlay/package.json", import.meta.url))')
+      if (fs.existsSync(path.join(repoRoot, serverPath))) {
+        expect(read(serverPath)).toContain("server.address()")
+      }
+    }
   })
 
   test("current overlay and repo-hygiene tests do not encode one developer profile path", () => {
@@ -1740,8 +1760,20 @@ describe("document health audit regressions", () => {
     const packageRoot = path.join(repoRoot, ".opencorvus", "expert-squads")
     const promptPaths = fs
       .readdirSync(packageRoot, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => `.opencorvus/expert-squads/${entry.name}/agents/build/system.md`)
+      .filter((namespaceEntry) => namespaceEntry.isDirectory())
+      .flatMap((namespaceEntry) => {
+        const namespaceRoot = path.join(packageRoot, namespaceEntry.name)
+        return fs
+          .readdirSync(namespaceRoot, { withFileTypes: true })
+          .filter((packageEntry) => packageEntry.isDirectory())
+          .flatMap((packageEntry) => {
+            const packageRelativeRoot = `.opencorvus/expert-squads/${namespaceEntry.name}/${packageEntry.name}`
+            return [
+              `${packageRelativeRoot}/agents/build/system.md`,
+              `${packageRelativeRoot}/virtual-agents/build/system.md`,
+            ].filter((relativePath) => fs.existsSync(path.join(repoRoot, relativePath)))
+          })
+      })
 
     expect(promptPaths).not.toEqual([])
     for (const relativePath of promptPaths) {
@@ -2254,6 +2286,28 @@ describe("document health audit regressions", () => {
     ]) {
       expect(fs.existsSync(path.join(repoRoot, ...retiredPackageSpecDir, file))).toBe(false)
     }
+  })
+
+  test("implemented July expert-squad records mark stale package-layout claims as superseded", () => {
+    const files = gitLsFiles("specs/records/2026-07/*.md").filter((file) =>
+      path.basename(file).startsWith("2026-07-06-"),
+    )
+    const stalePatterns = [
+      /\.opencorvus\/expert-squads\/<id>/,
+      /\.opencorvus\/expert-squads\/software-testing/,
+      /releases payload package selectors/,
+    ]
+    const offenders = files.filter((file) => {
+      const text = read(file)
+      if (!/^Status: (Implemented|Implementation record|Implementation goal|Superseded\b|Superseded by\b)/m.test(text)) {
+        return false
+      }
+      if (!/(expert[- ]squad|software-testing|opentest|frontend-automation-debug)/i.test(text)) return false
+      if (!stalePatterns.some((pattern) => pattern.test(text))) return false
+      const head = text.split(/\r?\n/).slice(0, 10).join("\n")
+      return !/Supersession note|Superseded/i.test(head)
+    })
+    expect(offenders).toEqual([])
   })
 
   test("message-card historical records preserve current phase and orderKey calibration", () => {
