@@ -136,3 +136,13 @@ Commit boundary:
 
 - Do not push only the prompt files when they name new structured crop handoff behavior. Include the direct implementation and tests for `reference_region_key`, `horizontal_component_bands`, `update_frontend_visual_region_binding`, Architect `reference_coverage.reference_regions`, and goal-scoped Build reference evidence.
 - Do not stage unrelated dirty-worktree changes outside this repair chain.
+
+Validation results for this closure:
+
+- `bun run --cwd packages/opencorvus typecheck` passed.
+- `bun test packages/opencorvus/test/frontend-design/visual-region-binding-tool.test.ts packages/opencorvus/test/architect/output-tools.test.ts packages/opencorvus/test/orchestrator/build-goal-reference.test.ts packages/opencorvus/test/build-agent/visual-reference-prompt.test.ts packages/opencorvus/test/agent/frontend-replica-desktop-only.test.ts packages/opencorvus/test/expert-squad/package-manager.test.ts packages/opencorvus/test/script/historical-docs-links.test.ts` passed: 134 pass, 0 fail, 711 expect calls.
+- `git diff --check` passed.
+
+Observed non-blocking test log:
+
+- Some `orchestrator build goal references` cases emitted completed-worktree cleanup warnings after the test goal had already passed and the assertion set completed. The command exited 0. This record does not treat those cleanup warnings as proof of this repair; they remain outside the `.opencorvus/expert-squads` Git tracking closure unless a later task opens cleanup ownership.
