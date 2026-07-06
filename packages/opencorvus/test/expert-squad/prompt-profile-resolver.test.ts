@@ -53,12 +53,8 @@ async function composeSchedulerPromptWithPackageMcp(input: {
   resourceName?: string
 }) {
   const packageMcpServerRef = `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/package-browser`
-  const promptRef = input.promptName ? `${packageMcpServerRef}/prompt/${input.promptName}` : undefined
-  const resourceRef = input.resourceName ? `${packageMcpServerRef}/resource/${input.resourceName}` : undefined
   await writeProjectExpertSquadPackage(input.projectPath, PROJECT_EXPERT_SQUAD_ID, {
     schedulerPackageMcpServerRefs: [packageMcpServerRef],
-    schedulerPackageMcpPromptRefs: promptRef ? [promptRef] : [],
-    schedulerPackageMcpResourceRefs: resourceRef ? [resourceRef] : [],
     packageMcpDefinition: packageMcpDefinition({
       ...(input.promptName ? { prompts: [input.promptName] } : {}),
       ...(input.resourceName ? { resources: [input.resourceName] } : {}),
@@ -83,8 +79,6 @@ describe("PromptProfileResolver", () => {
     const buildDefaultMcpResourceRef = "default/mcp/package-browser/resource/dom"
     await writeProjectExpertSquadPackage(project.path, PROJECT_EXPERT_SQUAD_ID, {
       schedulerPackageMcpServerRefs: [schedulerPackageMcpServerRef],
-      schedulerPackageMcpPromptRefs: [schedulerPackageMcpPromptRef],
-      schedulerPackageMcpResourceRefs: [schedulerPackageMcpResourceRef],
       buildDefaultMcpPromptRefs: [buildDefaultMcpPromptRef],
       buildDefaultMcpResourceRefs: [buildDefaultMcpResourceRef],
       packageMcpDefinition: {
@@ -145,8 +139,9 @@ describe("PromptProfileResolver", () => {
     expect(profile?.capability_projection.scheduler.package_tool_refs).toEqual([
       `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/source-evidence`,
     ])
-    expect(profile?.capability_projection.scheduler.package_mcp_prompt_refs).toEqual([schedulerPackageMcpPromptRef])
-    expect(profile?.capability_projection.scheduler.package_mcp_resource_refs).toEqual([schedulerPackageMcpResourceRef])
+    expect(profile?.capability_projection.scheduler.package_mcp_server_refs).toEqual([schedulerPackageMcpServerRef])
+    expect(profile?.capability_projection.scheduler.package_mcp_prompt_refs).toEqual([])
+    expect(profile?.capability_projection.scheduler.package_mcp_resource_refs).toEqual([])
     expect(profile?.capability_projection.agents.build.package_tool_refs).toEqual([
       `${PROJECT_EXPERT_SQUAD_ID}/build/build-evidence`,
     ])
@@ -172,6 +167,13 @@ describe("PromptProfileResolver", () => {
       "version",
       "virtual_agents",
     ])
+
+    const capability = await PromptProfileResolver.resolveSchedulerCapability({
+      projectDirectory: project.path,
+      config,
+    })
+    expect(capability.packageMcpPromptRefs).toEqual([schedulerPackageMcpPromptRef])
+    expect(capability.packageMcpResourceRefs).toEqual([schedulerPackageMcpResourceRef])
   })
 
   test("composes project package build overlays with default MCP context", async () => {
@@ -212,8 +214,6 @@ describe("PromptProfileResolver", () => {
     const schedulerPackageMcpResourceRef = `${schedulerPackageMcpServerRef}/resource/dom`
     await writeProjectExpertSquadPackage(project.path, PROJECT_EXPERT_SQUAD_ID, {
       schedulerPackageMcpServerRefs: [schedulerPackageMcpServerRef],
-      schedulerPackageMcpPromptRefs: [schedulerPackageMcpPromptRef],
-      schedulerPackageMcpResourceRefs: [schedulerPackageMcpResourceRef],
       packageMcpDefinition: packageMcpDefinition({
         prompts: ["inspect"],
         resources: ["dom"],
@@ -796,7 +796,6 @@ describe("PromptProfileResolver", () => {
     const packageMcpToolRef = `${packageMcpServerRef}/tool/snapshot`
     await writeProjectExpertSquadPackage(project.path, PROJECT_EXPERT_SQUAD_ID, {
       schedulerPackageMcpServerRefs: [packageMcpServerRef],
-      schedulerPackageMcpToolRefs: [packageMcpToolRef],
       packageMcpDefinition: {
         type: "local",
         command: [process.execPath, path.join(import.meta.dir, "../fixture/package-mcp-server.ts")],
@@ -844,6 +843,28 @@ describe("PromptProfileResolver", () => {
     expect(packageMcpResult.output).toContain("package-mcp-snapshot:active:")
     expect(packageMcpResult.metadata.package_mcp_tool_ref).toBe(packageMcpToolRef)
     expect(packageMcpResult.metadata.provider_tool_name).toBe(packageMcpProviderName)
+  })
+
+  test("rejects duplicate package MCP projection through server and typed refs", async () => {
+    await using project = await tmpdir({ git: true })
+    const packageMcpServerRef = `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/package-browser`
+    const packageMcpToolRef = `${packageMcpServerRef}/tool/snapshot`
+    await writeProjectExpertSquadPackage(project.path, PROJECT_EXPERT_SQUAD_ID, {
+      schedulerPackageMcpServerRefs: [packageMcpServerRef],
+      schedulerPackageMcpToolRefs: [packageMcpToolRef],
+      packageMcpDefinition: {
+        type: "local",
+        command: [process.execPath, path.join(import.meta.dir, "../fixture/package-mcp-server.ts")],
+        capabilities: { tools: ["snapshot"] },
+      },
+    })
+
+    await expect(
+      PromptProfileResolver.resolveSchedulerCapability({
+        projectDirectory: project.path,
+        config: Config.Info.parse({ prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } }),
+      }),
+    ).rejects.toThrow(/already mounted by package_mcp_server_refs/)
   })
 
   test("projects scheduler default MCP tool refs from the effective config", async () => {
@@ -908,8 +929,6 @@ describe("PromptProfileResolver", () => {
     const packageMcpResourceRef = `${packageMcpServerRef}/resource/dom`
     await writeProjectExpertSquadPackage(project.path, PROJECT_EXPERT_SQUAD_ID, {
       schedulerPackageMcpServerRefs: [packageMcpServerRef],
-      schedulerPackageMcpPromptRefs: [packageMcpPromptRef],
-      schedulerPackageMcpResourceRefs: [packageMcpResourceRef],
       packageMcpDefinition: {
         type: "local",
         command: [process.execPath, path.join(import.meta.dir, "../fixture/package-mcp-server.ts")],
@@ -959,8 +978,6 @@ describe("PromptProfileResolver", () => {
     const packageMcpResourceRef = `${packageMcpServerRef}/resource/dom`
     await writeProjectExpertSquadPackage(project.path, PROJECT_EXPERT_SQUAD_ID, {
       schedulerPackageMcpServerRefs: [packageMcpServerRef],
-      schedulerPackageMcpPromptRefs: [packageMcpPromptRef],
-      schedulerPackageMcpResourceRefs: [packageMcpResourceRef],
       packageMcpDefinition: packageMcpDefinition({
         prompts: ["inspect"],
         resources: ["dom"],
@@ -993,8 +1010,6 @@ describe("PromptProfileResolver", () => {
     const packageMcpResourceRef = `${packageMcpServerRef}/resource/dom`
     await writeProjectExpertSquadPackage(project.path, PROJECT_EXPERT_SQUAD_ID, {
       schedulerPackageMcpServerRefs: [packageMcpServerRef],
-      schedulerPackageMcpPromptRefs: [packageMcpPromptRef],
-      schedulerPackageMcpResourceRefs: [packageMcpResourceRef],
       packageMcpDefinition: packageMcpDefinition({
         prompts: ["inspect"],
         resources: ["dom"],
@@ -1020,7 +1035,6 @@ describe("PromptProfileResolver", () => {
     const packageMcpPromptRef = `${packageMcpServerRef}/prompt/image`
     await writeProjectExpertSquadPackage(project.path, PROJECT_EXPERT_SQUAD_ID, {
       schedulerPackageMcpServerRefs: [packageMcpServerRef],
-      schedulerPackageMcpPromptRefs: [packageMcpPromptRef],
       packageMcpDefinition: {
         type: "local",
         command: [process.execPath, path.join(import.meta.dir, "../fixture/package-mcp-server.ts")],
@@ -1199,7 +1213,6 @@ describe("PromptProfileResolver", () => {
     const packageMcpResourceRef = `${packageMcpServerRef}/resource/dom-binary`
     await writeProjectExpertSquadPackage(project.path, PROJECT_EXPERT_SQUAD_ID, {
       schedulerPackageMcpServerRefs: [packageMcpServerRef],
-      schedulerPackageMcpResourceRefs: [packageMcpResourceRef],
       packageMcpDefinition: {
         type: "local",
         command: [process.execPath, path.join(import.meta.dir, "../fixture/package-mcp-server.ts")],
@@ -1544,7 +1557,6 @@ describe("PromptProfileResolver", () => {
     const packageMcpToolRef = `${packageMcpServerRef}/tool/snapshot`
     await writeProjectExpertSquadPackage(project.path, PROJECT_EXPERT_SQUAD_ID, {
       buildPackageMcpServerRefs: [packageMcpServerRef],
-      buildPackageMcpToolRefs: [packageMcpToolRef],
       packageMcpDefinition: {
         type: "local",
         command: [process.execPath, path.join(import.meta.dir, "../fixture/package-mcp-server.ts")],
@@ -1583,7 +1595,6 @@ describe("PromptProfileResolver", () => {
     const packageMcpToolRef = `${packageMcpServerRef}/tool/snapshot`
     await writeProjectExpertSquadPackage(project.path, PROJECT_EXPERT_SQUAD_ID, {
       buildPackageMcpServerRefs: [packageMcpServerRef],
-      buildPackageMcpToolRefs: [packageMcpToolRef],
       packageMcpDefinition: {
         type: "local",
         command: [process.execPath, packageMcpServerPath],

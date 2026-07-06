@@ -600,6 +600,27 @@ export namespace ExpertSquadRegistry {
     }
   }
 
+  function packageMcpRefsExpandedByServers(input: {
+    serverRefs: readonly string[]
+    available: Set<string>
+    kind: "tool" | "prompt" | "resource"
+    context: string
+  }) {
+    const result = new Set<string>()
+    const seenServers = new Set<string>()
+    for (const serverRef of input.serverRefs) {
+      if (seenServers.has(serverRef)) {
+        throw new Error(`${input.context}: package_mcp_server_refs repeats ${serverRef}`)
+      }
+      seenServers.add(serverRef)
+      const prefix = `${serverRef}/${input.kind}/`
+      for (const ref of input.available) {
+        if (ref.startsWith(prefix)) result.add(ref)
+      }
+    }
+    return result
+  }
+
   type LoadPackageOptions = {
     workflowBindings?: readonly SchedulerAgentWorkflowBinding[]
   }
@@ -679,7 +700,28 @@ export namespace ExpertSquadRegistry {
         context,
       })
     }
+    const serverMountedMcpToolRefs = packageMcpRefsExpandedByServers({
+      serverRefs: projection.package_mcp_server_refs,
+      available: refs.mcpToolRefs,
+      kind: "tool",
+      context,
+    })
+    const serverMountedMcpPromptRefs = packageMcpRefsExpandedByServers({
+      serverRefs: projection.package_mcp_server_refs,
+      available: refs.mcpPromptRefs,
+      kind: "prompt",
+      context,
+    })
+    const serverMountedMcpResourceRefs = packageMcpRefsExpandedByServers({
+      serverRefs: projection.package_mcp_server_refs,
+      available: refs.mcpResourceRefs,
+      kind: "resource",
+      context,
+    })
     for (const ref of projection.package_mcp_tool_refs) {
+      if (serverMountedMcpToolRefs.has(ref)) {
+        throw new Error(`${context}: package MCP tool ref "${ref}" is already mounted by package_mcp_server_refs`)
+      }
       assertProjectedPackageMcpTypedRef({
         ref,
         kind: "tool",
@@ -692,6 +734,9 @@ export namespace ExpertSquadRegistry {
       })
     }
     for (const ref of projection.package_mcp_prompt_refs) {
+      if (serverMountedMcpPromptRefs.has(ref)) {
+        throw new Error(`${context}: package MCP prompt ref "${ref}" is already mounted by package_mcp_server_refs`)
+      }
       assertProjectedPackageMcpTypedRef({
         ref,
         kind: "prompt",
@@ -704,6 +749,9 @@ export namespace ExpertSquadRegistry {
       })
     }
     for (const ref of projection.package_mcp_resource_refs) {
+      if (serverMountedMcpResourceRefs.has(ref)) {
+        throw new Error(`${context}: package MCP resource ref "${ref}" is already mounted by package_mcp_server_refs`)
+      }
       assertProjectedPackageMcpTypedRef({
         ref,
         kind: "resource",

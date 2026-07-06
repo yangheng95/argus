@@ -42,9 +42,6 @@ function manifest(overrides: Record<string, unknown> = {}) {
         package_tool_refs: ["frontend-replica/orchestrator/source-evidence"],
         package_skill_refs: ["frontend-replica/orchestrator/scheduler"],
         package_mcp_server_refs: ["frontend-replica/orchestrator/browser"],
-        package_mcp_tool_refs: ["frontend-replica/orchestrator/browser/tool/snapshot"],
-        package_mcp_prompt_refs: ["frontend-replica/orchestrator/browser/prompt/inspect"],
-        package_mcp_resource_refs: ["frontend-replica/orchestrator/browser/resource/dom"],
       },
       agents: {
         build: {
@@ -123,12 +120,8 @@ describe("ExpertSquadRegistry", () => {
     expect(loaded.packageMcpToolRefs.has("frontend-replica/orchestrator/browser/tool/snapshot")).toBe(true)
     expect(loaded.packageMcpPromptRefs.has("frontend-replica/orchestrator/browser/prompt/inspect")).toBe(true)
     expect(loaded.packageMcpResourceRefs.has("frontend-replica/orchestrator/browser/resource/dom")).toBe(true)
-    expect(loaded.manifest.capability_projection.scheduler.package_mcp_prompt_refs).toEqual([
-      "frontend-replica/orchestrator/browser/prompt/inspect",
-    ])
-    expect(loaded.manifest.capability_projection.scheduler.package_mcp_resource_refs).toEqual([
-      "frontend-replica/orchestrator/browser/resource/dom",
-    ])
+    expect(loaded.manifest.capability_projection.scheduler.package_mcp_prompt_refs).toEqual([])
+    expect(loaded.manifest.capability_projection.scheduler.package_mcp_resource_refs).toEqual([])
     expect(loaded.explicitSchedulerWorkflowTools).toEqual(["build"])
     expect(loaded.readmeContent).toBe("# Frontend Replica")
   })
@@ -1073,6 +1066,21 @@ describe("ExpertSquadRegistry", () => {
     await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/is not declared in this package/)
   })
 
+  test("rejects package MCP capabilities declared by both server ref and typed refs", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, {
+      capability_projection: {
+        ...manifest().capability_projection,
+        scheduler: {
+          ...manifest().capability_projection.scheduler,
+          package_mcp_tool_refs: ["frontend-replica/orchestrator/browser/tool/snapshot"],
+        },
+      },
+    })
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/already mounted by package_mcp_server_refs/)
+  })
+
   test("rejects typed package MCP prompt refs not statically declared by the package MCP definition", async () => {
     await using tmp = await tmpdir()
     const packageRoot = await writeValidPackage(tmp.path, {
@@ -1181,10 +1189,6 @@ describe("ExpertSquadRegistry", () => {
           package_mcp_server_refs: [
             "frontend-replica/orchestrator/browser",
             "frontend-replica/shared/browser",
-          ],
-          package_mcp_tool_refs: [
-            "frontend-replica/orchestrator/browser/tool/snapshot",
-            "frontend-replica/shared/browser/tool/snapshot",
           ],
         },
       },

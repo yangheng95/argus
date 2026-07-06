@@ -587,6 +587,62 @@ export namespace PromptProfileResolver {
     return result
   }
 
+  function packageMcpKindRefs(
+    pkg: ExpertSquadRegistry.LoadedPackage,
+    kind: McpCapabilityKind,
+  ): ReadonlySet<string> {
+    if (kind === "tool") return pkg.packageMcpToolRefs
+    if (kind === "prompt") return pkg.packageMcpPromptRefs
+    return pkg.packageMcpResourceRefs
+  }
+
+  function projectionPackageMcpKindRefs(
+    projection: ExpertSquadRegistry.Projection,
+    kind: McpCapabilityKind,
+  ): readonly string[] {
+    if (kind === "tool") return projection.package_mcp_tool_refs
+    if (kind === "prompt") return projection.package_mcp_prompt_refs
+    return projection.package_mcp_resource_refs
+  }
+
+  function effectivePackageMcpRefs(input: {
+    active: ActiveProfilePackage
+    projection: ExpertSquadRegistry.Projection
+    kind: McpCapabilityKind
+    context: string
+  }): string[] {
+    if (input.active.builtIn) return []
+    const available = packageMcpKindRefs(input.active.pkg, input.kind)
+    const result: string[] = []
+    const seen = new Map<string, string>()
+    const add = (ref: string, source: string) => {
+      const previous = seen.get(ref)
+      if (previous) {
+        throw new Error(`${input.context}: package MCP ${input.kind} ref ${ref} is declared by both ${previous} and ${source}`)
+      }
+      if (!available.has(ref)) {
+        throw new Error(`${input.context}: package MCP ${input.kind} ref ${ref} is not declared in the active package`)
+      }
+      seen.set(ref, source)
+      result.push(ref)
+    }
+
+    for (const serverRef of input.projection.package_mcp_server_refs) {
+      if (!input.active.pkg.packageMcpServerRefs.has(serverRef)) {
+        throw new Error(`${input.context}: package MCP server ref ${serverRef} is not declared in the active package`)
+      }
+      const prefix = `${serverRef}/${input.kind}/`
+      const expanded = [...available]
+        .filter((item) => item.startsWith(prefix))
+        .sort((left, right) => left.localeCompare(right))
+      for (const ref of expanded) add(ref, `package_mcp_server_refs.${serverRef}`)
+    }
+    for (const ref of projectionPackageMcpKindRefs(input.projection, input.kind)) {
+      add(ref, `package_mcp_${input.kind}_refs`)
+    }
+    return result
+  }
+
   function workflowToolRoleMap(
     toolIDs: readonly string[],
     config: ConfigLike,
@@ -650,11 +706,26 @@ export namespace PromptProfileResolver {
       ...defaultMcpPromptRefs,
       ...defaultMcpResourceRefs,
     ])
-    const packageMcpToolRefs = active.builtIn ? [] : scheduler.package_mcp_tool_refs
+    const packageMcpToolRefs = effectivePackageMcpRefs({
+      active,
+      projection: scheduler,
+      kind: "tool",
+      context: "capability_projection.scheduler",
+    })
     const packageMcpToolProviderNames = packageMcpToolRefs.map(packageMcpToolProviderName)
-    const packageMcpPromptRefs = active.builtIn ? [] : scheduler.package_mcp_prompt_refs
+    const packageMcpPromptRefs = effectivePackageMcpRefs({
+      active,
+      projection: scheduler,
+      kind: "prompt",
+      context: "capability_projection.scheduler",
+    })
     const packageMcpPromptProviderNames = packageMcpPromptRefs.map(packageMcpPromptProviderName)
-    const packageMcpResourceRefs = active.builtIn ? [] : scheduler.package_mcp_resource_refs
+    const packageMcpResourceRefs = effectivePackageMcpRefs({
+      active,
+      projection: scheduler,
+      kind: "resource",
+      context: "capability_projection.scheduler",
+    })
     const packageMcpResourceProviderNames = packageMcpResourceRefs.map(packageMcpResourceProviderName)
     const projectedWorkflowToolRoles = workflowToolRoleMap(builtInToolIDs, input.config)
     const projectedWorkflowTools = [...projectedWorkflowToolRoles.keys()]
@@ -751,11 +822,26 @@ export namespace PromptProfileResolver {
       ...defaultMcpPromptRefs,
       ...defaultMcpResourceRefs,
     ])
-    const packageMcpToolRefs = active.builtIn ? [] : projection.package_mcp_tool_refs
+    const packageMcpToolRefs = effectivePackageMcpRefs({
+      active,
+      projection,
+      kind: "tool",
+      context: `capability_projection.agents.${input.agentID}`,
+    })
     const packageMcpToolProviderNames = packageMcpToolRefs.map(packageMcpToolProviderName)
-    const packageMcpPromptRefs = active.builtIn ? [] : projection.package_mcp_prompt_refs
+    const packageMcpPromptRefs = effectivePackageMcpRefs({
+      active,
+      projection,
+      kind: "prompt",
+      context: `capability_projection.agents.${input.agentID}`,
+    })
     const packageMcpPromptProviderNames = packageMcpPromptRefs.map(packageMcpPromptProviderName)
-    const packageMcpResourceRefs = active.builtIn ? [] : projection.package_mcp_resource_refs
+    const packageMcpResourceRefs = effectivePackageMcpRefs({
+      active,
+      projection,
+      kind: "resource",
+      context: `capability_projection.agents.${input.agentID}`,
+    })
     const packageMcpResourceProviderNames = packageMcpResourceRefs.map(packageMcpResourceProviderName)
     const rawVirtualAgent = active.pkg.promptProfile.virtualAgents[input.agentID]
     const resourceFingerprint = await projectedPackageResourceFingerprint({
