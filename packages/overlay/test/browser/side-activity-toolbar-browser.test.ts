@@ -584,40 +584,16 @@ test(
               '[data-ui="side-activity-button"][data-side="left"][data-activity="assistant"]',
               "aria-pressed",
             ),
-            leftToolButton:
+            leftExtensionsButton:
               document.querySelector<HTMLElement>(
-                '[data-ui="side-activity-button"][data-side="left"][data-activity="tool"]',
+                '[data-ui="side-activity-button"][data-side="left"][data-activity="extensions"]',
               )?.dataset.active ?? "",
-            leftToolCurrent: attr(
-              '[data-ui="side-activity-button"][data-side="left"][data-activity="tool"]',
+            leftExtensionsCurrent: attr(
+              '[data-ui="side-activity-button"][data-side="left"][data-activity="extensions"]',
               "aria-current",
             ),
-            leftToolPressed: attr(
-              '[data-ui="side-activity-button"][data-side="left"][data-activity="tool"]',
-              "aria-pressed",
-            ),
-            leftSkillButton:
-              document.querySelector<HTMLElement>(
-                '[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]',
-              )?.dataset.active ?? "",
-            leftSkillCurrent: attr(
-              '[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]',
-              "aria-current",
-            ),
-            leftSkillPressed: attr(
-              '[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]',
-              "aria-pressed",
-            ),
-            leftMcpButton:
-              document.querySelector<HTMLElement>(
-                '[data-ui="side-activity-button"][data-side="left"][data-activity="mcp"]',
-              )?.dataset.active ?? "",
-            leftMcpCurrent: attr(
-              '[data-ui="side-activity-button"][data-side="left"][data-activity="mcp"]',
-              "aria-current",
-            ),
-            leftMcpPressed: attr(
-              '[data-ui="side-activity-button"][data-side="left"][data-activity="mcp"]',
+            leftExtensionsPressed: attr(
+              '[data-ui="side-activity-button"][data-side="left"][data-activity="extensions"]',
               "aria-pressed",
             ),
             leftMemoryButton:
@@ -797,7 +773,7 @@ test(
         centerDiff: "false",
         centerPreview: "false",
         leftToolbarExists: true,
-        leftActivityButtons: 7,
+        leftActivityButtons: 5,
         leftTasksButton: "false",
         leftTasksCurrent: "",
         leftTasksPressed: "",
@@ -807,15 +783,9 @@ test(
         leftAssistantButton: "false",
         leftAssistantCurrent: "",
         leftAssistantPressed: "",
-        leftToolButton: "false",
-        leftToolCurrent: "",
-        leftToolPressed: "",
-        leftSkillButton: "false",
-        leftSkillCurrent: "",
-        leftSkillPressed: "",
-        leftMcpButton: "false",
-        leftMcpCurrent: "",
-        leftMcpPressed: "",
+        leftExtensionsButton: "false",
+        leftExtensionsCurrent: "",
+        leftExtensionsPressed: "",
         leftMemoryButton: "false",
         leftMemoryCurrent: "",
         leftMemoryPressed: "",
@@ -1425,20 +1395,31 @@ test(
         true,
       )
 
-      await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]')
-      await page.waitForSelector('#leftPanelSkills[data-active="true"] [data-ui="agent-skill-tabs"]')
+      const extensionButton = '[data-ui="side-activity-button"][data-side="left"][data-activity="extensions"]'
+      const extensionPanel = "#leftPanelExtensions"
+      const skillPanel = `${extensionPanel} [data-mode="skill"]`
+      const mcpPanel = `${extensionPanel} [data-mode="mcp"]`
+      const openExtensionMode = async (mode: "skill" | "mcp", panelSelector: string) => {
+        await clickButton(extensionButton)
+        await page.waitForSelector(`${extensionPanel}[data-active="true"]`)
+        await page.click(`${extensionPanel} .extension-activity-tabs [data-value="${mode}"]`)
+        await page.waitForSelector(`${panelSelector}[data-active="true"]`)
+      }
+
+      await openExtensionMode("skill", skillPanel)
+      await page.waitForSelector(`${skillPanel}[data-active="true"] [data-ui="agent-skill-tabs"]`)
       assertMatchObject(await activeState(), {
-        leftHeaderTitle: "Skills",
-        leftHeaderAriaLabel: "Skills",
-        leftHeaderI18nKey: "skill.title",
-        leftHeaderActionScope: "skill",
+        leftHeaderTitle: "Extensions",
+        leftHeaderAriaLabel: "Extensions",
+        leftHeaderI18nKey: "extensions.title",
+        leftHeaderActionScope: "extensions",
         leftHeaderActionsActive: "false",
-        leftSkillButton: "true",
-        leftSkillCurrent: "page",
-        leftSkillPressed: "",
+        leftExtensionsButton: "true",
+        leftExtensionsCurrent: "page",
+        leftExtensionsPressed: "",
       })
       const skillPanelState = await page.evaluate(() => {
-        const panel = document.querySelector<HTMLElement>("#leftPanelSkills")!
+        const panel = document.querySelector<HTMLElement>('#leftPanelExtensions [data-mode="skill"]')!
         const toolbar = panel.querySelector<HTMLElement>(".tool-panel-toolbar")
         const internalHeader = panel.querySelector<HTMLElement>('.oc-surface-header[data-surface="settings-group"]')
         const buttons = Array.from(panel.querySelectorAll<HTMLElement>('[data-ui="tool-panel-action"]')).map(
@@ -1505,10 +1486,10 @@ test(
         () => document.querySelector<HTMLElement>("#leftPanelTasks")?.dataset.active === "true",
       )
 
-      await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="mcp"]')
-      await page.waitForSelector("#leftPanelMcp[data-active='true'] .extension-settings-row")
+      await openExtensionMode("mcp", mcpPanel)
+      await page.waitForSelector(`${mcpPanel}[data-active='true'] .extension-settings-row`)
       const mcpPanelState = await page.evaluate(() => {
-        const panel = document.querySelector<HTMLElement>("#leftPanelMcp")!
+        const panel = document.querySelector<HTMLElement>('#leftPanelExtensions [data-mode="mcp"]')!
         const row = panel.querySelector<HTMLElement>(".extension-settings-row")!
         return {
           active: panel.dataset.active,
@@ -1524,9 +1505,9 @@ test(
         status: "Connected",
       })
       assertMatchObject(await activeState(), {
-        leftMcpButton: "true",
-        leftMcpCurrent: "page",
-        leftMcpPressed: "",
+        leftExtensionsButton: "true",
+        leftExtensionsCurrent: "page",
+        leftExtensionsPressed: "",
         leftTasksButton: "false",
         leftTasksCurrent: "",
         leftTasksPressed: "",
@@ -2062,16 +2043,16 @@ test(
         '[data-ui="coding-assistant-row"][data-session-id="ses_right_sidebar_assistant"] .coding-assistant-row-main',
       )
       await page.waitForFunction(() => (window as any).boardStore?.selectedSource?.kind === "session")
-      await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]')
+      await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="extensions"]')
       await page.waitForFunction(
         () =>
-          document.querySelector<HTMLElement>("#leftPanelSkills")?.dataset.active === "true" &&
+          document.querySelector<HTMLElement>("#leftPanelExtensions")?.dataset.active === "true" &&
           document.querySelector<HTMLElement>("#chatViewTitle")?.textContent === "Task" &&
           !(window as any).boardStore?.selectedSource,
       )
       assertMatchObject(await activeState(), {
         centerWorkflow: "true",
-        leftSkillButton: "true",
+        leftExtensionsButton: "true",
         leftAssistantButton: "false",
         chatTitle: "Task",
         selectedSourceKind: "",

@@ -96,11 +96,15 @@ test("index.html declares task-scope toolbar workbench activities without the hi
   expect(html).toContain('id="leftPanelMissions"')
   expect(html).toContain('id="leftPanelAssistant"')
   expect(html).toContain('id="codingAssistantSessionListPanel"')
-  expect(html).toContain('id="leftPanelSkills"')
-  expect(html).toContain('id="leftPanelMcp"')
+  expect(html).toContain('id="leftPanelExtensions"')
+  expect(html).not.toContain('id="leftPanelSkills"')
+  expect(html).not.toContain('id="leftPanelMcp"')
+  expect(html).not.toContain('id="leftPanelTools"')
   expect(html).toContain('id="leftPanelMemory"')
-  expect(html).toContain('id="solidLeftSkillsPanel"')
-  expect(html).toContain('id="solidLeftMcpPanel"')
+  expect(html).toContain('id="solidLeftExtensionsPanel"')
+  expect(html).not.toContain('id="solidLeftSkillsPanel"')
+  expect(html).not.toContain('id="solidLeftMcpPanel"')
+  expect(html).not.toContain('id="solidLeftToolsPanel"')
   expect(html).toContain('id="solidLeftMemoryPanel"')
   expect(html).not.toContain('id="leftPanelExplorer"')
   expect(html).not.toContain('id="leftPanelChanges"')
@@ -201,7 +205,7 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
   expect(main).toContain("<SideActivityToolbar")
   expect(main).toContain("selectLeftActivity")
   expect(main).toContain("selectRightActivity")
-  expect(main).toContain('type LeftActivity = "tasks" | "mission" | "assistant" | "memory" | "skill" | "mcp"')
+  expect(main).toContain('type LeftActivity = "tasks" | "mission" | "assistant" | "memory" | "extensions"')
   expect(main).toContain("type CenterWorkbenchPanel =")
   expect(main).toContain('| "screenshots"')
   expect(main).toContain('type RightActivity = Exclude<CenterWorkbenchPanel, "file">')
@@ -244,9 +248,11 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
     'id: "memory", icon: "config-memory", labelKey: "memory.title", tooltipKey: "activity.tooltip.memory"',
   )
   expect(main).toMatch(
-    /id:\s*"skill"[\s\S]*?icon:\s*"config-skill"[\s\S]*?labelKey:\s*"skill\.title"[\s\S]*?tooltipKey:\s*"activity\.tooltip\.skill"/,
+    /id:\s*"extensions"[\s\S]*?icon:\s*"config-skill"[\s\S]*?labelKey:\s*"extensions\.title"[\s\S]*?tooltipKey:\s*"activity\.tooltip\.extensions"/,
   )
-  expect(main).toContain('id: "mcp", icon: "config-mcp", labelKey: "mcp.title", tooltipKey: "activity.tooltip.mcp"')
+  expect(main).not.toContain('id: "tool"')
+  expect(main).not.toContain('id: "skill"')
+  expect(main).not.toContain('id: "mcp"')
   expect(main).toContain(
     'const [centerWorkbenchPanels, setCenterWorkbenchPanels] = createSignal<CenterWorkbenchPanel[]>(["workflow"])',
   )
@@ -498,6 +504,9 @@ test("redesign-required i18n keys exist in both locales; the legacy lifecycle ke
     "activity.tooltip.requirements",
     "activity.tooltip.architect",
     "activity.tooltip.goals",
+    "activity.tooltip.extensions",
+    "extensions.title",
+    "extensions.segment_aria",
     "workflow.goals_pending",
   ]
   // i18n keys are flat strings with literal dots, not nested paths — use

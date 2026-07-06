@@ -123,7 +123,7 @@ test("CSS token closure surfaces resolve canonical tokens visually", async () =>
             </section>
             <section class="token-closure-sample">
               <h2>Activity status</h2>
-              <div class="sidebar-tool-panel">
+              <div class="sidebar-extension-panel">
                 <div class="config-status-box">Status box uses canonical radius.</div>
               </div>
             </section>

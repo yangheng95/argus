@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "fef426d6ffc429ed"
+    "panel_revision": "ee69ab01fba13c26"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -57,14 +57,12 @@
   "activity.tooltip.requirements": "Open the selected task requirements panel.",
   "activity.tooltip.architect": "Open the selected task architecture contracts panel.",
   "activity.tooltip.goals": "Open the selected task goals and acceptance evidence panel.",
-  "activity.tooltip.mcp": "Manage MCP servers and tool connections available to agents.",
   "activity.tooltip.memory": "Inspect memory entries associated with the selected task and session.",
   "activity.tooltip.mission": "View Missions and the tasks they created.",
   "activity.tooltip.notifications": "Open task and system notifications.",
   "activity.tooltip.screenshots": "Browse screenshots that appeared in the selected task, grouped by agent.",
-  "activity.tooltip.skill": "Manage per-agent Skill mounts from the dynamic expert-squad projection.",
   "activity.tooltip.tasks": "View and switch recent tasks.",
-  "activity.tooltip.tool": "Inspect tools projected to each agent by the active expert squad.",
+  "activity.tooltip.extensions": "Manage projected tools, Skill mounts, and MCP connections in one panel.",
   "activity.tooltip.workflow": "Show or hide the main workflow conversation for the selected task.",
   "brand.guide_kicker": "Quick Guide",
   "brand.guide_positioning_body": "This workspace is for conversations and acceptance evidence: left selects recent tasks, center drives execution, right keeps documents, plan, evaluation, and file changes together.",
@@ -989,6 +987,8 @@
   "skill.source.url": "Remote URL",
   "skill.source_type": "Source Type",
   "skill.title": "Skills",
+  "extensions.segment_aria": "Extension panel section",
+  "extensions.title": "Extensions",
   "capability.agents": "Agents",
   "capability.empty_group": "None",
   "capability.none": "No projected capability",

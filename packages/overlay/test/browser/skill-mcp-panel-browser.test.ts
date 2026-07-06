@@ -224,8 +224,18 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
     }, server.origin)
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
-    await page.waitForSelector('[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]')
-    const initiallyHiddenMcpProjection = await page.$eval("#leftPanelMcp", (node: HTMLElement) => ({
+    const extensionButton = '[data-ui="side-activity-button"][data-side="left"][data-activity="extensions"]'
+    const extensionPanel = "#leftPanelExtensions"
+    const skillPanel = `${extensionPanel} [data-mode="skill"]`
+    const mcpPanel = `${extensionPanel} [data-mode="mcp"]`
+    const openExtensionMode = async (mode: "skill" | "mcp", panelSelector: string) => {
+      await page.click(extensionButton)
+      await page.waitForSelector(`${extensionPanel}[data-active="true"]`)
+      await page.click(`${extensionPanel} .extension-activity-tabs [data-value="${mode}"]`)
+      await page.waitForSelector(`${panelSelector}[data-active="true"]`)
+    }
+    await page.waitForSelector(extensionButton)
+    const initiallyHiddenMcpProjection = await page.$eval(mcpPanel, (node: HTMLElement) => ({
       active: node.dataset.active || "",
       lists: node.querySelectorAll("#mcpList").length,
       rows: node.querySelectorAll(".extension-settings-row").length,
@@ -236,17 +246,15 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
       { active: "false", lists: 0, rows: 0, text: "" },
       "hidden compact MCP panel must not materialize MCP list DOM before it is opened",
     )
-    await page.click('[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]')
-    await page.waitForSelector("#leftPanelSkills[data-active='true']")
-    const openSkillDirButton =
-      '#leftPanelSkills[data-active="true"] [data-ui="tool-panel-action"][aria-label="Open Dir"]'
+    await openExtensionMode("skill", skillPanel)
+    const openSkillDirButton = `${skillPanel}[data-active="true"] [data-ui="tool-panel-action"][aria-label="Open Dir"]`
     await page.waitForSelector(openSkillDirButton, { visible: true })
     await page.click(openSkillDirButton)
     await page.waitForFunction(() => (window as any).__openedPaths?.length === 1)
     assert.deepEqual(await page.evaluate(() => (window as any).__openedPaths), [
       "D:/overlay/global/.opencorvus/skills-market",
     ])
-    const mcpProjectionWhileSkillOpen = await page.$eval("#leftPanelMcp", (node: HTMLElement) => ({
+    const mcpProjectionWhileSkillOpen = await page.$eval(mcpPanel, (node: HTMLElement) => ({
       active: node.dataset.active || "",
       lists: node.querySelectorAll("#mcpList").length,
       rows: node.querySelectorAll(".extension-settings-row").length,
@@ -258,10 +266,9 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
       "MCP panel must stay unmaterialized while Skills is the active compact tool panel",
     )
 
-    await page.waitForSelector('[data-ui="side-activity-button"][data-side="left"][data-activity="mcp"]')
-    await page.click('[data-ui="side-activity-button"][data-side="left"][data-activity="mcp"]')
-    await page.waitForSelector("#leftPanelMcp[data-active='true'] #mcpList")
-    const skillProjectionWhileMcpOpen = await page.$eval("#leftPanelSkills", (node: HTMLElement) => ({
+    await openExtensionMode("mcp", mcpPanel)
+    await page.waitForSelector(`${mcpPanel}[data-active="true"] #mcpList`)
+    const skillProjectionWhileMcpOpen = await page.$eval(skillPanel, (node: HTMLElement) => ({
       active: node.dataset.active || "",
       agentTabs: node.querySelectorAll('[data-ui="agent-skill-tabs"]').length,
       skillPools: node.querySelectorAll('[data-ui="agent-skill-pool"]').length,
@@ -272,9 +279,11 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
       { active: "false", agentTabs: 0, skillPools: 0, text: "" },
       "Skills capability panel must unmount when MCP becomes the active compact tool panel",
     )
-    await page.waitForFunction(() => document.querySelector("#leftPanelMcp")?.textContent?.includes("browser"))
-    const statusScreenshot = await saveElementScreenshot(page, "#leftPanelMcp", "skill-mcp-status-pills.png")
-    const statusRows = await page.$$eval("#leftPanelMcp .extension-settings-row", (rows: HTMLElement[]) =>
+    await page.waitForFunction(() =>
+      document.querySelector('#leftPanelExtensions [data-mode="mcp"]')?.textContent?.includes("browser"),
+    )
+    const statusScreenshot = await saveElementScreenshot(page, extensionPanel, "skill-mcp-status-pills.png")
+    const statusRows = await page.$$eval(`${mcpPanel} .extension-settings-row`, (rows: HTMLElement[]) =>
       rows.map((row) => {
         const title = row.querySelector(".s-row-title") as HTMLElement | null
         const desc = row.querySelector(".s-row-desc") as HTMLElement | null
@@ -312,7 +321,7 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
     }
     requests.length = 0
 
-    const deleteAllButton = '#leftPanelMcp[data-active="true"] [data-ui="tool-panel-action"][aria-label="Delete All"]'
+    const deleteAllButton = `${mcpPanel}[data-active="true"] [data-ui="tool-panel-action"][aria-label="Delete All"]`
     await page.waitForSelector(deleteAllButton, { visible: true })
     await page.click(deleteAllButton)
     await page.waitForFunction(() =>
@@ -322,10 +331,10 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
 
     await page.click("#btnAppDialogOk")
     await page.waitForFunction(() =>
-      document.querySelector("#leftPanelMcp")?.textContent?.includes("mcp auth removal unavailable"),
+      document.querySelector('#leftPanelExtensions [data-mode="mcp"]')?.textContent?.includes("mcp auth removal unavailable"),
     )
-    const failureScreenshot = await saveElementScreenshot(page, "#leftPanelMcp", "skill-mcp-delete-failure.png")
-    const failureNotice = await page.$eval("#leftPanelMcp .config-status-box", (node: HTMLElement) => {
+    const failureScreenshot = await saveElementScreenshot(page, extensionPanel, "skill-mcp-delete-failure.png")
+    const failureNotice = await page.$eval(`${mcpPanel} .config-status-box`, (node: HTMLElement) => {
       const rect = node.getBoundingClientRect()
       const style = getComputedStyle(node)
       const buttonRect = node.querySelector("button")?.getBoundingClientRect()
@@ -364,15 +373,15 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
 
     requests.length = 0
     configPatches.length = 0
-    const addMcpButton = '#leftPanelMcp[data-active="true"] [data-ui="tool-panel-action"][aria-label="Add MCP"]'
+    const addMcpButton = `${mcpPanel}[data-active="true"] [data-ui="tool-panel-action"][aria-label="Add MCP"]`
     await page.waitForSelector(addMcpButton, { visible: true })
     await page.click(addMcpButton)
-    await page.waitForSelector("#leftPanelMcp .config-inline-form", { visible: true })
-    await page.waitForSelector('#leftPanelMcp .settings-form-select-trigger[aria-label="Transport"]', {
+    await page.waitForSelector(`${mcpPanel} .config-inline-form`, { visible: true })
+    await page.waitForSelector(`${mcpPanel} .settings-form-select-trigger[aria-label="Transport"]`, {
       visible: true,
     })
     const transportInitial = await page.$eval(
-      '#leftPanelMcp .settings-form-select-trigger[aria-label="Transport"]',
+      `${mcpPanel} .settings-form-select-trigger[aria-label="Transport"]`,
       (node: HTMLElement) => ({
         text: node.textContent?.trim() ?? "",
         width: node.getBoundingClientRect().width,
@@ -381,7 +390,7 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
     )
     assert.match(transportInitial.text, /Streamable HTTP/)
     assert.ok(transportInitial.width > 80 && transportInitial.height > 20)
-    await page.click('#leftPanelMcp .settings-form-select-trigger[aria-label="Transport"]')
+    await page.click(`${mcpPanel} .settings-form-select-trigger[aria-label="Transport"]`)
     await page.waitForSelector('.settings-form-select-option[data-value="streamable-http"]')
     await page.waitForSelector('.settings-form-select-option[data-value="sse"]')
     const transportOptions = await page.$$eval(".settings-form-select-option", (nodes: HTMLElement[]) =>
@@ -401,12 +410,12 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
     await page.click('.settings-form-select-option[data-value="sse"]')
     await page.waitForFunction(() =>
       document
-        .querySelector<HTMLElement>('#leftPanelMcp .settings-form-select-trigger[aria-label="Transport"]')
+        .querySelector<HTMLElement>('#leftPanelExtensions [data-mode="mcp"] .settings-form-select-trigger[aria-label="Transport"]')
         ?.textContent?.includes("SSE"),
     )
-    await page.type('#leftPanelMcp input[placeholder="exa"]', "newremote")
-    await page.type('#leftPanelMcp input[placeholder="https://example.com/mcp"]', "https://mcp.example.com/new")
-    await page.click("#leftPanelMcp .config-inline-form .dialog-actions button:last-child")
+    await page.type(`${mcpPanel} input[placeholder="exa"]`, "newremote")
+    await page.type(`${mcpPanel} input[placeholder="https://example.com/mcp"]`, "https://mcp.example.com/new")
+    await page.click(`${mcpPanel} .config-inline-form .dialog-actions button:last-child`)
     for (let attempt = 0; attempt < 50 && configPatches.length === 0; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 50))
     }

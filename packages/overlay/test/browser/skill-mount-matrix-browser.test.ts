@@ -379,49 +379,60 @@ test("left Tool, Skill, and MCP panels use vertical agent tabs and dynamic exper
     }, server.origin)
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
-    await waitForLeftActivity(page, "tool", diagnostics)
+    await waitForLeftActivity(page, "extensions", diagnostics)
+    const extensionButton = '[data-ui="side-activity-button"][data-side="left"][data-activity="extensions"]'
+    const extensionPanel = "#leftPanelExtensions"
+    const toolPanel = `${extensionPanel} [data-mode="tool"]`
+    const skillPanel = `${extensionPanel} [data-mode="skill"]`
+    const mcpPanel = `${extensionPanel} [data-mode="mcp"]`
+    const openExtensionMode = async (mode: "tool" | "skill" | "mcp", panelSelector: string) => {
+      await page.click(extensionButton)
+      await page.waitForSelector(`${extensionPanel}[data-active="true"]`)
+      await page.click(`${extensionPanel} .extension-activity-tabs [data-value="${mode}"]`)
+      await page.waitForSelector(`${panelSelector}[data-active="true"]`)
+    }
 
-    await page.click('[data-ui="side-activity-button"][data-side="left"][data-activity="tool"]')
-    await page.waitForSelector('#leftPanelTools[data-active="true"] [data-ui="tool-agent-capability-tabs"]')
+    await openExtensionMode("tool", toolPanel)
+    await page.waitForSelector(`${toolPanel}[data-active="true"] [data-ui="tool-agent-capability-tabs"]`)
     await page.waitForFunction(() =>
-      document.querySelector("#leftPanelTools")?.textContent?.includes("frontend-replica.build.patch"),
+      document.querySelector('#leftPanelExtensions [data-mode="tool"]')?.textContent?.includes("frontend-replica.build.patch"),
     )
-    const toolCollapsedLayout = await compactCapabilityLayoutState(page, "#leftPanelTools", "tool-agent-capability-tabs")
+    const toolCollapsedLayout = await compactCapabilityLayoutState(page, toolPanel, "tool-agent-capability-tabs")
     assert.deepEqual(toolCollapsedLayout.selectedAgents, [])
     assert.equal(toolCollapsedLayout.display, "flex")
     assert.equal(toolCollapsedLayout.flexDirection, "column")
     assert.equal(toolCollapsedLayout.gridTemplateColumns, "none")
     assert.equal(toolCollapsedLayout.bodyOverflowY, "auto")
     assert.equal(toolCollapsedLayout.vertical, true)
-    await page.click('#leftPanelTools .agent-capability-tab[data-agent-name="build"]')
+    await page.click(`${toolPanel} .agent-capability-tab[data-agent-name="build"]`)
     await page.waitForFunction(
       () =>
         document
-          .querySelector('#leftPanelTools .agent-capability-tab[data-agent-name="build"]')
+          .querySelector('#leftPanelExtensions [data-mode="tool"] .agent-capability-tab[data-agent-name="build"]')
           ?.getAttribute("aria-selected") === "true",
     )
-    const toolExpandedLayout = await compactCapabilityLayoutState(page, "#leftPanelTools", "tool-agent-capability-tabs")
+    const toolExpandedLayout = await compactCapabilityLayoutState(page, toolPanel, "tool-agent-capability-tabs")
     assert.deepEqual(toolExpandedLayout.selectedAgents, ["build"])
     assert.equal(toolExpandedLayout.vertical, true)
-    await page.click('#leftPanelTools .agent-capability-tab[data-agent-name="build"]')
+    await page.click(`${toolPanel} .agent-capability-tab[data-agent-name="build"]`)
     await page.waitForFunction(
       () =>
         document
-          .querySelector('#leftPanelTools .agent-capability-tab[data-agent-name="build"]')
+          .querySelector('#leftPanelExtensions [data-mode="tool"] .agent-capability-tab[data-agent-name="build"]')
           ?.getAttribute("aria-selected") === "false",
     )
     assert.deepEqual(
-      (await compactCapabilityLayoutState(page, "#leftPanelTools", "tool-agent-capability-tabs")).selectedAgents,
+      (await compactCapabilityLayoutState(page, toolPanel, "tool-agent-capability-tabs")).selectedAgents,
       [],
     )
-    await page.click('#leftPanelTools .agent-capability-tab[data-agent-name="build"]')
+    await page.click(`${toolPanel} .agent-capability-tab[data-agent-name="build"]`)
     await page.waitForFunction(
       () =>
         document
-          .querySelector('#leftPanelTools .agent-capability-tab[data-agent-name="build"]')
+          .querySelector('#leftPanelExtensions [data-mode="tool"] .agent-capability-tab[data-agent-name="build"]')
           ?.getAttribute("aria-selected") === "true",
     )
-    const toolSummary = await page.$eval("#leftPanelTools", (node: HTMLElement) => ({
+    const toolSummary = await page.$eval(toolPanel, (node: HTMLElement) => ({
       text: node.textContent || "",
       tabCount: node.querySelectorAll(".agent-capability-tab").length,
       fakeMountButtons: Array.from(node.querySelectorAll("button")).filter((button) =>
@@ -432,12 +443,12 @@ test("left Tool, Skill, and MCP panels use vertical agent tabs and dynamic exper
     assert.match(toolSummary.text, /frontend-replica\.build\.patch/)
     assert.equal(toolSummary.tabCount >= 4, true)
     assert.equal(toolSummary.fakeMountButtons, 0)
-    const toolScreenshot = await saveElementScreenshot(page, "#leftPanelTools", "left-tool-panel.png")
+    const toolScreenshot = await saveElementScreenshot(page, extensionPanel, "left-tool-panel.png")
 
-    await page.click('[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]')
-    await page.waitForSelector('#leftPanelSkills[data-active="true"] [data-ui="agent-skill-tabs"]')
-    await page.waitForSelector('#leftPanelSkills [data-ui="agent-skill-pool"]')
-    const skillCollapsedLayout = await compactCapabilityLayoutState(page, "#leftPanelSkills", "agent-skill-tabs")
+    await openExtensionMode("skill", skillPanel)
+    await page.waitForSelector(`${skillPanel}[data-active="true"] [data-ui="agent-skill-tabs"]`)
+    await page.waitForSelector(`${skillPanel} [data-ui="agent-skill-pool"]`)
+    const skillCollapsedLayout = await compactCapabilityLayoutState(page, skillPanel, "agent-skill-tabs")
     assert.deepEqual(skillCollapsedLayout.selectedAgents, [])
     assert.equal(skillCollapsedLayout.display, "flex")
     assert.equal(skillCollapsedLayout.flexDirection, "column")
@@ -455,34 +466,34 @@ test("left Tool, Skill, and MCP panels use vertical agent tabs and dynamic exper
     )
     const widthAfterResize = await sidebarWidth(page)
     assert.equal(widthAfterResize > widthBeforeResize, true)
-    await page.click('#leftPanelSkills .agent-capability-tab[data-agent-name="build"]')
+    await page.click(`${skillPanel} .agent-capability-tab[data-agent-name="build"]`)
     await page.waitForFunction(
       () =>
         document
-          .querySelector('#leftPanelSkills .agent-capability-tab[data-agent-name="build"]')
+          .querySelector('#leftPanelExtensions [data-mode="skill"] .agent-capability-tab[data-agent-name="build"]')
           ?.getAttribute("aria-selected") === "true",
     )
-    const skillExpandedLayout = await compactCapabilityLayoutState(page, "#leftPanelSkills", "agent-skill-tabs")
+    const skillExpandedLayout = await compactCapabilityLayoutState(page, skillPanel, "agent-skill-tabs")
     assert.deepEqual(skillExpandedLayout.selectedAgents, ["build"])
     assert.equal(skillExpandedLayout.vertical, true)
-    await page.click('#leftPanelSkills .agent-capability-tab[data-agent-name="build"]')
+    await page.click(`${skillPanel} .agent-capability-tab[data-agent-name="build"]`)
     await page.waitForFunction(
       () =>
         document
-          .querySelector('#leftPanelSkills .agent-capability-tab[data-agent-name="build"]')
+          .querySelector('#leftPanelExtensions [data-mode="skill"] .agent-capability-tab[data-agent-name="build"]')
           ?.getAttribute("aria-selected") === "false",
     )
-    assert.deepEqual((await compactCapabilityLayoutState(page, "#leftPanelSkills", "agent-skill-tabs")).selectedAgents, [])
-    await page.click('#leftPanelSkills .agent-capability-tab[data-agent-name="build"]')
+    assert.deepEqual((await compactCapabilityLayoutState(page, skillPanel, "agent-skill-tabs")).selectedAgents, [])
+    await page.click(`${skillPanel} .agent-capability-tab[data-agent-name="build"]`)
     await page.waitForFunction(
       () =>
         document
-          .querySelector('#leftPanelSkills .agent-capability-tab[data-agent-name="build"]')
+          .querySelector('#leftPanelExtensions [data-mode="skill"] .agent-capability-tab[data-agent-name="build"]')
           ?.getAttribute("aria-selected") === "true",
     )
-    await page.click('#leftPanelSkills .agent-skill-pool-row[data-skill-name="claude-debug"]', { button: "right" })
-    await page.waitForSelector("#leftPanelSkills .agent-mounted-skill-row")
-    const skillSummary = await page.$eval("#leftPanelSkills", (node: HTMLElement) => ({
+    await page.click(`${skillPanel} .agent-skill-pool-row[data-skill-name="claude-debug"]`, { button: "right" })
+    await page.waitForSelector(`${skillPanel} .agent-mounted-skill-row`)
+    const skillSummary = await page.$eval(skillPanel, (node: HTMLElement) => ({
       view: node.querySelector(".agent-skill-matrix")?.getAttribute("data-view"),
       tabCount: node.querySelectorAll('[data-ui="agent-skill-tabs"] .agent-capability-tab').length,
       poolRows: node.querySelectorAll("[data-ui='agent-skill-pool'] .agent-skill-pool-row").length,
@@ -494,46 +505,46 @@ test("left Tool, Skill, and MCP panels use vertical agent tabs and dynamic exper
     assert.equal(skillSummary.tabCount, 2)
     assert.equal(skillSummary.poolRows, 2)
     assert.deepEqual(skillSummary.mountedNames, ["claude-debug"])
-    const skillScreenshot = await saveElementScreenshot(page, "#leftPanelSkills", "left-skill-panel.png")
+    const skillScreenshot = await saveElementScreenshot(page, extensionPanel, "left-skill-panel.png")
 
-    await page.click('[data-ui="side-activity-button"][data-side="left"][data-activity="mcp"]')
-    await page.waitForSelector('#leftPanelMcp[data-active="true"] [data-ui="mcp-agent-capability-tabs"]')
+    await openExtensionMode("mcp", mcpPanel)
+    await page.waitForSelector(`${mcpPanel}[data-active="true"] [data-ui="mcp-agent-capability-tabs"]`)
     await page.waitForFunction(() =>
-      document.querySelector("#leftPanelMcp")?.textContent?.includes("frontend-replica/compare-region"),
+      document.querySelector('#leftPanelExtensions [data-mode="mcp"]')?.textContent?.includes("frontend-replica/compare-region"),
     )
-    const mcpCollapsedLayout = await compactCapabilityLayoutState(page, "#leftPanelMcp", "mcp-agent-capability-tabs")
+    const mcpCollapsedLayout = await compactCapabilityLayoutState(page, mcpPanel, "mcp-agent-capability-tabs")
     assert.deepEqual(mcpCollapsedLayout.selectedAgents, [])
     assert.equal(mcpCollapsedLayout.display, "flex")
     assert.equal(mcpCollapsedLayout.flexDirection, "column")
     assert.equal(mcpCollapsedLayout.gridTemplateColumns, "none")
     assert.equal(mcpCollapsedLayout.bodyOverflowY, "auto")
     assert.equal(mcpCollapsedLayout.vertical, true)
-    await page.click('#leftPanelMcp .agent-capability-tab[data-agent-name="build"]')
+    await page.click(`${mcpPanel} .agent-capability-tab[data-agent-name="build"]`)
     await page.waitForFunction(
       () =>
         document
-          .querySelector('#leftPanelMcp .agent-capability-tab[data-agent-name="build"]')
+          .querySelector('#leftPanelExtensions [data-mode="mcp"] .agent-capability-tab[data-agent-name="build"]')
           ?.getAttribute("aria-selected") === "true",
     )
-    const mcpExpandedLayout = await compactCapabilityLayoutState(page, "#leftPanelMcp", "mcp-agent-capability-tabs")
+    const mcpExpandedLayout = await compactCapabilityLayoutState(page, mcpPanel, "mcp-agent-capability-tabs")
     assert.deepEqual(mcpExpandedLayout.selectedAgents, ["build"])
     assert.equal(mcpExpandedLayout.vertical, true)
-    await page.click('#leftPanelMcp .agent-capability-tab[data-agent-name="build"]')
+    await page.click(`${mcpPanel} .agent-capability-tab[data-agent-name="build"]`)
     await page.waitForFunction(
       () =>
         document
-          .querySelector('#leftPanelMcp .agent-capability-tab[data-agent-name="build"]')
+          .querySelector('#leftPanelExtensions [data-mode="mcp"] .agent-capability-tab[data-agent-name="build"]')
           ?.getAttribute("aria-selected") === "false",
     )
-    assert.deepEqual((await compactCapabilityLayoutState(page, "#leftPanelMcp", "mcp-agent-capability-tabs")).selectedAgents, [])
-    await page.click('#leftPanelMcp .agent-capability-tab[data-agent-name="build"]')
+    assert.deepEqual((await compactCapabilityLayoutState(page, mcpPanel, "mcp-agent-capability-tabs")).selectedAgents, [])
+    await page.click(`${mcpPanel} .agent-capability-tab[data-agent-name="build"]`)
     await page.waitForFunction(
       () =>
         document
-          .querySelector('#leftPanelMcp .agent-capability-tab[data-agent-name="build"]')
+          .querySelector('#leftPanelExtensions [data-mode="mcp"] .agent-capability-tab[data-agent-name="build"]')
           ?.getAttribute("aria-selected") === "true",
     )
-    const mcpSummary = await page.$eval("#leftPanelMcp", (node: HTMLElement) => ({
+    const mcpSummary = await page.$eval(mcpPanel, (node: HTMLElement) => ({
       text: node.textContent || "",
       tabCount: node.querySelectorAll('[data-ui="mcp-agent-capability-tabs"] .agent-capability-tab').length,
       fakeMountButtons: Array.from(node.querySelectorAll("button")).filter((button) =>
@@ -545,7 +556,7 @@ test("left Tool, Skill, and MCP panels use vertical agent tabs and dynamic exper
     assert.match(mcpSummary.text, /Configured MCP Status/)
     assert.equal(mcpSummary.tabCount >= 4, true)
     assert.equal(mcpSummary.fakeMountButtons, 0)
-    const mcpScreenshot = await saveElementScreenshot(page, "#leftPanelMcp", "left-mcp-panel.png")
+    const mcpScreenshot = await saveElementScreenshot(page, extensionPanel, "left-mcp-panel.png")
 
     const mountRequest = requests.find((request) => request.path === "/skill/mount")
     assert.deepEqual(mountRequest?.body, { agent: "build", skill: "claude-debug" })

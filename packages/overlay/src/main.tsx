@@ -19,7 +19,7 @@ import { FileChangesPanel, type FileChangesActiveView } from "./components/FileC
 import { BrowserPreviewPanel } from "./components/BrowserPreviewPanel"
 import { ScreenshotBrowserPanel } from "./components/ScreenshotBrowserPanel"
 import { SideActivityToolbar, type SideActivity } from "./components/SideActivityToolbar"
-import { McpPanel, SkillsPanel, ToolsPanel } from "./components/settings/SkillMarketPanel"
+import { ExtensionActivityPanel } from "./components/settings/SkillMarketPanel"
 import { MemoryPanel } from "./components/MemoryPanel"
 import { closeFileEditor, fileWorkbenchOpen } from "./services/file-workbench"
 import type { DiffTarget } from "./services/diff"
@@ -266,7 +266,7 @@ type CenterWorkbenchPanel =
   | "screenshots"
   | "file"
 type RightActivity = Exclude<CenterWorkbenchPanel, "file">
-type LeftActivity = "tasks" | "mission" | "assistant" | "memory" | "tool" | "skill" | "mcp"
+type LeftActivity = "tasks" | "mission" | "assistant" | "memory" | "extensions"
 type PrimaryLeftActivity = "tasks" | "mission" | "assistant"
 type PrimaryCenterPanel = "task" | "mission" | "chat"
 
@@ -331,18 +331,16 @@ const LEFT_ACTIVITIES: readonly SideActivity<LeftActivity>[] = [
   { id: "tasks", icon: "tasks", labelKey: "task.ledger.title", tooltipKey: "activity.tooltip.tasks" },
   { id: "assistant", icon: "message", labelKey: "coding_assistant.title", tooltipKey: "activity.tooltip.assistant" },
   { id: "memory", icon: "config-memory", labelKey: "memory.title", tooltipKey: "activity.tooltip.memory" },
-  { id: "tool", icon: "config-tool", labelKey: "tool.title", tooltipKey: "activity.tooltip.tool" },
   {
-    id: "skill",
+    id: "extensions",
     icon: "config-skill",
-    labelKey: "skill.title",
-    tooltipKey: "activity.tooltip.skill",
+    labelKey: "extensions.title",
+    tooltipKey: "activity.tooltip.extensions",
     badge: () =>
       appStore.skillMounts?.unmounted_count > 0 ? (
         <span data-tone="warn">{appStore.skillMounts.unmounted_count}</span>
       ) : undefined,
   },
-  { id: "mcp", icon: "config-mcp", labelKey: "mcp.title", tooltipKey: "activity.tooltip.mcp" },
 ]
 
 const LEFT_ACTIVITY_BY_ID: ReadonlyMap<LeftActivity, SideActivity<LeftActivity>> = new Map(
@@ -1180,9 +1178,7 @@ const LEFT_ACTIVITY_BODY_IDS: Record<LeftActivity, string> = {
   mission: "leftPanelMissions",
   assistant: "leftPanelAssistant",
   memory: "leftPanelMemory",
-  tool: "leftPanelTools",
-  skill: "leftPanelSkills",
-  mcp: "leftPanelMcp",
+  extensions: "leftPanelExtensions",
 }
 
 disposers.push(
@@ -1637,27 +1633,11 @@ if (leftActivityToolbarEl) {
   )
 }
 
-const leftSkillsPanelEl = document.getElementById("solidLeftSkillsPanel")
-if (leftSkillsPanelEl) {
+const leftExtensionsPanelEl = document.getElementById("solidLeftExtensionsPanel")
+if (leftExtensionsPanelEl) {
   render(
-    () => <SkillsPanel active={selectedLeftPanelActivity() === "skill"} directory={activeDirectory} compact />,
-    leftSkillsPanelEl,
-  )
-}
-
-const leftToolsPanelEl = document.getElementById("solidLeftToolsPanel")
-if (leftToolsPanelEl) {
-  render(
-    () => <ToolsPanel active={selectedLeftPanelActivity() === "tool"} directory={activeDirectory} compact />,
-    leftToolsPanelEl,
-  )
-}
-
-const leftMcpPanelEl = document.getElementById("solidLeftMcpPanel")
-if (leftMcpPanelEl) {
-  render(
-    () => <McpPanel active={selectedLeftPanelActivity() === "mcp"} directory={activeDirectory} compact />,
-    leftMcpPanelEl,
+    () => <ExtensionActivityPanel active={selectedLeftPanelActivity() === "extensions"} directory={activeDirectory} />,
+    leftExtensionsPanelEl,
   )
 }
 

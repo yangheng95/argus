@@ -27,7 +27,7 @@ test("left activity shell keeps the token-owned minimum width", () => {
   expect(body).not.toMatch(/min-width\s*:\s*0\b/)
 })
 
-test("left activity toolbar owns task, mission, assistant, memory, tool, skill, and MCP controls", () => {
+test("left activity toolbar owns task, mission, assistant, memory, and consolidated extension controls", () => {
   const html = read("src/index.html")
   const main = read("src/main.tsx")
   const toolbar = read("src/components/SideActivityToolbar.tsx")
@@ -41,11 +41,12 @@ test("left activity toolbar owns task, mission, assistant, memory, tool, skill, 
   expect(html).toContain('id="leftActivityShell"')
   expect(html).toContain('id="leftPanelTasks"')
   expect(html).toContain('id="leftPanelMissions"')
-  expect(html).toContain('id="leftPanelSkills"')
-  expect(html).toContain('id="leftPanelTools"')
-  expect(html).toContain('id="leftPanelMcp"')
+  expect(html).toContain('id="leftPanelExtensions"')
+  expect(html).not.toContain('id="leftPanelSkills"')
+  expect(html).not.toContain('id="leftPanelTools"')
+  expect(html).not.toContain('id="leftPanelMcp"')
   expect(html).toContain('id="leftPanelMemory"')
-  expect(main).toContain('type LeftActivity = "tasks" | "mission" | "assistant" | "memory" | "tool" | "skill" | "mcp"')
+  expect(main).toContain('type LeftActivity = "tasks" | "mission" | "assistant" | "memory" | "extensions"')
   expect(main).toContain("const LEFT_ACTIVITIES")
   expect(main).toContain("const LEFT_ACTIVITY_BY_ID")
   expect(main).toContain("function leftActivityDefinition(activity: LeftActivity)")
@@ -80,28 +81,21 @@ test("left activity toolbar owns task, mission, assistant, memory, tool, skill, 
   expect(main).toContain(
     'id: "memory", icon: "config-memory", labelKey: "memory.title", tooltipKey: "activity.tooltip.memory"',
   )
-  expect(main).toContain(
-    'id: "tool", icon: "config-tool", labelKey: "tool.title", tooltipKey: "activity.tooltip.tool"',
-  )
-  expect(main).toContain('id: "skill"')
+  expect(main).toContain('id: "extensions"')
   expect(main).toContain('icon: "config-skill"')
-  expect(main).toContain('labelKey: "skill.title"')
-  expect(main).toContain('tooltipKey: "activity.tooltip.skill"')
+  expect(main).toContain('labelKey: "extensions.title"')
+  expect(main).toContain('tooltipKey: "activity.tooltip.extensions"')
   expect(main).toContain("appStore.skillMounts?.unmounted_count > 0")
   expect(main).toContain("appStore.skillMounts.unmounted_count")
   expect(main).toContain('data-tone="warn"')
-  expect(main).toContain('id: "mcp", icon: "config-mcp", labelKey: "mcp.title", tooltipKey: "activity.tooltip.mcp"')
-  expect(main).toContain(
-    '<ToolsPanel active={selectedLeftPanelActivity() === "tool"} directory={activeDirectory} compact />',
-  )
-  expect(main).toContain(
-    '<SkillsPanel active={selectedLeftPanelActivity() === "skill"} directory={activeDirectory} compact />',
-  )
-  expect(main).toContain(
-    '<McpPanel active={selectedLeftPanelActivity() === "mcp"} directory={activeDirectory} compact />',
-  )
-  expect(main).not.toContain('<SkillsPanel active={selectedLeftPanelActivity() === "skill"} compact />')
-  expect(main).not.toContain('<McpPanel active={selectedLeftPanelActivity() === "mcp"} compact />')
+  expect(main).not.toContain('id: "tool"')
+  expect(main).not.toContain('id: "skill"')
+  expect(main).not.toContain('id: "mcp"')
+  expect(main).toContain("<ExtensionActivityPanel")
+  expect(main).toContain('active={selectedLeftPanelActivity() === "extensions"}')
+  expect(main).not.toContain("solidLeftSkillsPanel")
+  expect(main).not.toContain("solidLeftToolsPanel")
+  expect(main).not.toContain("solidLeftMcpPanel")
   expect(icons).toContain("Wrench")
   expect(icons).toContain('"config-tool": { component: Wrench }')
   expect(main).toContain('active={selectedLeftPanelActivity() === "memory"}')
@@ -119,31 +113,32 @@ test("left activity toolbar owns task, mission, assistant, memory, tool, skill, 
   expect(toolbar).toContain("title={tooltip()}")
   expect(toolbar).toContain("aria-label={tooltip()}")
   expect(toolbar).toContain("side-activity-badge")
-  expect(activityCss).toContain(".sidebar-tool-panel .extension-settings-group")
+  expect(activityCss).toContain(".sidebar-extension-panel .extension-activity-tabs")
+  expect(activityCss).toContain(".sidebar-extension-panel .extension-settings-group")
+  expect(activityCss).toContain(".sidebar-memory-panel")
   expect(activityCss).toContain(".left-activity-shell")
   expect(activityCss).toContain(".side-activity-badge")
   expect(activityCss).toContain("flex-direction: row")
   expect(activityCss).toMatch(
-    /\.sidebar-tool-panel \.extension-settings-body\s*\{[^}]*flex:\s*1 1 0;[^}]*min-height:\s*0;/s,
+    /\.sidebar-extension-panel \.extension-settings-body\s*\{[^}]*flex:\s*1 1 0;[^}]*min-height:\s*0;/s,
   )
-  expect(activityCss).toContain(".sidebar-tool-panel .tool-panel-toolbar")
-  expect(activityCss).toContain('.sidebar-tool-panel .oc-button[data-ui="tool-panel-action"]')
-  expect(activityCss).toContain(".sidebar-tool-panel .config-status-box")
-  expect(activityCss).not.toContain(".sidebar-tool-panel .memory-panel")
-  expect(activityCss).not.toContain(".sidebar-tool-panel .knowledge-list")
+  expect(activityCss).toContain(".sidebar-extension-panel .tool-panel-toolbar")
+  expect(activityCss).toContain('.sidebar-extension-panel .oc-button[data-ui="tool-panel-action"]')
+  expect(activityCss).toContain(".sidebar-extension-panel .config-status-box")
+  expect(activityCss).not.toContain(".sidebar-extension-panel .memory-panel")
+  expect(activityCss).not.toContain(".sidebar-extension-panel .knowledge-list")
+  expect(activityCss).not.toContain(".sidebar-tool-panel")
   expect(settingsCss).toContain('.memory-panel[data-compact="true"] .knowledge-toolbar')
-  expect(activityCss).toContain(".sidebar-tool-panel .extension-settings-row")
-  expect(activityCss).toContain(".sidebar-tool-panel .extension-settings-row .s-row-desc")
+  expect(activityCss).toContain(".sidebar-extension-panel .extension-settings-row")
+  expect(activityCss).toContain(".sidebar-extension-panel .extension-settings-row .s-row-desc")
   expect(activityCss).toContain("-webkit-line-clamp: 3")
-  expect(activityCss).toContain(".sidebar-tool-panel .skill-drop-zone__copy strong")
+  expect(activityCss).toContain(".sidebar-extension-panel .skill-drop-zone__copy strong")
   for (const key of [
     "activity.tooltip.tasks",
     "activity.tooltip.mission",
     "activity.tooltip.assistant",
     "activity.tooltip.memory",
-    "activity.tooltip.tool",
-    "activity.tooltip.skill",
-    "activity.tooltip.mcp",
+    "activity.tooltip.extensions",
     "activity.tooltip.workflow",
     "activity.tooltip.requirements",
     "activity.tooltip.architect",
@@ -157,6 +152,10 @@ test("left activity toolbar owns task, mission, assistant, memory, tool, skill, 
     expect(en).toContain(`"${key}"`)
     expect(zh).toContain(`"${key}"`)
   }
+  expect(en).toContain('"extensions.title"')
+  expect(zh).toContain('"extensions.title"')
+  expect(en).toContain('"extensions.segment_aria"')
+  expect(zh).toContain('"extensions.segment_aria"')
 })
 
 test("skill panel imports dropped files, directories, and zip archives through the project import route", () => {
@@ -183,6 +182,9 @@ test("skill panel imports dropped files, directories, and zip archives through t
   expect(panel).toContain('data-view="agent-tabs"')
   expect(panel).toContain('data-ui="agent-skill-tabs"')
   expect(panel).toContain('data-ui="agent-skill-pool"')
+  expect(panel).toContain("ExtensionActivityPanel")
+  expect(panel).toContain("<SettingsSegmented<ExtensionActivityMode>")
+  expect(panel).toContain('data-ui="extension-activity-panel"')
   expect(panel).toContain("handleSkillPoolContextMenu")
   expect(panel).toContain("await handleMount(agent.name, skill.name)")
   expect(panel).toContain("mounted_agents?: string[]")

@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "fef426d6ffc429ed"
+    "panel_revision": "ee69ab01fba13c26"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -57,14 +57,12 @@
   "activity.tooltip.requirements": "打开当前任务的需求分析面板。",
   "activity.tooltip.architect": "打开当前任务的架构契约面板。",
   "activity.tooltip.goals": "打开当前任务的目标和验收证据面板。",
-  "activity.tooltip.mcp": "管理 Agent 可用的 MCP 服务和工具连接。",
   "activity.tooltip.memory": "查看当前任务和会话关联的记忆条目。",
   "activity.tooltip.mission": "查看 Mission 及其创建的任务。",
   "activity.tooltip.notifications": "打开任务和系统通知。",
   "activity.tooltip.screenshots": "按 Agent 浏览当前任务消息和工具结果中出现过的截图。",
-  "activity.tooltip.skill": "基于动态专家团投影管理每个 Agent 的 Skill 挂载。",
   "activity.tooltip.tasks": "查看并切换最近任务。",
-  "activity.tooltip.tool": "查看当前专家团投影到每个 Agent 的工具。",
+  "activity.tooltip.extensions": "在一个面板里管理投影工具、Skill 挂载和 MCP 连接。",
   "activity.tooltip.workflow": "显示或隐藏当前任务的主 Workflow 对话。",
   "brand.guide_kicker": "快速指南",
   "brand.guide_positioning_body": "该工作区用于对话和交付证据：左侧选择最近任务，中间推进执行，右侧集中展示文档、方案、评估和文件变更。",
@@ -989,6 +987,8 @@
   "skill.source.url": "远程 URL",
   "skill.source_type": "来源类型",
   "skill.title": "技能",
+  "extensions.segment_aria": "扩展面板分区",
+  "extensions.title": "扩展",
   "capability.agents": "Agent",
   "capability.empty_group": "无",
   "capability.none": "暂无投影能力",

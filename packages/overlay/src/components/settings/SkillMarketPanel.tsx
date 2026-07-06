@@ -54,6 +54,7 @@ import {
   SettingsPill,
   SettingsRow,
   SettingsSelect,
+  SettingsSegmented,
   type SettingsPillTone,
   type SettingsSelectOption,
 } from "./primitives"
@@ -418,6 +419,7 @@ function capabilityPool(mode: CapabilityPanelMode, squad: ExpertSquadOption | un
 // ── Extension Settings Panels ──
 
 type ExtensionPanelMode = "tool" | "skill" | "mcp" | "skill-market"
+type ExtensionActivityMode = "tool" | "skill" | "mcp"
 const MCP_STATUS_REFRESH_INTERVAL_MS = 1_000
 const SKILL_MATRIX_RENDER_CHUNK_SIZE = 8
 
@@ -1998,6 +2000,47 @@ export function McpPanel(props: { active?: boolean; compact?: boolean; directory
       compact={props.compact}
       directory={props.directory}
     />
+  )
+}
+
+export function ExtensionActivityPanel(props: { active?: boolean; directory?: DirectoryProp } = {}) {
+  const [mode, setMode] = createSignal<ExtensionActivityMode>("skill")
+  const unmountedCount = () => Number(appStore.skillMounts?.unmounted_count ?? 0)
+  const tabLabel = (key: string, count?: () => number) => (
+    <span class="extension-activity-tab-label">
+      <span>{t(key)}</span>
+      <Show when={(count?.() ?? 0) > 0}>
+        <span class="extension-activity-tab-badge" data-tone="warn">
+          {count?.() ?? 0}
+        </span>
+      </Show>
+    </span>
+  )
+
+  return (
+    <div class="extension-activity-panel" data-ui="extension-activity-panel" data-active={props.active ? "true" : "false"}>
+      <div class="extension-activity-tabs">
+        <SettingsSegmented<ExtensionActivityMode>
+          ariaLabel={t("extensions.segment_aria")}
+          value={mode()}
+          onChange={setMode}
+          options={[
+            { value: "tool", label: tabLabel("tool.title") },
+            { value: "skill", label: tabLabel("skill.title", unmountedCount), tone: unmountedCount() > 0 ? "warn" : "neutral" },
+            { value: "mcp", label: tabLabel("mcp.title") },
+          ]}
+        />
+      </div>
+      <div class="extension-activity-pane" data-mode="tool" data-active={mode() === "tool" ? "true" : "false"}>
+        <ToolsPanel active={props.active === true && mode() === "tool"} directory={props.directory} compact />
+      </div>
+      <div class="extension-activity-pane" data-mode="skill" data-active={mode() === "skill" ? "true" : "false"}>
+        <SkillsPanel active={props.active === true && mode() === "skill"} directory={props.directory} compact />
+      </div>
+      <div class="extension-activity-pane" data-mode="mcp" data-active={mode() === "mcp" ? "true" : "false"}>
+        <McpPanel active={props.active === true && mode() === "mcp"} directory={props.directory} compact />
+      </div>
+    </div>
   )
 }
 

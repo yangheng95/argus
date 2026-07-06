@@ -267,10 +267,20 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
       false,
     )
 
-    const skillButton = '[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]'
-    await page.waitForSelector(skillButton, { visible: true })
-    await page.click(skillButton)
-    await page.waitForSelector('#leftPanelSkills[data-active="true"] [data-ui="agent-skill-tabs"]')
+    const extensionButton = '[data-ui="side-activity-button"][data-side="left"][data-activity="extensions"]'
+    const extensionPanel = "#leftPanelExtensions"
+    const skillPanel = `${extensionPanel} [data-mode="skill"]`
+    const mcpPanel = `${extensionPanel} [data-mode="mcp"]`
+    const openExtensionMode = async (mode: "skill" | "mcp", panelSelector: string) => {
+      await page.click(extensionButton)
+      await page.waitForSelector(`${extensionPanel}[data-active="true"]`)
+      await page.click(`${extensionPanel} .extension-activity-tabs [data-value="${mode}"]`)
+      await page.waitForSelector(`${panelSelector}[data-active="true"]`)
+    }
+
+    await page.waitForSelector(extensionButton, { visible: true })
+    await openExtensionMode("skill", skillPanel)
+    await page.waitForSelector(`${skillPanel}[data-active="true"] [data-ui="agent-skill-tabs"]`)
     assert.equal(
       requestLog.some((item) => item.path === "/skill/mounts"),
       true,
@@ -279,16 +289,16 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
       requestLog.some((item) => item.path === "/mcp"),
       false,
     )
-    const skillName = await page.$eval("#leftPanelSkills .agent-skill-pool-row strong", (node) => node.textContent || "")
+    const skillName = await page.$eval(`${skillPanel} .agent-skill-pool-row strong`, (node) => node.textContent || "")
     assert.equal(skillName, "project-review")
-    await page.click('#leftPanelSkills .agent-capability-tab[data-agent-name="requirements"]')
+    await page.click(`${skillPanel} .agent-capability-tab[data-agent-name="requirements"]`)
     await page.waitForFunction(
       () =>
         document
-          .querySelector('#leftPanelSkills .agent-capability-tab[data-agent-name="requirements"]')
+          .querySelector('#leftPanelExtensions [data-mode="skill"] .agent-capability-tab[data-agent-name="requirements"]')
           ?.getAttribute("aria-selected") === "true",
     )
-    const skillPanelMetrics = await page.$eval("#leftPanelSkills .agent-skill-matrix", (node) => {
+    const skillPanelMetrics = await page.$eval(`${skillPanel} .agent-skill-matrix`, (node) => {
       const rect = node.getBoundingClientRect()
       return {
         height: rect.height,
@@ -296,7 +306,7 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
         text: node.textContent || "",
         mountedRows: node.querySelectorAll(".agent-mounted-skill-row").length,
         skillPools: node.querySelectorAll('[data-ui="agent-skill-pool"]').length,
-        sourceListVisible: !!document.querySelector("#leftPanelSkills .extension-list"),
+        sourceListVisible: !!document.querySelector('#leftPanelExtensions [data-mode="skill"] .extension-list'),
       }
     })
     assert.ok(skillPanelMetrics.height > 24)
@@ -305,26 +315,24 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
     assert.equal(skillPanelMetrics.mountedRows, 1)
     assert.equal(skillPanelMetrics.skillPools, 1)
     assert.equal(skillPanelMetrics.sourceListVisible, false)
-    const skillPanel = await page.$("#leftPanelSkills")
-    assert.ok(skillPanel, "skill panel should exist before screenshot")
+    const skillPanelElement = await page.$(extensionPanel)
+    assert.ok(skillPanelElement, "extension panel should exist before screenshot")
     const skillScreenshotPath = resolve(".scratch", "left-skill-panel-primitive-row.png")
     mkdirSync(dirname(skillScreenshotPath), { recursive: true })
-    writeFileSync(skillScreenshotPath, await skillPanel.screenshot({}))
+    writeFileSync(skillScreenshotPath, await skillPanelElement.screenshot({}))
 
-    const mcpButton = '[data-ui="side-activity-button"][data-side="left"][data-activity="mcp"]'
-    await page.waitForSelector(mcpButton, { visible: true })
-    await page.click(mcpButton)
-    await page.waitForSelector("#leftPanelMcp[data-active='true'] .extension-settings-row")
+    await openExtensionMode("mcp", mcpPanel)
+    await page.waitForSelector(`${mcpPanel}[data-active='true'] .extension-settings-row`)
     assert.equal(
       requestLog.some((item) => item.path === "/mcp"),
       true,
     )
     const mcpName = await page.$eval(
-      "#leftPanelMcp .extension-settings-row .s-row-title",
+      `${mcpPanel} .extension-settings-row .s-row-title`,
       (node) => node.textContent || "",
     )
     assert.equal(mcpName, "docs")
-    const mcpListMetrics = await page.$eval("#leftPanelMcp .extension-list", (node) => {
+    const mcpListMetrics = await page.$eval(`${mcpPanel} .extension-list`, (node) => {
       const rect = node.getBoundingClientRect()
       return { height: rect.height, text: node.textContent || "" }
     })
