@@ -16,8 +16,10 @@ export type ExpertSquadCatalogPackage = {
   manifestPath?: string
   readmePath?: string
   promptProfile: PromptProfileDefinition
+  virtualAgents?: Record<string, ExpertSquadRegistry.VirtualAgentDefinition>
   manifest: {
     dynamic_attributes: ExpertSquadRegistry.Manifest["dynamic_attributes"]
+    virtual_agents: ExpertSquadRegistry.Manifest["virtual_agents"]
     capability_projection: {
       scheduler: ExpertSquadRegistry.Projection
       agents: Record<string, ExpertSquadRegistry.Projection>
@@ -43,6 +45,17 @@ export function projectionHash(input: {
   dynamicAttributes: ExpertSquadRegistry.Manifest["dynamic_attributes"]
 }) {
   return createHash("sha256").update(stable(input)).digest("hex")
+}
+
+function virtualAgentSummaries(pkg: ExpertSquadCatalogPackage) {
+  return Object.entries(pkg.manifest.virtual_agents ?? {})
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([baseRole, virtualAgent]) => ({
+      base_role: baseRole,
+      virtual_agent_id: virtualAgent.id,
+      label: virtualAgent.label,
+      ...(virtualAgent.description ? { description: virtualAgent.description } : {}),
+    }))
 }
 
 export function catalogProjectionEntry(projection: ExpertSquadRegistry.Projection) {
@@ -184,6 +197,7 @@ export function catalogProfileFromPackage(input: {
       dynamicAttributes: input.pkg.manifest.dynamic_attributes,
     }),
     projected_agents: Object.keys(projection.agents).sort(),
+    virtual_agents: virtualAgentSummaries(input.pkg),
     capability_projection: {
       scheduler: catalogProjectionEntryWithBuiltInTools(projection.scheduler, schedulerBuiltInToolIDs),
       agents: Object.fromEntries(

@@ -205,6 +205,18 @@ describe("ExpertSquadPackageManager", () => {
     }
   })
 
+  test("software-testing payload exposes one external OpenTest protocol engine source", () => {
+    const source = payloadPackageSources.find((candidate) => candidate.id === "software-testing")
+    expect(source).toBeDefined()
+    expect(Object.keys(source!.files)).toContain("protocol-engine/opentest-contract.json")
+    expect(Object.keys(source!.files)).toContain("protocol-engine/opentest-protocol-engine.ts")
+    expect(Object.keys(source!.files)).toContain("tools/opentest-protocol-engine.ts")
+    expect(Object.keys(source!.files)).not.toContain("tools/test-protocol-contract.ts")
+    expect(source!.files["tools/opentest-protocol-engine.ts"]).toContain("parseProtocolContract(contractText)")
+    expect(source!.files["protocol-engine/opentest-protocol-engine.ts"]).toContain("export function parseProtocolContract")
+    expect(source!.files["protocol-engine/opentest-protocol-engine.ts"]).not.toContain("const OPEN_TEST_PROTOCOL")
+  })
+
   test("rejects payload package sources with unsafe embedded file paths", () => {
     const source = payloadPackageSources[0]!
     for (const relativePath of ["../escape.txt", "nested/../escape.txt", "C:/escape.txt", "README.md:ads", ""]) {

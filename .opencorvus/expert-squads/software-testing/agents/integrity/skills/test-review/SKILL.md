@@ -7,14 +7,6 @@ description: Use when reviewing whether software-testing artifacts and evidence 
 
 Review testing work from requirements to artifacts to run evidence.
 
-Check:
+For OpenTest-style artifacts, require `software-testing/shared/opentest-protocol-engine` validation output. Do not accept copied protocol prose as proof. The external contract file and parsed validation result are the only OpenTest protocol authority.
 
-- The requested system under test and surfaces are covered.
-- Each scenario has preconditions, steps, expected result, severity, and test points.
-- Edited tests assert behavior after action, including negative paths when relevant.
-- The exact command was run after edits.
-- Evidence includes logs, reports, screenshots, videos, or result files required by the surface.
-- Failures are classified as stale script, missing fixture, toolchain failure, or real product bug with supporting evidence.
-- Package tools were active only through the `software-testing` projection.
-
-If a required command or visual inspection was not run, mark the deliverable incomplete with the missing evidence and impact.
+If a required command, artifact, visual inspection, or protocol validation is missing, mark the deliverable incomplete with the missing evidence and impact.

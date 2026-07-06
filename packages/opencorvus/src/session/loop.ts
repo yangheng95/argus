@@ -129,6 +129,15 @@ export namespace SessionLoop {
     promptProfileID?: string
     capabilityProfileID?: string
     projectionHash?: string
+    virtualAgent?: {
+      baseRole: string
+      virtualAgentID: string
+      label: string
+      description?: string
+      expertSquadID: string
+      promptProfileID: string
+      projectionHash: string
+    }
     workerTurnDescriptorID?: string
     workerTurnDescriptorHash?: string
     goalID?: string

@@ -14,7 +14,7 @@ export namespace ExpertSquadRegistry {
   export const MANIFEST = "expert-squad.jsonc"
 
   const TOP_LEVEL_FILES = new Set([MANIFEST, "README.md", "selector.md"])
-  const TOP_LEVEL_DIRECTORIES = new Set(["agents", "skills", "tools", "mcp"])
+  const TOP_LEVEL_DIRECTORIES = new Set(["agents", "skills", "tools", "mcp", "virtual-agents", "protocol-engine"])
   const RUNTIME_INTERNAL_ENTRIES = new Set([".opencorvus", "r", "runtime", "worktrees", ".opencorvus-meta.json"])
 
   const ID = z.string().regex(/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/, "id must be kebab-case")
@@ -50,6 +50,15 @@ export namespace ExpertSquadRegistry {
       skill_refs: z.array(Ref).optional().default([]),
       tool_refs: z.array(Ref).optional().default([]),
       mcp_server_refs: z.array(Ref).optional().default([]),
+    })
+    .strict()
+
+  const VirtualAgentDefinition = z
+    .object({
+      id: ID,
+      label: z.string().trim().min(1),
+      description: z.string().trim().min(1).optional(),
+      prompt: RelativePath,
     })
     .strict()
 
@@ -107,11 +116,13 @@ export namespace ExpertSquadRegistry {
         frontend_design: { require_design_direction_contract: false },
       }),
       agents: z.record(z.string(), AgentDefinition).default({}),
+      virtual_agents: z.record(z.string(), VirtualAgentDefinition).default({}),
     })
     .strict()
 
   export type Manifest = z.infer<typeof Manifest>
   export type Projection = z.infer<typeof Projection>
+  export type VirtualAgentDefinition = z.infer<typeof VirtualAgentDefinition>
 
   export function parseID(value: string, context = "expert squad id") {
     const parsed = ID.safeParse(value)
@@ -156,6 +167,7 @@ export namespace ExpertSquadRegistry {
       label: string
       description?: string
       agents: Record<string, string>
+      virtualAgents: Record<string, VirtualAgentDefinition & { promptContent: string }>
     }
     packageSkillRefs: Set<string>
     packageToolRefs: Set<string>
@@ -173,6 +185,7 @@ export namespace ExpertSquadRegistry {
       label: string
       description?: string
       agents: Record<string, string>
+      virtualAgents: Record<string, VirtualAgentDefinition & { promptContent: string }>
     }
   }
 
@@ -196,6 +209,7 @@ export namespace ExpertSquadRegistry {
       label: string
       description?: string
       agents: Record<string, string>
+      virtualAgents: Record<string, VirtualAgentDefinition & { promptContent: string }>
     }
   }
 
@@ -207,6 +221,7 @@ export namespace ExpertSquadRegistry {
     skillRefs: Map<AgentRoleID, Set<string>>
     toolRefs: Map<AgentRoleID, Set<string>>
     mcpServerRefs: Map<AgentRoleID, Set<string>>
+    virtualAgentRoles: Set<AgentRoleID>
   }
 
   function parseJsoncText(text: string, source: string): unknown {
@@ -246,6 +261,10 @@ export namespace ExpertSquadRegistry {
 
   function assertRoleID(value: string, context: string): asserts value is AgentRoleID {
     if (!AgentRoleContract.isRoleID(value)) throw new Error(`${context}: unknown agent role "${value}"`)
+  }
+
+  function virtualAgentPromptPath(role: AgentRoleID) {
+    return `virtual-agents/${role}/system.md`
   }
 
   function assertSafeManifestRelativePath(relativePath: string, context: string) {
@@ -528,15 +547,17 @@ export namespace ExpertSquadRegistry {
     id: string
     available: Set<string>
     declaredByAgent: Map<AgentRoleID, Set<string>>
+    virtualAgentRoles: ReadonlySet<AgentRoleID>
     role: AgentRoleID
     context: string
   }) {
-    const { ref, id, available, declaredByAgent, role, context } = input
+    const { ref, id, available, declaredByAgent, virtualAgentRoles, role, context } = input
     assertPackageRef(ref, id, available, context)
     if (isSharedPackageRef(ref, id)) return
     if (!ref.startsWith(`${id}/${role}/`)) {
       throw new Error(`${context}: package ref "${ref}" must be shared or owned by agents.${role}`)
     }
+    if (virtualAgentRoles.has(role)) return
     if (!declaredByAgent.get(role)?.has(ref)) {
       throw new Error(`${context}: package ref "${ref}" is not declared in agents.${role}`)
     }
@@ -562,16 +583,18 @@ export namespace ExpertSquadRegistry {
     id: string
     available: Set<string>
     declaredByAgent: Map<AgentRoleID, Set<string>>
+    virtualAgentRoles: ReadonlySet<AgentRoleID>
     role: AgentRoleID
     context: string
   }) {
-    const { ref, kind, id, available, declaredByAgent, role, context } = input
+    const { ref, kind, id, available, declaredByAgent, virtualAgentRoles, role, context } = input
     assertPackageRef(ref, id, available, context)
     const serverRef = packageMcpServerRefFromTypedRef(ref, kind, context)
     if (isSharedPackageRef(serverRef, id)) return
     if (!serverRef.startsWith(`${id}/${role}/`)) {
       throw new Error(`${context}: package MCP ${kind} ref "${ref}" must be shared or owned by agents.${role}`)
     }
+    if (virtualAgentRoles.has(role)) return
     if (!declaredByAgent.get(role)?.has(serverRef)) {
       throw new Error(`${context}: package MCP ${kind} ref "${ref}" server is not declared in agents.${role}`)
     }
@@ -629,6 +652,7 @@ export namespace ExpertSquadRegistry {
         id,
         available: refs.skillRefs,
         declaredByAgent: declaredRefs.skillRefs,
+        virtualAgentRoles: declaredRefs.virtualAgentRoles,
         role,
         context,
       })
@@ -639,6 +663,7 @@ export namespace ExpertSquadRegistry {
         id,
         available: refs.toolRefs,
         declaredByAgent: declaredRefs.toolRefs,
+        virtualAgentRoles: declaredRefs.virtualAgentRoles,
         role,
         context,
       })
@@ -649,6 +674,7 @@ export namespace ExpertSquadRegistry {
         id,
         available: refs.mcpServerRefs,
         declaredByAgent: declaredRefs.mcpServerRefs,
+        virtualAgentRoles: declaredRefs.virtualAgentRoles,
         role,
         context,
       })
@@ -660,6 +686,7 @@ export namespace ExpertSquadRegistry {
         id,
         available: refs.mcpToolRefs,
         declaredByAgent: declaredRefs.mcpServerRefs,
+        virtualAgentRoles: declaredRefs.virtualAgentRoles,
         role,
         context,
       })
@@ -671,6 +698,7 @@ export namespace ExpertSquadRegistry {
         id,
         available: refs.mcpPromptRefs,
         declaredByAgent: declaredRefs.mcpServerRefs,
+        virtualAgentRoles: declaredRefs.virtualAgentRoles,
         role,
         context,
       })
@@ -682,6 +710,7 @@ export namespace ExpertSquadRegistry {
         id,
         available: refs.mcpResourceRefs,
         declaredByAgent: declaredRefs.mcpServerRefs,
+        virtualAgentRoles: declaredRefs.virtualAgentRoles,
         role,
         context,
       })
@@ -788,6 +817,34 @@ export namespace ExpertSquadRegistry {
       if (!trimmed) throw new Error(`built-in expert squad ${manifest.id}: blank prompt file ${agent.prompt}`)
       agents[agentID] = trimmed
     }
+    const virtualAgents: EmbeddedPackage["promptProfile"]["virtualAgents"] = {}
+    const virtualAgentIDs = new Map<string, AgentRoleID>()
+    for (const [role, virtualAgent] of Object.entries(manifest.virtual_agents)) {
+      assertRoleID(role, `built-in expert squad ${manifest.id}.virtual_agents.${role}`)
+      if (Object.hasOwn(manifest.agents, role)) {
+        throw new Error(`built-in expert squad ${manifest.id}.virtual_agents.${role}: agents.${role} must be absent when a virtual agent is declared`)
+      }
+      if (virtualAgent.prompt !== virtualAgentPromptPath(role)) {
+        throw new Error(`built-in expert squad ${manifest.id}.virtual_agents.${role}.prompt must be ${virtualAgentPromptPath(role)}`)
+      }
+      const previousRole = virtualAgentIDs.get(virtualAgent.id)
+      if (previousRole) {
+        throw new Error(
+          `built-in expert squad ${manifest.id}.virtual_agents.${role}.id duplicates virtual_agents.${previousRole}.id "${virtualAgent.id}"`,
+        )
+      }
+      virtualAgentIDs.set(virtualAgent.id, role)
+      const prompt = source.files[virtualAgent.prompt]
+      if (typeof prompt !== "string") {
+        throw new Error(`built-in expert squad ${manifest.id}: missing virtual agent prompt file ${virtualAgent.prompt}`)
+      }
+      const trimmed = prompt.trim()
+      if (!trimmed) throw new Error(`built-in expert squad ${manifest.id}: blank virtual agent prompt file ${virtualAgent.prompt}`)
+      virtualAgents[role] = {
+        ...virtualAgent,
+        promptContent: trimmed,
+      }
+    }
 
     return {
       id: manifest.id,
@@ -803,6 +860,7 @@ export namespace ExpertSquadRegistry {
         label: manifest.label,
         description: manifest.description,
         agents,
+        virtualAgents,
       },
     }
   }
@@ -845,6 +903,23 @@ export namespace ExpertSquadRegistry {
       skillRefs: new Map(),
       toolRefs: new Map(),
       mcpServerRefs: new Map(),
+      virtualAgentRoles: new Set(),
+    }
+    const virtualAgentIDs = new Map<string, AgentRoleID>()
+    for (const [role, virtualAgent] of Object.entries(manifest.virtual_agents)) {
+      assertRoleID(role, `virtual_agents.${role}`)
+      if (Object.hasOwn(manifest.agents, role)) {
+        throw new Error(`virtual_agents.${role}: agents.${role} must be absent when a virtual agent is declared`)
+      }
+      if (virtualAgent.prompt !== virtualAgentPromptPath(role)) {
+        throw new Error(`virtual_agents.${role}.prompt must be ${virtualAgentPromptPath(role)}`)
+      }
+      const previousRole = virtualAgentIDs.get(virtualAgent.id)
+      if (previousRole) {
+        throw new Error(`virtual_agents.${role}.id duplicates virtual_agents.${previousRole}.id "${virtualAgent.id}"`)
+      }
+      virtualAgentIDs.set(virtualAgent.id, role)
+      declared.virtualAgentRoles.add(role)
     }
     for (const [agentID, agent] of Object.entries(manifest.agents)) {
       assertRoleID(agentID, `agents.${agentID}`)
@@ -867,6 +942,33 @@ export namespace ExpertSquadRegistry {
     return declared
   }
 
+  async function validateVirtualAgentFiles(metadata: ParsedPackageMetadata) {
+    const declaredRoles = new Set(Object.keys(metadata.manifest.virtual_agents))
+    const virtualRoot = path.join(metadata.root, "virtual-agents")
+    for (const entry of await readOptionalDirectoryEntries(virtualRoot, "virtual-agents")) {
+      if (!entry.isDirectory()) throw new Error(`virtual-agents.${entry.name}: expected directory`)
+      assertRoleID(entry.name, `virtual-agents.${entry.name}`)
+      if (!declaredRoles.has(entry.name)) {
+        throw new Error(`virtual-agents.${entry.name}: directory must be declared in virtual_agents.${entry.name}`)
+      }
+    }
+    for (const [role, virtualAgent] of Object.entries(metadata.manifest.virtual_agents)) {
+      assertRoleID(role, `virtual_agents.${role}`)
+      if (virtualAgent.prompt !== virtualAgentPromptPath(role)) {
+        throw new Error(`virtual_agents.${role}.prompt must be ${virtualAgentPromptPath(role)}`)
+      }
+      const roleOverlayPrompt = path.join(metadata.root, "agents", role, "system.md")
+      const roleOverlayInfo = await lstat(roleOverlayPrompt).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") return undefined
+        throw error
+      })
+      if (roleOverlayInfo) {
+        throw new Error(`virtual_agents.${role}: agents/${role}/system.md must be absent when a virtual agent is declared`)
+      }
+      await assertNonBlankFile(metadata.root, virtualAgent.prompt, `virtual_agents.${role}.prompt`)
+    }
+  }
+
   async function readPromptProfile(metadata: ParsedPackageMetadata): Promise<LoadedPackage["promptProfile"]> {
     const agents: Record<string, string> = {}
     for (const [agentID, agent] of Object.entries(metadata.manifest.agents)) {
@@ -875,10 +977,20 @@ export namespace ExpertSquadRegistry {
       const file = await assertNonBlankFile(metadata.root, agent.prompt, `agents.${agentID}.prompt`)
       agents[agentID] = (await Filesystem.readText(file)).trim()
     }
+    const virtualAgents: LoadedPackage["promptProfile"]["virtualAgents"] = {}
+    for (const [role, virtualAgent] of Object.entries(metadata.manifest.virtual_agents)) {
+      assertRoleID(role, `virtual_agents.${role}`)
+      const file = await assertNonBlankFile(metadata.root, virtualAgent.prompt, `virtual_agents.${role}.prompt`)
+      virtualAgents[role] = {
+        ...virtualAgent,
+        promptContent: (await Filesystem.readText(file)).trim(),
+      }
+    }
     return {
       label: metadata.label,
       description: metadata.description,
       agents,
+      virtualAgents,
     }
   }
 
@@ -893,6 +1005,12 @@ export namespace ExpertSquadRegistry {
       assertRoleID(agentID, `agents.${agentID}`)
       if (agent.prompt) await assertFile(metadata.root, agent.prompt, `agents.${agentID}.prompt`)
     }
+    for (const role of Object.keys(manifest.virtual_agents)) {
+      if (Object.hasOwn(manifest.agents, role)) {
+        throw new Error(`virtual_agents.${role}: agents.${role} must be absent when a virtual agent is declared`)
+      }
+    }
+    await validateVirtualAgentFiles(metadata)
     const selectorInstructions = await readCatalogSelectorInstructions(metadata)
 
     const refs = await collectPackageRefs(metadata.root, manifest.id)
@@ -923,6 +1041,12 @@ export namespace ExpertSquadRegistry {
         declaredRefs,
         canonicalToolIDs,
       })
+    }
+    for (const role of Object.keys(manifest.virtual_agents)) {
+      assertRoleID(role, `virtual_agents.${role}`)
+      if (!manifest.capability_projection.agents[role]) {
+        throw new Error(`virtual_agents.${role} requires capability_projection.agents.${role}`)
+      }
     }
 
     const explicitSchedulerWorkflowTools = manifest.capability_projection.scheduler.built_in_tool_ids.filter(

@@ -85,6 +85,15 @@ export const PromptProfileCapabilityProjectionSchema = z
   })
   .strict()
 
+export const PromptProfileVirtualAgentSchema = z
+  .object({
+    base_role: z.string(),
+    virtual_agent_id: z.string(),
+    label: z.string(),
+    description: z.string().optional(),
+  })
+  .strict()
+
 export const PromptProfileCatalogProfileSchema = z
   .object({
     id: z.string(),
@@ -96,6 +105,7 @@ export const PromptProfileCatalogProfileSchema = z
     capability_profile_id: z.string(),
     projection_hash: z.string(),
     projected_agents: z.array(z.string()),
+    virtual_agents: z.array(PromptProfileVirtualAgentSchema),
     capability_projection: PromptProfileCapabilityProjectionSchema,
   })
   .strict()

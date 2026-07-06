@@ -8,6 +8,7 @@ import { repositoryExpertSquadRoot } from "../fixture/expert-squad"
 import { tmpdir } from "../fixture/fixture"
 import fs from "fs/promises"
 import path from "path"
+import { pathToFileURL } from "url"
 
 async function writeFile(root: string, relativePath: string, content: string) {
   const target = path.join(root, relativePath)
@@ -231,24 +232,162 @@ describe("ExpertSquadRegistry", () => {
     expect(loaded.packageSkillRefs.has("software-testing/build/test-implementation")).toBe(true)
     expect(loaded.packageSkillRefs.has("software-testing/integrity/test-review")).toBe(true)
     expect(loaded.packageToolRefs.has("software-testing/shared/test-artifact-inventory")).toBe(true)
-    expect(loaded.packageToolRefs.has("software-testing/shared/test-protocol-contract")).toBe(true)
+    expect(loaded.packageToolRefs.has("software-testing/shared/opentest-protocol-engine")).toBe(true)
     expect(loaded.manifest.capability_projection.scheduler.package_tool_refs).toEqual([
       "software-testing/shared/test-artifact-inventory",
-      "software-testing/shared/test-protocol-contract",
+      "software-testing/shared/opentest-protocol-engine",
     ])
-    expect(loaded.explicitSchedulerWorkflowTools).toEqual([
-      "analyze_intent",
-      "requirements",
-      "architect",
-      "deep_research",
-      "workload_analysis",
-      "build",
-      "visual_qa",
-      "integrity",
-      "fact_check",
-    ])
-    expect(loaded.promptProfile.agents.build).toContain("Implement and run software tests")
-    expect(loaded.promptProfile.agents.integrity).toContain("Review the complete testing evidence chain")
+    expect(loaded.explicitSchedulerWorkflowTools).toEqual(["build", "integrity"])
+    expect(Object.keys(loaded.manifest.capability_projection.agents).sort()).toEqual(["build", "integrity"])
+    expect(Object.keys(loaded.manifest.agents)).toEqual(["orchestrator"])
+    expect(loaded.promptProfile.virtualAgents.build?.id).toBe("opentest-implementer")
+    expect(loaded.promptProfile.virtualAgents.integrity?.id).toBe("opentest-reviewer")
+    expect(loaded.promptProfile.virtualAgents.build?.promptContent).toContain("protocol-engine/opentest-contract.json")
+  })
+
+  test("software-testing OpenTest protocol engine parses the external contract and validates artifacts", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = repositoryExpertSquadRoot("software-testing")
+    const engine = await import(pathToFileURL(path.join(packageRoot, "protocol-engine", "opentest-protocol-engine.ts")).href)
+    const contractText = await fs.readFile(path.join(packageRoot, "protocol-engine", "opentest-contract.json"), "utf8")
+    const contract = engine.parseProtocolContract(contractText)
+
+    expect(contract.script.required_export).toBe("steps")
+    expect(contract.script.mark_point_callee).toBe("ctx.mark_point")
+
+    async function writeCase(
+      directory: string,
+      input: {
+        testMarkdown?: string
+        script?: string
+        context?: string
+        acceptance?: string
+        result?: string
+      } = {},
+    ) {
+      await writeFile(
+        tmp.path,
+        path.posix.join(directory, "TEST.md"),
+        input.testMarkdown ??
+          [
+            "---",
+            "testName: Login regression",
+            "status: active",
+            "testPoints:",
+            "  - name: login accepts valid user",
+            "  - name: renders home",
+            "---",
+            "# Login regression",
+            "",
+          ].join("\n"),
+      )
+      if (input.script !== undefined) {
+        await writeFile(tmp.path, path.posix.join(directory, "script.ts"), input.script)
+      }
+      if (input.context !== undefined) {
+        await writeFile(tmp.path, path.posix.join(directory, ".opentest/ctx.d.ts"), input.context)
+      }
+      if (input.acceptance !== undefined) {
+        await writeFile(tmp.path, path.posix.join(directory, ".opentest/acceptance.json"), input.acceptance)
+      }
+      if (input.result !== undefined) {
+        await writeFile(tmp.path, path.posix.join(directory, ".opentest/runs/nested/result.json"), input.result)
+      }
+    }
+
+    const validScript = [
+      "export const steps = [",
+      "  async (ctx: { mark_point(name: string): Promise<void> }) => {",
+      '    await ctx.mark_point("login accepts valid user")',
+      '    await ctx.mark_point("renders home")',
+      "  },",
+      "]",
+      "",
+    ].join("\n")
+    const contextContract = "export interface TestContext { mark_point(name: string): Promise<void> }\n"
+    await writeCase("valid", {
+      script: validScript,
+      context: contextContract,
+      acceptance: '{"status":"accepted"}\n',
+      result: '{"status":"passed"}\n',
+    })
+
+    const valid = await engine.validateOpenTestCase({
+      contract,
+      projectDirectory: tmp.path,
+      testDirectory: "valid",
+    })
+    expect(valid.valid).toBe(true)
+    expect(valid.test_points).toEqual(["login accepts valid user", "renders home"])
+    expect(valid.mark_points).toEqual(["login accepts valid user", "renders home"])
+    expect(valid.artifacts.context_contract).toBe("valid/.opentest/ctx.d.ts")
+    expect(valid.artifacts.acceptance).toBe("valid/.opentest/acceptance.json")
+    expect(valid.artifacts.run_results).toEqual(["valid/.opentest/runs/nested/result.json"])
+
+    await writeCase("missing-frontmatter", {
+      testMarkdown: "# Missing frontmatter\n",
+      script: validScript,
+      context: contextContract,
+    })
+    await expect(
+      engine.validateOpenTestCase({ contract, projectDirectory: tmp.path, testDirectory: "missing-frontmatter" }),
+    ).resolves.toMatchObject({ valid: false, errors: expect.arrayContaining(["TEST.md missing YAML frontmatter"]) })
+
+    await writeCase("missing-script", {
+      context: contextContract,
+    })
+    await expect(
+      engine.validateOpenTestCase({ contract, projectDirectory: tmp.path, testDirectory: "missing-script" }),
+    ).resolves.toMatchObject({ valid: false, errors: expect.arrayContaining(["missing script.ts"]) })
+
+    await writeCase("missing-steps-export", {
+      script: "export async function run() { return true }\n",
+      context: contextContract,
+    })
+    await expect(
+      engine.validateOpenTestCase({ contract, projectDirectory: tmp.path, testDirectory: "missing-steps-export" }),
+    ).resolves.toMatchObject({ valid: false, errors: expect.arrayContaining(["script.ts missing exported steps"]) })
+
+    await writeCase("unmarked-test-point", {
+      script: [
+        "export const steps = [",
+        "  async (ctx: { mark_point(name: string): Promise<void> }) => {",
+        '    await ctx.mark_point("login accepts valid user")',
+        "  },",
+        "]",
+        "",
+      ].join("\n"),
+      context: contextContract,
+    })
+    await expect(
+      engine.validateOpenTestCase({ contract, projectDirectory: tmp.path, testDirectory: "unmarked-test-point" }),
+    ).resolves.toMatchObject({
+      valid: false,
+      errors: expect.arrayContaining(['testPoints "renders home" has no matching ctx.mark_point']),
+    })
+
+    await writeCase("extra-duplicate-mark", {
+      script: [
+        "export const steps = [",
+        "  async (ctx: { mark_point(name: string): Promise<void> }) => {",
+        '    await ctx.mark_point("login accepts valid user")',
+        '    await ctx.mark_point("login accepts valid user")',
+        '    await ctx.mark_point("not declared")',
+        "  },",
+        "]",
+        "",
+      ].join("\n"),
+      context: contextContract,
+    })
+    await expect(
+      engine.validateOpenTestCase({ contract, projectDirectory: tmp.path, testDirectory: "extra-duplicate-mark" }),
+    ).resolves.toMatchObject({
+      valid: false,
+      errors: expect.arrayContaining([
+        'script.ts duplicate ctx.mark_point "login accepts valid user"',
+        'ctx.mark_point "not declared" is not declared in testPoints',
+      ]),
+    })
   })
 
   test("rejects blank README because it is Orchestrator prompt content", async () => {
@@ -415,6 +554,93 @@ describe("ExpertSquadRegistry", () => {
     })
 
     await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/unknown agent role/)
+  })
+
+  test("accepts a virtual agent declared on a base role without a role overlay prompt", async () => {
+    await using tmp = await tmpdir()
+    const base = manifest()
+    const agents = { general: base.agents.general, orchestrator: base.agents.orchestrator }
+    const packageRoot = await writeValidPackage(tmp.path, {
+      agents,
+      virtual_agents: {
+        build: {
+          id: "frontend-replica-builder",
+          label: "Frontend Replica Builder",
+          description: "Package-owned expert identity on the build base role.",
+          prompt: "virtual-agents/build/system.md",
+        },
+      },
+    })
+    await fs.rm(path.join(packageRoot, "agents", "build", "system.md"))
+    await writeFile(packageRoot, "virtual-agents/build/system.md", "virtual build prompt")
+
+    const loaded = await ExpertSquadRegistry.loadPackage(packageRoot)
+
+    expect(loaded.promptProfile.agents.build).toBeUndefined()
+    expect(loaded.promptProfile.virtualAgents.build).toMatchObject({
+      id: "frontend-replica-builder",
+      label: "Frontend Replica Builder",
+      promptContent: "virtual build prompt",
+    })
+  })
+
+  test("rejects a virtual agent that keeps the old role overlay prompt source", async () => {
+    await using tmp = await tmpdir()
+    const base = manifest()
+    const agents = { general: base.agents.general, orchestrator: base.agents.orchestrator }
+    const packageRoot = await writeValidPackage(tmp.path, {
+      agents,
+      virtual_agents: {
+        build: {
+          id: "frontend-replica-builder",
+          label: "Frontend Replica Builder",
+          prompt: "virtual-agents/build/system.md",
+        },
+      },
+    })
+    await writeFile(packageRoot, "virtual-agents/build/system.md", "virtual build prompt")
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(
+      /agents\/build\/system\.md must be absent/,
+    )
+  })
+
+  test("rejects duplicate prompt binding between agents and virtual_agents", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, {
+      virtual_agents: {
+        build: {
+          id: "frontend-replica-builder",
+          label: "Frontend Replica Builder",
+          prompt: "virtual-agents/build/system.md",
+        },
+      },
+    })
+    await writeFile(packageRoot, "virtual-agents/build/system.md", "virtual build prompt")
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(
+      /agents\.build must be absent when a virtual agent is declared/,
+    )
+  })
+
+  test("rejects virtual agent prompts outside the canonical virtual-agents role path", async () => {
+    await using tmp = await tmpdir()
+    const base = manifest()
+    const agents = { general: base.agents.general, orchestrator: base.agents.orchestrator }
+    const packageRoot = await writeValidPackage(tmp.path, {
+      agents,
+      virtual_agents: {
+        build: {
+          id: "frontend-replica-builder",
+          label: "Frontend Replica Builder",
+          prompt: "agents/build/system.md",
+        },
+      },
+    })
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(
+      /virtual_agents\.build\.prompt must be virtual-agents\/build\/system\.md/,
+    )
   })
 
   test("rejects unknown nested manifest fields", async () => {

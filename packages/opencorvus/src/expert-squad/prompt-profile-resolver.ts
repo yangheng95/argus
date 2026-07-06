@@ -134,6 +134,16 @@ export namespace PromptProfileResolver {
     includeMcpTools: false
   }
 
+  export interface ResolvedVirtualAgent {
+    baseRole: AgentRoleID
+    virtualAgentID: string
+    label: string
+    description?: string
+    expertSquadID: string
+    promptProfileID: string
+    projectionHash: string
+  }
+
   export interface WorkerCapabilityInput extends ProjectScope {
     config: ConfigLike
     agentID: AgentRoleID
@@ -167,6 +177,7 @@ export namespace PromptProfileResolver {
     packageMcpResourceProviderNames: string[]
     packageRoot?: string
     workflowBindings: SchedulerAgentWorkflowBinding[]
+    virtualAgent?: ResolvedVirtualAgent
     includeMcpTools: false
   }
 
@@ -189,6 +200,7 @@ export namespace PromptProfileResolver {
     projectionHash: string
     projectedToolIDs: string[]
     projectedAgentIDs: string[]
+    virtualAgents: ResolvedVirtualAgent[]
     selectorSkillNames: string[]
     productionSkillNames: string[]
     projectedSkillNames: string[]
@@ -332,6 +344,52 @@ export namespace PromptProfileResolver {
         .join(",")}}`
     }
     return JSON.stringify(value)
+  }
+
+  function virtualAgentProjectionHash(input: {
+    promptProfileID: string
+    expertSquadID: string
+    baseRole: AgentRoleID
+    virtualAgent: ExpertSquadRegistry.VirtualAgentDefinition & { promptContent?: string }
+    projection?: ExpertSquadRegistry.Projection
+  }) {
+    return createHash("sha256").update(stable(input)).digest("hex")
+  }
+
+  function virtualAgentForRole(input: {
+    active: ActiveProfilePackage
+    role: AgentRoleID
+  }): ResolvedVirtualAgent | undefined {
+    const virtualAgent = input.active.pkg.promptProfile.virtualAgents[input.role]
+    if (!virtualAgent) return undefined
+    return {
+      baseRole: input.role,
+      virtualAgentID: virtualAgent.id,
+      label: virtualAgent.label,
+      ...(virtualAgent.description ? { description: virtualAgent.description } : {}),
+      expertSquadID: input.active.pkg.id,
+      promptProfileID: input.active.profileID,
+      projectionHash: virtualAgentProjectionHash({
+        promptProfileID: input.active.profileID,
+        expertSquadID: input.active.pkg.id,
+        baseRole: input.role,
+        virtualAgent,
+        projection: input.active.pkg.manifest.capability_projection.agents[input.role],
+      }),
+    }
+  }
+
+  function activeVirtualAgents(active: ActiveProfilePackage): ResolvedVirtualAgent[] {
+    return Object.keys(active.pkg.promptProfile.virtualAgents)
+      .sort()
+      .map((role) => {
+        if (!AgentRoleContract.isRoleID(role)) {
+          throw new Error(`Active expert squad ${active.profileID} has invalid virtual agent base role ${JSON.stringify(role)}`)
+        }
+        const projected = virtualAgentForRole({ active, role })
+        if (!projected) throw new Error(`Active expert squad ${active.profileID} lost virtual agent projection for ${role}`)
+        return projected
+      })
   }
 
   function catalogProfileFromPackage(input: {
@@ -560,6 +618,7 @@ export namespace PromptProfileResolver {
     const packageMcpPromptProviderNames = packageMcpPromptRefs.map(packageMcpPromptProviderName)
     const packageMcpResourceRefs = active.builtIn ? [] : projection.package_mcp_resource_refs
     const packageMcpResourceProviderNames = packageMcpResourceRefs.map(packageMcpResourceProviderName)
+    const virtualAgent = virtualAgentForRole({ active, role: input.agentID })
     return {
       promptProfileID: active.profileID,
       expertSquadID: active.pkg.id,
@@ -599,6 +658,7 @@ export namespace PromptProfileResolver {
       packageMcpResourceProviderNames,
       packageRoot: active.builtIn ? undefined : active.pkg.root,
       workflowBindings: [...(loadOptions?.workflowBindings ?? [])],
+      ...(virtualAgent ? { virtualAgent } : {}),
       includeMcpTools: false,
     }
   }
@@ -2389,6 +2449,9 @@ export namespace PromptProfileResolver {
     const selectorSkillNames = selectorSkills.map((skill) => skill.name)
     const projectedSkills = [...projected.values()].map((entry) => entry.skill)
     const skillSurfaceAgentIDs = skillProjectionAgentIDs(active.profileID, projectedAgentIDs, projectedSkills)
+    const virtualAgents = activeVirtualAgents(active).filter((virtualAgent) =>
+      skillSurfaceAgentIDs.includes(virtualAgent.baseRole),
+    )
     const uniqueProductionSkillNames = [...projected.entries()]
       .filter(([, entry]) => entry.source !== "selector")
       .map(([name]) => name)
@@ -2415,6 +2478,7 @@ export namespace PromptProfileResolver {
             projectedToolIDs,
             workflowID: input.workflow?.id,
             projectedAgentIDs: skillSurfaceAgentIDs,
+            virtualAgents,
             selectorSkillNames,
             productionSkillNames: uniqueProductionSkillNames,
             projectedSkillNames,
@@ -2424,6 +2488,7 @@ export namespace PromptProfileResolver {
         .digest("hex"),
       projectedToolIDs,
       projectedAgentIDs: skillSurfaceAgentIDs,
+      virtualAgents,
       selectorSkillNames,
       productionSkillNames: uniqueProductionSkillNames,
       projectedSkillNames,
@@ -2434,6 +2499,8 @@ export namespace PromptProfileResolver {
   export async function overlayFor(input: PromptInput): Promise<string | undefined> {
     const active = await packageForActiveProfile(input)
     const profile = active.pkg.promptProfile
+    const virtualPrompt = profile.virtualAgents[input.agentID]?.promptContent
+    if (typeof virtualPrompt === "string" && virtualPrompt.trim().length > 0) return virtualPrompt
     const prompt = profile.agents[input.agentID]
     return typeof prompt === "string" && prompt.trim().length > 0 ? prompt : undefined
   }
@@ -2477,6 +2544,44 @@ export namespace PromptProfileResolver {
     throw new Error(`Unknown prompt profile ${JSON.stringify(input.profileID)}`)
   }
 
+  function activeAgentProjection(input: {
+    active: ActiveProfilePackage
+    promptProfileActive: string
+  }): ExpertSquadCatalog["active_agent_projection"] {
+    const agents = activeVirtualAgents(input.active).map((virtualAgent) => {
+      const projection = input.active.pkg.manifest.capability_projection.agents[virtualAgent.baseRole]
+      if (!projection) {
+        throw new Error(
+          `Active expert squad ${input.active.profileID} virtual_agents.${virtualAgent.baseRole} requires capability_projection.agents.${virtualAgent.baseRole}`,
+        )
+      }
+      return {
+        base_role: virtualAgent.baseRole,
+        virtual_agent_id: virtualAgent.virtualAgentID,
+        label: virtualAgent.label,
+        ...(virtualAgent.description ? { description: virtualAgent.description } : {}),
+        projection_hash: virtualAgent.projectionHash,
+        package_skill_refs: projection.package_skill_refs,
+        package_tool_refs: projection.package_tool_refs,
+        package_mcp_server_refs: projection.package_mcp_server_refs,
+      }
+    })
+    return {
+      source_expert_squad_id: input.active.pkg.id,
+      prompt_profile_active: input.promptProfileActive,
+      projection_hash: createHash("sha256")
+        .update(
+          stable({
+            sourceExpertSquadID: input.active.pkg.id,
+            promptProfileActive: input.promptProfileActive,
+            agents,
+          }),
+        )
+        .digest("hex"),
+      agents,
+    }
+  }
+
   export async function catalog(input: ExpertSquadCatalogInput): Promise<ExpertSquadCatalog> {
     const active = PromptProfile.activeID(input.config)
     const projectDirectory = input.scope.directory
@@ -2500,6 +2605,10 @@ export namespace PromptProfileResolver {
     if (!squads.some((squad) => squad.id === active)) {
       throw new Error(`Unknown prompt profile ${JSON.stringify(active)}`)
     }
+    const activePackage = await packageForActiveProfile({
+      projectDirectory,
+      config: input.config,
+    })
     const skillProjectionInput: SkillProjectionInput = {
       projectDirectory,
       config: input.config,
@@ -2524,6 +2633,10 @@ export namespace PromptProfileResolver {
       scope: input.scope,
       targets: PromptProfile.targets,
       squads,
+      active_agent_projection: activeAgentProjection({
+        active: activePackage,
+        promptProfileActive: active,
+      }),
       active_skill_projection: {
         active_squad_id: skillProjection.expertSquadID,
         capability_profile_id: skillProjection.capabilityProfileID,

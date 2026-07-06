@@ -17,7 +17,7 @@ import { Filesystem } from "../../src/util/filesystem"
 import { ProjectTable } from "../../src/project/project.sql"
 import { Database } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
-import { PROJECT_EXPERT_SQUAD_ID, writeProjectExpertSquadPackage } from "../fixture/expert-squad"
+import { copyRepositoryExpertSquadPackage, PROJECT_EXPERT_SQUAD_ID, writeProjectExpertSquadPackage } from "../fixture/expert-squad"
 import { tmpdir } from "../fixture/fixture"
 import { TextReader, Uint8ArrayWriter, ZipWriter } from "@zip.js/zip.js"
 
@@ -644,6 +644,48 @@ describe("skill routes", () => {
         expect(body.matrix.find((row) => row.agent === "build")?.mounted).toContainEqual(
           expect.objectContaining({ name: "unreferenced-default", enabled: true }),
         )
+      },
+    })
+  }, 20000)
+
+  test("GET /skill/mounts exposes software-testing virtual agents as base-role metadata", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await copyRepositoryExpertSquadPackage(tmp.path, "software-testing")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Config.update({ prompt_profile: { active: "software-testing" } })
+        const app = Server.App()
+        const response = await app.request("/skill/mounts", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(response.status, await response.clone().text()).toBe(200)
+        const body = (await response.json()) as {
+          active_profile: string
+          projected_agents: string[]
+          agents: Array<{ name: string; virtual_agent?: { id: string; label: string; projection_hash: string } }>
+          project_mounts: { agents?: Record<string, string[]> }
+        }
+        expect(body.active_profile).toBe("software-testing")
+        expect(body.projected_agents).toEqual(expect.arrayContaining(["orchestrator", "build", "integrity"]))
+        expect(body.projected_agents).not.toContain("opentest-implementer")
+        expect(body.projected_agents).not.toContain("opentest-reviewer")
+        expect(body.agents.find((agent) => agent.name === "build")?.virtual_agent).toMatchObject({
+          id: "opentest-implementer",
+          label: "OpenTest Implementer",
+        })
+        expect(body.agents.find((agent) => agent.name === "integrity")?.virtual_agent).toMatchObject({
+          id: "opentest-reviewer",
+          label: "OpenTest Reviewer",
+        })
+        expect(body.project_mounts.agents?.build).toContain("software-test-implementation")
+        expect(body.project_mounts.agents?.integrity).toContain("software-test-review")
+        expect(body.project_mounts.agents?.["opentest-implementer"]).toBeUndefined()
+        expect(body.project_mounts.agents?.["opentest-reviewer"]).toBeUndefined()
       },
     })
   }, 20000)

@@ -94,6 +94,16 @@ test("expert squads settings renders package identity, projections, lifecycle ac
           build: "Verify with a real browser screenshot.",
           orchestrator: "Append README guidance into scheduling.",
         },
+        virtual_agents: [
+          {
+            base_role: "build",
+            virtual_agent_id: "frontend-replica-builder",
+            label: "Frontend Replica Builder",
+            description: "Projected package expert on the build base role.",
+            package_skill_refs: ["frontend-replica/build/implementation"],
+            package_tool_refs: ["frontend-replica/build/visual-qa"],
+          },
+        ],
       },
       {
         id: "backend",
@@ -266,6 +276,9 @@ test("expert squads settings renders package identity, projections, lifecycle ac
         projectionRows: Array.from(document.querySelectorAll<HTMLElement>(".expert-squad-projection-row")).map((node) =>
           node.textContent?.replace(/\s+/g, " ").trim() ?? "",
         ),
+        virtualAgents: Array.from(
+          document.querySelectorAll<HTMLElement>('[data-ui="expert-squad-active-agent-projection"] .expert-squad-projection-row'),
+        ).map((node) => node.textContent?.replace(/\s+/g, " ").trim() ?? ""),
         targets: Array.from(document.querySelectorAll<HTMLElement>(".expert-squad-target")).map((node) => ({
           hasOverlay: node.dataset.hasOverlay ?? "",
           text: node.textContent?.replace(/\s+/g, " ").trim() ?? "",
@@ -289,6 +302,7 @@ test("expert squads settings renders package identity, projections, lifecycle ac
     assert.match(state.readme, /Frontend Replica/)
     assert.match(state.selector, /desktop UI parity/)
     assert.equal(state.projectionRows.some((row) => row.includes("package_tool_refs") && row.includes("source-evidence")), true)
+    assert.equal(state.virtualAgents.some((row) => row.includes("frontend-replica-builder") && row.includes("build")), true)
     assert.equal(state.targets.every((target) => target.hasOverlay === "true" && target.text.includes("Read-only")), true)
     assert.equal(state.legacyPromptPanel, false)
     assert.equal(state.textareas, 0)

@@ -587,6 +587,7 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
     promptProfileID: workerCapability.promptProfileID,
     capabilityProfileID: workerCapability.capabilityProfileID,
     projectionHash: workerCapability.projectionHash,
+    ...(workerCapability.virtualAgent ? { virtualAgent: workerCapability.virtualAgent } : {}),
   }
 
   // ── 2. Compose the system prompt ─────────────────────────────────────

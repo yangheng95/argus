@@ -8219,6 +8219,12 @@ export type SkillMountsResponses = {
       hidden?: boolean
       skill_mountable: boolean
       skill_tool_available: boolean
+      virtual_agent?: {
+        id: string
+        label: string
+        description?: string
+        projection_hash: string
+      }
     }>
     matrix: Array<{
       agent: string
@@ -8326,6 +8332,12 @@ export type SkillMountResponses = {
       hidden?: boolean
       skill_mountable: boolean
       skill_tool_available: boolean
+      virtual_agent?: {
+        id: string
+        label: string
+        description?: string
+        projection_hash: string
+      }
     }>
     matrix: Array<{
       agent: string
@@ -8433,6 +8445,12 @@ export type SkillUnmountResponses = {
       hidden?: boolean
       skill_mountable: boolean
       skill_tool_available: boolean
+      virtual_agent?: {
+        id: string
+        label: string
+        description?: string
+        projection_hash: string
+      }
     }>
     matrix: Array<{
       agent: string
@@ -8551,6 +8569,12 @@ export type SkillImportAndMountResponses = {
       hidden?: boolean
       skill_mountable: boolean
       skill_tool_available: boolean
+      virtual_agent?: {
+        id: string
+        label: string
+        description?: string
+        projection_hash: string
+      }
     }>
     matrix: Array<{
       agent: string
@@ -8861,6 +8885,12 @@ export type ExpertSquadCatalogResponses = {
       capability_profile_id: string
       projection_hash: string
       projected_agents: Array<string>
+      virtual_agents: Array<{
+        base_role: string
+        virtual_agent_id: string
+        label: string
+        description?: string
+      }>
       capability_projection: {
         scheduler: {
           built_in_tool_ids: Array<string>
@@ -8927,6 +8957,21 @@ export type ExpertSquadCatalogResponses = {
         [key: string]: unknown
       }
     }>
+    active_agent_projection: {
+      source_expert_squad_id: string
+      prompt_profile_active: string
+      projection_hash: string
+      agents: Array<{
+        base_role: string
+        virtual_agent_id: string
+        label: string
+        description?: string
+        projection_hash: string
+        package_skill_refs: Array<string>
+        package_tool_refs: Array<string>
+        package_mcp_server_refs: Array<string>
+      }>
+    }
     active_skill_projection: {
       active_squad_id: string
       capability_profile_id: string

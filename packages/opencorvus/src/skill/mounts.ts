@@ -43,6 +43,15 @@ export namespace SkillMount {
     hidden: z.boolean().optional(),
     skill_mountable: z.boolean(),
     skill_tool_available: z.boolean(),
+    virtual_agent: z
+      .object({
+        id: z.string(),
+        label: z.string(),
+        description: z.string().optional(),
+        projection_hash: z.string(),
+      })
+      .strict()
+      .optional(),
   })
   export type AgentEntry = z.infer<typeof AgentEntry>
 
@@ -196,6 +205,9 @@ export namespace SkillMount {
       (agent) => projectedAgentNames.has(agent.name) && agentSkillMountable(agent) && agentCanUseSkillTool(agent),
     )
     const mountedAgents = mountedAgentsBySkill(skillProjection.skills)
+    const virtualAgentsByBaseRole = new Map<string, PromptProfileResolver.ResolvedVirtualAgent>(
+      skillProjection.virtualAgents.map((virtualAgent) => [virtualAgent.baseRole, virtualAgent]),
+    )
     const pool = skillProjection.skills.map((skill) => {
       const agents = mountedAgents.get(skill.name) ?? []
       return {
@@ -242,6 +254,18 @@ export namespace SkillMount {
         hidden: agent.hidden,
         skill_mountable: agentSkillMountable(agent),
         skill_tool_available: agentCanUseSkillTool(agent),
+        ...(virtualAgentsByBaseRole.has(agent.name)
+          ? {
+              virtual_agent: {
+                id: virtualAgentsByBaseRole.get(agent.name)!.virtualAgentID,
+                label: virtualAgentsByBaseRole.get(agent.name)!.label,
+                ...(virtualAgentsByBaseRole.get(agent.name)!.description
+                  ? { description: virtualAgentsByBaseRole.get(agent.name)!.description }
+                  : {}),
+                projection_hash: virtualAgentsByBaseRole.get(agent.name)!.projectionHash,
+              },
+            }
+          : {}),
       })),
       matrix: rows,
       project_mounts: mountsByAgent(skillProjection.skills),

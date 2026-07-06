@@ -127,6 +127,8 @@ describe("PromptProfileResolver", () => {
     expect(profile).toMatchObject({
       id: PROJECT_EXPERT_SQUAD_ID,
       label: "Project Replica",
+      display_label: "Project Replica",
+      display_prefix: undefined,
       built_in: false,
       editable: false,
       capability_profile_id: PROJECT_EXPERT_SQUAD_ID,
@@ -136,6 +138,7 @@ describe("PromptProfileResolver", () => {
         general: "project general overlay",
         orchestrator: "project orchestrator overlay",
       },
+      virtual_agents: {},
     })
     expect(profile?.projection_hash).toMatch(/^[a-f0-9]{64}$/)
     expect(profile?.capability_projection.scheduler.built_in_tool_ids).toContain("build")
@@ -155,6 +158,8 @@ describe("PromptProfileResolver", () => {
       "capability_profile_id",
       "capability_projection",
       "description",
+      "display_label",
+      "display_prefix",
       "dynamic_attributes",
       "editable",
       "id",
@@ -165,6 +170,7 @@ describe("PromptProfileResolver", () => {
       "selector",
       "source",
       "version",
+      "virtual_agents",
     ])
   })
 
@@ -489,11 +495,36 @@ describe("PromptProfileResolver", () => {
     await copyRepositoryExpertSquadPackage(project.path, SOFTWARE_TESTING_EXPERT_SQUAD_ID)
     const testCaseRoot = path.join(project.path, "cases", "login")
     await fs.mkdir(path.join(testCaseRoot, ".opentest"), { recursive: true })
-    await fs.mkdir(path.join(testCaseRoot, "runs", "2026-07-06"), { recursive: true })
-    await fs.writeFile(path.join(testCaseRoot, "TEST.md"), "# Login regression\n\n- testPoint: login accepts valid user\n")
-    await fs.writeFile(path.join(testCaseRoot, "script.ts"), "export async function run() { return true }\n")
+    await fs.mkdir(path.join(testCaseRoot, ".opentest", "runs", "2026-07-06"), { recursive: true })
+    await fs.writeFile(
+      path.join(testCaseRoot, "script.ts"),
+      [
+        "export const steps = [",
+        "  async (ctx: { mark_point(name: string): Promise<void> }) => {",
+        '    await ctx.mark_point("login accepts valid user")',
+        '    await ctx.mark_point("renders home")',
+        "  },",
+        "]",
+        "",
+      ].join("\n"),
+    )
+    await fs.writeFile(
+      path.join(testCaseRoot, "TEST.md"),
+      [
+        "---",
+        "testName: Login regression",
+        "status: active",
+        "testPoints:",
+        "  - name: login accepts valid user",
+        "  - name: renders home",
+        "---",
+        "# Login regression",
+        "",
+      ].join("\n"),
+    )
     await fs.writeFile(path.join(testCaseRoot, ".opentest", "ctx.d.ts"), "export interface TestContext { click(selector: string): Promise<void> }\n")
-    await fs.writeFile(path.join(testCaseRoot, "runs", "2026-07-06", "result.json"), '{"status":"passed"}\n')
+    await fs.writeFile(path.join(testCaseRoot, ".opentest", "runs", "2026-07-06", "result.json"), '{"status":"passed"}\n')
+    await fs.writeFile(path.join(testCaseRoot, ".opentest", "acceptance.json"), '{"status":"accepted"}\n')
     await fs.writeFile(
       path.join(project.path, "package.json"),
       JSON.stringify({ scripts: { test: "bun test", "test:e2e": "playwright test" } }, null, 2),
@@ -523,7 +554,7 @@ describe("PromptProfileResolver", () => {
     )
 
     const inventoryRef = `${SOFTWARE_TESTING_EXPERT_SQUAD_ID}/shared/test-artifact-inventory`
-    const protocolRef = `${SOFTWARE_TESTING_EXPERT_SQUAD_ID}/shared/test-protocol-contract`
+    const protocolRef = `${SOFTWARE_TESTING_EXPERT_SQUAD_ID}/shared/opentest-protocol-engine`
     const inventoryProviderName = PromptProfileResolver.packageToolProviderName(inventoryRef)
     const protocolProviderName = PromptProfileResolver.packageToolProviderName(protocolRef)
     const schedulerCapability = await PromptProfileResolver.resolveSchedulerCapability({
@@ -533,8 +564,11 @@ describe("PromptProfileResolver", () => {
 
     expect(schedulerCapability.promptProfileID).toBe(SOFTWARE_TESTING_EXPERT_SQUAD_ID)
     expect(schedulerCapability.builtInToolIDs).toEqual(
-      expect.arrayContaining(["requirements", "architect", "build", "visual_qa", "integrity", "fact_check"]),
+      expect.arrayContaining(["build", "integrity"]),
     )
+    for (const unusedTool of ["requirements", "architect", "visual_qa", "fact_check"]) {
+      expect(schedulerCapability.builtInToolIDs).not.toContain(unusedTool)
+    }
     expect(schedulerCapability.packageToolRefs).toEqual([inventoryRef, protocolRef])
     expect(schedulerCapability.packageToolProviderNames).toEqual([inventoryProviderName, protocolProviderName])
 
@@ -548,18 +582,16 @@ describe("PromptProfileResolver", () => {
     })
     expect(Object.hasOwn(schedulerTools, "build")).toBe(true)
     expect(Object.hasOwn(schedulerTools, "integrity")).toBe(true)
+    expect(Object.hasOwn(schedulerTools, "requirements")).toBe(false)
+    expect(Object.hasOwn(schedulerTools, "architect")).toBe(false)
+    expect(Object.hasOwn(schedulerTools, "visual_qa")).toBe(false)
+    expect(Object.hasOwn(schedulerTools, "fact_check")).toBe(false)
     expect(Object.hasOwn(schedulerTools, protocolProviderName)).toBe(true)
     expect(Object.hasOwn(schedulerTools, protocolRef)).toBe(false)
 
-    const protocolResult = await (schedulerTools[protocolProviderName] as any).execute(
+    const contractResult = await (schedulerTools[protocolProviderName] as any).execute(
       {
-        system_under_test: "login flow",
-        test_scope: "valid-user regression",
-        surfaces: ["gui", "integration"],
-        context_inputs: ["cases/login/TEST.md", "cases/login/script.ts", "cases/login/.opentest/ctx.d.ts"],
-        acceptance_outputs: ["cases/login/runs/2026-07-06/result.json"],
-        execution_command: "bun test cases/login/script.ts",
-        risk_level: "P1",
+        mode: "contract",
       },
       {
         toolCallId: "call_software_testing_protocol",
@@ -570,15 +602,19 @@ describe("PromptProfileResolver", () => {
         },
       },
     )
-    const protocol = JSON.parse(protocolResult.output) as {
-      workflow_position: Array<{ tool: string }>
-      tool_availability: { package_tools: Array<{ ref: string }> }
+    const contract = JSON.parse(contractResult.output) as {
+      contract: {
+        protocol: string
+        script: {
+          required_export: string
+          mark_point_callee: string
+        }
+      }
     }
-    expect(protocol.workflow_position.map((item) => item.tool)).toEqual(
-      expect.arrayContaining(["requirements", "architect", "build", "integrity", "fact_check"]),
-    )
-    expect(protocol.tool_availability.package_tools.map((item) => item.ref)).toEqual([inventoryRef, protocolRef])
-    expect(protocolResult.metadata.package_tool_ref).toBe(protocolRef)
+    expect(contract.contract.protocol).toBe("OpenTest")
+    expect(contract.contract.script.required_export).toBe("steps")
+    expect(contract.contract.script.mark_point_callee).toBe("ctx.mark_point")
+    expect(contractResult.metadata.package_tool_ref).toBe(protocolRef)
 
     const buildCapability = await PromptProfileResolver.resolveWorkerCapability({
       projectDirectory: project.path,
@@ -586,6 +622,12 @@ describe("PromptProfileResolver", () => {
       config,
     })
     expect(buildCapability.packageToolRefs).toEqual([inventoryRef, protocolRef])
+    expect(buildCapability.virtualAgent).toMatchObject({
+      baseRole: "build",
+      virtualAgentID: "opentest-implementer",
+      label: "OpenTest Implementer",
+      expertSquadID: SOFTWARE_TESTING_EXPERT_SQUAD_ID,
+    })
 
     const workerTools = await PromptProfileResolver.projectWorkerTools(
       { read: { kind: "dummy-read" } },
@@ -613,10 +655,12 @@ describe("PromptProfileResolver", () => {
         test_md: string
         script_ts: string | null
         context_contract: string | null
-        run_result_count: number
+        acceptance: string | null
+        run_results: string[]
       }>
       context_files: string[]
       run_results: string[]
+      acceptance_files: string[]
       package_scripts: Array<{ script: string; command: string }>
     }
     expect(inventory.test_cases).toContainEqual(
@@ -625,11 +669,13 @@ describe("PromptProfileResolver", () => {
         test_md: "cases/login/TEST.md",
         script_ts: "cases/login/script.ts",
         context_contract: "cases/login/.opentest/ctx.d.ts",
-        run_result_count: 1,
+        acceptance: "cases/login/.opentest/acceptance.json",
+        run_results: ["cases/login/.opentest/runs/2026-07-06/result.json"],
       }),
     )
     expect(inventory.context_files).toContain("cases/login/.opentest/ctx.d.ts")
-    expect(inventory.run_results).toContain("cases/login/runs/2026-07-06/result.json")
+    expect(inventory.run_results).toContain("cases/login/.opentest/runs/2026-07-06/result.json")
+    expect(inventory.acceptance_files).toContain("cases/login/.opentest/acceptance.json")
     expect(inventory.package_scripts).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ script: "test", command: "bun test" }),
@@ -637,6 +683,30 @@ describe("PromptProfileResolver", () => {
       ]),
     )
     expect(inventoryResult.metadata.package_tool_ref).toBe(inventoryRef)
+
+    const validationResult = await (workerTools[protocolProviderName] as any).execute(
+      { mode: "validate", test_directory: "cases/login" },
+      {
+        toolCallId: "call_software_testing_validate",
+        opencorvus: {
+          sessionID: "ses_software_testing_worker",
+          messageID: "msg_software_testing_worker",
+          toolCallID: "call_software_testing_validate",
+        },
+      },
+    )
+    const validation = JSON.parse(validationResult.output) as {
+      valid: boolean
+      test_points: string[]
+      mark_points: string[]
+      artifacts: { context_contract: string | null; acceptance: string | null; run_results: string[] }
+    }
+    expect(validation.valid).toBe(true)
+    expect(validation.test_points).toEqual(["login accepts valid user", "renders home"])
+    expect(validation.mark_points).toEqual(["login accepts valid user", "renders home"])
+    expect(validation.artifacts.context_contract).toBe("cases/login/.opentest/ctx.d.ts")
+    expect(validation.artifacts.acceptance).toBe("cases/login/.opentest/acceptance.json")
+    expect(validation.artifacts.run_results).toEqual(["cases/login/.opentest/runs/2026-07-06/result.json"])
   })
 
   test("projects scheduler default tool refs from the runtime tool map", async () => {
@@ -1753,7 +1823,22 @@ describe("PromptProfileResolver", () => {
         "software-testing-expert-squad",
       ]),
     )
+    const frontendAutomationSelector = projection.skills.find((skill) => skill.name === "frontend-automation-debug-expert-squad")
+    expect(frontendAutomationSelector?.content).toContain("## Expert Debug Contract")
+    expect(frontendAutomationSelector?.content).toContain("observable symptom -> direct trigger")
+    expect(frontendAutomationSelector?.content).toContain("Do not infer root cause from a task title")
+    const frontendInnovateSelector = projection.skills.find((skill) => skill.name === "frontend-innovate-expert-squad")
+    expect(frontendInnovateSelector?.content).toContain("## Expert Contract")
+    expect(frontendInnovateSelector?.content).toContain("design-convergence model")
+    expect(frontendInnovateSelector?.content).toContain("Do not accept a frontend innovation result")
     const frontendReplicaSelector = projection.skills.find((skill) => skill.name === "frontend-replica-expert-squad")
+    expect(frontendReplicaSelector?.content).toContain("## Expert Contract")
+    expect(frontendReplicaSelector?.content).toContain("source-to-render model")
+    expect(frontendReplicaSelector?.content).toContain("Do not accept source-row prose")
+    const softwareTestingSelector = projection.skills.find((skill) => skill.name === "software-testing-expert-squad")
+    expect(softwareTestingSelector?.content).toContain("## Expert Contract")
+    expect(softwareTestingSelector?.content).toContain("test-validity model")
+    expect(softwareTestingSelector?.content).toContain("Do not accept tests that were not run")
     expect(frontendReplicaSelector).toMatchObject({
       required_tools: ["select_expert_squad"],
       mounted_agents: ["orchestrator"],

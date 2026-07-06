@@ -12,53 +12,36 @@
   },
   "capability_projection": {
     "scheduler": {
-      "role_base": true,
+      "role_base": false,
       "built_in_tool_ids": [
-        "analyze_intent",
-        "requirements",
-        "architect",
-        "deep_research",
-        "workload_analysis",
-        "build",
-        "visual_qa",
-        "integrity",
-        "fact_check",
+        "select_expert_squad",
+        "skill",
+        "question",
+        "read_context",
+        "query_failed_goals",
         "add_goal",
         "modify_goal",
         "complete_goal",
         "delete_goal",
         "propose_task",
         "refine",
+        "complete_task",
+        "fail_task",
+        "wait",
         "browser_preview",
-        "bash"
+        "bash",
+        "build",
+        "integrity"
       ],
       "package_skill_refs": [
         "software-testing/orchestrator/workflow"
       ],
       "package_tool_refs": [
         "software-testing/shared/test-artifact-inventory",
-        "software-testing/shared/test-protocol-contract"
+        "software-testing/shared/opentest-protocol-engine"
       ]
     },
     "agents": {
-      "general": {
-        "role_base": true
-      },
-      "orchestrator": {
-        "role_base": true
-      },
-      "intent-analysis": {
-        "role_base": true
-      },
-      "requirements": {
-        "role_base": true
-      },
-      "architect": {
-        "role_base": true
-      },
-      "goal-workload-analyst": {
-        "role_base": true
-      },
       "build": {
         "role_base": true,
         "package_skill_refs": [
@@ -66,11 +49,8 @@
         ],
         "package_tool_refs": [
           "software-testing/shared/test-artifact-inventory",
-          "software-testing/shared/test-protocol-contract"
+          "software-testing/shared/opentest-protocol-engine"
         ]
-      },
-      "visual-qa": {
-        "role_base": true
       },
       "integrity": {
         "role_base": true,
@@ -79,21 +59,12 @@
         ],
         "package_tool_refs": [
           "software-testing/shared/test-artifact-inventory",
-          "software-testing/shared/test-protocol-contract"
+          "software-testing/shared/opentest-protocol-engine"
         ]
-      },
-      "deep-research": {
-        "role_base": true
-      },
-      "fact-check": {
-        "role_base": true
       }
     }
   },
   "agents": {
-    "general": {
-      "prompt": "agents/general/system.md"
-    },
     "orchestrator": {
       "prompt": "agents/orchestrator/system.md",
       "skill_refs": [
@@ -101,49 +72,22 @@
       ],
       "tool_refs": [
         "software-testing/shared/test-artifact-inventory",
-        "software-testing/shared/test-protocol-contract"
+        "software-testing/shared/opentest-protocol-engine"
       ]
-    },
-    "intent-analysis": {
-      "prompt": "agents/intent-analysis/system.md"
-    },
-    "requirements": {
-      "prompt": "agents/requirements/system.md"
-    },
-    "architect": {
-      "prompt": "agents/architect/system.md"
-    },
-    "goal-workload-analyst": {
-      "prompt": "agents/goal-workload-analyst/system.md"
-    },
+    }
+  },
+  "virtual_agents": {
     "build": {
-      "prompt": "agents/build/system.md",
-      "skill_refs": [
-        "software-testing/build/test-implementation"
-      ],
-      "tool_refs": [
-        "software-testing/shared/test-artifact-inventory",
-        "software-testing/shared/test-protocol-contract"
-      ]
-    },
-    "visual-qa": {
-      "prompt": "agents/visual-qa/system.md"
+      "id": "opentest-implementer",
+      "label": "OpenTest Implementer",
+      "description": "Implements and repairs software tests through the parsed OpenTest protocol contract.",
+      "prompt": "virtual-agents/build/system.md"
     },
     "integrity": {
-      "prompt": "agents/integrity/system.md",
-      "skill_refs": [
-        "software-testing/integrity/test-review"
-      ],
-      "tool_refs": [
-        "software-testing/shared/test-artifact-inventory",
-        "software-testing/shared/test-protocol-contract"
-      ]
-    },
-    "deep-research": {
-      "prompt": "agents/deep-research/system.md"
-    },
-    "fact-check": {
-      "prompt": "agents/fact-check/system.md"
+      "id": "opentest-reviewer",
+      "label": "OpenTest Reviewer",
+      "description": "Reviews software-test evidence against the parsed OpenTest protocol contract.",
+      "prompt": "virtual-agents/integrity/system.md"
     }
   }
 }

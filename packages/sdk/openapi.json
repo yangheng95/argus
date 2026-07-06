@@ -10530,6 +10530,29 @@
                           },
                           "skill_tool_available": {
                             "type": "boolean"
+                          },
+                          "virtual_agent": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "description": {
+                                "type": "string"
+                              },
+                              "projection_hash": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "label",
+                              "projection_hash"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "required": [
@@ -10969,6 +10992,29 @@
                           },
                           "skill_tool_available": {
                             "type": "boolean"
+                          },
+                          "virtual_agent": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "description": {
+                                "type": "string"
+                              },
+                              "projection_hash": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "label",
+                              "projection_hash"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "required": [
@@ -11421,6 +11467,29 @@
                           },
                           "skill_tool_available": {
                             "type": "boolean"
+                          },
+                          "virtual_agent": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "description": {
+                                "type": "string"
+                              },
+                              "projection_hash": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "label",
+                              "projection_hash"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "required": [
@@ -11873,6 +11942,29 @@
                           },
                           "skill_tool_available": {
                             "type": "boolean"
+                          },
+                          "virtual_agent": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "description": {
+                                "type": "string"
+                              },
+                              "projection_hash": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "label",
+                              "projection_hash"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "required": [
@@ -12904,6 +12996,32 @@
                               "type": "string"
                             }
                           },
+                          "virtual_agents": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "base_role": {
+                                  "type": "string"
+                                },
+                                "virtual_agent_id": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "description": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "base_role",
+                                "virtual_agent_id",
+                                "label"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
                           "capability_projection": {
                             "type": "object",
                             "properties": {
@@ -13248,6 +13366,7 @@
                           "capability_profile_id",
                           "projection_hash",
                           "projected_agents",
+                          "virtual_agents",
                           "capability_projection",
                           "display_label",
                           "source",
@@ -13256,6 +13375,78 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "active_agent_projection": {
+                      "type": "object",
+                      "properties": {
+                        "source_expert_squad_id": {
+                          "type": "string"
+                        },
+                        "prompt_profile_active": {
+                          "type": "string"
+                        },
+                        "projection_hash": {
+                          "type": "string"
+                        },
+                        "agents": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "base_role": {
+                                "type": "string"
+                              },
+                              "virtual_agent_id": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "description": {
+                                "type": "string"
+                              },
+                              "projection_hash": {
+                                "type": "string"
+                              },
+                              "package_skill_refs": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "package_tool_refs": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "package_mcp_server_refs": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "base_role",
+                              "virtual_agent_id",
+                              "label",
+                              "projection_hash",
+                              "package_skill_refs",
+                              "package_tool_refs",
+                              "package_mcp_server_refs"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "source_expert_squad_id",
+                        "prompt_profile_active",
+                        "projection_hash",
+                        "agents"
+                      ],
+                      "additionalProperties": false
                     },
                     "active_skill_projection": {
                       "type": "object",
@@ -13365,6 +13556,7 @@
                     "scope",
                     "targets",
                     "squads",
+                    "active_agent_projection",
                     "active_skill_projection"
                   ],
                   "additionalProperties": false

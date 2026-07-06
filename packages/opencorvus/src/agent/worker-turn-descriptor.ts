@@ -27,6 +27,18 @@ export namespace WorkerTurnDescriptor {
         promptProfileID: z.string(),
         capabilityProfileID: z.string(),
         projectionHash: z.string(),
+        virtualAgent: z
+          .object({
+            baseRole: z.string(),
+            virtualAgentID: z.string(),
+            label: z.string(),
+            description: z.string().optional(),
+            expertSquadID: z.string(),
+            promptProfileID: z.string(),
+            projectionHash: z.string(),
+          })
+          .strict()
+          .optional(),
       })
       .optional(),
     output: z.object({

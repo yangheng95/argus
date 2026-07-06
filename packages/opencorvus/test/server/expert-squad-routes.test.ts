@@ -63,10 +63,23 @@ describe("expert-squad routes", () => {
             label: string
             built_in: boolean
             source: { kind: "built_in" } | { kind: "project_package"; root: string }
+            virtual_agents: Array<{ base_role: string; virtual_agent_id: string }>
           }>
+          active_agent_projection: {
+            source_expert_squad_id: string
+            prompt_profile_active: string
+            projection_hash: string
+            agents: unknown[]
+          }
           active_skill_projection: { selector_skill_names: string[] }
         }
         expect(body.active).toEqual({ effective: "general", project: "general", session_override: null })
+        expect(body.active_agent_projection).toEqual({
+          source_expert_squad_id: "general",
+          prompt_profile_active: "general",
+          projection_hash: expect.stringMatching(/^[a-f0-9]{64}$/),
+          agents: [],
+        })
         expect(body.squads.map((squad) => squad.id)).toEqual([
           "general",
           ...payloadPackageSources.map((source) => source.id),
@@ -86,6 +99,10 @@ describe("expert-squad routes", () => {
           })
           await expect(ExpertSquadRegistry.loadPackage(targetRoot)).resolves.toMatchObject({ id: source.id })
         }
+        expect(squads.get("software-testing")?.virtual_agents.map((agent) => agent.virtual_agent_id).sort()).toEqual([
+          "opentest-implementer",
+          "opentest-reviewer",
+        ])
         expect(body.active_skill_projection.selector_skill_names).toEqual(
           expect.arrayContaining([
             "frontend-automation-debug-expert-squad",

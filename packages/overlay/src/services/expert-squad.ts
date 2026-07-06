@@ -61,11 +61,33 @@ export interface ExpertSquadOption {
   capability_profile_id: string
   projection_hash: string
   projected_agents: string[]
+  virtual_agents: ExpertSquadVirtualAgent[]
   capability_projection: ExpertSquadCapabilityProjection
   source: ExpertSquadCatalogSource
   readme: ExpertSquadCatalogReadme
   selector?: ExpertSquadCatalogSelector
   dynamic_attributes: Record<string, unknown>
+}
+
+export interface ExpertSquadVirtualAgent {
+  base_role: string
+  virtual_agent_id: string
+  label: string
+  description?: string
+}
+
+export interface ExpertSquadActiveAgentProjection {
+  source_expert_squad_id: string
+  prompt_profile_active: string
+  projection_hash: string
+  agents: Array<
+    ExpertSquadVirtualAgent & {
+      projection_hash: string
+      package_skill_refs: string[]
+      package_tool_refs: string[]
+      package_mcp_server_refs: string[]
+    }
+  >
 }
 
 export interface ExpertSquadTarget {
@@ -106,6 +128,7 @@ export interface ExpertSquadCatalog {
   scope: ExpertSquadCatalogScope
   targets: ExpertSquadTarget[]
   squads: ExpertSquadOption[]
+  active_agent_projection: ExpertSquadActiveAgentProjection
   active_skill_projection: ExpertSquadActiveSkillProjection
 }
 

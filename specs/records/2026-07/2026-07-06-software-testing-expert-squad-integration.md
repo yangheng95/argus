@@ -1,7 +1,9 @@
 # Software Testing Expert Squad Integration
 
 Date: 2026-07-06
-Status: Implemented.
+Status: Superseded by `2026-07-06-global-virtual-agent-opentest-adaptation.md` and `2026-07-06-opentest-contract-engine.md`.
+
+Supersession note: this record documents the first `software-testing` integration. The current implementation replaces the old `software-testing/shared/test-protocol-contract` tool with one external contract file plus a dynamic protocol engine, and trims `software-testing` projection to only the active roles that have real overlays, skills, tools, or virtual-agent bindings. Do not use this record as the current protocol source.
 
 Glossary:
 

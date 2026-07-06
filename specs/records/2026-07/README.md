@@ -1,5 +1,7 @@
 # July 2026 Records
 
+- [2026-07-06-global-virtual-agent-opentest-adaptation.md](2026-07-06-global-virtual-agent-opentest-adaptation.md) records the implementation goal for the global expert-squad virtual-agent refactor followed by the software-testing OpenTest protocol-engine adaptation.
+- [2026-07-06-opentest-contract-engine.md](2026-07-06-opentest-contract-engine.md) records the software-testing OpenTest contract-engine decision that keeps the protocol definition in an external JSON file parsed by the engine instead of embedded in prompts or tool code.
 - [2026-07-06-dynamic-expert-agent-instance-review-plan.md](2026-07-06-dynamic-expert-agent-instance-review-plan.md) records the independent-agent review packet for modeling expert-squad dynamic virtual agent instances from base roles without fallback, second active state, or package-defined global roles.
 - [2026-07-06-frontend-design-tool-surface-sync.md](2026-07-06-frontend-design-tool-surface-sync.md) records the repair for `frontend_design` session startup failure where the runtime submit tool `update_frontend_visual_region_binding` was exposed but missing from the static frontend-design session tool list.
 - [2026-07-06-visual-qa-diagnostic-image-annotation-repair.md](2026-07-06-visual-qa-diagnostic-image-annotation-repair.md) records the Visual QA diagnostic image annotation repair that keeps accepted evidence strict while allowing DOM problem annotations to use image-bearing source-binding and scroll-slice Browser Preview evidence with accurate coordinate transforms.

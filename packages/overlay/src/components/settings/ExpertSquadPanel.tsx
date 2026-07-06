@@ -103,6 +103,7 @@ export default function ExpertSquadPanel() {
   const sessionOverrideID = createMemo(() => catalog()?.active.session_override ?? "")
   const effectiveActiveID = createMemo(() => catalog()?.active.effective ?? "")
   const activeProjection = createMemo(() => catalog()?.active_skill_projection ?? null)
+  const activeAgentProjection = createMemo(() => catalog()?.active_agent_projection ?? null)
   const currentSquad = createMemo(() => {
     const list = squads()
     return list.find((squad) => squad.id === selectedSquadID()) ?? list[0]
@@ -511,6 +512,54 @@ export default function ExpertSquadPanel() {
                           <strong>{t("expert_squad.target_count", { count: selectedTargetCount() })}</strong>
                         </div>
                       </div>
+
+                      <div class="expert-squad-section">
+                        <div class="expert-squad-section-head">
+                          <strong>{t("expert_squad.virtual_agents")}</strong>
+                          <SettingsPill tone="muted">
+                            {t("expert_squad.agent_count", { count: squad.virtual_agents.length })}
+                          </SettingsPill>
+                        </div>
+                        <Show when={squad.virtual_agents.length > 0} fallback={<div class="empty-hint">-</div>}>
+                          <div class="expert-squad-projection-grid" data-ui="expert-squad-virtual-agents">
+                            <For each={squad.virtual_agents}>
+                              {(agent) => (
+                                <div class="expert-squad-projection-row">
+                                  <span>{agent.base_role}</span>
+                                  <strong>{agent.label}</strong>
+                                  <small>{agent.virtual_agent_id}</small>
+                                </div>
+                              )}
+                            </For>
+                          </div>
+                        </Show>
+                      </div>
+
+                      <Show when={effectiveActiveID() === squad.id && activeAgentProjection()}>
+                        {(projection) => (
+                          <div class="expert-squad-section" data-ui="expert-squad-active-agent-projection">
+                            <div class="expert-squad-section-head">
+                              <strong>{t("expert_squad.active_agent_projection")}</strong>
+                              <SettingsPill tone="accent">{projection().projection_hash.slice(0, 12)}</SettingsPill>
+                            </div>
+                            <div class="expert-squad-projection-grid">
+                              <For each={projection().agents}>
+                                {(agent) => (
+                                  <div class="expert-squad-projection-row">
+                                    <span>{agent.base_role}</span>
+                                    <strong>{agent.label}</strong>
+                                    <small>
+                                      {agent.virtual_agent_id} ·{" "}
+                                      {t("expert_squad.skill_count", { count: agent.package_skill_refs.length })} ·{" "}
+                                      {t("expert_squad.tool_count", { count: agent.package_tool_refs.length })}
+                                    </small>
+                                  </div>
+                                )}
+                              </For>
+                            </div>
+                          </div>
+                        )}
+                      </Show>
 
                       <div class="expert-squad-section">
                         <div class="expert-squad-section-head">

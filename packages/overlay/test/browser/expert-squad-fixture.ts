@@ -6,6 +6,16 @@ export interface ExpertSquadFixture {
   built_in?: boolean
   editable?: boolean
   agents?: Record<string, string>
+  virtual_agents?: Array<{
+    base_role: string
+    virtual_agent_id: string
+    label: string
+    description?: string
+    projection_hash?: string
+    package_skill_refs?: string[]
+    package_tool_refs?: string[]
+    package_mcp_server_refs?: string[]
+  }>
 }
 
 export interface ExpertSquadCatalogFixtureInput {
@@ -45,6 +55,7 @@ export function expertSquadOptionFixture(squad: ExpertSquadFixture) {
   const agents = squad.agents ?? {}
   const builtIn = squad.built_in ?? squad.id === "general"
   const displayLabel = squad.display_prefix ? `${squad.display_prefix}/${squad.label}` : squad.label
+  const virtualAgents = squad.virtual_agents ?? []
   return {
     id: squad.id,
     label: squad.label,
@@ -57,6 +68,16 @@ export function expertSquadOptionFixture(squad: ExpertSquadFixture) {
     capability_profile_id: squad.id,
     projection_hash: `test-${squad.id}`,
     projected_agents: Object.keys(agents),
+    virtual_agents: virtualAgents.map((agent) => ({
+      base_role: agent.base_role,
+      virtual_agent_id: agent.virtual_agent_id,
+      label: agent.label,
+      description: agent.description,
+      projection_hash: agent.projection_hash ?? `test-${squad.id}-${agent.base_role}`,
+      package_skill_refs: agent.package_skill_refs ?? [],
+      package_tool_refs: agent.package_tool_refs ?? [],
+      package_mcp_server_refs: agent.package_mcp_server_refs ?? [],
+    })),
     capability_projection: {
       scheduler: emptyExpertSquadProjectionEntry(),
       agents: Object.fromEntries(Object.keys(agents).map((agent) => [agent, emptyExpertSquadProjectionEntry()])),
@@ -94,6 +115,8 @@ export function expertSquadCatalogFixture(input: ExpertSquadCatalogFixtureInput 
         description: "General expert squad.",
       },
     ]
+  const squadOptions = squads.map(expertSquadOptionFixture)
+  const activeOption = squadOptions.find((squad) => squad.id === active)
   return {
     active: {
       effective: active,
@@ -107,7 +130,13 @@ export function expertSquadCatalogFixture(input: ExpertSquadCatalogFixtureInput 
       ...(input.sessionOverride === undefined ? {} : { sessionID: "ses_root" }),
     },
     targets: input.targets ?? [],
-    squads: squads.map(expertSquadOptionFixture),
+    squads: squadOptions,
+    active_agent_projection: {
+      source_expert_squad_id: active,
+      prompt_profile_active: active,
+      projection_hash: `test-${active}`,
+      agents: activeOption?.virtual_agents ?? [],
+    },
     active_skill_projection: {
       active_squad_id: active,
       capability_profile_id: active,

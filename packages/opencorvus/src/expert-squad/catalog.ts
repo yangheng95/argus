@@ -93,6 +93,28 @@ export const ExpertSquadActiveSkillProjectionSchema = z
   })
   .strict()
 
+export const ExpertSquadActiveAgentProjectionAgentSchema = z
+  .object({
+    base_role: z.string(),
+    virtual_agent_id: z.string(),
+    label: z.string(),
+    description: z.string().optional(),
+    projection_hash: z.string(),
+    package_skill_refs: z.array(z.string()),
+    package_tool_refs: z.array(z.string()),
+    package_mcp_server_refs: z.array(z.string()),
+  })
+  .strict()
+
+export const ExpertSquadActiveAgentProjectionSchema = z
+  .object({
+    source_expert_squad_id: z.string(),
+    prompt_profile_active: z.string(),
+    projection_hash: z.string(),
+    agents: z.array(ExpertSquadActiveAgentProjectionAgentSchema),
+  })
+  .strict()
+
 export const ExpertSquadCatalogSchema = z
   .object({
     active: ExpertSquadCatalogActiveSchema,
@@ -100,6 +122,7 @@ export const ExpertSquadCatalogSchema = z
     scope: ExpertSquadCatalogScopeSchema,
     targets: z.array(PromptProfileTargetCatalogEntrySchema),
     squads: z.array(ExpertSquadCatalogSummarySchema),
+    active_agent_projection: ExpertSquadActiveAgentProjectionSchema,
     active_skill_projection: ExpertSquadActiveSkillProjectionSchema,
   })
   .strict()
