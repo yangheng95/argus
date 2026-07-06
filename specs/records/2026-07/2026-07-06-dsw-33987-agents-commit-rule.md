@@ -41,6 +41,7 @@
 - Local `HEAD` before this rule update: `028bd41d1e dsw-0000: add expert squad display prefixes`.
 - `git rev-list --left-right --count myhexin/v0.0.1beta...HEAD` returned `0 0` after fetching `myhexin v0.0.1beta`, so the remote currently matches local `HEAD`.
 - `AGENTS.md` already contains an unstaged expert-squad rule addition outside this task; this change must stage only the new `dsw-33987` rule hunk from `AGENTS.md`.
+- Post-push second review found 23 non-`dsw-33987` subjects in `dev..HEAD`, including `dsw-0000`, `dsw-2374`, and `dsw-435`; the task is not complete until every remaining non-`dsw-33987` subject in the delivery range is rewritten too.
 
 ### Independent Agent Feedback
 
@@ -53,4 +54,5 @@
 3. Run documentation link health and whitespace checks for the touched files.
 4. Stage only the focused rule/spec/index hunks.
 5. Amend the last commit subject from `dsw-0000` to `dsw-33987`.
-6. Fetch `myhexin v0.0.1beta` again and force-push with lease only if the remote has not moved.
+6. Rewrite any remaining non-`dsw-33987` subject in `dev..HEAD` to `dsw-33987` while preserving commit tree content and parent order.
+7. Fetch `myhexin v0.0.1beta` again and force-push with lease only if the remote has not moved.

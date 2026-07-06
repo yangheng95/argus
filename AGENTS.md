@@ -165,7 +165,7 @@ build agent 处理任何前端页面、组件、可视化、overlay、preview、
 
 **33.** 必须主动在任何改动前后 commit + push 到 git-cc 远端（当前仓库 remote 名称为 `myhexin`，URL 为 `https://git-cc.myhexin.com:6443/yangheng/opencorvus.git`；`origin` / GitHub push 不能替代 git-cc push；不绕 hook，hook 是质量检查，pre-push 跑 typecheck / api:routes-check / docs:check，失败时修根因再 push，不要传 `--no-verify`），以便追踪历史和回滚。
 
-**33.0（v0.0.1beta commit 前缀 — 2026-07-06）**：当前 `v0.0.1beta` git-cc 交付线所有新提交和需要改写的本地 / 已推送提交，commit subject 必须统一以 `dsw-33987` 开头；禁止使用 `dsw-0000`、临时占位编号或其他未被用户明确指定的 `dsw-*` 编号绕过远端 hook。若发现已提交或已推送 commit 使用了错误前缀，必须先确认 `myhexin/v0.0.1beta` 未前进，再用保守的 lease 保护改写该提交并推送到 `myhexin`。
+**33.0（v0.0.1beta commit 前缀 — 2026-07-06）**：当前 `v0.0.1beta` git-cc 交付线后续新提交、尚未推送的本地提交、以及当前提交前可安全 amend 的最新提交，commit subject 必须统一以 `dsw-33987` 开头；禁止使用 `dsw-0000`、临时占位编号或其他未被用户明确指定的 `dsw-*` 编号绕过远端 hook。已提交 / 已推送的历史提交不得仅为了前缀统一而整段改写，除非用户明确要求历史重写并说明上游合并处理方式。
 
 **33.1（非主分支工作收敛 — 2026-06-22）**：如果为了隔离、并行、审计或修复切换到主分支外的分支 / worktree 工作，所有有效修改在该分支提交后，必须在同一轮工作内合并回主分支并切回主分支；主分支是唯一交付和 push 的事实来源。禁止把非主分支上的 commit、未合并 worktree 或远端临时分支当作已交付结果；禁止让同一需求在多个分支上长期并存造成事实分叉。合并前必须先 `fetch` 并确认主分支最新，合并后必须验证、commit/push 主分支；确认为废弃的分支修改不得作为交付物引用。
 
