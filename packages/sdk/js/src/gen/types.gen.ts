@@ -11619,7 +11619,12 @@ export type BrowserPreviewReadTaskEvidenceResponses = {
     acceptanceID?: string
     targetID: string
     viewportID: string
-    operationKind: "preview-capture" | "reference-comparison" | "source-binding" | "layout-geometry"
+    operationKind:
+      | "preview-capture"
+      | "reference-comparison"
+      | "scroll-slice-comparison"
+      | "source-binding"
+      | "layout-geometry"
     regionID?: string
     stateID?: string
     cropIntent?: "full-region" | "content-well"

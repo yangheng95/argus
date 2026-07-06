@@ -11,7 +11,7 @@ import {
   isEvaluationReportPassing,
   WEBPAGE_REFERENCE_COMPARISON_SSIM_PASS_THRESHOLD,
 } from "@/verification/visual/evaluate"
-import { findBrowserPreviewTargetByID, normalizeRuntimePathRefs } from "./persist"
+import { findBrowserPreviewTargetByID, normalizeRuntimePathRefs, persistBrowserPreviewEvidence } from "./persist"
 import { BrowserPreviewSourceReferenceArtifactID } from "./region-schema"
 import { resolveSourceReferencePath } from "./source-reference"
 import { BrowserPreviewViewportID } from "./viewport"
@@ -55,6 +55,7 @@ export const BrowserPreviewScrollSliceComparisonResult = z
     status: z.enum(["passed", "failed"]),
     operation: z.literal("scroll-slice-comparison"),
     manifestPath: z.string(),
+    evidenceID: z.string(),
     jobID: z.string(),
     taskID: z.string(),
     targetID: z.string(),
@@ -188,10 +189,33 @@ export async function compareBrowserPreviewScrollSlice(
     artifacts.diff = diff
   }
 
+  const manifestPath = path.join(outDir, "manifest.json")
+  const evidenceID = persistBrowserPreviewEvidence({
+    projectRoot,
+    taskID: input.taskID,
+    targetID: input.targetID,
+    viewportID: input.viewportID,
+    operationKind: "scroll-slice-comparison",
+    manifestPath,
+    artifactPaths: artifacts,
+    status: ssimPassed ? "passed" : "failed",
+    summary: ssimPassed
+      ? `Scroll-slice comparison passed for ${input.viewportID} scrollY=${input.scrollY}.`
+      : `Scroll-slice comparison failed for ${input.viewportID} scrollY=${input.scrollY}.`,
+    diagnostics: [
+      "Scroll-slice comparison is supporting Visual QA evidence only.",
+      "It is not reference-comparison proof.",
+      ssimPassed
+        ? `Scroll-slice SSIM ${visual.ssimScore.toFixed(3)} is greater than ${WEBPAGE_REFERENCE_COMPARISON_SSIM_PASS_THRESHOLD.toFixed(2)}.`
+        : `Scroll-slice SSIM ${visual.ssimScore.toFixed(3)} is not greater than ${WEBPAGE_REFERENCE_COMPARISON_SSIM_PASS_THRESHOLD.toFixed(2)}.`,
+      ...(lowSsimWarning ? [lowSsimWarning] : []),
+    ],
+  })
   const result: BrowserPreviewScrollSliceComparisonResult = {
     status: ssimPassed ? "passed" : "failed",
     operation: "scroll-slice-comparison",
-    manifestPath: path.join(outDir, "manifest.json"),
+    manifestPath,
+    evidenceID,
     jobID,
     taskID: input.taskID,
     targetID: input.targetID,

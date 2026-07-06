@@ -288,20 +288,27 @@ describe("orchestrator scheduler capability projection", () => {
     expect(captured.toolIDs).not.toContain("package-browser")
   })
 
-  test("select_expert_squad rejects migrated profile IDs when the project package is absent", async () => {
+  test("select_expert_squad accepts payload-released profile IDs when the project package is absent", async () => {
     await using tmp = await tmpdir({ git: true, config: { model: "mock-control/control" } })
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        await copyRepositoryExpertSquadPackage(tmp.path, "frontend-replica")
         const now = Date.now()
         const taskID = Identifier.ascending("task")
-        const root = await Session.create({ kind: "root", title: "scheduler missing migrated package" })
+        const root = await Session.create({ kind: "root", title: "scheduler payload package release" })
+        await Session.mergeConfigOverlay({
+          sessionID: root.id,
+          patch: {
+            prompt_profile: { active: "frontend-replica" },
+          },
+        })
         insertWorkflowTask({
           taskID,
           rootSessionID: root.id,
           now,
-          title: "scheduler missing migrated package",
+          title: "scheduler payload package release",
         })
         const { tools } = createOrchestratorTools({
           taskID,
@@ -309,15 +316,17 @@ describe("orchestrator scheduler capability projection", () => {
           signal: new AbortController().signal,
         })
 
-        await expect(
-          tools.select_expert_squad.execute(
-            {
-              profile_id: "frontend-replica",
-              reason: "Migrated expert squad IDs must come from project packages.",
-            },
-            toolOptions("select_expert_squad_missing_migrated_package"),
-          ),
-        ).rejects.toThrow('Unknown prompt profile "frontend-replica"')
+        const result = await tools.select_expert_squad.execute(
+          {
+            profile_id: "frontend-replica",
+            reason: "Payload expert squad IDs are released into the project before profile validation.",
+          },
+          toolOptions("select_expert_squad_payload_package"),
+        )
+
+        expect(toolText(result)).toContain(`Expert squad already active for task ${taskID}.`)
+        expect(toolText(result)).toContain("- continuation_wake: not_scheduled")
+        expect(Object.keys(await PromptProfileResolver.definitions(tmp.path))).toContain("frontend-replica")
       },
     })
   })
@@ -325,7 +334,6 @@ describe("orchestrator scheduler capability projection", () => {
   test("select_expert_squad continuation wake installs selected profile projected tool table", async () => {
     installControlModel()
     await using tmp = await tmpdir({ git: true, config: { model: "mock-control/control" } })
-    await copyRepositoryExpertSquadPackage(tmp.path, "frontend-replica")
     let captured: CapturedRuntimeContract | undefined
 
     await Instance.provide({

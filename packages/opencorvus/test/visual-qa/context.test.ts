@@ -1,14 +1,84 @@
 import { describe, expect, test } from "bun:test"
+import { renderAgentContextPackets, type AgentContextPacket } from "../../src/agent/context-packet"
 import {
-  renderVisualQaBuildEvidenceContext,
+  visualQaDispatchContextFromPackets,
+  visualQaDispatchContextPacket,
   renderVisualQaFrontendDesignContext,
   renderVisualQaFrontendResearchContext,
+  renderVisualQaImplementationOutcomeContext,
   renderVisualQaIntegrityContext,
   renderVisualQaPriorReportContext,
+  VISUAL_QA_DISPATCH_CONTEXT_PACKET_SCHEMA,
 } from "../../src/visual-qa/context"
 import type { ResearchBrief } from "../../src/research/schema"
 
 describe("visual-qa context rendering", () => {
+  function dispatchPacket(data: unknown): AgentContextPacket {
+    return {
+      id: "visual-qa-dispatch-context",
+      title: "Visual QA Dispatch Context",
+      source: "visual_qa_dispatch",
+      scope: "task",
+      parts: [
+        {
+          type: "structured",
+          schema: VISUAL_QA_DISPATCH_CONTEXT_PACKET_SCHEMA,
+          data,
+        },
+      ],
+    }
+  }
+
+  test("dispatch context uses structured packet data instead of marker JSON text", () => {
+    const packet = visualQaDispatchContextPacket({
+      appUrl: " http://127.0.0.1:7878 ",
+      previewCommand: " npm run dev ",
+      referenceParityRequired: true,
+      requiredReferenceRegions: [" hero@desktop ", "table@desktop"],
+    })!
+
+    expect(packet.parts.some((part) => part.type === "structured" && part.schema === VISUAL_QA_DISPATCH_CONTEXT_PACKET_SCHEMA)).toBe(
+      true,
+    )
+    const rendered = renderAgentContextPackets([packet])
+    expect(rendered).toContain("structured_ref: schema=opencorvus.visual_qa.dispatch_context.v1")
+    expect(rendered).toContain("app_url: http://127.0.0.1:7878")
+    expect(rendered).not.toContain("visual_qa_dispatch_json:")
+    expect(rendered).not.toContain('{"appUrl"')
+    expect(visualQaDispatchContextFromPackets([packet])).toEqual({
+      appUrl: "http://127.0.0.1:7878",
+      previewCommand: "npm run dev",
+      referenceParityRequired: true,
+      requiredReferenceRegions: ["hero@desktop", "table@desktop"],
+    })
+  })
+
+  test("dispatch context rejects malformed reference parity fields", () => {
+    expect(() =>
+      visualQaDispatchContextPacket({
+        requiredReferenceRegions: ["hero"],
+      }),
+    ).toThrow("must use the exact format region_id@viewport_id")
+    expect(() =>
+      visualQaDispatchContextFromPackets([dispatchPacket({ referenceParityRequired: "true" })]),
+    ).toThrow("referenceParityRequired must be a boolean")
+    expect(() =>
+      visualQaDispatchContextFromPackets([dispatchPacket({ requiredReferenceRegions: [123] })]),
+    ).toThrow("requiredReferenceRegions[0] must be a string")
+    expect(() =>
+      visualQaDispatchContextFromPackets([dispatchPacket({ requiredReferenceRegions: [" "] })]),
+    ).toThrow("must use the exact format region_id@viewport_id")
+    expect(() =>
+      visualQaDispatchContextFromPackets([dispatchPacket({ requiredReferenceRegions: ["hero"] })]),
+    ).toThrow("must use the exact format region_id@viewport_id")
+  })
+
+  test("dispatch context rejects unsupported structured fields", () => {
+    expect(() =>
+      visualQaDispatchContextFromPackets([dispatchPacket({ requiredReferencRegions: ["hero"] })]),
+    ).toThrow("unsupported visual QA dispatch field requiredReferencRegions")
+  })
+
   test("frontend-design context keeps only visual QA pointers", () => {
     const context = renderVisualQaFrontendDesignContext([
       {
@@ -106,29 +176,28 @@ describe("visual-qa context rendering", () => {
     expect(context).not.toContain("evidence=ev_ref")
   })
 
-  test("build evidence context keeps summaries and changed files instead of diffs", () => {
-    const context = renderVisualQaBuildEvidenceContext([
+  test("implementation outcome context keeps summaries and changed files instead of diffs", () => {
+    const context = renderVisualQaImplementationOutcomeContext([
       {
-        id: "acc_1",
-        task_id: "tsk_1",
-        run_id: "run_1",
-        goal_run_id: null,
-        status: "delivered",
+        id: "outcome_1",
+        provider: "build",
+        artifactKind: "build_attempt_outcome",
+        scope: "task",
+        capabilities: ["implementation"],
+        status: "completed",
+        result: "passed",
         summary: "Implemented the table and filter controls.",
-        result: {
-          changed_files: ["src/App.tsx", "src/App.css"],
-          commit_ref: "abc123",
-          diffs: [{ file: "src/App.tsx", diff: "GIANT_DIFF_SHOULD_NOT_APPEAR" }],
-        },
-        time_created: 1,
-        time_updated: 1,
       },
     ])
 
-    expect(context).toContain("Build Evidence Pointers")
+    expect(context).toContain("Implementation Outcome Pointers")
+    expect(context).toContain("build/outcome_1")
+    expect(context).toContain("artifact_kind: build_attempt_outcome")
+    expect(context).toContain("scope: task")
+    expect(context).toContain("capabilities: implementation")
     expect(context).toContain("Implemented the table and filter controls")
-    expect(context).toContain("src/App.tsx")
-    expect(context).toContain("abc123")
+    expect(context).not.toContain("changed_files")
+    expect(context).not.toContain("src/App.tsx")
     expect(context).not.toContain("GIANT_DIFF_SHOULD_NOT_APPEAR")
   })
 

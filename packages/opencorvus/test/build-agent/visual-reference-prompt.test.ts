@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test"
 import { renderVisualContractPreamble } from "../../src/build/agent"
-import { buildEvidenceEntries, renderBuildEvidenceRoleSections } from "../../src/build/evidence-pack"
+import {
+  BUILD_EVIDENCE_CONTEXT_PACKET_SCHEMA,
+  buildEvidenceEntries,
+  buildEvidenceContextPacket,
+  buildEvidencePackFromContextPackets,
+  renderBuildEvidenceRoleSections,
+} from "../../src/build/evidence-pack"
 
 /**
  * Overlay image ingestion fidelity contract.
@@ -61,7 +67,7 @@ describe("renderVisualContractPreamble", () => {
       { mime: "text/markdown", filename: "template.md", size: 2, sha: "t1" },
     ])
     expect(out).toContain("ui.png")
-    // Markdown is read via read_attachment / inline-into-request, not a
+    // Markdown is read via explicit refs/tools, not a
     // visual contract — must not be promoted to "binding visual target".
     expect(out).not.toContain("template.md")
   })
@@ -71,26 +77,14 @@ describe("renderVisualContractPreamble", () => {
     expect(out).toContain("deadbeef0123")
   })
 
-  test("inlined mode (default): tells the LLM file parts are inlined above", () => {
-    const out = renderVisualContractPreamble([{ mime: "image/png", filename: "ui.png", size: 1, sha: "v" }], {
-      mode: "inlined",
-    })
-    expect(out).toContain("inlined above as multimodal parts")
-    // Inlined mode talks about "file part decode failure", not "missing on disk".
-    expect(out).toContain("inlined file part")
-    expect(out).not.toContain("missing on disk")
-  })
-
-  test("staged-only mode (external provider): tells the LLM to read from disk", () => {
+  test("staged-only mode tells the LLM to read from disk", () => {
     const out = renderVisualContractPreamble([{ mime: "image/png", filename: "ui.png", size: 1, sha: "v" }], {
       mode: "staged-only",
     })
     expect(out).toContain("staged on disk")
     expect(out).toContain("references/")
-    // The wording must NOT promise inlining — codex / claude-code don't
-    // get multimodal file parts, and a "look above" claim would be a lie
-    // that the model would trust.
     expect(out).not.toContain("inlined above as multimodal parts")
+    expect(out).not.toContain("inlined file part")
     // Must still demand fail-loud on missing file.
     expect(out).toContain("missing on disk")
     expect(out).toContain("report_build_result")
@@ -107,10 +101,7 @@ describe("renderVisualContractPreamble", () => {
    * SVG; the gate caught it but the goal still failed retries.
    */
   describe("inline-base64 ban (rule 6.1 first branch)", () => {
-    const fixtures = [
-      { mode: "inlined" as const, label: "inlined mode" },
-      { mode: "staged-only" as const, label: "staged-only mode" },
-    ]
+    const fixtures = [{ mode: "staged-only" as const, label: "staged-only mode" }]
     for (const { mode, label } of fixtures) {
       test(`${label}: forbids inlining staged assets as data:...;base64,... URLs`, () => {
         const out = renderVisualContractPreamble([{ mime: "image/png", filename: "hero.png", size: 1, sha: "v" }], {
@@ -135,6 +126,156 @@ describe("renderVisualContractPreamble", () => {
         expect(out).toContain('src="references/foo.png"')
       })
     }
+  })
+})
+
+describe("build evidence context packet ingestion", () => {
+  test("rejects inline data URL evidence inside the structured packet", () => {
+    expect(() =>
+      buildEvidencePackFromContextPackets([
+        {
+          id: "inline-build-evidence",
+          title: "Inline Build Evidence",
+          source: "third_party_context",
+          parts: [
+            {
+              type: "structured",
+              schema: BUILD_EVIDENCE_CONTEXT_PACKET_SCHEMA,
+              data: {
+                targetReferences: [
+                  {
+                    mime: "image/png",
+                    url: "data:image/png;base64,UE5H",
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ]),
+    ).toThrow("must not contain inline data URLs")
+  })
+
+  test("rejects unsupported nested fields inside structured build evidence", () => {
+    expect(() =>
+      buildEvidencePackFromContextPackets([
+        {
+          id: "unknown-build-evidence-file-field",
+          title: "Unknown Build Evidence File Field",
+          source: "third_party_context",
+          parts: [
+            {
+              type: "structured",
+              schema: BUILD_EVIDENCE_CONTEXT_PACKET_SCHEMA,
+              data: {
+                targetReferences: [
+                  {
+                    mime: "image/png",
+                    url: "/attachment/project/target.png",
+                    sourcePath: "src/App.tsx",
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ]),
+    ).toThrow("targetReferences[0] contains unsupported field sourcePath")
+
+    expect(() =>
+      buildEvidencePackFromContextPackets([
+        {
+          id: "unknown-build-evidence-scope-field",
+          title: "Unknown Build Evidence Scope Field",
+          source: "third_party_context",
+          parts: [
+            {
+              type: "structured",
+              schema: BUILD_EVIDENCE_CONTEXT_PACKET_SCHEMA,
+              data: {
+                targetReferences: [
+                  {
+                    mime: "image/png",
+                    url: "/attachment/project/target.png",
+                    scope: {
+                      kind: "task",
+                      taskID: "tsk_build_evidence",
+                      projectID: "proj_wrong_layer",
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ]),
+    ).toThrow("targetReferences[0].scope contains unsupported field projectID")
+  })
+
+  test("ingests structured build evidence without private packet source or media role", () => {
+    const pack = buildEvidencePackFromContextPackets([
+      {
+        id: "generic-evidence-context",
+        title: "Generic Evidence Context",
+        source: "third_party_context",
+        parts: [
+          {
+            type: "structured",
+            schema: BUILD_EVIDENCE_CONTEXT_PACKET_SCHEMA,
+            data: {
+              targetReferences: [
+                {
+                  url: "/attachment/project/target.png",
+                  mime: "image/png",
+                  filename: "target.png",
+                },
+              ],
+            },
+          },
+          {
+            type: "media_ref",
+            url: "/attachment/project/target.png",
+            mime: "image/png",
+            filename: "target.png",
+          },
+        ],
+      },
+    ])
+
+    expect(pack?.targetReferences?.[0]?.filename).toBe("target.png")
+  })
+
+  test("rejects legacy source plus media role evidence without the structured schema", () => {
+    expect(() =>
+      buildEvidencePackFromContextPackets([
+      {
+        id: "legacy-build-evidence",
+        title: "Legacy Build Evidence",
+        source: "build_evidence",
+        parts: [
+          {
+            type: "media_ref",
+            role: "target_reference",
+            mime: "image/png",
+            url: "/attachment/project/target.png",
+          },
+        ],
+      },
+      ]),
+    ).toThrow("unsupported field")
+  })
+
+  test("producer emits structured schema as the evidence authority and role-free media refs", () => {
+    const packet = buildEvidenceContextPacket({
+      targetReferences: [{ url: "/attachment/project/target.png", mime: "image/png", filename: "target.png" }],
+    })
+
+    expect(packet?.source).toBeUndefined()
+    expect(packet?.parts.some((part) => part.type === "structured" && part.schema === BUILD_EVIDENCE_CONTEXT_PACKET_SCHEMA)).toBe(
+      true,
+    )
+    const media = packet?.parts.find((part) => part.type === "media_ref")
+    expect(media && "role" in media ? media.role : undefined).toBeUndefined()
   })
 })
 

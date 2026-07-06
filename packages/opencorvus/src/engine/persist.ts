@@ -34,6 +34,7 @@ import {
 import { persistEvidence } from "@/verification/persist"
 import type { ToolFailureCause } from "@/session/tool-failure-cause"
 import type { SpecSnapshotLineage } from "@/integrity/replay-lineage"
+import { createIntegrityAttemptPayload } from "@/integrity/attempt-payload"
 import { doesGoalRunStatusImplyStarted, isLiveGoalRunStatus, isTerminalGoalRunStatus } from "./catalog"
 import { isGoalRunOrphaned } from "./orphan"
 import { findLiveBuildOwnershipByGoal } from "./tool-ownership"
@@ -71,6 +72,7 @@ import {
   type ResearchBrief,
 } from "@/research/schema"
 import { renderSpecsAsText } from "@/acceptance/types"
+import type { BuildResult } from "@/build/types"
 
 type EngineDatabaseConnection = Parameters<Parameters<typeof Database.transaction>[0]>[0]
 
@@ -147,7 +149,7 @@ function latestBuildReportForGoal(taskID: string, goalID: string): string | unde
   return lines.join("\n")
 }
 
-function retryFeedbackValueFromGoalRun(input: { taskID: string; goalID: string; priorRun: GoalRunRow }): string {
+function retryEvidenceValueFromGoalRun(input: { taskID: string; goalID: string; priorRun: GoalRunRow }): string {
   const lines: string[] = []
   if (input.priorRun.error && input.priorRun.error.trim().length > 0) {
     lines.push(
@@ -165,7 +167,7 @@ function retryFeedbackValueFromGoalRun(input: { taskID: string; goalID: string; 
   return lines.join("\n")
 }
 
-function appendRetryFeedbackOnce(input: {
+function appendRetryEvidenceOnce(input: {
   taskID: string
   goalID: string
   key: string
@@ -197,28 +199,28 @@ function retryTerminalDetail(value: string): string | undefined {
   return trimmed.match(/^Previous goal_run\s+\S+\s+terminal error \(status=[^)]+\):\s*([^\n]+)/s)?.[1]?.trim()
 }
 
-function appendBuildRetryFeedbackForPriorRun(input: {
+function appendBuildRetryEvidenceForPriorRun(input: {
   taskID: string
   goalID: string
   priorRun: GoalRunRow
   source: string
 }): boolean {
   if (!isTerminalGoalRunStatus(input.priorRun.status)) return false
-  return appendRetryFeedbackOnce({
+  return appendRetryEvidenceOnce({
     taskID: input.taskID,
     goalID: input.goalID,
     key: `build_retry_previous_${input.priorRun.id}`,
-    value: retryFeedbackValueFromGoalRun(input),
+    value: retryEvidenceValueFromGoalRun(input),
     reason:
       `${input.source}: superseding previous goal_run ${input.priorRun.id} ` +
       `status=${input.priorRun.status}${input.priorRun.error ? ` error=${input.priorRun.error.trim()}` : ""}`,
   })
 }
 
-export function ensureBuildRetryFeedbackForGoal(input: { taskID: string; goalID: string; source: string }): boolean {
+export function ensureBuildRetryEvidenceForGoal(input: { taskID: string; goalID: string; source: string }): boolean {
   const tip = findLatestTipGoalRun(input.goalID)
   if (!tip) return false
-  return appendBuildRetryFeedbackForPriorRun({
+  return appendBuildRetryEvidenceForPriorRun({
     taskID: input.taskID,
     goalID: input.goalID,
     priorRun: tip,
@@ -1441,14 +1443,14 @@ export function startNewAttempt(input: {
       resetWorkspace = true
     }
   }
-  // Retry feedback writes route through appendRetryFeedbackOnce so direct
+  // Retry evidence writes route through appendRetryEvidenceOnce so direct
   // build retries and explicit rework retries share one decision_log shape.
   // Build prompts read `phase="retry"` filtered by goalID. Previously the
   // `feedback` parameter existed on the signature but was dropped silently;
   // executors on acceptance_rework/modify_contract rework cycles ran with no
   // rejection context — i.e. blind retries.
   if (input.feedback) {
-    appendRetryFeedbackOnce({
+    appendRetryEvidenceOnce({
       taskID: goal.task_id,
       goalID: input.goalID,
       key: `retry_analysis_${input.goalID}_${supersededTipID ?? "no_terminal_tip"}`,
@@ -2246,7 +2248,7 @@ export function beginBuildAttempt(input: {
     priorTip = findLatestTipGoalRun(input.goalID)
   }
   if (priorTip) {
-    appendBuildRetryFeedbackForPriorRun({
+    appendBuildRetryEvidenceForPriorRun({
       taskID: input.taskID,
       goalID: input.goalID,
       priorRun: priorTip,
@@ -2443,6 +2445,93 @@ function writeBuildAttemptOutcome(
       time_updated: input.now,
     })
     .run()
+  return outcomeID
+}
+
+export function recordTaskLevelBuildOutcome(input: {
+  taskID: string
+  runID?: string | null
+  sessionID?: string | null
+  result: BuildResult
+  worktreeDir?: string | null
+  worktreeBranch?: string | null
+  worktreeBaseRef?: string | null
+  mergeBackStatus?: string | null
+  lastMergeBackOutcome?: string | null
+  contributionCommitRef?: string | null
+  publishedCommitRef?: string | null
+  worktreeHead?: string | null
+  diffBaseRef?: string | null
+  diffHeadRef?: string | null
+  actualChangedFiles?: Array<{
+    path: string
+    status: "added" | "modified" | "deleted"
+    additions: number
+    deletions: number
+  }>
+  now?: number
+}): string {
+  const now = input.now ?? Date.now()
+  const terminalStatus = input.result.status === "passed" ? "completed" : "failed"
+  const actualChangedFiles = input.actualChangedFiles ?? []
+  const reportedChangedFiles = input.result.files_changed.map((file) => file.path)
+  const hostCommitRef = input.contributionCommitRef ?? undefined
+  const outcomeKind = buildAttemptOutcomeKind({
+    status: terminalStatus,
+    commitRef: hostCommitRef,
+    acceptanceDiffCount: actualChangedFiles.length,
+  })
+  const noDiffReason = buildNoDiffReason({
+    status: terminalStatus,
+    commitRef: hostCommitRef,
+    rawDiffCount: actualChangedFiles.length,
+    acceptanceDiffCount: actualChangedFiles.length,
+  })
+  const outcomeID = Identifier.ascending("artifact")
+  Database.use((db) =>
+    db
+      .insert(EngineArtifactTable)
+      .values({
+        id: outcomeID,
+        task_id: input.taskID,
+        run_id: input.runID ?? null,
+        goal_run_id: null,
+        kind: "build_attempt_outcome",
+        label: outcomeKind,
+        payload: {
+          task_id: input.taskID,
+          goal_id: null,
+          goal_run_id: null,
+          run_id: input.runID ?? null,
+          session_id: input.sessionID ?? null,
+          terminal_status: terminalStatus,
+          outcome_kind: outcomeKind,
+          summary: input.result.summary.trim() || `Task-level build ${outcomeKind}.`,
+          error: input.result.status === "failed" ? input.result.error : null,
+          no_diff_reason: noDiffReason ?? null,
+          build_report: input.result,
+          host_facts: {
+            merge_back_status: input.mergeBackStatus ?? null,
+            last_merge_back_outcome: input.lastMergeBackOutcome ?? null,
+            contribution_commit_ref: input.contributionCommitRef ?? null,
+            published_commit_ref: input.publishedCommitRef ?? null,
+            worktree_head: input.worktreeHead ?? null,
+            diff_base_ref: input.diffBaseRef ?? null,
+            diff_head_ref: input.diffHeadRef ?? null,
+            actual_changed_files: actualChangedFiles,
+            reported_changed_files: reportedChangedFiles,
+          },
+          workspace: {
+            dir: input.worktreeDir ?? null,
+            branch: input.worktreeBranch ?? null,
+            base_ref: input.worktreeBaseRef ?? null,
+          },
+        },
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
+  )
   return outcomeID
 }
 
@@ -2714,24 +2803,24 @@ export function recordIntegrityAttempt(input: {
       taskID: input.taskID,
       lineage: input.lineage,
     }).length + 1
-  const payload = {
-    spec_snapshot_id: input.lineage.activeSpecSnapshotID,
-    session_id: input.sessionID,
+  const payload = createIntegrityAttemptPayload({
+    specSnapshotID: input.lineage.activeSpecSnapshotID,
+    sessionID: input.sessionID,
     verdict: input.verdict,
     phase: input.phase,
     attempts,
-    reviewers: input.reviewers ?? [],
-    findings_count: input.findingsCount ?? input.issuesCount ?? 0,
-    required_repairs_count: input.requiredRepairsCount ?? input.correctionsCount ?? 0,
-    unresolved_disagreements_count: input.unresolvedDisagreementsCount ?? 0,
-    reason: input.reason ?? null,
-    team_report_markdown: input.teamReportMarkdown ?? input.reviewMarkdown ?? null,
+    reviewers: input.reviewers,
+    findingsCount: input.findingsCount ?? input.issuesCount,
+    requiredRepairsCount: input.requiredRepairsCount ?? input.correctionsCount,
+    unresolvedDisagreementsCount: input.unresolvedDisagreementsCount,
+    reason: input.reason,
+    teamReportMarkdown: input.teamReportMarkdown ?? input.reviewMarkdown,
     findings: input.findings ?? [],
     rounds: input.rounds ?? [],
-    required_repairs: input.requiredRepairs ?? [],
-    unresolved_disagreements: input.unresolvedDisagreements ?? [],
-    time_completed: now,
-  }
+    requiredRepairs: input.requiredRepairs ?? [],
+    unresolvedDisagreements: input.unresolvedDisagreements ?? [],
+    timeCompleted: now,
+  })
   Database.use((db) =>
     db
       .insert(EngineArtifactTable)

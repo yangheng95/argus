@@ -56,6 +56,7 @@ import {
   workerBuiltInToolIDsFromProjection,
 } from "./catalog-profile"
 import { ExpertSquadRegistry } from "./registry"
+import { ExpertSquadPackageManager } from "./manager"
 
 type ConfigLike = {
   prompt_profile?: PromptProfileConfig
@@ -235,6 +236,7 @@ export namespace PromptProfileResolver {
   }
 
   async function discoverProjectPackages(projectDirectory: string): Promise<ExpertSquadRegistry.PackageCatalogEntry[]> {
+    await ExpertSquadPackageManager.releasePayloadPackages({ projectDirectory })
     const entries = await ExpertSquadRegistry.discover(projectDirectory)
     for (const entry of entries) assertNoBuiltInCollision(entry.id)
     return entries
@@ -259,10 +261,17 @@ export namespace PromptProfileResolver {
   ): Promise<ExpertSquadRegistry.LoadedPackage | undefined> {
     ExpertSquadRegistry.parseID(profileID)
     const packageRoot = path.join(canonicalBase(projectDirectory), profileID)
-    const info = await lstat(packageRoot).catch((error: NodeJS.ErrnoException) => {
+    let info = await lstat(packageRoot).catch((error: NodeJS.ErrnoException) => {
       if (error.code === "ENOENT") return undefined
       throw error
     })
+    if (!info) {
+      await ExpertSquadPackageManager.releasePayloadPackages({ projectDirectory })
+      info = await lstat(packageRoot).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") return undefined
+        throw error
+      })
+    }
     if (!info) return undefined
     const loaded = await ExpertSquadRegistry.loadPackage(packageRoot, options)
     assertNoBuiltInCollision(loaded.id)
@@ -2164,17 +2173,26 @@ export namespace PromptProfileResolver {
     return ref.slice(prefix.length)
   }
 
-  function packageSkillPath(pkg: ExpertSquadRegistry.LoadedPackage, ref: string): string {
+  function packageSkillRefParts(pkg: ExpertSquadRegistry.LoadedPackage, ref: string): { owner: string; parts: string[] } {
     const prefix = `${pkg.id}/`
     if (!ref.startsWith(prefix)) throw new Error(`Package skill ref ${JSON.stringify(ref)} is not namespaced by ${pkg.id}`)
     const parts = ref.slice(prefix.length).split("/")
     const owner = parts.shift()
     if (!owner || parts.length === 0) throw new Error(`Invalid package skill ref ${JSON.stringify(ref)}`)
+    return { owner, parts }
+  }
+
+  function packageSkillPath(pkg: ExpertSquadRegistry.LoadedPackage, ref: string): string {
+    const { owner, parts } = packageSkillRefParts(pkg, ref)
     const base = owner === "shared" ? path.join(pkg.root, "skills") : path.join(pkg.root, "agents", owner, "skills")
     return path.join(base, ...parts, "SKILL.md")
   }
 
-  async function packageSkillFromRef(pkg: ExpertSquadRegistry.LoadedPackage, ref: string, role: string): Promise<Skill.Info> {
+  async function packageSkillFromRef(
+    pkg: ExpertSquadRegistry.LoadedPackage,
+    ref: string,
+    mountedAgents: string[],
+  ): Promise<Skill.Info> {
     const location = packageSkillPath(pkg, ref)
     const parsed = matter(await Filesystem.readText(location))
     if (Object.hasOwn(parsed.data, "mounted_agents") || Object.hasOwn(parsed.data, "agents")) {
@@ -2202,7 +2220,7 @@ export namespace PromptProfileResolver {
       priority: info.priority,
       required_tools: info.required_tools,
       agents: [],
-      mounted_agents: [role],
+      mounted_agents: unique(mountedAgents),
       expires_at: info.expires_at,
       duplicate_locations: [],
     }
@@ -2233,11 +2251,24 @@ export namespace PromptProfileResolver {
     )
   }
 
+  function projectedAgentIDsFromSkills(skills: readonly Skill.Info[]): string[] {
+    return unique(skills.flatMap((skill) => skill.mounted_agents))
+  }
+
+  function skillProjectionAgentIDs(
+    activeProfileID: string,
+    capabilityAgentIDs: readonly string[],
+    skills: readonly Skill.Info[],
+  ): string[] {
+    if (activeProfileID === DEFAULT_PROMPT_PROFILE_ID) return unique(capabilityAgentIDs)
+    return unique([...capabilityAgentIDs, ...projectedAgentIDsFromSkills(skills)])
+  }
+
   async function selectorCatalog(projectDirectory: string | undefined): Promise<ProjectSelectorPackage[]> {
     if (!projectDirectory) return []
     const base = canonicalBase(projectDirectory)
     const selectors: ProjectSelectorPackage[] = []
-    for (const entry of await ExpertSquadRegistry.discover(projectDirectory)) {
+    for (const entry of await discoverProjectPackages(projectDirectory)) {
       assertNoBuiltInCollision(entry.id)
       if (!entry.selector) continue
       const packageRoot = path.join(base, entry.id)
@@ -2288,6 +2319,18 @@ export namespace PromptProfileResolver {
       selectorPackages.filter((entry) => entry.builtin).map((entry) => selectorSkillName(entry.pkg.id)),
     )
     assertNoSelectorCollision(defaultSkills, projectedSelectorNames, builtInSelectorNames)
+
+    for (const skill of defaultSkills) {
+      addProjectedSkill(
+        projected,
+        {
+          ...skill,
+          mounted_agents: unique(skill.mounted_agents),
+        },
+        "default",
+      )
+    }
+
     const selectorSkills = selectorPackages
       .map((entry) =>
         selectorSkillFromPackage({
@@ -2304,13 +2347,21 @@ export namespace PromptProfileResolver {
       ["orchestrator", active.pkg.manifest.capability_projection.scheduler],
       ...Object.entries(active.pkg.manifest.capability_projection.agents),
     ])
-    const productionSkillNames: string[] = []
+    const packageSkillMounts = new Map<string, Set<string>>()
+    if (!active.builtIn) {
+      for (const ref of active.pkg.packageSkillRefs) {
+        const { owner } = packageSkillRefParts(active.pkg, ref)
+        if (owner === "shared") continue
+        const mounts = packageSkillMounts.get(ref) ?? new Set<string>()
+        mounts.add(owner)
+        packageSkillMounts.set(ref, mounts)
+      }
+    }
     for (const [role, projection] of roleProjections) {
       for (const ref of projection.default_skill_refs) {
         const name = defaultSkillNameFromRef(ref)
         const skill = defaultSkillsByName.get(name)
         if (!skill) throw new Error(`Active expert squad ${active.profileID} projects missing default skill ${ref}.`)
-        productionSkillNames.push(name)
         addProjectedSkill(
           projected,
           {
@@ -2322,15 +2373,25 @@ export namespace PromptProfileResolver {
       }
       if (!active.builtIn) {
         for (const ref of projection.package_skill_refs) {
-          const skill = await packageSkillFromRef(active.pkg, ref, role)
-          productionSkillNames.push(skill.name)
-          addProjectedSkill(projected, skill, "package")
+          const mounts = packageSkillMounts.get(ref) ?? new Set<string>()
+          mounts.add(role)
+          packageSkillMounts.set(ref, mounts)
         }
+      }
+    }
+    if (!active.builtIn) {
+      for (const [ref, mounts] of [...packageSkillMounts.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+        const skill = await packageSkillFromRef(active.pkg, ref, [...mounts])
+        addProjectedSkill(projected, skill, "package")
       }
     }
 
     const selectorSkillNames = selectorSkills.map((skill) => skill.name)
-    const uniqueProductionSkillNames = unique(productionSkillNames)
+    const projectedSkills = [...projected.values()].map((entry) => entry.skill)
+    const skillSurfaceAgentIDs = skillProjectionAgentIDs(active.profileID, projectedAgentIDs, projectedSkills)
+    const uniqueProductionSkillNames = [...projected.entries()]
+      .filter(([, entry]) => entry.source !== "selector")
+      .map(([name]) => name)
     const projectedSkillNames = [...projected.keys()]
     const projectedToolIDs = activeProjectedSchedulerToolIDs(capability, input.workflow)
     const projectedSkillMounts = Object.fromEntries(
@@ -2353,7 +2414,7 @@ export namespace PromptProfileResolver {
             schedulerProjectionHash: capability.projectionHash,
             projectedToolIDs,
             workflowID: input.workflow?.id,
-            projectedAgentIDs,
+            projectedAgentIDs: skillSurfaceAgentIDs,
             selectorSkillNames,
             productionSkillNames: uniqueProductionSkillNames,
             projectedSkillNames,
@@ -2362,11 +2423,11 @@ export namespace PromptProfileResolver {
         )
         .digest("hex"),
       projectedToolIDs,
-      projectedAgentIDs,
+      projectedAgentIDs: skillSurfaceAgentIDs,
       selectorSkillNames,
       productionSkillNames: uniqueProductionSkillNames,
       projectedSkillNames,
-      skills: [...projected.values()].map((entry) => entry.skill),
+      skills: projectedSkills,
     }
   }
 

@@ -166,6 +166,21 @@ describe("orchestrator no-decision stop classifier", () => {
     expect(reason).toContain("produced no task decision effect")
   })
 
+  test("rejects same-profile expert-squad reselection that produced no decision effect", () => {
+    const reason = classifyOrchestratorDecisionStop({
+      taskTerminal: false,
+      finish: "stop",
+      finalText: "The requested expert squad was already active.",
+      providerVisiblePartCount: 1,
+      wakeTools: [
+        { name: "skill" },
+        { name: "select_expert_squad", decisionEffect: "none" },
+      ],
+    })
+
+    expect(reason).toContain("produced no task decision effect")
+  })
+
   test("allows stops after real decision tools", () => {
     expect(
       classifyOrchestratorDecisionStop({
@@ -183,6 +198,18 @@ describe("orchestrator no-decision stop classifier", () => {
         finalText: "Scheduled a wait for the external event.",
         providerVisiblePartCount: 1,
         wakeTools: [{ name: "wait", decisionEffect: "decision" }],
+      }),
+    ).toBeUndefined()
+    expect(
+      classifyOrchestratorDecisionStop({
+        taskTerminal: false,
+        finish: "stop",
+        finalText: "Frontend replica expert squad selected; continuation wake scheduled.",
+        providerVisiblePartCount: 1,
+        wakeTools: [
+          { name: "skill" },
+          { name: "select_expert_squad", decisionEffect: "decision" },
+        ],
       }),
     ).toBeUndefined()
   })

@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test"
 import { buildIntegrityEvidencePrompt, type ReviewPromptInput } from "../../src/integrity/team-agent"
+import { integrityReplayContextPacket } from "../../src/integrity/replay-context"
 
 function baseInput(overrides: Partial<ReviewPromptInput> = {}): ReviewPromptInput {
   return {
@@ -19,33 +20,36 @@ function baseInput(overrides: Partial<ReviewPromptInput> = {}): ReviewPromptInpu
       },
     ],
     requirements: [],
-    replayContext: {
-      attemptNumber: 1,
-      lineage: {
-        taskID: "tsk_scope_maturity",
-        activeSpecSnapshotID: "spec_scope_maturity",
-        inheritedSpecSnapshotIDs: [],
-        reason: "active_only",
-      },
-      priorFactCheckAttempts: [],
-      priorAttempts: [],
-      buildEvidenceSinceLastReview: {
-        changedFiles: [],
-        diffs: [],
-        buildSummaries: [],
-        goalRuns: [],
-      },
-      scaleSignals: {
-        goals: 1,
-        requirements: 0,
-        acceptanceSpecs: 0,
-        changedFilesTotal: 0,
-        changedFilesSinceLastReview: 0,
-        priorAttempts: 0,
-        priorBlockingFindings: 0,
-        phase: "post_build",
-      },
-    },
+    contextPackets: [
+      integrityReplayContextPacket({
+        attemptNumber: 1,
+        lineage: {
+          taskID: "tsk_scope_maturity",
+          activeSpecSnapshotID: "spec_scope_maturity",
+          inheritedSpecSnapshotIDs: [],
+          reason: "active_only",
+        },
+        priorFactCheckAttempts: [],
+        priorAttempts: [],
+        implementationEvidenceSinceLastReview: {
+          changedFiles: [],
+          diffs: [],
+          implementationSummaries: [],
+          goalRuns: [],
+          taskAgentOutcomes: [],
+        },
+        scaleSignals: {
+          goals: 1,
+          requirements: 0,
+          acceptanceSpecs: 0,
+          changedFilesTotal: 0,
+          changedFilesSinceLastReview: 0,
+          priorAttempts: 0,
+          priorBlockingFindings: 0,
+          phase: "post_build",
+        },
+      }),
+    ],
     ...overrides,
   }
 }

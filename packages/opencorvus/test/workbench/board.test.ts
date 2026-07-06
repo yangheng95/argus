@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from "bun:test"
 import { boardTag, currentGoalRunFromRows, compileBoard } from "../../src/workbench/board"
 import { compileBrief } from "../../src/workbench/brief"
+import { taskStatusDetailFromBoard } from "../../src/status/task-status-snapshot"
 import { latestDeliveredGoalRunFromRows } from "../../src/engine/store"
 import { Database } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
@@ -16,10 +17,29 @@ import { Session } from "../../src/session"
 import { taskToolSessionMetadata } from "../../src/tool/task"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
+import { WorkflowRegistry, workflowSelectionSnapshot, type MiniWorkflow } from "../../src/engine/workflow"
 
 afterEach(async () => {
   await resetDatabase()
 })
+
+async function emitWorkflowSelected(
+  taskID: string,
+  workflow: MiniWorkflow,
+  source = "test.board-workflow-selection",
+) {
+  await EngineProtocol.emit(
+    Event.WorkflowSelected,
+    {
+      taskID,
+      workflowID: workflow.id,
+      workflowName: workflow.name,
+      workflow: workflowSelectionSnapshot(workflow),
+      summary: `Workflow "${workflow.name}" selected`,
+    },
+    { source },
+  )
+}
 
 test("currentGoalRunFromRows selects the supersede-chain tip", () => {
   const rows = [
@@ -245,6 +265,16 @@ test("compileBoard keeps build input evidence behind the contract artifact", asy
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
+      await EngineProtocol.emit(
+        Event.WorkflowStepUpdated,
+        {
+          taskID,
+          stepID: "build",
+          status: "failed",
+          summary: 'Step "Build" failed',
+        },
+        { source: "test.board-task-agent-outcome" },
+      )
       const board = compileBoard({ taskID }) as any
       const contract = board.artifacts.find((item: any) => item.kind === "build_session_contract")
       expect(contract?.payload).toEqual({
@@ -463,6 +493,7 @@ test("compileBoard does not materialize build phases for sessionless manual comp
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
+      await emitWorkflowSelected(taskID, WorkflowRegistry.resolveSync("pipeline")!, "test.board-sessionless-selection")
       const board = compileBoard({ taskID }) as any
       const goalWorkflow = board.goalWorkflows?.[0]
       const buildStep = goalWorkflow?.steps?.find((step: any) => step.stepID === "build")
@@ -560,11 +591,18 @@ test("board snapshot tag and task-scope status include workflow step protocol ev
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
+      const pipeline = WorkflowRegistry.resolveSync("pipeline")!
       const before = compileBoard({ taskID })
       const beforeTag = boardTag({ taskID })
       expect(before.lastSequence).toBe(0)
       expect(before.snapshotVersion).toBe(beforeTag)
-      expect(before.workflow?.steps.find((step) => step.id === "architect")?.status).toBe("pending")
+      expect(before.workflow).toBeUndefined()
+
+      await emitWorkflowSelected(taskID, pipeline, "test.board-selection")
+      const selected = compileBoard({ taskID })
+      expect(selected.lastSequence).toBe(1)
+      expect(selected.snapshotVersion).not.toBe(before.snapshotVersion)
+      expect(selected.workflow?.steps.find((step) => step.id === "architect")?.status).toBe("pending")
 
       await EngineProtocol.emit(
         Event.WorkflowStepUpdated,
@@ -579,9 +617,9 @@ test("board snapshot tag and task-scope status include workflow step protocol ev
 
       const after = compileBoard({ taskID })
       const afterTag = boardTag({ taskID })
-      expect(after.lastSequence).toBe(1)
+      expect(after.lastSequence).toBe(2)
       expect(after.snapshotVersion).toBe(afterTag)
-      expect(after.snapshotVersion).not.toBe(before.snapshotVersion)
+      expect(after.snapshotVersion).not.toBe(selected.snapshotVersion)
       expect(after.workflow?.steps.find((step) => step.id === "architect")?.status).toBe("running")
     },
   })
@@ -622,9 +660,11 @@ test("board snapshot tag ignores stream noise while lastSequence stays current",
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
+      const pipeline = WorkflowRegistry.resolveSync("pipeline")!
       const before = compileBoard({ taskID })
       const beforeTag = boardTag({ taskID })
       expect(before.lastSequence).toBe(0)
+      expect(before.workflow).toBeUndefined()
 
       Database.use((db) => {
         for (const [index, type] of ["test.session-status-noise", "review.stream.chunk"].entries()) {
@@ -655,6 +695,12 @@ test("board snapshot tag ignores stream noise while lastSequence stays current",
       expect(afterNoise.snapshotVersion).toBe(before.snapshotVersion)
       expect(afterNoise.lastSequence).toBe(2)
 
+      await emitWorkflowSelected(taskID, pipeline, "test.board-visible-selection")
+      const afterSelection = compileBoard({ taskID })
+      expect(afterSelection.lastSequence).toBe(3)
+      expect(afterSelection.snapshotVersion).not.toBe(before.snapshotVersion)
+      expect(afterSelection.workflow?.id).toBe("pipeline")
+
       await EngineProtocol.emit(
         Event.WorkflowStepUpdated,
         {
@@ -667,9 +713,119 @@ test("board snapshot tag ignores stream noise while lastSequence stays current",
       )
 
       const afterVisible = compileBoard({ taskID })
-      expect(afterVisible.lastSequence).toBe(3)
-      expect(afterVisible.snapshotVersion).not.toBe(before.snapshotVersion)
+      expect(afterVisible.lastSequence).toBe(4)
+      expect(afterVisible.snapshotVersion).not.toBe(afterSelection.snapshotVersion)
       expect(afterVisible.workflow?.steps.find((step) => step.id === "architect")?.status).toBe("running")
+    },
+  })
+})
+
+test("compileBoard uses scheduler workflow selection events", async () => {
+  await resetDatabase()
+  await using tmp = await tmpdir()
+  const now = Date.now()
+  const projectID = `project_board_workflow_selection_${now}`
+  const taskID = `tsk_board_workflow_selection_${now.toString(16)}`
+
+  Database.use((db) => {
+    db.insert(ProjectTable)
+      .values({
+        id: projectID,
+        worktree: tmp.path,
+        name: "Board workflow selection",
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    db.insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "Board workflow selection",
+        request: "Use scheduler workflow declaration",
+        kind: "workflow",
+        priority: "normal",
+        time_created: now,
+        time_updated: now,
+      } as any)
+      .run()
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      expect(compileBoard({ taskID }).workflow).toBeUndefined()
+      const direct = WorkflowRegistry.resolveSync("direct")!
+      await emitWorkflowSelected(taskID, direct)
+      const board = compileBoard({ taskID })
+      expect(board.workflow?.id).toBe("direct")
+      expect(board.workflow?.steps.map((step) => step.id)).toEqual(["analyze_intent", "build"])
+    },
+  })
+})
+
+test("compileBoard projects custom scheduler workflow snapshots without registry fallback", async () => {
+  await resetDatabase()
+  await using tmp = await tmpdir()
+  const now = Date.now()
+  const projectID = `project_board_custom_workflow_${now}`
+  const taskID = `tsk_board_custom_workflow_${now.toString(16)}`
+  const customWorkflow: MiniWorkflow = {
+    id: "custom-single-build",
+    name: "Custom Single Build",
+    description: "Test-defined workflow snapshot carried by scheduler evidence",
+    steps: [
+      {
+        id: "custom_build",
+        tool: "build",
+        agentRole: "build",
+        label: "Custom Build",
+        hint: "Run the build worker through the selected custom workflow.",
+        scope: "task",
+        skippable: false,
+        after: [],
+        outcomeCapability: "implementation",
+      },
+    ],
+    goalLoopStepIDs: [],
+  }
+
+  Database.use((db) => {
+    db.insert(ProjectTable)
+      .values({
+        id: projectID,
+        worktree: tmp.path,
+        name: "Board custom workflow selection",
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    db.insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "Board custom workflow selection",
+        request: "Use scheduler workflow snapshot",
+        kind: "workflow",
+        priority: "normal",
+        time_created: now,
+        time_updated: now,
+      } as any)
+      .run()
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await emitWorkflowSelected(taskID, customWorkflow, "test.board-custom-workflow-selection")
+      const board = compileBoard({ taskID })
+      expect(board.workflow?.id).toBe("custom-single-build")
+      expect(board.workflow?.steps.map((step) => step.id)).toEqual(["custom_build"])
+      expect(board.workflow?.steps[0]?.tool).toBe("build")
     },
   })
 })
@@ -811,6 +967,7 @@ test("cancelled terminal task does not project partially completed goal workflow
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
+      await emitWorkflowSelected(taskID, WorkflowRegistry.resolveSync("pipeline")!, "test.board-cancelled-selection")
       const board = compileBoard({ taskID }) as any
       const buildStep = board.workflow.steps.find((step: any) => step.id === "build")
       expect(board.task.status).toBe("cancelled")
@@ -896,6 +1053,7 @@ test("shutdown-interrupted task is not presented as acceptance failure", async (
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
+      await emitWorkflowSelected(taskID, WorkflowRegistry.resolveSync("pipeline")!, "test.board-interrupted-selection")
       const board = compileBoard({ taskID }) as any
       const buildStep = board.workflow.steps.find((step: any) => step.id === "build")
       expect(board.task.status).toBe("failed")
@@ -1060,6 +1218,7 @@ test("compileBoard projects contribution and published commit refs separately", 
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
+      await emitWorkflowSelected(taskID, WorkflowRegistry.resolveSync("pipeline")!, "test.board-commit-refs-selection")
       const board = compileBoard({ taskID }) as any
       const payloads = board.goalWorkflows?.[0]?.steps?.map((step: any) => step.payload).filter(Boolean) ?? []
       const payload = payloads.find((item: any) => item.changedFileDiffs?.length)
@@ -1190,6 +1349,7 @@ test("compileBoard projects terminal build outcome when goal has no acceptance",
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
+      await emitWorkflowSelected(taskID, WorkflowRegistry.resolveSync("pipeline")!, "test.board-build-outcome-selection")
       const board = compileBoard({ taskID }) as any
       const payloads = board.goalWorkflows?.[0]?.steps?.map((step: any) => step.payload).filter(Boolean) ?? []
       const payload = payloads.find((item: any) => item.buildOutcome)
@@ -1214,6 +1374,130 @@ test("compileBoard projects terminal build outcome when goal has no acceptance",
       expect(payload?.attemptChangedFiles).toEqual(["src/components/VisualParity.tsx"])
       expect(payload?.attemptCommitRef).toBe("attemptabc")
       expect(payload?.attemptPublishedCommitRef).toBeUndefined()
+    },
+  })
+})
+
+test("compileBoard projects task-level direct build outcomes outside goal workflows", async () => {
+  await resetDatabase()
+  await using tmp = await tmpdir()
+  const now = Date.now()
+  const stamp = now.toString(16)
+  const projectID = `project_board_task_build_outcome_${stamp}`
+  const taskID = `tsk_board_task_build_outcome_${stamp}`
+  const runID = `run_board_task_build_outcome_${stamp}`
+  const outcomeID = `artifact_board_task_build_outcome_${stamp}`
+
+  Database.use((db) => {
+    db.insert(ProjectTable)
+      .values({
+        id: projectID,
+        worktree: tmp.path,
+        name: "Board task-level build outcome projection",
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    db.insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "Task-level Build outcome projection",
+        request: "show direct build facts",
+        kind: "build",
+        priority: "normal",
+        time_created: now - 10_000,
+        time_updated: now,
+        time_started: now - 10_000,
+      } as any)
+      .run()
+    db.insert(EngineArtifactTable)
+      .values({
+        id: outcomeID,
+        task_id: taskID,
+        run_id: runID,
+        goal_run_id: null,
+        kind: "build_attempt_outcome",
+        label: "delivered",
+        payload: {
+          task_id: taskID,
+          goal_id: null,
+          goal_run_id: null,
+          run_id: runID,
+          session_id: "ses_board_task_build_outcome",
+          terminal_status: "failed",
+          outcome_kind: "failed",
+          summary: "Task-level direct build edited the route but failed verification.",
+          error: "synthetic direct build verification failure",
+          no_diff_reason: null,
+          build_report: {
+            status: "failed",
+            summary: "Task-level direct build edited the route but failed verification.",
+            error: "synthetic direct build verification failure",
+            files_changed: [
+              {
+                path: "src/routes/world-economy.tsx",
+                summary: "Added locale route entry.",
+                reason: "Integrity reported missing route.",
+              },
+            ],
+            tests: [{ name: "npm run build", passed: true, detail: "passed" }],
+            fact_check_items: [],
+          },
+          host_facts: {
+            contribution_commit_ref: "44489b5",
+            published_commit_ref: "44489b5",
+            diff_base_ref: "8055535",
+            diff_head_ref: "44489b5",
+            actual_changed_files: [
+              { path: "src/routes/world-economy.tsx", status: "modified", additions: 8, deletions: 1 },
+            ],
+          },
+          workspace: {
+            dir: tmp.path,
+            branch: "main",
+            base_ref: null,
+          },
+        },
+        time_created: now,
+        time_updated: now,
+      } as any)
+      .run()
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const board = compileBoard({ taskID }) as any
+      expect(() => TaskBoard.parse(board)).not.toThrow()
+      expect(board.workflow.id).toBe("direct")
+      expect(board.workflow.steps.find((step: any) => step.id === "build")?.status).toBe("failed")
+      expect(board.goalWorkflows ?? []).toHaveLength(0)
+      expect(board.taskAgentOutcomes).toEqual([
+        expect.objectContaining({
+          id: outcomeID,
+          provider: "build",
+          artifactKind: "build_attempt_outcome",
+          scope: "task",
+          capabilities: ["implementation"],
+          runID,
+          sessionID: "ses_board_task_build_outcome",
+          status: "failed",
+          result: "failed",
+          summary: "Task-level direct build edited the route but failed verification.",
+          error: "synthetic direct build verification failure",
+          time: {
+            created: now,
+            updated: now,
+          },
+        }),
+      ])
+      const status = taskStatusDetailFromBoard(board)
+      expect(status.status).toBe("failed")
+      expect(status.taskAgentOutcomes).toHaveLength(1)
+      expect(status.taskAgentOutcomes[0]?.id).toBe(outcomeID)
     },
   })
 })

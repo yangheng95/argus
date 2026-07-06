@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
+import fs from "node:fs/promises"
+import path from "node:path"
+import { buildEvidencePackFromContextPackets } from "../../src/build/evidence-pack"
 import { Database, eq } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
+import { AttachmentStore } from "../../src/storage/attachment-store"
 import {
   EngineArtifactTable,
   EngineGoalTable,
@@ -160,7 +164,7 @@ describe("orchestrator build goal references", () => {
     })
   }, 30_000)
 
-  test("passes primary-runtime frontend-design paths to goal build context", async () => {
+  test("passes goal-scoped frontend-design context without full-page reference path", async () => {
     await using tmp = await tmpdir({ git: true })
     const now = Date.now()
     const ids = seedWorkflowTaskWithGoals({
@@ -185,7 +189,19 @@ describe("orchestrator build goal references", () => {
         decisionLog.append({
           phase: "frontend_design",
           key: "frontend_project",
-          value: "status: created\nrole: source_baseline_input\nproject_root: frontend-design-skeleton",
+          value: JSON.stringify(
+            {
+              status: "created",
+              role: "source_baseline_input",
+              project_root: "frontend-design-skeleton",
+              source_package: "web-clone-source",
+              entrypoints: ["frontend-design-skeleton/index.html"],
+              generation_tool: "source-skeleton",
+              notes: [],
+            },
+            null,
+            2,
+          ),
           reason: "goal build context path regression",
         })
         decisionLog.append({
@@ -206,7 +222,7 @@ describe("orchestrator build goal references", () => {
           return {
             result: {
               status: "passed",
-              summary: "Observed goal build context.",
+              summary: "Observed goal-scoped build context.",
               files_changed: [],
               tests: [],
               commit_ref: "abc1234",
@@ -228,7 +244,7 @@ describe("orchestrator build goal references", () => {
           {
             goalID: ids.goalIDs[0]!,
             request: "Implement the frontend-design surface.",
-            reason: "Regression coverage for primary-runtime build context paths.",
+            reason: "Regression coverage for goal-scoped frontend-design build context.",
           },
           buildToolOptions("goal_context_paths"),
         )
@@ -236,13 +252,464 @@ describe("orchestrator build goal references", () => {
         expectGoalBuildStarted(result)
         await waitForGoalStatus(ids.goalIDs[0]!, "passed")
         const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, ids.taskID)
+        const frontendDesignPacketText = (observedContext?.contextPackets ?? [])
+          .flatMap((packet) => packet.parts ?? [])
+          .filter((part) => part?.type === "text")
+          .map((part) => part.text)
+          .join("\n")
         expect(observedContext?.projectDir).toBe(tmp.path)
-        expect(observedContext?.frontendDesign).toContain(paths.templateAbsolute)
-        expect(observedContext?.frontendDesign).toContain(paths.manifestAbsolute)
-        expect(observedContext?.frontendDesign).toContain("web-clone-source/reference.png")
-        expect(observedContext?.frontendDesign).not.toContain(
+        expect(frontendDesignPacketText).toContain(paths.templateAbsolute)
+        expect(frontendDesignPacketText).toContain(
+          "Goal-scoped Build visual targets come only from Architect reference_coverage crop rows",
+        )
+        expect(frontendDesignPacketText).not.toContain(paths.manifestAbsolute)
+        expect(frontendDesignPacketText).not.toContain("web-clone-source/reference.png")
+        expect(frontendDesignPacketText).not.toContain(
           `Materialized frontend_design public report (read this): ${paths.templateRelative}`,
         )
+      },
+    })
+  }, 30_000)
+
+  test("injects Architect-bound reference crop as goal-scoped Build target evidence", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const now = Date.now()
+    const ids = seedWorkflowTaskWithGoals({
+      directory: tmp.path,
+      now,
+      goalCount: 1,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "goal crop evidence root" })
+        attachTaskSession(ids.taskID, parent.id)
+        bindTaskToCurrentProject(ids.taskID)
+
+        const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, ids.taskID)
+        const cropRelative = path
+          .join(
+            paths.relativeDir,
+            "visual-region-bindings",
+            "page",
+            "01-hero__src1200x3000__x0-y0-w1200-h640.png",
+          )
+          .replaceAll("\\", "/")
+        const cropAbsolute = path.join(tmp.path, cropRelative)
+        await fs.mkdir(path.dirname(cropAbsolute), { recursive: true })
+        await fs.writeFile(cropAbsolute, minimalPngBytes())
+        const taskAttachment = await AttachmentStore.write(
+          Instance.project.id,
+          Buffer.from(minimalPngBytes()),
+          "image/png",
+          "full-page-reference.png",
+        )
+
+        Database.use((db) =>
+          db
+            .update(EngineTaskTable)
+            .set({
+              attachments: [{ ...taskAttachment, intent: "visual_reference", source: "task-attachment" }],
+              metadata: {
+                architect_fidelity: {
+                  sourceCoverage: [],
+                  referenceCoverage: [
+                    {
+                      id: "ref-hero",
+                      surface: "hero",
+                      goal_ids: [ids.goalIDs[0]!],
+                      visual_spec_ids: ["vis-hero"],
+                      reference_regions: [
+                        {
+                          reference_region_key: "hero@desktop",
+                          source_reference_artifact: cropRelative,
+                          binding_manifest_artifact: "docs/visual-region-binding.json",
+                          source_bbox: { x: 0, y: 0, width: 1200, height: 640 },
+                          crop_intent: "full-region",
+                        },
+                      ],
+                      expectation: "Hero goal must restore this crop.",
+                    },
+                  ],
+                  assemblyOwners: [],
+                },
+              },
+            } as any)
+            .where(eq(EngineTaskTable.id, ids.taskID))
+            .run(),
+        )
+
+        let observedContext: any
+        buildAgentRunImpl = async (input: any) => {
+          observedContext = input.context
+          await input.onSessionCreated?.("ses_goal_crop_build", {
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          })
+          return {
+            result: {
+              status: "passed",
+              summary: "Observed goal crop evidence.",
+              files_changed: [],
+              tests: [],
+              commit_ref: "crop1234",
+            },
+            sessionID: "ses_goal_crop_build",
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID: ids.taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.build.execute(
+          {
+            goalID: ids.goalIDs[0]!,
+            request: "Implement the crop-bound hero goal.",
+            reason: "Regression coverage for goal-bound reference crop evidence.",
+          },
+          buildToolOptions("goal_crop_evidence"),
+        )
+
+        expectGoalBuildStarted(result)
+        await waitForGoalStatus(ids.goalIDs[0]!, "passed")
+        const pack = buildEvidencePackFromContextPackets(observedContext?.contextPackets)
+        expect(pack?.targetReferences).toHaveLength(1)
+        expect(pack?.targetReferences?.[0]).toMatchObject({
+          intent: "visual_reference",
+          source: "frontend_design_visual_region_binding",
+          label: "ref-hero:hero@desktop",
+          filename: "01-hero__src1200x3000__x0-y0-w1200-h640.png",
+          scope: { kind: "goal", taskID: ids.taskID, goalID: ids.goalIDs[0]! },
+        })
+        expect(JSON.stringify(pack?.targetReferences)).not.toContain("full-page-reference.png")
+      },
+    })
+  }, 30_000)
+
+  test("preserves distinct goal reference region keys even when crop bytes match", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const now = Date.now()
+    const ids = seedWorkflowTaskWithGoals({
+      directory: tmp.path,
+      now,
+      goalCount: 1,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "goal duplicate crop bytes root" })
+        attachTaskSession(ids.taskID, parent.id)
+        bindTaskToCurrentProject(ids.taskID)
+
+        const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, ids.taskID)
+        const cropRelatives = [
+          path
+            .join(
+              paths.relativeDir,
+              "visual-region-bindings",
+              "page",
+              "01-card-a__src1200x3000__x0-y700-w400-h260.png",
+            )
+            .replaceAll("\\", "/"),
+          path
+            .join(
+              paths.relativeDir,
+              "visual-region-bindings",
+              "page",
+              "02-card-b__src1200x3000__x420-y700-w400-h260.png",
+            )
+            .replaceAll("\\", "/"),
+        ]
+        for (const cropRelative of cropRelatives) {
+          const cropAbsolute = path.join(tmp.path, cropRelative)
+          await fs.mkdir(path.dirname(cropAbsolute), { recursive: true })
+          await fs.writeFile(cropAbsolute, minimalPngBytes())
+        }
+
+        Database.use((db) =>
+          db
+            .update(EngineTaskTable)
+            .set({
+              metadata: {
+                architect_fidelity: {
+                  sourceCoverage: [],
+                  referenceCoverage: [
+                    {
+                      id: "ref-cards",
+                      surface: "cards",
+                      goal_ids: [ids.goalIDs[0]!],
+                      visual_spec_ids: ["vis-cards"],
+                      reference_regions: [
+                        {
+                          reference_region_key: "card-a@desktop",
+                          source_reference_artifact: cropRelatives[0],
+                          source_bbox: { x: 0, y: 700, width: 400, height: 260 },
+                          crop_intent: "full-region",
+                        },
+                        {
+                          reference_region_key: "card-b@desktop",
+                          source_reference_artifact: cropRelatives[1],
+                          source_bbox: { x: 420, y: 700, width: 400, height: 260 },
+                          crop_intent: "full-region",
+                        },
+                      ],
+                      expectation: "Both card crops are distinct semantic targets for this goal.",
+                    },
+                  ],
+                  assemblyOwners: [],
+                },
+              },
+            } as any)
+            .where(eq(EngineTaskTable.id, ids.taskID))
+            .run(),
+        )
+
+        let observedContext: any
+        buildAgentRunImpl = async (input: any) => {
+          observedContext = input.context
+          await input.onSessionCreated?.("ses_goal_duplicate_crop_bytes_build", {
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          })
+          return {
+            result: {
+              status: "passed",
+              summary: "Observed duplicate-byte goal crop evidence.",
+              files_changed: [],
+              tests: [],
+              commit_ref: "dupecrop1234",
+            },
+            sessionID: "ses_goal_duplicate_crop_bytes_build",
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID: ids.taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.build.execute(
+          {
+            goalID: ids.goalIDs[0]!,
+            request: "Implement the crop-bound cards goal.",
+            reason: "Regression coverage that reference_region_key identity is not collapsed by identical crop bytes.",
+          },
+          buildToolOptions("goal_duplicate_crop_bytes"),
+        )
+
+        expectGoalBuildStarted(result)
+        await waitForGoalStatus(ids.goalIDs[0]!, "passed")
+        const pack = buildEvidencePackFromContextPackets(observedContext?.contextPackets)
+        expect(pack?.targetReferences?.map((ref) => ref.label)).toEqual([
+          "ref-cards:card-a@desktop",
+          "ref-cards:card-b@desktop",
+        ])
+        expect(pack?.targetReferences?.map((ref) => ref.filename)).toEqual([
+          "01-card-a__src1200x3000__x0-y700-w400-h260.png",
+          "02-card-b__src1200x3000__x420-y700-w400-h260.png",
+        ])
+      },
+    })
+  }, 30_000)
+
+  test("does not substitute task-level visual references when goal reference coverage has no crop rows", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const now = Date.now()
+    const ids = seedWorkflowTaskWithGoals({
+      directory: tmp.path,
+      now,
+      goalCount: 1,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "goal missing crop evidence root" })
+        attachTaskSession(ids.taskID, parent.id)
+        bindTaskToCurrentProject(ids.taskID)
+
+        const taskAttachment = await AttachmentStore.write(
+          Instance.project.id,
+          Buffer.from(minimalPngBytes()),
+          "image/png",
+          "full-page-reference.png",
+        )
+
+        Database.use((db) =>
+          db
+            .update(EngineTaskTable)
+            .set({
+              attachments: [{ ...taskAttachment, intent: "visual_reference", source: "task-attachment" }],
+              metadata: {
+                architect_fidelity: {
+                  sourceCoverage: [],
+                  referenceCoverage: [
+                    {
+                      id: "ref-hero",
+                      surface: "hero",
+                      goal_ids: [ids.goalIDs[0]!],
+                      visual_spec_ids: ["vis-hero"],
+                      reference_regions: [],
+                      expectation: "Hero goal must restore the Frontend Design crop.",
+                    },
+                  ],
+                  assemblyOwners: [],
+                },
+              },
+            } as any)
+            .where(eq(EngineTaskTable.id, ids.taskID))
+            .run(),
+        )
+
+        let observedContext: any
+        buildAgentRunImpl = async (input: any) => {
+          observedContext = input.context
+          await input.onSessionCreated?.("ses_goal_missing_crop_build", {
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          })
+          return {
+            result: {
+              status: "passed",
+              summary: "Observed missing goal crop evidence.",
+              files_changed: [],
+              tests: [],
+              commit_ref: "missingcrop1234",
+            },
+            sessionID: "ses_goal_missing_crop_build",
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID: ids.taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.build.execute(
+          {
+            goalID: ids.goalIDs[0]!,
+            request: "Implement the crop-bound hero goal.",
+            reason: "Regression coverage that missing goal crops do not fall back to task references.",
+          },
+          buildToolOptions("goal_missing_crop_evidence"),
+        )
+
+        expectGoalBuildStarted(result)
+        await waitForGoalStatus(ids.goalIDs[0]!, "passed")
+        const pack = buildEvidencePackFromContextPackets(observedContext?.contextPackets)
+        expect(pack?.targetReferences ?? []).toEqual([])
+        expect(JSON.stringify(observedContext?.contextPackets ?? [])).not.toContain("full-page-reference.png")
+        expect(observedContext?.fidelity?.referenceCoverage?.[0]).toMatchObject({
+          id: "ref-hero",
+          reference_regions: [],
+        })
+      },
+    })
+  }, 30_000)
+
+  test("does not substitute task-level visual references when goal has no reference coverage row", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const now = Date.now()
+    const ids = seedWorkflowTaskWithGoals({
+      directory: tmp.path,
+      now,
+      goalCount: 1,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "goal missing reference row root" })
+        attachTaskSession(ids.taskID, parent.id)
+        bindTaskToCurrentProject(ids.taskID)
+
+        const taskAttachment = await AttachmentStore.write(
+          Instance.project.id,
+          Buffer.from(minimalPngBytes()),
+          "image/png",
+          "full-page-reference.png",
+        )
+
+        Database.use((db) =>
+          db
+            .update(EngineTaskTable)
+            .set({
+              attachments: [{ ...taskAttachment, intent: "visual_reference", source: "task-attachment" }],
+              metadata: {
+                architect_fidelity: {
+                  sourceCoverage: [],
+                  referenceCoverage: [],
+                  assemblyOwners: [],
+                },
+              },
+            } as any)
+            .where(eq(EngineTaskTable.id, ids.taskID))
+            .run(),
+        )
+
+        let observedContext: any
+        buildAgentRunImpl = async (input: any) => {
+          observedContext = input.context
+          await input.onSessionCreated?.("ses_goal_missing_reference_row_build", {
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          })
+          return {
+            result: {
+              status: "passed",
+              summary: "Observed missing goal reference coverage row.",
+              files_changed: [],
+              tests: [],
+              commit_ref: "missingrow1234",
+            },
+            sessionID: "ses_goal_missing_reference_row_build",
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID: ids.taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.build.execute(
+          {
+            goalID: ids.goalIDs[0]!,
+            request: "Implement the crop-bound goal with missing Architect binding.",
+            reason: "Regression coverage that absent goal reference rows do not fall back to task references.",
+          },
+          buildToolOptions("goal_missing_reference_row"),
+        )
+
+        expectGoalBuildStarted(result)
+        await waitForGoalStatus(ids.goalIDs[0]!, "passed")
+        const pack = buildEvidencePackFromContextPackets(observedContext?.contextPackets)
+        expect(pack?.targetReferences ?? []).toEqual([])
+        expect(JSON.stringify(observedContext?.contextPackets ?? [])).not.toContain("full-page-reference.png")
+        expect(observedContext?.fidelity?.referenceCoverage ?? []).toEqual([])
       },
     })
   }, 30_000)
@@ -384,7 +851,7 @@ function seedWorkflowTaskWithGoals(input: { directory: string; now: number; goal
         id: projectID,
         worktree: input.directory,
         name: "Goal reference test",
-        sandboxes: "[]",
+        sandboxes: [],
         time_created: input.now,
         time_updated: input.now,
       })
@@ -503,4 +970,14 @@ function bindTaskToCurrentProject(taskID: string) {
       .where(eq(EngineTaskTable.id, taskID))
       .run()
   })
+}
+
+function minimalPngBytes(): Uint8Array {
+  return Uint8Array.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44,
+    0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f,
+    0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00,
+    0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49,
+    0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+  ])
 }

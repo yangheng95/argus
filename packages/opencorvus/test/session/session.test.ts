@@ -6,11 +6,39 @@ import { Log } from "../../src/util/log"
 import { Instance } from "../../src/project/instance"
 import { Identifier } from "../../src/id/id"
 import { Message } from "../../src/session/message"
+import { tmpdir } from "../fixture/fixture"
 
 const projectRoot = path.join(__dirname, "../..")
 Log.init({ print: false })
 
 describe("session.started event", () => {
+  test("rejects cross-project parent sessions before persistence", async () => {
+    await using one = await tmpdir({ git: true })
+    await using two = await tmpdir({ git: true })
+    let foreignRootID = ""
+
+    await Instance.provide({
+      directory: two.path,
+      fn: async () => {
+        foreignRootID = (await Session.create({ kind: "root", title: "foreign parent root" })).id
+      },
+    })
+
+    await Instance.provide({
+      directory: one.path,
+      fn: async () => {
+        await expect(
+          Session.createNext({
+            kind: "build",
+            parentID: foreignRootID,
+            directory: one.path,
+            title: "invalid cross project child",
+          }),
+        ).rejects.toThrow("Session not found")
+      },
+    })
+  })
+
   test("should emit session.started event when session is created", async () => {
     await Instance.provide({
       directory: projectRoot,

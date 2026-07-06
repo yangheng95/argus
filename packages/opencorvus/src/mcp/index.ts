@@ -8,7 +8,9 @@ import {
   type CallToolResult,
   CallToolResultSchema,
   GetPromptResultSchema,
+  type GetPromptRequest,
   ReadResourceResultSchema,
+  type ReadResourceRequest,
   type Tool as MCPToolDef,
   ToolListChangedNotificationSchema,
 } from "@modelcontextprotocol/sdk/types.js"
@@ -93,6 +95,29 @@ export namespace MCP {
   )
 
   type MCPClient = Client
+
+  const ProjectionPromptPayloadSchema = z
+    .object({
+      description: z.unknown().optional(),
+      messages: z
+        .array(
+          z
+            .object({
+              role: z.unknown(),
+              content: z.unknown(),
+            })
+            .passthrough(),
+        ),
+    })
+    .passthrough()
+  export type ProjectionPromptPayload = z.infer<typeof ProjectionPromptPayloadSchema>
+
+  const ProjectionResourcePayloadSchema = z
+    .object({
+      contents: z.array(z.object({}).passthrough()),
+    })
+    .passthrough()
+  export type ProjectionResourcePayload = z.infer<typeof ProjectionResourcePayloadSchema>
 
   export const Status = z
     .discriminatedUnion("status", [
@@ -284,6 +309,24 @@ export namespace MCP {
     )
   }
 
+  export async function getScopedPromptProjectionPayload(
+    input: ScopedPromptInput & { args?: Record<string, string> },
+  ): Promise<ProjectionPromptPayload> {
+    return withScopedClient(input, async (client, timeout) =>
+      client.request(
+        {
+          method: "prompts/get",
+          params: {
+            name: input.promptName,
+            arguments: input.args,
+          },
+        } satisfies GetPromptRequest,
+        ProjectionPromptPayloadSchema,
+        mcpRequestOptions(timeout),
+      ),
+    )
+  }
+
   async function scopedResourceInfoFromClient(
     client: MCPClient,
     timeout: number,
@@ -312,6 +355,22 @@ export namespace MCP {
           },
           mcpRequestOptions(timeout),
         ),
+      )
+    })
+  }
+
+  export async function readScopedResourceProjectionPayload(input: ScopedResourceInput): Promise<ProjectionResourcePayload> {
+    return withScopedClient(input, async (client, timeout) => {
+      const resource = await scopedResourceInfoFromClient(client, timeout, input)
+      return client.request(
+        {
+          method: "resources/read",
+          params: {
+            uri: resource.uri,
+          },
+        } satisfies ReadResourceRequest,
+        ProjectionResourcePayloadSchema,
+        mcpRequestOptions(timeout),
       )
     })
   }

@@ -76,6 +76,7 @@ export const TaskStatusDetail = z.object({
     })
     .optional(),
   goals: TaskStatusGoalDetail.array(),
+  taskAgentOutcomes: TaskBoard.shape.taskAgentOutcomes.default([]),
   time: z.object({
     created: z.number(),
     updated: z.number(),
@@ -115,6 +116,7 @@ const TaskStatusBoardProjection = z
     agentInvocationDAG: TaskBoard.shape.agentInvocationDAG,
     workflow: TaskBoard.shape.workflow.optional(),
     goalWorkflows: TaskBoard.shape.goalWorkflows.optional(),
+    taskAgentOutcomes: TaskBoard.shape.taskAgentOutcomes.optional(),
   })
   .passthrough()
 
@@ -276,6 +278,7 @@ export function taskStatusDetailFromBoard(input: unknown): TaskStatusDetail {
         }
       : undefined,
     goals,
+    taskAgentOutcomes: board.taskAgentOutcomes ?? [],
     time: board.task.time,
   })
 }

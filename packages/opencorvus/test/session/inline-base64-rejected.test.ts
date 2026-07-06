@@ -18,6 +18,8 @@ import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { Identifier } from "../../src/id/id"
+import { count, Database, eq } from "../../src/storage/db"
+import { MessageTable, PartTable } from "../../src/session/session.sql"
 
 async function setupSession() {
   const session = await Session.create({ kind: "orchestrator" })
@@ -75,7 +77,7 @@ describe("Session.updatePart inline-base64 guard", () => {
             input: {},
             output: "{}",
             metadata: {},
-            time: { start: Date.now(), end: Date.now() },
+            time: { start: Date.now(), end: Date.now() + 1 },
             attachments: [
               {
                 id: Identifier.ascending("part"),
@@ -89,6 +91,75 @@ describe("Session.updatePart inline-base64 guard", () => {
           },
         } as any)
         await expect(promise).rejects.toThrow(/InlineBase64InPartError|inline base64/i)
+      },
+    })
+  })
+
+  test("rejects uppercase, parameterized, and prefixed data URLs", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { sessionID, messageID } = await setupSession()
+        for (const [index, url] of [
+          "DATA:image/png;base64,UE5H",
+          "data:image/png;charset=utf-8;base64,UE5H",
+          "prefix data:image/png;base64,UE5H",
+        ].entries()) {
+          await expect(
+            Session.updatePart({
+              id: Identifier.ascending("part"),
+              messageID,
+              sessionID,
+              type: "file",
+              mime: "image/png",
+              filename: `inline-${index}.png`,
+              url,
+            } as any),
+          ).rejects.toThrow(/InlineBase64InPartError|inline base64/i)
+        }
+      },
+    })
+  })
+
+  test("persistMessage rejects inline base64 without committing a header-only message", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "orchestrator" })
+        const messageID = Identifier.ascending("message")
+
+        await expect(
+          Session.persistMessage({
+            info: {
+              id: messageID,
+              sessionID: session.id,
+              role: "user",
+              time: { created: Date.now() },
+              agent: "user",
+              model: { providerID: "test", modelID: "test" },
+            } as any,
+            parts: [
+              {
+                id: Identifier.ascending("part"),
+                messageID,
+                sessionID: session.id,
+                type: "file",
+                mime: "image/png",
+                filename: "inline.png",
+                url: "data:image/png;charset=utf-8;base64,UE5H",
+              } as any,
+            ],
+          }),
+        ).rejects.toThrow(/InlineBase64InPartError|inline base64/i)
+
+        expect(
+          Database.use((db) =>
+            db.select({ count: count() }).from(MessageTable).where(eq(MessageTable.id, messageID)).get()!.count,
+          ),
+        ).toBe(0)
+        expect(Database.use((db) => db.select({ count: count() }).from(PartTable).get()!.count)).toBe(0)
       },
     })
   })

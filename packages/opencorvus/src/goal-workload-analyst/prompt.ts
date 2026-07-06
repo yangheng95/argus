@@ -1,13 +1,12 @@
 /**
  * User-prompt builder for the Goal Workload Analyst.
  *
- * The defining choice (spec §0): the FULL materialized frontend template is inlined here
- * — this is the one agent whose entire job is to digest the template, so we spend its
- * context budget on the full text rather than handing it a path it might skim.
- * Everything else (goal graph, contract graph, reference coverage) is rendered
- * as id-bearing anchors the brief must REFERENCE rather than restate (spec §2).
+ * The workload analyst receives upstream frontend template and evidence via
+ * shared context packets. Media/file content is referenced by link/index; the
+ * agent reads exact refs through available tools when it needs details.
  */
 import type { ArchitectContractGraph } from "@/architect/contract-graph"
+import { renderAgentContextPackets, type AgentContextPacket } from "@/agent/context-packet"
 
 export interface GoalWorkloadGoalInput {
   id: string
@@ -33,10 +32,8 @@ export interface WorkloadPromptInput {
   contractGraph?: ArchitectContractGraph
   referenceCoverage?: ReferenceCoverageInput[]
   requirements?: Array<{ id: string; type: string; description: string; acceptance: string; non_goals: string }>
-  /** Full materialized frontend template text — inlined so the analyst deep-reads it. */
-  prdFullText?: string
-  /** Frontend-design handoff reference text supplied by the orchestrator. */
-  frontendDesign?: string
+  /** Upstream agent handoff packets supplied by the scheduler. */
+  contextPackets?: AgentContextPacket[]
 }
 
 export function buildWorkloadUserPrompt(input: WorkloadPromptInput): string {
@@ -49,12 +46,17 @@ export function buildWorkloadUserPrompt(input: WorkloadPromptInput): string {
       "for one autonomous build.",
   )
 
-  if (input.prdFullText && input.prdFullText.trim().length > 0) {
+  const contextPackets = (input.contextPackets ?? []).filter((packet) => packet.parts.length > 0)
+  if (contextPackets.length > 0) {
     sections.push(
-      "# Full frontend template (read this completely before scoring any goal)\n\n" + input.prdFullText.trim(),
+      [
+        "# Agent Context Packets",
+        "",
+        "The scheduler supplied these typed context packets as upstream task evidence. Media appears as refs only; inspect cited refs through available tools before making visual or file-content claims.",
+        "",
+        renderAgentContextPackets(contextPackets),
+      ].join("\n"),
     )
-  } else if (input.frontendDesign && input.frontendDesign.trim().length > 0) {
-    sections.push(input.frontendDesign.trim())
   }
 
   if (input.requirements && input.requirements.length > 0) {

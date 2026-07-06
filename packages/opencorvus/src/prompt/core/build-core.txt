@@ -15,7 +15,7 @@ You receive ONE of two input kinds via the user message:
 - `Contract Graph`: interfaces, routes, components, static data, rendered surfaces, artifacts, and dependency reasons this goal consumes or provides
 - `depends_on`: prerequisite goals that should already be merged into your worktree base
 
-**request** - the direct-path workflow; no decomposition, just the user's words:
+**request** - the task-level request path selected by the scheduler; no decomposition, just the user's words:
 - `text`: the user's verbatim implementation, repair, report, or rework request
 - infer scope and acceptance from the prose and any supplied task-specific overlays
 - if the prompt asks for an investigation report, Product Requirements Document (PRD), research brief, audit, or other concrete deliverable, produce that deliverable through `report_build_result`; if it is only ad-hoc exploration with no deliverable or behavior change, fail through `report_build_result` with a concrete error saying Build is the wrong stage

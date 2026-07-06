@@ -2,6 +2,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import type { ToolSet } from "ai"
 import { runAgentSession } from "@/agent/runner"
+import { renderAgentContextPacketSection, type AgentContextPacket } from "@/agent/context-packet"
 import { Agent } from "@/agent/agent"
 import { createAgentCoordinationRuntimeTools } from "@/agent/coordination-runtime-tools"
 import { filterAgentTools } from "@/agent/filter-tools"
@@ -66,6 +67,8 @@ export namespace DeepResearchAgent {
     sourceUrls?: string[]
     focus?: string
     reason?: string
+    /** Upstream agent handoff packets supplied by the scheduler. */
+    contextPackets?: AgentContextPacket[]
     taskID?: string
     parentSessionID?: string
     model?: { providerID: string; modelID: string }
@@ -348,6 +351,8 @@ function buildUserPrompt(
   }
   const webpageEvidenceSection = renderWebpagePrdEvidencePromptSection(webpagePrdEvidence)
   if (webpageEvidenceSection) sections.push(webpageEvidenceSection)
+  const contextPackets = renderAgentContextPacketSection(input.contextPackets)
+  if (contextPackets) sections.push(contextPackets)
   if (input.focus?.trim()) sections.push(`# Focus\n\n${input.focus.trim()}`)
   sections.push(
     "# Output Boundary\n\n" +

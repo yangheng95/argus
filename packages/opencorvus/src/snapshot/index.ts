@@ -22,7 +22,10 @@ import type {
   Patch as _PatchType,
   PatchEvidenceSummary as _PatchEvidenceSummaryType,
 } from "./types"
-import { NamedError } from "@opencorvus-ai/util/error"
+import {
+  SnapshotEmptyTreeError as _SnapshotEmptyTreeError,
+  SnapshotIntegrityError as _SnapshotIntegrityError,
+} from "./errors"
 
 // Disk reclamation belongs to ProjectGC alone: every tree object emitted by
 // `track()` is dangling immediately (no ref, no reflog), so any local
@@ -37,30 +40,8 @@ export namespace Snapshot {
   const log = Log.create({ service: "snapshot" })
   export const EMPTY_TREE_HASH = _EMPTY_TREE_HASH
   export const EMPTY_TREE_WHOLE_WORKTREE_FILE_COUNT = _EMPTY_TREE_WHOLE_WORKTREE_FILE_COUNT
-  export const SnapshotIntegrityError = NamedError.create(
-    "SnapshotIntegrityError",
-    z.object({
-      message: z.string(),
-      operation: z.string(),
-      cwd: z.string(),
-      worktree: z.string(),
-      gitDir: z.string(),
-      exitCode: z.number().optional(),
-      stderr: z.string().optional(),
-      stdout: z.string().optional(),
-    }),
-  )
-  export const SnapshotEmptyTreeError = NamedError.create(
-    "SnapshotEmptyTreeError",
-    z.object({
-      message: z.string(),
-      operation: z.string(),
-      cwd: z.string(),
-      worktree: z.string(),
-      gitDir: z.string(),
-      fileCount: z.number().optional(),
-    }),
-  )
+  export const SnapshotIntegrityError = _SnapshotIntegrityError
+  export const SnapshotEmptyTreeError = _SnapshotEmptyTreeError
   const coreAutocrlf =
     process.env.OPENCORVUS_SNAPSHOT_CORE_AUTOCRLF || (process.platform === "win32" ? "input" : "false")
   const coreSafecrlf = "false"

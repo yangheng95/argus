@@ -261,15 +261,26 @@ function requireTaskInCurrentProject(taskID: string): TaskRow {
   return task
 }
 
+async function assertTaskRootSessionLineageInCurrentProject(task: TaskRow): Promise<Session.Info> {
+  if (!task.session_id) {
+    throw new Error(`Task ${task.id} has no root session; cannot use task-root session context.`)
+  }
+  const current = Instance.current()
+  const projectID = current?.project.id ?? task.project_id
+  return Session.assertLineageInProject({ sessionID: task.session_id, projectID })
+}
+
 async function provideTaskRootSessionInstance<T>(task: TaskRow, fn: () => Promise<T>): Promise<T> {
-  if (Instance.current() || !task.session_id) return fn()
-  const session = await Session.getInProject({ sessionID: task.session_id, projectID: task.project_id })
+  if (!task.session_id) return fn()
+  const session = await Session.assertLineageInProject({ sessionID: task.session_id, projectID: task.project_id })
+  if (Instance.current()) return fn()
   return Instance.provide({ directory: session.directory, fn })
 }
 
 async function provideActiveTaskRootSessionInstance<T>(task: TaskRow, fn: () => Promise<T>): Promise<T | undefined> {
-  if (Instance.current() || !task.session_id) return fn()
-  const session = await Session.getInProject({ sessionID: task.session_id, projectID: task.project_id })
+  if (!task.session_id) return fn()
+  const session = await Session.assertLineageInProject({ sessionID: task.session_id, projectID: task.project_id })
+  if (Instance.current()) return fn()
   return Instance.tryProvideActive({ directory: session.directory, fn })
 }
 
@@ -498,6 +509,7 @@ export interface DeleteTaskOptions extends CancelTaskOptions {
 
 async function resolveDirectReplyTarget(taskID: string, sessionID: string) {
   const task = requireTaskInCurrentProject(taskID)
+  await assertTaskRootSessionLineageInCurrentProject(task)
   const owningTask = taskIDForSession(sessionID)
   if (owningTask !== taskID) {
     throw new NotFoundError({ message: `Session ${sessionID} does not belong to task ${taskID}` })
@@ -513,7 +525,7 @@ async function resolveDirectReplyTarget(taskID: string, sessionID: string) {
       kind,
     })
   }
-  const session = await Session.getInProject({ sessionID, projectID: task.project_id })
+  const session = await Session.assertLineageInProject({ sessionID, projectID: task.project_id })
   const latest = await latestSessionPromptEnvelope(sessionID)
   if (!latest) {
     throw new ReplyTargetEnvelopeMissingError({
@@ -801,7 +813,11 @@ async function resolveOperatorSteerTarget(input: { task: TaskRow; sessionID: str
   goalID?: string
   goalRunID?: string
 }> {
-  const session = await Session.get(input.sessionID)
+  await assertTaskRootSessionLineageInCurrentProject(input.task)
+  const session = await Session.assertLineageInProject({
+    sessionID: input.sessionID,
+    projectID: input.task.project_id,
+  })
   const owningTask = taskIDForSession(session.id)
   if (owningTask && owningTask !== input.task.id) {
     throw new OperatorSteerTargetError({
@@ -1197,8 +1213,11 @@ async function appendTaskSessionMessage(
  * project-setup error that must surface, not be papered over.
  */
 async function messageContext(sessionID: string, taskID: string) {
-  const session = await Session.get(sessionID)
-  const task = requireTask(taskID)
+  const task = requireTaskInCurrentProject(taskID)
+  if (task.session_id !== sessionID) {
+    throw new NotFoundError({ message: `Task ${taskID} is not bound to session ${sessionID}` })
+  }
+  const session = await assertTaskRootSessionLineageInCurrentProject(task)
   const config = await EffectiveConfig.effective({ taskID, sessionID })
   const name =
     (session.kind === "root" && task.session_id === session.id ? "orchestrator" : undefined) ??
@@ -1550,9 +1569,16 @@ export namespace EngineService {
       })
     }
     if (input.promptProfile) {
+      const modelPreviewConfig = input.model
+        ? Config.mergeOverlay(taskConfigSnapshot, { model: input.model })
+        : taskConfigSnapshot
+      const profilePreviewConfig = Config.mergeOverlay(modelPreviewConfig, {
+        prompt_profile: { active: input.promptProfile },
+      })
       await PromptProfileResolver.assertKnownProfileID({
         projectDirectory: Instance.directory,
         profileID: input.promptProfile,
+        config: profilePreviewConfig,
       })
       await Session.mergeConfigOverlay({
         sessionID: session.id,
@@ -1570,8 +1596,8 @@ export namespace EngineService {
     // orchestrator resolves the default workflow fresh on each wake and
     // projects step status from side-effects (spec / goals / runs /
     // acceptance presence). board.ts::buildWorkflowFields likewise no
-    // longer reads task.workflow_state — it always defaults to pipeline
-    // and projects step status from DB rows.
+    // longer reads task.workflow_state — it reads scheduler-owned
+    // workflow.selected evidence and projects step status from DB rows.
 
     // Hierarchical permission model (rule 23): built-in tools default to
     // `allow` (see PermissionNext.evaluate). Agent-scoped overlays
@@ -2677,6 +2703,7 @@ export namespace EngineService {
 
   async function wakeTaskForOperatorIntent(taskID: string, intent: "retry" | "replan") {
     const task = requireTaskInCurrentProject(taskID)
+    await assertTaskRootSessionLineageInCurrentProject(task)
     const metadata =
       task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)
         ? { ...(task.metadata as Record<string, unknown>) }
@@ -2716,6 +2743,7 @@ export namespace EngineService {
 
   export async function recordOperatorNote(taskID: string, note: string) {
     const task = requireTaskInCurrentProject(taskID)
+    await assertTaskRootSessionLineageInCurrentProject(task)
     const run = findActiveRunForTask(task.id)
     const now = Date.now()
     Database.use((db) =>
@@ -2747,21 +2775,24 @@ export namespace EngineService {
   export async function handleTaskMessage(taskID: string, raw: z.input<typeof TaskMessageInput>) {
     const input = TaskMessageInput.parse(raw)
     const task = requireTaskInCurrentProject(taskID)
+    const rootSession = await assertTaskRootSessionLineageInCurrentProject(task)
     assertTaskOperatorMessageAccepted(task, input.text, input.attachments ?? [])
     const decodedAttachments = decodeApiAttachments({
       attachments: input.attachments,
       label: `Task ${taskID} operator attachment`,
     })
     if (input.promptProfile) {
-      if (!task.session_id) {
-        throw new Error(`Task ${task.id} has no root session; cannot apply prompt profile ${input.promptProfile}.`)
-      }
+      const profileDirectory = await EffectiveConfig.directory({ sessionID: rootSession.id })
+      const profilePreviewConfig = Config.mergeOverlay(await EffectiveConfig.effective({ sessionID: rootSession.id }), {
+        prompt_profile: { active: input.promptProfile },
+      })
       await PromptProfileResolver.assertKnownProfileID({
-        projectDirectory: await EffectiveConfig.directory({ sessionID: task.session_id }),
+        projectDirectory: profileDirectory,
         profileID: input.promptProfile,
+        config: profilePreviewConfig,
       })
       await Session.mergeConfigOverlay({
-        sessionID: task.session_id,
+        sessionID: rootSession.id,
         patch: { prompt_profile: { active: input.promptProfile } },
       })
     }
@@ -2815,7 +2846,8 @@ export namespace EngineService {
         `Task ${task.id} has no root session — cannot resolve operator model context; recreate the task or repair task.session_id`,
       )
     }
-    const ctx = await messageContext(task.session_id, task.id)
+    const rootSession = await assertTaskRootSessionLineageInCurrentProject(task)
+    const ctx = await messageContext(rootSession.id, task.id)
     if (!ctx) {
       throw new Error(
         `Task ${task.id} session ${task.session_id} has no agent/model context — cannot resolve operator model context`,
@@ -2855,7 +2887,7 @@ export namespace EngineService {
    */
   export async function generateFollowup(taskID: string): Promise<{ suggestion: string }> {
     const task = requireTaskInCurrentProject(taskID)
-    const sessionID = task.session_id ?? undefined
+    const sessionID = task.session_id ? (await assertTaskRootSessionLineageInCurrentProject(task)).id : undefined
     const model = await resolveAgentModel("summary", { sessionID })
     const config = await EffectiveConfig.effective(sessionID ? { sessionID } : undefined)
     const language = ProviderLLM.wrapModel(await Provider.getLanguage(model, { config }), model, {})

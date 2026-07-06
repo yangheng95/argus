@@ -1,4 +1,6 @@
 import { afterEach, expect, mock, test } from "bun:test"
+import { textContextPacket } from "../../src/agent/context-packet"
+import { visualHandoffStructuredPart } from "../../src/context-packets/visual-handoff"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 
@@ -22,6 +24,66 @@ afterEach(async () => {
   mock.restore()
   await Instance.disposeAll()
 })
+
+function fillMinimalArchitectCollector(collector: any) {
+  collector.summary = "Two goal decomposition"
+  collector.decomposition_analysis =
+    "The implementation goal owns product code, while the verification goal owns durable checks and consumes the implementation contract. This split keeps the work bounded and preserves final assembly ownership."
+  for (const [id, title, ownedPath, kind] of [
+    ["goal_main", "Main implementation", "src/main.ts", "feature"],
+    ["goal_tests", "Verification", "test/main.test.ts", "verification"],
+  ] as const) {
+    collector.goals.push({
+      id,
+      title,
+      objective: `${title} is independently verifiable.`,
+      acceptance_specs: [
+        {
+          id: `acc-${id}`,
+          source_requirement_id: "REQ-1",
+          goal_id: id,
+          title: `${title} acceptance`,
+          severity: "essential",
+          scorers: [
+            {
+              type: "heuristic",
+              name: "tests",
+              spec: { kind: "shell", cmd: "bun test" },
+              expect: { exit_code: 0 },
+            },
+          ],
+        },
+      ],
+      owned_paths: [ownedPath],
+      depends_on: id === "goal_tests" ? ["goal_main"] : [],
+      priority: "blocking",
+      kind,
+      requirement_ids: ["REQ-1"],
+    })
+  }
+  collector.traceability.push({ requirementID: "REQ-1", goalIDs: ["goal_main", "goal_tests"] })
+  collector.contract_graph.contracts.push({
+    id: "contract_main_entry",
+    kind: "component",
+    name: "Main implementation surface",
+    producer_goal_id: "goal_main",
+    consumer_goal_ids: ["goal_tests"],
+    summary: "Implementation output consumed by verification.",
+    artifact_paths: ["src/main.ts"],
+    evidence_refs: [],
+  })
+  collector.contract_graph.dependency_contracts.push({
+    from_goal_id: "goal_main",
+    to_goal_id: "goal_tests",
+    reason: "contract",
+    contract_ids: ["contract_main_entry"],
+  })
+  collector.assembly_owners.push({
+    surface: "final-deliverable",
+    goal_id: "goal_main",
+    rationale: "The implementation goal owns final stitching.",
+  })
+}
 
 test("ArchitectAgent registers submit_architect as the terminal collector contract", async () => {
   await using tmp = await tmpdir({ git: true })
@@ -165,6 +227,132 @@ test("ArchitectAgent registers submit_architect as the terminal collector contra
 
       expect(result.sessionID).toBe("ses_architect")
       expect(result.goals.map((goal) => goal.id)).toEqual(["goal_main", "goal_tests"])
+    },
+  })
+}, 30_000)
+
+test("ArchitectAgent requires reference coverage from visual handoff schema, not frontend_design source label", async () => {
+  await using tmp = await tmpdir({ git: true })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      runnerImpl = async (input: any) => {
+        const collector = input.toolKit.getCollector()
+        fillMinimalArchitectCollector(collector)
+        const result = await input.toolKit.tools.submit_architect.execute(
+          {
+            summary: collector.summary,
+            decomposition_analysis: collector.decomposition_analysis,
+            fact_check_items: [],
+          },
+          {} as any,
+        )
+        expect(String(result)).toContain("PASS: Architect output finalized.")
+        expect(String(result)).not.toContain("visual handoff context requires reference coverage")
+        return {
+          session: { id: "ses_architect_source_only_context" },
+          finalMessage: { info: {} },
+          collector,
+          structured: undefined,
+          streamErrors: [],
+          model: { providerID: "test", modelID: "mock", id: "test/mock" },
+        }
+      }
+
+      const { ArchitectAgent } = await import("../../src/architect/agent")
+      await expect(
+        ArchitectAgent.coordinate({
+          goals: [],
+          taskRequest: "Implement the visual page.",
+          taskTitle: "Visual page",
+          requirements: [
+            {
+              id: "REQ-1",
+              type: "explicit",
+              description: "Implement the visual page.",
+              acceptance: "The page is implemented and verified.",
+              non_goals: "",
+              evidence_refs: [],
+            },
+          ],
+          requirementDecisions: [],
+          contextPackets: [
+            textContextPacket({
+              id: "legacy-frontend-design-source-only",
+              title: "Legacy Frontend Design Source Only",
+              source: "frontend_design",
+              body: "Reference-looking prose without a visual handoff schema.",
+            })!,
+          ],
+          decisionLog: {
+            append() {},
+            toPromptSection() {
+              return ""
+            },
+          } as any,
+        }),
+      ).resolves.toMatchObject({ sessionID: "ses_architect_source_only_context" })
+
+      const schemaPacket = textContextPacket({
+        id: "third-party-visual-handoff",
+        title: "Third Party Visual Handoff",
+        source: "third_party_design",
+        body: "Reference parity is required for this surface.",
+      })!
+      const taggedSchemaPacket = {
+        ...schemaPacket,
+        parts: [...schemaPacket.parts, visualHandoffStructuredPart({ visualReference: true })!],
+      }
+      runnerImpl = async (input: any) => {
+        const collector = input.toolKit.getCollector()
+        fillMinimalArchitectCollector(collector)
+        const result = await input.toolKit.tools.submit_architect.execute(
+          {
+            summary: collector.summary,
+            decomposition_analysis: collector.decomposition_analysis,
+            fact_check_items: [],
+          },
+          {} as any,
+        )
+        expect(String(result)).toContain("PASS: Architect output finalized.")
+        expect(String(result)).toContain("Missing reference coverage")
+        expect(String(result)).toContain("visual handoff context requires reference coverage")
+        return {
+          session: { id: "ses_architect_schema_context" },
+          finalMessage: { info: {} },
+          collector,
+          structured: undefined,
+          streamErrors: [],
+          model: { providerID: "test", modelID: "mock", id: "test/mock" },
+        }
+      }
+
+      await expect(
+        ArchitectAgent.coordinate({
+          goals: [],
+          taskRequest: "Implement the visual page.",
+          taskTitle: "Visual page",
+          requirements: [
+            {
+              id: "REQ-1",
+              type: "explicit",
+              description: "Implement the visual page.",
+              acceptance: "The page is implemented and verified.",
+              non_goals: "",
+              evidence_refs: [],
+            },
+          ],
+          requirementDecisions: [],
+          contextPackets: [taggedSchemaPacket],
+          decisionLog: {
+            append() {},
+            toPromptSection() {
+              return ""
+            },
+          } as any,
+        }),
+      ).resolves.toMatchObject({ sessionID: "ses_architect_schema_context" })
     },
   })
 }, 30_000)

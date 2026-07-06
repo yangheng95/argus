@@ -439,6 +439,12 @@ export namespace Plugin {
     return state().then((x) => x.hooks.map((entry) => entry.hook))
   }
 
+  export async function toolHooks() {
+    return state().then((x) =>
+      x.hooks.flatMap((entry) => (entry.hook.tool ? [{ specifier: entry.specifier, tool: entry.hook.tool }] : [])),
+    )
+  }
+
   export async function init() {
     const hooks = await state().then((x) => x.hooks)
     const config = await Config.get()

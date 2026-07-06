@@ -144,7 +144,12 @@ export namespace AgentToolPool {
 
   const taskCodingGlobal = [...codingGlobal, "request_orchestrator_decision"] as const
 
-  const customDefaultGlobal = GLOBAL_TOOL_IDS.filter((id) => id !== "request_orchestrator_decision" && id !== "wait")
+  const CUSTOM_AGENT_DENIED_GLOBAL_TOOL_IDS = new Set<string>([
+    "panel",
+    "request_orchestrator_decision",
+    "wait",
+  ])
+  const customDefaultGlobal = GLOBAL_TOOL_IDS.filter((id) => !CUSTOM_AGENT_DENIED_GLOBAL_TOOL_IDS.has(id))
 
   export const roleAssignments: Record<AgentRoleID, ToolPoolAssignment> = {
     coding: pool({
@@ -274,6 +279,16 @@ export namespace AgentToolPool {
 
   export function customDefault(): ToolPoolAssignment {
     return pool({ global: customDefaultGlobal })
+  }
+
+  export function customAssignment(input: Partial<ToolPoolAssignment> | undefined): ToolPoolAssignment {
+    const normalized = normalize(input)
+    for (const toolID of normalized.global) {
+      if (CUSTOM_AGENT_DENIED_GLOBAL_TOOL_IDS.has(toolID)) {
+        throw new Error(`Custom agents cannot use scoped orchestration tool "${toolID}".`)
+      }
+    }
+    return normalized
   }
 
   export function orchestratorSchedulerRoleBaseToolIDs(): string[] {

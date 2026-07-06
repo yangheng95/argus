@@ -12,6 +12,7 @@ import { SessionPrompt } from "../../src/session/prompt"
 import { SessionPromptState } from "../../src/session/prompt/state"
 import { RIGHT_SIDEBAR_CODING_ASSISTANT_REQUIRED_TOOLS } from "../../src/coding-assistant/session"
 import { deriveTitle } from "../../src/title/derive"
+import { Identifier } from "../../src/id/id"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 import { installControlModel } from "../workspace/mock-control-model"
@@ -26,6 +27,38 @@ async function waitUntil(assertion: () => boolean, label: string, inactivityMs =
     await Bun.sleep(10)
   }
   throw new Error(`timed out waiting for ${label}`)
+}
+
+async function importCurrentProjectRightSidebarChildWithForeignParent(input: {
+  directory: string
+  parentID: string
+  title: string
+}): Promise<string> {
+  let sessionID = ""
+  await Instance.provide({
+    directory: input.directory,
+    fn: async () => {
+      const time = Date.now()
+      const child: Session.Info = {
+        id: Identifier.descending("session"),
+        slug: `coding-cross-parent-${Math.random().toString(36).slice(2)}`,
+        projectID: Instance.project.id,
+        directory: input.directory,
+        parentID: input.parentID,
+        title: input.title,
+        version: "test",
+        kind: "assistant",
+        metadata: { codingAssistant: { surface: "right-sidebar" } },
+        time: {
+          created: time,
+          updated: time,
+        },
+      }
+      await Session.importSnapshot({ info: child, messages: [] })
+      sessionID = child.id
+    },
+  })
+  return sessionID
 }
 
 describe("coding assistant routes", () => {
@@ -117,6 +150,68 @@ describe("coding assistant routes", () => {
         expect(queryScoped.status).toBe(200)
         const queryBody = (await queryScoped.json()) as { sessions: Session.Info[] }
         expect(queryBody.sessions.map((session) => session.id)).toEqual([otherDirectoryID])
+      },
+    })
+  })
+
+  test("coding session routes reject current-project right sidebar sessions with a foreign parent chain", async () => {
+    await using first = await tmpdir({ git: true })
+    await using second = await tmpdir({ git: true })
+
+    let foreignParentID = ""
+    await Instance.provide({
+      directory: second.path,
+      fn: async () => {
+        foreignParentID = (await Session.create({ kind: "assistant", title: "foreign coding parent" })).id
+      },
+    })
+
+    await Instance.provide({
+      directory: first.path,
+      fn: async () => {
+        const valid = await Session.create({
+          kind: "assistant",
+          title: "valid right sidebar",
+          metadata: { codingAssistant: { surface: "right-sidebar" } },
+        })
+        const pollutedID = await importCurrentProjectRightSidebarChildWithForeignParent({
+          directory: first.path,
+          parentID: foreignParentID,
+          title: "polluted right sidebar",
+        })
+        const app = Server.App()
+        const headers = {
+          "content-type": "application/json",
+          "x-opencorvus-directory": first.path,
+        }
+
+        const listed = await app.request("/coding/sessions?limit=1", { method: "GET", headers })
+        expect(listed.status).toBe(200)
+        const listedBody = (await listed.json()) as { sessions: Session.Info[] }
+        expect(listedBody.sessions.map((session) => session.id)).toEqual([valid.id])
+
+        const claim = await app.request(`/coding/session/${pollutedID}`, { method: "GET", headers })
+        expect(claim.status).toBe(404)
+
+        const rename = await app.request(`/coding/session/${pollutedID}`, {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify({ title: "renamed polluted session" }),
+        })
+        expect(rename.status).toBe(404)
+
+        const stop = await app.request(`/coding/session/${pollutedID}/abort`, { method: "POST", headers })
+        expect(stop.status).toBe(404)
+
+        const selection = await app.request(`/coding/session/${pollutedID}/selection`, {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify({ taskID: null }),
+        })
+        expect(selection.status).toBe(404)
+
+        const remove = await app.request(`/coding/session/${pollutedID}`, { method: "DELETE", headers })
+        expect(remove.status).toBe(404)
       },
     })
   })
@@ -452,13 +547,29 @@ describe("coding assistant routes", () => {
         expect(renamedBody.session.title).toBe("Renamed assistant")
         expect(renamedBody.session.time.updated).toBeGreaterThanOrEqual(beforeUpdated)
 
-        const taskID = TaskQueueService.enqueuePrompt({
-          sessionID: session.id,
-          source: "session.prompt_async",
-          prompt: {
-            parts: [{ type: "text", text: "queued assistant work" }],
-          },
-        })
+        const taskID = Identifier.ascending("task")
+        const queuedAt = Date.now()
+        Database.use((db) =>
+          db
+            .insert(TaskQueueTable)
+            .values({
+              id: taskID,
+              session_id: session.id,
+              prompt: "queued assistant work",
+              priority: "normal",
+              status: "queued",
+              source: "session.prompt_async",
+              metadata: {
+                kind: "session_prompt",
+                input: {
+                  parts: [{ type: "text", text: "queued assistant work" }],
+                },
+              },
+              time_created: queuedAt,
+              time_updated: queuedAt,
+            })
+            .run(),
+        )
         const stopped = await app.request(`/coding/session/${session.id}/abort`, {
           method: "POST",
           headers: {
@@ -466,6 +577,12 @@ describe("coding assistant routes", () => {
           },
         })
         expect(stopped.status).toBe(200)
+        await waitUntil(
+          () =>
+            Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, taskID)).get())
+              ?.status === "failed",
+          "coding assistant queued task failure",
+        )
         const queueRow = Database.use((db) =>
           db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, taskID)).get(),
         )
@@ -720,6 +837,7 @@ describe("coding assistant routes", () => {
           tools: { panel: true },
           extra: { surface: "right-sidebar" },
         })
+        await TaskQueueService.runNow()
       },
     })
   })
@@ -849,6 +967,7 @@ describe("coding assistant routes", () => {
         for (const tool of RIGHT_SIDEBAR_CODING_ASSISTANT_REQUIRED_TOOLS) {
           expect(row?.metadata.input.tools?.[tool]).toBe(true)
         }
+        await TaskQueueService.runNow()
 
         const syncPrompt = await app.request(`/session/${session.id}/message`, {
           method: "POST",

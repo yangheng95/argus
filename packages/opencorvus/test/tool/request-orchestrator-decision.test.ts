@@ -81,7 +81,7 @@ test("request_orchestrator_decision records request and reports accepted wake re
           summary: "Need routing",
           details: "Worker needs scheduler guidance.",
           blocking: true,
-          requested_decision: "continue or redispatch",
+          requested_decision: "continue or rerun the stage",
         },
         toolContext({ taskID, sessionID: workerID }),
         async () => "queued",
@@ -110,7 +110,7 @@ test("request_orchestrator_decision replays the same message without duplicate o
         summary: "Need routing",
         details: "Worker needs scheduler guidance.",
         blocking: true,
-        requested_decision: "continue or redispatch",
+        requested_decision: "continue or rerun the stage",
       }
 
       const first = await executeRequestOrchestratorDecision(
@@ -153,7 +153,7 @@ test("request_orchestrator_decision cancels the pending request when orchestrato
             summary: "Need routing",
             details: "Worker needs scheduler guidance.",
             blocking: true,
-            requested_decision: "continue or redispatch",
+            requested_decision: "continue or rerun the stage",
           },
           toolContext({ taskID, sessionID: workerID }),
           async () => "ignored",
@@ -162,6 +162,31 @@ test("request_orchestrator_decision cancels the pending request when orchestrato
 
       expect(listPendingAgentCoordinationRequests(taskID)).toHaveLength(0)
       expect(listAgentCoordinationRequests(taskID).map((row) => row.payload.status)).toEqual(["cancelled"])
+    },
+  })
+})
+
+test("request_orchestrator_decision rejects redispatch as a requested decision literal", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const { taskID, workerID } = await seedTaskWorker()
+
+      await expect(
+        executeRequestOrchestratorDecision(
+          {
+            summary: "Need routing",
+            details: "Worker must describe evidence and ask for orchestration judgment, not name the response action.",
+            blocking: true,
+            requested_decision: "redispatch",
+          },
+          toolContext({ taskID, sessionID: workerID }),
+          async () => "queued",
+        ),
+      ).rejects.toThrow(/must describe the scheduling question/)
+
+      expect(listAgentCoordinationRequests(taskID)).toHaveLength(0)
     },
   })
 })

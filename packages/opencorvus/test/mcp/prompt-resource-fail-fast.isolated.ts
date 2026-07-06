@@ -15,6 +15,7 @@ let listPromptOptions: unknown[] = []
 let listResourceOptions: unknown[] = []
 let getPromptOptions: unknown[] = []
 let readResourceOptions: unknown[] = []
+let projectionRequestOptions: unknown[] = []
 let transportRequestInits: unknown[] = []
 let finishAuthRequestInits: unknown[] = []
 let finishAuthCalls = 0
@@ -26,6 +27,8 @@ let transportCloseCalls = 0
 let toolList: Array<{ name: string; description?: string; inputSchema: Record<string, unknown> }> = []
 let resourceList: Array<{ uri: string; name: string; title?: string; description?: string; mimeType?: string }> = []
 let serverCapabilities: Record<string, Record<string, unknown>> = {}
+let promptProjectionPayload: unknown = { messages: [] }
+let resourceProjectionPayload: unknown = { contents: [] }
 
 class MockUnauthorizedError extends Error {
   constructor() {
@@ -84,6 +87,12 @@ mock.module("@modelcontextprotocol/sdk/client/index.js", () => ({
       readResourceOptions.push(options)
       if (resourceFetchError) throw resourceFetchError
       return { contents: [] }
+    }
+    async request(request: { method?: string }, schema: { parse: (value: unknown) => unknown }, options?: unknown) {
+      projectionRequestOptions.push(options)
+      if (request.method === "prompts/get") return schema.parse(promptProjectionPayload)
+      if (request.method === "resources/read") return schema.parse(resourceProjectionPayload)
+      throw new Error(`unexpected request method: ${request.method}`)
     }
   },
 }))
@@ -173,6 +182,7 @@ beforeEach(async () => {
   listResourceOptions = []
   getPromptOptions = []
   readResourceOptions = []
+  projectionRequestOptions = []
   transportRequestInits = []
   finishAuthRequestInits = []
   finishAuthCalls = 0
@@ -184,6 +194,8 @@ beforeEach(async () => {
   closeCalls = 0
   transportCloseCalls = 0
   serverCapabilities = { tools: {}, prompts: {}, resources: {} }
+  promptProjectionPayload = { messages: [] }
+  resourceProjectionPayload = { contents: [] }
   await Instance.disposeAll()
   await McpOAuthCallback.stop()
   Database.close()
@@ -220,6 +232,10 @@ async function withRemoteMcp(fn: () => Promise<void>) {
 function expectTransportSignal(value: unknown) {
   expect(value && typeof value === "object" && "signal" in value).toBe(true)
   expect((value as { signal?: unknown }).signal).toBeInstanceOf(AbortSignal)
+}
+
+function expectMcpRequestTimeout(value: unknown) {
+  expect(value).toMatchObject({ resetTimeoutOnProgress: true, timeout: expect.any(Number) })
 }
 
 function remoteAuthKey() {
@@ -286,6 +302,77 @@ describe("MCP prompt and resource listing", () => {
       expect(status.remote).toEqual({ status: "failed", error: "resource list unavailable" })
       expect(closeCalls).toBeGreaterThan(0)
       expect(transportCloseCalls).toBeGreaterThan(0)
+    })
+  })
+
+  test("scoped prompt projection payload requires explicit messages array", async () => {
+    await withRemoteMcp(async () => {
+      promptProjectionPayload = {}
+      await expect(
+        MCP.getScopedPromptProjectionPayload({
+          key: "remote",
+          mcp: {
+            type: "remote",
+            url: "https://example.com/mcp",
+            transport: "streamable-http",
+            oauth: false,
+          },
+          cwd: Instance.directory,
+          promptName: "template",
+        }),
+      ).rejects.toThrow()
+
+      promptProjectionPayload = { messages: [] }
+      await expect(
+        MCP.getScopedPromptProjectionPayload({
+          key: "remote",
+          mcp: {
+            type: "remote",
+            url: "https://example.com/mcp",
+            transport: "streamable-http",
+            oauth: false,
+          },
+          cwd: Instance.directory,
+          promptName: "template",
+        }),
+      ).resolves.toEqual({ messages: [] })
+      expectMcpRequestTimeout(projectionRequestOptions.at(-1))
+    })
+  })
+
+  test("scoped resource projection payload requires explicit contents array", async () => {
+    await withRemoteMcp(async () => {
+      resourceList = [{ name: "shared", uri: "mcp://fixture/shared.md" }]
+      resourceProjectionPayload = {}
+      await expect(
+        MCP.readScopedResourceProjectionPayload({
+          key: "remote",
+          mcp: {
+            type: "remote",
+            url: "https://example.com/mcp",
+            transport: "streamable-http",
+            oauth: false,
+          },
+          cwd: Instance.directory,
+          resourceName: "shared",
+        }),
+      ).rejects.toThrow()
+
+      resourceProjectionPayload = { contents: [] }
+      await expect(
+        MCP.readScopedResourceProjectionPayload({
+          key: "remote",
+          mcp: {
+            type: "remote",
+            url: "https://example.com/mcp",
+            transport: "streamable-http",
+            oauth: false,
+          },
+          cwd: Instance.directory,
+          resourceName: "shared",
+        }),
+      ).resolves.toEqual({ contents: [] })
+      expectMcpRequestTimeout(projectionRequestOptions.at(-1))
     })
   })
 

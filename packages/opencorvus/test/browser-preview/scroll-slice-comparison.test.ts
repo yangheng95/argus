@@ -5,7 +5,11 @@ import path from "node:path"
 import sharp from "sharp"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { compareBrowserPreviewScrollSlice } from "../../src/browser-preview/scroll-slice-comparison"
-import { findBrowserPreviewTargetByID, resolveRuntimeRelativePath } from "../../src/browser-preview/persist"
+import {
+  findBrowserPreviewTargetByID,
+  findReadableBrowserPreviewEvidenceByID,
+  resolveRuntimeRelativePath,
+} from "../../src/browser-preview/persist"
 import {
   BrowserPreviewCompareScrollSlicesTool,
   BrowserPreviewCompareScrollSlicesToolParameters,
@@ -60,6 +64,7 @@ describe("browser preview scroll-slice comparison", () => {
 
         expect(result.status).toBe("passed")
         expect(result.operation).toBe("scroll-slice-comparison")
+        expect(result.evidenceID).toMatch(/^art_/)
         expect(result.implementation.actualScrollY).toBe(300)
         expect(result.implementation.viewport).toEqual({ width: 360, height: 180 })
         expect(result.comparison_guidance.side_by_side_legend.left.role).toBe("source_reference")
@@ -76,6 +81,14 @@ describe("browser preview scroll-slice comparison", () => {
         await expectPngDimensions(sourceCrop, { width: 360, height: 180 })
         await expectPngDimensions(implementationCrop, { width: 360, height: 180 })
         await expectPngDimensions(sideBySide, { width: 736, height: 256 })
+        const evidence = await findReadableBrowserPreviewEvidenceByID({
+          projectRoot: tmp.path,
+          taskID,
+          evidenceID: result.evidenceID,
+        })
+        expect(evidence?.operationKind).toBe("scroll-slice-comparison")
+        expect(evidence?.status).toBe("passed")
+        expect(evidence?.artifactPaths?.side_by_side).toBe(result.artifacts.side_by_side)
         expect(findBrowserPreviewTargetByID({ taskID, targetID: target.id })?.url).toBe(server.url)
       } finally {
         await server.close()
@@ -114,6 +127,7 @@ describe("browser preview scroll-slice comparison", () => {
         })
 
         expect(result.status).toBe("failed")
+        expect(result.evidenceID).toMatch(/^art_/)
         expect(result.visual.ssim_score).toBeLessThan(0.8)
         const diagnostics = result.diagnostics.join("\n")
         expect(diagnostics).toContain("Scroll-slice SSIM")
@@ -123,6 +137,13 @@ describe("browser preview scroll-slice comparison", () => {
         expect(diagnostics).toContain("page should be calibrated as a whole")
         const sideBySide = resolveRuntimeRelativePath(tmp.path, result.artifacts.side_by_side)
         await expectPngDimensions(sideBySide, { width: 736, height: 288 })
+        const evidence = await findReadableBrowserPreviewEvidenceByID({
+          projectRoot: tmp.path,
+          taskID,
+          evidenceID: result.evidenceID,
+        })
+        expect(evidence?.operationKind).toBe("scroll-slice-comparison")
+        expect(evidence?.status).toBe("failed")
       } finally {
         await server.close()
       }
@@ -262,8 +283,11 @@ describe("browser preview scroll-slice comparison", () => {
         expect(output.attachments).toHaveLength(1)
         expect(output.attachments[0]?.mime).toBe("image/png")
         expect(output.metadata.referenceComparisonProof).toBe(false)
+        expect(output.metadata.evidenceID).toMatch(/^art_/)
+        expect(output.metadata.evidenceRef).toBe(`browser_preview_evidence:${output.metadata.evidenceID}`)
         expect(output.output).toContain("Supporting visual_diff evidence only")
         const payload = JSON.parse(output.output)
+        expect(payload.evidenceID).toBe(output.metadata.evidenceID)
         expect(payload.comparison_guidance.side_by_side_legend.left.label).toBe("LEFT: source/reference image")
         expect(payload.comparison_guidance.side_by_side_legend.right.label).toBe(
           "RIGHT: rendered/local implementation",

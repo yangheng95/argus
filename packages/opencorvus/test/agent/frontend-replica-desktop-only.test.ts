@@ -50,6 +50,9 @@ describe("frontend replica desktop-only generation scope", () => {
     expect(skill).toContain("Do not re-run Requirements, Architect, `frontend_research`, `frontend_design`, or the whole workflow")
     expect(skill).toContain("## Source authority")
     expect(skill).toContain("Source URL/screenshot/DOM/computed-style/interaction evidence defines the replica contract")
+    expect(skill).toContain("create_visual_region_binding_package")
+    expect(skill).toContain("update_frontend_visual_region_binding")
+    expect(skill).toContain("reference_region_key")
     expect(skill).toContain("## Replica surface model")
     expect(skill).toContain("current Visual QA / Integrity blockers, and acceptance-attempt count")
     expect(skill).toContain("A Build result with no target project diff")
@@ -65,6 +68,7 @@ describe("frontend replica desktop-only generation scope", () => {
     expect(skill).toContain("Do not mix several user-visible source components")
     expect(skill).toContain("generally needs 10 or more goals")
     expect(skill).toContain("source registry or shared mock contracts")
+    expect(skill).toContain("reference_coverage.reference_regions")
     expect(skill).toContain("Do not accept `no_project_diff`, documentation-only output")
     expect(skill).toContain("## Failure taxonomy")
     expect(skill).toContain("Implementation non-delivery")
@@ -112,8 +116,15 @@ describe("frontend replica desktop-only generation scope", () => {
     expect(agents.architect).toContain("footer/page y alignment")
     expect(agents.architect).toContain("empty CSS spacing")
     expect(agents["frontend-design"]).toContain("visible content, assets, canvas/image captures")
+    expect(agents["frontend-design"]).toContain("create_visual_region_coordinate_atlas")
+    expect(agents["frontend-design"]).toContain("update_frontend_visual_region_binding")
+    expect(agents["frontend-design"]).toContain("reference_region_key")
     expect(agents["frontend-design"]).toContain("instead of emitting page-height or min-height filler instructions")
+    expect(agents.architect).toContain("reference_coverage.reference_regions")
+    expect(agents.architect).toContain("source_reference_artifact")
     expect(agents.build).toContain("browser_preview_reference_regions")
+    expect(agents.build).toContain("goal-scoped target reference crops")
+    expect(agents.build).toContain("missing `reference_region_key` blocker")
     expect(agents.build).not.toContain("browser_preview_compare_scroll_slices")
     expect(agents.build).toContain("leave screen-by-screen scroll-slice visual_diff to Visual QA")
     expect(agents.build).toContain("comparison_guidance LEFT reference / RIGHT implementation")
@@ -178,9 +189,14 @@ describe("frontend replica desktop-only generation scope", () => {
     expect(build).toContain("verify multiple desktop-class viewports")
     expect(visualQa).toContain("Do not request, evaluate, or block on mobile/tablet reference evidence")
     expect(visualQa).toContain("additional desktop-class constrained or wide viewports")
-    expect(orchestrator).toContain(
+    expect(orchestrator).not.toContain(
       "tablet/mobile/non-desktop packets require explicit current multi-end migration authorization",
     )
+    expect(orchestrator).toContain("Domain-specific replica scope, desktop/mobile policy")
+
+    const agents = await frontendReplicaAgents()
+    expect(agents.orchestrator?.toLowerCase()).toContain("keep template mobile text out of goals")
+    expect(agents.orchestrator).toContain("scoped desktop adaptive viewport checks")
   })
 
   test("model-readable frontend design tools and handoffs do not imply multi-viewport default work", async () => {

@@ -14,6 +14,7 @@ import { MissionID } from "@/mission/schema"
 import { listMissionTasks, listTaskRows } from "@/engine/store"
 import { deriveTaskStatus } from "@/engine/task-status"
 import { PromptProfileResolver } from "@/expert-squad/prompt-profile-resolver"
+import { Config } from "@/config/config"
 import {
   MissionStatusSnapshot,
   StatusSnapshotState,
@@ -436,6 +437,7 @@ export function MissionRoutes() {
             await PromptProfileResolver.assertKnownProfileID({
               projectDirectory: Instance.directory,
               profileID: input.promptProfile,
+              config: Config.mergeOverlay(await Config.get(), { prompt_profile: { active: input.promptProfile } }),
             })
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error)

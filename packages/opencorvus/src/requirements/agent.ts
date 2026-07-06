@@ -23,10 +23,8 @@ import { createAgentCoordinationRuntimeTools } from "@/agent/coordination-runtim
 import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
 import { clarificationTranscriptSection, operatorNotesSection } from "@/engine"
-import { AttachmentStore } from "@/storage/attachment-store"
+import { renderAgentContextPacketSection, type AgentContextPacket, withAttachmentContextPacket } from "@/agent/context-packet"
 import { renderUserRequestSection } from "@/intent/request-prompt"
-import type { VisualSpec } from "@/frontend-design/types"
-import { renderVisualContractPromptSection } from "@/frontend-design/prompt-section"
 import {
   allResearchEvidenceRefsForTask,
   renderFrontendResearchBriefPromptSection,
@@ -61,12 +59,10 @@ export namespace RequirementsAgent {
   export interface RunInput {
     title: string
     request: string
-    /** Base64 image attachments — injected as vision content alongside the request text. */
+    /** Task attachment refs surfaced as link/index context alongside the request text. */
     attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
-    /** Advisory visual contract produced by frontend_design. */
-    designSpecs?: VisualSpec[]
-    /** Authoritative frontend template entries produced by frontend_design. */
-    frontendDesign?: string
+    /** Upstream agent handoff packets supplied by the scheduler. */
+    contextPackets?: AgentContextPacket[]
     taskID?: string
     parentSessionID?: string
     model?: { providerID: string; modelID: string }
@@ -135,7 +131,6 @@ export namespace RequirementsAgent {
         buildReport: () => outputToolKit.buildReport(),
       },
       buildUserPrompt: () => buildUserPrompt(input, context),
-      buildUserParts: () => buildPromptParts(buildUserPrompt(input, context), input.attachments),
       terminalTool: {
         toolName: "submit_requirements",
         isSatisfied: (collector) => collector.finalized,
@@ -210,21 +205,12 @@ function collectorToOutput(collector: RequirementsCollector): RequirementsOutput
 // Prompt construction
 // ---------------------------------------------------------------------------
 
-async function buildPromptParts(
-  text: string,
-  attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>,
-) {
-  const enrichedText = text + AttachmentStore.renderAttachmentInventory(attachments)
-  const inlineParts = await AttachmentStore.inlineFileParts(attachments)
-  return [{ type: "text" as const, text: enrichedText }, ...inlineParts]
-}
-
 function buildUserPrompt(
   input: {
     title: string
     request: string
-    designSpecs?: VisualSpec[]
-    frontendDesign?: string
+    contextPackets?: AgentContextPacket[]
+    attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
     taskID?: string
   },
   prefetched: string,
@@ -258,13 +244,10 @@ function buildUserPrompt(
     if (operatorNotes) sections.push(operatorNotes)
   }
 
-  if (input.designSpecs && input.designSpecs.length > 0) {
-    sections.push(renderVisualContractPromptSection({ specs: input.designSpecs }))
-  }
-
-  if (input.frontendDesign && input.frontendDesign.trim().length > 0) {
-    sections.push(input.frontendDesign)
-  }
+  const contextPackets = renderAgentContextPacketSection(
+    withAttachmentContextPacket(input.contextPackets, input.attachments),
+  )
+  if (contextPackets) sections.push(contextPackets)
 
   const researchBrief = renderResearchBriefPromptSection({
     taskID: input.taskID,

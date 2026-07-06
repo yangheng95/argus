@@ -9,6 +9,8 @@ import { SessionWake } from "../../src/session/wake"
 import { Bus } from "../../src/bus"
 import { BusEvent } from "../../src/bus/bus-event"
 import { Session } from "../../src/session"
+import { SessionPrompt } from "../../src/session/prompt"
+import { Identifier } from "../../src/id/id"
 
 const TestEvent = BusEvent.define(
   "test.event",
@@ -31,6 +33,38 @@ async function waitUntil(check: () => boolean, timeout = 2000) {
     await Bun.sleep(10)
   }
   throw new Error("timed out")
+}
+
+async function importCurrentProjectChildWithForeignParent(input: {
+  directory: string
+  parentID: string
+  title: string
+}) {
+  let sessionID = ""
+  await Instance.provide({
+    directory: input.directory,
+    fn: async () => {
+      const now = Date.now()
+      const child: Session.Info = {
+        id: Identifier.descending("session"),
+        slug: `event-cross-parent-${Math.random().toString(36).slice(2)}`,
+        projectID: Instance.project.id,
+        directory: input.directory,
+        parentID: input.parentID,
+        title: input.title,
+        version: "test",
+        kind: "assistant",
+        metadata: {},
+        time: {
+          created: now,
+          updated: now,
+        },
+      }
+      await Session.importSnapshot({ info: child, messages: [] })
+      sessionID = child.id
+    },
+  })
+  return sessionID
 }
 
 describe("scheduler.event-service", () => {
@@ -124,6 +158,66 @@ describe("scheduler.event-service", () => {
     wake.mockRestore()
   })
 
+  test("event dispatch rejects persisted jobs whose parent lineage leaves the current project", async () => {
+    await using current = await tmpdir({ git: true })
+    await using foreign = await tmpdir({ git: true })
+    const loop = spyOn(SessionPrompt, "loop").mockResolvedValue(undefined as never)
+    let foreignParentID = ""
+
+    await Instance.provide({
+      directory: foreign.path,
+      fn: async () => {
+        foreignParentID = (await Session.create({ kind: "assistant", title: "foreign parent" })).id
+      },
+    })
+    const childID = await importCurrentProjectChildWithForeignParent({
+      directory: current.path,
+      parentID: foreignParentID,
+      title: "current event child with foreign parent",
+    })
+
+    await Instance.provide({
+      directory: current.path,
+      fn: async () => {
+        const id = "crn_evt_foreign_parent_" + Math.random().toString(36).slice(2)
+        Database.use((db) =>
+          db
+            .insert(EventJobTable)
+            .values({
+              id,
+              project_id: Instance.project.id,
+              session_id: childID,
+              name: "foreign parent persisted event",
+              event_type: "test.event",
+              match_json: { "properties.value": "go" },
+              prompt: "must not wake",
+              enabled: true,
+              one_shot: false,
+              cooldown_ms: 0,
+            })
+            .run(),
+        )
+
+        EventService.init()
+        await Bus.publish(TestEvent, { value: "go" })
+        await waitUntil(
+          () =>
+            (Database.use((db) => db.select().from(EventJobTable).where(eq(EventJobTable.id, id)).get())
+              ?.failure_count ?? 0) === 1,
+        )
+
+        const row = Database.use((db) => db.select().from(EventJobTable).where(eq(EventJobTable.id, id)).get())
+        expect(row?.enabled).toBe(true)
+        expect(row?.last_run).toBeNull()
+        expect(row?.last_event).toBeNull()
+        expect(row?.last_error).toContain("Session not found")
+      },
+    })
+
+    expect(loop).not.toHaveBeenCalled()
+    loop.mockRestore()
+  })
+
   test("create rejects foreign sessions and remove reports only current-project rows", async () => {
     await using one = await tmpdir({ git: true })
     await using two = await tmpdir({ git: true })
@@ -131,6 +225,7 @@ describe("scheduler.event-service", () => {
     let oneProjectID = ""
     let twoProjectID = ""
     let twoSessionID = ""
+    let oneChildWithForeignParentID = ""
 
     await Instance.provide({
       directory: one.path,
@@ -163,7 +258,29 @@ describe("scheduler.event-service", () => {
       },
     })
 
-    expect(() =>
+    await Instance.provide({
+      directory: one.path,
+      fn: async () => {
+        const child: Session.Info = {
+          id: Identifier.descending("session"),
+          slug: "event-cross-parent-child",
+          projectID: Instance.project.id,
+          directory: one.path,
+          parentID: twoSessionID,
+          title: "project one event child with project two parent",
+          version: "test",
+          kind: "build",
+          time: {
+            created: Date.now(),
+            updated: Date.now(),
+          },
+        }
+        await Session.importSnapshot({ info: child, messages: [] })
+        oneChildWithForeignParentID = child.id
+      },
+    })
+
+    await expect(
       EventService.create({
         name: "bad event session",
         eventType: "test.bad",
@@ -171,7 +288,16 @@ describe("scheduler.event-service", () => {
         projectId: oneProjectID,
         sessionId: twoSessionID,
       }),
-    ).toThrow("Session not found")
+    ).rejects.toThrow("Session not found")
+    await expect(
+      EventService.create({
+        name: "bad event foreign parent",
+        eventType: "test.bad.parent",
+        prompt: "bad",
+        projectId: oneProjectID,
+        sessionId: oneChildWithForeignParentID,
+      }),
+    ).rejects.toThrow("Session not found")
 
     expect(EventService.remove(foreignJobID, oneProjectID)).toBe(false)
     expect(

@@ -13,6 +13,15 @@ async function gitTracked(dir: string, target: string) {
   return res.exitCode === 0
 }
 
+async function gitIgnoredNoIndex(dir: string, target: string) {
+  const res = await $`git check-ignore -v --no-index -- ${target}`.cwd(dir).quiet().nothrow()
+  const output = res.stdout.toString().trim()
+  const lastMatch = output.split(/\r?\n/).filter(Boolean).at(-1)
+  if (!lastMatch) return false
+  const pattern = lastMatch.match(/^[^:]+:\d+:(.*?)\t/)?.[1]
+  return pattern ? !pattern.startsWith("!") : false
+}
+
 async function commit(dir: string, files: string[], message: string) {
   for (const rel of files) await $`git add -- ${rel}`.cwd(dir).quiet()
   await $`git -c user.email=opencorvus@local -c user.name=OpenCorvus commit -m ${message}`.cwd(dir).quiet()
@@ -52,6 +61,8 @@ describe("ensureGitignore", () => {
         const body = await fs.readFile(path.join(tmp.path, ".gitignore"), "utf8")
         expect(body).toContain(".opencorvus/r/")
         expect(body).toContain(".opencorvus/runtime/")
+        expect(body).toContain("!.opencorvus/expert-squads/**/agents/build/")
+        expect(body).toContain("!.opencorvus/expert-squads/**/agents/build/**")
         expect(body).not.toMatch(/(^|\n)\.opencorvus\/(\r?\n|$)/)
         expect(body).toContain(".opencorvus-meta.json")
         expect(body).toContain(".opencorvus-worktrees/")
@@ -71,6 +82,8 @@ describe("ensureGitignore", () => {
         expect(body).toContain("node_modules/")
         expect(body).toContain(".opencorvus/r/")
         expect(body).toContain(".opencorvus/runtime/")
+        expect(body).toContain("!.opencorvus/expert-squads/**/agents/build/")
+        expect(body).toContain("!.opencorvus/expert-squads/**/agents/build/**")
         expect(body).not.toMatch(/(^|\n)\.opencorvus\/(\r?\n|$)/)
         expect(body).toContain(".opencorvus-meta.json")
         expect(body).toContain("/artifacts/")
@@ -157,5 +170,27 @@ describe("ensureGitignore", () => {
     const subjects = (await fs.readFile(path.join(tmp.path, ".hook-subjects"), "utf8")).trim().split(/\r?\n/)
     expect(subjects).toContain(InternalGitCommitSubject.untrackIgnoredPaths)
     expect(subjects).toContain(InternalGitCommitSubject.seedGitignore)
+  })
+
+  test("appends expert-squad build unignore rules for existing projects with generic build ignore", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const promptPath = ".opencorvus/expert-squads/frontend-replica/agents/build/system.md"
+    await fs.mkdir(path.dirname(path.join(tmp.path, promptPath)), { recursive: true })
+    await Bun.write(path.join(tmp.path, promptPath), "build overlay\n")
+    await Bun.write(path.join(tmp.path, ".gitignore"), "node_modules/\nbuild/\n")
+
+    expect(await gitIgnoredNoIndex(tmp.path, promptPath)).toBe(true)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await ensureGitignore()
+      },
+    })
+
+    const body = await fs.readFile(path.join(tmp.path, ".gitignore"), "utf8")
+    expect(body).toContain("!.opencorvus/expert-squads/**/agents/build/")
+    expect(body).toContain("!.opencorvus/expert-squads/**/agents/build/**")
+    expect(await gitIgnoredNoIndex(tmp.path, promptPath)).toBe(false)
   })
 })

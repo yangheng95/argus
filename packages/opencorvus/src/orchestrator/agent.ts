@@ -83,6 +83,7 @@ import {
   updateTask,
   WorkflowRegistry,
   createWorkflowState,
+  latestWorkflowSelectionForTask,
   workflowSelectionSnapshot,
   renderWorkflowPrompt,
 } from "@/engine"
@@ -642,6 +643,7 @@ export namespace Orchestrator {
         log.error("orchestrator: no session_id on task", { taskID })
         return
       }
+      await assertTaskRootSessionLineage(task)
 
       // workflow_state is no longer persisted. Every wake asks the scheduler
       // registry for the workflow that applies to this task kind, then derives
@@ -656,9 +658,14 @@ export namespace Orchestrator {
         throw new Error(`Orchestrator workflow "${workflowID}" is not registered`)
       }
       const workflowState: WorkflowState = createWorkflowState(workflow)
-      const isFirstWake = !task.time_started
-      if (isFirstWake) {
-        EngineProtocol.emit(EngineEvent.WorkflowSelected, {
+      // Direct-start tasks already have time_started before the first
+      // orchestrator wake, so workflow-selection ownership must be keyed off
+      // durable protocol evidence instead of task timestamps.
+      const workflowSelection = latestWorkflowSelectionForTask(taskID)
+      const shouldEmitWorkflowSelection =
+        !workflowSelection || workflowSelection.workflowID !== workflow.id || !workflowSelection.workflow
+      if (shouldEmitWorkflowSelection) {
+        await EngineProtocol.emit(EngineEvent.WorkflowSelected, {
           taskID,
           workflowID: workflow.id,
           workflowName: workflow.name,
@@ -778,7 +785,7 @@ export namespace Orchestrator {
 
       log.info("orchestrator starting", {
         taskID,
-        firstWake: isFirstWake,
+        emittedWorkflowSelection: shouldEmitWorkflowSelection,
         note: event?.note,
         sessionID: agentSession.id,
         model: `${model.providerID}/${model.id}`,
@@ -1141,10 +1148,21 @@ export namespace Orchestrator {
   }
 }
 
+async function assertTaskRootSessionLineage(task: Pick<TaskRow, "id" | "session_id" | "project_id">): Promise<void> {
+  if (!task.session_id) {
+    throw new Error(`Task ${task.id} has no root session`)
+  }
+  await Session.assertLineageInProject({
+    sessionID: task.session_id,
+    projectID: task.project_id,
+  })
+}
+
 async function orchestratorSessionForTask(task: TaskRow): Promise<Session.Info> {
   if (!task.session_id) {
     throw new Error(`Task ${task.id} has no root session`)
   }
+  await assertTaskRootSessionLineage(task)
   const existing = (await Session.children(task.session_id))
     .filter((session) => session.kind === "orchestrator")
     .sort((left, right) => left.time.created - right.time.created)
@@ -1283,6 +1301,7 @@ async function buildSystemParts(
   workflow?: MiniWorkflow,
   workflowState?: WorkflowState,
 ): Promise<{ parts: string[]; snapshot: TaskDesc }> {
+  await assertTaskRootSessionLineage(task)
   const profileScope = task.session_id ? { sessionID: task.session_id } : { taskID: task.id }
   const [config, projectDirectory] = await Promise.all([
     EffectiveConfig.effective(profileScope),
@@ -1303,10 +1322,10 @@ async function buildSystemParts(
   // reads facts and routes repair; it does not expose a retry-loop switch.
   ctx.push("## Recovery Discipline")
   ctx.push(
-    "- Rejected acceptance reviews and failed terminal waves require same-task diagnosis from the rendered facts. Route product, dependency, toolchain, git-worktree, preview, and browser-runner blockers to Build; route graph or dependency-contract blockers to modify_goal or architect; ask the operator only for external, destructive, or out-of-scope blockers.",
+    "- Rejected acceptance reviews and failed terminal waves require same-task diagnosis from the rendered facts. Route product, dependency, toolchain, git-worktree, preview, browser-runner, and no_project_diff producer blockers to Build; route graph or dependency-contract blockers to modify_goal for point repair, and use architect only when the persisted architect artifact itself is proven invalid and named. Ask the operator only for external, destructive, or out-of-scope blockers.",
   )
   ctx.push(
-    "- Do not restart upstream merely because a Build attempt failed or a retained worktree contains partial files. Reuse `query_failed_goals`, build retry requests, modify_goal, or architect re-entry according to the proven owner, then rerun the relevant verification or integrity path.",
+    "- Do not restart upstream merely because a Build attempt failed, a producer is no_project_diff, or a retained worktree contains partial files. Do not delete a dependency edge to bypass a non-delivered producer. Reuse `query_failed_goals`, build retry requests, or `modify_goal` according to the proven owner, then rerun the relevant verification or integrity path; use `propose_task`, `fail_task`, or `question` when the active workflow contract is invalid or blocked outside the current task.",
   )
   ctx.push("")
 

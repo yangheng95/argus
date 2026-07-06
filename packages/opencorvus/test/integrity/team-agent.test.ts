@@ -2,7 +2,7 @@ import { afterAll, afterEach, describe, expect, mock, spyOn, test } from "bun:te
 import { AgentSemaphore } from "../../src/engine/agent-semaphore"
 import { Instance } from "../../src/project/instance"
 import { Session } from "@/session"
-import type { IntegrityReplayContext } from "../../src/integrity/replay-context"
+import { integrityReplayContextPacket, type IntegrityReplayContext } from "../../src/integrity/replay-context"
 import { tmpdir } from "../fixture/fixture"
 
 let runnerCalls: any[] = []
@@ -128,11 +128,12 @@ function replayContext(attemptNumber: number): IntegrityReplayContext {
     },
     priorFactCheckAttempts: [],
     priorAttempts: [],
-    buildEvidenceSinceLastReview: {
+    implementationEvidenceSinceLastReview: {
       changedFiles: [],
       diffs: [],
-      buildSummaries: [],
+      implementationSummaries: [],
       goalRuns: [],
+      taskAgentOutcomes: [],
     },
     scaleSignals: {
       goals: 1,
@@ -140,7 +141,6 @@ function replayContext(attemptNumber: number): IntegrityReplayContext {
       acceptanceSpecs: 0,
       changedFilesTotal: 0,
       changedFilesSinceLastReview: 0,
-      priorFactCheckAttempts: [],
       priorAttempts: attemptNumber - 1,
       priorBlockingFindings: 0,
       phase: "post_build",
@@ -320,9 +320,12 @@ function reReviewReplayContext(): IntegrityReplayContext {
         blockingFindings: [
           {
             id: "BF-1",
+            fingerprint: "if_1111111111111111",
+            canonicalSymptom: "settings validation allows invalid settings to persist",
             title: "Settings validation blind spot",
             description: "Invalid settings can still be persisted.",
             repair: "Reject invalid settings before persisting.",
+            verify: ["settings validation rejects invalid persisted settings"],
             filePaths: ["src/settings.ts"],
             requirementIDs: ["REQ-settings"],
             specIDs: ["AS-settings"],
@@ -331,19 +334,27 @@ function reReviewReplayContext(): IntegrityReplayContext {
         requiredRepairs: [
           {
             id: "repair-settings",
+            fingerprint: "if_1111111111111111",
+            canonicalSymptom: "settings validation allows invalid settings to persist",
             description: "Add settings validation",
+            repair: "Reject invalid settings before persisting.",
+            verify: ["settings validation rejects invalid persisted settings"],
             filePaths: ["src/settings.ts"],
+            requirementIDs: ["REQ-settings"],
+            specIDs: ["AS-settings"],
+            sourceFindingIDs: ["BF-1"],
+            priorAttemptRefs: ["artifact_attempt_1"],
           },
         ],
         unresolvedDisagreements: [],
       },
     ],
-    buildEvidenceSinceLastReview: {
+    implementationEvidenceSinceLastReview: {
       sinceAttemptNumber: 1,
       sinceTimeCreated: priorTime,
       changedFiles: ["src/services/storage.ts"],
       diffs: [{ file: "src/services/storage.ts", status: "modified", additions: 8, deletions: 2 }],
-      buildSummaries: ["Build updated the storage guard."],
+      implementationSummaries: ["Build updated the storage guard."],
       goalRuns: [
         {
           goalID: "goal_settings",
@@ -353,6 +364,7 @@ function reReviewReplayContext(): IntegrityReplayContext {
           timeCompleted: priorTime + 2000,
         },
       ],
+      taskAgentOutcomes: [],
     },
     scaleSignals: {
       goals: 2,
@@ -393,6 +405,19 @@ describe("integrity team-agent replay attempts", () => {
     await Instance.disposeAll().catch(() => undefined)
   })
 
+  test("reviewIntegrity rejects direct replayContext private input", async () => {
+    const { reviewIntegrity } = await import("../../src/integrity/team-agent")
+
+    await expect(
+      reviewIntegrity({
+        userRequest: "Ship settings validation",
+        taskTitle: "Settings validation",
+        goals: [],
+        replayContext: replayContext(1),
+      } as any),
+    ).rejects.toThrow("rejects direct replayContext input")
+  })
+
   test("uses replayContext attempt number for stream progress, forwarders, and completed event", async () => {
     await using tmp = await tmpdir({ git: true })
     globalThis.setInterval = ((callback: TimerHandler) => {
@@ -421,7 +446,7 @@ describe("integrity team-agent replay attempts", () => {
               requirement_ids: [],
             },
           ],
-          replayContext: reReviewReplayContext(),
+          contextPackets: [integrityReplayContextPacket(reReviewReplayContext())],
           taskID: "tsk_team_attempt",
           parentSessionID: "ses_parent",
         })
@@ -486,7 +511,7 @@ describe("integrity team-agent replay attempts", () => {
               requirement_ids: [],
             },
           ],
-          replayContext: replayContext(3),
+          contextPackets: [integrityReplayContextPacket(replayContext(3))],
           taskID: "tsk_team_continuation",
           parentSessionID: "ses_parent",
           continuation: {
@@ -524,7 +549,7 @@ describe("integrity team-agent replay attempts", () => {
           userRequest: "Ship settings validation",
           taskTitle: "Settings validation",
           goals: [],
-          replayContext: replayContext(4),
+          contextPackets: [integrityReplayContextPacket(replayContext(4))],
           taskID: "tsk_team_no_goals",
           parentSessionID: "ses_parent",
         })
@@ -559,7 +584,7 @@ describe("integrity team-agent replay attempts", () => {
               requirement_ids: [],
             },
           ],
-          replayContext: replayContext(1),
+          contextPackets: [integrityReplayContextPacket(replayContext(1))],
           taskID: "tsk_team_parallelism",
           task: {
             id: "tsk_team_parallelism",
@@ -599,7 +624,7 @@ describe("integrity team-agent replay attempts", () => {
               requirement_ids: [],
             },
           ],
-          replayContext: replayContext(1),
+          contextPackets: [integrityReplayContextPacket(replayContext(1))],
           taskID: "tsk_team_visual_required",
           parentSessionID: "ses_parent",
           projectRoot: tmp.path,
@@ -632,7 +657,7 @@ describe("integrity team-agent replay attempts", () => {
             requirement_ids: ["REQ-1"],
           },
         ],
-        replayContext: replayContext(1),
+        contextPackets: [integrityReplayContextPacket(replayContext(1))],
       },
       {
         rationale: "Need API reviewer.",
@@ -766,7 +791,7 @@ describe("integrity team-agent replay attempts", () => {
       ],
       requirements,
       requirementStatus,
-      replayContext: replayContext(1),
+      contextPackets: [integrityReplayContextPacket(replayContext(1))],
     })
 
     expect(prompt).toContain("Rendered all 9 requirements")
@@ -998,7 +1023,7 @@ describe("integrity team-agent replay attempts", () => {
             requirement_ids: ["REQ-1"],
           },
         ],
-        replayContext: replayContext(2),
+        contextPackets: [integrityReplayContextPacket(replayContext(2))],
       },
       {
         rationale: "Need a large report reviewer.",
@@ -1065,7 +1090,7 @@ describe("integrity team-agent replay attempts", () => {
             requirement_ids: ["REQ-1"],
           },
         ],
-        replayContext: replayContext(1),
+        contextPackets: [integrityReplayContextPacket(replayContext(1))],
       },
       {
         reviewerID: "rev_api",
@@ -1110,7 +1135,7 @@ describe("integrity team-agent replay attempts", () => {
           requirement_ids: ["REQ-settings"],
         },
       ],
-      replayContext: replayContext(1),
+      contextPackets: [integrityReplayContextPacket(replayContext(1))],
     }
 
     const reviewerPrompt = buildReviewerPrompt(input, {

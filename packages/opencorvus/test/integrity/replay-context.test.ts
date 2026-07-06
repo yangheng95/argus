@@ -1,16 +1,24 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { ProjectTable } from "../../src/project/project.sql"
 import { Database } from "../../src/storage/db"
-import { EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { EngineArtifactTable, EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { recordIntegrityAttempt } from "../../src/engine/persist"
 import { findLatestIntegrityAttemptArtifact, listIntegrityAttemptArtifacts } from "../../src/engine/store"
-import type { BuildAttemptOutcomeRow, GoalRunRow } from "../../src/engine/store"
+import type { GoalRunRow } from "../../src/engine/store"
+import type { TaskAgentOutcome } from "../../src/agent/outcomes"
 import {
   buildIntegrityReplayContext,
   buildSpecSnapshotLineage,
+  INTEGRITY_REPLAY_CONTEXT_PACKET_SCHEMA,
+  INTEGRITY_REPLAY_CONTEXT_PACKET_SOURCE,
+  integrityReplayContextFromContextPackets,
+  integrityReplayContextPacket,
   renderIntegrityReplayContextPrompt,
 } from "../../src/integrity/replay-context"
+import { buildIntegrityRootHistory } from "../../src/integrity/root-history"
+import { renderAgentContextPackets } from "../../src/agent/context-packet"
 import type { GoalContractFields } from "../../src/pipeline/types"
+import { canonicalIntegritySymptom, integrityFindingFingerprint } from "../../src/integrity/finding-manifest"
 import { resetDatabase } from "../fixture/db"
 
 type BuildRecordRow = {
@@ -75,6 +83,18 @@ function lineage(taskID: string, activeSpecSnapshotID: string, inheritedSpecSnap
     activeSpecSnapshotID,
     inheritedSpecSnapshotIDs,
     reason: inheritedSpecSnapshotIDs.length > 0 ? ("integrity_correction_lineage" as const) : ("active_only" as const),
+  }
+}
+
+function withIntegrityFingerprint<T extends Record<string, unknown>>(input: T): T & {
+  canonicalSymptom: string
+  fingerprint: string
+} {
+  const canonicalSymptom = canonicalIntegritySymptom(input)
+  return {
+    ...input,
+    canonicalSymptom,
+    fingerprint: integrityFindingFingerprint({ ...input, canonicalSymptom }),
   }
 }
 
@@ -145,51 +165,329 @@ function goalRun(input: { id: string; taskID: string; goalID: string; now: numbe
   }
 }
 
-function buildOutcome(input: {
+function agentOutcome(input: {
   id: string
-  taskID: string
-  goalID: string
-  goalRunID: string
+  provider?: string
+  artifactKind?: string
+  scope?: "task" | "goal"
+  runID?: string
+  sessionID?: string
+  goalID?: string | null
+  goalRunID?: string | null
   now: number
-  outcomeKind: BuildAttemptOutcomeRow["outcome_kind"]
-  terminalStatus?: BuildAttemptOutcomeRow["terminal_status"]
+  outcomeKind: string
+  terminalStatus?: string
   summary?: string
-  error?: string | null
-  noDiffReason?: string | null
+  error?: string
+  noDiffReason?: string
   changedFiles?: string[]
-}): BuildAttemptOutcomeRow {
+  reportedChangedFiles?: string[]
+  commitRef?: string
+}): TaskAgentOutcome {
   return {
     id: input.id,
-    task_id: input.taskID,
-    run_id: `${input.id}_run`,
-    goal_id: input.goalID,
-    goal_run_id: input.goalRunID,
-    session_id: `${input.goalRunID}_session`,
-    terminal_status: input.terminalStatus ?? "completed",
-    outcome_kind: input.outcomeKind,
+    provider: input.provider ?? "build",
+    artifactKind: input.artifactKind ?? "build_attempt_outcome",
+    scope: input.scope ?? (input.goalRunID ? "goal" : "task"),
+    capabilities: ["implementation"],
+    runID: input.runID ?? `${input.id}_run`,
+    goalID: input.goalID,
+    goalRunID: input.goalRunID,
+    sessionID: input.sessionID ?? (input.goalRunID ? `${input.goalRunID}_session` : `${input.id}_session`),
+    status: input.terminalStatus ?? "completed",
+    result: input.outcomeKind,
     summary: input.summary ?? `Outcome ${input.id}`,
-    error: input.error ?? null,
-    no_diff_reason: input.noDiffReason ?? null,
-    commit_ref: null,
-    published_commit_ref: null,
-    diff_base_ref: null,
-    diff_head_ref: null,
-    changed_files: input.changedFiles ?? [],
-    host_facts: {},
-    workspace: { dir: null, branch: null, base_ref: null },
-    time_created: input.now,
-    time_updated: input.now,
+    error: input.error,
+    noDiffReason: input.noDiffReason,
+    changedFiles: input.changedFiles ?? [],
+    reportedChangedFiles: input.reportedChangedFiles ?? input.changedFiles ?? [],
+    commitRef: input.commitRef,
+    time: { created: input.now, updated: input.now },
+  }
+}
+
+function replayPacketFromStructuredData(data: unknown) {
+  return {
+    id: "integrity-replay-context-test",
+    title: "Integrity Replay Context Test",
+    source: INTEGRITY_REPLAY_CONTEXT_PACKET_SOURCE,
+    scope: "task" as const,
+    parts: [
+      {
+        type: "structured" as const,
+        schema: INTEGRITY_REPLAY_CONTEXT_PACKET_SCHEMA,
+        data,
+      },
+    ],
   }
 }
 
 describe("integrity replay context artifact source", () => {
-  beforeEach(async () => {
-    await resetDatabase()
+beforeEach(async () => {
+  await resetDatabase()
+})
+
+afterEach(async () => {
+  await resetDatabase()
+})
+
+test("integrity replay context travels through structured context packets without dumping JSON into prompt text", () => {
+  const now = Date.UTC(2026, 6, 4, 8)
+  const taskID = "tsk_replay_packet"
+  seedTask({ projectID: "prj_replay_packet", taskID, specIDs: ["spec_replay_packet"], now })
+  const context = buildIntegrityReplayContext({
+    taskID,
+    lineage: lineage(taskID, "spec_replay_packet"),
+    phase: "post_build",
+    goals: [goal("packet", 1)],
+    buildRecords: [
+      buildRecord({
+        id: "build_packet",
+        taskID,
+        now,
+        summary: "Packet implementation changed the dashboard route.",
+        result: { changed_files: ["src/routes/dashboard.tsx"] },
+      }),
+    ],
+    goalRuns: [goalRun({ id: "run_packet", taskID, goalID: "packet", now })],
   })
 
-  afterEach(async () => {
-    await resetDatabase()
+  const packet = integrityReplayContextPacket(context)
+  const rendered = renderAgentContextPackets([packet])
+
+  expect(integrityReplayContextFromContextPackets([packet])).toEqual(context)
+  expect(rendered).toContain("structured_ref: schema=opencorvus.integrity.replay_context.v1")
+  expect(rendered).toContain("changed_files_since_last_review: 1")
+  expect(rendered).not.toContain("Packet implementation changed the dashboard route.")
+  expect(rendered).not.toContain("\"implementationEvidenceSinceLastReview\"")
+})
+
+test("rejects malformed nested structured replay context before prompt rendering", () => {
+  const context = buildIntegrityReplayContext({
+    taskID: "tsk_replay_malformed_packet",
+    lineage: lineage("tsk_replay_malformed_packet", "spec_replay_malformed_packet"),
+    phase: "post_build",
+    goals: [goal("malformed", 1)],
+    buildRecords: [],
+    goalRuns: [],
   })
+
+  expect(() =>
+    integrityReplayContextFromContextPackets([
+      replayPacketFromStructuredData({
+        ...context,
+        lineage: {
+          ...context.lineage,
+          activeSpecSnapshotID: undefined,
+        },
+      }),
+    ]),
+  ).toThrow(/lineage\.activeSpecSnapshotID/)
+
+  expect(() =>
+    integrityReplayContextFromContextPackets([
+      replayPacketFromStructuredData({
+        ...context,
+        implementationEvidenceSinceLastReview: {
+          ...context.implementationEvidenceSinceLastReview,
+          diffs: [{}],
+        },
+      }),
+    ]),
+  ).toThrow(/implementationEvidenceSinceLastReview\.diffs\.0\.file/)
+
+  expect(() =>
+    integrityReplayContextFromContextPackets([
+      replayPacketFromStructuredData({
+        ...context,
+        priorAttempts: [{ attemptNumber: 1 }],
+      }),
+    ]),
+  ).toThrow(/priorAttempts\.0\.artifactID/)
+
+  expect(() =>
+    integrityReplayContextFromContextPackets([
+      replayPacketFromStructuredData({
+        ...context,
+        priorAttempts: [
+          {
+            attemptNumber: 1,
+            artifactID: "artifact_integrity_attempt",
+            timeCreated: Date.UTC(2026, 6, 4, 8),
+            reviewers: [],
+            blockingFindings: [],
+            requiredRepairs: [
+              {
+                id: "repair-bad-fingerprint",
+                fingerprint: "legacy-fingerprint",
+                canonicalSymptom: "Legacy fingerprint must fail.",
+                description: "Legacy fingerprint must fail.",
+                repair: "Use protocol fingerprint.",
+                verify: [],
+                filePaths: [],
+                requirementIDs: [],
+                specIDs: [],
+                sourceFindingIDs: [],
+                priorAttemptRefs: [],
+              },
+            ],
+            unresolvedDisagreements: [],
+          },
+        ],
+      }),
+    ]),
+  ).toThrow(/fingerprint/)
+
+  expect(() =>
+    integrityReplayContextFromContextPackets([
+      replayPacketFromStructuredData({
+        ...context,
+        priorFactCheckAttempts: [
+          {
+            artifactID: "artifact_fact_check",
+            factCheckSessionID: "session_fact_check",
+            timeCreated: Date.UTC(2026, 6, 4, 8),
+            targetSessionID: 123,
+            targetAgent: "build",
+            targetMessageID: "message_fact_check",
+            verdict: "clean",
+            outcome: "completed",
+            itemsTotal: 1,
+            itemsInspected: 1,
+            verifiedCount: 1,
+            correctedCount: 0,
+            unresolvedCount: 0,
+          },
+        ],
+      }),
+    ]),
+  ).toThrow(/priorFactCheckAttempts\.0\.targetSessionID/)
+})
+
+test("rejects malformed persisted integrity attempt payloads instead of filtering them", () => {
+  const now = Date.now()
+  const stamp = `${now.toString(16)}_${Math.random().toString(16).slice(2)}`
+  const projectID = `proj_replay_malformed_attempt_${stamp}`
+  const taskID = `tsk_replay_malformed_attempt_${stamp}`
+  const specID = `spec_replay_malformed_attempt_${stamp}`
+  seedTask({ projectID, taskID, specIDs: [specID], now })
+
+  Database.use((db) =>
+    db
+      .insert(EngineArtifactTable)
+      .values({
+        id: `art_bad_integrity_${stamp}`,
+        task_id: taskID,
+        run_id: null,
+        goal_run_id: null,
+        kind: "integrity_attempt",
+        label: "verdict-needs_correction",
+        payload: {
+          spec_snapshot_id: specID,
+          session_id: `ses_replay_malformed_attempt_${stamp}`,
+          verdict: "needs_correction",
+          phase: "post_build",
+          attempts: 1,
+          reviewers: [],
+          findings_count: 1,
+          required_repairs_count: 0,
+          unresolved_disagreements_count: 0,
+          reason: "Malformed payload should fail at read time.",
+          team_report_markdown: "Malformed payload should fail at read time.",
+          findings: [
+            {
+              id: "BF-malformed",
+              severity: "blocking",
+              verdictImpact: "needs_correction",
+              fingerprint: "if_deadbeefdeadbeef",
+              canonicalSymptom: "Malformed finding payload.",
+              title: "Malformed finding payload",
+              description: "A malformed finding payload must not be filtered.",
+              evidence: ["malformed evidence"],
+              targetIDs: [],
+              requirementIDs: [],
+              specIDs: [],
+              filePaths: ["src/App.tsx", 7],
+              affectedSymbols: [],
+              repair: "Reject malformed payloads.",
+              verify: ["Payload read rejects malformed fields."],
+              sourceFindingIDs: [],
+              priorAttemptRefs: [],
+              reviewers: ["rev_malformed"],
+              extra: true,
+            },
+          ],
+          rounds: [],
+          required_repairs: [],
+          unresolved_disagreements: [],
+          time_completed: now + 10,
+        },
+        time_created: now + 10,
+        time_updated: now + 10,
+      })
+      .run(),
+  )
+
+  expect(() =>
+    buildIntegrityReplayContext({
+      taskID,
+      lineage: lineage(taskID, specID),
+      phase: "post_build",
+      goals: [],
+      requirements: [],
+      buildRecords: [],
+      goalRuns: [],
+    }),
+  ).toThrow(/integrity attempt artifact/)
+
+  expect(() =>
+    buildIntegrityRootHistory({
+      taskID,
+      specSnapshotLineage: lineage(taskID, specID),
+    }),
+  ).toThrow(/integrity attempt artifact/)
+})
+
+test("recordIntegrityAttempt writes host-computed protocol fingerprints", () => {
+  const now = Date.now()
+  const stamp = `${now.toString(16)}_${Math.random().toString(16).slice(2)}`
+  const projectID = `proj_replay_computed_fingerprint_${stamp}`
+  const taskID = `tsk_replay_computed_fingerprint_${stamp}`
+  const specID = `spec_replay_computed_fingerprint_${stamp}`
+  seedTask({ projectID, taskID, specIDs: [specID], now })
+
+  const attemptID = recordIntegrityAttempt({
+    taskID,
+    sessionID: `ses_replay_computed_fingerprint_${stamp}`,
+    lineage: lineage(taskID, specID),
+    verdict: "needs_correction",
+    phase: "post_build",
+    findings: [
+      {
+        id: "BF-computed-fingerprint",
+        severity: "blocking",
+        title: "Computed fingerprint",
+        description: "The host computes this fingerprint before persistence.",
+        evidence: ["computed fingerprint evidence"],
+        repair: "Persist a protocol fingerprint.",
+      },
+    ],
+    now: now + 10,
+  })
+
+  const ctx = buildIntegrityReplayContext({
+    taskID,
+    lineage: lineage(taskID, specID),
+    phase: "post_build",
+    goals: [],
+    requirements: [],
+    buildRecords: [],
+    goalRuns: [],
+  })
+
+  expect(ctx.priorAttempts[0]?.artifactID).toBe(attemptID)
+  expect(ctx.priorAttempts[0]?.findings?.[0]?.fingerprint).toMatch(/^if_[a-f0-9]{16}$/)
+})
 
   test("lists same-task same-spec integrity attempts newest-first and latest delegates to the list", () => {
     const now = Date.now()
@@ -248,7 +546,7 @@ describe("integrity replay context artifact source", () => {
     )
   })
 
-  test("builds first-attempt replay context with scale counts and all build evidence", () => {
+  test("builds first-attempt replay context with scale counts and all implementation evidence", () => {
     const now = Date.now()
     const taskID = `tsk_replay_first_${now.toString(16)}`
     const ctx = buildIntegrityReplayContext({
@@ -277,7 +575,7 @@ describe("integrity replay context artifact source", () => {
 
     expect(ctx.attemptNumber).toBe(1)
     expect(ctx.priorAttempts).toEqual([])
-    expect(ctx.buildEvidenceSinceLastReview.changedFiles).toEqual([
+    expect(ctx.implementationEvidenceSinceLastReview.changedFiles).toEqual([
       "src/settings.ts",
       "src/storage.ts",
       "src/validation.ts",
@@ -379,7 +677,7 @@ describe("integrity replay context artifact source", () => {
       phase: "post_build",
       reviewers: [{ reviewerID: "rev_settings", scope: "Settings validation", verdict: "needs_correction" }],
       findings: [
-        {
+        withIntegrityFingerprint({
           id: "BF-1",
           severity: "blocking",
           title: "Settings validation blind spot",
@@ -388,16 +686,21 @@ describe("integrity replay context artifact source", () => {
           filePaths: ["src/settings.ts"],
           requirementIDs: ["REQ-2"],
           specIDs: ["settings_validation"],
-        },
-        {
+        }),
+        withIntegrityFingerprint({
           id: "ADV-1",
           severity: "advisory",
           title: "Copy can improve",
           description: "Advisory only.",
-        },
+          repair: "Polish copy later.",
+        }),
       ],
       requiredRepairs: [
-        { id: "repair-settings", description: "Add settings validation", filePaths: ["src/settings.ts"] },
+        withIntegrityFingerprint({
+          id: "repair-settings",
+          description: "Add settings validation",
+          filePaths: ["src/settings.ts"],
+        }),
       ],
       unresolvedDisagreements: [{ id: "dispute-1", description: "Reviewer disagreement" }],
       reason: "Settings validation needs correction.",
@@ -473,12 +776,12 @@ describe("integrity replay context artifact source", () => {
       unresolvedDisagreements: [{ id: "dispute-1", description: "Reviewer disagreement" }],
     })
     expect(ctx.priorAttempts[1]).toMatchObject({ attemptNumber: 2, artifactID: secondAttemptID })
-    expect(ctx.buildEvidenceSinceLastReview).toMatchObject({
+    expect(ctx.implementationEvidenceSinceLastReview).toMatchObject({
       sinceAttemptNumber: 2,
       sinceTimeCreated: now + 20,
       changedFiles: ["src/settings.ts", "src/storage.ts"],
       diffs: [{ file: "src/settings.ts", status: "modified", additions: 4, deletions: 2 }],
-      buildSummaries: ["New build record after latest review"],
+      implementationSummaries: ["New build record after latest review"],
       goalRuns: [
         {
           goalID: "storage",
@@ -532,10 +835,9 @@ describe("integrity replay context artifact source", () => {
       requirements: [],
       buildRecords: [],
       goalRuns: [goalRun({ id: goalRunID, taskID, goalID: "dashboard", now, completed: now + 5 })],
-      buildOutcomes: [
-        buildOutcome({
+      agentOutcomes: [
+        agentOutcome({
           id: "outcome_no_diff",
-          taskID,
           goalID: "dashboard",
           goalRunID,
           now: now + 5,
@@ -546,7 +848,7 @@ describe("integrity replay context artifact source", () => {
       ],
     })
 
-    expect(ctx.buildEvidenceSinceLastReview.goalRuns[0]).toMatchObject({
+    expect(ctx.implementationEvidenceSinceLastReview.goalRuns[0]).toMatchObject({
       goalID: "dashboard",
       goalRunID,
       status: "completed",
@@ -558,6 +860,117 @@ describe("integrity replay context artifact source", () => {
     expect(prompt).toContain("outcome=no_project_diff")
     expect(prompt).toContain("no_diff=actual_changed_files_empty")
     expect(prompt).toContain("changed_files=0")
+  })
+
+  test("renders task-level direct build outcomes after latest review", () => {
+    const now = Date.now()
+    const taskID = `tsk_replay_task_build_${now.toString(16)}`
+    const outcome = agentOutcome({
+      id: "outcome_task_direct_route",
+      runID: "run_task_direct_route",
+      sessionID: "ses_task_direct_route",
+      now: now + 20,
+      outcomeKind: "delivered",
+      summary: "Direct build repaired the world economy route.",
+      changedFiles: ["src/routes/world-economy.tsx"],
+      reportedChangedFiles: ["src/routes/world-economy.tsx"],
+      commitRef: "44489b5",
+    })
+    const ctx = buildIntegrityReplayContext({
+      taskID,
+      lineage: lineage(taskID, "spec_replay_task_build"),
+      phase: "post_build",
+      goals: [],
+      requirements: [],
+      buildRecords: [],
+      goalRuns: [],
+      agentOutcomes: [
+        outcome,
+        agentOutcome({
+          id: "outcome_custom_implementation",
+          provider: "custom-implementation-agent",
+          artifactKind: "custom_implementation_outcome",
+          runID: "run_custom_implementation",
+          sessionID: "ses_custom_implementation",
+          now: now + 30,
+          outcomeKind: "delivered",
+          summary: "A non-Build implementation provider repaired a shared helper.",
+          changedFiles: ["src/lib/shared-helper.ts"],
+          reportedChangedFiles: ["src/lib/shared-helper.ts"],
+          commitRef: "abc1234",
+        }),
+      ],
+    })
+
+    expect(ctx.implementationEvidenceSinceLastReview.changedFiles).toEqual([
+      "src/lib/shared-helper.ts",
+      "src/routes/world-economy.tsx",
+    ])
+    expect(ctx.implementationEvidenceSinceLastReview.taskAgentOutcomes[0]).toMatchObject({
+      provider: "build",
+      artifactKind: "build_attempt_outcome",
+      artifactID: "outcome_task_direct_route",
+      terminalStatus: "completed",
+      outcomeKind: "delivered",
+      actualChangedFiles: ["src/routes/world-economy.tsx"],
+      reportedChangedFiles: ["src/routes/world-economy.tsx"],
+      commitRef: "44489b5",
+    })
+    expect(ctx.implementationEvidenceSinceLastReview.taskAgentOutcomes[1]).toMatchObject({
+      provider: "custom-implementation-agent",
+      artifactKind: "custom_implementation_outcome",
+      artifactID: "outcome_custom_implementation",
+      actualChangedFiles: ["src/lib/shared-helper.ts"],
+    })
+    const prompt = renderIntegrityReplayContextPrompt(ctx)
+    expect(prompt).toContain("Task-level agent outcomes after latest review")
+    expect(prompt).toContain("provider=build, kind=build_attempt_outcome")
+    expect(prompt).toContain("provider=custom-implementation-agent, kind=custom_implementation_outcome")
+    expect(prompt).toContain("outcome_task_direct_route")
+    expect(prompt).toContain("actual_changed_files=1")
+    expect(prompt).toContain("reported_changed_files=1")
+    expect(prompt).toContain("commit=44489b5")
+  })
+
+  test("keeps reported-only task build files out of integrity changed file rollup", () => {
+    const now = Date.now()
+    const taskID = `tsk_replay_task_build_reported_only_${now.toString(16)}`
+    const outcome = agentOutcome({
+      id: "outcome_task_direct_reported_only",
+      runID: "run_task_direct_reported_only",
+      sessionID: "ses_task_direct_reported_only",
+      now: now + 20,
+      outcomeKind: "no_project_diff",
+      summary: "Direct build self-reported a route edit without host diff evidence.",
+      noDiffReason: "missing_commit_ref",
+      changedFiles: [],
+      reportedChangedFiles: ["src/routes/world-economy.tsx"],
+    })
+    const ctx = buildIntegrityReplayContext({
+      taskID,
+      lineage: lineage(taskID, "spec_replay_task_build_reported_only"),
+      phase: "post_build",
+      goals: [],
+      requirements: [],
+      buildRecords: [],
+      goalRuns: [],
+      agentOutcomes: [outcome],
+    })
+
+    expect(ctx.implementationEvidenceSinceLastReview.changedFiles).toEqual([])
+    expect(ctx.implementationEvidenceSinceLastReview.taskAgentOutcomes[0]).toMatchObject({
+      provider: "build",
+      artifactKind: "build_attempt_outcome",
+      outcomeKind: "no_project_diff",
+      noDiffReason: "missing_commit_ref",
+      actualChangedFiles: [],
+      reportedChangedFiles: ["src/routes/world-economy.tsx"],
+      commitRef: undefined,
+    })
+    const prompt = renderIntegrityReplayContextPrompt(ctx)
+    expect(prompt).toContain("actual_changed_files=0")
+    expect(prompt).toContain("reported_changed_files=1")
+    expect(prompt).not.toContain("changedFiles: src/routes/world-economy.tsx")
   })
 
   test("renders re-review prompt with prior blockers, repairs, reviewer focuses, changed files, and scale signals", () => {
@@ -575,7 +988,7 @@ describe("integrity replay context artifact source", () => {
       phase: "post_build",
       reviewers: [{ reviewerID: "rev_settings", scope: "Settings validation", verdict: "needs_correction" }],
       findings: [
-        {
+        withIntegrityFingerprint({
           id: "BF-1",
           severity: "blocking",
           title: "Settings validation blind spot",
@@ -584,10 +997,14 @@ describe("integrity replay context artifact source", () => {
           filePaths: ["src/settings.ts"],
           requirementIDs: ["REQ-2"],
           specIDs: ["settings_validation"],
-        },
+        }),
       ],
       requiredRepairs: [
-        { id: "repair-settings", description: "Add settings validation", filePaths: ["src/settings.ts"] },
+        withIntegrityFingerprint({
+          id: "repair-settings",
+          description: "Add settings validation",
+          filePaths: ["src/settings.ts"],
+        }),
       ],
       now: now + 10,
     })

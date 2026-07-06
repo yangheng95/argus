@@ -430,6 +430,27 @@ test("validates config schema and throws on invalid fields", async () => {
   })
 })
 
+test("rejects obsolete build retry replay token limit config", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await writeConfig(dir, {
+        $schema: "https://opencorvus.ai/config.json",
+        agent: {
+          build: {
+            retry_replay_token_limit: 1_000,
+          },
+        },
+      })
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await expect(Config.get()).rejects.toThrow("retry_replay_token_limit")
+    },
+  })
+})
+
 test("throws error for invalid JSON", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {

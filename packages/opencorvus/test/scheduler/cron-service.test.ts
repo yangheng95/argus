@@ -6,6 +6,7 @@ import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 import { SessionWake } from "../../src/session/wake"
 import { Session } from "../../src/session"
+import { SessionPrompt } from "../../src/session/prompt"
 import { Message } from "../../src/session/message"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import * as EngineQueue from "../../src/engine/queue"
@@ -41,6 +42,38 @@ function seedTask(input: { taskID: string; sessionID?: string; completed?: boole
       } as any)
       .run(),
   )
+}
+
+async function importCurrentProjectChildWithForeignParent(input: {
+  directory: string
+  parentID: string
+  title: string
+}) {
+  let sessionID = ""
+  await Instance.provide({
+    directory: input.directory,
+    fn: async () => {
+      const now = Date.now()
+      const child: Session.Info = {
+        id: Identifier.descending("session"),
+        slug: `cron-cross-parent-${Math.random().toString(36).slice(2)}`,
+        projectID: Instance.project.id,
+        directory: input.directory,
+        parentID: input.parentID,
+        title: input.title,
+        version: "test",
+        kind: "assistant",
+        metadata: {},
+        time: {
+          created: now,
+          updated: now,
+        },
+      }
+      await Session.importSnapshot({ info: child, messages: [] })
+      sessionID = child.id
+    },
+  })
+  return sessionID
 }
 
 async function appendTerminalToolResult(input: { sessionID: string; tool: string }) {
@@ -188,6 +221,59 @@ describe("scheduler.cron-service", () => {
     expect((row?.last_run ?? null) === null).toBe(true)
   }, 30_000)
 
+  test("poll rejects persisted session jobs whose parent lineage leaves the current project", async () => {
+    await using current = await tmpdir({ git: true })
+    await using foreign = await tmpdir({ git: true })
+    const loop = spyOn(SessionPrompt, "loop").mockResolvedValue(undefined as never)
+    let foreignParentID = ""
+
+    await Instance.provide({
+      directory: foreign.path,
+      fn: async () => {
+        foreignParentID = (await Session.create({ kind: "assistant", title: "foreign parent" })).id
+      },
+    })
+    const childID = await importCurrentProjectChildWithForeignParent({
+      directory: current.path,
+      parentID: foreignParentID,
+      title: "current cron child with foreign parent",
+    })
+
+    await Instance.provide({
+      directory: current.path,
+      fn: async () => {
+        const id = "crn_foreign_parent_" + Math.random().toString(36).slice(2)
+        Database.use((db) =>
+          db
+            .insert(CronJobTable)
+            .values({
+              id,
+              project_id: Instance.project.id,
+              session_id: childID,
+              name: "foreign parent persisted cron",
+              expression: "1m",
+              prompt: "must not wake",
+              enabled: true,
+              one_shot: true,
+              next_run: Date.now() - 1000,
+            })
+            .run(),
+        )
+
+        await CronService.runNow()
+
+        const row = Database.use((db) => db.select().from(CronJobTable).where(eq(CronJobTable.id, id)).get())
+        expect(row?.enabled).toBe(true)
+        expect(row?.last_run).toBeNull()
+        expect(row?.lease_owner).toBeNull()
+        expect(row?.failure_count).toBe(1)
+        expect(row?.last_error).toContain("Session not found")
+      },
+    })
+
+    expect(loop).not.toHaveBeenCalled()
+  })
+
   test("create rejects foreign sessions and remove reports only current-project rows", async () => {
     await using one = await tmpdir({ git: true })
     await using two = await tmpdir({ git: true })
@@ -195,6 +281,7 @@ describe("scheduler.cron-service", () => {
     let oneProjectID = ""
     let twoProjectID = ""
     let twoSessionID = ""
+    let oneChildWithForeignParentID = ""
     let twoTaskID = ""
 
     await Instance.provide({
@@ -243,7 +330,29 @@ describe("scheduler.cron-service", () => {
       },
     })
 
-    expect(() =>
+    await Instance.provide({
+      directory: one.path,
+      fn: async () => {
+        const child: Session.Info = {
+          id: Identifier.descending("session"),
+          slug: "cron-cross-parent-child",
+          projectID: Instance.project.id,
+          directory: one.path,
+          parentID: twoSessionID,
+          title: "project one cron child with project two parent",
+          version: "test",
+          kind: "build",
+          time: {
+            created: Date.now(),
+            updated: Date.now(),
+          },
+        }
+        await Session.importSnapshot({ info: child, messages: [] })
+        oneChildWithForeignParentID = child.id
+      },
+    })
+
+    await expect(
       CronService.create({
         name: "bad cron session",
         expression: "1m",
@@ -251,8 +360,17 @@ describe("scheduler.cron-service", () => {
         projectId: oneProjectID,
         sessionId: twoSessionID,
       }),
-    ).toThrow("Session not found")
-    expect(() =>
+    ).rejects.toThrow("Session not found")
+    await expect(
+      CronService.create({
+        name: "bad cron foreign parent",
+        expression: "1m",
+        prompt: "bad",
+        projectId: oneProjectID,
+        sessionId: oneChildWithForeignParentID,
+      }),
+    ).rejects.toThrow("Session not found")
+    await expect(
       CronService.createTaskWake({
         name: "bad cron task",
         reason: "bad",
@@ -260,7 +378,7 @@ describe("scheduler.cron-service", () => {
         taskId: twoTaskID,
         durationMs: 1000,
       }),
-    ).toThrow("Task not found")
+    ).rejects.toThrow("Task not found")
 
     expect(CronService.remove(foreignJobID, oneProjectID)).toBe(false)
     expect(
@@ -274,15 +392,16 @@ describe("scheduler.cron-service", () => {
       directory: tmp.path,
       fn: async () => {
         const taskID = "tsk_cron_consume_" + Math.random().toString(36).slice(2)
-        seedTask({ taskID })
-        const open = CronService.createTaskWake({
+        const session = await Session.create({ kind: "orchestrator", title: "task wait consume root" })
+        seedTask({ taskID, sessionID: session.id })
+        const open = await CronService.createTaskWake({
           name: "task wait",
           reason: "external signal",
           projectId: Instance.project.id,
           taskId: taskID,
           durationMs: 20 * 60 * 1000,
         })
-        const claimed = CronService.createTaskWake({
+        const claimed = await CronService.createTaskWake({
           name: "task wait",
           reason: "claimed due signal",
           projectId: Instance.project.id,
@@ -297,7 +416,7 @@ describe("scheduler.cron-service", () => {
             .run(),
         )
 
-        const consumed = CronService.consumePendingTaskWaits({
+        const consumed = await CronService.consumePendingTaskWaits({
           taskId: taskID,
           projectId: Instance.project.id,
           reason: "accepted wake",
@@ -314,6 +433,240 @@ describe("scheduler.cron-service", () => {
     })
   })
 
+  test("consumePendingTaskWaits does not require a task root session when no pending wait exists", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskID = "tsk_cron_no_pending_" + Math.random().toString(36).slice(2)
+        seedTask({ taskID })
+
+        const consumed = await CronService.consumePendingTaskWaits({
+          taskId: taskID,
+          projectId: Instance.project.id,
+          reason: "ordinary wake without scheduled wait",
+        })
+
+        expect(consumed.jobIDs).toEqual([])
+      },
+    })
+  })
+
+  test("session activity does not consume pending session waits whose parent lineage leaves the current project", async () => {
+    await using current = await tmpdir({ git: true })
+    await using foreign = await tmpdir({ git: true })
+    let foreignParentID = ""
+
+    await Instance.provide({
+      directory: foreign.path,
+      fn: async () => {
+        foreignParentID = (await Session.create({ kind: "assistant", title: "foreign session wait parent" })).id
+      },
+    })
+    const childID = await importCurrentProjectChildWithForeignParent({
+      directory: current.path,
+      parentID: foreignParentID,
+      title: "current session wait child with foreign parent",
+    })
+
+    await Instance.provide({
+      directory: current.path,
+      fn: async () => {
+        CronService.init()
+        const id = "crn_session_wait_foreign_parent_" + Math.random().toString(36).slice(2)
+        Database.use((db) =>
+          db
+            .insert(CronJobTable)
+            .values({
+              id,
+              project_id: Instance.project.id,
+              session_id: childID,
+              name: "session wait",
+              expression: "delay:1200000ms",
+              prompt: "must remain pending",
+              enabled: true,
+              one_shot: true,
+              next_run: Date.now() + 20 * 60 * 1000,
+            })
+            .run(),
+        )
+        const messageID = Identifier.ascending("message")
+        await Session.persistMessage({
+          info: {
+            id: messageID,
+            sessionID: childID,
+            role: "user",
+            time: { created: Date.now() },
+            agent: "assistant",
+            model: { providerID: "test-provider", modelID: "test-model" },
+          },
+          parts: [
+            {
+              id: Identifier.ascending("part"),
+              messageID,
+              sessionID: childID,
+              type: "text",
+              text: "do not consume polluted wait",
+              kind: "user_content",
+            },
+          ],
+          touchSessionID: childID,
+        })
+        await Database.awaitEffectIdle(500)
+
+        expect(Database.use((db) => db.select().from(CronJobTable).where(eq(CronJobTable.id, id)).get())).toBeDefined()
+      },
+    })
+  })
+
+  test("task wake creation rejects tasks whose root session parent lineage leaves the current project", async () => {
+    await using current = await tmpdir({ git: true })
+    await using foreign = await tmpdir({ git: true })
+    let foreignParentID = ""
+
+    await Instance.provide({
+      directory: foreign.path,
+      fn: async () => {
+        foreignParentID = (await Session.create({ kind: "assistant", title: "foreign task wake parent" })).id
+      },
+    })
+    const childID = await importCurrentProjectChildWithForeignParent({
+      directory: current.path,
+      parentID: foreignParentID,
+      title: "current task wake child with foreign parent",
+    })
+
+    await Instance.provide({
+      directory: current.path,
+      fn: async () => {
+        const taskID = "tsk_cron_foreign_root_create_" + Math.random().toString(36).slice(2)
+        seedTask({ taskID, sessionID: childID })
+
+        await expect(
+          CronService.createTaskWake({
+            name: "task wait",
+            reason: "must reject polluted root",
+            projectId: Instance.project.id,
+            taskId: taskID,
+            durationMs: 20 * 60 * 1000,
+          }),
+        ).rejects.toThrow("Session not found")
+      },
+    })
+  })
+
+  test("due task cron with invalid root session lineage fails before dispatching the task loop", async () => {
+    await using current = await tmpdir({ git: true })
+    await using foreign = await tmpdir({ git: true })
+    const dispatchTaskLoop = spyOn(EngineQueue, "dispatchTaskLoop").mockResolvedValue("started")
+    let foreignParentID = ""
+
+    await Instance.provide({
+      directory: foreign.path,
+      fn: async () => {
+        foreignParentID = (await Session.create({ kind: "assistant", title: "foreign due task parent" })).id
+      },
+    })
+    const childID = await importCurrentProjectChildWithForeignParent({
+      directory: current.path,
+      parentID: foreignParentID,
+      title: "current due task child with foreign parent",
+    })
+
+    await Instance.provide({
+      directory: current.path,
+      fn: async () => {
+        const taskID = "tsk_cron_foreign_root_due_" + Math.random().toString(36).slice(2)
+        const cronID = "crn_task_wait_foreign_parent_" + Math.random().toString(36).slice(2)
+        seedTask({ taskID, sessionID: childID })
+        Database.use((db) =>
+          db
+            .insert(CronJobTable)
+            .values({
+              id: cronID,
+              project_id: Instance.project.id,
+              task_id: taskID,
+              name: "task wait",
+              expression: "delay:1200000ms",
+              prompt: "must fail before dispatch",
+              enabled: true,
+              one_shot: true,
+              next_run: Date.now() - 1000,
+            })
+            .run(),
+        )
+
+        await CronService.runNow()
+
+        expect(dispatchTaskLoop).not.toHaveBeenCalled()
+        const row = Database.use((db) => db.select().from(CronJobTable).where(eq(CronJobTable.id, cronID)).get())
+        expect(row?.enabled).toBe(true)
+        expect(row?.last_run).toBeNull()
+        expect(row?.lease_owner).toBeNull()
+        expect(row?.failure_count).toBe(1)
+        expect(row?.last_error).toContain("Session not found")
+      },
+    })
+  })
+
+  test("early task wait activity preserves invalid lineage rows and does not dispatch", async () => {
+    await using current = await tmpdir({ git: true })
+    await using foreign = await tmpdir({ git: true })
+    const dispatchTaskLoop = spyOn(EngineQueue, "dispatchTaskLoop").mockResolvedValue("started")
+    let foreignParentID = ""
+
+    await Instance.provide({
+      directory: foreign.path,
+      fn: async () => {
+        foreignParentID = (await Session.create({ kind: "assistant", title: "foreign early task parent" })).id
+      },
+    })
+    const childID = await importCurrentProjectChildWithForeignParent({
+      directory: current.path,
+      parentID: foreignParentID,
+      title: "current early task child with foreign parent",
+    })
+
+    await Instance.provide({
+      directory: current.path,
+      fn: async () => {
+        const taskID = "tsk_cron_foreign_root_early_" + Math.random().toString(36).slice(2)
+        const cronID = "crn_task_wait_foreign_early_" + Math.random().toString(36).slice(2)
+        seedTask({ taskID, sessionID: childID })
+        Database.use((db) =>
+          db
+            .insert(CronJobTable)
+            .values({
+              id: cronID,
+              project_id: Instance.project.id,
+              task_id: taskID,
+              name: "task wait",
+              expression: "delay:1200000ms",
+              prompt: "must not be consumed",
+              enabled: true,
+              one_shot: true,
+              next_run: Date.now() + 20 * 60 * 1000,
+            })
+            .run(),
+        )
+
+        await expect(
+          CronService.triggerTaskWaitFromActivity({
+            taskId: taskID,
+            projectId: Instance.project.id,
+            source: "test.activity",
+            detail: "invalid root session lineage",
+          }),
+        ).rejects.toThrow("Session not found")
+
+        expect(dispatchTaskLoop).not.toHaveBeenCalled()
+        expect(
+          Database.use((db) => db.select().from(CronJobTable).where(eq(CronJobTable.id, cronID)).get()),
+        ).toBeDefined()
+      },
+    })
+  })
+
   test("normal user message consumes pending session wait cron", async () => {
     await using tmp = await tmpdir({ git: true })
 
@@ -322,7 +675,7 @@ describe("scheduler.cron-service", () => {
       fn: async () => {
         CronService.init()
         const session = await Session.create({ kind: "assistant", title: "session wait consume" })
-        const scheduled = CronService.createDelayedSessionWake({
+        const scheduled = await CronService.createDelayedSessionWake({
           name: "session wait",
           prompt: "scheduled session wait",
           projectId: Instance.project.id,
@@ -369,7 +722,7 @@ describe("scheduler.cron-service", () => {
       fn: async () => {
         CronService.init()
         const session = await Session.create({ kind: "assistant", title: "session wait updateMessage consume" })
-        const scheduled = CronService.createDelayedSessionWake({
+        const scheduled = await CronService.createDelayedSessionWake({
           name: "session wait",
           prompt: "scheduled session wait",
           projectId: Instance.project.id,
@@ -413,7 +766,7 @@ describe("scheduler.cron-service", () => {
         await Session.updateMessage(message)
         await Database.awaitEffectIdle(500)
 
-        const scheduled = CronService.createDelayedSessionWake({
+        const scheduled = await CronService.createDelayedSessionWake({
           name: "session wait",
           prompt: "scheduled session wait",
           projectId: Instance.project.id,
@@ -452,7 +805,7 @@ describe("scheduler.cron-service", () => {
         await Session.updateMessage(message)
         await Database.awaitEffectIdle(500)
 
-        const scheduled = CronService.createTaskWake({
+        const scheduled = await CronService.createTaskWake({
           name: "task wait",
           reason: "external user activity",
           projectId: Instance.project.id,
@@ -481,7 +834,7 @@ describe("scheduler.cron-service", () => {
         const session = await Session.create({ kind: "orchestrator", title: "wait activity root" })
         const taskID = "tsk_cron_tool_activity_" + Math.random().toString(36).slice(2)
         seedTask({ taskID, sessionID: session.id })
-        const scheduled = CronService.createTaskWake({
+        const scheduled = await CronService.createTaskWake({
           name: "task wait",
           reason: "external tool output",
           projectId: Instance.project.id,
@@ -513,7 +866,7 @@ describe("scheduler.cron-service", () => {
         const session = await Session.create({ kind: "orchestrator", title: "wait self result root" })
         const taskID = "tsk_cron_wait_self_" + Math.random().toString(36).slice(2)
         seedTask({ taskID, sessionID: session.id })
-        const scheduled = CronService.createTaskWake({
+        const scheduled = await CronService.createTaskWake({
           name: "task wait",
           reason: "external clock",
           projectId: Instance.project.id,
@@ -541,12 +894,14 @@ describe("scheduler.cron-service", () => {
       fn: async () => {
         const now = Date.now()
         const taskID = "tsk_cron_wait_" + Math.random().toString(36).slice(2)
+        const session = await Session.create({ kind: "orchestrator", title: "task cron wait root" })
         Database.use((db) =>
           db
             .insert(EngineTaskTable)
             .values({
               id: taskID,
               project_id: Instance.project.id,
+              session_id: session.id,
               source: "test",
               title: "Task cron wait",
               request: "Wait for webhook",
@@ -559,7 +914,7 @@ describe("scheduler.cron-service", () => {
             .run(),
         )
 
-        const scheduled = CronService.createTaskWake({
+        const scheduled = await CronService.createTaskWake({
           name: "task wait",
           reason: "external webhook landed",
           projectId: Instance.project.id,
@@ -599,12 +954,14 @@ describe("scheduler.cron-service", () => {
       fn: async () => {
         const now = Date.now()
         const taskID = "tsk_cron_wait_ignored_" + Math.random().toString(36).slice(2)
+        const session = await Session.create({ kind: "orchestrator", title: "ignored task cron wait root" })
         Database.use((db) =>
           db
             .insert(EngineTaskTable)
             .values({
               id: taskID,
               project_id: Instance.project.id,
+              session_id: session.id,
               source: "test",
               title: "Ignored task cron wait",
               request: "Wait for terminal no-op",
@@ -618,7 +975,7 @@ describe("scheduler.cron-service", () => {
             .run(),
         )
 
-        const scheduled = CronService.createTaskWake({
+        const scheduled = await CronService.createTaskWake({
           name: "task wait",
           reason: "terminal passive wake",
           projectId: Instance.project.id,

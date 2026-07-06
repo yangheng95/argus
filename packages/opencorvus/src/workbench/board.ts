@@ -38,10 +38,16 @@ import {
   EngineRequirementTable,
   EngineTaskTable,
   EvaluationCheck,
+  latestWorkflowSelectionForTask,
   TaskBoardGoalStepPayload,
   WorkflowRegistry,
 } from "@/engine"
-import { projectGoalSteps, projectTaskSteps, type MiniWorkflowStep } from "@/engine/workflow"
+import {
+  projectGoalSteps,
+  projectTaskSteps,
+  type MiniWorkflowStep,
+  type WorkflowTaskOutcomeProjection,
+} from "@/engine/workflow"
 import { ProtocolEventTable } from "@/protocol/protocol.sql"
 import { Database, and, desc, eq, inArray, sql } from "@/storage/db"
 import { timelineOrderKey } from "@/timeline/order"
@@ -50,6 +56,7 @@ import { compileBrief } from "./brief"
 import { findLatestAcceptanceEvidenceManifest } from "@/acceptance/manifest"
 import { Project } from "@/project/project"
 import { agentInvocationDAGForTask } from "@/orchestrator/task-event"
+import { collectTaskAgentOutcomes } from "@/agent/outcomes"
 
 const BOARD_SNAPSHOT_LIMIT = 80
 const BOARD_CHANGED_FILE_LIMIT = 80
@@ -57,7 +64,7 @@ const BOARD_SUMMARY_LIMIT = 4000
 const BOARD_ARTIFACT_STRING_LIMIT = 1200
 const BOARD_ARTIFACT_ARRAY_LIMIT = 8
 const BOARD_ARTIFACT_OBJECT_DEPTH_LIMIT = 3
-const BOARD_VISIBLE_PROTOCOL_EVENT_TYPES = ["workflow.step.updated"] as const
+const BOARD_VISIBLE_PROTOCOL_EVENT_TYPES = ["workflow.selected", "workflow.step.updated"] as const
 
 export function compileBoard(input: { taskID: string }) {
   const task = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, input.taskID)).get())
@@ -201,7 +208,8 @@ function buildBoard(
   // would cause ALL SSE events to be silently discarded.
   // Workflow-structured fields (workflow, goalWorkflows, requirements, architect).
   // Step status is projected fresh from DB rows each render (no FSM cache).
-  const workflowFields = buildWorkflowFields(task, goals)
+  const taskAgentOutcomes = collectTaskAgentOutcomes(task.id)
+  const workflowFields = buildWorkflowFields(task, goals, taskAgentOutcomes)
   const project = Project.get(task.project_id)
 
   return {
@@ -263,6 +271,7 @@ function buildBoard(
     candidateAcceptance: viewBoardAcceptance(latestAcceptance),
     acceptedAcceptance: viewBoardAcceptance(acceptedAcceptance),
     evaluation: viewBoardEvaluation(latestEvaluation),
+    taskAgentOutcomes,
     interactions: interactions.map(viewInteraction),
     channels: bindings.map((item) => ({
       id: item.id,
@@ -863,29 +872,29 @@ function boardOverview(input: {
 
 // ═══════════════════════════════════════════════════════════════════
 // MiniWorkflow board fields — workflow shape, per-goal workflows,
-// requirements list, and architect summary. Workflow template always
-// defaults to pipeline; task-scope step status is projected from
-// side-effects (spec / goals / runs / acceptance presence), goal-scope
-// step status from the goal_run chain.
+// requirements list, and architect summary. Workflow selection is scheduler
+// evidence (`workflow.selected`), not a board default; task-scope step status
+// is projected from side-effects (spec / goals / runs / acceptance presence),
+// goal-scope step status from the goal_run chain.
 // ═══════════════════════════════════════════════════════════════════
 
 function buildWorkflowFields(
   task: typeof EngineTaskTable.$inferSelect,
   goals: Array<typeof EngineGoalTable.$inferSelect>,
+  taskAgentOutcomes: readonly WorkflowTaskOutcomeProjection[],
 ) {
-  // Phase-6-f-3-bis-b: workflow_state no longer persisted. Default to the
-  // pipeline workflow; if the task is direct-eligible (no goals, no spec,
-  // build already ran) the orchestrator's `switchToDirectWorkflowIfEligible`
-  // swaps in-memory — the board's role here is to provide a stable render
-  // shape, not to authoritatively select which workflow owns the task.
-  const workflow = WorkflowRegistry.resolveSync("pipeline")
+  // Phase-6-f-3-bis-b: workflow_state no longer persisted. The board projects
+  // scheduler-owned workflow selection from `workflow.selected`; it does not
+  // author a default workflow before the scheduler emits that event.
+  const workflow = workflowForBoardTask(task)
 
   if (!workflow) {
+    const activeSpec = findActiveSpecForTask(task.id)
     return {
-      workflow: { id: "pipeline", name: "Pipeline", steps: [], goalLoopStepIDs: [] },
+      workflow: undefined,
       goalWorkflows: [] as Array<unknown>,
-      requirements: [] as Array<unknown>,
-      architect: undefined,
+      requirements: activeSpec ? buildRequirements(task.id, activeSpec.id, goals) : ([] as Array<unknown>),
+      architect: buildArchitectSummary(task.id),
     }
   }
 
@@ -894,7 +903,7 @@ function buildWorkflowFields(
   // design_specs presence), goal-scope from the goal_run chain.
   const projectedGoalSteps = projectGoalSteps(task.id, workflow)
   const projectedTaskSteps = mergeTaskStepProjections(
-    projectTaskSteps(task.id, workflow),
+    projectTaskSteps(task.id, workflow, taskAgentOutcomes),
     projectTaskStepsFromWorkflowEvents(task.id),
   )
   const taskStatus = deriveTaskStatus(task)
@@ -1020,6 +1029,20 @@ function buildWorkflowFields(
     requirements,
     architect,
   }
+}
+
+function workflowForBoardTask(task: typeof EngineTaskTable.$inferSelect) {
+  const selection = latestWorkflowSelectionForTask(task.id)
+  if (selection?.workflow) return selection.workflow
+
+  const workflowID = selection?.workflowID ?? WorkflowRegistry.builtInDefaultIDForTaskKind(task.kind)
+  if (!workflowID) return undefined
+
+  const workflow = WorkflowRegistry.resolveSync(workflowID)
+  if (!workflow) {
+    throw new Error(`workflow.selected references unknown workflow "${workflowID}" for task ${task.id}`)
+  }
+  return workflow
 }
 
 type TaskStepProjection = Record<string, { status: string; startedAt?: number; completedAt?: number }>
@@ -1302,6 +1325,9 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
     buildSessionID = goalRun.session_id ?? undefined
     const outcome = findBuildOutcomeByGoalRun(goalRun.id)
     if (outcome) {
+      if (!outcome.goal_run_id) {
+        throw new Error(`Goal run ${goalRun.id} resolved task-level build outcome ${outcome.id}.`)
+      }
       buildOutcome = {
         id: outcome.id,
         goalRunID: outcome.goal_run_id,

@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test"
 import TEAM_CORE from "../../src/prompt/core/integrity-team-core.txt"
 import { buildReviewerPrompt, type ReviewPromptInput } from "../../src/integrity/team-agent"
+import { integrityReplayContextPacket } from "../../src/integrity/replay-context"
 
 function r7ToR8PromptInput(): ReviewPromptInput {
   return {
@@ -28,7 +29,8 @@ function r7ToR8PromptInput(): ReviewPromptInput {
         non_goals: "Browser quota exhaustion hardening is not a bounded REQ.",
       },
     ],
-    replayContext: {
+    contextPackets: [
+      integrityReplayContextPacket({
       attemptNumber: 8,
       lineage: {
         taskID: "tsk_e54c2d091001t145QP2P6xwoqi",
@@ -51,9 +53,15 @@ function r7ToR8PromptInput(): ReviewPromptInput {
               id: "ADV-3-silent-quota-error",
               severity: "advisory",
               verdictImpact: "concerns",
+              fingerprint: "if_2222222222222222",
+              canonicalSymptom: "safeSetItem silently swallows quota errors without user notification",
               title: "safeSetItem silently swallows QuotaExceededError",
               description: "safeSetItem() silently swallows QuotaExceededError without user notification.",
               repair: "Consider surfacing quota exhaustion as a non-blocking warning.",
+              verify: ["quota exhaustion remains advisory without new evidence"],
+              affectedSymbols: ["safeSetItem"],
+              sourceFindingIDs: [],
+              priorAttemptRefs: [],
               filePaths: ["src/services/storage.ts"],
               requirementIDs: [],
               specIDs: [],
@@ -62,16 +70,16 @@ function r7ToR8PromptInput(): ReviewPromptInput {
           blockingFindings: [],
           requiredRepairs: [],
           unresolvedDisagreements: [],
-          fact_check_items: [],
         },
       ],
-      buildEvidenceSinceLastReview: {
+      implementationEvidenceSinceLastReview: {
         sinceAttemptNumber: 7,
         sinceTimeCreated: Date.UTC(2026, 4, 23, 14, 0),
         changedFiles: [],
         diffs: [],
-        buildSummaries: ["No storage surface changed after R7."],
+        implementationSummaries: ["No storage surface changed after R7."],
         goalRuns: [],
+        taskAgentOutcomes: [],
       },
       scaleSignals: {
         goals: 1,
@@ -83,7 +91,8 @@ function r7ToR8PromptInput(): ReviewPromptInput {
         priorBlockingFindings: 0,
         phase: "post_build",
       },
-    },
+      }),
+    ],
   }
 }
 

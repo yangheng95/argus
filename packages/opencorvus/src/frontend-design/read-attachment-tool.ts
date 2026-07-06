@@ -3,10 +3,11 @@
  * text/markdown/JSON references listed in the task's attachment manifest.
  *
  * Why this exists:
- *   The multimodal attachment path handles images/PDFs/audio/video — those
- *   are inlined as file parts on the user message. Text-family attachments
- *   (design tokens JSON, style-guide markdown, brand-voice docs) get
- *   surfaced as `[reference — read via tool]` rows inside
+ *   Task attachments are surfaced as refs in
+ *   `AttachmentStore.renderAttachmentInventory`. Text-family attachments
+ *   (design tokens JSON, style-guide markdown, brand-voice docs) can be read
+ *   through this tool; binary media refs remain evidence refs for tools that
+ *   can actually inspect that MIME.
  *   `AttachmentStore.renderAttachmentInventory`'s textual ledger.
  *   Before this tool existed, the agent could see the URL but had no way to
  *   actually open it: `webfetch` requires http(s) and the attachment URLs
@@ -41,7 +42,7 @@ export function createReadAttachmentTool(defaultProjectID: string) {
         "Read a task attachment by its URL or stored name. " +
         "Use this for text / markdown / JSON / CSS reference material listed in the task's attachment manifest — " +
         "design tokens, style guides, brand docs, etc. " +
-        "Images and PDFs are already inlined; call this only for textual references. " +
+        "Binary image / PDF / audio / video refs are rejected here unless they decode as text; use visual/runtime evidence tooling for pixel-level inspection. " +
         "Returns a UTF-8 decoded string (binary files are rejected) truncated to 200 KB.",
       inputSchema: z.object({
         reference: z
@@ -88,7 +89,7 @@ export function createReadAttachmentTool(defaultProjectID: string) {
         if (nul > 4) {
           return (
             `Error: ${resolved.name} looks binary (${nul} NUL bytes in first ${probe.length}). ` +
-            "Images/PDFs/binary assets are delivered via multimodal attachments, not this tool."
+            "Images/PDFs/binary assets must be inspected through visual evidence tooling, not decoded as text."
           )
         }
 

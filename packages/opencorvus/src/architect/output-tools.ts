@@ -31,7 +31,6 @@ import {
   RubricLevelSchema,
   type AcceptanceSpec,
 } from "@/acceptance/types"
-import type { VisualSpec } from "@/frontend-design/types"
 import type { TraceabilityEntry } from "./types"
 import {
   architectFidelityIssues,
@@ -294,7 +293,7 @@ export interface ArchitectGoalCountContract {
 
 type ArchitectValidationInput = {
   workDir?: string
-  designSpecs?: VisualSpec[]
+  knownVisualSpecIDs?: string[]
   requireReferenceCoverage?: boolean
   referenceCoverageReasons?: string[]
   knownRequirementIDs?: string[]
@@ -761,7 +760,7 @@ export function architectValidationFindings(
         referenceCoverage: collector.reference_coverage,
         assemblyOwners: collector.assembly_owners,
       },
-      designSpecs: input?.designSpecs,
+      knownVisualSpecIDs: input?.knownVisualSpecIDs,
       workDir: input?.workDir,
       requireReferenceCoverage: input?.requireReferenceCoverage,
     }).map((message) => ({
@@ -816,8 +815,9 @@ export function architectValidationIssues(collector: ArchitectCollector, input?:
 function formatReferenceCoverageReason(input?: ArchitectValidationInput): string {
   const reasons = input?.referenceCoverageReasons?.filter((reason) => reason.trim().length > 0) ?? []
   if (reasons.length > 0) return `requireReferenceCoverage=true because ${reasons.join(", ")}.`
-  if ((input?.designSpecs?.length ?? 0) > 0) return "requireReferenceCoverage=true because designSpecs are present."
-  return "requireReferenceCoverage=true because frontendDesign handoff or caller flag is present."
+  if ((input?.knownVisualSpecIDs?.length ?? 0) > 0)
+    return "requireReferenceCoverage=true because visual spec ids are present in scheduler context."
+  return "requireReferenceCoverage=true because a schema-bearing visual handoff or caller flag is present."
 }
 
 function formatGoalCandidateList(goals: RegisteredGoal[]): string {
@@ -1031,7 +1031,7 @@ export function createArchitectOutputTools(input: {
    */
   existingGoals?: RegisteredGoal[]
   workDir?: string
-  designSpecs?: VisualSpec[]
+  knownVisualSpecIDs?: string[]
   requireReferenceCoverage?: boolean
   referenceCoverageReasons?: string[]
   knownRequirementIDs?: string[]
@@ -1053,7 +1053,7 @@ export function createArchitectOutputTools(input: {
   const validate = () =>
     architectValidationIssues(collector, {
       workDir: dir,
-      designSpecs: input.designSpecs,
+      knownVisualSpecIDs: input.knownVisualSpecIDs,
       requireReferenceCoverage: input.requireReferenceCoverage,
       referenceCoverageReasons: input.referenceCoverageReasons,
       knownRequirementIDs: input.knownRequirementIDs,
@@ -1414,7 +1414,7 @@ export function createArchitectOutputTools(input: {
 
     register_reference_coverage: tool({
       description:
-        "Register which authoritative reference surface or visual spec ids each goal must restore when this evidence is already clear.",
+        "Register which authoritative reference surface, visual spec ids, and Frontend Design reference_regions each goal must restore when this evidence is already clear.",
       inputSchema: ReferenceCoverageEntrySchema,
       execute: async (input) => {
         const parsed = ReferenceCoverageEntrySchema.parse(input)
@@ -1570,7 +1570,7 @@ export function createArchitectOutputTools(input: {
         collector.fact_check_items = items
         const findings = architectValidationFindings(collector, {
           workDir: dir,
-          designSpecs: input.designSpecs,
+          knownVisualSpecIDs: input.knownVisualSpecIDs,
           requireReferenceCoverage: input.requireReferenceCoverage,
           referenceCoverageReasons: input.referenceCoverageReasons,
           knownRequirementIDs: input.knownRequirementIDs,

@@ -61,7 +61,7 @@ const CodingSessionsResponse = z.object({
 })
 
 async function assertRightSidebarCodingSession(sessionID: string) {
-  const session = await Session.get(sessionID)
+  const session = await Session.assertLineageInProject({ sessionID, projectID: Instance.project.id })
   if (session.projectID !== Instance.project.id || session.directory !== Instance.directory) {
     throw new NotFoundError({ message: `Coding assistant session not found: ${sessionID}` })
   }
@@ -179,7 +179,7 @@ export function CodingRoutes() {
       validator("query", CodingSessionQuery),
       async (c) => {
         const input = c.req.valid("query")
-        return c.json(listRightSidebarCodingAssistantSessions(input))
+        return c.json(await listRightSidebarCodingAssistantSessions(input))
       },
     )
     .get(

@@ -22,6 +22,19 @@ export type IntegrityPriorManifestRef = {
   attemptNumber?: number
 }
 
+const INTEGRITY_FINDING_FINGERPRINT_PATTERN = /^if_[a-f0-9]{16}$/
+
+export function isIntegrityFindingFingerprint(value: unknown): value is string {
+  return typeof value === "string" && INTEGRITY_FINDING_FINGERPRINT_PATTERN.test(value)
+}
+
+export function assertIntegrityFindingFingerprint(value: unknown, context = "integrity finding fingerprint"): string {
+  if (!isIntegrityFindingFingerprint(value)) {
+    throw new Error(`${context} must match if_[a-f0-9]{16}`)
+  }
+  return value
+}
+
 export function canonicalIntegritySymptom(input: IntegrityManifestSource): string {
   const explicit = normalizeDisplayText(input.canonicalSymptom)
   if (explicit) return explicit
@@ -81,7 +94,7 @@ export function buildPriorManifestIndex(
     for (const item of items) {
       const id = normalizeDisplayText(item.id)
       if (!id) continue
-      const fingerprint = normalizeDisplayText(item.fingerprint) || integrityFindingFingerprint(item)
+      const fingerprint = assertIntegrityFindingFingerprint(item.fingerprint, `prior manifest item ${id} fingerprint`)
       out.set(fingerprint, { id, fingerprint, attemptNumber: attempt.attemptNumber })
     }
   }

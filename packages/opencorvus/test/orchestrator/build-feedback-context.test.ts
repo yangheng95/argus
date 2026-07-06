@@ -5,7 +5,7 @@ import { Database } from "../../src/storage/db"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import {
   composeLatestAcceptanceFeedbackForBuild,
-  composeLatestVisualQaFeedbackForBuild,
+  composeLatestVisualQaFeedbackForImplementation,
 } from "../../src/orchestrator/tools"
 import { createDecisionLog } from "../../src/decision-log"
 import { resetDatabase } from "../fixture/db"
@@ -205,14 +205,14 @@ describe("orchestrator build feedback context", () => {
                     category: "reference-structure",
                     question: "Does the local top viewport preserve the reference hero navigation structure?",
                     region: "hero navigation boundary",
-                    reference_region_key: "top viewport",
+                    reference_region_key: "top_viewport@desktop",
                     status: "failed",
                     expected: "The hero module sits below the sticky navigation and keeps the tab row visible.",
                     observed: "The hero module starts under the sticky navigation and clips the tab row.",
                     viewports: [{ width: 1440, height: 900 }],
                     states: ["default"],
-                    source_refs: ["browser_preview_reference_regions"],
-                    evidence_refs: ["screenshot://local/top-viewport.png"],
+                    source_refs: ["frontend_design:browser_preview_reference_regions"],
+                    evidence_refs: ["browser_preview_evidence:art_top_viewport"],
                     required_correction: "Restore the hero container top spacing and tab row flow.",
                   },
                 ],
@@ -222,8 +222,8 @@ describe("orchestrator build feedback context", () => {
                     region: "top viewport",
                     viewports: [{ width: 1440, height: 900 }],
                     states: ["default"],
-                    source_refs: ["browser_preview_reference_regions"],
-                    evidence_refs: ["screenshot://local/top-viewport.png"],
+                    source_refs: ["frontend_design:browser_preview_reference_regions"],
+                    evidence_refs: ["browser_preview_evidence:art_top_viewport"],
                     notes: "Compared the local top viewport against the reference.",
                   },
                 ],
@@ -237,8 +237,8 @@ describe("orchestrator build feedback context", () => {
                     reason: "The hero module starts under the sticky navigation and hides the tab row.",
                     impact: "Users cannot scan the first market category tabs reliably.",
                     required_correction: "Restore the hero container top spacing and tab row flow.",
-                    source_refs: ["browser_preview_reference_regions"],
-                    evidence_refs: ["screenshot://local/top-viewport.png"],
+                    source_refs: ["frontend_design:browser_preview_reference_regions"],
+                    evidence_refs: ["browser_preview_evidence:art_top_viewport"],
                   },
                 ],
                 unresolved_code_module_problems: [],
@@ -270,17 +270,17 @@ describe("orchestrator build feedback context", () => {
                       "data-testid": "hero-tabs",
                     },
                     code_search_terms: ["hero-tabs", "market-hero", "is-clipped"],
-                    evidence_refs: ["screenshot://local/top-viewport.png"],
+                    evidence_refs: ["browser_preview_evidence:art_top_viewport"],
                     annotated_evidence_refs: ["/attachment/project/dom-hero-tabs.annotated.png"],
-                    notes: "Build should inspect the hero tab container spacing before repainting adjacent modules.",
+                    notes:
+                      "The current workflow implementation owner should inspect the hero tab container spacing before repainting adjacent modules.",
                   },
                 ],
-                repairs: [],
                 evidence: [
                   {
                     check_ids: [visualQaCheckID],
                     type: "screenshot",
-                    ref: "screenshot://local/top-viewport.png",
+                    ref: "browser_preview_evidence:art_top_viewport",
                     viewport: { width: 1440, height: 900 },
                     state: "default",
                     note: "Local implementation screenshot with clipped hero tabs.",
@@ -288,13 +288,11 @@ describe("orchestrator build feedback context", () => {
                 ],
                 reference_parity: {
                   required: true,
-                  required_regions: ["top viewport"],
-                  reference_comparison_evidence_refs: ["browser_preview_reference_regions"],
+                  required_regions: ["top_viewport@desktop"],
+                  reference_comparison_evidence_refs: [],
                   missing_regions: [],
                   blocker_ids: ["blocker-hero-overlap"],
                 },
-                commands: [],
-                changed_files: [],
                 open_questions: [],
                 fact_check_items: [],
               },
@@ -312,10 +310,10 @@ describe("orchestrator build feedback context", () => {
         })
 
         const acceptanceFeedback = await composeLatestAcceptanceFeedbackForBuild({ taskID })
-        const feedback = composeLatestVisualQaFeedbackForBuild({ taskID })
+        const feedback = composeLatestVisualQaFeedbackForImplementation({ taskID })
 
         expect(acceptanceFeedback).toBeUndefined()
-        expect(feedback ?? "").toContain("Latest failed Visual QA report for Build repair")
+        expect(feedback ?? "").toContain("Latest failed Visual QA implementation repair evidence")
         expect(feedback ?? "").toContain("problem_dom_regions: 1")
         expect(feedback ?? "").toContain("blocker-hero-overlap")
         expect(feedback ?? "").toContain('locator: main [data-testid="hero-tabs"]')
@@ -382,8 +380,8 @@ describe("orchestrator build feedback context", () => {
                   observed: "Hero spacing overlaps the navigation.",
                   viewports: [{ width: 1440, height: 900 }],
                   states: ["default"],
-                  source_refs: ["visual_qa"],
-                  evidence_refs: ["screenshot://local/hero.png"],
+                  source_refs: ["visual_qa:review"],
+                  evidence_refs: ["browser_preview_evidence:art_hero"],
                 },
               ],
               coverage: [
@@ -392,8 +390,8 @@ describe("orchestrator build feedback context", () => {
                   region: "hero",
                   viewports: [{ width: 1440, height: 900 }],
                   states: ["default"],
-                  source_refs: ["visual_qa"],
-                  evidence_refs: ["screenshot://local/hero.png"],
+                  source_refs: ["visual_qa:review"],
+                  evidence_refs: ["browser_preview_evidence:art_hero"],
                   notes: "Checked hero spacing.",
                 },
               ],
@@ -407,18 +405,17 @@ describe("orchestrator build feedback context", () => {
                   reason: "The hero overlaps the navigation.",
                   impact: "Users cannot reliably scan the top navigation.",
                   required_correction: "Restore hero top spacing.",
-                  source_refs: ["visual_qa"],
-                  evidence_refs: ["screenshot://local/hero.png"],
+                  source_refs: ["visual_qa:review"],
+                  evidence_refs: ["browser_preview_evidence:art_hero"],
                 },
               ],
               unresolved_code_module_problems: [],
               problem_dom_regions: [],
-              repairs: [],
               evidence: [
                 {
                   check_ids: [visualQaCheckID],
                   type: "screenshot",
-                  ref: "screenshot://local/hero.png",
+                  ref: "browser_preview_evidence:art_hero",
                   viewport: { width: 1440, height: 900 },
                   state: "default",
                   note: "Local screenshot with overlap.",
@@ -431,8 +428,6 @@ describe("orchestrator build feedback context", () => {
                 missing_regions: [],
                 blocker_ids: [],
               },
-              commands: [],
-              changed_files: [],
               open_questions: [],
               fact_check_items: [],
             },
@@ -446,9 +441,9 @@ describe("orchestrator build feedback context", () => {
           reason: "Dedicated frontend GUI and functional QA report from session ses_visual_qa_feedback",
         })
 
-        const feedback = composeLatestVisualQaFeedbackForBuild({ taskID })
+        const feedback = composeLatestVisualQaFeedbackForImplementation({ taskID })
 
-        expect(feedback ?? "").toContain("Latest failed Visual QA report for Build repair")
+        expect(feedback ?? "").toContain("Latest failed Visual QA implementation repair evidence")
         expect(feedback ?? "").toContain("effective_accepted: false")
         expect(feedback ?? "").toContain("blocker-stale-accepted")
       },

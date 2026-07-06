@@ -6,7 +6,7 @@ import {
   type ReviewPromptInput,
 } from "../../src/integrity/team-agent"
 import { IntegrityFindingSchema } from "../../src/integrity/team-schema"
-import type { IntegrityReplayContext } from "../../src/integrity/replay-context"
+import { integrityReplayContextPacket, type IntegrityReplayContext } from "../../src/integrity/replay-context"
 
 const repoRoot = path.resolve(import.meta.dir, "../../../..")
 const teamCorePath = path.join(repoRoot, "packages/opencorvus/src/prompt/core/integrity-team-core.txt")
@@ -33,11 +33,12 @@ function replayContext(): IntegrityReplayContext {
     },
     priorFactCheckAttempts: [],
     priorAttempts: [],
-    buildEvidenceSinceLastReview: {
+    implementationEvidenceSinceLastReview: {
       changedFiles: [],
       diffs: [],
-      buildSummaries: [],
+      implementationSummaries: [],
       goalRuns: [],
+      taskAgentOutcomes: [],
     },
     scaleSignals: {
       goals: 1,
@@ -85,7 +86,7 @@ const promptInput: ReviewPromptInput = {
       non_goals: "This does not cover bundle-size budgets.",
     },
   ],
-  replayContext: replayContext(),
+  contextPackets: [integrityReplayContextPacket(replayContext())],
 }
 
 describe("integrity finding traceability discipline", () => {

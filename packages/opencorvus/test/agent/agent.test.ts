@@ -273,8 +273,33 @@ test("role contract metadata is projected onto registered agents", async () => {
 })
 
 test("custom default tool pool excludes scoped orchestration tools", () => {
+  expect(AgentToolPool.customDefault().global).not.toContain("panel")
   expect(AgentToolPool.customDefault().global).not.toContain("request_orchestrator_decision")
   expect(AgentToolPool.customDefault().global).not.toContain("wait")
+})
+
+test("custom agent config rejects scoped orchestration tools", async () => {
+  await using tmp = await tmpdir({
+    config: {
+      agent: {
+        custom_panel_agent: {
+          description: "Invalid custom control agent",
+          tools: {
+            global: ["panel"],
+          },
+        },
+      },
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await expect(Agent.get("custom_panel_agent")).rejects.toThrow(
+        'Custom agents cannot use scoped orchestration tool "panel"',
+      )
+    },
+  })
 })
 
 test("all live task-owned worker roles expose the A2A request tool", () => {
@@ -410,7 +435,7 @@ test("orchestrator does not receive the control-plane panel tool", async () => {
   })
 })
 
-test("orchestrator skill policy excludes unprojected default ordinary skills", async () => {
+test("skill policy mounts ordinary default skills by their declared agents", async () => {
   await using tmp = await tmpdir({
     git: true,
     init: async (dir) => {
@@ -428,6 +453,7 @@ mounted_agents:
       )
     },
   })
+  await writeProjectExpertSquadPackage(tmp.path)
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
@@ -442,9 +468,10 @@ mounted_agents:
       const orchestratorPrompt = await SystemPrompt.skills(orchestrator!, {
         availableToolNames: ["skill", "select_expert_squad"],
       })
-      expect(orchestratorPrompt).toContain("frontend-replica-expert-squad")
-      expect(orchestratorPrompt).toContain("frontend-innovate-expert-squad")
-      expect(orchestratorPrompt).toContain("frontend-automation-debug-expert-squad")
+      expect(orchestratorPrompt).toContain(`${PROJECT_EXPERT_SQUAD_ID}-expert-squad`)
+      expect(orchestratorPrompt).not.toContain("frontend-replica-expert-squad")
+      expect(orchestratorPrompt).not.toContain("frontend-innovate-expert-squad")
+      expect(orchestratorPrompt).not.toContain("frontend-automation-debug-expert-squad")
       expect(orchestratorPrompt).not.toContain("tool-skill")
       const prompt = await SystemPrompt.skills(requirements!)
       expect(prompt).toContain("### Mounted Skills")
@@ -452,7 +479,7 @@ mounted_agents:
       expect(prompt).toContain("The `skill` tool can search mounted skills")
       expect(prompt).toContain("fuzzy-search mounted skill titles and SKILL.md contents")
       expect(prompt).toContain("Before planning or tool use")
-      expect(prompt).not.toContain("tool-skill")
+      expect(prompt).toContain("tool-skill")
     },
   })
 })
@@ -656,7 +683,6 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
       expect(visualVisible.has("browser_preview_reference_regions")).toBe(true)
       expect(visualVisible.has("browser_preview_compare_scroll_slices")).toBe(true)
       expect(visualVisible.has("browser_preview_layout_geometry")).toBe(true)
-      expect(visualVisible.has("bash")).toBe(true)
       expect(visualVisible.has("webpage_render")).toBe(false)
       expect(visualVisible.has("webpage_evaluate")).toBe(false)
       expect(visualVisible.has("webpage_vision_judge")).toBe(false)
@@ -851,6 +877,7 @@ test("wait tool is exposed only to Mission and the orchestrator scheduler", () =
   }
 
   expect(AgentToolPool.customDefault().global).not.toContain("wait")
+  expect(AgentToolPool.customDefault().global).not.toContain("panel")
 })
 
 test("orchestrator tool pool covers every self-built orchestrator tool", async () => {

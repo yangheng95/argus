@@ -12,7 +12,7 @@ test("orchestrator workflow retires deliver and completes through explicit orche
   expect(normalizedPrompt).toContain("host-owned final acceptance object")
   expect(normalizedPrompt).toContain("There is no `deliver` or `publish_acceptance` tool")
   expect(normalizedPrompt).toContain(
-    "Pipeline workflow tasks complete only when you, the Orchestrator, decide the current durable task evidence satisfies the user request",
+    "Workflow tasks complete only when you, the Orchestrator, decide the current durable task evidence satisfies the user request",
   )
   expect(normalizedPrompt).toContain("call `complete_task` with a concrete completion summary")
   expect(normalizedPrompt).toContain("Use `integrity` as an optional system-completeness review report")

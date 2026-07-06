@@ -2,6 +2,7 @@ import { expect, test } from "bun:test"
 import TEAM_CORE from "../../src/prompt/core/integrity-team-core.txt"
 import { buildSupervisorConsensusPrompt, type ReviewPromptInput } from "../../src/integrity/team-agent"
 import type { IntegrityReviewerPlan, IntegrityReviewerReport } from "../../src/integrity/team-schema"
+import { integrityReplayContextPacket } from "../../src/integrity/replay-context"
 
 const input: ReviewPromptInput = {
   userRequest: "Ship a chat page.",
@@ -28,62 +29,70 @@ const input: ReviewPromptInput = {
       non_goals: "Quota exhaustion hardening is out of this bounded REQ.",
     },
   ],
-  replayContext: {
-    attemptNumber: 2,
-    lineage: {
-      taskID: "tsk_consensus_fold",
-      activeSpecSnapshotID: "spec_consensus_fold",
-      inheritedSpecSnapshotIDs: [],
-      reason: "active_only",
-    },
-    priorFactCheckAttempts: [],
-    priorAttempts: [
-      {
-        attemptNumber: 1,
-        artifactID: "art_consensus_prior",
-        timeCreated: Date.UTC(2026, 4, 23, 10),
-        phase: "post_build",
-        verdict: "concerns",
-        summary: "Prior storage quota concern was advisory.",
-        reviewers: [{ reviewerID: "rev_prior", scope: "Storage", verdict: "concerns" }],
-        findings: [
-          {
-            id: "ADV-3-silent-quota-error",
-            severity: "advisory",
-            verdictImpact: "concerns",
-            title: "safeSetItem quota handling lacks visible warning",
-            description: "safeSetItem swallows quota errors.",
-            repair: "Consider a warning.",
-            filePaths: ["src/services/storage.ts"],
-            requirementIDs: [],
-            specIDs: [],
-          },
-        ],
-        blockingFindings: [],
-        requiredRepairs: [],
-        unresolvedDisagreements: [],
-        fact_check_items: [],
+  contextPackets: [
+    integrityReplayContextPacket({
+      attemptNumber: 2,
+      lineage: {
+        taskID: "tsk_consensus_fold",
+        activeSpecSnapshotID: "spec_consensus_fold",
+        inheritedSpecSnapshotIDs: [],
+        reason: "active_only",
       },
-    ],
-    buildEvidenceSinceLastReview: {
-      sinceAttemptNumber: 1,
-      sinceTimeCreated: Date.UTC(2026, 4, 23, 10),
-      changedFiles: [],
-      diffs: [],
-      buildSummaries: [],
-      goalRuns: [],
-    },
-    scaleSignals: {
-      goals: 1,
-      requirements: 1,
-      acceptanceSpecs: 0,
-      changedFilesTotal: 0,
-      changedFilesSinceLastReview: 0,
-      priorAttempts: 1,
-      priorBlockingFindings: 0,
-      phase: "post_build",
-    },
-  },
+      priorFactCheckAttempts: [],
+      priorAttempts: [
+        {
+          attemptNumber: 1,
+          artifactID: "art_consensus_prior",
+          timeCreated: Date.UTC(2026, 4, 23, 10),
+          phase: "post_build",
+          verdict: "concerns",
+          summary: "Prior storage quota concern was advisory.",
+          reviewers: [{ reviewerID: "rev_prior", scope: "Storage", verdict: "concerns" }],
+          findings: [
+            {
+              id: "ADV-3-silent-quota-error",
+              severity: "advisory",
+              verdictImpact: "concerns",
+              fingerprint: "if_2222222222222222",
+              canonicalSymptom: "safeSetItem silently swallows quota errors without user notification",
+              title: "safeSetItem quota handling lacks visible warning",
+              description: "safeSetItem swallows quota errors.",
+              repair: "Consider a warning.",
+              verify: ["quota exhaustion remains advisory without new evidence"],
+              affectedSymbols: ["safeSetItem"],
+              sourceFindingIDs: [],
+              priorAttemptRefs: [],
+              filePaths: ["src/services/storage.ts"],
+              requirementIDs: [],
+              specIDs: [],
+            },
+          ],
+          blockingFindings: [],
+          requiredRepairs: [],
+          unresolvedDisagreements: [],
+        },
+      ],
+      implementationEvidenceSinceLastReview: {
+        sinceAttemptNumber: 1,
+        sinceTimeCreated: Date.UTC(2026, 4, 23, 10),
+        changedFiles: [],
+        diffs: [],
+        implementationSummaries: [],
+        goalRuns: [],
+        taskAgentOutcomes: [],
+      },
+      scaleSignals: {
+        goals: 1,
+        requirements: 1,
+        acceptanceSpecs: 0,
+        changedFilesTotal: 0,
+        changedFilesSinceLastReview: 0,
+        priorAttempts: 1,
+        priorBlockingFindings: 0,
+        phase: "post_build",
+      },
+    }),
+  ],
 }
 
 const plan: IntegrityReviewerPlan = {

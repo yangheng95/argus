@@ -424,6 +424,127 @@ describe("task message routes", () => {
     expect(response.status).toBe(404)
   })
 
+  test("taskID routes reject tasks whose root session parent lineage leaves the active project before session mutations", async () => {
+    await using current = await tmpdir({ git: true, config: routeTestConfig })
+    await using foreign = await tmpdir({ git: true, config: routeTestConfig })
+    const dispatchTaskLoop = mockDispatchTaskLoopAccepted("started")
+    let foreignParentID = ""
+    let taskID = ""
+    let childID = ""
+
+    await Instance.provide({
+      directory: foreign.path,
+      fn: async () => {
+        foreignParentID = (await Session.create({ kind: "root", title: "foreign task route parent" })).id
+      },
+    })
+
+    await Instance.provide({
+      directory: current.path,
+      fn: async () => {
+        const now = Date.now()
+        const child: Session.Info = {
+          id: Identifier.descending("session"),
+          slug: `task-route-cross-parent-${Math.random().toString(36).slice(2)}`,
+          projectID: Instance.project.id,
+          directory: current.path,
+          parentID: foreignParentID,
+          title: "current task route child with foreign parent",
+          version: "test",
+          kind: "root",
+          metadata: {},
+          time: {
+            created: now,
+            updated: now,
+          },
+        }
+        await Session.importSnapshot({ info: child, messages: [] })
+        childID = child.id
+        taskID = Identifier.ascending("task")
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: child.id,
+              source: "panel",
+              title: "polluted task route root",
+              request: "polluted task route root",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
+        )
+      },
+    })
+
+    const app = Server.App()
+    await bootstrapProjectApp(app, current.path)
+    dispatchTaskLoop.mockClear()
+    const writeAttachment = spyOn(AttachmentStore, "write")
+    const commonHeaders = {
+      "content-type": "application/json",
+      "x-opencorvus-directory": current.path,
+    }
+
+    const modelContext = await app.request(`/task/${taskID}/operator-model-context`, {
+      headers: { "x-opencorvus-directory": current.path },
+    })
+    expect(modelContext.status).toBe(404)
+    expect(dispatchTaskLoop).not.toHaveBeenCalled()
+
+    const message = await app.request(`/task/${taskID}/message`, {
+      method: "POST",
+      headers: commonHeaders,
+      body: JSON.stringify({
+        text: "This message must not be written.",
+        source: "panel",
+        promptProfile: PROJECT_EXPERT_SQUAD_ID,
+      }),
+    })
+    expect(message.status).toBe(404)
+    expect(dispatchTaskLoop).not.toHaveBeenCalled()
+
+    const attachmentMessage = await app.request(`/task/${taskID}/message`, {
+      method: "POST",
+      headers: commonHeaders,
+      body: JSON.stringify({
+        text: "This attachment must not be written.",
+        source: "panel",
+        attachments: [
+          {
+            mime: "image/png",
+            filename: "blocked.png",
+            data: Buffer.from("not an actual image but valid base64").toString("base64"),
+          },
+        ],
+      }),
+    })
+    expect(attachmentMessage.status).toBe(404)
+    expect(writeAttachment).not.toHaveBeenCalled()
+    expect(dispatchTaskLoop).not.toHaveBeenCalled()
+
+    const followup = await app.request(`/task/${taskID}/followup`, {
+      method: "POST",
+      headers: commonHeaders,
+    })
+    expect(followup.status).toBe(404)
+    expect(dispatchTaskLoop).not.toHaveBeenCalled()
+    expect((await Session.get(childID)).metadata?.configOverlay).toBeUndefined()
+    expect(await Session.messages({ sessionID: childID })).toHaveLength(0)
+    const task = Database.use((db) =>
+      db
+        .select({ attachments: EngineTaskTable.attachments })
+        .from(EngineTaskTable)
+        .where(eq(EngineTaskTable.id, taskID))
+        .get(),
+    )
+    expect(task?.attachments).toBeNull()
+  })
+
   test("POST /task/:taskID/message triggers scheduler with natural language", async () => {
     await using tmp = await tmpdir({ git: true, config: routeTestConfig })
 

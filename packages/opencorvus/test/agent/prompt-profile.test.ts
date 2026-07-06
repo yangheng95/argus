@@ -92,6 +92,15 @@ const requiredProjectTargetMatrix = {
   ],
 } as const
 
+const expectedCatalogSquadIDs = [
+  "general",
+  "algorithm",
+  "backend",
+  "frontend-automation-debug",
+  "frontend-innovate",
+  "frontend-replica",
+] as const
+
 function expectConfigRejected(input: unknown, expectedMessage: string) {
   const parsed = Config.Info.safeParse(input)
   expect(parsed.success).toBe(false)
@@ -151,21 +160,24 @@ describe("prompt profiles", () => {
     expect(PromptProfile.activeID(config)).toBe("general")
   })
 
-  test("built-in prompt-profile source contains only the default scheduler profile", async () => {
+  test("built-in prompt-profile source contains only general while payloads seed project catalog", async () => {
     await using project = await tmpdir({ git: true })
     const config = Config.Info.parse({})
     expect(Object.keys(PromptProfile.builtIns)).toEqual(["general"])
     expect(PromptProfile.builtIns.general.agents).toEqual({})
     expect(PromptProfile.composeAgentPrompt({ agentID: "build", base: "BASE", config })).toBe("BASE")
-    const builtInCatalog = await PromptProfileResolver.catalog({
+    const catalog = await PromptProfileResolver.catalog({
       config,
       projectActive: "general",
       sessionOverride: null,
       scope: { kind: "project", directory: project.path },
       defaultSkills: [],
     })
-    expect(builtInCatalog.squads.map((squad) => squad.id)).toEqual(["general"])
-    const generalProfile = builtInCatalog.squads.find((squad) => squad.id === "general")
+    expect(catalog.squads.map((squad) => squad.id)).toEqual([...expectedCatalogSquadIDs])
+    expect(
+      catalog.squads.filter((squad) => squad.built_in).map((squad) => squad.id),
+    ).toEqual(["general"])
+    const generalProfile = catalog.squads.find((squad) => squad.id === "general")
     expect(generalProfile?.capability_projection.scheduler.built_in_tool_ids).toContain("select_expert_squad")
     expect(generalProfile?.capability_projection.scheduler.built_in_tool_ids).toContain("complete_task")
   })
@@ -342,14 +354,7 @@ describe("prompt profiles", () => {
   test("repository catalog keeps only general as built-in while project packages cover required target matrices", async () => {
     expect(Object.keys(PromptProfile.builtIns)).toEqual(["general"])
     const profiles = await repositoryProfiles()
-    expect(Object.keys(profiles)).toEqual([
-      "general",
-      "algorithm",
-      "backend",
-      "frontend-automation-debug",
-      "frontend-innovate",
-      "frontend-replica",
-    ])
+    expect(Object.keys(profiles)).toEqual([...expectedCatalogSquadIDs])
     const targetIDs = new Set(PromptProfile.targets.map((target) => target.id))
 
     for (const [profileID, requiredTargets] of Object.entries(requiredProjectTargetMatrix)) {
@@ -450,14 +455,7 @@ describe("prompt profiles", () => {
       catalog.squads.find((squad) => squad.id === "frontend-replica")?.capability_projection.agents.build
         .built_in_tool_ids,
     ).toContain("edit")
-    expect(catalog.squads.map((squad) => squad.id)).toEqual([
-      "general",
-      "algorithm",
-      "backend",
-      "frontend-automation-debug",
-      "frontend-innovate",
-      "frontend-replica",
-    ])
+    expect(catalog.squads.map((squad) => squad.id)).toEqual([...expectedCatalogSquadIDs])
     expect(catalog.squads.some((squad) => squad.id === "custom-squad")).toBe(false)
   })
 

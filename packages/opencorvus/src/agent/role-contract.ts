@@ -24,39 +24,6 @@ export type AgentRoleID =
 export type AgentArchetype = "host" | "worker"
 export type AgentControlSurface = "host" | "primary" | "task-worker" | "helper"
 export type PromptProfileTargetMode = "none" | "user" | "builtin"
-export type AgentCoordinationRedispatchDispatcher =
-  | "frontend_research_stage"
-  | "frontend_design_stage"
-  | "build_stage"
-  | "intent_analysis_stage"
-  | "explore_stage"
-  | "workload_analysis_stage"
-  | "fact_check_stage"
-  | "deep_research_stage"
-  | "requirements_stage"
-  | "architect_stage"
-  | "visual_qa_stage"
-  | "integrity_stage"
-
-export type OrchestratorWorkflowToolName =
-  | "requirements"
-  | "architect"
-  | "frontend_design"
-  | "frontend_research"
-  | "deep_research"
-  | "visual_qa"
-  | "workload_analysis"
-  | "analyze_intent"
-  | "fact_check"
-  | "build"
-  | "explore"
-  | "integrity"
-
-export interface AgentCoordinationRedispatchBinding {
-  dispatcher: AgentCoordinationRedispatchDispatcher
-  stage: AgentRoleID
-  target_kind: AgentRoleID
-}
 
 export interface AgentRoleContract {
   id: AgentRoleID
@@ -73,8 +40,6 @@ export interface AgentRoleContract {
   exactRuntimeContract: boolean
   liveRuntimeContinuation: boolean
   protocolStageContinuation: boolean
-  orchestratorWorkflowToolName: OrchestratorWorkflowToolName | null
-  agentCoordinationRedispatchBinding: AgentCoordinationRedispatchBinding | null
   directSessionReply: boolean
   disableConfigurable: boolean
   nonExecutorSourceBoundaryExempt: boolean
@@ -98,8 +63,6 @@ export namespace AgentRoleContract {
       exactRuntimeContract: false,
       liveRuntimeContinuation: false,
       protocolStageContinuation: false,
-      orchestratorWorkflowToolName: null,
-      agentCoordinationRedispatchBinding: null,
       directSessionReply: false,
       disableConfigurable: true,
       nonExecutorSourceBoundaryExempt: false,
@@ -121,8 +84,6 @@ export namespace AgentRoleContract {
       exactRuntimeContract: false,
       liveRuntimeContinuation: false,
       protocolStageContinuation: false,
-      orchestratorWorkflowToolName: null,
-      agentCoordinationRedispatchBinding: null,
       directSessionReply: false,
       disableConfigurable: true,
       nonExecutorSourceBoundaryExempt: false,
@@ -144,8 +105,6 @@ export namespace AgentRoleContract {
       exactRuntimeContract: false,
       liveRuntimeContinuation: true,
       protocolStageContinuation: true,
-      orchestratorWorkflowToolName: "build",
-      agentCoordinationRedispatchBinding: { dispatcher: "build_stage", stage: "build", target_kind: "build" },
       directSessionReply: false,
       disableConfigurable: true,
       nonExecutorSourceBoundaryExempt: true,
@@ -156,7 +115,7 @@ export namespace AgentRoleContract {
       archetype: "worker",
       controlSurface: "task-worker",
       description:
-        "Focused visual QA (Quality Assurance) agent. Uses browser/runtime evidence to test frontend GUI fidelity and observable functions, may repair in-scope defects, and reports reproducible visual and functional findings instead of relying on fixed screenshot baselines.",
+        "Focused visual QA (Quality Assurance) report-only agent. Uses browser/runtime evidence to test frontend GUI fidelity and observable functions, then reports reproducible visual and functional findings instead of relying on fixed screenshot baselines.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",
@@ -167,12 +126,6 @@ export namespace AgentRoleContract {
       exactRuntimeContract: true,
       liveRuntimeContinuation: true,
       protocolStageContinuation: true,
-      orchestratorWorkflowToolName: "visual_qa",
-      agentCoordinationRedispatchBinding: {
-        dispatcher: "visual_qa_stage",
-        stage: "visual-qa",
-        target_kind: "visual-qa",
-      },
       directSessionReply: false,
       disableConfigurable: true,
       nonExecutorSourceBoundaryExempt: true,
@@ -193,8 +146,6 @@ export namespace AgentRoleContract {
       exactRuntimeContract: false,
       liveRuntimeContinuation: false,
       protocolStageContinuation: false,
-      orchestratorWorkflowToolName: null,
-      agentCoordinationRedispatchBinding: null,
       directSessionReply: false,
       disableConfigurable: true,
       nonExecutorSourceBoundaryExempt: false,
@@ -215,8 +166,6 @@ export namespace AgentRoleContract {
       exactRuntimeContract: false,
       liveRuntimeContinuation: true,
       protocolStageContinuation: false,
-      orchestratorWorkflowToolName: "explore",
-      agentCoordinationRedispatchBinding: { dispatcher: "explore_stage", stage: "explore", target_kind: "explore" },
       directSessionReply: false,
       disableConfigurable: true,
       nonExecutorSourceBoundaryExempt: false,
@@ -237,8 +186,6 @@ export namespace AgentRoleContract {
       exactRuntimeContract: false,
       liveRuntimeContinuation: false,
       protocolStageContinuation: false,
-      orchestratorWorkflowToolName: null,
-      agentCoordinationRedispatchBinding: null,
       directSessionReply: false,
       disableConfigurable: true,
       nonExecutorSourceBoundaryExempt: false,
@@ -259,8 +206,6 @@ export namespace AgentRoleContract {
       exactRuntimeContract: false,
       liveRuntimeContinuation: false,
       protocolStageContinuation: false,
-      orchestratorWorkflowToolName: null,
-      agentCoordinationRedispatchBinding: null,
       directSessionReply: false,
       disableConfigurable: true,
       nonExecutorSourceBoundaryExempt: false,
@@ -281,8 +226,6 @@ export namespace AgentRoleContract {
       exactRuntimeContract: false,
       liveRuntimeContinuation: false,
       protocolStageContinuation: false,
-      orchestratorWorkflowToolName: null,
-      agentCoordinationRedispatchBinding: null,
       directSessionReply: false,
       disableConfigurable: true,
       nonExecutorSourceBoundaryExempt: false,
@@ -303,8 +246,6 @@ export namespace AgentRoleContract {
       exactRuntimeContract: false,
       liveRuntimeContinuation: false,
       protocolStageContinuation: false,
-      orchestratorWorkflowToolName: null,
-      agentCoordinationRedispatchBinding: null,
       directSessionReply: false,
       disableConfigurable: true,
       nonExecutorSourceBoundaryExempt: false,
@@ -325,8 +266,6 @@ export namespace AgentRoleContract {
       exactRuntimeContract: false,
       liveRuntimeContinuation: false,
       protocolStageContinuation: false,
-      orchestratorWorkflowToolName: null,
-      agentCoordinationRedispatchBinding: null,
       directSessionReply: false,
       disableConfigurable: true,
       nonExecutorSourceBoundaryExempt: false,
@@ -348,8 +287,6 @@ export namespace AgentRoleContract {
       exactRuntimeContract: false,
       liveRuntimeContinuation: false,
       protocolStageContinuation: false,
-      orchestratorWorkflowToolName: null,
-      agentCoordinationRedispatchBinding: null,
       directSessionReply: false,
       disableConfigurable: true,
       nonExecutorSourceBoundaryExempt: false,
@@ -371,12 +308,6 @@ export namespace AgentRoleContract {
       exactRuntimeContract: true,
       liveRuntimeContinuation: true,
       protocolStageContinuation: true,
-      orchestratorWorkflowToolName: "requirements",
-      agentCoordinationRedispatchBinding: {
-        dispatcher: "requirements_stage",
-        stage: "requirements",
-        target_kind: "requirements",
-      },
       directSessionReply: true,
       disableConfigurable: true,
       nonExecutorSourceBoundaryExempt: false,
@@ -397,12 +328,6 @@ export namespace AgentRoleContract {
       exactRuntimeContract: true,
       liveRuntimeContinuation: true,
       protocolStageContinuation: true,
-      orchestratorWorkflowToolName: "architect",
-      agentCoordinationRedispatchBinding: {
-        dispatcher: "architect_stage",
-        stage: "architect",
-        target_kind: "architect",
-      },
       directSessionReply: true,
       disableConfigurable: true,
       nonExecutorSourceBoundaryExempt: false,
@@ -424,12 +349,6 @@ export namespace AgentRoleContract {
       exactRuntimeContract: true,
       liveRuntimeContinuation: true,
       protocolStageContinuation: true,
-      orchestratorWorkflowToolName: "frontend_design",
-      agentCoordinationRedispatchBinding: {
-        dispatcher: "frontend_design_stage",
-        stage: "frontend-design",
-        target_kind: "frontend-design",
-      },
       directSessionReply: true,
       disableConfigurable: true,
       nonExecutorSourceBoundaryExempt: false,
@@ -451,12 +370,6 @@ export namespace AgentRoleContract {
       exactRuntimeContract: true,
       liveRuntimeContinuation: true,
       protocolStageContinuation: true,
-      orchestratorWorkflowToolName: "analyze_intent",
-      agentCoordinationRedispatchBinding: {
-        dispatcher: "intent_analysis_stage",
-        stage: "intent-analysis",
-        target_kind: "intent-analysis",
-      },
       directSessionReply: true,
       disableConfigurable: true,
       nonExecutorSourceBoundaryExempt: false,
@@ -478,12 +391,6 @@ export namespace AgentRoleContract {
       exactRuntimeContract: false,
       liveRuntimeContinuation: true,
       protocolStageContinuation: true,
-      orchestratorWorkflowToolName: "integrity",
-      agentCoordinationRedispatchBinding: {
-        dispatcher: "integrity_stage",
-        stage: "integrity",
-        target_kind: "integrity",
-      },
       directSessionReply: true,
       disableConfigurable: true,
       nonExecutorSourceBoundaryExempt: true,
@@ -505,12 +412,6 @@ export namespace AgentRoleContract {
       exactRuntimeContract: true,
       liveRuntimeContinuation: true,
       protocolStageContinuation: true,
-      orchestratorWorkflowToolName: "fact_check",
-      agentCoordinationRedispatchBinding: {
-        dispatcher: "fact_check_stage",
-        stage: "fact-check",
-        target_kind: "fact-check",
-      },
       directSessionReply: false,
       disableConfigurable: false,
       nonExecutorSourceBoundaryExempt: false,
@@ -532,12 +433,6 @@ export namespace AgentRoleContract {
       exactRuntimeContract: true,
       liveRuntimeContinuation: true,
       protocolStageContinuation: true,
-      orchestratorWorkflowToolName: "deep_research",
-      agentCoordinationRedispatchBinding: {
-        dispatcher: "deep_research_stage",
-        stage: "deep-research",
-        target_kind: "deep-research",
-      },
       directSessionReply: false,
       disableConfigurable: false,
       nonExecutorSourceBoundaryExempt: false,
@@ -559,12 +454,6 @@ export namespace AgentRoleContract {
       exactRuntimeContract: true,
       liveRuntimeContinuation: true,
       protocolStageContinuation: true,
-      orchestratorWorkflowToolName: "frontend_research",
-      agentCoordinationRedispatchBinding: {
-        dispatcher: "frontend_research_stage",
-        stage: "frontend-research",
-        target_kind: "frontend-research",
-      },
       directSessionReply: false,
       disableConfigurable: false,
       nonExecutorSourceBoundaryExempt: false,
@@ -586,12 +475,6 @@ export namespace AgentRoleContract {
       exactRuntimeContract: true,
       liveRuntimeContinuation: true,
       protocolStageContinuation: true,
-      orchestratorWorkflowToolName: "workload_analysis",
-      agentCoordinationRedispatchBinding: {
-        dispatcher: "workload_analysis_stage",
-        stage: "goal-workload-analyst",
-        target_kind: "goal-workload-analyst",
-      },
       directSessionReply: false,
       disableConfigurable: true,
       nonExecutorSourceBoundaryExempt: false,
@@ -647,18 +530,6 @@ export namespace AgentRoleContract {
 
   export function isProtocolStageContinuationID(id: string): id is AgentRoleID {
     return isRoleID(id) && get(id).protocolStageContinuation
-  }
-
-  export function agentCoordinationRedispatchIDs(): AgentRoleID[] {
-    return taskWorkerIDs().filter((id) => get(id).agentCoordinationRedispatchBinding !== null)
-  }
-
-  export function agentCoordinationRedispatchBinding(id: AgentRoleID): AgentCoordinationRedispatchBinding | undefined {
-    return get(id).agentCoordinationRedispatchBinding ?? undefined
-  }
-
-  export function orchestratorWorkflowToolName(id: AgentRoleID): OrchestratorWorkflowToolName | undefined {
-    return get(id).orchestratorWorkflowToolName ?? undefined
   }
 
   export function directSessionReplyIDs(): AgentRoleID[] {

@@ -191,9 +191,14 @@ async function commit(input: {
   }
 }
 
-const GITIGNORE_ESSENTIALS = `node_modules/
+function gitignoreEssentials(): string {
+  return `node_modules/
 dist/
 build/
+# Expert-squad packages are source definitions. Their agents/build prompt
+# folders must not be hidden by the generic build-output ignore rule above.
+!.opencorvus/expert-squads/**/agents/build/
+!.opencorvus/expert-squads/**/agents/build/**
 .output/
 .next/
 .nuxt/
@@ -256,6 +261,7 @@ lpt7
 lpt8
 lpt9
 `
+}
 
 // Paths OpenCorvus must keep out of ordinary source-control checkpoints.
 // Runtime scratch is host-owned bookkeeping. Root /artifacts/ is visual
@@ -296,9 +302,7 @@ export async function ensureGitignore() {
     // Append missing essentials without overwriting user content
     const existing = await file.text()
     const lines = new Set(existing.split(/\r?\n/).map((l) => l.trim()))
-    const missing = GITIGNORE_ESSENTIALS.split("\n").filter(
-      (l) => l.trim() && !l.startsWith("!") && !lines.has(l.trim()),
-    )
+    const missing = gitignoreEssentials().split("\n").filter((l) => l.trim() && !lines.has(l.trim()))
     if (missing.length > 0) {
       await Bun.write(
         `${dir}/.gitignore`,
@@ -306,7 +310,7 @@ export async function ensureGitignore() {
       )
     }
   } else {
-    await Bun.write(`${dir}/.gitignore`, GITIGNORE_ESSENTIALS)
+    await Bun.write(`${dir}/.gitignore`, gitignoreEssentials())
   }
 
   await untrackOpencorvusGitExcludedPaths(dir)

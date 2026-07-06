@@ -166,6 +166,7 @@ export namespace TaskQueueService {
         source: z.string().optional(),
       })
       .parse(raw)
+    await assertSessionLineageInCurrentProject(input.sessionID)
     const prompt = stampTaskQueueWakeReason(
       applySessionPromptIdentity(input.sessionID, promptSchema().parse(input.prompt), "new"),
       { queueSource: input.source },
@@ -183,7 +184,7 @@ export namespace TaskQueueService {
     hooks?: { beforeLoop?: () => void | Promise<void> },
   ) {
     const input = ExecuteCompactionInput.parse(raw)
-    const session = await Session.get(input.sessionID)
+    const session = await assertSessionLineageInCurrentProject(input.sessionID)
     const source = await compactionSource(input.sessionID, input.sourceUserMessageID)
     const { SessionCompaction } = await import("@/session/compaction")
     await SessionCompaction.create({
@@ -459,6 +460,11 @@ export namespace TaskQueueService {
     const list: Array<typeof TaskQueueTable.$inferSelect> = []
     for (const item of queued) {
       if (list.length >= limit) break
+      const valid = await assertSessionLineageInCurrentProject(item.session_id).catch((error) => {
+        failQueued(item.id, item.session_id, error)
+        return undefined
+      })
+      if (!valid) continue
       const task = claim(item.id, item.session_id)
       if (!task) continue
       list.push(task)
@@ -621,6 +627,7 @@ export namespace TaskQueueService {
   }
 
   async function execute(task: typeof TaskQueueTable.$inferSelect, inFlight: InFlightTask) {
+    await assertSessionLineageInCurrentProject(task.session_id)
     const metadata = RawTaskMetadata.safeParse(task.metadata)
     if (!metadata.success) {
       throw new Error("invalid queue metadata")
@@ -720,7 +727,7 @@ export namespace TaskQueueService {
   }
 
   async function executeSessionWake(sessionID: string, hooks?: { beforeLoop?: () => void | Promise<void> }) {
-    const session = await Session.get(sessionID)
+    const session = await assertSessionLineageInCurrentProject(sessionID)
     return SessionContext.provide(session, () =>
       Instance.provide({
         directory: session.directory,
@@ -759,7 +766,11 @@ export namespace TaskQueueService {
     if (stale.length === 0) return 0
     let recovered = 0
     for (const task of stale) {
-      const session = await Session.get(task.session_id)
+      const session = await assertSessionLineageInCurrentProject(task.session_id).catch((error) => {
+        fail(task, error)
+        return undefined
+      })
+      if (!session) continue
       const promptCancelled = cancelSessionPromptInScope({
         session,
         handle: "TaskQueueService.recover",
@@ -805,6 +816,10 @@ export namespace TaskQueueService {
     return recovered
   }
 
+  async function assertSessionLineageInCurrentProject(sessionID: string): Promise<Session.Info> {
+    return Session.assertLineageInProject({ sessionID, projectID: Instance.project.id })
+  }
+
   function fail(task: QueueTaskRow, error: unknown) {
     const now = Date.now()
     const failed = Database.use((db) =>
@@ -837,6 +852,32 @@ export namespace TaskQueueService {
     })
     publishTerminalTaskError(task.session_id, message(error))
     requestDrain("task failed")
+  }
+
+  function failQueued(id: string, sessionID: string, error: unknown) {
+    const now = Date.now()
+    const failed = Database.use((db) =>
+      db
+        .update(TaskQueueTable)
+        .set({
+          status: "failed",
+          time_completed: now,
+          error_message: message(error),
+          time_updated: now,
+        })
+        .where(and(eq(TaskQueueTable.id, id), eq(TaskQueueTable.status, "queued")))
+        .returning({ id: TaskQueueTable.id })
+        .get(),
+    )
+    if (!failed) return
+    clearRecoveryTimer(id)
+    log.error("queued task rejected before claim", {
+      id,
+      sessionID,
+      error: message(error),
+    })
+    publishTerminalTaskError(sessionID, message(error))
+    requestDrain("queued task rejected before claim")
   }
 
   function publishTerminalTaskError(sessionID: string, text: string) {

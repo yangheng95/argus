@@ -3,8 +3,6 @@ import type { Part, VisibleMessage } from "@opencorvus-ai/sdk"
 import { Session } from "../../session"
 import { cmd } from "./cmd"
 import { bootstrap } from "../bootstrap"
-import { Database } from "../../storage/db"
-import { SessionTable, MessageTable, PartTable } from "../../session/session.sql"
 import { EOL } from "os"
 import { Filesystem } from "../../util/filesystem"
 
@@ -51,38 +49,9 @@ export async function readSessionImportFile(file: string): Promise<SessionImport
   }
 }
 
-export function importSessionData(exportData: SessionImportData) {
-  Database.use((db) => db.insert(SessionTable).values(Session.toRow(exportData.info)).onConflictDoNothing().run())
-
-  for (const msg of exportData.messages) {
-    Database.use((db) =>
-      db
-        .insert(MessageTable)
-        .values({
-          id: msg.info.id,
-          session_id: exportData.info.id,
-          time_created: msg.info.time?.created ?? Date.now(),
-          data: msg.info,
-        })
-        .onConflictDoNothing()
-        .run(),
-    )
-
-    for (const part of msg.parts) {
-      Database.use((db) =>
-        db
-          .insert(PartTable)
-          .values({
-            id: part.id,
-            message_id: msg.info.id,
-            session_id: exportData.info.id,
-            data: part,
-          })
-          .onConflictDoNothing()
-          .run(),
-      )
-    }
-  }
+export async function importSessionData(exportData: SessionImportData) {
+  const snapshot = Session.importSnapshot.schema.parse(exportData)
+  await Session.importSnapshot(snapshot)
 }
 
 export const ImportCommand = cmd({
@@ -98,7 +67,7 @@ export const ImportCommand = cmd({
   handler: async (args) => {
     await bootstrap(process.cwd(), async () => {
       const exportData = await readSessionImportFile(args.file)
-      importSessionData(exportData)
+      await importSessionData(exportData)
 
       process.stdout.write(`Imported session: ${exportData.info.id}`)
       process.stdout.write(EOL)

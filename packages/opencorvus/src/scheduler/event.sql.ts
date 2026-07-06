@@ -23,6 +23,8 @@ export const EventJobTable = sqliteTable(
     cooldown_ms: integer().notNull().default(0),
     last_run: integer(),
     last_event: text(),
+    failure_count: integer().notNull().default(0),
+    last_error: text(),
     ...Timestamps,
   },
   (table) => [

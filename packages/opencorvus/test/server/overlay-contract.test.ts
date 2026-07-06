@@ -120,12 +120,12 @@ describe("overlay contract", () => {
         const direct = list.find((w) => w.id === "direct")!
         expect(direct.steps.map((s) => s.id)).toEqual(["analyze_intent", "build"])
 
-        // pipeline workflow — has goal-scope build step and final integrity step
+        // pipeline workflow — has goal-scope build, integrity review, then optional fact-check.
         const pipeline = list.find((w) => w.id === "pipeline")!
         expect(pipeline.goalLoopStepIDs).toContain("build")
         const buildStep = pipeline.steps.find((s) => s.id === "build")
         expect(buildStep?.scope).toBe("goal")
-        expect(pipeline.steps.at(-1)?.id).toBe("integrity")
+        expect(pipeline.steps.slice(-2).map((s) => s.id)).toEqual(["integrity", "fact_check"])
         expect(pipeline.steps.some((s) => s.id === "deliver")).toBe(false)
       },
     })

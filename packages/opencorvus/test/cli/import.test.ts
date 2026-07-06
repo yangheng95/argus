@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process"
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
-import { ImportCommand } from "../../src/cli/cmd/import"
+import { ImportCommand, importSessionData } from "../../src/cli/cmd/import"
 import { Instance } from "../../src/project/instance"
 import { MessageTable, PartTable, SessionTable } from "../../src/session/session.sql"
 import { count, Database } from "../../src/storage/db"
@@ -122,5 +122,106 @@ describe("import command input failures", () => {
     expect(result.status).not.toBe(0)
     expect(result.stdout).not.toContain("Imported session")
     expect(result.stderr).toContain(`Import file is not valid JSON: ${malformed}`)
+  })
+})
+
+describe("import command session part write boundary", () => {
+  test("normalizes json_schema format defaults before snapshot import", async () => {
+    await withIsolatedCli(async (projectDir) => {
+      const now = Date.now()
+
+      await Instance.provide({
+        directory: projectDir,
+        fn: async () => {
+          await importSessionData({
+            info: {
+              id: "ses_import_format_default",
+              slug: "import-format-default",
+              projectID: Instance.project.id,
+              version: "local",
+              directory: process.cwd(),
+              title: "Format default import",
+              kind: "root",
+              time: { created: now, updated: now },
+            } as any,
+            messages: [
+              {
+                info: {
+                  id: "msg_import_format_default",
+                  sessionID: "ses_import_format_default",
+                  role: "user",
+                  time: { created: now },
+                  format: {
+                    type: "json_schema",
+                    schema: { type: "object" },
+                  },
+                  agent: "orchestrator",
+                  model: {
+                    providerID: "test",
+                    modelID: "test",
+                  },
+                } as any,
+                parts: [],
+              },
+            ],
+          })
+        },
+      })
+
+      const messageRow = Database.use((db) => db.select({ data: MessageTable.data }).from(MessageTable).get())
+      expect((messageRow?.data as any).format.retryCount).toBe(2)
+      expect(importedRowCounts()).toEqual({ sessions: 1, messages: 1, parts: 0 })
+    })
+  })
+
+  test("rejects inline base64 part data through Session.updatePart", async () => {
+    await withIsolatedCli(async (projectDir) => {
+      const now = Date.now()
+
+      await Instance.provide({
+        directory: projectDir,
+        fn: async () => {
+          await expect(
+            importSessionData({
+              info: {
+                id: "ses_import_inline_guard",
+                slug: "import-inline-guard",
+                projectID: Instance.project.id,
+                version: "local",
+                directory: process.cwd(),
+                title: "Inline guard import",
+                kind: "root",
+                time: { created: now, updated: now },
+              } as any,
+              messages: [
+                {
+                  info: {
+                    id: "msg_import_inline_guard",
+                    sessionID: "ses_import_inline_guard",
+                    role: "user",
+                    time: { created: now },
+                    agent: "user",
+                    model: { providerID: "test", modelID: "test" },
+                  } as any,
+                  parts: [
+                    {
+                      id: "prt_import_inline_guard",
+                      sessionID: "ses_import_inline_guard",
+                      messageID: "msg_import_inline_guard",
+                      type: "file",
+                      mime: "image/png",
+                      filename: "inline.png",
+                      url: "data:image/png;base64,UE5H",
+                    } as any,
+                  ],
+                },
+              ],
+            }),
+          ).rejects.toThrow("refusing inline base64 data URL")
+        },
+      })
+
+      expect(importedRowCounts()).toEqual({ sessions: 0, messages: 0, parts: 0 })
+    })
   })
 })

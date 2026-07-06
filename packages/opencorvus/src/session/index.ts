@@ -29,6 +29,7 @@ import { PermissionNext } from "@/permission/next"
 import { iife } from "@/util/iife"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { timelineMessageOrderKey, timelinePartOrderKey } from "@/timeline/order"
+import { inlineBase64DataUrlMatch, inlineBase64DataUrlSnippet } from "@/util/inline-base64"
 
 export namespace Session {
   const log = Log.create({ service: "session" })
@@ -320,6 +321,9 @@ export namespace Session {
     permission?: PermissionNext.Ruleset
     metadata?: Record<string, unknown>
   }) {
+    if (input.parentID) {
+      await assertLineageInProject({ sessionID: input.parentID, projectID: Instance.project.id })
+    }
     const result: Info = {
       id: Identifier.descending("session", input.id),
       slug: Slug.create(),
@@ -367,6 +371,18 @@ export namespace Session {
     )
     if (!row) throw new NotFoundError({ message: `Session not found: ${sessionID}` })
     return fromRow(row)
+  })
+
+  export const assertLineageInProject = fn(SessionProjectInput, async ({ sessionID, projectID }) => {
+    let current = await getInProject({ sessionID, projectID })
+    const first = current
+    for (let hops = 0; current.parentID; hops++) {
+      if (hops >= 64) {
+        throw new Error(`Session parent chain for ${sessionID} exceeds 64 hops`)
+      }
+      current = await getInProject({ sessionID: current.parentID, projectID })
+    }
+    return first
   })
 
   export const get = fn(Identifier.schema("session"), async (id) => {
@@ -909,7 +925,13 @@ export namespace Session {
     return { ...persisted, orderKey } as Message.VisibleInfo
   }
 
-  export const updateMessage = fn(Message.Info, async (msg) => {
+  function upsertMessageRow(
+    msg: Message.Info,
+    options: {
+      publishCreated: boolean
+      publishUpdated: boolean
+    },
+  ): Message.VisibleInfo {
     let persisted: Message.VisibleInfo | undefined
     Database.use((db) => {
       const existing = db
@@ -930,21 +952,27 @@ export namespace Session {
         })
         .onConflictDoUpdate({ target: MessageTable.id, set: { data } })
         .run()
-      if (!existing) {
+      if (options.publishCreated && !existing) {
         Database.effect(() =>
           Bus.publish(Message.Event.Created, {
             info: persistedMessage,
           }),
         )
       }
-      Database.effect(() =>
-        Bus.publish(Message.Event.Updated, {
-          info: persistedMessage,
-        }),
-      )
+      if (options.publishUpdated) {
+        Database.effect(() =>
+          Bus.publish(Message.Event.Updated, {
+            info: persistedMessage,
+          }),
+        )
+      }
     })
-    if (!persisted) throw new Error(`Session.updateMessage: message ${msg.id} was not persisted`)
+    if (!persisted) throw new Error(`Session message ${msg.id} was not persisted`)
     return persisted
+  }
+
+  export const updateMessage = fn(Message.Info, async (msg) => {
+    return upsertMessageRow(msg, { publishCreated: true, publishUpdated: true })
   })
 
   /**
@@ -954,29 +982,7 @@ export namespace Session {
    * fully assembled. Follow up with `updateMessage` to publish the event.
    */
   export const saveMessage = fn(Message.Info, async (msg) => {
-    let persisted: Message.VisibleInfo | undefined
-    Database.use((db) => {
-      const existing = db
-        .select({ time_created: MessageTable.time_created })
-        .from(MessageTable)
-        .where(eq(MessageTable.id, msg.id))
-        .get()
-      const persistedMessage = messageWithPersistedCreated(msg, existing?.time_created ?? msg.time.created)
-      persisted = persistedMessage
-      const time_created = persistedMessage.time.created
-      const { id, sessionID, ...data } = persistedMessage
-      db.insert(MessageTable)
-        .values({
-          id,
-          session_id: sessionID,
-          time_created,
-          data,
-        })
-        .onConflictDoUpdate({ target: MessageTable.id, set: { data } })
-        .run()
-    })
-    if (!persisted) throw new Error(`Session.saveMessage: message ${msg.id} was not persisted`)
-    return persisted
+    return upsertMessageRow(msg, { publishCreated: false, publishUpdated: false })
   })
 
   /**
@@ -1008,7 +1014,7 @@ export namespace Session {
         db.select({ id: MessageTable.id }).from(MessageTable).where(eq(MessageTable.id, input.info.id)).get(),
       )
       Database.transaction(() => {
-        saveMessage(input.info)
+        upsertMessageRow(input.info, { publishCreated: false, publishUpdated: false })
         if (!existing) {
           const createdInfo = messageWithPersistedCreated(input.info, input.info.time.created)
           Database.effect(() =>
@@ -1017,9 +1023,9 @@ export namespace Session {
             }),
           )
         }
-        updateMessage(input.info)
+        upsertMessageRow(input.info, { publishCreated: false, publishUpdated: true })
         for (const part of input.parts) {
-          updatePart(part)
+          updatePartRow(part, { publish: true })
         }
         if (input.touchSessionID) {
           touch(input.touchSessionID)
@@ -1126,7 +1132,6 @@ export namespace Session {
    *    LLM-decision shortcut. The producer code path is the bug; this
    *    guard surfaces the regression at the write boundary so it cannot
    *    silently bloat the DB. */
-  const INLINE_BASE64_RE = /"data:[^";,]+;base64,/
   export class InlineBase64InPartError extends Error {
     constructor(
       public readonly partID: string,
@@ -1143,23 +1148,32 @@ export namespace Session {
     }
   }
 
-  export const updatePart = fn(UpdatePartInput, async (part) => {
+  export function assertPartHasNoInlineBase64(part: Message.Part): void {
+    const { id } = part
+    const data = { ...part } as Record<string, unknown>
+    delete data.id
+    delete data.messageID
+    delete data.sessionID
+    delete data.orderKey
+    // Cheap regex on the serialized string is O(N) over the part payload,
+    // dominated by the JSON.stringify cost the insert below would pay
+    // anyway. Triggers before the row touches SQLite — keeps the DB clean.
+    const serialized = JSON.stringify(data)
+    const match = inlineBase64DataUrlMatch(serialized)
+    if (match) {
+      const snippet = inlineBase64DataUrlSnippet(serialized, match)
+      throw new InlineBase64InPartError(id, snippet)
+    }
+  }
+
+  function updatePartRow(part: Message.Part, options: { publish: boolean }): { outputPart: Message.Part; wrotePart: boolean } {
+    assertPartHasNoInlineBase64(part)
     const { id, messageID, sessionID, orderKey: providedOrderKey, ...data } = part
     const assertProvidedPartOrderKey = (canonicalOrderKey: string) => {
       const supplied = typeof providedOrderKey === "string" ? providedOrderKey.trim() : ""
       if (supplied && supplied !== canonicalOrderKey) {
         throw new Error(`Session.updatePart: part ${id} orderKey drift between input and persisted row`)
       }
-    }
-    // Cheap regex on the serialized string is O(N) over the part payload,
-    // dominated by the JSON.stringify cost the insert below would pay
-    // anyway. Triggers before the row touches SQLite — keeps the DB clean.
-    const serialized = JSON.stringify(data)
-    const match = INLINE_BASE64_RE.exec(serialized)
-    if (match) {
-      const start = Math.max(0, match.index - 40)
-      const snippet = serialized.slice(start, match.index + 80).replace(/\s+/g, " ")
-      throw new InlineBase64InPartError(id, snippet)
     }
     const time = Date.now()
     let outputPart = part
@@ -1169,7 +1183,7 @@ export namespace Session {
         orderKey: messageOrderKey,
         part: outputPart as Message.VisiblePart,
       })
-    const publishAfterCommit = Database.hasActiveContext()
+    const publishAfterCommit = options.publish && Database.hasActiveContext()
     let wrotePart = false
     Database.use((db) => {
       const message = db
@@ -1236,14 +1250,79 @@ export namespace Session {
       wrotePart = true
       if (publishAfterCommit) Database.effect(publishPartUpdated)
     })
+    return { outputPart, wrotePart }
+  }
+
+  export const updatePart = fn(UpdatePartInput, async (part) => {
+    const publishAfterCommit = Database.hasActiveContext()
+    const { outputPart, wrotePart } = updatePartRow(part, { publish: true })
     // SSE (Server-Sent Events) stream deltas depend on the part-created
     // event already being visible to live subscribers. Outside an existing
     // DB transaction, publish and await that event before callers emit
     // message.part.delta. Inside a transaction, keep the post-commit effect
     // boundary so observers never see uncommitted parts.
-    if (wrotePart && !publishAfterCommit) await publishPartUpdated()
+    if (wrotePart && !publishAfterCommit) {
+      const messageOrderKey = timelineMessageOrderKey({
+        info: {
+          id: outputPart.messageID,
+          time: {
+            created: Database.use((db) => {
+              const row = db
+                .select({ timeCreated: MessageTable.time_created })
+                .from(MessageTable)
+                .where(and(eq(MessageTable.id, outputPart.messageID), eq(MessageTable.session_id, outputPart.sessionID)))
+                .get()
+              if (!row) throw new NotFoundError({ message: `Message not found: ${outputPart.messageID}` })
+              return row.timeCreated
+            }),
+          },
+        },
+      })
+      await Bus.publish(Message.Event.PartUpdated, {
+        orderKey: messageOrderKey,
+        part: outputPart as Message.VisiblePart,
+      })
+    }
     return outputPart
   })
+
+  export const importSnapshot = fn(
+    z.object({
+      info: Info,
+      messages: z.array(
+        z.object({
+          info: Message.Info,
+          parts: z.array(Message.Part),
+        }),
+      ),
+    }),
+    async (input) => {
+      Database.transaction((db) => {
+        const sessionRow = toRow(input.info)
+        const { id: _sessionID, ...sessionSet } = sessionRow
+        db.insert(SessionTable)
+          .values(sessionRow)
+          .onConflictDoUpdate({ target: SessionTable.id, set: sessionSet })
+          .run()
+
+        for (const msg of input.messages) {
+          const { orderKey: _messageOrderKey, ...messageInfo } = {
+            ...msg.info,
+            sessionID: input.info.id,
+          } as Message.Info & { orderKey?: string }
+          upsertMessageRow(messageInfo, { publishCreated: false, publishUpdated: false })
+          for (const part of msg.parts) {
+            const { orderKey: _partOrderKey, ...partInfo } = {
+              ...part,
+              messageID: messageInfo.id,
+              sessionID: input.info.id,
+            } as Message.Part & { orderKey?: string }
+            updatePartRow(partInfo as Message.Part, { publish: false })
+          }
+        }
+      })
+    },
+  )
 
   // updatePartDelta is a pure Bus publish. Deltas are ephemeral by contract —
   // the protocol bridge (task-message-protocol-bridge.ts:bridgeDelta) routes

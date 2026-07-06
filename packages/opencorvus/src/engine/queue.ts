@@ -27,6 +27,7 @@ import { EngineProtocol } from "./protocol"
 import { openTaskForOperatorWake } from "./task-message-open"
 import { listLiveOrchestratorToolOwnership } from "./tool-ownership"
 import { Instance } from "@/project/instance"
+import { Session } from "@/session"
 
 const log = Log.create({ service: "engine.queue" })
 const DEAD_OWNER_QUEUE_CONVERGENCE_REASON = "Directory queue: previous owner process died before interruption"
@@ -339,6 +340,49 @@ function queuedTasksForCwd(cwd: string, input: { projectID?: string } = {}): Que
   })
 }
 
+async function assertTaskRootSessionLineage(task: Pick<TaskRow, "id" | "session_id" | "project_id">): Promise<void> {
+  if (!task.session_id) return
+  await Session.assertLineageInProject({
+    sessionID: task.session_id,
+    projectID: task.project_id,
+  })
+}
+
+function nextQueuedTaskForCwd(cwd: string): TaskRow | undefined {
+  if (!cwd) return undefined
+  const row = Database.use((db) =>
+    db
+      .select({ task: EngineTaskTable })
+      .from(EngineTaskTable)
+      .leftJoin(SessionTable, eq(SessionTable.id, EngineTaskTable.session_id))
+      .leftJoin(ProjectTable, eq(ProjectTable.id, EngineTaskTable.project_id))
+      .where(
+        and(
+          sql`${EngineTaskTable.time_started} IS NULL`,
+          sql`${EngineTaskTable.time_completed} IS NULL`,
+          sql`COALESCE(${SessionTable.directory}, ${ProjectTable.worktree}) = ${cwd}`,
+          sql`NOT EXISTS (
+            SELECT 1
+            FROM engine_task t2
+            LEFT JOIN session s2 ON s2.id = t2.session_id
+            LEFT JOIN project p2 ON p2.id = t2.project_id
+            WHERE t2.time_started IS NOT NULL AND t2.time_completed IS NULL
+              AND COALESCE(json_extract(t2.metadata, '$.interrupted'), 0) != 1
+              AND COALESCE(s2.directory, p2.worktree) = ${cwd}
+          )`,
+        ),
+      )
+      .orderBy(
+        sql`CASE ${EngineTaskTable.priority} WHEN 'critical' THEN 0 ELSE 1 END`,
+        EngineTaskTable.queue_order,
+        EngineTaskTable.time_created,
+        EngineTaskTable.id,
+      )
+      .get(),
+  )
+  return row?.task
+}
+
 export function directoryQueueSnapshot(cwd: string) {
   const queued = queuedTasksForCwd(cwd)
   return {
@@ -475,6 +519,7 @@ export async function drainQueuedTaskEventIfUnowned(taskID: string): Promise<boo
     log.warn("discarding queued wake for task without cwd", { taskID })
     return false
   }
+  await assertTaskRootSessionLineage(task)
 
   const liveOwners = listLiveOrchestratorToolOwnership(taskID)
   if (liveOwners.length > 0) return false
@@ -511,8 +556,22 @@ export async function drainQueuedTaskEventIfUnowned(taskID: string): Promise<boo
 export async function drainPendingQueuedOperatorWakes(): Promise<number> {
   const taskIDs = [...new Set(pendingQueuedOperatorWakeTaskIDs())]
   let drained = 0
+  const failures: string[] = []
   for (const taskID of taskIDs) {
-    if (await drainQueuedTaskEventIfUnowned(taskID)) drained += 1
+    try {
+      if (await drainQueuedTaskEventIfUnowned(taskID)) drained += 1
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      failures.push(`${taskID}: ${message}`)
+      log.error("queued operator wake failed lineage validation", {
+        taskID,
+        error: message,
+        errorName: error instanceof Error ? error.name : undefined,
+      })
+    }
+  }
+  if (failures.length > 0) {
+    throw new Error(`Failed to drain ${failures.length} queued operator wake(s): ${failures.join("; ")}`)
   }
   return drained
 }
@@ -676,6 +735,9 @@ export function claimQueuedTaskForCwd(taskID: string, cwd: string, now = Date.no
 }
 
 export async function startQueuedTaskInCwd(taskID: string, cwd: string): Promise<TaskRow | undefined> {
+  const task = findTask(taskID)
+  if (!task) return undefined
+  await assertTaskRootSessionLineage(task)
   const claimed = claimQueuedTaskForCwd(taskID, cwd)
   if (!claimed) return undefined
   await startLoopForTask(claimed, undefined, cwd)
@@ -765,7 +827,10 @@ export async function advanceQueue(
 ): Promise<TaskRow | undefined> {
   if (!cwd) return undefined
   await convergeDeadOwnerActiveTasksForCwd(cwd)
-  const claimed = claimNextForCwd(cwd)
+  const candidate = nextQueuedTaskForCwd(cwd)
+  if (!candidate) return undefined
+  await assertTaskRootSessionLineage(candidate)
+  const claimed = claimQueuedTaskForCwd(candidate.id, cwd)
   if (!claimed) return undefined
   const queuedWake = findNextPendingQueuedOperatorWake(claimed.id)
   const event = queuedWake?.event
@@ -824,6 +889,7 @@ export async function dispatchTaskLoop(input: DispatchTaskLoopInput): Promise<Di
   if (!task) return "ignored"
   if (isTaskTerminal(task)) {
     if (isOperatorWakeEvent(input.event)) {
+      await assertTaskRootSessionLineage(task)
       task = await openTaskForOperatorWake(task, "Operator wake reopened terminal task")
     } else {
       log.info("dispatchTaskLoop: ignoring terminal task wake", {
@@ -834,6 +900,7 @@ export async function dispatchTaskLoop(input: DispatchTaskLoopInput): Promise<Di
       return "ignored"
     }
   }
+  await assertTaskRootSessionLineage(task)
   const cwd = taskCwd(task.id)
   if (!cwd) {
     log.warn("dispatchTaskLoop: task has no cwd", { taskID: task.id, note: input.event?.note })
@@ -890,7 +957,7 @@ export async function dispatchTaskLoop(input: DispatchTaskLoopInput): Promise<Di
 
 async function consumePendingWaitCronForAcceptedWake(task: TaskRow, reason: string): Promise<void> {
   const { CronService } = await import("@/scheduler/cron-service")
-  CronService.consumePendingTaskWaits({
+  await CronService.consumePendingTaskWaits({
     taskId: task.id,
     projectId: task.project_id,
     reason,
@@ -906,6 +973,7 @@ async function consumePendingWaitCronForAcceptedWake(task: TaskRow, reason: stri
  * (task-loop → queue → task-loop).
  */
 async function startLoopForTask(task: TaskRow, event: OrchestratorEvent | undefined, cwd: string): Promise<boolean> {
+  await assertTaskRootSessionLineage(task)
   if (loopInFlightFor(task.id)) {
     log.info("loop already in flight, skipping", { taskID: task.id })
     return false

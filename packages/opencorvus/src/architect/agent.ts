@@ -31,8 +31,6 @@ import { createAgentContextTools } from "@/agent/context-tools"
 import { createAgentCoordinationRuntimeTools } from "@/agent/coordination-runtime-tools"
 import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
-import type { VisualSpec } from "@/frontend-design/types"
-import { renderVisualContractPromptSection } from "@/frontend-design/prompt-section"
 import {
   allResearchEvidenceRefsForTask,
   renderFrontendResearchArchitectPromptSection,
@@ -45,8 +43,13 @@ import type { ArchitectResult, ArchitectRetryContext, ParsedRequirement, Require
 import type { WorkloadBrief } from "@/goal-workload-analyst/types"
 import type { AgentSessionContinuation } from "@/engine/stage-continuation"
 import { createArchitectOutputTools, type ArchitectGoalCountContract, type RegisteredGoal } from "./output-tools"
-import { AttachmentStore } from "@/storage/attachment-store"
 import { renderUserRequestSection } from "@/intent/request-prompt"
+import {
+  renderAgentContextPacketSection,
+  type AgentContextPacket,
+  withAttachmentContextPacket,
+} from "@/agent/context-packet"
+import { visualHandoffContextsFromPackets } from "@/context-packets/visual-handoff"
 
 import ARCHITECT_CORE from "@/prompt/core/architect-core.txt"
 
@@ -75,10 +78,10 @@ export namespace ArchitectAgent {
     requirements?: ParsedRequirement[]
     /** Runtime / framework / test decisions produced by Requirements. */
     requirementDecisions?: RequirementsDecision[]
-    /** Optional visual anchors produced by frontend_design. */
-    designSpecs?: VisualSpec[]
-    /** Authoritative frontend template entries produced by frontend_design. */
-    frontendDesign?: string
+    /** Visual spec ids known to scheduler validation; prompt context arrives through contextPackets. */
+    knownVisualSpecIDs?: string[]
+    /** Upstream agent handoff packets supplied by the scheduler. */
+    contextPackets?: AgentContextPacket[]
     /** Acceptance feedback that triggered this re-run. Absent on first pass. */
     retryContext?: ArchitectRetryContext
     /** Goal Workload Analyst briefs for the active snapshot, passed when the
@@ -87,10 +90,8 @@ export namespace ArchitectAgent {
      *  goal is too large / under-specified for one autonomous build. Absent on
      *  the first pass (no analyst has run yet). */
     workloadBriefs?: WorkloadBrief[]
-    /** Multimodal attachments the user uploaded with the task (images, PDFs,
-     *  reference files). Surfaced into both the user-message text section
-     *  and — for image / pdf / audio / video MIMEs — as inline file parts so
-     *  the model can actually look at them while decomposing goals. */
+    /** Attachments the user uploaded with the task (images, PDFs, reference
+     *  files). Surfaced as link/index refs in the user-message text section. */
     attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
     /** Parent session — a child "architect" session is created under it. */
     parentSessionID?: string
@@ -114,13 +115,17 @@ export namespace ArchitectAgent {
       requirement_ids: g.requirement_ids,
     }))
     const goalCountContract = resolveArchitectGoalCountContract(input)
+    const visualHandoffRequiresReferenceCoverage = visualHandoffContextsFromPackets(input.contextPackets).some(
+      (handoff) => handoff.visualReference || handoff.webCloneSource,
+    )
     const outputToolKit = createArchitectOutputTools({
       existingGoals: seedGoals,
-      designSpecs: input.designSpecs,
-      requireReferenceCoverage: (input.designSpecs?.length ?? 0) > 0 || Boolean(input.frontendDesign?.trim()),
+      knownVisualSpecIDs: input.knownVisualSpecIDs,
+      requireReferenceCoverage:
+        (input.knownVisualSpecIDs?.length ?? 0) > 0 || visualHandoffRequiresReferenceCoverage,
       referenceCoverageReasons: [
-        ...((input.designSpecs?.length ?? 0) > 0 ? ["designSpecs are present"] : []),
-        ...(input.frontendDesign?.trim() ? ["frontendDesign handoff is present"] : []),
+        ...((input.knownVisualSpecIDs?.length ?? 0) > 0 ? ["visual spec ids are present"] : []),
+        ...(visualHandoffRequiresReferenceCoverage ? ["visual handoff context requires reference coverage"] : []),
       ],
       knownRequirementIDs: input.requirements?.map((requirement) => requirement.id),
       knownResearchEvidenceRefs: allResearchEvidenceRefsForTask({
@@ -169,16 +174,10 @@ export namespace ArchitectAgent {
         buildReport: () => outputToolKit.buildReport(),
       },
       buildUserPrompt: () => buildUserPrompt(input),
-      buildUserParts: async () => {
-        const text = buildUserPrompt(input)
-        const enrichedText = text + AttachmentStore.renderAttachmentInventory(input.attachments)
-        const inlineParts = await AttachmentStore.inlineFileParts(input.attachments)
-        return [{ type: "text" as const, text: enrichedText }, ...inlineParts]
-      },
       terminalTool: {
         toolName: "submit_architect",
         isSatisfied: (collector) => collector.finalized,
-        // MUST use the toolKit's predicate (closes over workDir/designSpecs/
+        // MUST use the toolKit's predicate (closes over workDir/context/
         // requireReferenceCoverage) so terminal-tool scoping never disagrees
         // with submit_architect's own validation. Passing the standalone
         // `isArchitectReadyToFinalize(collector)` here drops the workDir-
@@ -302,21 +301,11 @@ function buildUserPrompt(input: ArchitectAgent.CoordinateInput): string {
     )
   }
 
-  if (input.designSpecs && input.designSpecs.length > 0) {
-    sections.push(
-      renderVisualContractPromptSection({
-        specs: input.designSpecs,
-        instructions: [
-          "The following visual constraints came from frontend_design and are authoritative for the referenced surface.",
-          "Use them when decomposing frontend goals, source/reference coverage, owned paths, interaction work, and integrity coverage.",
-        ],
-      }),
-    )
-  }
-
-  if (input.frontendDesign && input.frontendDesign.trim().length > 0) {
-    sections.push(input.frontendDesign)
-  }
+  const contextPackets = withAttachmentContextPacket(input.contextPackets, input.attachments).filter(
+    (packet) => packet.parts.length > 0,
+  )
+  const contextPacketSection = renderAgentContextPacketSection(contextPackets)
+  if (contextPacketSection) sections.push(contextPacketSection)
 
   const researchBrief = renderResearchBriefPromptSection({
     taskID: input.taskID,

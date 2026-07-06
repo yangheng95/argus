@@ -89,9 +89,11 @@ export namespace Log {
 
   export async function init(options: Options) {
     if (options.level) level = options.level
-    await fs.mkdir(directory(), { recursive: true })
-    await cleanup(directory())
-    logpath = path.join(directory(), options.dev ? "dev.log" : productionLogFileName(generation + 1))
+    const logDirectory = directory()
+    await fs.mkdir(logDirectory, { recursive: true })
+    await cleanup(logDirectory)
+    logpath = path.join(logDirectory, options.dev ? "dev.log" : productionLogFileName(generation + 1))
+    await fs.mkdir(logDirectory, { recursive: true })
     await fs.writeFile(logpath, "")
     const fileDestination = pino.destination({ dest: logpath, sync: false, mkdir: true })
     const destination = options.print

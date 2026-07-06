@@ -4,7 +4,7 @@ import { ProjectTable } from "../../src/project/project.sql"
 import { EngineArtifactTable, EngineGoalTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import {
   beginBuildAttempt,
-  ensureBuildRetryFeedbackForGoal,
+  ensureBuildRetryEvidenceForGoal,
   finalizeBuildAttempt,
   persistTaskAcceptance,
   startNewAttempt,
@@ -361,7 +361,7 @@ describe("Goal.startNewAttempt — options", () => {
     expect(retryEntries[0]?.value).not.toContain("Terminal error: merge_back conflict")
   })
 
-  test("ensureBuildRetryFeedbackForGoal writes retry feedback before prompt context is composed", () => {
+  test("ensureBuildRetryEvidenceForGoal writes retry evidence before prompt context is composed", () => {
     const gr = `grun_prompt_feedback_${Date.now()}`
     insertGoalRun({ id: gr, status: "failed", error: "Merge left worktree in MERGING state" })
     createDecisionLog(taskID).append({
@@ -376,7 +376,7 @@ describe("Goal.startNewAttempt — options", () => {
       reason: "test build report",
     })
 
-    const created = ensureBuildRetryFeedbackForGoal({
+    const created = ensureBuildRetryEvidenceForGoal({
       taskID,
       goalID,
       source: "test.prompt_context",
@@ -395,7 +395,7 @@ describe("Goal.startNewAttempt — options", () => {
     expect(retryEntries[0]?.value).not.toContain("Previous build session")
     expect(retryEntries[0]?.value).not.toContain("Retry count on previous attempt")
 
-    const second = ensureBuildRetryFeedbackForGoal({
+    const second = ensureBuildRetryEvidenceForGoal({
       taskID,
       goalID,
       source: "test.prompt_context",
@@ -408,7 +408,7 @@ describe("Goal.startNewAttempt — options", () => {
     ).toHaveLength(1)
   })
 
-  test("ensureBuildRetryFeedbackForGoal appends clarified retry feedback over old ambiguous text", () => {
+  test("ensureBuildRetryEvidenceForGoal appends clarified retry evidence over old ambiguous text", () => {
     const gr = `grun_retry_clarified_${Date.now()}`
     insertGoalRun({ id: gr, status: "failed", error: "MCP server browser failed to connect: Not connected" })
     const log = createDecisionLog(taskID)
@@ -420,7 +420,7 @@ describe("Goal.startNewAttempt — options", () => {
       reason: "old ambiguous retry text",
     })
 
-    const created = ensureBuildRetryFeedbackForGoal({
+    const created = ensureBuildRetryEvidenceForGoal({
       taskID,
       goalID,
       source: "test.retry_clarification",
@@ -436,7 +436,7 @@ describe("Goal.startNewAttempt — options", () => {
     expect(latest?.reason).toContain("supersedes decision_log")
   })
 
-  test("ensureBuildRetryFeedbackForGoal preserves precise terminal retry evidence", () => {
+  test("ensureBuildRetryEvidenceForGoal preserves precise terminal retry evidence", () => {
     const gr = `grun_retry_precise_${Date.now()}`
     insertGoalRun({ id: gr, status: "failed", error: "prior build failed" })
     const log = createDecisionLog(taskID)
@@ -449,7 +449,7 @@ describe("Goal.startNewAttempt — options", () => {
       reason: "precise retry evidence",
     })
 
-    const created = ensureBuildRetryFeedbackForGoal({
+    const created = ensureBuildRetryEvidenceForGoal({
       taskID,
       goalID,
       source: "test.retry_precise_preserve",
@@ -461,7 +461,7 @@ describe("Goal.startNewAttempt — options", () => {
     expect(log.readByKey(`build_retry_previous_${gr}`)?.value).toBe(precise)
   })
 
-  test("ensureBuildRetryFeedbackForGoal preserves clarified precise retry evidence", () => {
+  test("ensureBuildRetryEvidenceForGoal preserves clarified precise retry evidence", () => {
     const gr = `grun_retry_clarified_precise_${Date.now()}`
     insertGoalRun({ id: gr, status: "failed", error: "prior build failed" })
     const log = createDecisionLog(taskID)
@@ -474,7 +474,7 @@ describe("Goal.startNewAttempt — options", () => {
       reason: "clarified precise retry evidence",
     })
 
-    const created = ensureBuildRetryFeedbackForGoal({
+    const created = ensureBuildRetryEvidenceForGoal({
       taskID,
       goalID,
       source: "test.retry_clarified_precise_preserve",

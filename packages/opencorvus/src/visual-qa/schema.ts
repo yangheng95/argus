@@ -1,6 +1,9 @@
 import z from "zod"
+import { DurableEvidenceRefSchema } from "@/evidence/ref"
+import { referenceComparisonEvidenceIDFromRef } from "@/evidence/reference-comparison"
 import { FactCheckItemListSchema } from "@/fact-check/schema"
 import { VISUAL_QA_PRODUCT_DESIGN_PRINCIPLE_IDS } from "./product-design-principles"
+import { normalizeVisualQaReferenceRegionKey } from "./reference-region-key"
 
 export const VisualQaSeveritySchema = z.enum(["critical", "major", "minor"])
 export const VisualQaFindingStatusSchema = z.enum(["open", "repaired", "deferred"])
@@ -11,14 +14,31 @@ export const VisualQaViewportSchema = z.object({
   width: z.number().int().positive(),
   height: z.number().int().positive(),
   device_scale_factor: z.number().positive().optional(),
-})
+}).strict()
 
 export const VisualQaDomBoxSchema = z.object({
   x: z.number(),
   y: z.number(),
   width: z.number().nonnegative(),
   height: z.number().nonnegative(),
-})
+}).strict()
+
+export const VisualQaReportEvidenceRefSchema = DurableEvidenceRefSchema
+
+export const VisualQaReferenceRegionKeySchema = z
+  .string()
+  .min(1)
+  .transform((key, ctx) => {
+    try {
+      return normalizeVisualQaReferenceRegionKey(key, "Visual QA reference region key")
+    } catch (error) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: error instanceof Error ? error.message : String(error),
+      })
+      return z.NEVER
+    }
+  })
 
 export const VisualQaCoverageSchema = z.object({
   check_ids: z
@@ -32,15 +52,15 @@ export const VisualQaCoverageSchema = z.object({
     .default([])
     .describe("Runtime states checked: default, narrow, hover, modal open, loading, error, etc."),
   source_refs: z
-    .array(z.string().min(1))
+    .array(VisualQaReportEvidenceRefSchema)
     .default([])
-    .describe("Frontend-design/build/source artifact refs used as the source of truth."),
+    .describe("Durable frontend-design/build/source evidence refs used as the source of truth."),
   evidence_refs: z
-    .array(z.string().min(1))
+    .array(VisualQaReportEvidenceRefSchema)
     .default([])
-    .describe("Fresh screenshot, visual comparison, console/network, or command evidence refs."),
+    .describe("Durable fresh screenshot, visual comparison, console/network, or command evidence refs."),
   notes: z.string().min(1),
-})
+}).strict()
 
 export const VisualQaCheckItemSchema = z.object({
   id: z.string().min(1),
@@ -52,9 +72,7 @@ export const VisualQaCheckItemSchema = z.object({
     ),
   question: z.string().min(1).describe("Concrete visual/product question that was checked."),
   region: z.string().min(1).describe("Visible region, route, component family, or interaction surface checked."),
-  reference_region_key: z
-    .string()
-    .min(1)
+  reference_region_key: VisualQaReferenceRegionKeySchema
     .optional()
     .describe(
       "Required reference parity key in region_id@viewport_id form when this check covers one bound reference region.",
@@ -64,9 +82,9 @@ export const VisualQaCheckItemSchema = z.object({
   observed: z.string().min(1).describe("Observed rendered result from fresh evidence."),
   viewports: z.array(VisualQaViewportSchema).default([]),
   states: z.array(z.string().min(1)).default([]),
-  source_refs: z.array(z.string().min(1)).default([]),
+  source_refs: z.array(VisualQaReportEvidenceRefSchema).default([]),
   evidence_refs: z
-    .array(z.string().min(1))
+    .array(VisualQaReportEvidenceRefSchema)
     .default([])
     .describe(
       "Fresh evidence refs that prove this check result when already known. Initial check registration may leave this empty; the final report must still have registered evidence rows tied to this check ID.",
@@ -76,7 +94,7 @@ export const VisualQaCheckItemSchema = z.object({
     .min(1)
     .optional()
     .describe("Required correction when status is failed or inconclusive."),
-})
+}).strict()
 
 export const VisualQaFindingSchema = z.object({
   id: z.string().min(1),
@@ -89,13 +107,9 @@ export const VisualQaFindingSchema = z.object({
   claim: z.string().min(1),
   reproduction: z.string().min(1),
   region: z.string().min(1),
-  source_refs: z.array(z.string().min(1)).default([]),
-  evidence_refs: z.array(z.string().min(1)).default([]),
-  repair_refs: z
-    .array(z.string().min(1))
-    .default([])
-    .describe("Changed files, commits, or verification refs when repaired."),
-})
+  source_refs: z.array(VisualQaReportEvidenceRefSchema).default([]),
+  evidence_refs: z.array(VisualQaReportEvidenceRefSchema).default([]),
+}).strict()
 
 export const VisualQaProductionBlockerSchema = z.object({
   id: z.string().min(1),
@@ -114,9 +128,9 @@ export const VisualQaProductionBlockerSchema = z.object({
     .describe("Why a professional design reviewer would block this surface from production delivery."),
   impact: z.string().min(1).describe("User-visible or product-quality impact if shipped as-is."),
   required_correction: z.string().min(1).describe("Concrete correction required before the product can ship."),
-  source_refs: z.array(z.string().min(1)).default([]),
-  evidence_refs: z.array(z.string().min(1)).default([]),
-})
+  source_refs: z.array(VisualQaReportEvidenceRefSchema).default([]),
+  evidence_refs: z.array(VisualQaReportEvidenceRefSchema).default([]),
+}).strict()
 
 export const VisualQaCodeModuleReferenceSchema = z.object({
   entity: z
@@ -129,7 +143,7 @@ export const VisualQaCodeModuleReferenceSchema = z.object({
     .string()
     .min(1)
     .describe("Observed problem tied to that entity. Generic project improvement text is not a valid problem."),
-})
+}).strict()
 
 export const VisualQaUnresolvedCodeModuleProblemSchema = z.object({
   id: z.string().min(1),
@@ -142,11 +156,11 @@ export const VisualQaUnresolvedCodeModuleProblemSchema = z.object({
     .string()
     .min(1)
     .describe(
-      "Evidence-backed reason Visual QA cannot safely repair this code module problem inside the current worktree.",
+      "Evidence-backed reason this code module problem must be repaired by the current workflow implementation owner before Visual QA can accept the surface.",
     ),
   blocker_ids: z.array(z.string().min(1)).min(1).describe("Production blocker IDs that expose this problem."),
-  evidence_refs: z.array(z.string().min(1)).default([]),
-})
+  evidence_refs: z.array(VisualQaReportEvidenceRefSchema).default([]),
+}).strict()
 
 export const VisualQaProblemDomRegionSchema = z.object({
   id: z.string().min(1),
@@ -189,27 +203,16 @@ export const VisualQaProblemDomRegionSchema = z.object({
   code_search_terms: z
     .array(z.string().min(1))
     .default([])
-    .describe("Strings Build should grep first when mapping the DOM region to source code."),
-  evidence_refs: z.array(z.string().min(1)).default([]),
+    .describe("Strings the current workflow implementation owner should grep first when mapping the DOM region to source code."),
+  evidence_refs: z.array(VisualQaReportEvidenceRefSchema).default([]),
   annotated_evidence_refs: z
-    .array(z.string().min(1))
+    .array(VisualQaReportEvidenceRefSchema)
     .default([])
     .describe(
       "Host-generated annotated screenshot refs with this Document Object Model (DOM) region's bbox, locator, blocker IDs, and repair hints drawn directly on the image.",
     ),
   notes: z.string().min(1).describe("Concise repair guidance tied to these DOM facts."),
-})
-
-export const VisualQaRepairSchema = z.object({
-  check_ids: z
-    .array(z.string().min(1))
-    .min(1)
-    .describe("Registered Visual QA check item IDs whose defects were repaired or verified."),
-  finding_ids: z.array(z.string().min(1)).default([]),
-  files_changed: z.array(z.string().min(1)).default([]),
-  reason: z.string().min(1),
-  verification: z.string().min(1),
-})
+}).strict()
 
 export const VisualQaEvidenceSchema = z.object({
   check_ids: z
@@ -227,32 +230,33 @@ export const VisualQaEvidenceSchema = z.object({
     "source_artifact",
     "other",
   ]),
-  ref: z.string().min(1).describe("Path, URL, command id, or artifact ref."),
+  ref: VisualQaReportEvidenceRefSchema.describe("Durable evidence ref; do not use bare paths, file URLs, or command text."),
   viewport: VisualQaViewportSchema.optional(),
   state: z.string().optional(),
   note: z.string().min(1),
-})
+}).strict()
+
+export const VisualQaReferenceComparisonEvidenceRefSchema = z
+  .string()
+  .pipe(VisualQaReportEvidenceRefSchema)
+  .refine((ref) => Boolean(referenceComparisonEvidenceIDFromRef(ref)), {
+    message:
+      "reference_comparison_evidence_refs must contain formal reference-comparison evidence refs; side-by-side PNG paths are supporting visual_diff evidence only.",
+  })
 
 export const VisualQaReferenceParitySchema = z.object({
   required: z.boolean().default(false),
-  required_regions: z.array(z.string().min(1)).default([]),
+  required_regions: z.array(VisualQaReferenceRegionKeySchema).default([]),
   reference_comparison_evidence_refs: z
-    .array(z.string().min(1))
+    .array(VisualQaReferenceComparisonEvidenceRefSchema)
     .default([])
-    .describe("Artifact IDs from persisted browser preview comparison evidence."),
-  missing_regions: z.array(z.string().min(1)).default([]),
+    .describe("Formal evidence refs for persisted reference-comparison evidence."),
+  missing_regions: z.array(VisualQaReferenceRegionKeySchema).default([]),
   blocker_ids: z
     .array(z.string().min(1))
     .default([])
     .describe("Production blocker IDs explaining missing comparison evidence when accepted=false."),
-})
-
-export const VisualQaCommandSchema = z.object({
-  command: z.string().min(1),
-  cwd: z.string().min(1).optional(),
-  passed: z.boolean(),
-  detail: z.string().min(1),
-})
+}).strict()
 
 export const VisualQaReportSchema = z.object({
   accepted: z.boolean(),
@@ -263,7 +267,6 @@ export const VisualQaReportSchema = z.object({
   production_blockers: z.array(VisualQaProductionBlockerSchema).default([]),
   unresolved_code_module_problems: z.array(VisualQaUnresolvedCodeModuleProblemSchema).default([]),
   problem_dom_regions: z.array(VisualQaProblemDomRegionSchema).default([]),
-  repairs: z.array(VisualQaRepairSchema).default([]),
   evidence: z.array(VisualQaEvidenceSchema).default([]),
   reference_parity: VisualQaReferenceParitySchema.default({
     required: false,
@@ -272,11 +275,9 @@ export const VisualQaReportSchema = z.object({
     missing_regions: [],
     blocker_ids: [],
   }),
-  commands: z.array(VisualQaCommandSchema).default([]),
-  changed_files: z.array(z.string().min(1)).default([]),
   open_questions: z.array(z.string().min(1)).default([]),
   fact_check_items: FactCheckItemListSchema.default([]),
-})
+}).strict()
 
 export const VisualQaAcceptanceSchema = z
   .object({

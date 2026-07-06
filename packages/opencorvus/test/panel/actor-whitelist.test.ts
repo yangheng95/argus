@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
+import { panelActionSchemaForAgent } from "../../src/panel/capability"
 import { PanelTool } from "../../src/tool/panel"
 import { EngineService } from "../../src/task-api"
 import { Log } from "../../src/util/log"
@@ -62,7 +63,7 @@ const MISSION_DENIED = [
 ] as const
 
 function isWhitelistDenied(error: unknown): boolean {
-  return error instanceof Error && /not permitted for the mission agent/i.test(error.message)
+  return error instanceof Error && /not permitted for actor mission/i.test(error.message)
 }
 
 describe("panel actor whitelist — mission", () => {
@@ -110,6 +111,20 @@ describe("panel actor whitelist — mission", () => {
     const { error } = await call({ action, ...params }, "mission")
     expect(error).toBeInstanceOf(Error)
     expect(isWhitelistDenied(error)).toBe(true)
+  })
+
+  test("mission panel schema exposes only mission coordination actions", () => {
+    const schema = panelActionSchemaForAgent("mission")
+    expect(() => schema.parse({ action: "retry_task", taskID: "task_1" })).toThrow()
+    expect(() => schema.parse({ action: "delete_goal", goalID: "goal_1" })).toThrow()
+    expect(() =>
+      schema.parse({
+        action: "create_task",
+        title: "Coordinate",
+        request: "Run the bounded task",
+        allow_create: true,
+      }),
+    ).not.toThrow()
   })
 
   test("control_agent retains access to actions denied for mission", async () => {

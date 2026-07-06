@@ -2,8 +2,7 @@ import { Database, NotFoundError, and, eq, isNull, or, sql } from "@/storage/db"
 import { CronJobTable } from "./cron.sql"
 import { Cron } from "./cron"
 import { Scheduler } from "./index"
-import { SessionWake } from "@/session"
-import { SessionTable } from "@/session/session.sql"
+import { Session, SessionWake } from "@/session"
 import { EngineTaskTable } from "@/engine/engine.sql"
 import { Log } from "@/util/log"
 import { Instance, lazyInstanceState } from "@/project/instance"
@@ -119,33 +118,29 @@ export namespace CronService {
     }))
   }
 
-  function assertSessionInProject(input: { sessionId?: string; projectId: string }) {
+  async function assertSessionInProject(input: { sessionId?: string; projectId: string }) {
     const sessionId = input.sessionId
     if (!sessionId) return
-    const session = Database.use((db) =>
-      db
-        .select({ id: SessionTable.id })
-        .from(SessionTable)
-        .where(and(eq(SessionTable.id, sessionId), eq(SessionTable.project_id, input.projectId)))
-        .get(),
-    )
-    if (!session) throw new NotFoundError({ message: `Session not found: ${sessionId}` })
+    await Session.assertLineageInProject({ sessionID: sessionId, projectID: input.projectId })
   }
 
-  function assertTaskInProject(input: { taskId: string; projectId: string }) {
+  async function assertTaskRootSessionInProject(input: { taskId: string; projectId: string }) {
     const task = Database.use((db) =>
       db
-        .select({ id: EngineTaskTable.id })
+        .select({ id: EngineTaskTable.id, sessionID: EngineTaskTable.session_id })
         .from(EngineTaskTable)
         .where(and(eq(EngineTaskTable.id, input.taskId), eq(EngineTaskTable.project_id, input.projectId)))
         .get(),
     )
     if (!task) throw new NotFoundError({ message: `Task not found: ${input.taskId}` })
+    if (!task.sessionID) throw new Error(`Task ${input.taskId} has no root session; cannot schedule task wake.`)
+    await Session.assertLineageInProject({ sessionID: task.sessionID, projectID: input.projectId })
+    return task
   }
 
-  export function create(input: CreateCronJobInput): { id: string; name: string; nextRun: number } {
+  export async function create(input: CreateCronJobInput): Promise<{ id: string; name: string; nextRun: number }> {
     const parsed = Cron.parse(input.expression)
-    assertSessionInProject({ sessionId: input.sessionId, projectId: input.projectId })
+    await assertSessionInProject({ sessionId: input.sessionId, projectId: input.projectId })
     const now = Date.now()
     const nextRun = Cron.nextRun(parsed, now)
     const id = Identifier.ascending("cron")
@@ -169,12 +164,12 @@ export namespace CronService {
     return { id, name: input.name, nextRun }
   }
 
-  export function createDelayedSessionWake(input: CreateDelayedSessionWakeInput): {
+  export async function createDelayedSessionWake(input: CreateDelayedSessionWakeInput): Promise<{
     id: string
     name: string
     nextRun: number
-  } {
-    assertSessionInProject({ sessionId: input.sessionId, projectId: input.projectId })
+  }> {
+    await assertSessionInProject({ sessionId: input.sessionId, projectId: input.projectId })
     assertDuration(input.durationMs)
     const now = Date.now()
     const nextRun = now + input.durationMs
@@ -198,8 +193,8 @@ export namespace CronService {
     return { id, name: input.name, nextRun }
   }
 
-  export function createTaskWake(input: CreateTaskCronWakeInput): { id: string; name: string; nextRun: number } {
-    assertTaskInProject({ taskId: input.taskId, projectId: input.projectId })
+  export async function createTaskWake(input: CreateTaskCronWakeInput): Promise<{ id: string; name: string; nextRun: number }> {
+    await assertTaskRootSessionInProject({ taskId: input.taskId, projectId: input.projectId })
     assertDuration(input.durationMs)
     const now = Date.now()
     const nextRun = now + input.durationMs
@@ -234,13 +229,30 @@ export namespace CronService {
     return !!row
   }
 
-  export function consumePendingTaskWaits(input: {
+  export async function consumePendingTaskWaits(input: {
     taskId: string
     projectId: string
     reason: string
     now?: number
-  }): ConsumedCronWaits {
+  }): Promise<ConsumedCronWaits> {
     const now = input.now ?? Date.now()
+    const pending = Database.use((db) =>
+      db
+        .select({ id: CronJobTable.id })
+        .from(CronJobTable)
+        .where(
+          and(
+            eq(CronJobTable.project_id, input.projectId),
+            eq(CronJobTable.task_id, input.taskId),
+            eq(CronJobTable.enabled, true),
+            eq(CronJobTable.one_shot, true),
+            or(isNull(CronJobTable.lease_owner), sql`${CronJobTable.lease_until} <= ${now}`),
+          ),
+        )
+        .all(),
+    )
+    if (pending.length === 0) return { jobIDs: [] }
+    await assertTaskRootSessionInProject({ taskId: input.taskId, projectId: input.projectId })
     const rows = Database.use((db) =>
       db
         .delete(CronJobTable)
@@ -268,12 +280,13 @@ export namespace CronService {
     return { jobIDs }
   }
 
-  export function consumePendingSessionWaits(input: {
+  export async function consumePendingSessionWaits(input: {
     sessionId: string
     projectId: string
     reason: string
     now?: number
-  }): ConsumedCronWaits {
+  }): Promise<ConsumedCronWaits> {
+    await Session.assertLineageInProject({ sessionID: input.sessionId, projectID: input.projectId })
     const now = input.now ?? Date.now()
     const rows = Database.use((db) =>
       db
@@ -310,7 +323,7 @@ export namespace CronService {
     source: string
     detail: string
   }): Promise<ConsumedCronWaits & { dispatchResult?: string }> {
-    const consumed = consumePendingTaskWaits({
+    const consumed = await consumePendingTaskWaits({
       taskId: input.taskId,
       projectId: input.projectId,
       reason: `${input.source}: ${input.detail}`,
@@ -361,7 +374,7 @@ export namespace CronService {
   async function handleMessageCreated(info: Message.VisibleInfo): Promise<void> {
     if (info.role !== "user") return
     if (isSchedulerWakeMessage(info)) return
-    consumePendingSessionWaits({
+    await consumePendingSessionWaits({
       sessionId: info.sessionID,
       projectId: Instance.project.id,
       reason: "user message created before scheduled wait due time",
@@ -436,6 +449,8 @@ export namespace CronService {
         while (true) {
           const row = pick()
           if (!row) return
+          const candidate = await validateDueJobBeforeClaim(row.id, projectID, now)
+          if (!candidate) continue
           const job = claim(row.id, projectID, owner, now)
           if (!job) continue
           await execute(job, owner, now).catch(async (err) => {
@@ -444,6 +459,40 @@ export namespace CronService {
         }
       }),
     )
+  }
+
+  async function validateDueJobBeforeClaim(id: string, projectID: string, now: number) {
+    const job = Database.use((db) =>
+      db
+        .select()
+        .from(CronJobTable)
+        .where(
+          sql`${CronJobTable.id} = ${id}
+            AND ${CronJobTable.project_id} = ${projectID}
+            AND ${CronJobTable.enabled} = 1
+            AND ${CronJobTable.next_run} <= ${now}
+            AND (${CronJobTable.lease_until} <= ${now} OR ${CronJobTable.lease_until} IS NULL)`,
+        )
+        .get(),
+    )
+    if (!job) return undefined
+    try {
+      await assertCronJobLineage(job)
+      return job
+    } catch (error) {
+      await failBeforeLease(job, error)
+      return undefined
+    }
+  }
+
+  async function assertCronJobLineage(job: typeof CronJobTable.$inferSelect): Promise<void> {
+    if (job.task_id) {
+      await assertTaskRootSessionInProject({ taskId: job.task_id, projectId: job.project_id })
+      return
+    }
+    if (job.session_id) {
+      await Session.assertLineageInProject({ sessionID: job.session_id, projectID: job.project_id })
+    }
   }
 
   function concurrency() {
@@ -561,6 +610,7 @@ export namespace CronService {
     fireID: string,
   ): Promise<{ sessionID?: string; taskID?: string; dispatchResult?: string }> {
     if (job.task_id) {
+      await assertTaskRootSessionInProject({ taskId: job.task_id, projectId: job.project_id })
       const { dispatchTaskLoop } = await import("@/engine/queue")
       const dispatchResult = await dispatchTaskLoop({
         taskID: job.task_id,
@@ -621,6 +671,39 @@ export namespace CronService {
     )
 
     log.error("cron job execution failed", {
+      jobId: job.id,
+      name: job.name,
+      error: msg,
+      retryAt: new Date(nextRun).toISOString(),
+    })
+  }
+
+  async function failBeforeLease(job: typeof CronJobTable.$inferSelect, err: unknown): Promise<void> {
+    const now = Date.now()
+    const step = job.failure_count + 1
+    const wait = Math.min(MAX_BACKOFF_MS, 1000 * 2 ** Math.min(step, 30))
+    const nextRun = Math.max(job.next_run, now + wait)
+    const msg = err instanceof Error ? err.message : String(err)
+
+    Database.use((db) =>
+      db
+        .update(CronJobTable)
+        .set({
+          failure_count: sql`${CronJobTable.failure_count} + 1`,
+          last_error: msg,
+          next_run: nextRun,
+          lease_until: 0,
+          lease_owner: null,
+        })
+        .where(
+          sql`${CronJobTable.id} = ${job.id}
+            AND ${CronJobTable.project_id} = ${job.project_id}
+            AND (${CronJobTable.lease_until} <= ${now} OR ${CronJobTable.lease_until} IS NULL)`,
+        )
+        .run(),
+    )
+
+    log.error("cron job rejected before lease", {
       jobId: job.id,
       name: job.name,
       error: msg,

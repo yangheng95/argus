@@ -73,7 +73,7 @@ describe("architectFidelityIssues — sourceCoverage container path semantics", 
         referenceCoverage: [],
         assemblyOwners: [{ surface: "app-entry", goal_id: "goal_bootstrap", rationale: "owns scaffold" }],
       },
-      designSpecs: [],
+      knownVisualSpecIDs: [],
       // workDir undefined → existingOwnedPaths is [] → vacuous pass. Drive the
       // path-match branch directly via the `existingOwnedPaths > 0` reproducer
       // below; this case verifies the unrelated-paths case stays clean.

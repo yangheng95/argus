@@ -4,6 +4,7 @@ import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
 import { CronService } from "../../src/scheduler/cron-service"
 import { CronJobTable } from "../../src/scheduler/cron.sql"
+import { Session } from "../../src/session"
 import { Database, eq } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -21,12 +22,14 @@ describe("engine describe task cron waits", () => {
       fn: async () => {
         const now = Date.now()
         const taskID = "tsk_describe_cron_wait_" + Math.random().toString(36).slice(2)
+        const session = await Session.create({ kind: "orchestrator", title: "describe task cron wait root" })
         Database.use((db) =>
           db
             .insert(EngineTaskTable)
             .values({
               id: taskID,
               project_id: Instance.project.id,
+              session_id: session.id,
               source: "test",
               title: "Describe task cron wait",
               request: "Wait for an external DNS propagation event",
@@ -39,7 +42,7 @@ describe("engine describe task cron waits", () => {
             .run(),
         )
 
-        const scheduled = CronService.createTaskWake({
+        const scheduled = await CronService.createTaskWake({
           name: "task wait",
           reason: "external DNS propagation",
           projectId: Instance.project.id,

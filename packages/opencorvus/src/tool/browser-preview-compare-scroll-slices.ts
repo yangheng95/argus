@@ -62,6 +62,8 @@ export const BrowserPreviewCompareScrollSlicesTool = Tool.define(BrowserPreviewC
         taskID,
         targetID: params.targetID,
         viewportID: params.viewportID,
+        evidenceID: result.evidenceID,
+        evidenceRef: `browser_preview_evidence:${result.evidenceID}`,
         jobID: result.jobID,
         manifestPath: result.manifestPath,
         artifacts: result.artifacts,

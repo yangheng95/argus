@@ -35,6 +35,7 @@ import { tool, type ToolSet } from "ai"
 import { Log } from "@/util/log"
 import type { PromptProfileConfig } from "@/agent/prompt-profile"
 import { PromptProfileResolver } from "@/expert-squad/prompt-profile-resolver"
+import type { AgentContextPacket } from "@/agent/context-packet"
 import { resolveAgentModel } from "@/agent/model"
 import { AgentRunError, runAgentSession } from "@/agent/runner"
 import { Agent } from "@/agent/agent"
@@ -72,9 +73,7 @@ import {
 import { Identifier } from "@/id/id"
 import { Message } from "@/session/message"
 import { MCPServe } from "@/mcp/serve"
-import type { VisualSpec } from "@/frontend-design/types"
 import type { WorkloadBrief } from "@/goal-workload-analyst/types"
-import { renderVisualContractPromptSection } from "@/frontend-design/prompt-section"
 import type { AssemblyOwnerEntry, ReferenceCoverageEntry, SourceCoverageEntry } from "@/architect/fidelity"
 import type { FileDiff } from "@/snapshot/types"
 import {
@@ -99,19 +98,23 @@ import { PermissionNext } from "@/permission/next"
 import { Question } from "@/question"
 import { buildBuildAgentReport } from "./report"
 import { InstructionPrompt } from "@/session/instruction"
-import { renderBuildPromptOverlays } from "./prompt-context"
+import {
+  buildContextPacketText,
+  buildIntegrityBlockingFingerprintsFromContextPackets,
+  renderBuildPromptOverlays,
+} from "./prompt-context"
 import {
   buildEvidenceEntries,
+  buildEvidencePackFromContextPackets,
   buildEvidenceTargetReferences,
   renderBuildEvidenceRoleSections,
   type BuildEvidencePack,
 } from "./evidence-pack"
 import {
   buildEvidencePackFromInputManifest,
+  composeBuildInputEvidenceManifest,
   findOriginalBuildSessionInputEvidenceManifest,
-  type BuildInputEvidenceManifest,
 } from "./evidence-manifest"
-import { BuildSessionReplayPressure } from "./session-replay-pressure"
 
 import BUILD_CORE from "@/prompt/core/build-core.txt"
 import ENGINEERING_CRAFT from "@/prompt/core/engineering-craft.txt"
@@ -627,18 +630,11 @@ export namespace BuildAgent {
       non_goals: string
       evidence_refs?: string[]
     }>
-    /** Optional visual anchors from frontend_design. The frontend template is the
-     *  authoritative contract; these rows only provide compact ids when present. */
-    designSpecs?: VisualSpec[]
-    /** Compact frontend_research pointer digest rendered from the latest
-     *  non-stale frontend_research_brief artifact. Build consumes it as coverage
-     *  and drilldown pointers before implementing webpage/UI replica surfaces. */
-    frontendResearch?: string
-    /** Full frontend-design frontend template and source manifest from the decision log.
-     *  This names frontend_template, fillable_modules, visual_consistency_contract,
-     *  ui_data_contract, review notes, completeness audit, reference artifacts,
-     *  and evidence_source_manifest. */
-    frontendDesign?: string
+    /** Scheduler-supplied typed packets from upstream agents and persisted
+     *  review/evidence sources. This is the only cross-agent context channel:
+     *  frontend_design, frontend_research, Integrity, Visual QA, and acceptance
+     *  feedback are packet sources rather than Build-private fields. */
+    contextPackets?: AgentContextPacket[]
     /** Task-scoped Architect Contract Graph. Build receives graph contracts
      *  and dependency reasons by id; it must not infer dependency meaning from
      *  removed prose contract fields. */
@@ -652,35 +648,6 @@ export namespace BuildAgent {
       title: string
       commit_ref?: string
     }>
-    /** Pre-rendered "Persistent Integrity Findings" section composed by
-     *  orchestrator from integrity_attempt artifacts, spec snapshot lineage,
-     *  shared prompt capping/sanitization, and the shared root-history helper.
-     *  Build renders it before retry guidance because workflow integrity findings
-     *  outrank the orchestrator's hand-written summary. */
-    integrityFeedback?: string
-    /** Pre-rendered Visual Quality Assurance (QA) repair report composed from
-     *  the latest failed visual_qa decision-log report. This is separate from
-     *  acceptanceFeedback because Visual QA is peer review evidence, not a
-     *  host acceptance verdict. */
-    visualQaFeedback?: string
-    /** First-class retry guidance from the orchestrator LLM for this
-     *  specific attempt (passed via the `request` field on the `build`
-     *  tool, which used to overwrite `target.objective` before retry
-     *  guidance and current-turn guidance were split).
-     *  Distinct from retryFeedback: this is the current turn's direct
-     *  instruction; retryFeedback is the auto-aggregated historical
-     *  summary from decision_log phase=retry entries. When both exist,
-     *  retryGuidance renders first because the orchestrator's just-now
-     *  decision should be honoured before historical context. */
-    retryGuidance?: string
-    /** Pre-rendered "Prior Attempt Failed" section from the decision log's
-     *  retry entries. Empty / undefined on the first attempt. The caller
-     *  composes the markdown so this agent doesn't need DB access. */
-    retryFeedback?: string
-    /** Canonical acceptance rejection packet read directly from persisted
-     *  verdict / manifest artifacts. Unlike retryFeedback, this is not an
-     *  orchestrator-written summary and also exists for task-scope rework. */
-    acceptanceFeedback?: string
     /** Primary project worktree directory. Build prompts use it to point
      *  worktree executors at canonical task runtime evidence without copying
      *  `.opencorvus/r` into the managed worktree. */
@@ -702,14 +669,6 @@ export namespace BuildAgent {
       owned_paths: string[]
       depends_on: string[]
     }>
-    /** Binary evidence projected by the orchestrator for this build dispatch.
-     *  Target references, prior outputs, and comparison artifacts keep
-     *  separate roles all the way to prompt construction. */
-    evidencePack?: BuildEvidencePack
-    /** Validated immutable Build input evidence manifest composed before
-     *  session creation. Build stages and provider-bound file parts from this
-     *  manifest, never from ambient project state. */
-    inputEvidenceManifest?: BuildInputEvidenceManifest
     /** This goal's Goal Workload Analyst brief, injected only when it matches
      *  the active architect snapshot. Scopes the goal BEFORE implementation
      *  (anti premature-minimization): countable work surface, underestimation
@@ -1026,16 +985,25 @@ export namespace BuildAgent {
       const promptContext = input.context
         ? { ...input.context, projectDir: input.context.projectDir ?? Instance.project.worktree }
         : undefined
-      const evidencePack = promptContext?.evidencePack
-      const currentInputEvidenceManifest = promptContext?.inputEvidenceManifest
+      const contextEvidencePack = buildEvidencePackFromContextPackets(promptContext?.contextPackets)
+      const currentInputEvidenceManifest = contextEvidencePack
+        ? await composeBuildInputEvidenceManifest({
+            projectID: input.task.project_id,
+            taskID: input.task.id,
+            ...(input.target.kind === "goal" ? { goalID: input.target.id } : {}),
+            ...(runtimeGoalRunID ? { goalRunID: runtimeGoalRunID } : {}),
+            sessionID: buildSession.id,
+            evidencePack: contextEvidencePack,
+          })
+        : undefined
       const inputEvidenceManifest =
         currentInputEvidenceManifest ?? (retryingExistingBuildSession ? originalInputEvidenceManifest : undefined)
       const promptEvidencePack = currentInputEvidenceManifest
         ? buildEvidencePackFromInputManifest(currentInputEvidenceManifest)
-        : evidencePack
+        : contextEvidencePack
       const reportContractEvidencePack = inputEvidenceManifest
         ? buildEvidencePackFromInputManifest(inputEvidenceManifest)
-        : evidencePack
+        : contextEvidencePack
       const evidenceEntries = buildEvidenceEntries(promptEvidencePack)
       const targetReferences = buildEvidenceTargetReferences(promptEvidencePack)
       const requiredVisualQaAnnotationRefs = buildEvidenceVisualQaAnnotationRefs(reportContractEvidencePack)
@@ -1045,7 +1013,9 @@ export namespace BuildAgent {
         input.existingSessionID
           ? buildRetryFeedbackPrompt(input.target, promptContext, input.task.id)
           : buildUserPrompt(input.target, promptContext, input.task.id)
-      const requiredIntegrityFingerprints = integrityBlockingFingerprintsFromFeedback(input.context?.integrityFeedback)
+      const requiredIntegrityFingerprints = buildIntegrityBlockingFingerprintsFromContextPackets(
+        input.context?.contextPackets,
+      )
 
       // Stage build evidence into `<worktree>/references/`
       // so the build agent can pass worktree-local relative paths to tools
@@ -1123,7 +1093,7 @@ export namespace BuildAgent {
             }
           : undefined
       // External coding providers (codex / claude-code) get only a single
-      // text prompt — no multimodal file parts, no attachment inventory.
+      // text prompt — no hidden prompt file parts, no task attachment inventory.
       // The visual contract has to ride on the prompt itself, with the
       // "staged-only" wording so the LLM is told it must `read` the
       // worktree's references/<filename> on disk (not pretend it saw
@@ -1380,21 +1350,6 @@ export namespace BuildAgent {
               lastMergeBackOutcome: lastMergeBackOutcome ?? null,
             })
             if (!contractErr) throw err
-            const pressureScope = { taskID: input.task.id }
-            const pressure = BuildSessionReplayPressure.evaluate({
-              sessionID: buildSession.id,
-              config: await EffectiveConfig.effective(pressureScope),
-              model: await resolveAgentModel("build", {
-                ...pressureScope,
-                explicitModel: input.model,
-              }),
-            })
-            const overweightTerminalError = createMissingTerminalReplayPressureError({
-              sessionID: buildSession.id,
-              lastMergeBackOutcome: lastMergeBackOutcome ?? null,
-              pressure,
-            })
-            if (overweightTerminalError) throw overweightTerminalError
             const continuation = createBuildTerminalContinuationRequest({
               taskID: input.task.id,
               parentSessionID: input.parentSessionID,
@@ -1628,13 +1583,6 @@ export namespace BuildAgent {
       }
     })
   }
-}
-
-function integrityBlockingFingerprintsFromFeedback(feedback: string | undefined): string[] {
-  if (!feedback || feedback.trim().length === 0) return []
-  const sectionStart = feedback.indexOf("Blocking fingerprints:")
-  const source = sectionStart >= 0 ? feedback.slice(sectionStart) : feedback
-  return [...new Set(source.match(/\bif_[a-f0-9]{16}\b/g) ?? [])].sort()
 }
 
 function externalBuildSystemContract(executor: Exclude<TaskRow["executor"], "opencorvus">): string {
@@ -1980,25 +1928,6 @@ export function convertMissingTerminalToolError(
       "build report. Files already written to the goal worktree by prior attempt(s); " +
       "this turn MUST read/glob what is there and complete the build per the " +
       "standard build-agent contract (structured terminal report, not turn-final prose).",
-  )
-}
-
-export function createMissingTerminalReplayPressureError(input: {
-  sessionID: string
-  lastMergeBackOutcome?: string | null
-  pressure: BuildSessionReplayPressure.Evaluation
-}): BuildAgentContractError | null {
-  if (!input.pressure.contextUnavailableReason) return null
-  return new BuildAgentContractError(
-    "missing_terminal_report",
-    {
-      sessionID: input.sessionID,
-      lastMergeBackOutcome: input.lastMergeBackOutcome ?? null,
-    },
-    "Previous build session ended without producing the terminal build report, " +
-      "and its transcript is no longer reusable for same-session recovery " +
-      `(${input.pressure.contextUnavailableReason}). The next build retry must start a fresh Build session ` +
-      "on the recorded goal worktree and use durable retry facts rather than replaying this oversized transcript.",
   )
 }
 
@@ -3189,19 +3118,15 @@ function renderBuildRequirementsSection(
  * runs, attachments demonstrably exist; restoration is therefore not
  * optional. Filenames are listed so the model cannot pretend "no specific
  * image was named". Only image/pdf-shaped MIMEs are listed — text/JSON
- * attachments take a different prompt path (read_attachment / inline).
+ * attachments take a different prompt path through explicit refs/tools.
  *
  * `mode`:
- *   - `"inlined"` (opencorvus in-process build): file parts are inlined in
- *     the user message above this text. Tell the LLM it can look at them
- *     directly and fail loudly if it can't.
- *   - `"staged-only"` (external coding providers — codex, claude-code):
- *     no inline file parts in the protocol; the bytes only exist on disk
- *     in the goal worktree's `references/` directory. Tell the LLM where
- *     to read them and require it to actually open them before claiming
- *     the visual is done.
+ *   - `"staged-only"`: media bytes are not hidden in prompt context. They
+ *     exist on disk in the goal worktree's `references/` directory. Tell the
+ *     LLM where to read them and require it to actually open them before
+ *     claiming the visual is done.
  */
-export type VisualContractMode = "inlined" | "staged-only"
+export type VisualContractMode = "staged-only"
 
 export function renderVisualContractPreamble(
   attachments: ReadonlyArray<{ mime: string; filename?: string; size?: number; sha?: string }>,
@@ -3212,11 +3137,9 @@ export function renderVisualContractPreamble(
     (a) => typeof a?.mime === "string" && (a.mime.startsWith("image/") || a.mime === "application/pdf"),
   )
   if (visual.length === 0) return ""
-  const mode = options.mode ?? "inlined"
+  const mode = options.mode ?? "staged-only"
   const sourceLine =
-    mode === "inlined"
-      ? "The file(s) below are inlined above as multimodal parts."
-      : "The file(s) below are staged on disk under `references/<filename>`. Your runtime cannot inline them as multimodal message parts — you MUST open each one through the project's read tool / image-viewing tool before producing UI code."
+    "The file(s) below are staged on disk under `references/<filename>`. Your runtime cannot inline them as multimodal message parts — you MUST open each one through the project's read tool / image-viewing tool before producing UI code."
   const lines: string[] = [
     "## Visual Reference Contract (binding for this dispatch)",
     "",
@@ -3233,21 +3156,13 @@ export function renderVisualContractPreamble(
     lines.push(`- ${name} (${att.mime}${size})`)
   }
   lines.push("")
-  if (mode === "inlined") {
-    lines.push(
-      "If you cannot read the pixels from the inlined file part (model is not",
-      "vision-capable, decode failure, etc.), fail this goal via",
-      "`report_build_result` with a concrete blocker that names the file —",
-      "do NOT guess from filename or surrounding prose and proceed.",
-    )
-  } else {
-    lines.push(
-      "If you cannot read the staged file (missing on disk, unreadable, your",
-      "tools cannot ingest its MIME), fail this goal via `report_build_result`",
-      "with a concrete blocker that names the file — do NOT guess from filename",
-      "or surrounding prose and proceed.",
-    )
-  }
+  void mode
+  lines.push(
+    "If you cannot read the staged file (missing on disk, unreadable, your",
+    "tools cannot ingest its MIME), fail this goal via `report_build_result`",
+    "with a concrete blocker that names the file — do NOT guess from filename",
+    "or surrounding prose and proceed.",
+  )
   lines.push("", "")
   return lines.join("\n")
 }
@@ -3325,28 +3240,13 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
       lines.push("")
     }
 
-    const overlays = renderBuildPromptOverlays(
-      context ? { ...context, acceptanceFeedback: undefined, taskID } : undefined,
-    )
+    const overlays = renderBuildPromptOverlays(context ? { ...context, taskID, targetKind: "goal" } : undefined)
     if (overlays.sections.length > 0) {
       lines.push("## Task-Specific Build Overlays")
       lines.push("")
       lines.push(`Rendered overlays: ${overlays.ids.join(", ")}`)
       lines.push("")
       lines.push(overlays.sections.join("\n\n"))
-      lines.push("")
-    }
-
-    if (context?.designSpecs && context.designSpecs.length > 0) {
-      lines.push(
-        renderVisualContractPromptSection({
-          specs: context.designSpecs,
-          instructions: [
-            "The optional visual anchors below came from frontend_design. The frontend template above remains authoritative for the referenced UI/web target: restore the relevant subset 1:1 as closely as the stack allows.",
-            "Use the subset relevant to this goal's responsibility paths, UI surface, and interactions; ignore anchors targeting unrelated regions.",
-          ],
-        }),
-      )
       lines.push("")
     }
 
@@ -3375,6 +3275,16 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
       for (const row of referenceCoverage) {
         const specIDs = row.visual_spec_ids.length > 0 ? ` visual_specs=${row.visual_spec_ids.join(", ")}` : ""
         lines.push(`- **${row.id}** surface=${row.surface}${specIDs} — ${row.expectation}`)
+        for (const region of row.reference_regions ?? []) {
+          const box = region.source_bbox
+            ? ` bbox=x:${region.source_bbox.x},y:${region.source_bbox.y},w:${region.source_bbox.width},h:${region.source_bbox.height}`
+            : ""
+          const intent = region.crop_intent ? ` intent=${region.crop_intent}` : ""
+          const manifest = region.binding_manifest_artifact ? ` manifest=${region.binding_manifest_artifact}` : ""
+          lines.push(
+            `  - reference_region=${region.reference_region_key} crop=${region.source_reference_artifact}${box}${intent}${manifest}`,
+          )
+        }
       }
       lines.push("")
     }
@@ -3393,21 +3303,6 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
       lines.push("")
     }
 
-    if (context?.retryGuidance && context.retryGuidance.trim().length > 0) {
-      lines.push("## Retry Guidance From Orchestrator")
-      lines.push("")
-      lines.push(context.retryGuidance.trim())
-      lines.push("")
-    }
-    if (context?.retryFeedback && context.retryFeedback.trim().length > 0) {
-      lines.push(context.retryFeedback)
-      lines.push("")
-    }
-    const acceptanceOverlay = renderBuildPromptOverlays({ acceptanceFeedback: context?.acceptanceFeedback, taskID })
-    if (acceptanceOverlay.sections.length > 0) {
-      lines.push(acceptanceOverlay.sections.join("\n\n"))
-      lines.push("")
-    }
     // Goal contract.
     lines.push(`# Goal: ${target.title}`)
     lines.push("")
@@ -3452,44 +3347,13 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
   if (reqs.length > 0) {
     contextLines.push(renderBuildRequirementsSection(reqs, { directRequest: true }))
   }
-  const overlays = renderBuildPromptOverlays(
-    context ? { ...context, acceptanceFeedback: undefined, taskID } : undefined,
-  )
+  const overlays = renderBuildPromptOverlays(context ? { ...context, taskID, targetKind: "request" } : undefined)
   if (overlays.sections.length > 0) {
     contextLines.push("## Task-Specific Build Overlays")
     contextLines.push("")
     contextLines.push(`Rendered overlays: ${overlays.ids.join(", ")}`)
     contextLines.push("")
     contextLines.push(overlays.sections.join("\n\n"))
-    contextLines.push("")
-  }
-  if (context?.retryGuidance && context.retryGuidance.trim().length > 0) {
-    contextLines.push("## Retry Guidance From Orchestrator")
-    contextLines.push("")
-    contextLines.push(context.retryGuidance.trim())
-    contextLines.push("")
-  }
-  if (context?.retryFeedback && context.retryFeedback.trim().length > 0) {
-    contextLines.push("## Prior Attempt Failed — Read This Before Implementing")
-    contextLines.push("")
-    contextLines.push(context.retryFeedback.trim())
-    contextLines.push("")
-  }
-  const acceptanceOverlay = renderBuildPromptOverlays({ acceptanceFeedback: context?.acceptanceFeedback, taskID })
-  if (acceptanceOverlay.sections.length > 0) {
-    contextLines.push(acceptanceOverlay.sections.join("\n\n"))
-    contextLines.push("")
-  }
-  if (context?.designSpecs && context.designSpecs.length > 0) {
-    contextLines.push(
-      renderVisualContractPromptSection({
-        specs: context.designSpecs,
-        instructions: [
-          "The visual contract below came from frontend_design. It is authoritative for this direct build request.",
-          "Use the decision-log evidence_source_manifest and staged references for any source file/image named by the frontend template.",
-        ],
-      }),
-    )
     contextLines.push("")
   }
   return [
@@ -3517,17 +3381,11 @@ export function buildRetryFeedbackPrompt(
   _taskID?: string,
 ): string {
   const persistedFacts = [
-    context?.retryFeedback,
-    context?.integrityFeedback,
-    context?.visualQaFeedback,
-    context?.acceptanceFeedback,
+    buildContextPacketText(context?.contextPackets),
   ]
     .map((value) => (typeof value === "string" ? value.trim() : ""))
     .filter((value) => value.length > 0)
   if (persistedFacts.length > 0) return persistedFacts.join("\n\n")
-
-  const directFeedback = context?.retryGuidance?.trim()
-  if (directFeedback) return directFeedback
 
   return "Previous build attempt failed, but no terminal error text was recorded."
 }

@@ -97,6 +97,8 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.select_expert_squad.description).toContain("scheduler capability")
     expect(tools.select_expert_squad.description).toContain("visible selection evidence")
     expect(tools.select_expert_squad.description).toContain("visible continuation wake")
+    expect(tools.select_expert_squad.description).toContain("already active")
+    expect(tools.select_expert_squad.description).toContain("no-op")
     expect(tools.select_expert_squad.description).toContain("does not dispatch work")
     expect(tools.select_expert_squad.description).toContain("current model call")
     expect(tools.select_expert_squad.description).toContain("infer the profile from keywords")

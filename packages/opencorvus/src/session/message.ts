@@ -5,6 +5,7 @@ import { APICallError, convertToModelMessages, LoadAPIKeyError, type ModelMessag
 import { Identifier } from "../id/id"
 import { LSP } from "../lsp"
 import { Snapshot } from "@/snapshot"
+import { SnapshotEmptyTreeError, SnapshotIntegrityError } from "@/snapshot/errors"
 import { fn } from "@/util/fn"
 import { Database, NotFoundError, and, eq, desc, inArray } from "@/storage/db"
 import { MessageTable, PartTable } from "./session.sql"
@@ -542,8 +543,8 @@ export namespace Message {
         StructuredOutputError.Schema,
         StructuredOutputPayloadError.Schema,
         TerminalToolMissingError.Schema,
-        Snapshot.SnapshotIntegrityError.Schema,
-        Snapshot.SnapshotEmptyTreeError.Schema,
+        SnapshotIntegrityError.Schema,
+        SnapshotEmptyTreeError.Schema,
         ContextOverflowError.Schema,
         PromptBudgetOverflowError.Schema,
         ToolSchemaBudgetError.Schema,
@@ -1489,9 +1490,9 @@ export namespace Message {
         return e.toObject()
       case ModelImageInputTooLargeError.isInstance(e):
         return e.toObject()
-      case Snapshot.SnapshotEmptyTreeError.isInstance(e):
+      case SnapshotEmptyTreeError.isInstance(e):
         return e.toObject()
-      case Snapshot.SnapshotIntegrityError.isInstance(e):
+      case SnapshotIntegrityError.isInstance(e):
         return e.toObject()
       case LoadAPIKeyError.isInstance(e):
         return new Message.AuthError(

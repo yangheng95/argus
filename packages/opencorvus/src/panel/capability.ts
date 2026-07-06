@@ -93,18 +93,45 @@ function list<const T extends readonly [Capability, ...Capability[]]>(...items: 
   return items
 }
 
+type CapabilityTuple = [Capability, Capability, ...Capability[]]
+type SchemaTuple = [z.ZodObject<any>, z.ZodObject<any>, ...z.ZodObject<any>[]]
+
 function schemas<const T extends readonly Capability[]>(items: T) {
   return items.map((item) => item.schema) as unknown as {
     [K in keyof T]: T[K] extends Capability<infer S, infer A> ? z.ZodObject<{ action: z.ZodLiteral<A> } & S> : never
   }
 }
 
+function schemaTuple(items: CapabilityTuple): SchemaTuple {
+  return schemas(items) as unknown as SchemaTuple
+}
+
 function missionSchemas<const T extends readonly Capability[]>(items: T) {
-  return items.map((item) => (item.action === "create_task" ? item.schema.required({ title: true }) : item.schema)) as [
-    z.ZodObject<any>,
-    z.ZodObject<any>,
-    ...z.ZodObject<any>[],
-  ]
+  return items.map((item) => (item.action === "create_task" ? item.schema.required({ title: true }) : item.schema)) as SchemaTuple
+}
+
+const MissionPanelCapabilityActions = [
+  "create_task",
+  "query_task",
+  "view_board",
+  "view_plan",
+  "view_tasks",
+  "send_task_message",
+  "cancel_task",
+  "reply_interaction",
+  "reject_interaction",
+] as const
+const ExplorePanelCapabilityActions = ["query_task", "view_board", "view_plan", "view_tasks"] as const
+
+function selectCapabilities(actions: readonly string[], context: string): CapabilityTuple {
+  const byAction: Map<string, Capability> = new Map(PanelCapabilityRegistry.map((item) => [item.action, item] as const))
+  const items = actions.map((action) => {
+    const capability = byAction.get(action)
+    if (!capability) throw new Error(`${context} references unknown panel action ${action}.`)
+    return capability
+  })
+  if (items.length < 2) throw new Error(`${context} must declare at least two panel actions.`)
+  return items as CapabilityTuple
 }
 
 export const PanelCapabilityRegistry = list(
@@ -352,10 +379,21 @@ export const PanelCapabilityRegistry = list(
 )
 
 export const PanelActionSchema = z.discriminatedUnion("action", schemas(PanelCapabilityRegistry))
-export const MissionPanelActionSchema = z.discriminatedUnion("action", missionSchemas(PanelCapabilityRegistry))
+export const MissionPanelCapabilityRegistry = selectCapabilities(MissionPanelCapabilityActions, "mission panel capability registry")
+export const ExplorePanelCapabilityRegistry = selectCapabilities(ExplorePanelCapabilityActions, "explore panel capability registry")
+export const MissionPanelActionSchema = z.discriminatedUnion("action", missionSchemas(MissionPanelCapabilityRegistry))
+export const ExplorePanelActionSchema = z.discriminatedUnion(
+  "action",
+  schemaTuple(ExplorePanelCapabilityRegistry),
+)
+export type PanelActionInput = z.infer<typeof PanelActionSchema>
+export type PanelActionParameterSchema = z.ZodType<PanelActionInput>
 
-export function panelActionSchemaForAgent(agent: string | undefined): typeof PanelActionSchema {
-  return (agent === "mission" ? MissionPanelActionSchema : PanelActionSchema) as typeof PanelActionSchema
+export function panelActionSchemaForAgent(agent: string | undefined): PanelActionParameterSchema {
+  const actor = derivePanelActor(agent)
+  if (actor === "mission") return MissionPanelActionSchema as unknown as PanelActionParameterSchema
+  if (actor === "explore") return ExplorePanelActionSchema as unknown as PanelActionParameterSchema
+  return PanelActionSchema
 }
 
 export const PanelCapability = z.object({
@@ -396,6 +434,22 @@ export function panelCapabilities(surface: Surface) {
 
 export function panelCapabilityActionSet(surface: Surface) {
   return new Set(panelCapabilities(surface).actions.map((item) => item.action))
+}
+
+function panelCapabilityItemsForActor(actor: PanelActor, surface?: Surface): readonly Capability[] {
+  const actorItems =
+    actor === "mission"
+      ? MissionPanelCapabilityRegistry
+      : actor === "explore"
+        ? ExplorePanelCapabilityRegistry
+        : actor === "right_sidebar_assistant" && surface
+          ? PanelCapabilityRegistry.filter((item) => item.surfaces.includes(surface))
+          : PanelCapabilityRegistry
+  return surface ? actorItems.filter((item) => item.surfaces.includes(surface)) : actorItems
+}
+
+export function panelActionSetForActor(actor: PanelActor, surface?: Surface) {
+  return new Set(panelCapabilityItemsForActor(actor, surface).map((item) => item.action))
 }
 
 export function panelCapabilityPrompt(surface: Surface) {

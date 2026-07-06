@@ -20,11 +20,13 @@ export const BROWSER_PREVIEW_EVIDENCE_KIND = "browser_preview_evidence" as const
 const BrowserPreviewEvidenceOperationKind = z.enum([
   "preview-capture",
   "reference-comparison",
+  "scroll-slice-comparison",
   "source-binding",
   "layout-geometry",
 ])
 const BrowserPreviewEvidenceStatus = z.enum(["passed", "failed"])
 const REQUIRED_REFERENCE_COMPARISON_ARTIFACTS = ["source_crop", "implementation_crop", "side_by_side"] as const
+const REQUIRED_SCROLL_SLICE_COMPARISON_ARTIFACTS = ["source_crop", "implementation_crop", "side_by_side"] as const
 
 export const BrowserPreviewEvidenceCorruptionError = NamedError.create(
   "BrowserPreviewEvidenceCorruptionError",
@@ -451,7 +453,12 @@ export function persistBrowserPreviewEvidence(input: {
   acceptanceID?: string
   targetID: string
   viewportID: string
-  operationKind: "preview-capture" | "reference-comparison" | "source-binding" | "layout-geometry"
+  operationKind:
+    | "preview-capture"
+    | "reference-comparison"
+    | "scroll-slice-comparison"
+    | "source-binding"
+    | "layout-geometry"
   regionID?: string
   stateID?: string
   cropIntent?: BrowserPreviewCropIntentValue
@@ -482,6 +489,12 @@ export function persistBrowserPreviewEvidence(input: {
     const missing = REQUIRED_REFERENCE_COMPARISON_ARTIFACTS.filter((key) => !artifactPaths?.[key])
     if (missing.length > 0) {
       throw new Error(`passed reference-comparison evidence requires artifact path(s): ${missing.join(", ")}`)
+    }
+  }
+  if (operationKind === "scroll-slice-comparison" && status === "passed") {
+    const missing = REQUIRED_SCROLL_SLICE_COMPARISON_ARTIFACTS.filter((key) => !artifactPaths?.[key])
+    if (missing.length > 0) {
+      throw new Error(`passed scroll-slice-comparison evidence requires artifact path(s): ${missing.join(", ")}`)
     }
   }
   Database.use((db) =>
@@ -537,6 +550,17 @@ async function assertBrowserPreviewEvidenceArtifactsReadable(
       if (!artifactPath) {
         throw browserPreviewEvidenceCorruption(evidence, {
           reason: `passed reference-comparison missing required artifact path: ${key}`,
+        })
+      }
+      artifacts.push({ path: artifactPath })
+    }
+  }
+  if (evidence.status === "passed" && evidence.operationKind === "scroll-slice-comparison") {
+    for (const key of REQUIRED_SCROLL_SLICE_COMPARISON_ARTIFACTS) {
+      const artifactPath = evidence.artifactPaths?.[key]
+      if (!artifactPath) {
+        throw browserPreviewEvidenceCorruption(evidence, {
+          reason: `passed scroll-slice-comparison missing required artifact path: ${key}`,
         })
       }
       artifacts.push({ path: artifactPath })

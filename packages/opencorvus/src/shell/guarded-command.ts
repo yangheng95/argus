@@ -1,26 +1,41 @@
-import { ProjectRuntimePaths } from "@/project/runtime-paths"
+import { createIsolatedProjectCheckWorkspace, type IsolatedProjectCheckWorkspace } from "@/project/isolated-check-workspace"
+import { Log } from "@/util/log"
+import { ProcessSupervisor } from "@/shell/process-supervisor"
 import { Shell } from "@/shell/shell"
+
+const log = Log.create({ service: "guarded-command" })
 
 export type GuardedCommandInput = {
   command: string
   projectDir: string
+  taskID?: string
   timeoutMs: number
   env?: NodeJS.ProcessEnv
   signal?: AbortSignal
   background?: boolean
-  readOnlyGuard?: boolean
 }
 
 export async function runGuardedCommand(input: GuardedCommandInput): Promise<string> {
-  const beforeStatus = input.readOnlyGuard ? await gitShortStatus(input) : undefined
-  const parts = input.background ? await runBackgroundCommand(input) : await runForegroundCommand(input)
-  const afterStatus = input.readOnlyGuard ? await gitShortStatus(input) : undefined
-  const warning =
-    beforeStatus !== undefined && afterStatus !== undefined
-      ? formatReadOnlyGuardWarning(beforeStatus, afterStatus)
-      : undefined
-  if (warning) parts.push(warning)
-  return parts.join("\n") || "exit_code: 0 (no output)"
+  const isolated = await createIsolatedProjectCheckWorkspace({
+    projectDir: input.projectDir,
+    sourceCwd: input.projectDir,
+    taskID: input.taskID,
+  })
+  const scopedInput = { ...input, projectDir: isolated.workspace }
+  try {
+    const backgroundResult = input.background ? await runBackgroundCommand(scopedInput) : undefined
+    const parts = backgroundResult ? backgroundResult.parts : await runForegroundCommand(scopedInput)
+    parts.unshift(`source_cwd: ${input.projectDir}`, `execution_cwd: ${isolated.workspace}`)
+    if (input.background) {
+      scheduleWorkspaceCleanup(isolated, input.timeoutMs, input.signal, backgroundResult!.exited)
+    } else {
+      await isolated.dispose()
+    }
+    return parts.join("\n") || "exit_code: 0 (no output)"
+  } catch (error) {
+    await isolated.dispose().catch(() => undefined)
+    throw error
+  }
 }
 
 async function runForegroundCommand(input: GuardedCommandInput): Promise<string[]> {
@@ -40,65 +55,82 @@ async function runForegroundCommand(input: GuardedCommandInput): Promise<string[
   return parts
 }
 
-async function runBackgroundCommand(input: GuardedCommandInput): Promise<string[]> {
+async function runBackgroundCommand(input: GuardedCommandInput): Promise<{ parts: string[]; exited: Promise<void> }> {
   const result = await Shell.launch(input.command, {
     cwd: input.projectDir,
     env: input.env,
     outputSniffMs: Math.min(input.timeoutMs, 10_000),
     leaseMs: input.timeoutMs,
-  })
-  return [
-    "background: true",
-    `pid: ${result.pid}`,
-    result.address ? `url: ${result.address}` : "",
-    `lease_timeout_ms: ${input.timeoutMs}`,
-    result.initialOutput.trim() ? `startup_output:\n${result.initialOutput}` : "",
-  ].filter((part) => part.length > 0)
-}
-
-async function gitShortStatus(input: GuardedCommandInput): Promise<string> {
-  const status = await Shell.run("git status --short --untracked-files=all", {
-    cwd: input.projectDir,
-    env: input.env,
-    timeoutMs: 10_000,
     abort: input.signal,
   })
-  return normalizeReadOnlyGitStatus(status.stdout)
+  return {
+    exited: result.exited,
+    parts: [
+      "background: true",
+      `pid: ${result.pid}`,
+      result.address ? `url: ${result.address}` : "",
+      `lease_timeout_ms: ${input.timeoutMs}`,
+      result.initialOutput.trim() ? `startup_output:\n${result.initialOutput}` : "",
+    ].filter((part) => part.length > 0),
+  }
 }
 
-export function formatReadOnlyGuardWarning(beforeStatus: string, afterStatus: string): string | undefined {
-  const before = normalizeReadOnlyGitStatus(beforeStatus)
-  const after = normalizeReadOnlyGitStatus(afterStatus)
-  if (before === after) return undefined
-  return [
-    "readonly_guard: implementation worktree changed during reviewer command; treat this as unsafe verification, not an implementation fix.",
-    "before_status:",
-    before || "(clean)",
-    "after_status:",
-    after || "(clean)",
-  ].join("\n")
+function scheduleWorkspaceCleanup(
+  workspace: IsolatedProjectCheckWorkspace,
+  leaseMs: number,
+  signal: AbortSignal | undefined,
+  processExited: Promise<void>,
+): void {
+  let cleaned = false
+  const cleanupDelayMs = Math.max(leaseMs, 1) + 1_000
+  const cleanup = () => {
+    if (cleaned) return
+    cleaned = true
+    clearTimeout(timer)
+    signal?.removeEventListener("abort", cleanup)
+    void cleanupBackgroundWorkspace(workspace, processExited).catch((error) => {
+      log.error("failed to clean isolated background command workspace", {
+        workspace: workspace.root,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    })
+  }
+  const timer = setTimeout(cleanup, cleanupDelayMs)
+  timer.unref?.()
+  processExited.finally(cleanup).catch(cleanup)
+  if (signal?.aborted) cleanup()
+  else signal?.addEventListener("abort", cleanup, { once: true })
 }
 
-export function normalizeReadOnlyGitStatus(stdout: string): string {
-  return stdout
-    .split(/\r?\n/)
-    .map((line) => line.trimEnd())
-    .filter((line) => line.length > 0)
-    .filter((line) => !statusLineTouchesOnlyEvidenceInput(line))
-    .join("\n")
+async function cleanupBackgroundWorkspace(
+  workspace: IsolatedProjectCheckWorkspace,
+  processExited: Promise<void>,
+): Promise<void> {
+  await waitForBackgroundExit(processExited, 5_000)
+  await ProcessSupervisor.disposeLiveProcessesUnder(workspace.root)
+  let lastError: unknown
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    try {
+      await workspace.dispose()
+      return
+    } catch (error) {
+      lastError = error
+      await Bun.sleep(100)
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError ?? "unknown workspace cleanup failure"))
 }
 
-function statusLineTouchesOnlyEvidenceInput(line: string): boolean {
-  const payload = line.length > 3 ? line.slice(3).trim() : line.trim()
-  const paths = payload
-    .split(" -> ")
-    .map(unquoteGitPath)
-    .filter((item) => item.length > 0)
-  return paths.length > 0 && paths.every((item) => ProjectRuntimePaths.isEvidenceInputRelativePath(item))
-}
-
-function unquoteGitPath(input: string): string {
-  const trimmed = input.trim()
-  if (trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"')) return trimmed.slice(1, -1)
-  return trimmed
+async function waitForBackgroundExit(processExited: Promise<void>, timeoutMs: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    await Promise.race([
+      processExited,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
 }

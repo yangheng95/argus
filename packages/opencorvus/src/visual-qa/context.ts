@@ -1,10 +1,18 @@
 import type { DecisionEntry } from "@/decision-log"
-import type { AcceptanceResult } from "@/engine/engine.sql"
-import type { AcceptanceRow } from "@/engine/store"
+import type { TaskAgentOutcome } from "@/agent/outcomes"
+import {
+  agentContextStructuredPartBySchema,
+  renderAgentContextPackets,
+  type AgentContextPacket,
+} from "@/agent/context-packet"
 import type { ResearchBrief } from "@/research/schema"
+import { normalizeVisualQaReferenceRegionKey } from "./reference-region-key"
 
 type VisualQaDecisionEntry = Pick<DecisionEntry, "key" | "value" | "reason">
-type VisualQaDelivery = Pick<AcceptanceRow, "id" | "status" | "summary" | "result">
+type VisualQaImplementationOutcome = Pick<
+  TaskAgentOutcome,
+  "id" | "provider" | "artifactKind" | "scope" | "capabilities" | "status" | "result" | "summary" | "error"
+>
 type VisualQaFrontendResearchBrief = {
   artifactID: string
   brief: ResearchBrief
@@ -12,6 +20,123 @@ type VisualQaFrontendResearchBrief = {
 type VisualQaIntegrityAttempt = {
   id?: string
   payload?: unknown
+}
+
+export type VisualQaDispatchContext = {
+  appUrl?: string
+  previewCommand?: string
+  referenceParityRequired?: boolean
+  requiredReferenceRegions?: string[]
+}
+
+export const VISUAL_QA_DISPATCH_CONTEXT_PACKET_SOURCE = "visual_qa_dispatch"
+export const VISUAL_QA_DISPATCH_CONTEXT_PACKET_SCHEMA = "opencorvus.visual_qa.dispatch_context.v1"
+
+export function visualQaDispatchContextPacket(input: VisualQaDispatchContext): AgentContextPacket | undefined {
+  const context: VisualQaDispatchContext = {
+    ...(input.appUrl?.trim() ? { appUrl: input.appUrl.trim() } : {}),
+    ...(input.previewCommand?.trim() ? { previewCommand: input.previewCommand.trim() } : {}),
+    ...(input.referenceParityRequired ? { referenceParityRequired: true } : {}),
+    ...(input.requiredReferenceRegions?.length
+      ? {
+          requiredReferenceRegions: input.requiredReferenceRegions.map((region, index) =>
+            normalizeVisualQaReferenceRegionKey(region, `visualQaDispatchContextPacket.requiredReferenceRegions[${index}]`),
+          ),
+        }
+      : {}),
+  }
+  if (Object.keys(context).length === 0) return undefined
+  return {
+    id: "visual-qa-dispatch-context",
+    title: "Visual QA Dispatch Context",
+    source: VISUAL_QA_DISPATCH_CONTEXT_PACKET_SOURCE,
+    scope: "task",
+    parts: [
+      {
+        type: "text",
+        text: [
+          context.appUrl ? `app_url: ${context.appUrl}` : "",
+          context.previewCommand ? `preview_command: ${context.previewCommand}` : "",
+          context.referenceParityRequired ? "reference_parity_required: true" : "",
+          context.requiredReferenceRegions?.length
+            ? `required_reference_regions: ${context.requiredReferenceRegions.join(", ")}`
+            : "",
+        ]
+          .filter((line) => line.length > 0)
+          .join("\n"),
+      },
+      {
+        type: "structured",
+        schema: VISUAL_QA_DISPATCH_CONTEXT_PACKET_SCHEMA,
+        label: "visual_qa_dispatch",
+        summary: [
+          context.appUrl ? "app_url" : "",
+          context.previewCommand ? "preview_command" : "",
+          context.referenceParityRequired ? "reference_parity_required" : "",
+          context.requiredReferenceRegions?.length ? `required_regions=${context.requiredReferenceRegions.length}` : "",
+        ]
+          .filter(Boolean)
+          .join("; "),
+        data: context,
+      },
+    ],
+  }
+}
+
+export function visualQaDispatchContextFromPackets(
+  packets: readonly AgentContextPacket[] | undefined,
+): VisualQaDispatchContext {
+  const value = agentContextStructuredPartBySchema<VisualQaDispatchContext>(
+    packets,
+    VISUAL_QA_DISPATCH_CONTEXT_PACKET_SCHEMA,
+  )
+  return value ? parseVisualQaDispatchContext(value, VISUAL_QA_DISPATCH_CONTEXT_PACKET_SCHEMA) : {}
+}
+
+function parseVisualQaDispatchContext(value: unknown, packetID: string): VisualQaDispatchContext {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`context packet ${packetID} has invalid visual QA dispatch structured payload`)
+  }
+  const record = value as Record<string, unknown>
+  const unsupported = Object.keys(record).filter(
+    (key) => !["appUrl", "previewCommand", "referenceParityRequired", "requiredReferenceRegions"].includes(key),
+  )
+  if (unsupported.length > 0) {
+    throw new Error(`context packet ${packetID} has unsupported visual QA dispatch field ${unsupported[0]}`)
+  }
+  if (record.appUrl !== undefined && typeof record.appUrl !== "string") {
+    throw new Error(`context packet ${packetID}.appUrl must be a string`)
+  }
+  if (record.previewCommand !== undefined && typeof record.previewCommand !== "string") {
+    throw new Error(`context packet ${packetID}.previewCommand must be a string`)
+  }
+  if (record.referenceParityRequired !== undefined && typeof record.referenceParityRequired !== "boolean") {
+    throw new Error(`context packet ${packetID}.referenceParityRequired must be a boolean`)
+  }
+  const rawRequiredReferenceRegions = record.requiredReferenceRegions
+  if (rawRequiredReferenceRegions !== undefined && !Array.isArray(rawRequiredReferenceRegions)) {
+    throw new Error(`context packet ${packetID}.requiredReferenceRegions must be an array`)
+  }
+  const requiredReferenceRegions =
+    rawRequiredReferenceRegions === undefined
+      ? undefined
+      : rawRequiredReferenceRegions.map((item, index) => {
+          if (typeof item !== "string") {
+            throw new Error(`context packet ${packetID}.requiredReferenceRegions[${index}] must be a string`)
+          }
+          return normalizeVisualQaReferenceRegionKey(
+            item,
+            `context packet ${packetID}.requiredReferenceRegions[${index}]`,
+          )
+        })
+  return {
+    ...(typeof record.appUrl === "string" && record.appUrl.trim() ? { appUrl: record.appUrl.trim() } : {}),
+    ...(typeof record.previewCommand === "string" && record.previewCommand.trim()
+      ? { previewCommand: record.previewCommand.trim() }
+      : {}),
+    ...(record.referenceParityRequired === true ? { referenceParityRequired: true } : {}),
+    ...(requiredReferenceRegions?.length ? { requiredReferenceRegions } : {}),
+  }
 }
 
 const FRONTEND_DESIGN_KEYS_FOR_VISUAL_QA = [
@@ -141,20 +266,25 @@ function frontendResearchEvidenceRefs(artifactID: string, evidenceIDs: string[])
   return evidenceIDs.map((id) => frontendResearchEvidenceRef(artifactID, id))
 }
 
-export function renderVisualQaBuildEvidenceContext(deliveries: VisualQaDelivery[]): string {
-  if (deliveries.length === 0) return ""
+export function renderVisualQaImplementationOutcomeContext(outcomes: readonly VisualQaImplementationOutcome[]): string {
+  if (outcomes.length === 0) return ""
   const lines = [
-    "# Build Evidence Pointers",
+    "# Implementation Outcome Pointers",
     "",
-    "Latest delivery summaries and changed files only. Read files or reports directly if deeper evidence is needed.",
+    "Latest scheduler-projected agent outcomes only. Read files or reports directly if deeper evidence is needed.",
   ]
-  for (const delivery of deliveries.slice(0, 8)) {
-    const result = delivery.result as AcceptanceResult | null
-    const changedFiles = result?.changed_files?.slice(0, 24) ?? []
-    const commitRef = typeof result?.commit_ref === "string" ? result.commit_ref : undefined
-    lines.push("", `## ${delivery.id}`, `status: ${delivery.status}`, `summary: ${limitText(delivery.summary, 500)}`)
-    if (commitRef) lines.push(`commit_ref: ${commitRef}`)
-    if (changedFiles.length) lines.push("changed_files:", ...changedFiles.map((file) => `- ${file}`))
+  for (const outcome of outcomes.slice(-8).reverse()) {
+    lines.push(
+      "",
+      `## ${outcome.provider}/${outcome.id}`,
+      `artifact_kind: ${outcome.artifactKind}`,
+      `scope: ${outcome.scope}`,
+      `status: ${outcome.status}`,
+    )
+    if (outcome.result) lines.push(`result: ${outcome.result}`)
+    if (outcome.capabilities?.length) lines.push(`capabilities: ${outcome.capabilities.join(", ")}`)
+    if (outcome.summary) lines.push(`summary: ${limitText(outcome.summary, 500)}`)
+    if (outcome.error) lines.push(`error: ${limitText(outcome.error, 500)}`)
   }
   return lines.join("\n")
 }
@@ -181,7 +311,7 @@ export function renderVisualQaIntegrityContext(row?: VisualQaIntegrityAttempt | 
   const lines = [
     "# Integrity Review Pointers",
     "",
-    "Use this post-build integrity review as the repair source. Fix component truth and visible functionality before layout or style polish.",
+    "Use this post-build integrity review as review context. If defects remain visible, report concrete implementation repair inputs for the current workflow owner before layout or style polish.",
     "",
     `artifact_id: ${row?.id ?? "(unknown)"}`,
     `verdict: ${payload.verdict ?? "(unknown)"}`,
@@ -200,7 +330,7 @@ export function renderVisualQaIntegrityContext(row?: VisualQaIntegrityAttempt | 
   }
   lines.push(
     "",
-    "Repair priority:",
+    "Implementation repair priority:",
     "- component truth and visible functionality first, including fake/placeholder widgets, static mock charts, dead controls, and missing regions",
     "- layout/composition second",
     "- spacing, typography, color, and state-style polish last",

@@ -1,12 +1,17 @@
 import { describe, expect, test } from "bun:test"
 import { BuildAgent, externalEventPartText, externalToolProtocolErrorMessage } from "../../src/build/agent"
 import { Config } from "../../src/config/config"
-import { PROJECT_EXPERT_SQUAD_ID, writeProjectExpertSquadPackage } from "../fixture/expert-squad"
+import {
+  copyRepositoryExpertSquadPackage,
+  PROJECT_EXPERT_SQUAD_ID,
+  writeProjectExpertSquadPackage,
+} from "../fixture/expert-squad"
 import { tmpdir } from "../fixture/fixture"
 
 describe("BuildAgent external coding system prompt", () => {
   test("injects OpenCorvus MCP executor aliases without reopening webpage evidence tools", async () => {
     await using tmp = await tmpdir({ git: true })
+    await copyRepositoryExpertSquadPackage(tmp.path, "frontend-replica")
     const composed = await BuildAgent.composeExternalCodingSystem({
       executor: "codex",
       config: Config.Info.parse({ prompt_profile: { active: "frontend-replica" } }),

@@ -14,6 +14,7 @@
 
 import { Log } from "@/util/log"
 import { runAgentSession } from "@/agent/runner"
+import { renderAgentContextPacketSection, type AgentContextPacket } from "@/agent/context-packet"
 import type { AgentSessionContinuation } from "@/engine/stage-continuation"
 import { filterAgentTools } from "@/agent/filter-tools"
 import { createAgentCoordinationRuntimeTools } from "@/agent/coordination-runtime-tools"
@@ -84,6 +85,8 @@ function buildFactCheckUserPrompt(input: FactCheckAgent.RunInput, targetMessageT
   sections.push(
     `# Registered fact-check items (${input.factCheckItems.length})\n\n` + renderFactCheckItems(input.factCheckItems),
   )
+  const contextPackets = renderAgentContextPacketSection(input.contextPackets)
+  if (contextPackets) sections.push(contextPackets)
   sections.push(
     "# Output contract\n\n" +
       "Inspect every registered item using your tools, then call `report_fact_check_result` " +
@@ -153,6 +156,8 @@ export namespace FactCheckAgent {
     targetMessageContentHash: string
     /** fact_check_items extracted from the target worker's terminal report. */
     factCheckItems: FactCheckItem[]
+    /** Upstream agent handoff packets supplied by the scheduler. */
+    contextPackets?: AgentContextPacket[]
     /** Free-text reason the orchestrator wrote when invoking the tool. */
     reason: string
     /** Orchestrator session id (used as the persistence idempotency key and

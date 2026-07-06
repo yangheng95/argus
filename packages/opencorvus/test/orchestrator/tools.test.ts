@@ -13,6 +13,7 @@ import { Bus } from "../../src/bus"
 import { Database, and, eq, sql } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
+import { Project } from "../../src/project/project"
 import {
   EngineArtifactTable,
   EngineGoalTable,
@@ -141,6 +142,7 @@ import { researchRequestHash, researchSourceDigest } from "../../src/research/sc
 import { recordFactCheckAttempt } from "../../src/fact-check/persist"
 import { WorkerTurnDescriptor } from "../../src/agent/worker-turn-descriptor"
 import { ensureTaskMessageProtocolBridge } from "../../src/orchestrator/protocol/message-bridge"
+import { ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY } from "../../src/orchestrator/stateful-tool-names"
 import { SkillTool } from "../../src/tool/skill"
 import {
   createDesignResourceManifest,
@@ -316,6 +318,63 @@ function toolText(result: unknown): string {
     return (result as { output: string }).output
   }
   throw new Error(`Expected string tool result or known wrapped string output, got ${JSON.stringify(result)}`)
+}
+
+function toolMetadata(result: unknown): Record<string, unknown> {
+  if (result && typeof result === "object" && typeof (result as { metadata?: unknown }).metadata === "object") {
+    return ((result as { metadata: Record<string, unknown> }).metadata ?? {}) as Record<string, unknown>
+  }
+  return {}
+}
+
+async function importCurrentProjectSessionWithForeignParent(input: {
+  kind: Session.Info["kind"]
+  title: string
+  goalID?: string
+}): Promise<Session.Info> {
+  const now = Date.now()
+  const suffix = `${now}_${Math.random().toString(16).slice(2)}`
+  const foreignProjectID = `project_foreign_parent_${suffix}`
+  Database.use((db) =>
+    db
+      .insert(ProjectTable)
+      .values({
+        id: foreignProjectID,
+        worktree: `${Instance.directory}-foreign-parent-${suffix}`,
+        name: `${input.title} foreign project`,
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
+  )
+  const foreignParent: Session.Info = {
+    id: Identifier.ascending("session"),
+    slug: `foreign-parent-${suffix}`,
+    projectID: foreignProjectID,
+    directory: Instance.directory,
+    title: `${input.title} foreign parent`,
+    version: "test",
+    kind: "root",
+    metadata: {},
+    time: { created: now, updated: now },
+  }
+  const child: Session.Info = {
+    id: Identifier.ascending("session"),
+    slug: `polluted-child-${suffix}`,
+    projectID: Instance.project.id,
+    directory: Instance.directory,
+    parentID: foreignParent.id,
+    title: input.title,
+    version: "test",
+    kind: input.kind,
+    ...(input.goalID ? { goalID: input.goalID } : {}),
+    metadata: {},
+    time: { created: now + 1, updated: now + 1 },
+  }
+  await Session.importSnapshot({ info: foreignParent, messages: [] })
+  await Session.importSnapshot({ info: child, messages: [] })
+  return child
 }
 
 async function waitForSessionStatusEvent(input: {
@@ -942,11 +1001,15 @@ function minimalVisualQaReportWithRequiredReferenceParity() {
   const report = minimalVisualQaReport()
   return {
     ...report,
+    check_items: report.check_items.map((item) => ({
+      ...item,
+      reference_region_key: "main_surface@desktop",
+    })),
     reference_parity: {
       required: true,
-      required_regions: ["main surface"],
+      required_regions: ["main_surface@desktop"],
       reference_comparison_evidence_refs: [],
-      missing_regions: ["main surface"],
+      missing_regions: ["main_surface@desktop"],
       blocker_ids: ["missing-rendered-reference-comparison"],
     },
   }
@@ -2133,14 +2196,15 @@ function insertWorkflowTaskWithGoal(input: {
   insertProject?: boolean
 }) {
   const specID = input.specID ?? `spec_${input.goalID}`
+  const projectID = Project.directoryProjectID(input.worktree)
   Database.use((db) => {
     if (input.insertProject !== false) {
       db.insert(ProjectTable)
         .values({
-          id: input.projectID,
+          id: projectID,
           worktree: input.worktree,
           name: input.projectName,
-          sandboxes: "[]",
+          sandboxes: [],
           time_created: input.now,
           time_updated: input.now,
         })
@@ -2149,7 +2213,7 @@ function insertWorkflowTaskWithGoal(input: {
     db.insert(EngineTaskTable)
       .values({
         id: input.taskID,
-        project_id: input.projectID,
+        project_id: projectID,
         session_id: input.sessionID,
         source: "test",
         title: input.taskTitle,
@@ -2400,6 +2464,7 @@ async function seedLatestAssistantUsage(input: {
   now: number
   inputTokens: number
   totalTokens?: number
+  cacheReadTokens?: number
 }) {
   const userMessageID = Identifier.ascending("message")
   await Session.updateMessage({
@@ -2425,7 +2490,7 @@ async function seedLatestAssistantUsage(input: {
       input: input.inputTokens,
       output: 100,
       reasoning: 0,
-      cache: { read: 0, write: 0 },
+      cache: { read: input.cacheReadTokens ?? 0, write: 0 },
     },
     finish: "stop",
     time: { created: input.now + 1, completed: input.now + 2 },
@@ -2442,21 +2507,26 @@ function seedBuildUptakeIntegrityHistory(input: { taskID: string; specID: string
     phase: "post_build",
     reviewers: [{ reviewerID: "rev_storage", scope: "Storage validation", verdict: "needs_correction" }],
     findings: [
-      integrityFinding({
+      {
         id: "BF-R1-storage-validation",
+        severity: "blocking",
+        verdictImpact: "needs_correction",
+        canonicalSymptom: rootID,
+        title: "Persisted settings are trusted",
         description: "getSettings trusts localStorage values.",
-        repair: "Validate persisted settings on load.",
-        filePaths: ["src/services/storage.ts"],
+        evidence: ["src/services/storage.ts getSettings"],
+        targetIDs: [],
         requirementIDs: ["REQ-settings"],
+        specIDs: [],
+        filePaths: ["src/services/storage.ts"],
+        affectedSymbols: [],
+        repair: "Validate persisted settings on load.",
+        verify: ["Load invalid persisted settings and assert validation rejects them."],
+        sourceFindingIDs: [],
+        priorAttemptRefs: [],
         reviewers: ["rev_storage"],
-      }),
-    ].map((finding) => ({
-      ...finding,
-      rootID,
-      canonicalLabel: "Validate persisted settings",
-      title: "Persisted settings are trusted",
-      evidence: ["src/services/storage.ts getSettings"],
-    })),
+      },
+    ],
     now: input.now + 1,
   })
   recordIntegrityAttempt({
@@ -2467,21 +2537,26 @@ function seedBuildUptakeIntegrityHistory(input: { taskID: string; specID: string
     phase: "post_build",
     reviewers: [{ reviewerID: "rev_settings", scope: "Settings repair verification", verdict: "needs_correction" }],
     findings: [
-      integrityFinding({
+      {
         id: "BF-R2-settings-validation",
+        severity: "blocking",
+        verdictImpact: "needs_correction",
+        canonicalSymptom: rootID,
+        title: "getSettings does not validate model, temperature, or maxTokens",
         description: "Invalid model/temperature/maxTokens values from localStorage reach API settings.",
-        repair: "Validate model against ALLOWED_MODELS, clamp temperature to [0,2], clamp maxTokens to [1,8192].",
-        filePaths: ["src/services/storage.ts"],
+        evidence: ["src/services/storage.ts getSettings still returns unchecked values"],
+        targetIDs: [],
         requirementIDs: ["REQ-settings"],
+        specIDs: [],
+        filePaths: ["src/services/storage.ts"],
+        affectedSymbols: [],
+        repair: "Validate model against ALLOWED_MODELS, clamp temperature to [0,2], clamp maxTokens to [1,8192].",
+        verify: ["Load invalid localStorage values and assert settings normalization rejects or clamps them."],
+        sourceFindingIDs: [],
+        priorAttemptRefs: [],
         reviewers: ["rev_settings", "rev_storage"],
-      }),
-    ].map((finding) => ({
-      ...finding,
-      rootID,
-      canonicalLabel: "Validate persisted settings",
-      title: "getSettings does not validate model, temperature, or maxTokens",
-      evidence: ["src/services/storage.ts getSettings still returns unchecked values"],
-    })),
+      },
+    ],
     now: input.now + 2,
   })
 }
@@ -2608,7 +2683,7 @@ describe("orchestrator tools", () => {
         Database.use((db) =>
           db
             .update(EngineTaskTable)
-            .set({ session_id: root.id, time_updated: Date.now() })
+            .set({ project_id: Instance.project.id, session_id: root.id, time_updated: Date.now() })
             .where(eq(EngineTaskTable.id, taskID))
             .run(),
         )
@@ -2636,6 +2711,7 @@ describe("orchestrator tools", () => {
         expect(resultText).toContain("- capability_profile_id: frontend-innovate")
         expect(resultText).toMatch(/- projection_hash: [a-f0-9]{64}/)
         expect(resultText).toContain("- continuation_wake: started")
+        expect(toolMetadata(result)[ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY]).toBe("decision")
         const firstOverlay = (await Session.get(root.id)).metadata?.configOverlay as Record<string, unknown>
         expect(firstOverlay).toEqual({
           prompt_profile: { active: "frontend-innovate" },
@@ -2673,6 +2749,7 @@ describe("orchestrator tools", () => {
         expect(projectPackageText).toContain(`- active: ${PROJECT_EXPERT_SQUAD_ID}`)
         expect(projectPackageText).toContain(`- capability_profile_id: ${PROJECT_EXPERT_SQUAD_ID}`)
         expect(projectPackageText).toMatch(/- projection_hash: [a-f0-9]{64}/)
+        expect(toolMetadata(projectPackageResult)[ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY]).toBe("decision")
         expect((await Session.get(root.id)).metadata?.configOverlay).toEqual({
           prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID },
         })
@@ -2680,6 +2757,25 @@ describe("orchestrator tools", () => {
         expect(secondSelection?.value).toContain("previous_profile=frontend-innovate")
         expect(secondSelection?.value).toContain(`active_profile=${PROJECT_EXPERT_SQUAD_ID}`)
         expect(secondSelection?.value).toContain(`capability_profile_id=${PROJECT_EXPERT_SQUAD_ID}`)
+        expect(dispatchTaskLoop).toHaveBeenCalledTimes(2)
+
+        const sameProfileResult = await tools.select_expert_squad.execute(
+          {
+            profile_id: PROJECT_EXPERT_SQUAD_ID,
+            reason: "The current project package is already active and should remain active.",
+          },
+          buildToolOptions("select_expert_squad_same_profile"),
+        )
+        const sameProfileText = toolText(sameProfileResult)
+        expect(sameProfileText).toContain(`Expert squad already active for task ${taskID}.`)
+        expect(sameProfileText).toContain(`- previous: ${PROJECT_EXPERT_SQUAD_ID}`)
+        expect(sameProfileText).toContain(`- active: ${PROJECT_EXPERT_SQUAD_ID}`)
+        expect(sameProfileText).toContain("- continuation_wake: not_scheduled")
+        expect(toolMetadata(sameProfileResult)[ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY]).toBe("none")
+        expect((await Session.get(root.id)).metadata?.configOverlay).toEqual({
+          prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID },
+        })
+        expect(createDecisionLog(taskID).readByKey("select_expert_squad")?.id).toBe(secondSelection?.id)
         expect(dispatchTaskLoop).toHaveBeenCalledTimes(2)
 
         await expect(
@@ -2693,6 +2789,224 @@ describe("orchestrator tools", () => {
         })
         expect(createDecisionLog(taskID).readByKey("select_expert_squad")?.id).toBe(secondSelection?.id)
         expect(dispatchTaskLoop).toHaveBeenCalledTimes(2)
+      },
+    })
+  })
+
+  test("select_expert_squad rejects task root sessions whose parent lineage leaves the active project", async () => {
+    await using foreign = await tmpdir()
+    const now = Date.now()
+    const projectID = "prj_select_expert_squad_foreign_lineage"
+    const foreignProjectID = "prj_select_expert_squad_foreign_parent"
+    const taskID = "tsk_select_expert_squad_foreign_lineage"
+    let foreignParentID = ""
+    let childID = ""
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: tmp.path,
+          name: "Select expert squad foreign lineage project",
+          sandboxes: "[]",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(ProjectTable)
+        .values({
+          id: foreignProjectID,
+          worktree: foreign.path,
+          name: "Select expert squad foreign parent project",
+          sandboxes: "[]",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+    })
+
+    await Instance.provide({
+      directory: foreign.path,
+      fn: async () => {
+        foreignParentID = (await Session.create({ kind: "root", title: "foreign expert squad parent" })).id
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const child: Session.Info = {
+          id: Identifier.descending("session"),
+          slug: `select-expert-squad-cross-parent-${Math.random().toString(36).slice(2)}`,
+          projectID: Instance.project.id,
+          directory: tmp.path,
+          parentID: foreignParentID,
+          title: "current expert squad child with foreign parent",
+          version: "test",
+          kind: "root",
+          metadata: {},
+          time: {
+            created: now,
+            updated: now,
+          },
+        }
+        await Session.importSnapshot({ info: child, messages: [] })
+        childID = child.id
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: child.id,
+              source: "test",
+              title: "Select expert squad polluted lineage",
+              request: "Select an expert squad from a polluted task root session",
+              kind: "workflow",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
+        )
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: child.id,
+          signal: new AbortController().signal,
+        })
+        const dispatchTaskLoop = spyOn(EngineQueue, "dispatchTaskLoop").mockResolvedValue("started")
+
+        await expect(
+          tools.select_expert_squad.execute(
+            {
+              profile_id: "frontend-innovate",
+              reason: "The profile must not be selected through a polluted task root lineage.",
+            },
+            buildToolOptions("select_expert_squad_foreign_lineage"),
+          ),
+        ).rejects.toThrow("Session not found")
+        expect(dispatchTaskLoop).not.toHaveBeenCalled()
+        expect((await Session.get(childID)).metadata?.configOverlay).toBeUndefined()
+        expect(createDecisionLog(taskID).readByKey("select_expert_squad")).toBeUndefined()
+      },
+    })
+  })
+
+  test("config-reading orchestrator tools reject polluted task and agent session lineage before dispatch", async () => {
+    await using foreign = await tmpdir()
+    const now = Date.now()
+    const taskID = "tsk_config_tool_foreign_lineage"
+    let foreignParentID = ""
+
+    await Instance.provide({
+      directory: foreign.path,
+      fn: async () => {
+        foreignParentID = (await Session.create({ kind: "root", title: "foreign tool parent" })).id
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const child: Session.Info = {
+          id: Identifier.descending("session"),
+          slug: `config-tool-cross-parent-${Math.random().toString(36).slice(2)}`,
+          projectID: Instance.project.id,
+          directory: tmp.path,
+          parentID: foreignParentID,
+          title: "current tool child with foreign parent",
+          version: "test",
+          kind: "root",
+          metadata: {},
+          time: {
+            created: now,
+            updated: now,
+          },
+        }
+        await Session.importSnapshot({ info: child, messages: [] })
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: child.id,
+              source: "test",
+              title: "Config tool polluted lineage",
+              request: "Config-reading tools must not resolve through polluted lineage",
+              kind: "workflow",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
+        )
+        const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: child.id,
+          signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState: createWorkflowState(pipeline),
+        })
+
+        let exploreCalled = false
+        exploreRunImpl = async () => {
+          exploreCalled = true
+          return { sessionID: "ses_explore_should_not_start", finalText: "should not start" }
+        }
+
+        await expect(
+          tools.explore.execute(
+            {
+              question: "Which files are relevant?",
+              reason: "This should fail before model resolution.",
+            },
+            buildToolOptions("explore_foreign_lineage"),
+          ),
+        ).rejects.toThrow("Session not found")
+        expect(exploreCalled).toBe(false)
+
+        await expect(
+          tools.frontend_design.execute(
+            {
+              reason: "This should fail before frontend design evidence preparation.",
+            },
+            buildToolOptions("frontend_design_foreign_lineage"),
+          ),
+        ).rejects.toThrow("Session not found")
+
+        await expect(
+          tools.refine.execute(
+            {
+              focus: "all",
+              reason: "This should fail before refine model resolution.",
+            },
+            buildToolOptions("refine_foreign_lineage"),
+          ),
+        ).rejects.toThrow("Session not found")
+
+        await expect(
+          tools.propose_task.execute(
+            {
+              title: "Follow-up must not be created",
+              request: "Create a follow-up task from polluted lineage.",
+              reason: "The polluted lineage must fail before auto-confirm config resolution.",
+              evidence_anchor: {
+                kind: "code_module",
+                entity: "packages/app/src/Polluted.tsx",
+                observed_problem: "The polluted lineage should block follow-up task creation.",
+                evidence_refs: ["decision_log:polluted_lineage"],
+              },
+              priority: "normal",
+              queue: false,
+              kind: "workflow",
+            },
+            buildToolOptions("propose_task_foreign_lineage"),
+          ),
+        ).rejects.toThrow("Session not found")
+        expect(Database.use((db) => db.select().from(EngineTaskTable).all()).map((task) => task.id)).toEqual([taskID])
       },
     })
   })
@@ -2761,6 +3075,7 @@ describe("orchestrator tools", () => {
     )
 
     expect(injectMessage).not.toHaveBeenCalled()
+    expect(toolMetadata(result)[ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY]).toBe("none")
     expect(toolText(result)).toContain("Operator message is already recorded")
     expect(toolText(result)).toContain("source=panel")
     expect(toolText(result)).toContain("messageID=msg_operator_projection")
@@ -3896,9 +4211,9 @@ describe("orchestrator tools", () => {
           taskID,
           runID: run.id,
           status: "failed",
-          requiredReferenceRegions: ["main surface"],
+          requiredReferenceRegions: ["main_surface@desktop"],
           referenceComparisonEvidenceRefs: [],
-          productionBlockerIDs: ["missing-rendered-reference-comparison", "missing_reference_region:main surface"],
+          productionBlockerIDs: ["missing-rendered-reference-comparison", "missing_reference_region:main_surface@desktop"],
         })
 
         const secondResult = await tools.visual_qa.execute(
@@ -5281,7 +5596,7 @@ describe("orchestrator tools", () => {
   test("respond_agent_coordination redispatch starts the architect stage dispatcher", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
-    const projectID = `project_agent_coordination_architect_redispatch_${stamp}`
+    const projectID = Project.directoryProjectID(tmp.path)
     const taskID = `tsk_agent_coordination_architect_redispatch_${stamp}`
     const reqSpecID = `spec_agent_coordination_architect_redispatch_${stamp}`
     let architectInput: any
@@ -5454,7 +5769,7 @@ describe("orchestrator tools", () => {
   test("respond_agent_coordination redispatch recovers a pending architect action after spec persistence", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
-    const projectID = `project_agent_coordination_architect_recover_${stamp}`
+    const projectID = Project.directoryProjectID(tmp.path)
     const taskID = `tsk_agent_coordination_architect_recover_${stamp}`
     const reqSpecID = `spec_agent_coordination_architect_recover_req_${stamp}`
     const oldSpecID = `spec_agent_coordination_architect_recover_old_${stamp}`
@@ -10354,6 +10669,342 @@ describe("orchestrator tools", () => {
     })
   })
 
+  test("respond_agent_coordination rejects live-owned worker sessions whose parent lineage leaves the project before response artifacts", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_agent_coordination_foreign_lineage_${stamp}`
+    const taskID = `tsk_agent_coordination_foreign_lineage_${stamp}`
+    const goalID = `gol_agent_coordination_foreign_lineage_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "agent coordination foreign lineage",
+      taskTitle: "agent coordination foreign lineage",
+      request: "Detached worker with polluted parent asks for continuation",
+      goalTitle: "Reject polluted worker lineage",
+      goalSlug: "reject-polluted-worker-lineage",
+      objective: "A2A response must not read config or write artifacts for a worker whose parent chain leaves the project.",
+      now,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({
+          kind: "root",
+          title: "agent coordination foreign lineage legal root",
+          metadata: { configOverlay: { model: "openai/gpt-5.5" } },
+        })
+        const worker = await importCurrentProjectSessionWithForeignParent({
+          kind: "build",
+          title: "agent coordination polluted live-owned build worker",
+        })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const ownershipPayload = createOrchestratorToolOwnershipPayload({
+          taskID,
+          orchestratorSessionID: parent.id,
+          orchestratorMessageID: "msg_foreign_lineage_orchestrator",
+          toolCallID: "cal_foreign_lineage_build",
+          toolPartID: "prt_foreign_lineage_build",
+          childSessionID: worker.id,
+          toolName: "build",
+          scope: "task",
+          now,
+        })
+        insertOrchestratorToolOwnershipArtifact({
+          taskID,
+          label: "tool-ownership-start",
+          payload: ownershipPayload,
+          now,
+        })
+        const request = await createAgentCoordinationRequest({
+          taskID,
+          sessionID: worker.id,
+          agent: "build",
+          messageID: Identifier.ascending("message"),
+          summary: "Continue polluted detached worker",
+          details: "The request is authorized by live ownership, but the worker session parent leaves the project.",
+          blocking: true,
+          requestedDecision: "continue_worker",
+          severity: "blocked",
+        })
+        expect(request.payload).toMatchObject({
+          session_ownership_source: "live_tool_ownership",
+          tool_ownership_id: ownershipPayload.ownership_id,
+        })
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          workflow: WorkflowRegistry.resolveSync("pipeline"),
+          signal: new AbortController().signal,
+        })
+        await expect(
+          tools.respond_agent_coordination.execute(
+            {
+              request_id: request.payload.request_id,
+              decision: "continue",
+              reason: "The worker should continue only if its lineage is valid.",
+            },
+            await buildPersistedToolOptions({
+              sessionID: parent.id,
+              label: "respond_agent_coordination_foreign_lineage",
+            }),
+          ),
+        ).rejects.toThrow(/Session not found/)
+
+        expect(findAgentCoordinationRequest({ taskID, requestID: request.payload.request_id })?.payload.status).toBe(
+          "pending",
+        )
+        const responseRows = Database.use((db) =>
+          db
+            .select()
+            .from(EngineArtifactTable)
+            .where(
+              and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "agent_coordination_response")),
+            )
+            .all(),
+        )
+        expect(responseRows).toHaveLength(0)
+        expect(listAgentCoordinationActions(taskID)).toHaveLength(0)
+      },
+    })
+  })
+
+  test("respond_agent_coordination rejects terminal decisions for polluted worker lineage before response artifacts", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_agent_coordination_terminal_foreign_lineage_${stamp}`
+    const taskID = `tsk_agent_coordination_terminal_foreign_lineage_${stamp}`
+    const goalID = `gol_agent_coordination_terminal_foreign_lineage_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "agent coordination terminal foreign lineage",
+      taskTitle: "agent coordination terminal foreign lineage",
+      request: "Polluted worker asks for a terminal A2A decision",
+      goalTitle: "Reject polluted worker lineage",
+      goalSlug: "reject-polluted-worker-terminal-lineage",
+      objective: "A2A terminal decisions must not write response artifacts for a worker whose parent chain leaves the project.",
+      now,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({
+          kind: "root",
+          title: "agent coordination terminal foreign lineage legal root",
+          metadata: { configOverlay: { model: "openai/gpt-5.5" } },
+        })
+        const worker = await importCurrentProjectSessionWithForeignParent({
+          kind: "build",
+          title: "agent coordination polluted terminal build worker",
+        })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const ownershipPayload = createOrchestratorToolOwnershipPayload({
+          taskID,
+          orchestratorSessionID: parent.id,
+          orchestratorMessageID: "msg_terminal_foreign_lineage_orchestrator",
+          toolCallID: "cal_terminal_foreign_lineage_build",
+          toolPartID: "prt_terminal_foreign_lineage_build",
+          childSessionID: worker.id,
+          toolName: "build",
+          scope: "task",
+          now,
+        })
+        insertOrchestratorToolOwnershipArtifact({
+          taskID,
+          label: "tool-ownership-terminal-start",
+          payload: ownershipPayload,
+          now,
+        })
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          workflow: WorkflowRegistry.resolveSync("pipeline"),
+          signal: new AbortController().signal,
+        })
+
+        const decisions = [
+          { decision: "cancel_worker" as const, requestedDecision: "cancel_worker" },
+          { decision: "ask_user" as const, requestedDecision: "ask_user" },
+          { decision: "fail_task" as const, requestedDecision: "fail_task" },
+        ]
+        for (const entry of decisions) {
+          const request = await createAgentCoordinationRequest({
+            taskID,
+            sessionID: worker.id,
+            agent: "build",
+            messageID: Identifier.ascending("message"),
+            summary: `Polluted worker asks for ${entry.decision}`,
+            details: "The request is authorized by live ownership, but the worker session parent leaves the project.",
+            blocking: true,
+            requestedDecision: entry.requestedDecision,
+            severity: "blocked",
+          })
+
+          await expect(
+            tools.respond_agent_coordination.execute(
+              {
+                request_id: request.payload.request_id,
+                decision: entry.decision,
+                reason: "The worker decision is only valid if the worker lineage is valid.",
+              },
+              await buildPersistedToolOptions({
+                sessionID: parent.id,
+                label: `respond_agent_coordination_terminal_foreign_lineage_${entry.decision}`,
+              }),
+            ),
+          ).rejects.toThrow(/Session not found/)
+
+          expect(findAgentCoordinationRequest({ taskID, requestID: request.payload.request_id })?.payload.status).toBe(
+            "pending",
+          )
+        }
+
+        const responseRows = Database.use((db) =>
+          db
+            .select()
+            .from(EngineArtifactTable)
+            .where(
+              and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "agent_coordination_response")),
+            )
+            .all(),
+        )
+        expect(responseRows).toHaveLength(0)
+        expect(listAgentCoordinationActions(taskID)).toHaveLength(0)
+      },
+    })
+  })
+
+  test("respond_agent_coordination rejects polluted worker lineage before replaying response artifacts", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_agent_coordination_replay_foreign_lineage_${stamp}`
+    const taskID = `tsk_agent_coordination_replay_foreign_lineage_${stamp}`
+    const goalID = `gol_agent_coordination_replay_foreign_lineage_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "agent coordination replay foreign lineage",
+      taskTitle: "agent coordination replay foreign lineage",
+      request: "Polluted worker has an existing response/action replay",
+      goalTitle: "Reject polluted worker replay",
+      goalSlug: "reject-polluted-worker-replay",
+      objective: "A2A replay must not read existing response/action artifacts before proving worker lineage.",
+      now,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({
+          kind: "root",
+          title: "agent coordination replay foreign lineage legal root",
+          metadata: { configOverlay: { model: "openai/gpt-5.5" } },
+        })
+        const worker = await importCurrentProjectSessionWithForeignParent({
+          kind: "build",
+          title: "agent coordination polluted replay build worker",
+        })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const ownershipPayload = createOrchestratorToolOwnershipPayload({
+          taskID,
+          orchestratorSessionID: parent.id,
+          orchestratorMessageID: "msg_replay_foreign_lineage_orchestrator",
+          toolCallID: "cal_replay_foreign_lineage_build",
+          toolPartID: "prt_replay_foreign_lineage_build",
+          childSessionID: worker.id,
+          toolName: "build",
+          scope: "task",
+          now,
+        })
+        insertOrchestratorToolOwnershipArtifact({
+          taskID,
+          label: "tool-ownership-replay-start",
+          payload: ownershipPayload,
+          now,
+        })
+        const request = await createAgentCoordinationRequest({
+          taskID,
+          sessionID: worker.id,
+          agent: "build",
+          messageID: Identifier.ascending("message"),
+          summary: "Polluted worker has existing response",
+          details: "The request already points at response/action artifacts, but worker lineage is invalid.",
+          blocking: true,
+          requestedDecision: "cancel_worker",
+          severity: "blocked",
+        })
+        await createAgentCoordinationResponse({
+          taskID,
+          requestID: request.payload.request_id,
+          orchestratorSessionID: parent.id,
+          orchestratorMessageID: "msg_replay_existing_response",
+          orchestratorToolCallID: "cal_replay_existing_response",
+          orchestratorToolPartID: "prt_replay_existing_response",
+          decision: "cancel_worker",
+          reason: "Existing response/action fixture for lineage replay.",
+          now,
+        })
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          workflow: WorkflowRegistry.resolveSync("pipeline"),
+          signal: new AbortController().signal,
+        })
+        await expect(
+          tools.respond_agent_coordination.execute(
+            {
+              request_id: request.payload.request_id,
+              decision: "cancel_worker",
+              reason: "Existing response/action fixture for lineage replay.",
+            },
+            await buildPersistedToolOptions({
+              sessionID: parent.id,
+              label: "respond_agent_coordination_replay_foreign_lineage",
+            }),
+          ),
+        ).rejects.toThrow(/Session not found/)
+
+        expect(findAgentCoordinationRequest({ taskID, requestID: request.payload.request_id })?.payload.status).toBe(
+          "responded",
+        )
+        const responseRows = Database.use((db) =>
+          db
+            .select()
+            .from(EngineArtifactTable)
+            .where(
+              and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "agent_coordination_response")),
+            )
+            .all(),
+        )
+        expect(responseRows).toHaveLength(1)
+        expect(listAgentCoordinationActions(taskID)).toHaveLength(1)
+      },
+    })
+  })
+
   test("respond_agent_coordination cancel_worker recovers a pending action after terminal status is durable", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
@@ -12731,6 +13382,7 @@ describe("orchestrator tools", () => {
           category: "reference-structure",
           question: "Does the market tab row preserve the source page hierarchy and spacing?",
           region: "market tabs",
+          reference_region_key: "market_tabs@desktop",
           status: "failed",
           expected: "The market tab row matches the source hierarchy and first-viewport spacing.",
           observed: "The market tab row is clipped and spacing is too loose.",
@@ -12805,7 +13457,7 @@ describe("orchestrator tools", () => {
         ]
         visualQaRecord.report.reference_parity = {
           required: true,
-          required_regions: ["market tabs"],
+          required_regions: ["market_tabs@desktop"],
           reference_comparison_evidence_refs: [comparisonEvidenceRef],
           missing_regions: [],
           blocker_ids: ["blocker-market-tabs"],
@@ -13096,6 +13748,14 @@ describe("orchestrator tools", () => {
         buildAgentRunImpl = async (input: any) => {
           capturedRunInput = input
           await markBuildSlotAcquired(input, `ses_goal_current_project_${stamp}`)
+          const srcDir = path.join(input.workDir, "src")
+          await fs.mkdir(srcDir, { recursive: true })
+          await fs.writeFile(path.join(srcDir, "index.ts"), `export const currentProjectGoal = ${JSON.stringify(stamp)}\n`)
+          await $`git add src/index.ts`.cwd(input.workDir)
+          await $`git -c user.name=OpenCorvus -c user.email=opencorvus@example.test commit -m "test current project goal diff"`.cwd(
+            input.workDir,
+          )
+          const head = (await $`git rev-parse HEAD`.cwd(input.workDir).text()).trim().slice(0, 12)
           return {
             result: {
               status: "passed",
@@ -13108,12 +13768,12 @@ describe("orchestrator tools", () => {
                 },
               ],
               tests: [],
-              commit_ref: "cur1234",
+              commit_ref: head,
             },
             sessionID: `ses_goal_current_project_${stamp}`,
             worktreeDir: input.workDir,
             mergeBackStatus: "not_invoked",
-            worktreeHead: "cur1234",
+            worktreeHead: head,
           }
         }
 
@@ -13157,8 +13817,14 @@ describe("orchestrator tools", () => {
         )
         .get(),
     )
-    expect((outcome?.payload as any)?.host_facts?.contribution_commit_ref).toBe("cur1234")
-    expect((outcome?.payload as any)?.workspace?.dir).toBeNull()
+    const outcomePayload = outcome?.payload as any
+    expect(outcomePayload?.outcome_kind).toBe("delivered")
+    expect(outcomePayload?.no_diff_reason).toBeNull()
+    expect(outcomePayload?.host_facts?.contribution_commit_ref).toMatch(/^[0-9a-f]{12}$/)
+    expect(outcomePayload?.host_facts?.diff_base_ref).toMatch(/^[0-9a-f]{12}$/)
+    expect(outcomePayload?.host_facts?.diff_head_ref).toMatch(/^[0-9a-f]{12}$/)
+    expect(outcomePayload?.host_facts?.actual_changed_files).toEqual(["src/index.ts"])
+    expect(outcomePayload?.workspace?.dir).toBeNull()
   })
 
   test("task-level direct build can explicitly request a managed worktree", async () => {
@@ -13319,7 +13985,7 @@ describe("orchestrator tools", () => {
   test("propose_task can create a follow-up while the parent task is still active", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
-    const projectID = `project_propose_${stamp}`
+    const projectID = Project.directoryProjectID(tmp.path)
     const taskID = `tsk_propose_${stamp}`
     const createSpy = spyOn(EngineService, "createSchedulerChildTask").mockResolvedValue("tsk_created_followup")
 
@@ -13392,6 +14058,7 @@ describe("orchestrator tools", () => {
         )
 
         const text = toolText(result)
+        expect(toolMetadata(result)[ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY]).toBe("decision")
         expect(text).toContain("Follow-up task created automatically")
         expect(text).toContain("tsk_created_followup")
         expect(await Question.list()).toHaveLength(0)
@@ -13426,7 +14093,7 @@ describe("orchestrator tools", () => {
   test("propose_task accepts document and expert-squad evidence anchors", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
-    const projectID = `project_propose_anchor_${stamp}`
+    const projectID = Project.directoryProjectID(tmp.path)
     const taskID = `tsk_propose_anchor_${stamp}`
     const createSpy = spyOn(EngineService, "createSchedulerChildTask")
       .mockResolvedValueOnce("tsk_document_followup")
@@ -13553,7 +14220,7 @@ describe("orchestrator tools", () => {
   test("propose_task rejects vague follow-up work without a concrete evidence anchor", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
-    const projectID = `project_vague_followup_${stamp}`
+    const projectID = Project.directoryProjectID(tmp.path)
     const taskID = `tsk_vague_followup_${stamp}`
     const createSpy = spyOn(EngineService, "createSchedulerChildTask").mockResolvedValue("tsk_should_not_create_vague")
 
@@ -13618,6 +14285,7 @@ describe("orchestrator tools", () => {
         )
 
         const text = toolText(result)
+        expect(toolMetadata(result)[ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY]).toBe("none")
         expect(text).toContain("Follow-up task proposal rejected")
         expect(text).toContain("concrete evidence anchor")
         expect(text).toContain("no new task was created")
@@ -13639,6 +14307,7 @@ describe("orchestrator tools", () => {
           buildToolOptions(),
         )
 
+        expect(toolMetadata(noEvidenceResult)[ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY]).toBe("none")
         expect(toolText(noEvidenceResult)).toContain("Follow-up task proposal rejected")
         expect(toolText(noEvidenceResult)).toContain("evidence_anchor.kind")
         expect(createSpy).not.toHaveBeenCalled()
@@ -13649,7 +14318,7 @@ describe("orchestrator tools", () => {
   test("propose_task allows a second independent child task for the same parent", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
-    const projectID = `project_parallel_child_${stamp}`
+    const projectID = Project.directoryProjectID(tmp.path)
     const taskID = `tsk_parallel_parent_${stamp}`
     const existingChildID = `tsk_parallel_existing_${stamp}`
     const createSpy = spyOn(EngineService, "createSchedulerChildTask").mockResolvedValue("tsk_parallel_new_child")
@@ -13773,7 +14442,7 @@ describe("orchestrator tools", () => {
   test("propose_task refuses a completed parent task without creating follow-up work", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
-    const projectID = `project_completed_propose_${stamp}`
+    const projectID = Project.directoryProjectID(tmp.path)
     const taskID = `tsk_completed_propose_${stamp}`
     const createSpy = spyOn(EngineService, "createSchedulerChildTask").mockResolvedValue("tsk_completed_followup")
 
@@ -13862,7 +14531,7 @@ describe("orchestrator tools", () => {
   test("propose_task does not create a follow-up task when auto-confirm is disabled and the user declines", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
-    const projectID = `project_decline_${stamp}`
+    const projectID = Project.directoryProjectID(tmp.path)
     const taskID = `tsk_decline_${stamp}`
     const createSpy = spyOn(EngineService, "createSchedulerChildTask").mockResolvedValue("tsk_should_not_create")
 
@@ -15641,7 +16310,7 @@ describe("orchestrator tools", () => {
     })
   }, 15000)
 
-  test("goal build session contract records generic evidence without a dispatch manifest", async () => {
+  test("goal build session contract does not substitute task visual evidence without goal crop binding", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })
 
@@ -15670,10 +16339,10 @@ describe("orchestrator tools", () => {
           worktree: tmp.path,
           projectName: "Goal input evidence contract test",
           taskTitle: "Goal input evidence contract task",
-          request: "Build a goal with task-owned visual evidence.",
+          request: "Build a goal that has only task-owned visual evidence.",
           goalTitle: "Input evidence goal",
           goalSlug: "input-evidence-goal",
-          objective: "Use task-owned visual evidence for this goal build.",
+          objective: "Do not receive task-owned visual evidence as a goal target reference.",
           now,
           insertProject: false,
         })
@@ -15693,12 +16362,12 @@ describe("orchestrator tools", () => {
           return {
             result: {
               status: "passed",
-              summary: "Goal consumed task-owned evidence.",
+              summary: "Goal ran without task-owned evidence.",
               files_changed: [
                 {
                   path: "src/index.ts",
-                  summary: "Used visual evidence.",
-                  reason: "Evidence pack was present.",
+                  summary: "Changed scoped implementation.",
+                  reason: "Goal target evidence must come from bound crop references.",
                 },
               ],
               tests: [],
@@ -15730,15 +16399,8 @@ describe("orchestrator tools", () => {
         expect(capturedInput.context.inputEvidenceManifest).toBeUndefined()
         expect(capturedInput.context.evidencePack).toBeUndefined()
         const evidencePack = buildEvidencePackFromBuildContext(capturedInput.context)
-        expect(evidencePack?.targetReferences).toHaveLength(1)
-        expect(evidencePack?.targetReferences?.[0]).toMatchObject({
-          url: targetRef.url,
-          sha: targetRef.sha,
-          mime: targetRef.mime,
-          size: targetRef.size,
-          intent: "visual_reference",
-          source: "task-attachment",
-        })
+        expect(evidencePack?.targetReferences ?? []).toEqual([])
+        expect(JSON.stringify(capturedInput.context ?? {})).not.toContain("goal-input-reference.png")
         const contractArtifact = Database.use((db) =>
           db
             .select()
@@ -16173,7 +16835,6 @@ describe("orchestrator tools", () => {
     let observedExistingSessionID: unknown
     let observedRetryFeedback: unknown
     let originalRefUrl = ""
-    let currentRefUrl = ""
 
     await Instance.provide({
       directory: tmp.path,
@@ -16207,7 +16868,6 @@ describe("orchestrator tools", () => {
           "current-retry-reference.png",
         )
         originalRefUrl = originalRef.url
-        currentRefUrl = currentRef.url
         Database.use((db) =>
           db
             .update(EngineTaskTable)
@@ -16286,8 +16946,8 @@ describe("orchestrator tools", () => {
           expect(input.context?.inputEvidenceManifest).toBeUndefined()
           expect(input.context?.evidencePack).toBeUndefined()
           const evidencePack = buildEvidencePackFromBuildContext(input.context)
-          expect(JSON.stringify(evidencePack)).toContain(currentRefUrl)
-          expect(JSON.stringify(evidencePack)).not.toContain(originalRefUrl)
+          expect(evidencePack?.targetReferences ?? []).toEqual([])
+          expect(JSON.stringify(input.context ?? {})).not.toContain(originalRefUrl)
           await markBuildSlotAcquired(input, priorSessionID)
           return {
             result: {
@@ -16344,24 +17004,16 @@ describe("orchestrator tools", () => {
     })
   }, 30_000)
 
-  test("goal build retry opens a fresh session on the same worktree when prior replay pressure is too high", async () => {
-    installControlModel()
+  test("goal build retry reuses the prior build session despite high raw replay pressure", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
-    tmp = await tmpdir({
-      git: true,
-      config: {
-        model: "mock-control/control",
-        agent: { build: { retry_replay_token_limit: 1_000 } },
-      },
-    })
+    tmp = await tmpdir({ git: true })
 
     const now = Date.now()
     const stamp = now.toString(16)
-    const projectID = `project_retry_replay_pressure_${stamp}`
-    const taskID = `tsk_retry_replay_pressure_${stamp}`
-    const goalID = `gol_retry_replay_pressure_${stamp}`
-    const priorSessionID = `ses_prior_replay_pressure_${stamp}`
-    const freshSessionID = `ses_fresh_replay_pressure_${stamp}`
+    const projectID = `project_retry_high_raw_usage_${stamp}`
+    const taskID = `tsk_retry_high_raw_usage_${stamp}`
+    const goalID = `gol_retry_high_raw_usage_${stamp}`
+    const priorSessionID = `ses_prior_high_raw_usage_${stamp}`
     let observedExistingSessionID: unknown = "not-observed"
     let observedWorktreeDir = ""
     let observedRetryFeedback = ""
@@ -16376,12 +17028,12 @@ describe("orchestrator tools", () => {
           goalID,
           sessionID: parent.id,
           worktree: tmp.path,
-          projectName: "Fresh retry replay pressure test",
-          taskTitle: "Fresh retry replay pressure task",
-          request: "Retry a failed goal after the prior build session became expensive to replay",
-          goalTitle: "Fresh retry after replay pressure",
-          goalSlug: "fresh-retry-replay-pressure",
-          objective: "Verify replay pressure opens fresh context on the same worktree",
+          projectName: "Reuse retry high raw usage test",
+          taskTitle: "Reuse retry high raw usage task",
+          request: "Retry a failed goal after the prior build session reported high raw token usage",
+          goalTitle: "Reuse retry after high raw usage",
+          goalSlug: "reuse-retry-high-raw-usage",
+          objective: "Verify high raw usage does not force fresh context",
           now,
           insertProject: false,
         })
@@ -16404,29 +17056,30 @@ describe("orchestrator tools", () => {
           sessionID: priorSessionID,
           now: now + 20,
           inputTokens: 1_500,
+          cacheReadTokens: 4_096,
         })
         createDecisionLog(taskID).append({
           phase: "retry",
           goalID,
           key: `build_retry_previous_${priorGoalRunID}`,
-          value: "Terminal error: exact replay-pressure failure from persisted facts",
-          reason: "replay_pressure_audit",
+          value: "Terminal error: exact high-usage failure from persisted facts",
+          reason: "high_raw_usage_audit",
         })
 
         buildAgentRunImpl = async (input: any) => {
           observedExistingSessionID = input.existingSessionID
           observedWorktreeDir = input.managedWorktree.directory
           observedRetryFeedback = contextPacketText(input.context, "retry")
-          await markBuildSlotAcquired(input, freshSessionID)
+          await markBuildSlotAcquired(input, priorSessionID)
           return {
             result: {
               status: "failed",
-              summary: "Fresh retry used the preserved worktree after replay pressure.",
+              summary: "Retry reused the prior provider session despite high raw usage.",
               files_changed: [],
               tests: [],
-              error: "fresh retry still failed",
+              error: "same-session retry still failed",
             },
-            sessionID: freshSessionID,
+            sessionID: priorSessionID,
             worktreeDir: input.managedWorktree.directory,
             worktreeBranch: input.managedWorktree.branch,
             worktreeBaseRef: input.managedWorktree.baseRef,
@@ -16442,26 +17095,24 @@ describe("orchestrator tools", () => {
         const result = await tools.build.execute(
           {
             goalID,
-            request: "Retry without replaying the oversized prior transcript.",
-            reason: "Prior build session replay pressure is above the configured Build replay limit.",
+            request: "Retry by continuing the previous provider session.",
+            reason: "Prior build session has high raw usage, but it has no concrete context failure.",
           },
           buildToolOptions(),
         )
 
         expectGoalBuildStarted(result)
         await waitForGoalStatus(goalID, "failed")
-        expect(observedExistingSessionID).toBeUndefined()
+        expect(observedExistingSessionID).toBe(priorSessionID)
         expect(observedWorktreeDir).toBe(tmp.path)
-        expect(observedRetryFeedback).toContain("Terminal error: exact replay-pressure failure from persisted facts")
+        expect(observedRetryFeedback).toContain("Terminal error: exact high-usage failure from persisted facts")
         expect(observedRetryFeedback).not.toContain("prior_session_replay_pressure")
         expect(observedRetryFeedback).not.toContain("Build retry selected a fresh build session")
         expect(findGoalLatestWorkspace(goalID).directory).toBe(tmp.path)
         const latest = listGoalRunsByGoal(goalID).at(0)
-        expect(latest?.session_id).toBe(freshSessionID)
+        expect(latest?.session_id).toBe(priorSessionID)
         const decision = createDecisionLog(taskID).readByKey(`build_retry_fresh_session_${priorGoalRunID}`)
-        expect(decision?.value).toContain("prior_session_replay_pressure")
-        expect(decision?.value).toContain("estimate=1500")
-        expect(decision?.value).toContain("limit=1000")
+        expect(decision).toBeUndefined()
       },
     })
   }, 30_000)
@@ -17228,6 +17879,7 @@ describe("orchestrator tools", () => {
             goalSlug: "duplicate-live-guard",
             objective: "Ensure duplicate dispatch is keyed by live build ownership facts",
             now,
+            insertProject: false,
           })
           const goalRunID = beginBuildAttempt({
             taskID,
@@ -17416,6 +18068,7 @@ describe("orchestrator tools", () => {
           objective: "Create a non-trivial blocking goal requiring integrity evidence",
           now,
           specID,
+          insertProject: false,
         })
         const { tools } = createOrchestratorTools({
           taskID,
@@ -17720,7 +18373,7 @@ describe("orchestrator tools", () => {
   )
 
   test(
-    "goal build uses design resource manifest target once when task artifact has same material image",
+    "goal build does not use design resource manifest target without goal crop binding",
     async () => {
       await tmp?.[Symbol.asyncDispose]?.()
       tmp = await tmpdir({ git: true })
@@ -17743,10 +18396,10 @@ describe("orchestrator tools", () => {
           worktree: tmp.path,
           projectName: "Manifest build evidence test",
           taskTitle: "Manifest build evidence task",
-          request: "Build from a captured design material image.",
+          request: "Build a goal with a captured design material image.",
           goalTitle: "Implement captured material",
           goalSlug: "implement-captured-material",
-          objective: "Use the captured material image exactly once as target evidence.",
+          objective: "Do not receive task-level design material as a goal target reference.",
           now,
           insertProject: false,
         })
@@ -17796,12 +18449,12 @@ describe("orchestrator tools", () => {
           return {
             result: {
               status: "passed",
-              summary: "Goal built with manifest evidence",
+              summary: "Goal built without task-level manifest evidence",
               files_changed: [
                 {
                   path: "src/index.ts",
-                  summary: "Updated visual implementation.",
-                  reason: "Required by the mocked manifest build.",
+                  summary: "Updated scoped implementation.",
+                  reason: "Goal target evidence must come from bound crop references.",
                 },
               ],
               tests: [],
@@ -17823,8 +18476,8 @@ describe("orchestrator tools", () => {
         const result = await tools.build.execute(
           {
             goalID,
-            request: "Implement from the captured design material image",
-            reason: "Verify manifest evidence projection.",
+            request: "Implement without substituting the task-level captured design material image.",
+            reason: "Verify goal builds do not use manifest evidence without crop binding.",
           },
           buildToolOptions(),
         )
@@ -17832,13 +18485,7 @@ describe("orchestrator tools", () => {
         expectGoalBuildStarted(result)
         await waitForGoalStatus(goalID, "passed")
         const evidencePack = buildEvidencePackFromBuildContext(capturedContext)
-        expect(evidencePack?.targetReferences).toHaveLength(1)
-        expect(evidencePack?.targetReferences?.[0]).toMatchObject({
-          url: screenshot.url,
-          label: "material-reference.png",
-          intent: "visual_reference",
-          source: "material",
-        })
+        expect(evidencePack?.targetReferences ?? []).toEqual([])
         expect(evidencePack?.previousOutputs ?? []).toEqual([])
       },
     })

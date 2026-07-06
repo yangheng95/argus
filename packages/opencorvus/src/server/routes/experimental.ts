@@ -16,6 +16,7 @@ import { zodToJsonSchema } from "zod-to-json-schema"
 import { errors, namedErrorResponse } from "../error"
 import { lazy } from "../../util/lazy"
 import { NotFoundError } from "../../storage/db"
+import { assertActiveProjectSession } from "../active-project-session"
 
 // Workspace shape for the workspace sub-tree (mounted at /workspace)
 const WorkspaceRoutes = lazy(() =>
@@ -355,7 +356,7 @@ export const ExperimentalRoutes = lazy(() =>
       validator("json", CreateScheduleBody),
       async (c) => {
         const body = c.req.valid("json")
-        return c.json(CronService.create({ ...body, projectId: Instance.project.id }))
+        return c.json(await CronService.create({ ...body, projectId: Instance.project.id }))
       },
     )
     .delete(
@@ -419,7 +420,7 @@ export const ExperimentalRoutes = lazy(() =>
       validator("json", CreateEventScheduleBody),
       async (c) => {
         const body = c.req.valid("json")
-        return c.json(EventService.create({ ...body, projectId: Instance.project.id }))
+        return c.json(await EventService.create({ ...body, projectId: Instance.project.id }))
       },
     )
     .delete(
@@ -475,7 +476,7 @@ export const ExperimentalRoutes = lazy(() =>
       validator("query", z.object({ sessionId: z.string() })),
       async (c) => {
         const { sessionId } = c.req.valid("query")
-        await Session.getInProject({ sessionID: sessionId, projectID: Instance.project.id })
+        await assertActiveProjectSession(sessionId)
         return c.json(TaskPlan.list(sessionId))
       },
     )
@@ -495,7 +496,7 @@ export const ExperimentalRoutes = lazy(() =>
       validator("query", z.object({ sessionId: z.string() })),
       async (c) => {
         const { sessionId } = c.req.valid("query")
-        await Session.getInProject({ sessionID: sessionId, projectID: Instance.project.id })
+        await assertActiveProjectSession(sessionId)
         return c.json({ content: Scratchpad.get(sessionId) })
       },
     )

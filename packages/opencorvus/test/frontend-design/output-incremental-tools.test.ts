@@ -83,6 +83,56 @@ async function createVisualBaselineFixture() {
   }
 }
 
+async function createVisualRegionBindingFixture(root: string) {
+  const cropDir = path.join(root, ".opencorvus", "r", "t", "tsk_regions", "fd", "visual-region-bindings", "world")
+  const sourceDir = path.join(root, "web-clone-source")
+  const docsDir = path.join(root, "docs")
+  await fs.mkdir(cropDir, { recursive: true })
+  await fs.mkdir(sourceDir, { recursive: true })
+  await fs.mkdir(docsDir, { recursive: true })
+  for (const file of [
+    path.join(sourceDir, "reference.png"),
+    path.join(cropDir, "01-header__desktop__x0-y0-w400-h120.png"),
+    path.join(cropDir, "bbox-overlay__src400x300.png"),
+    path.join(cropDir, "region-contact-sheet__src400x300.png"),
+  ]) {
+    await fs.writeFile(file, "png bytes")
+  }
+  const manifestPath = "docs/visual-region-binding.json"
+  const manifest = {
+    version: 1,
+    purpose: "visual-region-binding-package",
+    generated_at: "2026-07-05T00:00:00.000Z",
+    manifest_path: manifestPath,
+    source_image: "web-clone-source/reference.png",
+    source_image_dimensions: { width: 400, height: 300 },
+    slicing_strategy: "horizontal_component_bands",
+    crop_directory: ".opencorvus/r/t/tsk_regions/fd/visual-region-bindings/world",
+    bbox_overlay_artifact: ".opencorvus/r/t/tsk_regions/fd/visual-region-bindings/world/bbox-overlay__src400x300.png",
+    contact_sheet_artifact:
+      ".opencorvus/r/t/tsk_regions/fd/visual-region-bindings/world/region-contact-sheet__src400x300.png",
+    regions: [
+      {
+        region_id: "header",
+        source_order: 1,
+        source_bbox: { x: 0, y: 0, width: 400, height: 120 },
+        viewport: "desktop",
+        region_scope: "top navigation and hero header",
+        crop_intent: "full-region",
+        target_route: "/",
+        implementation_locator: "header.site-header",
+        component_files: ["src/components/Header.tsx"],
+        reference_region_key: "header@desktop",
+        source_reference_artifact:
+          ".opencorvus/r/t/tsk_regions/fd/visual-region-bindings/world/01-header__desktop__x0-y0-w400-h120.png",
+        source_crop_filename: "01-header__desktop__x0-y0-w400-h120.png",
+      },
+    ],
+  }
+  await fs.writeFile(path.join(root, manifestPath), JSON.stringify(manifest, null, 2), "utf8")
+  return { manifestPath }
+}
+
 async function registerMinimalFrontendResult(
   kit = createFrontendTemplateOutputTools(),
   options: { includeDesignDirections?: boolean; selectDesignDirection?: boolean; includeAntiSlopReview?: boolean } = {},
@@ -667,6 +717,25 @@ test("update_frontend tools assemble and finalize the canonical frontend templat
   expect(kit.buildReport().detail).toContain("## Rejected Generic Traits Review")
 })
 
+test("update_frontend_visual_region_binding registers structured crop manifest rows", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "frontend-region-binding-"))
+  const { manifestPath } = await createVisualRegionBindingFixture(root)
+  const kit = await registerMinimalFrontendResult(createFrontendTemplateOutputTools({ workspaceRoot: root }))
+
+  const registered = await callTool(kit.tools, "update_frontend_visual_region_binding", {
+    manifest_path: manifestPath,
+  })
+  const status = await callTool(kit.tools, "inspect_frontend_result_status", {})
+  const result = await callTool(kit.tools, "submit_frontend_template", { final: true })
+
+  expect(registered).toContain("OK: frontend visual region binding registered")
+  expect(status).toContain("visual_region_bindings=1")
+  expect(result).toContain("OK")
+  expect(kit.getCollector().final?.visual_region_bindings[0]?.regions[0]?.reference_region_key).toBe("header@desktop")
+  expect(kit.buildReport().detail).toContain("## Visual Region Bindings")
+  expect(kit.buildReport().detail).toContain("1:header@desktop")
+})
+
 test("frontend design directions must be selected before final submit", async () => {
   const kit = await registerMinimalFrontendResult(createFrontendTemplateOutputTools(), {
     selectDesignDirection: false,
@@ -705,20 +774,20 @@ test("ordinary frontend template submit does not require frontend innovate direc
   expect(kit.getCollector().final?.anti_slop_review).toEqual([])
 })
 
-test("frontend innovate submit requires multiple directions, selection, and rejected-traits review", async () => {
+test("design-direction contract submit requires multiple directions, selection, and rejected-traits review", async () => {
   const missingDirections = await registerMinimalFrontendResult(
-    createFrontendTemplateOutputTools({ requireFrontendInnovateContract: true }),
+    createFrontendTemplateOutputTools({ requireDesignDirectionContract: true }),
     {
       includeDesignDirections: false,
       includeAntiSlopReview: true,
     },
   )
   expect(await callTool(missingDirections.tools, "submit_frontend_template", { final: true })).toContain(
-    "frontend-innovate handoff requires at least two resource-backed design_directions",
+    "design-direction handoff contract requires at least two resource-backed design_directions",
   )
 
   const missingSelection = await registerMinimalFrontendResult(
-    createFrontendTemplateOutputTools({ requireFrontendInnovateContract: true }),
+    createFrontendTemplateOutputTools({ requireDesignDirectionContract: true }),
     {
       includeDesignDirections: true,
       selectDesignDirection: false,
@@ -730,14 +799,14 @@ test("frontend innovate submit requires multiple directions, selection, and reje
   )
 
   const missingAntiSlop = await registerMinimalFrontendResult(
-    createFrontendTemplateOutputTools({ requireFrontendInnovateContract: true }),
+    createFrontendTemplateOutputTools({ requireDesignDirectionContract: true }),
     {
       includeDesignDirections: true,
       includeAntiSlopReview: false,
     },
   )
   expect(await callTool(missingAntiSlop.tools, "submit_frontend_template", { final: true })).toContain(
-    "frontend-innovate handoff requires anti_slop_review",
+    "design-direction handoff contract requires anti_slop_review",
   )
 })
 

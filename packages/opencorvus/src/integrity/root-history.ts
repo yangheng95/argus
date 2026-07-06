@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
 import { listIntegrityAttemptArtifacts } from "@/engine/store"
-import { canonicalIntegritySymptom, defaultIntegrityVerify, integrityFindingFingerprint } from "./finding-manifest"
 import type { IntegrityPriorAttemptSummary, SpecSnapshotLineage } from "./replay-context"
+import type { IntegrityAttemptFindingPayload, IntegrityAttemptRequiredRepairPayload } from "./attempt-payload"
 import { getSharedIntegrityPromptBudget, sanitizeIntegrityPromptText } from "./shared-prompt"
 
 export type IntegrityRootSymptomVariation = {
@@ -89,10 +89,10 @@ export function buildIntegrityRootHistory(input: {
   let latestAdvisoryFindings: IntegrityRootSymptomVariation[] = []
 
   chronologicalRows.forEach((row, index) => {
-    const payload = asRecord(row.payload)
+    const payload = row.payload
     const attemptNumber = index + 1
-    const reviewers = reviewerSummaries(payload.reviewers)
-    const findings = findingSummaries(payload.findings)
+    const reviewers = payload.reviewers
+    const findings = payload.findings.map(rootFindingSummary)
     const blockingFindings = findings.filter((finding) => finding.severity === "blocking")
     const advisoryFindings = findings.filter((finding) => finding.severity === "advisory")
     const blockingRootLabels: string[] = []
@@ -139,14 +139,14 @@ export function buildIntegrityRootHistory(input: {
       attemptNumber,
       artifactID: row.artifactID,
       timeCreated: row.timeCreated,
-      phase: phaseFrom(payload.phase),
-      verdict: verdictFrom(payload.verdict),
-      summary: stringFrom(payload.summary) ?? stringFrom(payload.reason),
-      teamReportMarkdown: stringFrom(payload.team_report_markdown),
+      phase: payload.phase,
+      verdict: payload.verdict,
+      summary: payload.reason ?? undefined,
+      teamReportMarkdown: payload.team_report_markdown ?? undefined,
       reviewers,
       blockingFindings: blockingFindings.map(stripSeverity),
-      requiredRepairs: requiredRepairSummaries(payload.required_repairs),
-      unresolvedDisagreements: disagreementSummaries(payload.unresolved_disagreements),
+      requiredRepairs: payload.required_repairs.map(rootRequiredRepairSummary),
+      unresolvedDisagreements: payload.unresolved_disagreements,
       blockingRootLabels: blockingRootLabels.sort(),
     })
   })
@@ -442,69 +442,22 @@ function cleanInline(value: string): string {
     .trim()
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
-}
-
-function stringFrom(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim().length > 0 ? value : undefined
-}
-
-function stringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
-}
-
-function phaseFrom(value: unknown): "pre_build" | "post_build" | undefined {
-  return value === "pre_build" || value === "post_build" ? value : undefined
-}
-
-function verdictFrom(value: unknown): "pass" | "concerns" | "needs_correction" | undefined {
-  return value === "pass" || value === "concerns" || value === "needs_correction" ? value : undefined
-}
-
-function reviewerSummaries(value: unknown): Array<{ reviewerID: string; scope: string; verdict?: string }> {
-  if (!Array.isArray(value)) return []
-  return value.flatMap((item) => {
-    const reviewer = asRecord(item)
-    const reviewerID = stringFrom(reviewer.reviewerID) ?? stringFrom(reviewer.id)
-    const scope = stringFrom(reviewer.scope) ?? stringFrom(reviewer.focus) ?? stringFrom(reviewer.title)
-    if (!reviewerID || !scope) return []
-    return [{ reviewerID, scope, verdict: stringFrom(reviewer.verdict) }]
-  })
-}
-
-function findingSummaries(value: unknown): FindingSummary[] {
-  if (!Array.isArray(value)) return []
-  return value.flatMap((item) => {
-    const finding = asRecord(item)
-    const severityRaw = stringFrom(finding.severity)
-    const verdictImpact = stringFrom(finding.verdictImpact)
-    const severity = severityRaw === "blocking" || verdictImpact === "needs_correction" ? "blocking" : "advisory"
-    if (severity !== "blocking" && severityRaw !== "advisory") return []
-    const normalizedSeverity: "blocking" | "advisory" = severity
-    const draft = {
-      id: stringFrom(finding.id) ?? "unknown-finding",
-      title: stringFrom(finding.title) ?? "Untitled finding",
-      description: stringFrom(finding.description) ?? "",
-      repair: stringFrom(finding.repair) ?? "",
-      evidence: stringArray(finding.evidence),
-      filePaths: stringArray(finding.filePaths),
-      requirementIDs: stringArray(finding.requirementIDs),
-      specIDs: stringArray(finding.specIDs),
-      severity: normalizedSeverity,
-      reviewerIDs: stringArray(finding.reviewers),
-    }
-    const canonicalSymptom = stringFrom(finding.canonicalSymptom) ?? canonicalIntegritySymptom(draft)
-    const withSymptom = { ...draft, canonicalSymptom }
-    return [
-      {
-        ...withSymptom,
-        fingerprint: stringFrom(finding.fingerprint) ?? integrityFindingFingerprint(withSymptom),
-        verify:
-          stringArray(finding.verify).length > 0 ? stringArray(finding.verify) : defaultIntegrityVerify(withSymptom),
-      },
-    ]
-  })
+function rootFindingSummary(finding: IntegrityAttemptFindingPayload): FindingSummary {
+  return {
+    id: finding.id,
+    fingerprint: finding.fingerprint,
+    canonicalSymptom: finding.canonicalSymptom,
+    severity: finding.severity,
+    title: finding.title,
+    description: finding.description,
+    repair: finding.repair,
+    verify: finding.verify,
+    evidence: finding.evidence,
+    reviewerIDs: finding.reviewers,
+    filePaths: finding.filePaths,
+    requirementIDs: finding.requirementIDs,
+    specIDs: finding.specIDs,
+  }
 }
 
 function stripSeverity(finding: FindingSummary): IntegrityPriorAttemptSummary["blockingFindings"][number] {
@@ -522,46 +475,22 @@ function stripSeverity(finding: FindingSummary): IntegrityPriorAttemptSummary["b
   }
 }
 
-function requiredRepairSummaries(value: unknown): IntegrityPriorAttemptSummary["requiredRepairs"] {
-  if (!Array.isArray(value)) return []
-  return value.flatMap((item) => {
-    const repair = asRecord(item)
-    const id = stringFrom(repair.id)
-    const description = stringFrom(repair.description)
-    if (!id || !description) return []
-    const draft = {
-      id,
-      title: stringFrom(repair.title),
-      description,
-      repair: stringFrom(repair.repair) ?? description,
-      filePaths: stringArray(repair.filePaths),
-      requirementIDs: stringArray(repair.requirementIDs),
-      specIDs: stringArray(repair.specIDs),
-      sourceFindingIDs: stringArray(repair.sourceFindingIDs),
-      priorAttemptRefs: stringArray(repair.priorAttemptRefs),
-    }
-    const canonicalSymptom = stringFrom(repair.canonicalSymptom) ?? canonicalIntegritySymptom(draft)
-    const withSymptom = { ...draft, canonicalSymptom }
-    return [
-      {
-        ...withSymptom,
-        fingerprint: stringFrom(repair.fingerprint) ?? integrityFindingFingerprint(withSymptom),
-        verify:
-          stringArray(repair.verify).length > 0 ? stringArray(repair.verify) : defaultIntegrityVerify(withSymptom),
-      },
-    ]
-  })
-}
-
-function disagreementSummaries(value: unknown): IntegrityPriorAttemptSummary["unresolvedDisagreements"] {
-  if (!Array.isArray(value)) return []
-  return value.flatMap((item) => {
-    const disagreement = asRecord(item)
-    const id = stringFrom(disagreement.id)
-    const description = stringFrom(disagreement.description)
-    if (!id || !description) return []
-    return [{ id, description }]
-  })
+function rootRequiredRepairSummary(
+  repair: IntegrityAttemptRequiredRepairPayload,
+): IntegrityPriorAttemptSummary["requiredRepairs"][number] {
+  return {
+    id: repair.id,
+    fingerprint: repair.fingerprint,
+    canonicalSymptom: repair.canonicalSymptom,
+    description: repair.description,
+    repair: repair.repair,
+    verify: repair.verify,
+    filePaths: repair.filePaths,
+    requirementIDs: repair.requirementIDs,
+    specIDs: repair.specIDs,
+    sourceFindingIDs: repair.sourceFindingIDs,
+    priorAttemptRefs: repair.priorAttemptRefs,
+  }
 }
 
 function hashRootKey(value: string): string {

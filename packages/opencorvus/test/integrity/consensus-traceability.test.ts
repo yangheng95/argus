@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
-import type { IntegrityReplayContext } from "../../src/integrity/replay-context"
+import { integrityReplayContextPacket, type IntegrityReplayContext } from "../../src/integrity/replay-context"
 
 let sessionCounter = 0
 let capturedConsensusPrompt = ""
@@ -83,11 +83,12 @@ function replayContext(): IntegrityReplayContext {
     },
     priorFactCheckAttempts: [],
     priorAttempts: [],
-    buildEvidenceSinceLastReview: {
+    implementationEvidenceSinceLastReview: {
       changedFiles: [],
       diffs: [],
-      buildSummaries: [],
+      implementationSummaries: [],
       goalRuns: [],
+      taskAgentOutcomes: [],
     },
     scaleSignals: {
       goals: 1,
@@ -241,7 +242,7 @@ describe("integrity consensus traceability discipline", () => {
           non_goals: "No bundle-size budget is requested.",
         },
       ],
-      replayContext: replayContext(),
+      contextPackets: [integrityReplayContextPacket(replayContext())],
     })
 
     expect(capturedConsensusPrompt).toContain("Perform the integrity review in this single streaming session")

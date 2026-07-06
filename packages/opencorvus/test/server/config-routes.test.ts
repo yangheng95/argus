@@ -462,6 +462,73 @@ describe("config prompt routes", () => {
     })
   })
 
+  test("GET /expert-squad/catalog active skill projection shares projected agents with skill mounts", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        prompt_profile: {
+          active: PROJECT_EXPERT_SQUAD_ID,
+        },
+      },
+      init: async (dir) => {
+        await Bun.write(
+          path.join(dir, ".opencorvus", "skill", "requirements-guide", "SKILL.md"),
+          [
+            "---",
+            "name: requirements-guide",
+            "description: Requirements-only ordinary skill.",
+            "mounted_agents:",
+            "  - requirements",
+            "---",
+            "",
+            "# Requirements Guide",
+          ].join("\n"),
+        )
+      },
+    })
+    await writeProjectExpertSquadPackage(tmp.path)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const headers = {
+          "x-opencorvus-directory": tmp.path,
+        }
+        const catalogResponse = await app.request("/expert-squad/catalog", { headers })
+        const mountsResponse = await app.request("/skill/mounts", { headers })
+
+        expect(catalogResponse.status, await catalogResponse.clone().text()).toBe(200)
+        expect(mountsResponse.status, await mountsResponse.clone().text()).toBe(200)
+        const catalog = (await catalogResponse.json()) as {
+          active_skill_projection: {
+            projected_agent_ids: string[]
+            projected_skill_names: string[]
+            skills: Array<{ name: string; mounted_agents: string[] }>
+          }
+        }
+        const mounts = (await mountsResponse.json()) as {
+          projected_agents: string[]
+          projected_skill_names: string[]
+          skills: Array<{ name: string; mounted_agents: string[] }>
+        }
+
+        expect([...catalog.active_skill_projection.projected_agent_ids].sort()).toEqual(
+          [...mounts.projected_agents].sort(),
+        )
+        expect(catalog.active_skill_projection.projected_agent_ids).toContain("requirements")
+        expect(catalog.active_skill_projection.projected_skill_names).toContain("requirements-guide")
+        expect(mounts.projected_skill_names).toContain("requirements-guide")
+        expect(
+          catalog.active_skill_projection.skills.find((skill) => skill.name === "requirements-guide")?.mounted_agents,
+        ).toEqual(["requirements"])
+        expect(mounts.skills.find((skill) => skill.name === "requirements-guide")?.mounted_agents).toEqual([
+          "requirements",
+        ])
+      },
+    })
+  })
+
   test("GET /config/prompt returns session-effective project package prompt when sessionID is supplied", async () => {
     await using tmp = await tmpdir({ git: true })
     await writeProjectExpertSquadPackage(tmp.path)

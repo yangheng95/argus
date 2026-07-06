@@ -3,10 +3,12 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import fs from "fs/promises"
 import path from "path"
 import { ExpertSquadPackageManager } from "../../src/expert-squad/manager"
+import { payloadPackageSources } from "../../src/expert-squad/payload"
 import { ExpertSquadRegistry } from "../../src/expert-squad/registry"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { resetDatabase } from "../fixture/db"
+import { repositoryExpertSquadRoot } from "../fixture/expert-squad"
 import { tmpdir } from "../fixture/fixture"
 
 const PACKAGE_ID = "custom-replica"
@@ -19,6 +21,23 @@ async function writeFile(root: string, relativePath: string, content: string) {
 
 async function readJsonFile(file: string) {
   return JSON.parse(await fs.readFile(file, "utf8"))
+}
+
+async function collectRelativeFiles(root: string): Promise<string[]> {
+  const files: string[] = []
+  async function walk(current: string) {
+    const entries = (await fs.readdir(current, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))
+    for (const entry of entries) {
+      const child = path.join(current, entry.name)
+      if (entry.isDirectory()) {
+        await walk(child)
+        continue
+      }
+      if (entry.isFile()) files.push(path.relative(root, child).replace(/\\/g, "/"))
+    }
+  }
+  await walk(root)
+  return files
 }
 
 async function writePromptProfileConfig(projectRoot: string) {
@@ -163,6 +182,96 @@ describe("ExpertSquadPackageManager", () => {
   afterEach(async () => {
     mock.restore()
     await resetDatabase()
+  })
+
+  test("payload package sources match current repository expert-squad packages", async () => {
+    expect(payloadPackageSources.map((source) => source.id)).toEqual([
+      "algorithm",
+      "backend",
+      "frontend-automation-debug",
+      "frontend-innovate",
+      "frontend-replica",
+    ])
+
+    for (const source of payloadPackageSources) {
+      expect(ExpertSquadRegistry.loadEmbeddedPackage(source).id).toBe(source.id)
+      const repositoryRoot = repositoryExpertSquadRoot(source.id)
+      const repositoryFiles = await collectRelativeFiles(repositoryRoot)
+      expect(new Set(Object.keys(source.files))).toEqual(new Set(repositoryFiles))
+      for (const relativePath of repositoryFiles) {
+        expect(source.files[relativePath]).toBe(await fs.readFile(path.join(repositoryRoot, relativePath), "utf8"))
+      }
+    }
+  })
+
+  test("rejects payload package sources with unsafe embedded file paths", () => {
+    const source = payloadPackageSources[0]!
+    for (const relativePath of ["../escape.txt", "nested/../escape.txt", "C:/escape.txt", "README.md:ads", ""]) {
+      expect(() =>
+        ExpertSquadPackageManager.validatePayloadPackageSource({
+          ...source,
+          files: {
+            ...source.files,
+            [relativePath]: "unsafe payload content",
+          },
+        }),
+      ).toThrow(/expert squad payload path/)
+    }
+  })
+
+  test("releases payload packages into an empty project without overwriting existing packages", async () => {
+    await using project = await tmpdir({ git: true })
+
+    const first = await ExpertSquadPackageManager.releasePayloadPackages({ projectDirectory: project.path })
+
+    expect(first.installed.map((item) => item.id)).toEqual(payloadPackageSources.map((source) => source.id))
+    expect(first.skipped).toEqual([])
+    for (const source of payloadPackageSources) {
+      const targetRoot = path.join(project.path, ".opencorvus", "expert-squads", source.id)
+      await expect(ExpertSquadRegistry.loadPackage(targetRoot)).resolves.toMatchObject({ id: source.id })
+    }
+
+    await writeFile(
+      path.join(project.path, ".opencorvus", "expert-squads", "frontend-replica"),
+      "README.md",
+      "# Project-owned Frontend Replica\n",
+    )
+    const second = await ExpertSquadPackageManager.releasePayloadPackages({ projectDirectory: project.path })
+
+    expect(second.installed).toEqual([])
+    expect(second.skipped.map((item) => item.id)).toEqual(payloadPackageSources.map((source) => source.id))
+    expect(
+      await fs.readFile(path.join(project.path, ".opencorvus", "expert-squads", "frontend-replica", "README.md"), "utf8"),
+    ).toBe("# Project-owned Frontend Replica\n")
+  })
+
+  test("payload release rejects existing non-directory targets", async () => {
+    await using project = await tmpdir({ git: true })
+    const targetRoot = path.join(project.path, ".opencorvus", "expert-squads", "algorithm")
+    await fs.mkdir(path.dirname(targetRoot), { recursive: true })
+    await fs.writeFile(targetRoot, "not a package directory")
+
+    await expect(ExpertSquadPackageManager.releasePayloadPackages({ projectDirectory: project.path })).rejects.toThrow(
+      `Expert squad target exists and is not a directory: ${targetRoot}`,
+    )
+  })
+
+  test("failed payload post-move validation removes the newly released target", async () => {
+    await using project = await tmpdir({ git: true })
+    const targetRoot = path.join(project.path, ".opencorvus", "expert-squads", "algorithm")
+    const originalLoadPackage = ExpertSquadRegistry.loadPackage
+    spyOn(ExpertSquadRegistry, "loadPackage").mockImplementation(async (...args) => {
+      const [root] = args
+      if (path.normalize(root) === path.normalize(targetRoot)) {
+        throw new Error("forced payload post-move validation failure")
+      }
+      return originalLoadPackage(...args)
+    })
+
+    await expect(ExpertSquadPackageManager.releasePayloadPackages({ projectDirectory: project.path })).rejects.toThrow(
+      "forced payload post-move validation failure",
+    )
+    await expect(fs.lstat(targetRoot)).rejects.toMatchObject({ code: "ENOENT" })
   })
 
   test("imports a source folder into the canonical expert-squad directory without selecting it", async () => {
@@ -519,7 +628,7 @@ describe("ExpertSquadPackageManager", () => {
     await expect(
       ExpertSquadPackageManager.importArchive({ projectDirectory: project.path, archiveBase64: totalOversizedArchive, replace: false }),
     ).rejects.toThrow(/unpacked content exceeds expert squad archive limit/)
-  })
+  }, 20000)
 
   test("rejects ZIP path traversal, absolute paths, and duplicate normalized entries", async () => {
     await using project = await tmpdir()

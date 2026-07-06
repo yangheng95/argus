@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test"
 import { BuildAgentContractError, BuildResultSchema } from "../../src/build/types"
 import {
   convertMissingTerminalToolError,
-  createMissingTerminalReplayPressureError,
   createBuildTerminalContinuationRequest,
   createMergeBackSingleFlight,
   evaluateBuildReportSubmission,
@@ -226,70 +225,6 @@ describe("convertMissingTerminalToolError", () => {
 })
 
 describe("createBuildTerminalContinuationRequest", () => {
-  test("missing terminal recovery refuses same-session continuation when replay pressure is already too high", () => {
-    const err = createMissingTerminalReplayPressureError({
-      sessionID: "ses_pressure",
-      lastMergeBackOutcome: "merge_back was never reached",
-      pressure: {
-        summary: {
-          sessionID: "ses_pressure",
-          messageCount: 32,
-          partCount: 128,
-          messageJsonChars: 10_000,
-          partJsonChars: 1_200_000,
-          textPartChars: 12_000,
-          reasoningChars: 0,
-          toolInputChars: 8_000,
-          toolOutputChars: 980_000,
-          completedToolParts: 64,
-          uncompactedToolParts: 64,
-          latestAssistantInputTokens: 253_093,
-          latestAssistantTotalTokens: 253_813,
-          replayTokensEstimate: 253_093,
-        },
-        limit: { tokenLimit: 32_000, source: "model_output_window" },
-        contextUnavailableReason:
-          "prior_session_replay_pressure:estimate=253093:limit=32000:limit_source=model_output_window:latest_input=253093:tool_output_chars=980000:tool_input_chars=8000:uncompacted_tools=64",
-      },
-    })
-
-    expect(err).toBeInstanceOf(BuildAgentContractError)
-    expect(err?.code).toBe("missing_terminal_report")
-    expect(err?.diagnostics.sessionID).toBe("ses_pressure")
-    expect(err?.diagnostics.lastMergeBackOutcome).toBe("merge_back was never reached")
-    expect(err?.message).toContain("prior_session_replay_pressure")
-    expect(err?.message).toContain("fresh Build session")
-    expect(err?.message).toContain("recorded goal worktree")
-    expect(err?.message).not.toContain("Continue build after missing report_build_result")
-  })
-
-  test("missing terminal recovery keeps same-session continuation available under replay budget", () => {
-    const err = createMissingTerminalReplayPressureError({
-      sessionID: "ses_small",
-      pressure: {
-        summary: {
-          sessionID: "ses_small",
-          messageCount: 4,
-          partCount: 8,
-          messageJsonChars: 1_000,
-          partJsonChars: 2_000,
-          textPartChars: 500,
-          reasoningChars: 0,
-          toolInputChars: 200,
-          toolOutputChars: 1_000,
-          completedToolParts: 2,
-          uncompactedToolParts: 2,
-          latestAssistantInputTokens: 1_500,
-          latestAssistantTotalTokens: 1_700,
-          replayTokensEstimate: 1_500,
-        },
-        limit: { tokenLimit: 32_000, source: "model_output_window" },
-      },
-    })
-
-    expect(err).toBeNull()
-  })
-
   test("persists a build-scoped same-session finalizer continuation", async () => {
     await using tmp = await tmpdir({ git: true })
 

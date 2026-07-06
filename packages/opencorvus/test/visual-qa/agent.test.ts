@@ -8,6 +8,8 @@ import { BrowserPreviewTool } from "../../src/tool/browser-preview"
 import { BrowserPreviewReferenceRegionsTool } from "../../src/tool/browser-preview-reference-regions"
 import { BrowserPreviewCompareScrollSlicesTool } from "../../src/tool/browser-preview-compare-scroll-slices"
 import { BrowserPreviewLayoutGeometryTool } from "../../src/tool/browser-preview-layout-geometry"
+import { textContextPacket } from "../../src/agent/context-packet"
+import { visualQaDispatchContextPacket } from "../../src/visual-qa/context"
 
 describe("visual-qa agent", () => {
   test("runtime tool surface matches the dedicated static contract", async () => {
@@ -16,11 +18,11 @@ describe("visual-qa agent", () => {
       directory: tmp.path,
       fn: async () => {
         const contextTools = await VisualQaTestHooks.createVisualQaContextTools({})
-        const implementationTools = await VisualQaTestHooks.createVisualQaImplementationTools({})
+        const evidenceTools = await VisualQaTestHooks.createVisualQaEvidenceTools({})
         const utilityTools = await VisualQaTestHooks.createVisualQaUtilityTools({})
         const tools = {
           ...contextTools,
-          ...implementationTools,
+          ...evidenceTools,
           ...utilityTools,
           ...createVisualQaOutputTools().tools,
         }
@@ -31,6 +33,12 @@ describe("visual-qa agent", () => {
         expect(Object.keys(tools)).toContain("browser_preview_reference_regions")
         expect(Object.keys(tools)).toContain("browser_preview_compare_scroll_slices")
         expect(Object.keys(tools)).toContain("browser_preview_layout_geometry")
+        expect(Object.keys(tools)).not.toContain("bash")
+        expect(Object.keys(tools)).not.toContain("edit")
+        expect(Object.keys(tools)).not.toContain("write")
+        expect(Object.keys(tools)).not.toContain("apply_patch")
+        expect(Object.keys(tools)).not.toContain("register_visual_qa_repair")
+        expect(Object.keys(tools)).not.toContain("register_visual_qa_changed_file")
         expect(Object.keys(tools)).not.toContain("webpage_render")
         expect(Object.keys(tools)).not.toContain("webpage_evaluate")
         expect(Object.keys(tools)).not.toContain("webpage_vision_judge")
@@ -56,13 +64,32 @@ describe("visual-qa agent", () => {
       taskTitle: "Clone page",
       taskRequest: "Replicate the visual page.",
       reason: "Need fresh desktop and mobile evidence.",
-      integrityContext: "Integrity says the fake chart must become a real data-bound chart.",
-      frontendDesign: "visual_consistency_contract",
-      buildEvidence: "Build report",
-      previewCommand: "npm run dev",
+      contextPackets: [
+        textContextPacket({
+          id: "integrity-review",
+          title: "Integrity Review Context",
+          source: "integrity",
+          body: "Integrity says the fake chart must become a real data-bound chart.",
+        })!,
+        textContextPacket({
+          id: "frontend-design",
+          title: "Frontend Design Context",
+          source: "frontend_design",
+          body: "visual_consistency_contract",
+        })!,
+        textContextPacket({
+          id: "agent-outcomes",
+          title: "Agent Outcome Context",
+          source: "agent_outcomes",
+          body: "Implementation report",
+        })!,
+        visualQaDispatchContextPacket({
+          previewCommand: "npm run dev",
+        })!,
+      ],
     })
     expect(prompt).toContain("frontend visual GUI and functional product review")
-    expect(prompt).toContain("Visual QA and integrity are peer post-build review agents")
+    expect(prompt).toContain("Visual QA and integrity are peer post-implementation review agents")
     expect(prompt).toContain("focused frontend visual/product-design review evidence")
     expect(prompt).toContain("GUI means Graphical User Interface")
     expect(prompt).not.toContain("UX means User Experience")
@@ -72,8 +99,15 @@ describe("visual-qa agent", () => {
     expect(prompt).toContain("removing/replacing/rebuilding that component")
     expect(prompt).toContain("instead of CSS tweaking")
     expect(prompt).toContain("Integrity Review Context")
+    expect(prompt).toContain("context_packet_id: integrity-review")
+    expect(prompt).toContain("source: integrity")
     expect(prompt).toContain("fake chart must become a real data-bound chart")
-    expect(prompt).toContain("Repair coarse-to-fine")
+    expect(prompt).toContain("Visual QA is report-only")
+    expect(prompt).toContain("do not edit files")
+    expect(prompt).toContain("do not edit files, run shell repair commands, or claim code repair")
+    expect(prompt).toContain("Review coarse-to-fine")
+    expect(prompt).not.toContain("Repair coarse-to-fine")
+    expect(prompt).not.toContain("If you repair files")
     expect(prompt).toContain("component truth and visible functionality first")
     expect(prompt).toContain("layout/composition second")
     expect(prompt).toContain("state-style polish last")
@@ -83,9 +117,13 @@ describe("visual-qa agent", () => {
     expect(prompt).toContain("Document Object Model (DOM)")
     expect(prompt).toContain("code-search terms")
     expect(prompt).toContain("screenshots remain the visual proof")
+    expect(prompt).toContain("current workflow's implementation owner")
     expect(prompt).toContain("register evidence rows only after you actually captured or inspected")
     expect(prompt).toContain("must reuse refs from registered `register_visual_qa_evidence` rows")
     expect(prompt).toContain("Do not fill schema refs from intent")
+    expect(prompt).toContain("Tool result acceptance discipline")
+    expect(prompt).toContain("`state.status=completed`, returned attachments, job IDs, or registered evidence rows are not acceptance proof")
+    expect(prompt).toContain("cite the returned `browser_preview_evidence:<evidenceID>` ref")
     expect(prompt).toContain("Reference/clone fidelity is in scope only when")
     expect(prompt).toContain("prioritize screenshot comparison")
     expect(prompt).toContain("browser_preview_reference_regions")
@@ -110,9 +148,12 @@ describe("visual-qa agent", () => {
     expect(prompt).toContain("shared layout anchors")
     expect(prompt).toContain("Do not request, evaluate, or block on mobile/tablet reference evidence")
     expect(prompt).toContain("instead of inventing proof or reference-comparison refs")
-    expect(prompt).toContain("fresh screenshot-bearing evidence")
+    expect(prompt).toContain("formal `reference-comparison` evidence")
+    expect(prompt).toContain("fresh screenshot-bearing durable evidence refs")
+    expect(prompt).toContain("do not put bare filesystem paths")
     expect(prompt).toContain("per-screen screenshots or scroll-slice comparisons")
     expect(prompt).toContain("Frontend Design Context")
+    expect(prompt).toContain("context_packet_id: frontend-design")
     expect(prompt).not.toContain("Frontend Research Work Packets")
     expect(prompt).toContain("Use Node for Playwright")
     expect(prompt).toContain("no unresolved_code_module_problems")

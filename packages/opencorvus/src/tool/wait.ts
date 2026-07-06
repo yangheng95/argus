@@ -52,14 +52,14 @@ export async function executeWait(input: {
   }
 
   const scheduled = input.taskID
-    ? CronService.createTaskWake({
+    ? await CronService.createTaskWake({
         name: "task wait",
         projectId: Instance.project.id,
         taskId: input.taskID,
         durationMs: input.duration_ms,
         reason: input.reason,
       })
-    : CronService.createDelayedSessionWake({
+    : await CronService.createDelayedSessionWake({
         name: "session wait",
         projectId: Instance.project.id,
         sessionId: input.sessionID,

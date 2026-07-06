@@ -3,7 +3,9 @@ import {
   buildPriorManifestIndex,
   canonicalIntegritySymptom,
   defaultIntegrityVerify,
+  assertIntegrityFindingFingerprint,
   integrityFindingFingerprint,
+  isIntegrityFindingFingerprint,
 } from "../../src/integrity/finding-manifest"
 
 describe("integrity finding manifest", () => {
@@ -36,6 +38,12 @@ describe("integrity finding manifest", () => {
     )
   })
 
+  test("validates the persisted fingerprint protocol format", () => {
+    expect(isIntegrityFindingFingerprint("if_deadbeefdeadbeef")).toBe(true)
+    expect(isIntegrityFindingFingerprint("legacy-deadbeef")).toBe(false)
+    expect(() => assertIntegrityFindingFingerprint("legacy-deadbeef")).toThrow(/if_\[a-f0-9\]\{16\}/)
+  })
+
   test("keeps non-ASCII symptoms distinct", () => {
     const first = integrityFindingFingerprint({ canonicalSymptom: "设置未校验", filePaths: [] })
     const second = integrityFindingFingerprint({ canonicalSymptom: "主题未持久化", filePaths: [] })
@@ -51,14 +59,36 @@ describe("integrity finding manifest", () => {
       filePaths: ["src/settings.ts"],
       evidence: ["getSettings returns unchecked values"],
     }
-    const index = buildPriorManifestIndex([{ attemptNumber: 2, findings: [finding], requiredRepairs: [] }])
     const fingerprint = integrityFindingFingerprint({
       ...finding,
       canonicalSymptom: canonicalIntegritySymptom(finding),
     })
+    const index = buildPriorManifestIndex([
+      { attemptNumber: 2, findings: [{ ...finding, fingerprint }], requiredRepairs: [] },
+    ])
 
     expect(index.get(fingerprint)).toEqual({ id: "F-settings", fingerprint, attemptNumber: 2 })
     expect(defaultIntegrityVerify(finding)).toContain("Verify required repair: Validate settings on load.")
+  })
+
+  test("prior manifest index rejects missing or malformed persisted fingerprints", () => {
+    expect(() =>
+      buildPriorManifestIndex([
+        {
+          attemptNumber: 4,
+          findings: [{ id: "F-missing", title: "Missing fingerprint" }],
+        },
+      ]),
+    ).toThrow("prior manifest item F-missing fingerprint must match")
+
+    expect(() =>
+      buildPriorManifestIndex([
+        {
+          attemptNumber: 5,
+          findings: [{ id: "F-invalid", fingerprint: "legacy-deadbeef", title: "Invalid fingerprint" }],
+        },
+      ]),
+    ).toThrow("prior manifest item F-invalid fingerprint must match")
   })
 
   test("prior manifest index prefers persisted fingerprints", () => {

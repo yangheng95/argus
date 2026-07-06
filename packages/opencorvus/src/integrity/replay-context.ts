@@ -1,11 +1,15 @@
 import type { GoalContractFields } from "@/pipeline/types"
 import type { ParsedRequirement } from "@/requirements/types"
-import type { BuildAttemptOutcomeRow, GoalRunRow } from "@/engine/store"
+import type { GoalRunRow } from "@/engine/store"
 import { listIntegrityAttemptArtifacts, listSpecSnapshots } from "@/engine/store"
 import { listFactCheckAttempts } from "@/fact-check/persist"
-import { canonicalIntegritySymptom, defaultIntegrityVerify, integrityFindingFingerprint } from "./finding-manifest"
+import type { TaskAgentOutcome } from "@/agent/outcomes"
+import { agentContextStructuredPartBySchema, type AgentContextPacket } from "@/agent/context-packet"
+import { isIntegrityFindingFingerprint } from "./finding-manifest"
+import type { IntegrityAttemptFindingPayload, IntegrityAttemptRequiredRepairPayload } from "./attempt-payload"
 import { renderSharedIntegrityPromptContext } from "./shared-prompt"
 import type { SpecSnapshotLineage } from "./replay-lineage"
+import z from "zod"
 
 export type { SpecSnapshotLineage } from "./replay-lineage"
 
@@ -71,12 +75,12 @@ export type IntegrityPriorAttemptSummary = {
   unresolvedDisagreements: Array<{ id: string; description: string }>
 }
 
-export type IntegrityBuildEvidenceSinceLastReview = {
+export type IntegrityImplementationEvidenceSinceLastReview = {
   sinceAttemptNumber?: number
   sinceTimeCreated?: number
   changedFiles: string[]
   diffs: Array<{ file: string; status?: string; additions?: number; deletions?: number }>
-  buildSummaries: string[]
+  implementationSummaries: string[]
   goalRuns: Array<{
     goalID: string
     goalRunID: string
@@ -89,6 +93,22 @@ export type IntegrityBuildEvidenceSinceLastReview = {
     commitRef?: string
     timeCreated: number
     timeCompleted?: number | null
+  }>
+  taskAgentOutcomes: Array<{
+    provider: string
+    artifactKind: string
+    artifactID: string
+    runID?: string
+    sessionID?: string
+    terminalStatus: string
+    outcomeKind: string
+    outcomeSummary?: string
+    outcomeError?: string
+    noDiffReason?: string
+    actualChangedFiles: string[]
+    reportedChangedFiles: string[]
+    commitRef?: string
+    timeCreated: number
   }>
 }
 
@@ -133,11 +153,11 @@ export type IntegrityReplayContext = {
    *  dispatching fact_check.  Newest first; an empty array is the
    *  honest default when no fact-check has run yet. */
   priorFactCheckAttempts: IntegrityPriorFactCheckAttempt[]
-  buildEvidenceSinceLastReview: IntegrityBuildEvidenceSinceLastReview
+  implementationEvidenceSinceLastReview: IntegrityImplementationEvidenceSinceLastReview
   scaleSignals: IntegrityReviewScaleSignals
 }
 
-export type BuildIntegrityReplayContextInput = {
+export type IntegrityReplayContextInput = {
   taskID: string
   lineage: SpecSnapshotLineage
   phase?: "pre_build" | "post_build"
@@ -145,8 +165,198 @@ export type BuildIntegrityReplayContextInput = {
   requirements?: ParsedRequirement[]
   buildRecords: BuildRecordRow[]
   goalRuns: GoalRunRow[]
-  buildOutcomes?: BuildAttemptOutcomeRow[]
+  agentOutcomes?: TaskAgentOutcome[]
 }
+
+export const INTEGRITY_REPLAY_CONTEXT_PACKET_SOURCE = "integrity_replay_context"
+export const INTEGRITY_REPLAY_CONTEXT_PACKET_SCHEMA = "opencorvus.integrity.replay_context.v1"
+
+const IntegrityReviewerSummarySchema = z
+  .object({
+    reviewerID: z.string(),
+    scope: z.string(),
+    verdict: z.string().optional(),
+  })
+  .strict()
+
+const IntegrityFindingFingerprintSchema = z.string().refine(isIntegrityFindingFingerprint, {
+  message: "fingerprint must match if_[a-f0-9]{16}",
+})
+
+const IntegrityPriorFindingSchema = z
+  .object({
+    id: z.string(),
+    severity: z.enum(["blocking", "advisory"]),
+    verdictImpact: z.enum(["pass", "concerns", "needs_correction"]).optional(),
+    fingerprint: IntegrityFindingFingerprintSchema,
+    canonicalSymptom: z.string(),
+    title: z.string(),
+    description: z.string(),
+    repair: z.string(),
+    verify: z.array(z.string()),
+    affectedSymbols: z.array(z.string()),
+    sourceFindingIDs: z.array(z.string()),
+    priorAttemptRefs: z.array(z.string()),
+    filePaths: z.array(z.string()),
+    requirementIDs: z.array(z.string()),
+    specIDs: z.array(z.string()),
+  })
+  .strict()
+
+const IntegrityPriorBlockingFindingSchema = z
+  .object({
+    id: z.string(),
+    fingerprint: IntegrityFindingFingerprintSchema,
+    canonicalSymptom: z.string(),
+    title: z.string(),
+    description: z.string(),
+    repair: z.string(),
+    verify: z.array(z.string()),
+    filePaths: z.array(z.string()),
+    requirementIDs: z.array(z.string()),
+    specIDs: z.array(z.string()),
+  })
+  .strict()
+
+const IntegrityRequiredRepairSchema = z
+  .object({
+    id: z.string(),
+    fingerprint: IntegrityFindingFingerprintSchema,
+    canonicalSymptom: z.string(),
+    description: z.string(),
+    repair: z.string(),
+    verify: z.array(z.string()),
+    filePaths: z.array(z.string()),
+    requirementIDs: z.array(z.string()),
+    specIDs: z.array(z.string()),
+    sourceFindingIDs: z.array(z.string()),
+    priorAttemptRefs: z.array(z.string()),
+  })
+  .strict()
+
+const IntegrityPriorAttemptSummarySchema = z
+  .object({
+    attemptNumber: z.number(),
+    artifactID: z.string(),
+    timeCreated: z.number(),
+    phase: z.enum(["pre_build", "post_build"]).optional(),
+    verdict: z.enum(["pass", "concerns", "needs_correction"]).optional(),
+    summary: z.string().optional(),
+    teamReportMarkdown: z.string().optional(),
+    reviewers: z.array(IntegrityReviewerSummarySchema),
+    findings: z.array(IntegrityPriorFindingSchema).optional(),
+    blockingFindings: z.array(IntegrityPriorBlockingFindingSchema),
+    requiredRepairs: z.array(IntegrityRequiredRepairSchema),
+    unresolvedDisagreements: z.array(z.object({ id: z.string(), description: z.string() }).strict()),
+  })
+  .strict()
+
+const IntegrityImplementationEvidenceSinceLastReviewSchema = z
+  .object({
+    sinceAttemptNumber: z.number().optional(),
+    sinceTimeCreated: z.number().optional(),
+    changedFiles: z.array(z.string()),
+    diffs: z.array(
+      z
+        .object({
+          file: z.string(),
+          status: z.string().optional(),
+          additions: z.number().optional(),
+          deletions: z.number().optional(),
+        })
+        .strict(),
+    ),
+    implementationSummaries: z.array(z.string()),
+    goalRuns: z.array(
+      z
+        .object({
+          goalID: z.string(),
+          goalRunID: z.string(),
+          status: z.string(),
+          outcomeKind: z.string().optional(),
+          outcomeSummary: z.string().optional(),
+          outcomeError: z.string().optional(),
+          noDiffReason: z.string().optional(),
+          changedFiles: z.array(z.string()).optional(),
+          commitRef: z.string().optional(),
+          timeCreated: z.number(),
+          timeCompleted: z.number().nullable().optional(),
+        })
+        .strict(),
+    ),
+    taskAgentOutcomes: z.array(
+      z
+        .object({
+          provider: z.string(),
+          artifactKind: z.string(),
+          artifactID: z.string(),
+          runID: z.string().optional(),
+          sessionID: z.string().optional(),
+          terminalStatus: z.string(),
+          outcomeKind: z.string(),
+          outcomeSummary: z.string().optional(),
+          outcomeError: z.string().optional(),
+          noDiffReason: z.string().optional(),
+          actualChangedFiles: z.array(z.string()),
+          reportedChangedFiles: z.array(z.string()),
+          commitRef: z.string().optional(),
+          timeCreated: z.number(),
+        })
+        .strict(),
+    ),
+  })
+  .strict()
+
+const IntegrityPriorFactCheckAttemptSchema = z
+  .object({
+    artifactID: z.string(),
+    factCheckSessionID: z.string(),
+    timeCreated: z.number(),
+    targetSessionID: z.string(),
+    targetAgent: z.string(),
+    targetMessageID: z.string(),
+    verdict: z.enum(["clean", "minor_corrections", "needs_orchestrator_action", "inconclusive"]),
+    outcome: z.enum(["completed", "aborted", "tool_error"]),
+    itemsTotal: z.number(),
+    itemsInspected: z.number(),
+    verifiedCount: z.number(),
+    correctedCount: z.number(),
+    unresolvedCount: z.number(),
+  })
+  .strict()
+
+const IntegrityReviewScaleSignalsSchema = z
+  .object({
+    goals: z.number(),
+    requirements: z.number(),
+    acceptanceSpecs: z.number(),
+    changedFilesTotal: z.number(),
+    changedFilesSinceLastReview: z.number(),
+    priorAttempts: z.number(),
+    priorBlockingFindings: z.number(),
+    phase: z.enum(["pre_build", "post_build"]).optional(),
+  })
+  .strict()
+
+const SpecSnapshotLineageSchema = z
+  .object({
+    taskID: z.string(),
+    activeSpecSnapshotID: z.string(),
+    inheritedSpecSnapshotIDs: z.array(z.string()),
+    reason: z.enum(["active_only", "integrity_correction_lineage"]),
+  })
+  .strict()
+
+const IntegrityReplayContextSchema = z
+  .object({
+    attemptNumber: z.number(),
+    lineage: SpecSnapshotLineageSchema,
+    priorAttempts: z.array(IntegrityPriorAttemptSummarySchema),
+    priorFactCheckAttempts: z.array(IntegrityPriorFactCheckAttemptSchema),
+    implementationEvidenceSinceLastReview: IntegrityImplementationEvidenceSinceLastReviewSchema,
+    scaleSignals: IntegrityReviewScaleSignalsSchema,
+  })
+  .strict()
 
 export function buildSpecSnapshotLineage(input: { taskID: string; activeSpecSnapshotID: string }): SpecSnapshotLineage {
   const snapshots = listSpecSnapshots(input.taskID)
@@ -173,7 +383,47 @@ export function buildSpecSnapshotLineage(input: { taskID: string; activeSpecSnap
   }
 }
 
-export function buildIntegrityReplayContext(input: BuildIntegrityReplayContextInput): IntegrityReplayContext {
+export function integrityReplayContextPacket(context: IntegrityReplayContext): AgentContextPacket {
+  return {
+    id: "integrity-replay-context",
+    title: "Integrity Replay Context",
+    source: INTEGRITY_REPLAY_CONTEXT_PACKET_SOURCE,
+    scope: "task",
+    parts: [
+      {
+        type: "text",
+        text: [
+          `attempt_number: ${context.attemptNumber}`,
+          `active_spec_snapshot_id: ${context.lineage.activeSpecSnapshotID}`,
+          `prior_attempts: ${context.priorAttempts.length}`,
+          `prior_fact_check_attempts: ${context.priorFactCheckAttempts.length}`,
+          `changed_files_since_last_review: ${context.scaleSignals.changedFilesSinceLastReview}`,
+          `prior_blocking_findings: ${context.scaleSignals.priorBlockingFindings}`,
+          ...(context.scaleSignals.phase ? [`phase: ${context.scaleSignals.phase}`] : []),
+        ].join("\n"),
+      },
+      {
+        type: "structured",
+        schema: INTEGRITY_REPLAY_CONTEXT_PACKET_SCHEMA,
+        label: "integrity_replay_context",
+        summary: `attempt=${context.attemptNumber}; prior_attempts=${context.priorAttempts.length}; changed_files_since_last_review=${context.scaleSignals.changedFilesSinceLastReview}`,
+        data: context,
+      },
+    ],
+  }
+}
+
+export function integrityReplayContextFromContextPackets(
+  packets: readonly AgentContextPacket[] | undefined,
+): IntegrityReplayContext | undefined {
+  const context = agentContextStructuredPartBySchema<IntegrityReplayContext>(
+    packets,
+    INTEGRITY_REPLAY_CONTEXT_PACKET_SCHEMA,
+  )
+  return context ? parseIntegrityReplayContext(context, INTEGRITY_REPLAY_CONTEXT_PACKET_SCHEMA) : undefined
+}
+
+export function buildIntegrityReplayContext(input: IntegrityReplayContextInput): IntegrityReplayContext {
   if (input.taskID !== input.lineage.taskID) {
     throw new Error(
       `IntegrityReplayContext taskID ${input.taskID} does not match lineage taskID ${input.lineage.taskID}.`,
@@ -185,20 +435,22 @@ export function buildIntegrityReplayContext(input: BuildIntegrityReplayContextIn
   })
   const chronologicalAttempts = newestFirstAttempts.slice().reverse()
   const priorAttempts = chronologicalAttempts.map((row, index): IntegrityPriorAttemptSummary => {
-    const payload = asRecord(row.payload)
+    const payload = row.payload
     return {
       attemptNumber: index + 1,
       artifactID: row.artifactID,
       timeCreated: row.timeCreated,
-      phase: phaseFrom(payload.phase),
-      verdict: verdictFrom(payload.verdict),
-      summary: stringFrom(payload.summary) ?? stringFrom(payload.reason),
-      teamReportMarkdown: stringFrom(payload.team_report_markdown),
-      reviewers: reviewerSummaries(payload.reviewers),
-      findings: findingSummaries(payload.findings),
-      blockingFindings: blockingFindingSummaries(payload.findings),
-      requiredRepairs: requiredRepairSummaries(payload.required_repairs),
-      unresolvedDisagreements: disagreementSummaries(payload.unresolved_disagreements),
+      phase: payload.phase,
+      verdict: payload.verdict,
+      summary: payload.reason ?? undefined,
+      teamReportMarkdown: payload.team_report_markdown ?? undefined,
+      reviewers: payload.reviewers,
+      findings: payload.findings.map(priorFindingSummary),
+      blockingFindings: payload.findings
+        .filter((finding) => finding.severity === "blocking" || finding.verdictImpact === "needs_correction")
+        .map(priorBlockingFindingSummary),
+      requiredRepairs: payload.required_repairs.map(priorRequiredRepairSummary),
+      unresolvedDisagreements: payload.unresolved_disagreements,
     }
   })
   const latestPrior = priorAttempts.at(-1)
@@ -211,9 +463,24 @@ export function buildIntegrityReplayContext(input: BuildIntegrityReplayContextIn
     sinceTimeCreated === undefined
       ? input.goalRuns
       : input.goalRuns.filter((run) => (run.time_completed ?? run.time_created) > sinceTimeCreated)
-  const buildOutcomesByGoalRun = new Map((input.buildOutcomes ?? []).map((outcome) => [outcome.goal_run_id, outcome]))
-  const changedFilesTotal = changedFilesFromBuildRecords(input.buildRecords)
-  const changedFilesSinceLastReview = changedFilesFromBuildRecords(buildRecordsSince)
+  const agentOutcomesByGoalRun = new Map(
+    (input.agentOutcomes ?? [])
+      .filter((outcome) => outcome.goalRunID)
+      .map((outcome) => [outcome.goalRunID, outcome]),
+  )
+  const agentOutcomesSince =
+    sinceTimeCreated === undefined
+      ? (input.agentOutcomes ?? [])
+      : (input.agentOutcomes ?? []).filter((outcome) => outcome.time.created > sinceTimeCreated)
+  const taskAgentOutcomesSince = agentOutcomesSince.filter((outcome) => outcome.scope === "task")
+  const changedFilesTotal = uniqueSorted([
+    ...changedFilesFromBuildRecords(input.buildRecords),
+    ...changedFilesFromAgentOutcomes(input.agentOutcomes ?? []),
+  ])
+  const changedFilesSinceLastReview = uniqueSorted([
+    ...changedFilesFromBuildRecords(buildRecordsSince),
+    ...changedFilesFromAgentOutcomes(agentOutcomesSince),
+  ])
 
   const factCheckRows = listFactCheckAttempts(input.taskID)
   const priorFactCheckAttempts: IntegrityPriorFactCheckAttempt[] = factCheckRows.map((row) => ({
@@ -237,22 +504,23 @@ export function buildIntegrityReplayContext(input: BuildIntegrityReplayContextIn
     lineage: input.lineage,
     priorAttempts,
     priorFactCheckAttempts,
-    buildEvidenceSinceLastReview: {
+    implementationEvidenceSinceLastReview: {
       sinceAttemptNumber: latestPrior?.attemptNumber,
       sinceTimeCreated,
       changedFiles: changedFilesSinceLastReview,
       diffs: diffsFromBuildRecords(buildRecordsSince),
-      buildSummaries: buildRecordsSince.map((record) => record.summary).filter((item) => item.trim().length > 0),
+      implementationSummaries: buildRecordsSince.map((record) => record.summary).filter((item) => item.trim().length > 0),
       goalRuns: goalRunsSince.map((run) => ({
         goalID: run.goal_id,
         goalRunID: run.id,
         status: run.status,
-        ...(buildOutcomesByGoalRun.has(run.id)
-          ? goalRunOutcomeSummary(buildOutcomesByGoalRun.get(run.id)!)
+        ...(agentOutcomesByGoalRun.has(run.id)
+          ? goalRunOutcomeSummary(agentOutcomesByGoalRun.get(run.id)!)
           : {}),
         timeCreated: run.time_created,
         timeCompleted: run.time_completed,
       })),
+      taskAgentOutcomes: taskAgentOutcomesSince.map(taskAgentOutcomeSummary),
     },
     scaleSignals: {
       goals: input.goals.length,
@@ -269,12 +537,12 @@ export function buildIntegrityReplayContext(input: BuildIntegrityReplayContextIn
 
 export function renderIntegrityReplayContextPrompt(context: IntegrityReplayContext): string {
   const lines = ["# Integrity Replay Context", "", `Current integrity attempt: #${context.attemptNumber}.`, ""]
-  const evidence = context.buildEvidenceSinceLastReview
+  const evidence = context.implementationEvidenceSinceLastReview
   const changedDirectories = replayPathDirectories(evidence.changedFiles)
   const visibleChangedDirectories = changedDirectories.slice(0, 24)
   const diffDirectories = replayPathDirectories(evidence.diffs.map((diff) => diff.file))
   const visibleDiffDirectories = diffDirectories.slice(0, 24)
-  const evidenceLines = ["Build evidence after latest integrity attempt:"]
+  const evidenceLines = ["Implementation evidence after latest integrity attempt:"]
   if (evidence.sinceAttemptNumber !== undefined) evidenceLines.push(`- Since attempt: #${evidence.sinceAttemptNumber}`)
   if (evidence.sinceTimeCreated !== undefined) {
     evidenceLines.push(`- Since time: ${new Date(evidence.sinceTimeCreated).toISOString()}`)
@@ -297,11 +565,11 @@ export function renderIntegrityReplayContextPrompt(context: IntegrityReplayConte
     for (const directory of visibleDiffDirectories) evidenceLines.push(`  - ${directory}`)
     replayAppendOmittedLine(evidenceLines, diffDirectories.length, visibleDiffDirectories.length, "diff directories")
   }
-  if (evidence.buildSummaries.length > 0) {
-    evidenceLines.push("- Build summaries:")
-    const summaries = evidence.buildSummaries.slice(0, 6)
+  if (evidence.implementationSummaries.length > 0) {
+    evidenceLines.push("- Implementation summaries:")
+    const summaries = evidence.implementationSummaries.slice(0, 6)
     for (const summary of summaries) evidenceLines.push(`  - ${clipReplayText(summary, 300)}`)
-    replayAppendOmittedLine(evidenceLines, evidence.buildSummaries.length, summaries.length, "build summaries")
+    replayAppendOmittedLine(evidenceLines, evidence.implementationSummaries.length, summaries.length, "implementation summaries")
   }
   if (evidence.goalRuns.length > 0) {
     evidenceLines.push("- Goal runs after latest review:")
@@ -314,6 +582,20 @@ export function renderIntegrityReplayContextPrompt(context: IntegrityReplayConte
       const outcomeError = run.outcomeError ? `, error=${clipReplayText(run.outcomeError, 120)}` : ""
       evidenceLines.push(
         `  - ${run.goalID}/${run.goalRunID}: ${run.status}${outcome}${noDiff}${changedFiles}${commitRef}${outcomeSummary}${outcomeError}, created=${new Date(run.timeCreated).toISOString()}${run.timeCompleted ? `, completed=${new Date(run.timeCompleted).toISOString()}` : ""}`,
+      )
+    }
+  }
+  if (evidence.taskAgentOutcomes.length > 0) {
+    evidenceLines.push("- Task-level agent outcomes after latest review:")
+    for (const outcome of evidence.taskAgentOutcomes) {
+      const noDiff = outcome.noDiffReason ? `, no_diff=${outcome.noDiffReason}` : ""
+      const actual = `, actual_changed_files=${outcome.actualChangedFiles.length}`
+      const reported = `, reported_changed_files=${outcome.reportedChangedFiles.length}`
+      const commitRef = outcome.commitRef ? `, commit=${outcome.commitRef}` : ""
+      const outcomeSummary = outcome.outcomeSummary ? `, summary=${clipReplayText(outcome.outcomeSummary, 120)}` : ""
+      const outcomeError = outcome.outcomeError ? `, error=${clipReplayText(outcome.outcomeError, 120)}` : ""
+      evidenceLines.push(
+        `  - ${outcome.artifactID}: provider=${outcome.provider}, kind=${outcome.artifactKind}, status=${outcome.terminalStatus}, outcome=${outcome.outcomeKind}${noDiff}${actual}${reported}${commitRef}${outcomeSummary}${outcomeError}, created=${new Date(outcome.timeCreated).toISOString()}`,
       )
     }
   }
@@ -368,6 +650,17 @@ export function renderIntegrityReplayContextPrompt(context: IntegrityReplayConte
   return lines.join("\n")
 }
 
+function parseIntegrityReplayContext(value: unknown, packetID: string): IntegrityReplayContext {
+  const parsed = IntegrityReplayContextSchema.safeParse(value)
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0]
+    const path = issue?.path.length ? ` at ${issue.path.join(".")}` : ""
+    const detail = issue ? `: ${issue.message}` : ""
+    throw new Error(`context packet ${packetID} has invalid integrity replay context payload${path}${detail}`)
+  }
+  return parsed.data as IntegrityReplayContext
+}
+
 function replayPathDirectories(paths: readonly string[]): string[] {
   const directories = new Set<string>()
   for (const path of paths) {
@@ -388,7 +681,7 @@ function clipReplayText(text: string, maxChars: number): string {
   return `${text.slice(0, Math.max(0, maxChars - marker.length)).trimEnd()}${marker}`
 }
 
-function goalRunOutcomeSummary(outcome: BuildAttemptOutcomeRow): {
+function goalRunOutcomeSummary(outcome: TaskAgentOutcome): {
   outcomeKind: string
   outcomeSummary?: string
   outcomeError?: string
@@ -397,12 +690,33 @@ function goalRunOutcomeSummary(outcome: BuildAttemptOutcomeRow): {
   commitRef?: string
 } {
   return {
-    outcomeKind: outcome.outcome_kind,
+    outcomeKind: outcome.result ?? outcome.status,
     outcomeSummary: outcome.summary,
-    outcomeError: outcome.error ?? undefined,
-    noDiffReason: outcome.no_diff_reason ?? undefined,
-    changedFiles: outcome.changed_files,
-    commitRef: outcome.commit_ref ?? undefined,
+    outcomeError: outcome.error,
+    noDiffReason: outcome.noDiffReason,
+    changedFiles: outcome.changedFiles ?? [],
+    commitRef: outcome.commitRef,
+  }
+}
+
+function taskAgentOutcomeSummary(
+  outcome: TaskAgentOutcome,
+): IntegrityImplementationEvidenceSinceLastReview["taskAgentOutcomes"][number] {
+  return {
+    provider: outcome.provider,
+    artifactKind: outcome.artifactKind,
+    artifactID: outcome.id,
+    runID: outcome.runID,
+    sessionID: outcome.sessionID,
+    terminalStatus: outcome.status,
+    outcomeKind: outcome.result ?? outcome.status,
+    outcomeSummary: outcome.summary || undefined,
+    outcomeError: outcome.error,
+    noDiffReason: outcome.noDiffReason,
+    actualChangedFiles: outcome.changedFiles ?? [],
+    reportedChangedFiles: outcome.reportedChangedFiles ?? [],
+    commitRef: outcome.commitRef,
+    timeCreated: outcome.time.created,
   }
 }
 
@@ -418,120 +732,61 @@ function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
 }
 
-function phaseFrom(value: unknown): "pre_build" | "post_build" | undefined {
-  return value === "pre_build" || value === "post_build" ? value : undefined
+function priorFindingSummary(
+  finding: IntegrityAttemptFindingPayload,
+): NonNullable<IntegrityPriorAttemptSummary["findings"]>[number] {
+  return {
+    id: finding.id,
+    severity: finding.severity,
+    verdictImpact: finding.verdictImpact,
+    fingerprint: finding.fingerprint,
+    canonicalSymptom: finding.canonicalSymptom,
+    title: finding.title,
+    description: finding.description,
+    repair: finding.repair,
+    verify: finding.verify,
+    affectedSymbols: finding.affectedSymbols,
+    sourceFindingIDs: finding.sourceFindingIDs,
+    priorAttemptRefs: finding.priorAttemptRefs,
+    filePaths: finding.filePaths,
+    requirementIDs: finding.requirementIDs,
+    specIDs: finding.specIDs,
+  }
 }
 
-function verdictFrom(value: unknown): "pass" | "concerns" | "needs_correction" | undefined {
-  return value === "pass" || value === "concerns" || value === "needs_correction" ? value : undefined
+function priorBlockingFindingSummary(
+  finding: IntegrityAttemptFindingPayload,
+): IntegrityPriorAttemptSummary["blockingFindings"][number] {
+  return {
+    id: finding.id,
+    fingerprint: finding.fingerprint,
+    canonicalSymptom: finding.canonicalSymptom,
+    title: finding.title,
+    description: finding.description,
+    repair: finding.repair,
+    verify: finding.verify,
+    filePaths: finding.filePaths,
+    requirementIDs: finding.requirementIDs,
+    specIDs: finding.specIDs,
+  }
 }
 
-function reviewerSummaries(value: unknown): Array<{ reviewerID: string; scope: string; verdict?: string }> {
-  if (!Array.isArray(value)) return []
-  return value.flatMap((item) => {
-    const reviewer = asRecord(item)
-    const reviewerID = stringFrom(reviewer.reviewerID) ?? stringFrom(reviewer.id)
-    const scope = stringFrom(reviewer.scope) ?? stringFrom(reviewer.focus) ?? stringFrom(reviewer.title)
-    if (!reviewerID || !scope) return []
-    return [{ reviewerID, scope, verdict: stringFrom(reviewer.verdict) }]
-  })
-}
-
-function blockingFindingSummaries(value: unknown): IntegrityPriorAttemptSummary["blockingFindings"] {
-  return findingSummaries(value).flatMap((finding) => {
-    if (finding.severity !== "blocking" && finding.verdictImpact !== "needs_correction") return []
-    return [
-      {
-        id: finding.id,
-        fingerprint: finding.fingerprint,
-        canonicalSymptom: finding.canonicalSymptom,
-        title: finding.title,
-        description: finding.description,
-        repair: finding.repair,
-        verify: finding.verify,
-        filePaths: finding.filePaths,
-        requirementIDs: finding.requirementIDs,
-        specIDs: finding.specIDs,
-      },
-    ]
-  })
-}
-
-function findingSummaries(value: unknown): NonNullable<IntegrityPriorAttemptSummary["findings"]> {
-  if (!Array.isArray(value)) return []
-  return value.flatMap((item) => {
-    const finding = asRecord(item)
-    const severity = stringFrom(finding.severity)
-    if (severity !== "blocking" && severity !== "advisory") return []
-    const normalizedSeverity: "blocking" | "advisory" = severity
-    const draft = {
-      id: stringFrom(finding.id) ?? "unknown-finding",
-      severity: normalizedSeverity,
-      verdictImpact: verdictFrom(finding.verdictImpact),
-      title: stringFrom(finding.title) ?? "Untitled finding",
-      description: stringFrom(finding.description) ?? "",
-      repair: stringFrom(finding.repair) ?? "",
-      filePaths: stringArray(finding.filePaths),
-      requirementIDs: stringArray(finding.requirementIDs),
-      specIDs: stringArray(finding.specIDs),
-      affectedSymbols: stringArray(finding.affectedSymbols),
-      sourceFindingIDs: stringArray(finding.sourceFindingIDs),
-      priorAttemptRefs: stringArray(finding.priorAttemptRefs),
-    }
-    const canonicalSymptom = stringFrom(finding.canonicalSymptom) ?? canonicalIntegritySymptom(draft)
-    const withSymptom = { ...draft, canonicalSymptom }
-    return [
-      {
-        ...withSymptom,
-        fingerprint: stringFrom(finding.fingerprint) ?? integrityFindingFingerprint(withSymptom),
-        verify:
-          stringArray(finding.verify).length > 0 ? stringArray(finding.verify) : defaultIntegrityVerify(withSymptom),
-      },
-    ]
-  })
-}
-
-function requiredRepairSummaries(value: unknown): IntegrityPriorAttemptSummary["requiredRepairs"] {
-  if (!Array.isArray(value)) return []
-  return value.flatMap((item) => {
-    const repair = asRecord(item)
-    const id = stringFrom(repair.id)
-    const description = stringFrom(repair.description)
-    if (!id || !description) return []
-    const draft = {
-      id,
-      title: stringFrom(repair.title),
-      description,
-      repair: stringFrom(repair.repair) ?? description,
-      filePaths: stringArray(repair.filePaths),
-      requirementIDs: stringArray(repair.requirementIDs),
-      specIDs: stringArray(repair.specIDs),
-      affectedSymbols: stringArray(repair.affectedSymbols),
-      sourceFindingIDs: stringArray(repair.sourceFindingIDs),
-      priorAttemptRefs: stringArray(repair.priorAttemptRefs),
-    }
-    const canonicalSymptom = stringFrom(repair.canonicalSymptom) ?? canonicalIntegritySymptom(draft)
-    const withSymptom = { ...draft, canonicalSymptom }
-    return [
-      {
-        ...withSymptom,
-        fingerprint: stringFrom(repair.fingerprint) ?? integrityFindingFingerprint(withSymptom),
-        verify:
-          stringArray(repair.verify).length > 0 ? stringArray(repair.verify) : defaultIntegrityVerify(withSymptom),
-      },
-    ]
-  })
-}
-
-function disagreementSummaries(value: unknown): IntegrityPriorAttemptSummary["unresolvedDisagreements"] {
-  if (!Array.isArray(value)) return []
-  return value.flatMap((item) => {
-    const disagreement = asRecord(item)
-    const id = stringFrom(disagreement.id)
-    const description = stringFrom(disagreement.description)
-    if (!id || !description) return []
-    return [{ id, description }]
-  })
+function priorRequiredRepairSummary(
+  repair: IntegrityAttemptRequiredRepairPayload,
+): IntegrityPriorAttemptSummary["requiredRepairs"][number] {
+  return {
+    id: repair.id,
+    fingerprint: repair.fingerprint,
+    canonicalSymptom: repair.canonicalSymptom,
+    description: repair.description,
+    repair: repair.repair,
+    verify: repair.verify,
+    filePaths: repair.filePaths,
+    requirementIDs: repair.requirementIDs,
+    specIDs: repair.specIDs,
+    sourceFindingIDs: repair.sourceFindingIDs,
+    priorAttemptRefs: repair.priorAttemptRefs,
+  }
 }
 
 function changedFilesFromBuildRecords(records: BuildRecordRow[]): string[] {
@@ -550,9 +805,17 @@ function changedFilesFromBuildRecords(records: BuildRecordRow[]): string[] {
   return [...out].sort()
 }
 
-function diffsFromBuildRecords(records: BuildRecordRow[]): IntegrityBuildEvidenceSinceLastReview["diffs"] {
+function changedFilesFromAgentOutcomes(outcomes: TaskAgentOutcome[]): string[] {
+  return uniqueSorted(outcomes.flatMap((outcome) => outcome.changedFiles ?? []))
+}
+
+function uniqueSorted(items: string[]): string[] {
+  return [...new Set(items.filter((item) => item.trim().length > 0))].sort()
+}
+
+function diffsFromBuildRecords(records: BuildRecordRow[]): IntegrityImplementationEvidenceSinceLastReview["diffs"] {
   const seen = new Set<string>()
-  const diffs: IntegrityBuildEvidenceSinceLastReview["diffs"] = []
+  const diffs: IntegrityImplementationEvidenceSinceLastReview["diffs"] = []
   for (const record of records) {
     const result = asRecord(record.result)
     if (!Array.isArray(result.diffs)) continue

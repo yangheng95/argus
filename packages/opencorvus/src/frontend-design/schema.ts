@@ -6,6 +6,7 @@
  */
 import { z } from "zod"
 import { FactCheckItemListSchema } from "@/fact-check/schema"
+import { VisualRegionBindingManifestSchema } from "./visual-region-binding-schema"
 
 function normalizedArtifactPath(input: string): string {
   return input.replaceAll("\\", "/")
@@ -567,6 +568,12 @@ export const FrontendTemplateFinalSchema = z
       .describe(
         "Structured rendered-screenshot evidence for visual-html-skeleton acceptance. Required when frontend_project.role=visual_baseline_input. Each item must tie the rendered skeleton entrypoint to a task-scoped renderer, rendered screenshot artifact, source reference screenshot, hashes, viewport dimensions, capture mode, review status, and optional diff artifact. Text-only screenshot paths do not satisfy visual baseline acceptance.",
       ),
+    visual_region_bindings: z
+      .array(VisualRegionBindingManifestSchema)
+      .default([])
+      .describe(
+        "Structured VisualRegionBinding crop manifests completed by frontend_design. For full-page webpage replicas, this is the machine-readable handoff from model-authored horizontal component-band crops to Architect reference_coverage.reference_regions.",
+      ),
     ui_data_contract: OptionalMarkdownField(
       "UI data contract required to reproduce the frontend: local mock/static data, observable endpoints when present, state transitions, and error/loading behavior.",
     ),
@@ -806,6 +813,14 @@ export const FrontendReferenceArtifactToolInputSchema = z
   })
   .strict()
 
+export const FrontendVisualRegionBindingManifestToolInputSchema = z
+  .object({
+    manifest_path: SourceReferenceStringSchema.describe(
+      "Project-root-relative JSON manifest path returned by create_visual_region_binding_package.",
+    ),
+  })
+  .strict()
+
 export const FrontendTemplateToolInputSchema = z
   .object({
     design_system: z.string().min(1),
@@ -838,6 +853,7 @@ export const FrontendTemplateToolInputSchema = z
     visual_consistency_contract: z.string().default(""),
     visual_consistency_items: z.array(ToolCompactTemplateItemSchema).default([]),
     visual_validation_evidence: z.array(ToolVisualValidationEvidenceSchema).default([]),
+    visual_region_bindings: z.array(VisualRegionBindingManifestSchema).default([]),
     ui_data_contract: z.string().default(""),
     ui_data_contract_items: z.array(ToolCompactTemplateItemSchema).default([]),
     template_iteration_notes: z.array(z.string().min(1)).default([]),

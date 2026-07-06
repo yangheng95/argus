@@ -1,17 +1,21 @@
-import { afterEach, describe, expect, mock, test } from "bun:test"
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { rm } from "fs/promises"
 import { existsSync } from "fs"
 import path from "path"
 import { Config } from "../../src/config/config"
+import { Identifier } from "../../src/id/id"
 import type { PermissionNext } from "../../src/permission/next"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
 import { SkillTool } from "../../src/tool/skill"
 import { Agent } from "../../src/agent/agent"
+import { SkillMount } from "../../src/skill/mounts"
 import type { Tool } from "../../src/tool/tool"
 import { Log } from "../../src/util/log"
 import { Filesystem } from "../../src/util/filesystem"
+import { ProjectTable } from "../../src/project/project.sql"
+import { Database } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
 import { PROJECT_EXPERT_SQUAD_ID, writeProjectExpertSquadPackage } from "../fixture/expert-squad"
 import { tmpdir } from "../fixture/fixture"
@@ -360,10 +364,13 @@ describe("skill routes", () => {
           matrix: Array<{ agent: string; mounted: Array<{ name: string; enabled: boolean }> }>
         }
         const mountedNames = body.matrix.find((row) => row.agent === "requirements")?.mounted.map((item) => item.name)
-        expect(mountedNames).not.toContain("bundle-alpha")
-        expect(mountedNames).not.toContain("bundle-beta")
+        expect(mountedNames).toContain("bundle-alpha")
+        expect(mountedNames).toContain("bundle-beta")
         for (const name of ["bundle-alpha", "bundle-beta"]) {
-          expect(body.skills.find((entry) => entry.name === name)).toBeUndefined()
+          expect(body.skills.find((entry) => entry.name === name)).toMatchObject({
+            mounted_agents: ["requirements"],
+            unmounted: false,
+          })
           const yaml = await Filesystem.readText(path.join(tmp.path, ".opencorvus", "skill", name, "SKILL.md"))
           expect(yaml).toContain("mounted_agents:")
           expect(yaml).toContain("- requirements")
@@ -420,7 +427,7 @@ describe("skill routes", () => {
     })
   })
 
-  test("POST /skill/mount materializes builtin skill without granting active projection", async () => {
+  test("POST /skill/mount materializes builtin skill into the default skill projection", async () => {
     await using tmp = await tmpdir({ git: true })
     const home = process.env.OPENCORVUS_TEST_HOME
     const opencorvusHome = process.env.OPENCORVUS_HOME
@@ -450,9 +457,12 @@ describe("skill routes", () => {
             matrix: Array<{ agent: string; mounted: Array<{ name: string; enabled: boolean }> }>
           }
           const materialized = path.join(tmp.path, ".opencorvus", "skills", "research-report", "SKILL.md")
-          expect(body.skills.find((entry) => entry.name === "research-report")).toBeUndefined()
-          expect(body.matrix.find((row) => row.agent === "build")?.mounted).not.toContainEqual(
-            expect.objectContaining({ name: "research-report" }),
+          expect(body.skills.find((entry) => entry.name === "research-report")).toMatchObject({
+            mounted_agents: ["build"],
+            unmounted: false,
+          })
+          expect(body.matrix.find((row) => row.agent === "build")?.mounted).toContainEqual(
+            expect.objectContaining({ name: "research-report", enabled: true }),
           )
           const yaml = await Filesystem.readText(materialized)
           expect(yaml).toContain("mounted_agents:")
@@ -468,7 +478,9 @@ describe("skill routes", () => {
           const listedBody = (await listed.json()) as {
             skills: Array<{ name: string; mounted_agents: string[] }>
           }
-          expect(listedBody.skills.find((entry) => entry.name === "research-report")).toBeUndefined()
+          expect(listedBody.skills.find((entry) => entry.name === "research-report")).toMatchObject({
+            mounted_agents: ["build"],
+          })
 
           const installed = await app.request("/skill/installed", {
             headers: {
@@ -488,7 +500,7 @@ describe("skill routes", () => {
     }
   }, 20000)
 
-  test("GET /skill/mounts refresh=true rescans installed skills without projecting them", async () => {
+  test("GET /skill/mounts refresh=true rescans installed skills into the unmounted pool", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -525,7 +537,10 @@ describe("skill routes", () => {
         const refreshedBody = (await refreshed.json()) as {
           skills: Array<{ name: string; mounted_agents: string[]; unmounted: boolean }>
         }
-        expect(refreshedBody.skills.find((entry) => entry.name === "manual-refresh-skill")).toBeUndefined()
+        expect(refreshedBody.skills.find((entry) => entry.name === "manual-refresh-skill")).toMatchObject({
+          mounted_agents: [],
+          unmounted: true,
+        })
 
         const installed = await app.request("/skill/installed", {
           headers: {
@@ -548,12 +563,12 @@ describe("skill routes", () => {
           [
             "---",
             "name: unreferenced-default",
-            "description: Installed ordinary skill outside active projection.",
+            "description: Installed ordinary skill in the default system collection.",
             "mounted_agents:",
             "  - build",
             "---",
             "",
-            "This skill must not enter the active package projection.",
+            "This skill remains visible because expert-squad projection unions the default system skill collection.",
           ].join("\n"),
         )
       },
@@ -599,33 +614,270 @@ describe("skill routes", () => {
         expect(body.projection_hash).toMatch(/^[a-f0-9]{64}$/)
         expect(body.projected_tool_ids).not.toContain("build")
         expect(body.projected_tool_ids).not.toContain("source-evidence")
-        expect(body.projected_agents).toEqual(["orchestrator", "build"])
+        expect(body.projected_agents).toEqual(["orchestrator", "general", "build"])
         expect(body.selector_skill_names).toEqual([`${PROJECT_EXPERT_SQUAD_ID}-expert-squad`])
-        expect(body.production_skill_names.sort()).toEqual(["implementation", "scheduler"])
+        expect(body.production_skill_names).toEqual(
+          expect.arrayContaining(["implementation", "scheduler", "unreferenced-default"]),
+        )
         expect(body.projected_skill_names).toEqual(body.skills.map((entry) => entry.name))
         expect(body.projected_skill_names).toEqual(
-          expect.arrayContaining(["implementation", `${PROJECT_EXPERT_SQUAD_ID}-expert-squad`, "scheduler"]),
+          expect.arrayContaining([
+            "implementation",
+            `${PROJECT_EXPERT_SQUAD_ID}-expert-squad`,
+            "scheduler",
+            "unreferenced-default",
+          ]),
         )
         expect(body.projected_skill_names).not.toContain("source-evidence")
         expect(body.projected_skill_names).not.toContain("package-browser")
-        expect(body.projected_skill_names).not.toContain("unreferenced-default")
         expect(body.skills.find((entry) => entry.name === "scheduler")?.mounted_agents).toEqual(["orchestrator"])
         expect(body.skills.find((entry) => entry.name === "implementation")?.mounted_agents).toEqual(["build"])
+        expect(body.skills.find((entry) => entry.name === "unreferenced-default")?.mounted_agents).toEqual(["build"])
         expect(body.skills.map((entry) => entry.name)).not.toContain("source-evidence")
-        expect(body.skills.map((entry) => entry.name)).not.toContain("unreferenced-default")
         expect(body.project_mounts.agents?.orchestrator).toContain("scheduler")
         expect(body.project_mounts.agents?.build).toContain("implementation")
-        expect(body.project_mounts.agents?.build ?? []).not.toContain("unreferenced-default")
+        expect(body.project_mounts.agents?.build).toContain("unreferenced-default")
         expect(body.project_mounts.agents?.build ?? []).not.toContain("source-evidence")
         expect(body.matrix.find((row) => row.agent === "build")?.mounted).toContainEqual(
           expect.objectContaining({ name: "implementation", enabled: true }),
         )
-        expect(body.matrix.find((row) => row.agent === "build")?.mounted).not.toContainEqual(
-          expect.objectContaining({ name: "unreferenced-default" }),
+        expect(body.matrix.find((row) => row.agent === "build")?.mounted).toContainEqual(
+          expect.objectContaining({ name: "unreferenced-default", enabled: true }),
         )
       },
     })
   }, 20000)
+
+  test("GET /skill/mounts includes active package agent-local skills discovered from directory", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        prompt_profile: {
+          active: PROJECT_EXPERT_SQUAD_ID,
+        },
+      },
+    })
+    const packageRoot = await writeProjectExpertSquadPackage(tmp.path)
+    await Filesystem.write(
+      path.join(packageRoot, "agents", "build", "skills", "package-review", "SKILL.md"),
+      [
+        "---",
+        "name: package-review",
+        "description: Directory-discovered package review skill.",
+        "---",
+        "",
+        "# Package Review",
+        "",
+        "PACKAGE_REVIEW_CONTENT",
+      ].join("\n"),
+    )
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Config.update({ prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } })
+        const app = Server.App()
+        const headers = {
+          "x-opencorvus-directory": tmp.path,
+        }
+        const response = await app.request("/skill/mounts", { headers })
+
+        expect(response.status, await response.clone().text()).toBe(200)
+        const body = (await response.json()) as {
+          active_profile: string
+          production_skill_names: string[]
+          projected_skill_names: string[]
+          skills: Array<{ name: string; mounted_agents: string[]; unmounted: boolean }>
+          project_mounts: { agents?: Record<string, string[]> }
+          matrix: Array<{ agent: string; mounted: Array<{ name: string; enabled: boolean }> }>
+        }
+        expect(body.active_profile).toBe(PROJECT_EXPERT_SQUAD_ID)
+        expect(body.production_skill_names).toContain("package-review")
+        expect(body.projected_skill_names).toContain("package-review")
+        expect(body.skills.find((entry) => entry.name === "package-review")).toMatchObject({
+          mounted_agents: ["build"],
+          unmounted: false,
+        })
+        expect(body.project_mounts.agents?.build).toContain("package-review")
+        expect(body.matrix.find((row) => row.agent === "build")?.mounted).toContainEqual(
+          expect.objectContaining({ name: "package-review", enabled: true }),
+        )
+
+        const installed = await app.request("/skill/installed", { headers })
+        expect(installed.status).toBe(200)
+        const installedBody = (await installed.json()) as Array<{ name: string }>
+        expect(installedBody.map((entry) => entry.name)).not.toContain("package-review")
+      },
+    })
+  }, 20000)
+
+  test("GET /skill/mounts fails visibly when package skills declare mounted agents", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        prompt_profile: {
+          active: PROJECT_EXPERT_SQUAD_ID,
+        },
+      },
+    })
+    const packageRoot = await writeProjectExpertSquadPackage(tmp.path)
+    await Filesystem.write(
+      path.join(packageRoot, "agents", "build", "skills", "package-review", "SKILL.md"),
+      [
+        "---",
+        "name: package-review",
+        "description: Package skill with conflicting visibility metadata.",
+        "mounted_agents:",
+        "  - build",
+        "---",
+        "",
+        "# Package Review",
+      ].join("\n"),
+    )
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Config.update({ prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } })
+        const response = await Server.App().request("/skill/mounts", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(response.status, await response.clone().text()).toBe(500)
+        const body = (await response.json()) as { data?: { message?: string } }
+        expect(body.data?.message).toContain(
+          `Package skill ${PROJECT_EXPERT_SQUAD_ID}/build/package-review must not declare agents or mounted_agents`,
+        )
+      },
+    })
+  }, 20000)
+
+  test("skill mount routes reject sessions outside the active project before mount matrix side effects", async () => {
+    await using project = await tmpdir({ git: true })
+    const app = Server.App()
+    let oneChildWithForeignParentID = ""
+    let foreignSessionID = ""
+
+    await Instance.provide({
+      directory: project.path,
+      fn: async () => {
+        foreignSessionID = Identifier.descending("session")
+        const foreignProjectID = "foreign-project"
+        const foreignProjectDirectory = path.join(project.path, "..", foreignProjectID)
+        const now = Date.now()
+        Database.use((db) =>
+          db
+            .insert(ProjectTable)
+            .values({
+              id: foreignProjectID,
+              worktree: foreignProjectDirectory,
+              name: "Foreign Project",
+              time_created: now,
+              time_updated: now,
+              sandboxes: [],
+            })
+            .run(),
+        )
+        await Session.importSnapshot({
+          info: {
+            id: foreignSessionID,
+            slug: "foreign-skill-root",
+            projectID: foreignProjectID,
+            directory: foreignProjectDirectory,
+            title: "foreign project skill owner",
+            version: "test",
+            kind: "root",
+            time: {
+              created: Date.now(),
+              updated: Date.now(),
+            },
+          },
+          messages: [],
+        })
+        const child: Session.Info = {
+          id: Identifier.descending("session"),
+          slug: "cross-parent-skill-child",
+          projectID: Instance.project.id,
+          directory: project.path,
+          parentID: foreignSessionID,
+          title: "project a skill child with project b parent",
+          version: "test",
+          kind: "build",
+          time: {
+            created: Date.now(),
+            updated: Date.now(),
+          },
+        }
+        await Session.importSnapshot({ info: child, messages: [] })
+        oneChildWithForeignParentID = child.id
+      },
+    })
+
+    const matrix = spyOn(SkillMount, "matrix")
+    const mount = spyOn(SkillMount, "mount")
+    const unmount = spyOn(SkillMount, "unmount")
+    const importAndMount = spyOn(SkillMount, "importAndMount")
+    const headers = {
+      "x-opencorvus-directory": project.path,
+    }
+    const jsonHeaders = {
+      ...headers,
+      "content-type": "application/json",
+    }
+
+    const foreignMounts = await app.request(
+      `/skill/mounts?refresh=true&sessionID=${encodeURIComponent(foreignSessionID)}`,
+      { headers },
+    )
+    const foreignMount = await app.request("/skill/mount", {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify({ sessionID: foreignSessionID, agent: "build", skill: "foreign-skill" }),
+    })
+    const foreignUnmount = await app.request("/skill/unmount", {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify({ sessionID: foreignSessionID, agent: "build", skill: "foreign-skill" }),
+    })
+    const foreignImportAndMount = await app.request("/skill/import-and-mount", {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify({
+        sessionID: foreignSessionID,
+        agent: "build",
+        import: {
+          filename: "SKILL.md",
+          content: "---\nname: foreign-import\n---\nforeign project import must not run\n",
+        },
+      }),
+    })
+    const foreignParentMounts = await app.request(
+      `/skill/mounts?refresh=true&sessionID=${encodeURIComponent(oneChildWithForeignParentID)}`,
+      { headers },
+    )
+    const foreignParentMount = await app.request("/skill/mount", {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify({ sessionID: oneChildWithForeignParentID, agent: "build", skill: "foreign-parent-skill" }),
+    })
+
+    for (const response of [
+      foreignMounts,
+      foreignMount,
+      foreignUnmount,
+      foreignImportAndMount,
+      foreignParentMounts,
+      foreignParentMount,
+    ]) {
+      expect(response.status).toBe(404)
+    }
+    expect(matrix).not.toHaveBeenCalled()
+    expect(mount).not.toHaveBeenCalled()
+    expect(unmount).not.toHaveBeenCalled()
+    expect(importAndMount).not.toHaveBeenCalled()
+  })
 
   test("POST /skill/install invalidates discovery cache before the next mount matrix read", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -728,7 +980,7 @@ describe("skill routes", () => {
     })
   }, 20000)
 
-  test("GET /skill/mounts excludes external installed skills until active projection references them", async () => {
+  test("GET /skill/mounts includes external installed skills in the unmounted pool", async () => {
     await using tmp = await tmpdir({
       git: true,
       init: async (dir) => {
@@ -775,7 +1027,11 @@ describe("skill routes", () => {
           "opencorvus-singular-review",
           "opencorvus-plural-review",
         ]) {
-          expect(initialBody.skills.find((entry) => entry.name === name)).toBeUndefined()
+          expect(initialBody.skills.find((entry) => entry.name === name)).toMatchObject({
+            mounted_agents: [],
+            unmounted: true,
+            warning: "unmounted",
+          })
         }
 
         const installed = await app.request("/skill/installed", {
@@ -824,12 +1080,15 @@ describe("skill routes", () => {
           skills: Array<{ name: string; mounted_agents: string[]; unmounted: boolean }>
           matrix: Array<{ agent: string; mounted: Array<{ name: string; enabled: boolean }> }>
         }
-        expect(body.skills.find((entry) => entry.name === "claude-review")).toBeUndefined()
-        expect(body.matrix.find((row) => row.agent === "requirements")?.mounted ?? []).not.toContainEqual(
-          expect.objectContaining({ name: "claude-review" }),
+        expect(body.skills.find((entry) => entry.name === "claude-review")).toMatchObject({
+          mounted_agents: ["requirements", "architect"],
+          unmounted: false,
+        })
+        expect(body.matrix.find((row) => row.agent === "requirements")?.mounted).toContainEqual(
+          expect.objectContaining({ name: "claude-review", enabled: true }),
         )
-        expect(body.matrix.find((row) => row.agent === "architect")?.mounted).not.toContainEqual(
-          expect.objectContaining({ name: "claude-review" }),
+        expect(body.matrix.find((row) => row.agent === "architect")?.mounted).toContainEqual(
+          expect.objectContaining({ name: "claude-review", enabled: true }),
         )
         const mountedYaml = await Filesystem.readText(
           path.join(tmp.path, ".claude", "skills", "claude-review", "SKILL.md"),
@@ -860,7 +1119,7 @@ describe("skill routes", () => {
     })
   }, 20000)
 
-  test("GET /skill/mounts exposes integrity as mountable without auto-projecting installed skills", async () => {
+  test("GET /skill/mounts exposes integrity and installed skills before operator mount", async () => {
     await using tmp = await tmpdir({
       git: true,
       init: async (dir) => {
@@ -902,7 +1161,10 @@ describe("skill routes", () => {
         )
         expect(initialBody.agents.map((agent) => agent.name)).not.toContain("orchestrator")
         expect(initialBody.matrix.map((row) => row.agent)).not.toContain("orchestrator")
-        expect(initialBody.skills.find((entry) => entry.name === "integrity-preview-review")).toBeUndefined()
+        expect(initialBody.skills.find((entry) => entry.name === "integrity-preview-review")).toMatchObject({
+          mounted_agents: [],
+          unmounted: true,
+        })
 
         const mounted = await app.request("/skill/mount", {
           method: "POST",
@@ -920,9 +1182,12 @@ describe("skill routes", () => {
           skills: Array<{ name: string; mounted_agents: string[]; unmounted: boolean }>
           matrix: Array<{ agent: string; mounted: Array<{ name: string; enabled: boolean }> }>
         }
-        expect(body.skills.find((entry) => entry.name === "integrity-preview-review")).toBeUndefined()
-        expect(body.matrix.find((row) => row.agent === "integrity")?.mounted).not.toContainEqual(
-          expect.objectContaining({ name: "integrity-preview-review" }),
+        expect(body.skills.find((entry) => entry.name === "integrity-preview-review")).toMatchObject({
+          mounted_agents: ["integrity"],
+          unmounted: false,
+        })
+        expect(body.matrix.find((row) => row.agent === "integrity")?.mounted).toContainEqual(
+          expect.objectContaining({ name: "integrity-preview-review", enabled: true }),
         )
 
         const yaml = await Filesystem.readText(
@@ -979,7 +1244,7 @@ describe("skill routes", () => {
     })
   })
 
-  test("GET /skill/mounts ignores stale default skill mounted_agents when manifest refs the skill", async () => {
+  test("GET /skill/mounts fails visibly for unknown default skill mounted_agents", async () => {
     await using tmp = await tmpdir({
       git: true,
       init: async (dir) => {
@@ -1013,22 +1278,10 @@ describe("skill routes", () => {
           },
         })
 
-        expect(response.status, await response.clone().text()).toBe(200)
-        const body = (await response.json()) as {
-          projected_skill_names: string[]
-          skills: Array<{ name: string; mounted_agents: string[] }>
-          matrix: Array<{ agent: string; mounted: Array<{ name: string; enabled: boolean }> }>
-          project_mounts: { agents?: Record<string, string[]> }
-        }
-        expect(body.projected_skill_names).toContain("typo-mounted")
-        expect(body.skills.find((entry) => entry.name === "typo-mounted")?.mounted_agents).toEqual(["build"])
-        expect(body.project_mounts.agents?.build).toContain("typo-mounted")
-        expect(body.project_mounts.agents?.requriements ?? []).not.toContain("typo-mounted")
-        expect(body.matrix.find((row) => row.agent === "build")?.mounted).toContainEqual(
-          expect.objectContaining({ name: "typo-mounted", enabled: true }),
-        )
-        expect(body.matrix.find((row) => row.agent === "requirements")?.mounted ?? []).not.toContainEqual(
-          expect.objectContaining({ name: "typo-mounted" }),
+        expect(response.status, await response.clone().text()).toBe(500)
+        const body = (await response.json()) as { data?: { message?: string } }
+        expect(body.data?.message).toContain(
+          "Skill typo-mounted mounted_agents contains unknown agent(s): requriements",
         )
         const yaml = await Filesystem.readText(
           path.join(tmp.path, ".opencorvus", "skill", "typo-mounted", "SKILL.md"),
@@ -1232,7 +1485,7 @@ describe("skill routes", () => {
     })
   }, 20000)
 
-  test("installed skill remains outside SkillTool until active projection references it", async () => {
+  test("installed and mounted skill is available through SkillTool", async () => {
     await using tmp = await tmpdir({ git: true })
     const skillDir = path.join(tmp.path, "skill-e2e")
     await Filesystem.write(
@@ -1292,7 +1545,10 @@ describe("skill routes", () => {
           unmounted_count: number
           skills: Array<{ name: string; mounted_agents: string[]; unmounted: boolean }>
         }
-        expect(mountBody.skills.find((item) => item.name === "route-installed-skill")).toBeUndefined()
+        expect(mountBody.skills.find((item) => item.name === "route-installed-skill")).toMatchObject({
+          mounted_agents: ["build"],
+          unmounted: false,
+        })
 
         const build = await Agent.get("build")
         expect(build).toBeDefined()
@@ -1302,14 +1558,13 @@ describe("skill routes", () => {
           ask: async () => {},
         }
 
-        await expect(tool.execute({ name: "route-installed-skill" }, ctx)).rejects.toThrow(
-          'Skill "route-installed-skill" not found or not allowed',
-        )
+        const loaded = await tool.execute({ name: "route-installed-skill" }, ctx)
+        expect(loaded.output).toContain('<skill_content name="route-installed-skill">')
       },
     })
   }, 20000)
 
-  test("GET /skill/mounts ignores default skill mounted_agents outside manifest refs", async () => {
+  test("GET /skill/mounts unions default skill mounted_agents with manifest refs", async () => {
     await using tmp = await tmpdir({
       git: true,
       config: { prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } },
@@ -1319,12 +1574,12 @@ describe("skill routes", () => {
           [
             "---",
             "name: shared-note",
-            "description: Default skill with stale mounted agents.",
+            "description: Default skill with its own mounted agents.",
             "mounted_agents:",
             "  - requirements",
             "---",
             "",
-            "This default skill is projected only to Build.",
+            "This default skill is projected to Requirements and additionally to Build.",
           ].join("\n"),
         )
       },
@@ -1351,14 +1606,17 @@ describe("skill routes", () => {
           matrix: Array<{ agent: string; mounted: Array<{ name: string; enabled: boolean }> }>
         }
         expect(body.projected_skill_names).toContain("shared-note")
-        expect(body.skills.find((entry) => entry.name === "shared-note")?.mounted_agents).toEqual(["build"])
+        expect(body.skills.find((entry) => entry.name === "shared-note")?.mounted_agents).toEqual([
+          "requirements",
+          "build",
+        ])
         expect(body.project_mounts.agents?.build).toContain("shared-note")
-        expect(body.project_mounts.agents?.requirements ?? []).not.toContain("shared-note")
+        expect(body.project_mounts.agents?.requirements).toContain("shared-note")
         expect(body.matrix.find((row) => row.agent === "build")?.mounted).toContainEqual(
           expect.objectContaining({ name: "shared-note", enabled: true }),
         )
-        expect(body.matrix.find((row) => row.agent === "requirements")?.mounted ?? []).not.toContainEqual(
-          expect.objectContaining({ name: "shared-note" }),
+        expect(body.matrix.find((row) => row.agent === "requirements")?.mounted).toContainEqual(
+          expect.objectContaining({ name: "shared-note", enabled: true }),
         )
 
         const installed = await app.request("/skill/installed", {

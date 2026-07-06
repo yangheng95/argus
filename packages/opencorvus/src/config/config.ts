@@ -40,6 +40,8 @@ import { AgentRoleContract, type AgentRoleID } from "@/agent/role-contract"
 import { PromptProfileConfigSchema, PromptProfileOverlaySchema } from "@/agent/prompt-profile"
 import { isModelReference } from "@/provider/model-ref"
 import { BrowserMCPBuiltin } from "@/mcp/browser/builtin"
+import { McpConfigSchema } from "./mcp-schema"
+import { git } from "@/util/git"
 
 export namespace Config {
   const ModelId = z
@@ -50,6 +52,15 @@ export namespace Config {
     .meta({ $ref: "https://models.dev/model-schema.json#/$defs/Model" })
   export const DEFAULT_MODEL = "openai/gpt-5.5"
   const log = Log.create({ service: "config" })
+  type LoadStateOptions = {
+    readOnly?: boolean
+    directory?: string
+    worktree?: string
+  }
+
+  type ConfigLoadOptions = {
+    writeSchema?: boolean
+  }
 
   function errnoCode(error: unknown): string | undefined {
     if (!error || typeof error !== "object") return
@@ -96,7 +107,10 @@ export namespace Config {
     return merged
   }
 
-  export const state = lazyInstanceState(async () => {
+  async function loadState(options: LoadStateOptions = {}) {
+    const loadOptions = { writeSchema: options.readOnly !== true }
+    const directory = options.directory ?? Instance.directory
+    const worktree = options.worktree ?? Instance.worktree
     const auth = await Auth.all()
 
     // Config loading order (low -> high precedence): https://opencorvus.ai/docs/config#precedence-order
@@ -122,10 +136,14 @@ export namespace Config {
         if (!remoteConfig.$schema) remoteConfig.$schema = "https://opencorvus.ai/config.json"
         result = mergeConfigConcatArrays(
           result,
-          await load(JSON.stringify(remoteConfig), {
-            dir: path.dirname(`${key}/.well-known/opencorvus`),
-            source: `${key}/.well-known/opencorvus`,
-          }),
+          await load(
+            JSON.stringify(remoteConfig),
+            {
+              dir: path.dirname(`${key}/.well-known/opencorvus`),
+              source: `${key}/.well-known/opencorvus`,
+            },
+            loadOptions,
+          ),
         )
         log.debug("loaded remote config from well-known", { url: key })
       }
@@ -136,18 +154,18 @@ export namespace Config {
     }
 
     // Global user config overrides remote config.
-    result = mergeConfigConcatArrays(result, await global())
+    result = mergeConfigConcatArrays(result, await loadGlobalConfig(loadOptions))
 
     // Custom config path overrides global config.
     if (Flag.OPENCORVUS_CONFIG) {
-      result = mergeConfigConcatArrays(result, await loadFile(Flag.OPENCORVUS_CONFIG))
+      result = mergeConfigConcatArrays(result, await loadFile(Flag.OPENCORVUS_CONFIG, loadOptions))
       log.debug("loaded custom config", { path: Flag.OPENCORVUS_CONFIG })
     }
 
     // Project config overrides global and remote config.
     if (!Flag.OPENCORVUS_DISABLE_PROJECT_CONFIG) {
-      for (const file of await ConfigPaths.projectFiles("opencorvus", Instance.directory, Instance.worktree)) {
-        result = mergeConfigConcatArrays(result, await loadFile(file))
+      for (const file of await ConfigPaths.projectFiles("opencorvus", directory, worktree)) {
+        result = mergeConfigConcatArrays(result, await loadFile(file, loadOptions))
       }
     }
 
@@ -159,7 +177,7 @@ export namespace Config {
       ...(result.experimental ?? {}),
     }
 
-    const directories = await ConfigPaths.directories(Instance.directory, Instance.worktree)
+    const directories = await ConfigPaths.directories(directory, worktree)
 
     // .opencorvus directory config overrides (project and global) config sources.
     if (Flag.OPENCORVUS_CONFIG_DIR) {
@@ -174,7 +192,7 @@ export namespace Config {
       if (isOpencorvusDir) {
         for (const file of ["opencorvus.jsonc", "opencorvus.json"]) {
           log.debug(`loading config from ${path.join(dir, file)}`)
-          result = mergeConfigConcatArrays(result, await loadFile(path.join(dir, file)))
+          result = mergeConfigConcatArrays(result, await loadFile(path.join(dir, file), loadOptions))
           // to satisfy the type checker
           result.agent ??= {}
           result.plugin ??= []
@@ -192,7 +210,7 @@ export namespace Config {
       // time. Those collisions were the root cause of the 2026-04-29
       // gemini-task scaffold merge failure.
       const localPlugins = await loadPlugin(dir)
-      if (isOpencorvusDir && localPlugins.length > 0) {
+      if (!options.readOnly && isOpencorvusDir && localPlugins.length > 0) {
         deps.push(
           iife(async () => {
             const shouldInstall = await needsInstall(dir)
@@ -211,10 +229,14 @@ export namespace Config {
     if (process.env.OPENCORVUS_CONFIG_CONTENT) {
       result = mergeConfigConcatArrays(
         result,
-        await load(process.env.OPENCORVUS_CONFIG_CONTENT, {
-          dir: Instance.directory,
-          source: "OPENCORVUS_CONFIG_CONTENT",
-        }),
+        await load(
+          process.env.OPENCORVUS_CONFIG_CONTENT,
+          {
+            dir: directory,
+            source: "OPENCORVUS_CONFIG_CONTENT",
+          },
+          loadOptions,
+        ),
       )
       log.debug("loaded custom config from OPENCORVUS_CONFIG_CONTENT")
     }
@@ -228,7 +250,7 @@ export namespace Config {
         for (const file of ["opencorvus.jsonc", "opencorvus.json"]) {
           const managedFile = path.join(managedDir, file)
           try {
-            result = mergeConfigConcatArrays(result, await loadFile(managedFile))
+            result = mergeConfigConcatArrays(result, await loadFile(managedFile, loadOptions))
           } catch (error) {
             if (!permissionDenied(error)) throw error
             log.warn("skipping managed config due to permission error", { path: managedFile })
@@ -276,7 +298,9 @@ export namespace Config {
       directories,
       deps,
     }
-  })
+  }
+
+  export const state = lazyInstanceState(async () => loadState())
 
   export async function waitForDependencies() {
     const deps = await state().then((x) => x.deps)
@@ -577,73 +601,12 @@ export namespace Config {
     return uniqueSpecifiers.toReversed()
   }
 
-  export const McpLocal = z
-    .object({
-      type: z.literal("local").describe("Type of MCP server connection"),
-      command: z.string().array().describe("Command and arguments to run the MCP server"),
-      environment: z
-        .record(z.string(), z.string())
-        .optional()
-        .describe("Environment variables to set when running the MCP server"),
-      enabled: z.boolean().optional().describe("Enable or disable the MCP server on startup"),
-      timeout: z
-        .number()
-        .int()
-        .positive()
-        .optional()
-        .describe("Timeout in ms for MCP server requests. Defaults to 30000 (30 seconds) if not specified."),
-    })
-    .strict()
-    .meta({
-      ref: "McpLocalConfig",
-    })
-
-  export const McpOAuth = z
-    .object({
-      clientId: z
-        .string()
-        .optional()
-        .describe("OAuth client ID. If not provided, dynamic client registration (RFC 7591) will be attempted."),
-      clientSecret: z.string().optional().describe("OAuth client secret (if required by the authorization server)"),
-      scope: z.string().optional().describe("OAuth scopes to request during authorization"),
-    })
-    .strict()
-    .meta({
-      ref: "McpOAuthConfig",
-    })
-  export type McpOAuth = z.infer<typeof McpOAuth>
-
-  export const McpRemote = z
-    .object({
-      type: z.literal("remote").describe("Type of MCP server connection"),
-      url: z.string().describe("URL of the remote MCP server"),
-      transport: z
-        .enum(["streamable-http", "sse"])
-        .describe(
-          "Remote MCP transport. Use streamable-http for standard remote MCP endpoints or sse for SSE-only servers.",
-        ),
-      enabled: z.boolean().optional().describe("Enable or disable the MCP server on startup"),
-      headers: z.record(z.string(), z.string()).optional().describe("Headers to send with the request"),
-      oauth: z
-        .union([McpOAuth, z.literal(false)])
-        .optional()
-        .describe(
-          "OAuth authentication configuration for the MCP server. Set to false to disable OAuth auto-detection.",
-        ),
-      timeout: z
-        .number()
-        .int()
-        .positive()
-        .optional()
-        .describe("Timeout in ms for MCP server requests. Defaults to 30000 (30 seconds) if not specified."),
-    })
-    .strict()
-    .meta({
-      ref: "McpRemoteConfig",
-    })
-
-  export const Mcp = z.discriminatedUnion("type", [McpLocal, McpRemote])
-  export type Mcp = z.infer<typeof Mcp>
+  export const McpLocal = McpConfigSchema.McpLocal
+  export const McpOAuth = McpConfigSchema.McpOAuth
+  export type McpOAuth = McpConfigSchema.McpOAuth
+  export const McpRemote = McpConfigSchema.McpRemote
+  export const Mcp = McpConfigSchema.Mcp
+  export type Mcp = McpConfigSchema.Mcp
 
   export const PermissionAction = z.enum(["ask", "allow", "deny"]).meta({
     ref: "PermissionActionConfig",
@@ -832,7 +795,7 @@ export namespace Config {
     .object({
       model: ModelId.nullable().optional(),
       prompt: z.record(z.string(), z.string().nullable()).nullable().optional(),
-      prompt_profile: PromptProfileOverlaySchema.nullable().optional(),
+      prompt_profile: z.lazy(() => PromptProfileOverlaySchema).nullable().optional(),
       agent: z.record(z.string(), OverlayAgent.nullable()).nullable().optional(),
     })
     .strict()
@@ -1376,7 +1339,9 @@ export namespace Config {
         .record(z.string(), z.string())
         .optional()
         .describe("System-scope prompt overrides keyed by prompt identifier (e.g. core_header)"),
-      prompt_profile: PromptProfileConfigSchema.describe("Active package-backed expert-squad prompt profile selection."),
+      prompt_profile: z
+        .lazy(() => PromptProfileConfigSchema)
+        .describe("Active package-backed expert-squad prompt profile selection."),
       instructions: z.array(z.string()).optional().describe("Additional instruction files or patterns to include"),
       permission: Permission.optional(),
       tool_permissions: z
@@ -1508,14 +1473,6 @@ export namespace Config {
           build: z
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for build agent"),
-              retry_replay_token_limit: z
-                .number()
-                .int()
-                .min(1)
-                .optional()
-                .describe(
-                  "Maximum estimated provider replay tokens for reusing a previous Build session on retry. When omitted, OpenCorvus derives the limit from the Build model output window and existing context budget.",
-                ),
             })
             .optional()
             .describe(
@@ -1568,11 +1525,16 @@ export namespace Config {
                   z.object({
                     id: z.string().describe("Step unique ID within workflow"),
                     tool: z.string().describe("Orchestrator tool name this step maps to"),
+                    agentRole: z.string().optional().describe("Scheduler-owned agent role dispatched by this tool"),
                     label: z.string().describe("UI display label"),
                     hint: z.string().optional().describe("Brief guidance injected into system prompt"),
                     scope: z.enum(["task", "goal"]).describe("task = once per task, goal = once per goal"),
                     skippable: z.boolean().optional().describe("Whether Orchestrator can skip this step"),
                     after: z.array(z.string()).optional().describe("Prerequisite step IDs"),
+                    outcomeCapability: z
+                      .string()
+                      .optional()
+                      .describe("Task-level agent outcome capability that marks this step complete"),
                   }),
                 ),
                 goalLoopStepIDs: z
@@ -1683,6 +1645,17 @@ export namespace Config {
             message: `config.agent.${agentID}.tools is not supported: built-in agent tool pools are defined by the canonical AgentToolPool contract.`,
           })
         }
+        if (
+          agentID === "build" &&
+          Object.prototype.hasOwnProperty.call(agentConfig.options ?? {}, "retry_replay_token_limit")
+        ) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["agent", agentID, "retry_replay_token_limit"],
+            message:
+              "config.agent.build.retry_replay_token_limit is retired; Build retry reuses the prior session unless concrete context-unavailable evidence exists.",
+          })
+        }
       }
     })
     .meta({
@@ -1691,27 +1664,35 @@ export namespace Config {
 
   export type Info = z.output<typeof Info>
 
-  export const global = lazy(async () => {
+  async function loadGlobalConfig(options?: ConfigLoadOptions) {
     let result: Info = pipe(
       {},
-      mergeDeep(await loadFile(path.join(Global.Path.config, "config.json"))),
-      mergeDeep(await loadFile(path.join(Global.Path.config, "opencorvus.json"))),
-      mergeDeep(await loadFile(path.join(Global.Path.config, "opencorvus.jsonc"))),
+      mergeDeep(await loadFile(path.join(Global.Path.config, "config.json"), options)),
+      mergeDeep(await loadFile(path.join(Global.Path.config, "opencorvus.json"), options)),
+      mergeDeep(await loadFile(path.join(Global.Path.config, "opencorvus.jsonc"), options)),
     )
 
     return result
+  }
+
+  export const global = lazy(async () => {
+    return loadGlobalConfig()
   })
 
   export const { readFile } = ConfigPaths
 
-  async function loadFile(filepath: string): Promise<Info> {
+  async function loadFile(filepath: string, options?: ConfigLoadOptions): Promise<Info> {
     log.info("loading", { path: filepath })
     const text = await readFile(filepath)
     if (!text || text.trim().length === 0) return {} as Info
-    return load(text, { path: filepath })
+    return load(text, { path: filepath }, options)
   }
 
-  async function load(text: string, options: { path: string } | { dir: string; source: string }) {
+  async function load(
+    text: string,
+    options: { path: string } | { dir: string; source: string },
+    loadOptions?: ConfigLoadOptions,
+  ) {
     const original = text
     const source = "path" in options ? options.path : options.source
     const isFile = "path" in options
@@ -1722,7 +1703,7 @@ export namespace Config {
 
     const parsed = Info.safeParse(data)
     if (parsed.success) {
-      if (!parsed.data.$schema && isFile) {
+      if (!parsed.data.$schema && isFile && loadOptions?.writeSchema !== false) {
         parsed.data.$schema = "https://opencorvus.ai/config.json"
         const updated = original.replace(/^\s*\{/, '{\n  "$schema": "https://opencorvus.ai/config.json",')
         await Bun.write(options.path, updated)
@@ -1766,6 +1747,23 @@ export namespace Config {
 
   export async function get() {
     return state().then((x) => x.config)
+  }
+
+  async function readOnlyWorktreeBoundary(directory: string) {
+    const resolvedDirectory = Filesystem.resolve(directory)
+    const result = await git(["rev-parse", "--show-toplevel"], {
+      cwd: resolvedDirectory,
+      timeoutProfile: "fast",
+    })
+    if (result.exitCode !== 0) return resolvedDirectory
+    const topLevel = result.text().trim()
+    return topLevel ? Filesystem.resolve(topLevel) : resolvedDirectory
+  }
+
+  export async function snapshotForProject(directory: string) {
+    const resolvedDirectory = Filesystem.resolve(directory)
+    const worktree = await readOnlyWorktreeBoundary(resolvedDirectory)
+    return structuredClone((await loadState({ readOnly: true, directory: resolvedDirectory, worktree })).config) as Info
   }
 
   export async function getGlobal() {

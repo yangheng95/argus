@@ -1,9 +1,8 @@
 import { Bus } from "@/bus"
 import { Instance, lazyInstanceState } from "@/project/instance"
-import { Database, NotFoundError, and, eq } from "@/storage/db"
+import { Database, and, eq, sql } from "@/storage/db"
 import { Log } from "@/util/log"
-import { SessionWake } from "@/session"
-import { SessionTable } from "@/session/session.sql"
+import { Session, SessionWake } from "@/session"
 import { Wildcard } from "@/util/wildcard"
 import { Identifier } from "@/id/id"
 import { EventJobTable } from "./event.sql"
@@ -21,6 +20,8 @@ export type EventJobView = {
   cooldownMs: number
   lastRun: number | null
   lastEvent: string | null
+  failureCount: number
+  lastError: string | null
 }
 
 export type CreateEventJobInput = {
@@ -73,24 +74,19 @@ export namespace EventService {
       cooldownMs: j.cooldown_ms,
       lastRun: j.last_run,
       lastEvent: j.last_event ?? null,
+      failureCount: j.failure_count,
+      lastError: j.last_error ?? null,
     }))
   }
 
-  function assertSessionInProject(input: { sessionId?: string; projectId: string }) {
+  async function assertSessionInProject(input: { sessionId?: string; projectId: string }) {
     const sessionId = input.sessionId
     if (!sessionId) return
-    const session = Database.use((db) =>
-      db
-        .select({ id: SessionTable.id })
-        .from(SessionTable)
-        .where(and(eq(SessionTable.id, sessionId), eq(SessionTable.project_id, input.projectId)))
-        .get(),
-    )
-    if (!session) throw new NotFoundError({ message: `Session not found: ${sessionId}` })
+    await Session.assertLineageInProject({ sessionID: sessionId, projectID: input.projectId })
   }
 
-  export function create(input: CreateEventJobInput): { id: string; name: string; eventType: string } {
-    assertSessionInProject({ sessionId: input.sessionId, projectId: input.projectId })
+  export async function create(input: CreateEventJobInput): Promise<{ id: string; name: string; eventType: string }> {
+    await assertSessionInProject({ sessionId: input.sessionId, projectId: input.projectId })
     const id = Identifier.ascending("cron")
     Database.use((db) =>
       db
@@ -146,12 +142,7 @@ export namespace EventService {
       pending.push(
         run(job, event.type, now)
           .catch((error) => {
-            log.error("event job execution failed", {
-              jobId: job.id,
-              name: job.name,
-              event: event.type,
-              error: error instanceof Error ? error.message : String(error),
-            })
+            fail(job, event.type, error)
           })
           .finally(() => {
             state().running.delete(job.id)
@@ -208,6 +199,8 @@ export namespace EventService {
           last_run: now,
           last_event: type,
           enabled: job.one_shot ? false : true,
+          failure_count: 0,
+          last_error: null,
         })
         .where(and(eq(EventJobTable.id, job.id), eq(EventJobTable.project_id, job.project_id)))
         .run(),
@@ -220,6 +213,26 @@ export namespace EventService {
       event: type,
       sessionID,
       oneShot: job.one_shot,
+    })
+  }
+
+  function fail(job: typeof EventJobTable.$inferSelect, type: string, error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error)
+    Database.use((db) =>
+      db
+        .update(EventJobTable)
+        .set({
+          failure_count: sql`${EventJobTable.failure_count} + 1`,
+          last_error: msg,
+        })
+        .where(and(eq(EventJobTable.id, job.id), eq(EventJobTable.project_id, job.project_id)))
+        .run(),
+    )
+    log.error("event job execution failed", {
+      jobId: job.id,
+      name: job.name,
+      event: type,
+      error: msg,
     })
   }
 }

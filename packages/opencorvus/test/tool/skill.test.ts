@@ -421,7 +421,20 @@ Use this skill.
 
   test("project expert-squad selector load does not sample package production files", async () => {
     await using tmp = await tmpdir({ git: true })
-    await writeProjectExpertSquadPackage(tmp.path)
+    const packageRoot = await writeProjectExpertSquadPackage(tmp.path)
+    await Bun.write(
+      path.join(packageRoot, "agents", "build", "skills", "package-review", "SKILL.md"),
+      [
+        "---",
+        "name: package-review",
+        "description: Directory-discovered package review skill.",
+        "---",
+        "",
+        "# Package Review",
+        "",
+        "PACKAGE_REVIEW_CONTENT",
+      ].join("\n"),
+    )
     const home = process.env.OPENCORVUS_TEST_HOME
     process.env.OPENCORVUS_TEST_HOME = tmp.path
 
@@ -463,7 +476,20 @@ Use this skill.
         mcp: { browser: { enabled: false } },
       },
     })
-    await writeProjectExpertSquadPackage(tmp.path)
+    const packageRoot = await writeProjectExpertSquadPackage(tmp.path)
+    await Bun.write(
+      path.join(packageRoot, "agents", "build", "skills", "package-review", "SKILL.md"),
+      [
+        "---",
+        "name: package-review",
+        "description: Directory-discovered package review skill.",
+        "---",
+        "",
+        "# Package Review",
+        "",
+        "PACKAGE_REVIEW_CONTENT",
+      ].join("\n"),
+    )
     const home = process.env.OPENCORVUS_TEST_HOME
     process.env.OPENCORVUS_TEST_HOME = tmp.path
 
@@ -490,6 +516,7 @@ Use this skill.
           const buildSurface = await SkillMount.resolve({ agent: build!, config })
           expect(buildSurface.active_profile).toBe(PROJECT_EXPERT_SQUAD_ID)
           expect(buildSurface.skills.map((skill) => skill.name)).toContain("implementation")
+          expect(buildSurface.skills.map((skill) => skill.name)).toContain("package-review")
           expect(buildSurface.skills.map((skill) => skill.name)).not.toContain("scheduler")
 
           const skillPrompt = await SystemPrompt.skills(orchestrator!, { config, projectDirectory: tmp.path })
@@ -498,6 +525,13 @@ Use this skill.
           expect(skillPrompt).not.toContain("source-evidence")
           expect(skillPrompt).not.toContain("build-evidence")
           expect(skillPrompt).not.toContain("package-browser")
+          const buildPrompt = await SystemPrompt.skills(build!, {
+            config,
+            projectDirectory: tmp.path,
+            surface: buildSurface,
+          })
+          expect(buildPrompt).toContain("package-review")
+          expect(buildPrompt).toContain("Directory-discovered package review skill.")
 
           const tool = await SkillTool.init({ agent: orchestrator!, config })
           const ctx: Tool.Context = { ...baseCtx, agent: "orchestrator", ask: async () => {} }
@@ -514,6 +548,17 @@ Use this skill.
             { ...baseCtx, agent: "build", ask: async () => {} },
           )
           expect(buildSearch.output).toContain("<name>implementation</name>")
+          const packageSearch = await buildSkill.execute(
+            { query: "package review" },
+            { ...baseCtx, agent: "build", ask: async () => {} },
+          )
+          expect(packageSearch.output).toContain("<name>package-review</name>")
+          const packageReview = await buildSkill.execute(
+            { name: "package-review" },
+            { ...baseCtx, agent: "build", ask: async () => {} },
+          )
+          expect(packageReview.output).toContain('<skill_content name="package-review">')
+          expect(packageReview.output).toContain("PACKAGE_REVIEW_CONTENT")
 
           const toolIDs = await ToolRegistry.ids()
           const packageToolProviderName = PromptProfileResolver.packageToolProviderName(
@@ -550,7 +595,7 @@ Use this skill.
     }
   })
 
-  test("default skill mounted_agents do not grant visibility outside manifest refs", async () => {
+  test("default skill mounted_agents union with active expert-squad default refs", async () => {
     await using tmp = await tmpdir({
       git: true,
       config: { prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } },
@@ -560,14 +605,14 @@ Use this skill.
           [
             "---",
             "name: shared-note",
-            "description: Default skill with stale mounted agents.",
+            "description: Default skill with its own mounted agents.",
             "mounted_agents:",
             "  - requirements",
             "---",
             "",
             "# Shared Note",
             "",
-            "This default skill is projected only to Build.",
+            "This default skill is projected to Requirements and additionally to Build.",
           ].join("\n"),
         )
       },
@@ -590,6 +635,7 @@ Use this skill.
           const buildSurface = await SkillMount.resolve({ agent: build!, config })
           expect(buildSurface.skills.map((skill) => skill.name)).toContain("shared-note")
           expect(buildSurface.skills.find((skill) => skill.name === "shared-note")?.skill.mounted_agents).toEqual([
+            "requirements",
             "build",
           ])
           const buildSkill = await SkillTool.init({ agent: build, skillSurface: buildSurface })
@@ -601,14 +647,19 @@ Use this skill.
           ).toContain('<skill_content name="shared-note">')
 
           const requirementsSurface = await SkillMount.resolve({ agent: requirements!, config })
-          expect(requirementsSurface.skills.map((skill) => skill.name)).not.toContain("shared-note")
-          expect((await SystemPrompt.skills(requirements!, { surface: requirementsSurface })) ?? "").not.toContain(
+          expect(requirementsSurface.skills.map((skill) => skill.name)).toContain("shared-note")
+          expect((await SystemPrompt.skills(requirements!, { surface: requirementsSurface })) ?? "").toContain(
             "shared-note",
           )
           const requirementsSkill = await SkillTool.init({ agent: requirements, skillSurface: requirementsSurface })
-          await expect(
-            requirementsSkill.execute({ name: "shared-note" }, { ...baseCtx, agent: "requirements", ask: async () => {} }),
-          ).rejects.toThrow('Skill "shared-note" not found or not allowed')
+          expect(
+            (
+              await requirementsSkill.execute(
+                { name: "shared-note" },
+                { ...baseCtx, agent: "requirements", ask: async () => {} },
+              )
+            ).output,
+          ).toContain('<skill_content name="shared-note">')
         },
       })
     } finally {

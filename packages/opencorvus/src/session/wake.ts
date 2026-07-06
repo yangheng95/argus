@@ -95,7 +95,7 @@ export namespace SessionWake {
       sessionID = session.id
       log.info("created new session for wake", { sessionID })
     } else {
-      session = await Session.get(sessionID)
+      session = await Session.assertLineageInProject({ sessionID, projectID: Instance.project.id })
     }
 
     const config = await EffectiveConfig.effective({ sessionID })

@@ -4,7 +4,8 @@ import path from "path"
 import sharp from "sharp"
 
 import { BuildAgent, repairManagedBuildSessionStagedFileParts } from "../../src/build/agent"
-import type { BuildEvidencePack } from "../../src/build/evidence-pack"
+import { textContextPacket } from "../../src/agent/context-packet"
+import { buildEvidenceContextPacket, type BuildEvidencePack } from "../../src/build/evidence-pack"
 import { composeBuildInputEvidenceManifest, type BuildInputEvidenceManifest } from "../../src/build/evidence-manifest"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import type { CodingProvider, CodingRunInfo, CodingResumeInfo } from "../../src/executor/contract"
@@ -114,12 +115,9 @@ function seedTask(input: {
   )
 }
 
-async function composeTestInputEvidenceManifest(taskID: string, evidencePack: BuildEvidencePack) {
-  return await composeBuildInputEvidenceManifest({
-    projectID: Instance.project.id,
-    taskID,
-    evidencePack,
-  })
+function contextPacketsForEvidencePack(evidencePack: BuildEvidencePack) {
+  const packet = buildEvidenceContextPacket(evidencePack)
+  return packet ? [packet] : []
 }
 
 function seedProjectRow(input: { projectID: string; worktree: string }) {
@@ -352,7 +350,6 @@ describe("BuildAgent managed worktree runtime", () => {
             },
           ],
         }
-        const inputEvidenceManifest = await composeTestInputEvidenceManifest(taskID, evidencePack)
 
         const stageToWorktree = AttachmentStore.stageToWorktree
         const stageSpy = spyOn(AttachmentStore, "stageToWorktree").mockImplementation(stageToWorktree)
@@ -365,8 +362,7 @@ describe("BuildAgent managed worktree runtime", () => {
               text: "verify evidence pack prompt",
             },
             context: {
-              evidencePack,
-              inputEvidenceManifest,
+              contextPackets: contextPacketsForEvidencePack(evidencePack),
             },
           })
 
@@ -375,7 +371,7 @@ describe("BuildAgent managed worktree runtime", () => {
           const prompt = captured.run?.prompt ?? ""
           expect(prompt).toContain("## Visual Reference Contract")
           expect(prompt).toContain("target-reference.png")
-          const contractOnly = prompt.slice(0, prompt.indexOf("## Build Evidence Pack"))
+          const contractOnly = prompt.slice(0, prompt.indexOf("# Delegation"))
           expect(contractOnly).not.toContain("previous-output.png")
           expect(prompt).toContain("### Previous Build Output Evidence")
           expect(prompt).toContain("previous-output.png")
@@ -429,7 +425,7 @@ describe("BuildAgent managed worktree runtime", () => {
             text: "verify evidence staging reaches Build",
           },
           context: {
-            evidencePack,
+            contextPackets: contextPacketsForEvidencePack(evidencePack),
           },
           workDir,
         })
@@ -475,7 +471,6 @@ describe("BuildAgent managed worktree runtime", () => {
         const evidencePack: BuildEvidencePack = {
           targetReferences: [{ ...targetRef, intent: "visual_reference", source: "test" }],
         }
-        const inputEvidenceManifest = await composeTestInputEvidenceManifest(taskID, evidencePack)
 
         const output = await BuildAgent.run({
           task: task!,
@@ -485,8 +480,7 @@ describe("BuildAgent managed worktree runtime", () => {
             text: "verify caller-owned evidence staging",
           },
           context: {
-            evidencePack,
-            inputEvidenceManifest,
+            contextPackets: contextPacketsForEvidencePack(evidencePack),
           },
           workDir,
         })
@@ -870,11 +864,6 @@ describe("BuildAgent managed worktree runtime", () => {
         const evidencePack: BuildEvidencePack = {
           targetReferences: [{ ...targetRef, intent: "visual_reference", source: "user-upload" }],
         }
-        const inputEvidenceManifest = await composeBuildInputEvidenceManifest({
-          projectID: taskProjectID,
-          taskID,
-          evidencePack,
-        })
         const captured: { run?: CodingRunInfo; resume?: CodingResumeInfo } = {}
         ExecutorRegistry.registerCoding("codex", captureCodingProvider(captured), {
           model: "test-model",
@@ -891,8 +880,7 @@ describe("BuildAgent managed worktree runtime", () => {
                 text: "fresh dispatch must not use the active project for task evidence",
               },
               context: {
-                evidencePack,
-                inputEvidenceManifest,
+                contextPackets: contextPacketsForEvidencePack(evidencePack),
               },
             }),
           ).rejects.toThrow("fresh build dispatch must enter the task project before evidence materialization")
@@ -1419,7 +1407,14 @@ describe("BuildAgent managed worktree runtime", () => {
             text: "repair the existing direct build",
           },
           context: {
-            retryFeedback: "Prior attempt failed because merge_back was blocked by dirty files.",
+            contextPackets: [
+              textContextPacket({
+                id: "retry-managed-worktree-runtime",
+                title: "Prior Build Retry Evidence",
+                source: "retry",
+                body: "Prior attempt failed because merge_back was blocked by dirty files.",
+              })!,
+            ],
           },
           workDir,
         })
@@ -1516,7 +1511,6 @@ describe("BuildAgent managed worktree runtime", () => {
             },
           ],
         }
-        const currentManifest = await composeTestInputEvidenceManifest(taskID, currentEvidencePack)
         const captured: { run?: CodingRunInfo; resume?: CodingResumeInfo } = {}
         ExecutorRegistry.registerCoding(
           "codex",
@@ -1578,9 +1572,16 @@ describe("BuildAgent managed worktree runtime", () => {
             text: "repair the existing direct build from visual feedback",
           },
           context: {
-            visualQaFeedback: "Visual QA found hero spacing mismatch; consume the comparison and layout evidence.",
-            evidencePack: currentEvidencePack,
-            inputEvidenceManifest: currentManifest,
+            contextPackets: [
+              textContextPacket({
+                id: "visual-qa-build-context",
+                title: "Visual QA Repair Evidence",
+                source: "visual_qa",
+                scope: "task",
+                body: "Visual QA found hero spacing mismatch; consume the comparison and layout evidence.",
+              })!,
+              ...contextPacketsForEvidencePack(currentEvidencePack),
+            ],
           },
           workDir,
         })

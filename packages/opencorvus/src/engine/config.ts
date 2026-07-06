@@ -12,7 +12,8 @@
  *   cfg.requirements.max_steps   // 100 (或用户自定义值)
  */
 import { Config } from "@/config/config"
-import type { MiniWorkflow } from "./workflow"
+import { AgentRoleContract, type AgentRoleID } from "@/agent/role-contract"
+import { WorkflowRegistry, type MiniWorkflow, type OrchestratorWorkflowToolName } from "./workflow"
 
 // ═══════════════════════════════════════════════════════════════════
 // 类型定义
@@ -194,6 +195,10 @@ export namespace EngineConfig {
     return merge(cfg.assistant)
   }
 
+  export function fromAssistantConfig(user?: Config.Info["assistant"]): EngineConfigType {
+    return merge(user)
+  }
+
   /** 同步获取硬编码默认值（不读取配置文件），用于模块初始化阶段无法 await 的场景 */
   export function getDefaults(): EngineConfigType {
     return { ...DEFAULTS }
@@ -251,14 +256,27 @@ function merge(user?: Config.Info["assistant"]): EngineConfigType {
       description: w.description ?? "",
       steps: w.steps.map((s) => ({
         id: s.id,
-        tool: s.tool,
+        tool: resolveWorkflowToolName(s.tool),
+        agentRole: resolveWorkflowAgentRole(s.agentRole),
         label: s.label,
         hint: s.hint ?? "",
         scope: s.scope,
         skippable: s.skippable ?? false,
         after: s.after ?? [],
+        outcomeCapability: s.outcomeCapability,
       })),
       goalLoopStepIDs: w.goalLoopStepIDs ?? [],
     })),
   }
+}
+
+function resolveWorkflowToolName(tool: string): OrchestratorWorkflowToolName {
+  if (WorkflowRegistry.isWorkflowToolName(tool)) return tool
+  throw new Error(`assistant.workflows references unknown orchestrator workflow tool "${tool}"`)
+}
+
+function resolveWorkflowAgentRole(agentRole: string | undefined): AgentRoleID | undefined {
+  if (agentRole === undefined) return undefined
+  if (AgentRoleContract.isRoleID(agentRole)) return agentRole
+  throw new Error(`assistant.workflows references unknown agent role "${agentRole}"`)
 }

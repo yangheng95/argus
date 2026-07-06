@@ -18,6 +18,8 @@ import { dispatchTaskLoop, drainPendingQueuedOperatorWakes, queuedTaskEventStats
 import { hooks } from "../../src/engine/state"
 import { findTask } from "../../src/engine/store"
 import { deriveTaskStatus } from "../../src/engine/task-status"
+import type { MiniWorkflow, OrchestratorWorkflowToolName } from "../../src/engine/workflow"
+import type { AgentRoleID } from "../../src/agent/role-contract"
 import {
   completeOrchestratorToolOwnership,
   createOrchestratorToolOwnershipPayload,
@@ -55,6 +57,27 @@ import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
+
+function workflowDeclaringAgentRole(role: AgentRoleID, tool: OrchestratorWorkflowToolName): MiniWorkflow {
+  return {
+    id: `test-${tool}-${role}`,
+    name: `Test ${tool}`,
+    description: `Test workflow declaring ${role}`,
+    goalLoopStepIDs: [],
+    steps: [
+      {
+        id: tool,
+        tool,
+        agentRole: role,
+        label: role,
+        hint: `Dispatch ${role}`,
+        scope: "task",
+        skippable: false,
+        after: [],
+      },
+    ],
+  }
+}
 
 function sessionOrderKey(sessionID: string, timeCreated: number) {
   return timelineOrderKey({ domain: "session", time: timeCreated, id: sessionID })
@@ -125,9 +148,34 @@ function integrityReviewCompletedPayload(input: { taskID: string; sessionID: str
     verdict: "pass" as const,
     summary: "faithful",
     teamReportMarkdown: "Faithful replay passed.",
+    checkItems: [
+      {
+        id: "check-replay-identity",
+        reviewerID: "requirements_surface",
+        category: "integration",
+        target: "task conversation event replay",
+        question: "Does hydration preserve the persisted integrity event identity fields?",
+        status: "passed" as const,
+        expected: "Hydrated replay keeps the persisted task and session identity.",
+        observed: "The replayed event preserves task/session identity.",
+        evidence: ["The replayed event preserves task/session identity."],
+      },
+      {
+        id: "check-replay-emitted-at",
+        reviewerID: "acceptance_surface",
+        category: "integration",
+        target: "task conversation emittedAt fidelity",
+        question: "Does hydration preserve emittedAt instead of replacing it with hydrate time?",
+        status: "passed" as const,
+        expected: "emittedAt is present and equals the persisted timestamp.",
+        observed: "The replayed event preserves emittedAt fidelity.",
+        evidence: ["The replayed event preserves emittedAt fidelity."],
+      },
+    ],
     reviewers: [
       {
         reviewerID: "requirements_surface",
+        checkIDs: ["check-replay-identity"],
         scope: "Requirement surface",
         verdict: "pass" as const,
         summary: "Requirements remain covered.",
@@ -137,12 +185,12 @@ function integrityReviewCompletedPayload(input: { taskID: string; sessionID: str
           evidencePlan: ["Inspect the hydrated conversation event payload."],
           passCriteria: ["The replayed event keeps the original emittedAt timestamp."],
         },
-        evidence: ["The replayed event preserves task/session identity."],
-        findings: [],
+        evidence: [{ checkIDs: ["check-replay-identity"], note: "The replayed event preserves task/session identity." }],
         openQuestions: [],
       },
       {
         reviewerID: "acceptance_surface",
+        checkIDs: ["check-replay-emitted-at"],
         scope: "Acceptance surface",
         verdict: "pass" as const,
         summary: "Acceptance remains covered.",
@@ -152,8 +200,9 @@ function integrityReviewCompletedPayload(input: { taskID: string; sessionID: str
           evidencePlan: ["Compare emittedAt and timestamp on the hydrated event."],
           passCriteria: ["emittedAt is present and equals timestamp."],
         },
-        evidence: ["The replayed event preserves emittedAt fidelity."],
-        findings: [],
+        evidence: [
+          { checkIDs: ["check-replay-emitted-at"], note: "The replayed event preserves emittedAt fidelity." },
+        ],
         openQuestions: [],
       },
     ],
@@ -1610,7 +1659,7 @@ describe("task conversation routes", () => {
           taskID: redispatch.taskID,
           sessionID: redispatch.worker.id,
           summary: "Start a replacement same-kind worker pass",
-          requestedDecision: "redispatch",
+          requestedDecision: "evaluate scheduler-owned stage rerun",
         })
         const redispatchTools = createOrchestratorTools({
           taskID: redispatch.taskID,
@@ -1662,7 +1711,7 @@ describe("task conversation routes", () => {
           sessionID: acceptedRedispatch.worker.id,
           agent: "explore",
           summary: "Start a replacement explore stage",
-          requestedDecision: "redispatch",
+          requestedDecision: "evaluate scheduler-owned stage rerun",
         })
         const acceptedRedispatchOptions = await buildPersistedToolOptions({
           sessionID: acceptedRedispatch.orchestrator.id,
@@ -1676,13 +1725,9 @@ describe("task conversation routes", () => {
           orchestratorToolCallID: acceptedRedispatchOptions.opencorvus.toolCallID,
           orchestratorToolPartID: acceptedRedispatchOptions.opencorvus.toolPartID,
           decision: "redispatch",
-          reason: "Replacement explore stage has a concrete dispatcher binding.",
+          reason: "Replacement explore stage has a concrete workflow tool binding.",
           message: "Run the replacement explore stage.",
-          redispatchBinding: {
-            dispatcher: "explore_stage",
-            stage: "explore",
-            target_kind: "explore",
-          },
+          redispatchWorkflow: workflowDeclaringAgentRole("explore", "explore"),
         })
         const acceptedRedispatchAction = listAgentCoordinationActions(acceptedRedispatch.taskID)[0]
         expect(acceptedRedispatchAction?.payload).toMatchObject({
@@ -1694,7 +1739,7 @@ describe("task conversation routes", () => {
           target_agent: "explore",
           result: {
             redispatch_binding: {
-              dispatcher: "explore_stage",
+              workflow_tool_name: "explore",
               stage: "explore",
               target_kind: "explore",
             },
@@ -1704,7 +1749,6 @@ describe("task conversation routes", () => {
           taskID: acceptedRedispatch.taskID,
           actionID: acceptedRedispatchResponse.payload.action_id,
           result: {
-            dispatcher: "explore_stage",
             replacement_session_id: "ses_replacement_explore",
           },
           summary: "redispatch_worker replacement explore stage completed",

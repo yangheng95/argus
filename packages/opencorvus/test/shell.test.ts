@@ -332,6 +332,18 @@ describe("shell process supervisor contract", () => {
     }
   })
 
+  test("windows helper absence rejects background launch that requires process-tree cleanup", async () => {
+    if (process.platform !== "win32") return
+    const restore = ProcessSupervisor.setWindowsHelperResolverForTest(async () => undefined)
+    try {
+      await expect(Shell.launch("echo missing-background-helper", { outputSniffMs: 1, leaseMs: 1 })).rejects.toThrow(
+        "Windows process supervisor helper is required for process-tree cleanup",
+      )
+    } finally {
+      restore()
+    }
+  })
+
   test("windows helper dispose terminates the reported child process tree", async () => {
     if (process.platform !== "win32") return
 

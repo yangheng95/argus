@@ -8,6 +8,7 @@ import { Config } from "@/config/config"
 import { EngineConfig } from "@/engine/config"
 import { WorkflowRegistry } from "@/engine/workflow"
 import { builtInPromptProfiles } from "./builtin"
+import { payloadPackageSources } from "./payload"
 import { ExpertSquadRegistry } from "./registry"
 
 export namespace ExpertSquadPackageManager {
@@ -40,6 +41,11 @@ export namespace ExpertSquadPackageManager {
     filename: string
     bytes: Uint8Array
     fileCount: number
+  }
+
+  export interface ReleasePayloadResult {
+    installed: ImportResult[]
+    skipped: ImportResult[]
   }
 
   type NormalizedArchiveFile = {
@@ -126,16 +132,24 @@ export namespace ExpertSquadPackageManager {
   }
 
   function normalizeArchivePath(value: string) {
+    return normalizePackageRelativePath(value, "archive")
+  }
+
+  function normalizePayloadPath(value: string) {
+    return normalizePackageRelativePath(value, "payload")
+  }
+
+  function normalizePackageRelativePath(value: string, source: "archive" | "payload") {
     const slashNormalized = value.replace(/\\/g, "/")
     if (slashNormalized.startsWith("/") || /^[a-zA-Z]:/.test(slashNormalized)) {
-      throw new Error(`Refusing absolute expert squad archive path: ${value}`)
+      throw new Error(`Refusing absolute expert squad ${source} path: ${value}`)
     }
-    if (slashNormalized.includes(":")) throw new Error(`Refusing unsafe expert squad archive path: ${value}`)
+    if (slashNormalized.includes(":")) throw new Error(`Refusing unsafe expert squad ${source} path: ${value}`)
     const normalized = slashNormalized.replace(/^\.\//, "")
     const segments = normalized.split("/").filter(Boolean)
-    if (segments.length === 0) throw new Error(`Invalid empty expert squad archive path: ${value}`)
+    if (segments.length === 0) throw new Error(`Invalid empty expert squad ${source} path: ${value}`)
     if (segments.some((segment) => segment === "." || segment === "..")) {
-      throw new Error(`Refusing unsafe expert squad archive path: ${value}`)
+      throw new Error(`Refusing unsafe expert squad ${source} path: ${value}`)
     }
     return segments.join("/")
   }
@@ -280,14 +294,22 @@ export namespace ExpertSquadPackageManager {
     }
   }
 
+  type InstallSourceDirectoryResult = ImportResult & {
+    installed: boolean
+  }
+
+  type PackageLoadOptions = Parameters<typeof ExpertSquadRegistry.loadPackage>[1]
+
   async function installSourceDirectory(input: {
     projectDirectory: string
     sourceDirectory: string
     replace: boolean
-  }): Promise<ImportResult> {
+    skipExisting?: boolean
+    loadOptions?: PackageLoadOptions
+  }): Promise<InstallSourceDirectoryResult> {
     assertSourceNotRuntimeInternal(input.projectDirectory, input.sourceDirectory)
     const source = Filesystem.resolve(input.sourceDirectory)
-    const loadOptions = await packageLoadOptions(input.projectDirectory)
+    const loadOptions = input.loadOptions ?? (await packageLoadOptions(input.projectDirectory))
     const loaded = await ExpertSquadRegistry.loadSourcePackage(source, loadOptions)
     assertNoBuiltInCollision(loaded.id)
     const target = targetRoot(input.projectDirectory, loaded.id)
@@ -306,6 +328,14 @@ export namespace ExpertSquadPackageManager {
       }
       const existing = !!targetState
 
+      if (existing && input.skipExisting) {
+        return {
+          id: loaded.id,
+          targetRoot: target,
+          replaced: false,
+          installed: false,
+        }
+      }
       if (existing && !input.replace) throw new Error(`Expert squad package already exists: ${loaded.id}`)
 
       await mkdir(base, { recursive: true })
@@ -342,6 +372,7 @@ export namespace ExpertSquadPackageManager {
           id: loaded.id,
           targetRoot: target,
           replaced: existing,
+          installed: true,
         }
       } catch (error) {
         await rm(staging, { recursive: true, force: true }).catch(() => undefined)
@@ -363,7 +394,8 @@ export namespace ExpertSquadPackageManager {
   }
 
   export async function importDirectory(input: ImportDirectoryInput): Promise<ImportResult> {
-    return installSourceDirectory(input)
+    const { installed: _installed, ...result } = await installSourceDirectory(input)
+    return result
   }
 
   export async function importArchive(input: ImportArchiveInput): Promise<ImportResult> {
@@ -373,14 +405,113 @@ export namespace ExpertSquadPackageManager {
     await rm(sourceRoot, { recursive: true, force: true })
     try {
       await writeArchiveFiles(sourceRoot, await readArchiveFiles(input))
-      return await installSourceDirectory({
+      const { installed: _installed, ...result } = await installSourceDirectory({
         projectDirectory: input.projectDirectory,
         sourceDirectory: sourceRoot,
         replace: input.replace,
       })
+      return result
     } finally {
       await rm(sourceRoot, { recursive: true, force: true }).catch(() => undefined)
     }
+  }
+
+  export function validatePayloadPackageSource(source: ExpertSquadRegistry.EmbeddedPackageSource) {
+    const loaded = ExpertSquadRegistry.loadEmbeddedPackage(source)
+    for (const relativePath of Object.keys(source.files)) normalizePayloadPath(relativePath)
+    return loaded
+  }
+
+  async function writePayloadPackageSource(sourceRoot: string, source: (typeof payloadPackageSources)[number]) {
+    validatePayloadPackageSource(source)
+    for (const [relativePath, content] of Object.entries(source.files)) {
+      const normalizedPath = normalizePayloadPath(relativePath)
+      const target = path.join(sourceRoot, ...normalizedPath.split("/"))
+      assertInside(sourceRoot, target, "expert squad payload file")
+      await Filesystem.write(target, content)
+    }
+  }
+
+  async function installPayloadPackageSource(input: {
+    projectDirectory: string
+    source: (typeof payloadPackageSources)[number]
+    getLoadOptions: () => Promise<PackageLoadOptions>
+  }): Promise<InstallSourceDirectoryResult> {
+    const loaded = validatePayloadPackageSource(input.source)
+    assertNoBuiltInCollision(loaded.id)
+    const target = targetRoot(input.projectDirectory, loaded.id)
+    return withPackageInstallLock(Filesystem.normalizePath(target), async () => {
+      const targetState = await lstat(target).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") return undefined
+        throw error
+      })
+      if (targetState?.isSymbolicLink()) throw new Error(`Expert squad target is a symbolic link: ${target}`)
+      if (targetState && !targetState.isDirectory()) {
+        throw new Error(`Expert squad target exists and is not a directory: ${target}`)
+      }
+      if (targetState) {
+        return {
+          id: loaded.id,
+          targetRoot: target,
+          replaced: false,
+          installed: false,
+        }
+      }
+
+      const base = canonicalBase(input.projectDirectory)
+      const scratch = scratchBase(input.projectDirectory)
+      const staging = stagingRoot(input.projectDirectory, `payload-${loaded.id}`)
+      await mkdir(base, { recursive: true })
+      await mkdir(scratch, { recursive: true })
+      assertInside(scratch, staging, "expert squad payload staging root")
+      assertInside(base, target, "expert squad target root")
+      await rm(staging, { recursive: true, force: true })
+
+      let targetInstalled = false
+      try {
+        await writePayloadPackageSource(staging, input.source)
+        const loadOptions = await input.getLoadOptions()
+        const staged = await ExpertSquadRegistry.loadSourcePackage(staging, loadOptions)
+        if (staged.id !== loaded.id) {
+          throw new Error(`Expert squad payload id changed during release: expected ${loaded.id}, got ${staged.id}`)
+        }
+        await rename(staging, target)
+        targetInstalled = true
+        await ExpertSquadRegistry.loadPackage(target, loadOptions)
+        return {
+          id: loaded.id,
+          targetRoot: target,
+          replaced: false,
+          installed: true,
+        }
+      } catch (error) {
+        await rm(staging, { recursive: true, force: true }).catch(() => undefined)
+        if (targetInstalled) await rm(target, { recursive: true, force: true }).catch(() => undefined)
+        throw error
+      }
+    })
+  }
+
+  export async function releasePayloadPackages(input: { projectDirectory: string }): Promise<ReleasePayloadResult> {
+    const installed: ImportResult[] = []
+    const skipped: ImportResult[] = []
+    let loadOptions: Promise<PackageLoadOptions> | undefined
+    const getLoadOptions = () => {
+      loadOptions ??= packageLoadOptions(input.projectDirectory)
+      return loadOptions
+    }
+
+    for (const source of payloadPackageSources) {
+      const { installed: didInstall, ...result } = await installPayloadPackageSource({
+        projectDirectory: input.projectDirectory,
+        source,
+        getLoadOptions,
+      })
+      if (didInstall) installed.push(result)
+      else skipped.push(result)
+    }
+
+    return { installed, skipped }
   }
 
   function zipPath(...parts: string[]) {

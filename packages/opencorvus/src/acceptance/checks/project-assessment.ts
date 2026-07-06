@@ -1,8 +1,8 @@
 import fs from "node:fs/promises"
 import path from "node:path"
-import { randomUUID } from "node:crypto"
 import { spawn } from "node:child_process"
 import { Instance } from "@/project/instance"
+import { withIsolatedProjectCheckWorkspace } from "@/project/isolated-check-workspace"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { collectMainWorktreeDiff, readBaselineCommitFromMetadata } from "@/engine/workspace-export"
 import { clip } from "./types"
@@ -35,17 +35,6 @@ import type { AcceptanceSpecialistReview } from "../specialist-review"
 import type { ReviewStreamStep } from "@/review/stream"
 
 const COMMAND_TIMEOUT_MS = 180_000
-const CHECK_WORKSPACE_EXCLUDED_NAMES = new Set([
-  ".git",
-  ".opencorvus",
-  ".opencorvus-worktrees",
-  ".next",
-  ".turbo",
-  ".cache",
-  "coverage",
-  "out",
-])
-
 export async function buildAcceptanceEvidenceManifest(input: {
   taskID?: string
   runID?: string
@@ -439,15 +428,22 @@ async function runRequiredCheck(
   }
 
   let executionCwd: string | undefined
-  const result = await withIsolatedCheckWorkspace(taskID, check.cwd ?? Instance.directory, async (workspace) => {
-    executionCwd = workspace
-    return runShellCommand({
-      command: check.command,
-      cwd: workspace,
-      timeoutMs: COMMAND_TIMEOUT_MS,
+  const result = await withIsolatedProjectCheckWorkspace(
+    {
+      projectDir: Instance.directory,
+      sourceCwd: check.cwd ?? Instance.directory,
       taskID,
-    })
-  })
+    },
+    async (workspace) => {
+      executionCwd = workspace
+      return runShellCommand({
+        command: check.command,
+        cwd: workspace,
+        timeoutMs: COMMAND_TIMEOUT_MS,
+        taskID,
+      })
+    },
+  )
   const status = result.exitCode === 0 ? "passed" : "failed"
   const outputExcerpt = clip([result.stdout, result.stderr].filter(Boolean).join("\n"), 4000)
   return {
@@ -479,53 +475,6 @@ function skipRequiredCheck(check: AcceptanceRequiredCheck, reason: string): Acce
     startedAt: now,
     completedAt: now,
   }
-}
-
-async function withIsolatedCheckWorkspace<T>(
-  taskID: string | undefined,
-  sourceCwd: string,
-  fn: (workspace: string) => Promise<T>,
-): Promise<T> {
-  const scratchParent = taskID
-    ? ProjectRuntimePaths.acceptancePaths(Instance.directory, taskID).checkWorkspaces
-    : ProjectRuntimePaths.tasklessAcceptancePaths(sourceCwd).checkWorkspaces
-  await fs.mkdir(scratchParent, { recursive: true })
-  const scratchRoot = await fs.mkdtemp(path.join(scratchParent, `${randomUUID()}-`))
-  const workspace = path.join(scratchRoot, "workspace")
-  try {
-    await copyTreeIntoCheckWorkspace(sourceCwd, workspace, sourceCwd)
-    return await fn(workspace)
-  } finally {
-    await fs.rm(scratchRoot, { recursive: true, force: true })
-  }
-}
-
-async function copyTreeIntoCheckWorkspace(source: string, destination: string, sourceRoot: string): Promise<void> {
-  if (!shouldCopyIntoCheckWorkspace(sourceRoot, source)) return
-  const stat = await fs.lstat(source)
-  if (stat.isDirectory()) {
-    await fs.mkdir(destination, { recursive: true })
-    const entries = await fs.readdir(source)
-    for (const entry of entries) {
-      await copyTreeIntoCheckWorkspace(path.join(source, entry), path.join(destination, entry), sourceRoot)
-    }
-    return
-  }
-  if (stat.isSymbolicLink()) {
-    const target = await fs.readlink(source)
-    await fs.symlink(target, destination)
-    return
-  }
-  if (stat.isFile()) {
-    await fs.mkdir(path.dirname(destination), { recursive: true })
-    await fs.copyFile(source, destination)
-  }
-}
-
-function shouldCopyIntoCheckWorkspace(sourceCwd: string, candidate: string) {
-  const relative = path.relative(sourceCwd, candidate)
-  if (!relative) return true
-  return relative.split(path.sep).every((part) => !CHECK_WORKSPACE_EXCLUDED_NAMES.has(part))
 }
 
 async function runShellCommand(input: {

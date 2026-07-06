@@ -7,6 +7,7 @@ import { sanitizeIntegrityPromptText, type SharedPromptBudget } from "./shared-p
 export type BuildIntegrityFeedback = {
   promptMarkdown: string
   runtimeMarkdownPath?: string
+  blockingFingerprints: string[]
 }
 
 export function composeIntegrityFeedbackForBuild(input: {
@@ -72,7 +73,7 @@ export function composeIntegrityFeedbackForBuild(input: {
     .join("\n\n")
 
   if (directPrompt.length <= input.promptBudget.totalCharCap) {
-    return { promptMarkdown: directPrompt }
+    return { promptMarkdown: directPrompt, blockingFingerprints: blockingFingerprintsFromFindings(history.latestBlockingFindings) }
   }
   if (!input.runtimeMarkdownDir) {
     throw new Error(
@@ -101,7 +102,15 @@ export function composeIntegrityFeedbackForBuild(input: {
     .filter((section) => section.trim().length > 0)
     .join("\n\n")
 
-  return { promptMarkdown: materializedPrompt, runtimeMarkdownPath }
+  return {
+    promptMarkdown: materializedPrompt,
+    runtimeMarkdownPath,
+    blockingFingerprints: blockingFingerprintsFromFindings(history.latestBlockingFindings),
+  }
+}
+
+function blockingFingerprintsFromFindings(findings: IntegrityRootSymptomVariation[]): string[] {
+  return [...new Set(findings.map((finding) => finding.fingerprint).filter(Boolean))].sort()
 }
 
 function renderPersistentRootsSection(

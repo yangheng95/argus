@@ -126,8 +126,6 @@ describe("composeIntegrityFeedbackForBuild", () => {
       findings: [
         {
           id: "BF-R1-storage",
-          rootID: "storage-validation",
-          canonicalLabel: "Validate persisted settings",
           severity: "blocking",
           title: "Persisted settings are trusted",
           description: "getSettings() trusts localStorage values.",
@@ -150,8 +148,6 @@ describe("composeIntegrityFeedbackForBuild", () => {
       findings: [
         {
           id: "BF-R2-settings-validation",
-          rootID: "storage-validation",
-          canonicalLabel: "Validate persisted settings",
           severity: "blocking",
           title: "getSettings does not validate model, temperature, or maxTokens",
           description:
@@ -176,8 +172,6 @@ describe("composeIntegrityFeedbackForBuild", () => {
       findings: [
         {
           id: "BF-R3-settings-validation",
-          rootID: "storage-validation",
-          canonicalLabel: "Validate persisted settings",
           severity: "blocking",
           title: "getSettings still does not validate model, temperature, or maxTokens",
           description:
@@ -203,7 +197,8 @@ describe("composeIntegrityFeedbackForBuild", () => {
       now: now + 30,
     })
 
-    const composed = feedback({ taskID, lineage: rootLineage })?.promptMarkdown ?? ""
+    const result = feedback({ taskID, lineage: rootLineage })
+    const composed = result?.promptMarkdown ?? ""
     const rootHistory = buildIntegrityRootHistory({
       taskID,
       specSnapshotLineage: rootLineage,
@@ -219,6 +214,7 @@ describe("composeIntegrityFeedbackForBuild", () => {
     expect(composed).toContain("### Build repair report contract")
     expect(composed).toContain("repair_report.repaired_findings[]")
     expect(composed).toContain(rootHistory.latestBlockingFindings[0]!.fingerprint)
+    expect(result?.blockingFingerprints).toEqual([rootHistory.latestBlockingFindings[0]!.fingerprint])
     expect(composed).toContain("BF-R3-settings-validation")
     expect(composed).toContain("getSettings does not validate model, temperature, or maxTokens")
     expect(composed).toContain("src/services/storage.ts")
@@ -246,7 +242,6 @@ describe("composeIntegrityFeedbackForBuild", () => {
       findings: [
         {
           id: "BF-old",
-          rootID: "lineage-root",
           severity: "blocking",
           title: "Old snapshot root",
           description: "lineageRoot() old snapshot already found this root.",
@@ -266,7 +261,6 @@ describe("composeIntegrityFeedbackForBuild", () => {
       findings: [
         {
           id: "BF-active",
-          rootID: "lineage-root",
           severity: "blocking",
           title: "Active snapshot root still exists",
           description: "lineageRoot() active corrective snapshot still reports the root.",
@@ -286,7 +280,6 @@ describe("composeIntegrityFeedbackForBuild", () => {
       findings: [
         {
           id: "BF-active-latest",
-          rootID: "lineage-root",
           severity: "blocking",
           title: "Active snapshot root remains",
           description: "lineageRoot() still reports the active corrective snapshot root.",
@@ -323,7 +316,6 @@ describe("composeIntegrityFeedbackForBuild", () => {
       findings: [
         {
           id: "BF-old",
-          rootID: "fixed-root",
           severity: "blocking",
           title: "Old blocker",
           description: "Old blocker description.",
@@ -365,7 +357,6 @@ describe("composeIntegrityFeedbackForBuild", () => {
       findings: [
         {
           id: "BF-cap-1",
-          rootID: "cap-root-1",
           severity: "blocking",
           title: "First blocker survives runtime materialization",
           description: "x".repeat(900),
@@ -374,7 +365,6 @@ describe("composeIntegrityFeedbackForBuild", () => {
         },
         {
           id: "BF-cap-2",
-          rootID: "cap-root-2",
           severity: "blocking",
           title: "Second blocker survives runtime materialization",
           description: "y".repeat(900),
@@ -420,7 +410,6 @@ describe("composeIntegrityFeedbackForBuild", () => {
       findings: [
         {
           id: "BF-sanitize",
-          rootID: "sanitize-root",
           severity: "blocking",
           title: "# injected title",
           description: "\u001B[31m# injected description\u001B[0m\n\u202Ertl\x00",

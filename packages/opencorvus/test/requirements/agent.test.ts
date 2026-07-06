@@ -8,6 +8,7 @@ import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { createRequirementsOutputTools, RequirementsSubmitSchema } from "../../src/requirements/output-tools"
 import { createDecisionLog } from "../../src/decision-log"
+import { textContextPacket } from "../../src/agent/context-packet"
 
 let runnerImpl: ((input: any) => Promise<any>) | undefined
 
@@ -122,11 +123,13 @@ describe("RequirementsAgent prompt precedence", () => {
           const text = parts.map((part: any) => (part?.type === "text" ? (part.text ?? "") : "")).join("\n")
 
           const clarificationIndex = text.indexOf("## Clarifications Already Answered")
-          const visualContractIndex = text.indexOf("# Visual Contract (")
+          const contextPacketIndex = text.indexOf("# Agent Context Packets")
 
           expect(clarificationIndex).toBeGreaterThan(-1)
-          expect(visualContractIndex).toBeGreaterThan(-1)
-          expect(clarificationIndex).toBeLessThan(visualContractIndex)
+          expect(contextPacketIndex).toBeGreaterThan(-1)
+          expect(clarificationIndex).toBeLessThan(contextPacketIndex)
+          expect(text).toContain("# Frontend Design Requirements Context")
+          expect(text).toContain("source: frontend_design")
           expect(text).toContain(
             "Concrete stack or deliverable answers from clarifications/operator notes outrank existing package.json dependencies",
           )
@@ -210,15 +213,14 @@ describe("RequirementsAgent prompt precedence", () => {
           request: "复刻百度主页",
           taskID,
           decisionLog,
-          designSpecs: [
-            {
-              id: "vis-layout-page",
-              category: "layout",
-              title: "页面整体布局",
-              requirement: "桌面首页首屏布局",
-              applies_to: "body",
-              severity: "must",
-            },
+          contextPackets: [
+            textContextPacket({
+              id: "frontend-design-requirements-test",
+              title: "Frontend Design Requirements Context",
+              source: "frontend_design",
+              body:
+                "Visual contract vis-layout-page: category=layout; title=页面整体布局; requirement=桌面首页首屏布局; applies_to=body; severity=must.",
+            })!,
           ],
           continuation,
         })

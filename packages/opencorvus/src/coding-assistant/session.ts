@@ -3,7 +3,7 @@ import type { SessionPrompt } from "@/session/prompt"
 import { Instance } from "@/project/instance"
 import { Session as SessionApi } from "@/session"
 import { SessionTable } from "@/session/session.sql"
-import { Database, and, desc, eq, isNull, like, or, sql, type SQL } from "@/storage/db"
+import { Database, NotFoundError, and, desc, eq, isNull, like, or, sql, type SQL } from "@/storage/db"
 export { RIGHT_SIDEBAR_CODING_ASSISTANT_DEFAULT_TITLE } from "@/session/first-message-title"
 
 export const RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA = {
@@ -94,10 +94,10 @@ export type RightSidebarCodingAssistantSessionList = {
   }
 }
 
-export function listRightSidebarCodingAssistantSessions(
+export async function listRightSidebarCodingAssistantSessions(
   input: RightSidebarCodingAssistantSessionListInput,
-): RightSidebarCodingAssistantSessionList {
-  const conditions: SQL[] = [
+): Promise<RightSidebarCodingAssistantSessionList> {
+  const baseConditions = (): SQL[] => [
     eq(SessionTable.project_id, Instance.project.id),
     eq(SessionTable.directory, Instance.directory),
     eq(SessionTable.kind, "assistant" as const),
@@ -105,37 +105,61 @@ export function listRightSidebarCodingAssistantSessions(
     sql`json_extract(${SessionTable.metadata}, '$.codingAssistant.surface') = 'right-sidebar'`,
   ]
   const search = input.search?.trim()
-  if (search) {
-    conditions.push(or(like(SessionTable.title, `%${search}%`), like(SessionTable.id, `%${search}%`))!)
-  }
   if (input.cursorUpdated !== undefined) {
     if (!input.cursorSessionID) {
       throw new Error("listRightSidebarCodingAssistantSessions requires cursorSessionID with cursorUpdated")
     }
-    const cursorUpdated = input.cursorUpdated
-    const cursorSessionID = input.cursorSessionID
-    conditions.push(
-      or(
-        sql`${SessionTable.time_updated} < ${cursorUpdated}`,
-        sql`${SessionTable.time_updated} = ${cursorUpdated} AND ${SessionTable.id} < ${cursorSessionID}`,
-      )!,
-    )
   }
+
   const visibleLimit = input.limit
-  const rows = Database.use((db) =>
-    db
-      .select()
-      .from(SessionTable)
-      .where(and(...conditions))
-      .orderBy(desc(SessionTable.time_updated), desc(SessionTable.id))
-      .limit(visibleLimit + 1)
-      .all(),
-  )
-  const visible = rows.slice(0, visibleLimit).map(SessionApi.fromRow)
-  const last = visible.at(-1)
+  const visible: Session.Info[] = []
+  let cursorUpdated = input.cursorUpdated
+  let cursorSessionID = input.cursorSessionID
+
+  while (visible.length <= visibleLimit) {
+    const conditions = baseConditions()
+    if (search) {
+      conditions.push(or(like(SessionTable.title, `%${search}%`), like(SessionTable.id, `%${search}%`))!)
+    }
+    if (cursorUpdated !== undefined) {
+      conditions.push(
+        or(
+          sql`${SessionTable.time_updated} < ${cursorUpdated}`,
+          sql`${SessionTable.time_updated} = ${cursorUpdated} AND ${SessionTable.id} < ${cursorSessionID}`,
+        )!,
+      )
+    }
+    const rows = Database.use((db) =>
+      db
+        .select()
+        .from(SessionTable)
+        .where(and(...conditions))
+        .orderBy(desc(SessionTable.time_updated), desc(SessionTable.id))
+        .limit(visibleLimit + 1)
+        .all(),
+    )
+    for (const row of rows) {
+      const session = SessionApi.fromRow(row)
+      try {
+        await SessionApi.assertLineageInProject({ sessionID: session.id, projectID: Instance.project.id })
+        visible.push(session)
+      } catch (error) {
+        if (!(error instanceof NotFoundError)) throw error
+      }
+      if (visible.length > visibleLimit) break
+    }
+    if (visible.length > visibleLimit || rows.length <= visibleLimit) break
+    const lastScanned = rows.at(-1)
+    if (!lastScanned) break
+    cursorUpdated = lastScanned.time_updated
+    cursorSessionID = lastScanned.id
+  }
+
+  const sessions = visible.slice(0, visibleLimit)
+  const last = sessions.at(-1)
   return {
-    sessions: visible,
-    ...(rows.length > visibleLimit && last
+    sessions,
+    ...(visible.length > visibleLimit && last
       ? {
           nextCursor: {
             updated: last.time.updated,

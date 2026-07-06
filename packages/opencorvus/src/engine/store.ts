@@ -22,6 +22,7 @@ import {
 } from "@/storage/db"
 import type { SQL } from "@/storage/db"
 import { specSnapshotIDsForLineage, type SpecSnapshotLineage } from "@/integrity/replay-lineage"
+import { parseIntegrityAttemptPayload, type IntegrityAttemptPayload } from "@/integrity/attempt-payload"
 import { AcceptanceDiffSummary, EvaluationCheck } from "./model"
 import {
   EngineArtifactTable,
@@ -134,8 +135,8 @@ export type BuildAttemptOutcomeRow = {
   id: string
   task_id: string
   run_id: string | null
-  goal_id: string
-  goal_run_id: string
+  goal_id: string | null
+  goal_run_id: string | null
   session_id: string | null
   terminal_status: "completed" | "failed" | "aborted"
   outcome_kind: BuildAttemptOutcomeKind
@@ -147,6 +148,8 @@ export type BuildAttemptOutcomeRow = {
   diff_base_ref: string | null
   diff_head_ref: string | null
   changed_files: string[]
+  reported_changed_files: string[]
+  build_report: Record<string, unknown> | null
   host_facts: Record<string, unknown>
   workspace: {
     dir: string | null
@@ -906,11 +909,12 @@ export type LatestIntegrityAttemptArtifactQuery = {
   phase?: "pre_build" | "post_build"
 }
 
-export type IntegrityAttemptArtifactRow = ArtifactRow & {
+export type IntegrityAttemptArtifactRow = Omit<ArtifactRow, "payload"> & {
   artifactID: string
   taskID: string
   specSnapshotID: string
   timeCreated: number
+  payload: IntegrityAttemptPayload
 }
 
 export function listIntegrityAttemptArtifacts(input: IntegrityAttemptArtifactQuery): IntegrityAttemptArtifactRow[] {
@@ -960,9 +964,8 @@ function selectIntegrityAttemptArtifacts(input: {
 }
 
 export function integrityAttemptVerdict(row: ArtifactRow | undefined | null) {
-  const payload = row?.payload as { verdict?: unknown } | null | undefined
-  const verdict = payload?.verdict
-  return verdict === "pass" || verdict === "concerns" || verdict === "needs_correction" ? verdict : undefined
+  if (!row) return undefined
+  return parseIntegrityAttemptPayload(row.payload, `integrity attempt artifact ${row.id}`).verdict
 }
 
 export type IntegrityArtifactMissingSessionStatus = {
@@ -1023,16 +1026,13 @@ export function findLatestIntegrityArtifactMissingStatus(
 }
 
 function toIntegrityAttemptArtifactRow(row: ArtifactRow): IntegrityAttemptArtifactRow {
-  const payload =
-    row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
-      ? (row.payload as Record<string, unknown>)
-      : {}
-  const specSnapshotID = typeof payload.spec_snapshot_id === "string" ? payload.spec_snapshot_id : ""
+  const payload = parseIntegrityAttemptPayload(row.payload, `integrity attempt artifact ${row.id}`)
   return {
     ...row,
+    payload,
     artifactID: row.id,
     taskID: row.task_id,
-    specSnapshotID,
+    specSnapshotID: payload.spec_snapshot_id,
     timeCreated: row.time_created,
   }
 }
@@ -2219,8 +2219,8 @@ function artifactRowToGoalRunRow(row: typeof EngineArtifactTable.$inferSelect): 
 function artifactRowToBuildAttemptOutcomeRow(row: typeof EngineArtifactTable.$inferSelect): BuildAttemptOutcomeRow {
   const payload = (row.payload ?? {}) as {
     task_id?: string
-    goal_id?: string
-    goal_run_id?: string
+    goal_id?: string | null
+    goal_run_id?: string | null
     run_id?: string | null
     session_id?: string | null
     terminal_status?: "completed" | "failed" | "aborted"
@@ -2228,6 +2228,7 @@ function artifactRowToBuildAttemptOutcomeRow(row: typeof EngineArtifactTable.$in
     summary?: string
     error?: string | null
     no_diff_reason?: string | null
+    build_report?: Record<string, unknown>
     host_facts?: Record<string, unknown>
     workspace?: {
       dir?: string | null
@@ -2236,26 +2237,31 @@ function artifactRowToBuildAttemptOutcomeRow(row: typeof EngineArtifactTable.$in
     }
   }
   const hostFacts = payload.host_facts && typeof payload.host_facts === "object" ? payload.host_facts : {}
-  const changedFiles = Array.isArray(hostFacts.actual_changed_files)
-    ? hostFacts.actual_changed_files.filter((item): item is string => typeof item === "string" && item.length > 0)
-    : []
+  const buildReport = payload.build_report && typeof payload.build_report === "object" ? payload.build_report : null
+  const changedFiles = changedFilePathsFromHostFacts(hostFacts.actual_changed_files)
+  const reportedChangedFiles = changedFilePathsFromBuildReport(buildReport?.files_changed)
   return {
     id: row.id,
     task_id: payload.task_id ?? row.task_id,
     run_id: payload.run_id ?? row.run_id ?? null,
-    goal_id: payload.goal_id ?? "",
-    goal_run_id: payload.goal_run_id ?? row.goal_run_id ?? "",
+    goal_id: payload.goal_id ?? null,
+    goal_run_id: payload.goal_run_id ?? row.goal_run_id ?? null,
     session_id: payload.session_id ?? null,
     terminal_status: payload.terminal_status ?? "failed",
     outcome_kind: payload.outcome_kind ?? "failed",
     summary: payload.summary ?? "",
     error: payload.error ?? null,
     no_diff_reason: payload.no_diff_reason ?? null,
-    commit_ref: typeof hostFacts.contribution_commit_ref === "string" ? hostFacts.contribution_commit_ref : null,
+    commit_ref:
+      typeof hostFacts.contribution_commit_ref === "string" && hostFacts.contribution_commit_ref.trim()
+        ? hostFacts.contribution_commit_ref
+        : null,
     published_commit_ref: typeof hostFacts.published_commit_ref === "string" ? hostFacts.published_commit_ref : null,
     diff_base_ref: typeof hostFacts.diff_base_ref === "string" ? hostFacts.diff_base_ref : null,
     diff_head_ref: typeof hostFacts.diff_head_ref === "string" ? hostFacts.diff_head_ref : null,
     changed_files: changedFiles,
+    reported_changed_files: reportedChangedFiles,
+    build_report: buildReport,
     host_facts: hostFacts,
     workspace: {
       dir: payload.workspace?.dir ?? null,
@@ -2265,6 +2271,30 @@ function artifactRowToBuildAttemptOutcomeRow(row: typeof EngineArtifactTable.$in
     time_created: row.time_created,
     time_updated: row.time_updated,
   }
+}
+
+function changedFilePathsFromHostFacts(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((item) => {
+    if (typeof item === "string" && item.trim()) return [item.trim()]
+    if (item && typeof item === "object" && !Array.isArray(item)) {
+      const path = (item as Record<string, unknown>).path
+      if (typeof path === "string" && path.trim()) return [path.trim()]
+    }
+    return []
+  })
+}
+
+function changedFilePathsFromBuildReport(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((item) => {
+    if (typeof item === "string" && item.trim()) return [item.trim()]
+    if (item && typeof item === "object" && !Array.isArray(item)) {
+      const path = (item as Record<string, unknown>).path
+      if (typeof path === "string" && path.trim()) return [path.trim()]
+    }
+    return []
+  })
 }
 
 /** Reconstruct an `EvaluationRow` (historical `engine_evaluation` shape) from an

@@ -26,7 +26,7 @@ Your strengths:
 ## Web Research
 
 - Use websearch when the task requires external knowledge not in the codebase.
-- For live webpage URLs that need visual clone / render / page-structure analysis, report that the caller should use `frontend_research` first when a source-backed Page Skeleton Blueprint is missing, then `frontend_design` for the implementation template. You do not own webpage evidence extraction.
+- For live webpage URLs that need visual clone / render / page-structure analysis, report that the caller should use the current scheduler workflow's source-page investigation stage first when a source-backed Page Skeleton Blueprint is missing, then its visual/template handoff stage when one is declared. You do not own webpage evidence extraction or workflow routing.
 - Use `webfetch` only for pure-text content (API docs, README, plain JSON), not visual cloning.
 - Prefer official documentation and primary sources.
 

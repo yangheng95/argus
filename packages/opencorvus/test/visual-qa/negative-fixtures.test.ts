@@ -29,7 +29,7 @@ async function readManifest(): Promise<NegativeFixtureManifest> {
 }
 
 function reportForFixture(item: NegativeFixtureManifest["cases"][number], accepted: boolean): VisualQaReport {
-  const imageRef = path.join(fixtureRoot, item.image).replaceAll("\\", "/")
+  const imageRef = `visual_qa:negative-product-grade:${item.id}`
   return {
     accepted,
     summary: `${item.id} is a negative product-grade calibration fixture.`,
@@ -44,7 +44,7 @@ function reportForFixture(item: NegativeFixtureManifest["cases"][number], accept
         observed: item.blocker.reason,
         viewports: [{ width: 1366, height: 768 }],
         states: ["default"],
-        source_refs: ["fixture:negative-product-grade"],
+        source_refs: ["visual_qa:negative-product-grade"],
         evidence_refs: [imageRef],
         required_correction: item.blocker.required_correction,
       },
@@ -55,7 +55,7 @@ function reportForFixture(item: NegativeFixtureManifest["cases"][number], accept
         region: item.blocker.region,
         viewports: [{ width: 1366, height: 768 }],
         states: ["default"],
-        source_refs: ["fixture:negative-product-grade"],
+        source_refs: ["visual_qa:negative-product-grade"],
         evidence_refs: [imageRef],
         notes: "Checked the captured first viewport fixture.",
       },
@@ -65,13 +65,12 @@ function reportForFixture(item: NegativeFixtureManifest["cases"][number], accept
       {
         ...item.blocker,
         check_ids: [NEGATIVE_CHECK_ID],
-        source_refs: ["fixture:negative-product-grade"],
+        source_refs: ["visual_qa:negative-product-grade"],
         evidence_refs: [imageRef],
       },
     ],
     unresolved_code_module_problems: [],
     problem_dom_regions: [],
-    repairs: [],
     evidence: [
       {
         check_ids: [NEGATIVE_CHECK_ID],
@@ -89,8 +88,6 @@ function reportForFixture(item: NegativeFixtureManifest["cases"][number], accept
       missing_regions: [],
       blocker_ids: [],
     },
-    commands: [],
-    changed_files: [],
     open_questions: [],
     fact_check_items: [],
   }

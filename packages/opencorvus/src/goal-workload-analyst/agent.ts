@@ -68,7 +68,7 @@ export namespace GoalWorkloadAnalystAgent {
     log.info("goal-workload-analyst starting", {
       goals: input.goals.length,
       contracts: knownContractIDs.length,
-      hastemplate: Boolean(input.prdFullText?.trim()),
+      contextPackets: input.contextPackets?.length ?? 0,
     })
 
     const out = await runAgentSession({

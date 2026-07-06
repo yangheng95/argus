@@ -23,9 +23,9 @@ import z from "zod"
 import { runAgentSession } from "@/agent/runner"
 import type { AgentSessionContinuation } from "@/engine/stage-continuation"
 import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
-import { AttachmentStore } from "@/storage/attachment-store"
 import { renderUserRequestSection } from "@/intent/request-prompt"
 import { createAgentContextTools } from "@/agent/context-tools"
+import { renderAgentContextPacketSection, type AgentContextPacket, withAttachmentContextPacket } from "@/agent/context-packet"
 import { createAgentCoordinationRuntimeTools } from "@/agent/coordination-runtime-tools"
 import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
@@ -49,11 +49,11 @@ export namespace IntentAnalysisAgent {
     taskID?: string
     /** Parent session — a child "intent-analysis" session is created under it. */
     parentSessionID?: string
-    /** Multimodal attachments the user uploaded with the task (images, PDFs,
-     *  etc.). Surfaced into the user-message text section AND inlined as
-     *  multimodal file parts so the model can actually look at them while
-     *  classifying intent. */
+    /** Attachments the user uploaded with the task (images, PDFs, etc.).
+     *  Surfaced as link/index refs in the user-message text section. */
     attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
+    /** Upstream agent handoff packets supplied by the scheduler. */
+    contextPackets?: AgentContextPacket[]
     model?: { providerID: string; modelID: string }
     signal?: AbortSignal
     continuation?: AgentSessionContinuation
@@ -95,12 +95,6 @@ export namespace IntentAnalysisAgent {
         buildReport: toolKit.buildReport,
       },
       buildUserPrompt: () => buildUserPrompt(input),
-      buildUserParts: async () => {
-        const text = buildUserPrompt(input)
-        const enrichedText = text + AttachmentStore.renderAttachmentInventory(input.attachments)
-        const inlineParts = await AttachmentStore.inlineFileParts(input.attachments)
-        return [{ type: "text" as const, text: enrichedText }, ...inlineParts]
-      },
       format: {
         schema: z.toJSONSchema(IntentFinalSchema) as Record<string, unknown>,
         retryCount: 2,
@@ -170,5 +164,9 @@ function buildUserPrompt(input: IntentAnalysisAgent.AnalyzeInput): string {
     sections.push(`# Title\n\n${input.title.trim()}`)
   }
   sections.push(renderUserRequestSection({ heading: "# User Request", request: input.request, taskID: input.taskID }))
+  const contextPackets = renderAgentContextPacketSection(
+    withAttachmentContextPacket(input.contextPackets, input.attachments),
+  )
+  if (contextPackets) sections.push(contextPackets)
   return sections.join("\n\n")
 }

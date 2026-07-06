@@ -987,6 +987,91 @@ test("register_visual_feedback_acceptance attaches canonical final visual feedba
   expect(findings.some((finding) => finding.code === "missing_visual_region_acceptance_ownership")).toBe(false)
 })
 
+test("register_reference_coverage records structured goal-bound reference crop regions", async () => {
+  const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd(), knownRequirementIDs: ["REQ-1"] })
+
+  await kit.tools.register_goal.execute!(
+    {
+      id: "goal_hero",
+      title: "Hero region",
+      objective: "Implement the hero region from the source reference crop.",
+      acceptance_specs: [acceptance("goal_hero", [], "REQ-1")],
+      owned_paths: ["src/Hero.tsx"],
+      depends_on: [],
+      priority: "blocking",
+      kind: "feature",
+      requirement_ids: ["REQ-1"],
+    } as any,
+    {} as any,
+  )
+
+  await kit.tools.register_reference_coverage.execute!(
+    {
+      id: "ref-hero-desktop",
+      surface: "hero desktop",
+      goal_ids: ["goal_hero"],
+      visual_spec_ids: ["vis-hero"],
+      reference_regions: [
+        {
+          reference_region_key: "hero@desktop",
+          source_reference_artifact:
+            ".opencorvus/r/t/tsk_demo/fd/visual-region-bindings/page/01-hero__src1200x3000__x0-y0-w1200-h640.png",
+          binding_manifest_artifact: "docs/visual-region-binding.json",
+          source_bbox: { x: 0, y: 0, width: 1200, height: 640 },
+          crop_intent: "full-region",
+        },
+      ],
+      expectation: "Build must restore the hero from the crop produced by Frontend Design.",
+    } as any,
+    {} as any,
+  )
+
+  expect(kit.getCollector().reference_coverage[0]?.reference_regions[0]).toMatchObject({
+    reference_region_key: "hero@desktop",
+    source_bbox: { x: 0, y: 0, width: 1200, height: 640 },
+  })
+})
+
+test("register_reference_coverage rejects malformed reference region keys", async () => {
+  const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd(), knownRequirementIDs: ["REQ-1"] })
+
+  await kit.tools.register_goal.execute!(
+    {
+      id: "goal_hero",
+      title: "Hero region",
+      objective: "Implement the hero region from the source reference crop.",
+      acceptance_specs: [acceptance("goal_hero", [], "REQ-1")],
+      owned_paths: ["src/Hero.tsx"],
+      depends_on: [],
+      priority: "blocking",
+      kind: "feature",
+      requirement_ids: ["REQ-1"],
+    } as any,
+    {} as any,
+  )
+
+  await expect(
+    kit.tools.register_reference_coverage.execute!(
+      {
+        id: "ref-hero-desktop",
+        surface: "hero desktop",
+        goal_ids: ["goal_hero"],
+        visual_spec_ids: ["vis-hero"],
+        reference_regions: [
+          {
+            reference_region_key: "hero-desktop",
+            source_reference_artifact:
+              ".opencorvus/r/t/tsk_demo/fd/visual-region-bindings/page/01-hero__src1200x3000__x0-y0-w1200-h640.png",
+          },
+        ],
+        expectation: "Build must restore the hero from the crop produced by Frontend Design.",
+      } as any,
+      {} as any,
+    ),
+  ).rejects.toThrow("reference region key")
+  expect(kit.getCollector().reference_coverage).toEqual([])
+})
+
 test("register_visual_feedback_acceptance rejects non-final goal kinds without mutation", async () => {
   const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd(), knownRequirementIDs: ["REQ-1"] })
   await kit.tools.register_goal.execute!(

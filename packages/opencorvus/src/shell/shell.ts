@@ -160,6 +160,7 @@ export namespace Shell {
     pid: number
     address?: string
     initialOutput: string
+    exited: Promise<void>
   }
 
   /**
@@ -171,7 +172,7 @@ export namespace Shell {
    */
   export async function launch(
     command: string,
-    opts: { cwd?: string; env?: NodeJS.ProcessEnv; outputSniffMs?: number; leaseMs?: number } = {},
+    opts: { cwd?: string; env?: NodeJS.ProcessEnv; outputSniffMs?: number; leaseMs?: number; abort?: AbortSignal } = {},
   ): Promise<LaunchResult> {
     const { cwd, env, outputSniffMs = 8000, leaseMs } = opts
     const shell = acceptable()
@@ -181,10 +182,12 @@ export namespace Shell {
       shell,
       cwd,
       env: { ...process.env, ...env, ...guardEnv },
+      requireProcessTreeCleanup: true,
     })
 
     let initialOutput = ""
     let exited = false
+    let aborted = false
     supervisor.stdout?.on("data", (chunk: Buffer) => {
       initialOutput += chunk.toString()
     })
@@ -200,29 +203,55 @@ export namespace Shell {
       },
     )
 
-    await new Promise((r) => setTimeout(r, outputSniffMs))
+    const abortHandler = () => {
+      aborted = true
+      void supervisor.dispose()
+    }
+    opts.abort?.addEventListener("abort", abortHandler, { once: true })
+    if (opts.abort?.aborted) abortHandler()
+
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, outputSniffMs)
+      const done = () => {
+        clearTimeout(timer)
+        opts.abort?.removeEventListener("abort", done)
+        resolve()
+      }
+      opts.abort?.addEventListener("abort", done, { once: true })
+      supervisor.exited.then(done, done)
+    })
+
+    if (aborted) {
+      opts.abort?.removeEventListener("abort", abortHandler)
+      await supervisor.dispose()
+      throw new Error(`Process launch aborted. Output:\n${initialOutput.slice(0, 1000)}`)
+    }
 
     if (exited) {
+      opts.abort?.removeEventListener("abort", abortHandler)
       await supervisor.dispose()
       throw new Error(`Process exited immediately after launch. Output:\n${initialOutput.slice(0, 1000)}`)
     }
 
+    const disposeSupervisor = () => supervisor.dispose()
     const leaseTimer =
       typeof leaseMs === "number" && Number.isFinite(leaseMs) && leaseMs > 0
         ? setTimeout(() => {
-            void supervisor.dispose()
+            void disposeSupervisor()
           }, leaseMs)
         : undefined
     leaseTimer?.unref?.()
-    supervisor.exited
+    const exitedPromise = supervisor.exited
       .finally(() => {
         if (leaseTimer) clearTimeout(leaseTimer)
+        opts.abort?.removeEventListener("abort", abortHandler)
       })
+      .then(() => undefined)
       .catch(() => undefined)
     supervisor.unref()
 
     const address = detectLaunchAddress(initialOutput)
-    return { pid: supervisor.pid, address, initialOutput: initialOutput.slice(0, 2000) }
+    return { pid: supervisor.pid, address, initialOutput: initialOutput.slice(0, 2000), exited: exitedPromise }
   }
 
   function detectLaunchAddress(output: string): string | undefined {

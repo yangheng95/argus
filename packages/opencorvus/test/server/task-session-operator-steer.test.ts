@@ -85,6 +85,29 @@ describe("task session operator steer route", () => {
     })
   }
 
+  async function importCurrentProjectSession(input: {
+    directory: string
+    kind: Session.Info["kind"]
+    title: string
+    parentID?: string
+  }) {
+    const now = Date.now()
+    const info: Session.Info = {
+      id: Identifier.ascending("session"),
+      slug: `operator-steer-lineage-${Math.random().toString(36).slice(2)}`,
+      projectID: Instance.project.id,
+      directory: input.directory,
+      ...(input.parentID ? { parentID: input.parentID } : {}),
+      title: input.title,
+      version: "test",
+      kind: input.kind,
+      metadata: {},
+      time: { created: now, updated: now },
+    }
+    await Session.importSnapshot({ info, messages: [] })
+    return info
+  }
+
   async function postSteer(input: { taskID: string; sessionID: string; directory: string; message?: string }) {
     return Server.App().request(
       `/task/${input.taskID}/session/${encodeURIComponent(input.sessionID)}/operator-steer`,
@@ -105,9 +128,51 @@ describe("task session operator steer route", () => {
         .select()
         .from(EngineArtifactTable)
         .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "queued_operator_wake")))
-        .all(),
+      .all(),
     )
   }
+
+  test("operator steer rejects polluted task-root lineage before writing coordination artifacts", async () => {
+    await using current = await tmpdir({ git: true })
+    await using foreign = await tmpdir({ git: true })
+    let foreignParentID = ""
+
+    await Instance.provide({
+      directory: foreign.path,
+      fn: async () => {
+        foreignParentID = (await Session.create({ kind: "root", title: "operator steer foreign parent" })).id
+      },
+    })
+
+    await Instance.provide({
+      directory: current.path,
+      fn: async () => {
+        const now = Date.now()
+        const taskID = Identifier.ascending("task")
+        const root = await importCurrentProjectSession({
+          directory: current.path,
+          kind: "root",
+          title: "operator steer polluted root",
+          parentID: foreignParentID,
+        })
+        const worker = await importCurrentProjectSession({
+          directory: current.path,
+          kind: "build",
+          title: "operator steer polluted worker",
+          parentID: root.id,
+        })
+        seedTask({ taskID, rootID: root.id, now })
+
+        const response = await postSteer({ taskID, sessionID: worker.id, directory: current.path })
+
+        expect(response.status).not.toBe(200)
+        expect(await response.text()).toContain("Session not found")
+        expect(listPendingAgentCoordinationRequests(taskID)).toEqual([])
+        expect(listAgentCoordinationActions(taskID)).toEqual([])
+        expect(queuedCoordinationWakes(taskID)).toEqual([])
+      },
+    })
+  })
 
   function installRuntimeContract(input: { taskID: string; sessionID: string; kind: OperatorSteerTargetKind }) {
     const descriptor = WorkerTurnDescriptor.create({

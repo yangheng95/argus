@@ -7,36 +7,12 @@ import { Session } from "@/session"
 import { Question } from "@/question"
 import { captureWindowScreenshot } from "@/gui/screenshot"
 import {
-  PanelActionSchema,
   derivePanelActor,
+  panelActionSetForActor,
   panelActionSchemaForAgent,
-  panelCapabilityActionSet,
 } from "@/panel/capability"
 import { RIGHT_SIDEBAR_CODING_ASSISTANT_SOURCE, isRightSidebarCodingAssistantSession } from "@/coding-assistant/session"
 
-// Action whitelist by actor. `mission` is a coordinator that drives
-// squad/team work through a bounded set of panel actions; `explore` is a
-// read-only investigator. control_agent and panel_ui retain their full existing surface.
-// The coordination set covers dispatch (create_task), reconciliation
-// (query_task / view_*), follow-up (send_task_message), interaction
-// answering (reply/reject_interaction), and stopping work (cancel_task). It
-// deliberately EXCLUDES replan_task / retry_task / update_goal / delete_goal
-// / update_checks / set_executor / select_* / *_session — those belong to
-// the orchestrator and the desktop panel_ui (rule 11: Mission coordinates,
-// it does not replace the orchestrator). The host enforces here so even a
-// future mis-grant of `panel` to a different identity holds.
-const MISSION_ALLOWED_ACTIONS = new Set([
-  "create_task",
-  "query_task",
-  "view_board",
-  "view_plan",
-  "view_tasks",
-  "send_task_message",
-  "cancel_task",
-  "reply_interaction",
-  "reject_interaction",
-])
-const EXPLORE_ALLOWED_ACTIONS = new Set(["query_task", "view_board", "view_plan", "view_tasks"])
 import { isDecodableText, decodeDataUrlText, decodeDataUrlBase64 } from "@/session/text-mime"
 
 const localOnly = (ctx: Tool.Context) => ctx.extra?.surface === "panel" || ctx.extra?.surface === "right-sidebar"
@@ -292,36 +268,18 @@ function requireMissionTaskSemanticTitle(input: unknown): string {
   return input.trim().replace(/\s+/g, " ")
 }
 
-export const PanelTool = Tool.define<typeof PanelActionSchema, {}>("panel", async (initCtx) => ({
+export const PanelTool = Tool.define<ReturnType<typeof panelActionSchemaForAgent>, {}>("panel", async (initCtx) => ({
   description:
     "Operate the OpenCorvus control plane: inspect plans/boards, manage task state, reply to interactions, and manage sessions.",
   parameters: panelActionSchemaForAgent(initCtx?.agent?.name),
   async execute(params, ctx) {
-    // Actor-based action filter. Mission is a coordinator, not an executor —
-    // it drives squad/team work through a bounded panel surface and must not
-    // replan/retry/edit goals or manage sessions here (rule 11). The host
-    // enforces so even a future mis-grant of `panel` to another identity holds.
     const actor = await resolvePanelActor(ctx)
-    if (actor === "mission" && !MISSION_ALLOWED_ACTIONS.has(params.action)) {
+    const actorSurface = actor === "right_sidebar_assistant" ? "right-sidebar" : undefined
+    const allowedActions = panelActionSetForActor(actor, actorSurface)
+    if (!allowedActions.has(params.action)) {
       throw new Error(
-        `panel action "${params.action}" is not permitted for the mission agent. ` +
-          `Mission may call: ${[...MISSION_ALLOWED_ACTIONS].join(", ")}. ` +
-          `It coordinates squad/team work but does not replace the orchestrator — ` +
-          `replan/retry/goal/session operations belong to the orchestrator and the desktop panel.`,
-      )
-    }
-    if (actor === "explore" && !EXPLORE_ALLOWED_ACTIONS.has(params.action)) {
-      throw new Error(
-        `panel action "${params.action}" is not permitted for the explore agent. ` +
-          `Explore may call: ${[...EXPLORE_ALLOWED_ACTIONS].join(", ")}.`,
-      )
-    }
-    const rightSidebarActions =
-      actor === "right_sidebar_assistant" ? panelCapabilityActionSet("right-sidebar") : undefined
-    if (rightSidebarActions && !rightSidebarActions.has(params.action)) {
-      throw new Error(
-        `panel action "${params.action}" is not permitted for the right sidebar assistant. ` +
-          `Allowed actions: ${[...rightSidebarActions].join(", ")}.`,
+        `panel action "${params.action}" is not permitted for actor ${actor}. ` +
+          `Allowed actions: ${[...allowedActions].join(", ")}.`,
       )
     }
     switch (params.action) {

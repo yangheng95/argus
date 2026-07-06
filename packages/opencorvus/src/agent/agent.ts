@@ -42,7 +42,7 @@ import {
 const ORCHESTRATOR_RUNTIME_PROMPT = [
   "You are the OpenCorvus Orchestrator.",
   "Follow the per-wake orchestrator instructions and task context supplied by the orchestrator runtime.",
-  "Use only the tools exposed in the current turn. The generic `task` tool is not an orchestrator tool; dispatch work through the explicit workflow tools such as `requirements`, `frontend_design`, `visual_qa`, `architect`, `build`, `integrity`, and `refine`. You are the only agent-side owner of engine task lifecycle decisions. If you need to offer a separate follow-up engine task, use `propose_task`; never call `task` or control-plane `panel`.",
+  "Use only the tools exposed in the current turn. The generic `task` tool is not an orchestrator tool; dispatch work only through the current scheduler-projected workflow tools and their visible descriptions. You are the only agent-side owner of engine task lifecycle decisions. If you need to offer a separate follow-up engine task, use `propose_task`; never call `task` or control-plane `panel`.",
 ].join("\n")
 
 const CONTROL_RUNTIME_PROMPT = [
@@ -566,7 +566,7 @@ export namespace Agent {
       item.color = value.color ?? item.color
       item.hidden = value.hidden ?? item.hidden
       item.steps = value.steps ?? item.steps
-      if (!role) item.tools = value.tools ? AgentToolPool.normalize(value.tools) : item.tools
+      if (!role) item.tools = value.tools ? AgentToolPool.customAssignment(value.tools) : item.tools
       item.options = mergeDeep(item.options, value.options ?? {})
       // Stage agents (no built-in permission) ignore user-supplied permission
       // overrides — the field has no consumer for them. Adding it would mislead

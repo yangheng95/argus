@@ -1,6 +1,5 @@
 import fs from "node:fs/promises"
 import path from "node:path"
-import { fileURLToPath } from "node:url"
 import {
   browserPreviewEvidenceIDFromRef,
   findReadableBrowserPreviewEvidenceArtifactPath,
@@ -113,9 +112,6 @@ async function resolveImageEvidenceRef(input: {
     return { sourceRef: ref, absPath }
   }
 
-  const directPath = await resolveDirectPath(input.projectRoot, ref)
-  if (directPath) return { sourceRef: ref, absPath: directPath }
-
   const evidenceID = browserPreviewEvidenceIDFromRef(ref)
   if (evidenceID) {
     const resolved = await resolveBrowserPreviewEvidenceImage({
@@ -128,24 +124,6 @@ async function resolveImageEvidenceRef(input: {
   }
 
   return { issue: `Visual QA evidence ref is not a resolvable screenshot image: ${ref}` }
-}
-
-async function resolveDirectPath(projectRoot: string, ref: string): Promise<string | undefined> {
-  const normalized = ref.replaceAll("\\", "/")
-  let candidate: string | undefined
-  if (normalized.startsWith("file://")) {
-    candidate = fileURLToPath(normalized)
-  } else if (path.isAbsolute(ref)) {
-    candidate = ref
-  } else if (
-    normalized === ProjectRuntimePaths.relativeRuntimeRoot() ||
-    normalized.startsWith(`${ProjectRuntimePaths.relativeRuntimeRoot()}/`)
-  ) {
-    candidate = resolveRuntimeRelativePath(projectRoot, normalized)
-  }
-  if (!candidate) return undefined
-  await assertReadableFile(candidate)
-  return candidate
 }
 
 async function resolveBrowserPreviewEvidenceImage(input: {

@@ -1,6 +1,7 @@
 import { BlobReader, TextReader, TextWriter, Uint8ArrayWriter, ZipReader, ZipWriter } from "@zip.js/zip.js"
 import { afterEach, describe, expect, test } from "bun:test"
 import path from "path"
+import { payloadPackageSources } from "../../src/expert-squad/payload"
 import { ExpertSquadRegistry } from "../../src/expert-squad/registry"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
@@ -41,6 +42,60 @@ describe("expert-squad routes", () => {
   afterEach(async () => {
     await resetDatabase()
   })
+
+  test("GET /expert-squad/catalog releases payload packages for an empty project", async () => {
+    await using project = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: project.path,
+      fn: async () => {
+        const response = await Server.App().request("/expert-squad/catalog", {
+          headers: {
+            "x-opencorvus-directory": project.path,
+          },
+        })
+
+        expect(response.status, await response.clone().text()).toBe(200)
+        const body = (await response.json()) as {
+          active: { effective: string; project: string; session_override: string | null }
+          squads: Array<{
+            id: string
+            label: string
+            built_in: boolean
+            source: { kind: "built_in" } | { kind: "project_package"; root: string }
+          }>
+          active_skill_projection: { selector_skill_names: string[] }
+        }
+        expect(body.active).toEqual({ effective: "general", project: "general", session_override: null })
+        expect(body.squads.map((squad) => squad.id)).toEqual([
+          "general",
+          ...payloadPackageSources.map((source) => source.id),
+        ])
+
+        const squads = new Map(body.squads.map((squad) => [squad.id, squad]))
+        expect(squads.get("general")).toMatchObject({
+          built_in: true,
+          source: { kind: "built_in" },
+        })
+        for (const source of payloadPackageSources) {
+          const targetRoot = path.join(project.path, ".opencorvus", "expert-squads", source.id)
+          const squad = squads.get(source.id)
+          expect(squads.get(source.id)).toMatchObject({
+            built_in: false,
+            source: { kind: "project_package", root: targetRoot },
+          })
+          await expect(ExpertSquadRegistry.loadPackage(targetRoot)).resolves.toMatchObject({ id: source.id })
+        }
+        expect(body.active_skill_projection.selector_skill_names).toEqual(
+          expect.arrayContaining([
+            "frontend-automation-debug-expert-squad",
+            "frontend-innovate-expert-squad",
+            "frontend-replica-expert-squad",
+          ]),
+        )
+      },
+    })
+  }, 20000)
 
   test("POST /expert-squad/import-folder installs a source folder under the current project", async () => {
     await using project = await tmpdir({ git: true })

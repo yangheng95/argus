@@ -27,6 +27,7 @@ import {
   insertOrchestratorToolOwnershipArtifact,
   listLiveOrchestratorToolOwnership,
 } from "../../src/engine/tool-ownership"
+import { WorkflowRegistry } from "../../src/engine/workflow"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -276,7 +277,7 @@ describe("agent coordination artifacts", () => {
           summary: "Need orchestrator routing",
           details: "The evidence conflicts with the goal contract.",
           blocking: true,
-          requestedDecision: "choose continue or redispatch",
+          requestedDecision: "choose continue or rerun the stage",
           evidenceRefs: ["artifact:brief"],
           severity: "blocked",
           now,
@@ -295,7 +296,7 @@ describe("agent coordination artifacts", () => {
           summary: "Need orchestrator routing",
           details: "The evidence conflicts with the goal contract.",
           blocking: true,
-          requestedDecision: "choose continue or redispatch",
+          requestedDecision: "choose continue or rerun the stage",
           evidenceRefs: ["artifact:brief"],
           severity: "blocked",
           now: now + 1,
@@ -312,7 +313,7 @@ describe("agent coordination artifacts", () => {
             summary: "Conflicting replay",
             details: "The evidence conflicts with the goal contract.",
             blocking: true,
-            requestedDecision: "choose continue or redispatch",
+            requestedDecision: "choose continue or rerun the stage",
             evidenceRefs: ["artifact:brief"],
             severity: "blocked",
           }),
@@ -497,7 +498,7 @@ describe("agent coordination artifacts", () => {
           summary: "Need orchestrator routing",
           details: "The evidence conflicts with the goal contract.",
           blocking: true,
-          requestedDecision: "choose continue or redispatch",
+          requestedDecision: "choose continue or rerun the stage",
           now,
         })
         const duplicateID = Identifier.ascending("artifact")
@@ -533,7 +534,7 @@ describe("agent coordination artifacts", () => {
             summary: "Need orchestrator routing",
             details: "The evidence conflicts with the goal contract.",
             blocking: true,
-            requestedDecision: "choose continue or redispatch",
+            requestedDecision: "choose continue or rerun the stage",
           }),
         ).rejects.toThrow(/has 2 persisted requests/)
         expect(
@@ -749,7 +750,7 @@ describe("agent coordination artifacts", () => {
   })
 
   test(
-    "response helper rejects redispatch until a concrete dispatcher action exists",
+    "response helper rejects redispatch until a concrete workflow tool binding exists",
     async () => {
       await using tmp = await tmpdir({ git: true })
       await Instance.provide({
@@ -773,9 +774,9 @@ describe("agent coordination artifacts", () => {
             agent: "architect",
             messageID: "msg_worker_redispatch",
             summary: "Need redispatch",
-            details: "The worker asks for a fresh dispatcher action.",
+            details: "The worker asks for a fresh workflow tool action.",
             blocking: true,
-            requestedDecision: "redispatch",
+            requestedDecision: "evaluate scheduler-owned stage rerun",
             now,
           })
 
@@ -788,11 +789,143 @@ describe("agent coordination artifacts", () => {
               reason: "Redispatch must not create a weak action.",
               now: now + 1,
             }),
-          ).rejects.toThrow(/concrete worker dispatcher action binding/)
+          ).rejects.toThrow(/concrete scheduler workflow binding/)
           expect(findAgentCoordinationRequest({ taskID, requestID: request.payload.request_id })?.payload.status).toBe(
             "pending",
           )
           expect(listAgentCoordinationActions(taskID)).toHaveLength(0)
+          const response = await createAgentCoordinationResponse({
+            taskID,
+            requestID: request.payload.request_id,
+            ...coordinationResponseAudit("redispatch_accepted"),
+            decision: "redispatch",
+            reason: "Redispatch uses the current workflow declaration.",
+            redispatchWorkflow: WorkflowRegistry.resolveSync("pipeline"),
+            now: now + 2,
+          })
+          expect(listAgentCoordinationActions(taskID).map((row) => row.payload)).toEqual([
+            expect.objectContaining({
+              action: "redispatch_worker",
+              response_id: response.payload.response_id,
+              result: {
+                redispatch_binding: {
+                  workflow_tool_name: "architect",
+                  stage: "architect",
+                  target_kind: "architect",
+                },
+              },
+            }),
+          ])
+        },
+      })
+    },
+    { timeout: 15_000 },
+  )
+
+  test(
+    "redispatch action updates reject legacy top-level binding fields at the write boundary",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const now = Date.now()
+          const taskID = Identifier.ascending("task")
+          seedTask(taskID, now)
+          const root = await Session.create({ kind: "root", title: "coordination redispatch write guard root" })
+          const worker = await Session.create({
+            kind: "architect",
+            parentID: root.id,
+            title: "coordination redispatch write guard worker",
+          })
+          Database.use((db) =>
+            db.update(EngineTaskTable).set({ session_id: root.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+          )
+          const request = await createAgentCoordinationRequest({
+            taskID,
+            sessionID: worker.id,
+            agent: "architect",
+            messageID: "msg_worker_redispatch_write_guard",
+            summary: "Need redispatch",
+            details: "The worker asks for a fresh workflow tool action.",
+            blocking: true,
+            requestedDecision: "evaluate scheduler-owned stage rerun",
+            now,
+          })
+          const response = await createAgentCoordinationResponse({
+            taskID,
+            requestID: request.payload.request_id,
+            ...coordinationResponseAudit("redispatch_write_guard"),
+            decision: "redispatch",
+            reason: "Redispatch uses the current workflow declaration.",
+            redispatchWorkflow: WorkflowRegistry.resolveSync("pipeline"),
+            now: now + 1,
+          })
+
+          await expect(
+            recordAgentCoordinationActionProgress({
+              taskID,
+              actionID: response.payload.action_id,
+              result: { workflow_tool_name: "architect" },
+              summary: "old top-level workflow tool progress must not persist",
+              now: now + 2,
+            }),
+          ).rejects.toThrow(/Malformed agent coordination action payload/)
+          await expect(
+            completeAgentCoordinationAction({
+              taskID,
+              actionID: response.payload.action_id,
+              result: { stage: "architect", target_kind: "architect" },
+              summary: "old top-level stage completion must not persist",
+              now: now + 3,
+            }),
+          ).rejects.toThrow(/Malformed agent coordination action payload/)
+          await expect(
+            recordAgentCoordinationActionProgress({
+              taskID,
+              actionID: response.payload.action_id,
+              result: {
+                redispatch_binding: {
+                  workflow_tool_name: "requirements",
+                  stage: "architect",
+                  target_kind: "architect",
+                },
+              },
+              summary: "nested redispatch binding progress must not replace the scheduler binding",
+              now: now + 4,
+            }),
+          ).rejects.toThrow(/cannot replace scheduler-derived redispatch_binding/)
+          await expect(
+            completeAgentCoordinationAction({
+              taskID,
+              actionID: response.payload.action_id,
+              result: {
+                redispatch_binding: {
+                  workflow_tool_name: "requirements",
+                  stage: "architect",
+                  target_kind: "architect",
+                },
+              },
+              summary: "nested redispatch binding completion must not replace the scheduler binding",
+              now: now + 5,
+            }),
+          ).rejects.toThrow(/cannot replace scheduler-derived redispatch_binding/)
+
+          const completed = await completeAgentCoordinationAction({
+            taskID,
+            actionID: response.payload.action_id,
+            result: { dispatched: true },
+            summary: "redispatch action closed with nested binding preserved",
+            now: now + 6,
+          })
+          expect(completed.payload.result).toEqual({
+            redispatch_binding: {
+              workflow_tool_name: "architect",
+              stage: "architect",
+              target_kind: "architect",
+            },
+            dispatched: true,
+          })
         },
       })
     },

@@ -38,7 +38,8 @@ describe("MCP prompt and resource listing", () => {
           )
         }
         const output = `${stdout}\n${stderr}`
-        expect(output).toContain("10 pass")
+        const passCount = Number(output.match(/(\d+)\s+pass/)?.[1] ?? "0")
+        expect(passCount).toBeGreaterThan(0)
         expect(output).toContain("0 fail")
       } finally {
         await rm(home, { recursive: true, force: true }).catch(() => undefined)

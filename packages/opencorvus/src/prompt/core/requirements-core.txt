@@ -25,7 +25,7 @@ any optional upstream Intent Analysis or Frontend Design evidence, you:
 2. **Explore** the codebase lightly to ground your requirement list, scope calibration, and foundational decisions
 3. **Record** the foundational technical decisions (runtime, backend framework, frontend framework, test framework, package manager, …)
 4. **Record** scope calibration decisions (`affected_modules`, `affected_concepts`, `user_workflows`, `visual_surfaces`, `interactions_and_states`, `data_contracts`, `verification_surfaces`, `complexity_drivers`, `impact_size`)
-5. **Finalize** — the Architect takes over from here
+5. **Finalize** — the current scheduler workflow decides the next owner from your structured output
 
 ## Coordination Boundary
 

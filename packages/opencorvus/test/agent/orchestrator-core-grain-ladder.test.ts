@@ -40,8 +40,9 @@ describe("orchestrator-core workflow backtracking prohibition", () => {
 })
 
 /**
- * 2026-05-20 (user directive): the system delivers a project through its
- * specialist agent team via the workflow pipeline. The orchestrator was
+ * 2026-05-20 (user directive), updated 2026-07-04: the system delivers a
+ * project through the specialist agent team declared by the active scheduler
+ * workflow. The orchestrator was
  * shortcutting `kind=workflow` tasks straight to `build({ request })`,
  * skipping requirements/architect (no goal graph, no contracts, nothing
  * for integrity to verify). Direct build is reserved for kind=build and
@@ -52,18 +53,20 @@ describe("orchestrator-core workflow backtracking prohibition", () => {
 describe("orchestrator-core workflow-bypass prohibition", () => {
   test("states the agent-team acceptance principle", async () => {
     const text = await Bun.file(promptPath).text()
-    expect(text).toContain("The system delivers a project through its specialist agent team")
-    expect(text).toContain("the team IS the\nacceptance mechanism")
+    expect(text).toContain("The system delivers a project through the specialist agent team declared by the")
+    expect(text).toContain("current scheduler workflow")
+    expect(text).toContain("rendered current-workflow section in this prompt is the authoritative source")
   })
 
   test("prohibits jumping straight to direct build on a fresh workflow task", async () => {
     const text = await Bun.file(promptPath).text()
-    expect(text).toContain("Bypassing the workflow is prohibited in principle")
+    expect(text).toContain("Bypassing the current workflow is prohibited in principle")
     expect(text).toMatch(/MUST NOT jump straight to `build\(\{ request \}\)`/)
-    expect(text).toContain("task simplicity is the Architect's call")
+    expect(text).toContain("current workflow declares upstream evidence or goal-graph stages")
+    expect(text).toContain("task simplicity belongs to")
     const norm = text.replace(/\s+/g, " ")
-    expect(norm).toContain("started by a direct `build` bypass is NOT accepted by the `integrity` agent")
-    expect(norm).toContain("it cannot return a pass and the task cannot complete")
+    expect(norm).toContain("implementation was started by a direct `build` bypass has no goal graph or acceptance contracts")
+    expect(norm).toContain("you cannot responsibly complete it until you create or recover durable task evidence")
   })
 
   test("direct build is the narrow exception: kind=build or post-review fix", async () => {

@@ -22,6 +22,13 @@ export namespace WorkerTurnDescriptor {
       switches: z.record(z.string(), z.boolean()).optional(),
       terminal: z.string().optional(),
     }),
+    capability: z
+      .object({
+        promptProfileID: z.string(),
+        capabilityProfileID: z.string(),
+        projectionHash: z.string(),
+      })
+      .optional(),
     output: z.object({
       format: z.enum(["text", "json_schema"]),
       resultMode: z.enum(["reply", "summary"]).default("reply"),

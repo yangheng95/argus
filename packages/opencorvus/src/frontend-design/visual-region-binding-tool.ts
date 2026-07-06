@@ -8,7 +8,14 @@ import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { taskPrimaryProjectRoot } from "@/project/task-runtime-root"
 import { requireRuntimePackage } from "@/runtime/package-require"
 import { buildMultimodalToolResult } from "@/tool/multimodal-result"
-import { BrowserPreviewCropIntent } from "@/browser-preview/region-schema"
+import { normalizeVisualQaReferenceRegionKey } from "@/visual-qa/reference-region-key"
+import {
+  VisualRegionBindingInputRegionSchema,
+  VisualRegionBindingManifestSchema,
+  VisualRegionBoxSchema,
+  VisualRegionSlicingStrategySchema,
+  type VisualRegionBindingManifest,
+} from "./visual-region-binding-schema"
 
 const sharp = requireRuntimePackage<typeof import("sharp")>("sharp")
 
@@ -17,24 +24,6 @@ export interface FrontendVisualRegionBindingToolEvent {
   status: "started" | "passed" | "failed"
   details?: Record<string, unknown>
 }
-
-const RegionBoxSchema = z.object({
-  x: z.number().int().nonnegative(),
-  y: z.number().int().nonnegative(),
-  width: z.number().int().positive(),
-  height: z.number().int().positive(),
-})
-
-const RegionBindingSchema = z.object({
-  region_id: z.string().min(1),
-  source_bbox: RegionBoxSchema,
-  viewport: z.string().min(1),
-  region_scope: z.string().min(1),
-  crop_intent: BrowserPreviewCropIntent,
-  target_route: z.string().min(1),
-  implementation_locator: z.string().min(1),
-  component_files: z.array(z.string().min(1)).min(1),
-})
 
 const VisualRegionBindingInputSchema = z.object({
   sourceImagePath: z
@@ -53,7 +42,10 @@ const VisualRegionBindingInputSchema = z.object({
     .min(1)
     .optional()
     .describe("Artifact package directory name under the task frontend-design runtime package."),
-  regions: z.array(RegionBindingSchema).min(1),
+  slicing_strategy: VisualRegionSlicingStrategySchema.describe(
+    "Required page cut strategy. For full-page webpage replicas Frontend Design owns horizontal component-band slicing before Architect writes goals.",
+  ),
+  regions: z.array(VisualRegionBindingInputRegionSchema).min(1),
 })
 
 const VisualRegionCoordinateAtlasInputSchema = z.object({
@@ -77,10 +69,7 @@ const VisualRegionCoordinateAtlasInputSchema = z.object({
 
 type VisualRegionBindingInput = z.infer<typeof VisualRegionBindingInputSchema>
 type VisualRegionCoordinateAtlasInput = z.infer<typeof VisualRegionCoordinateAtlasInputSchema>
-type MaterializedVisualRegionBinding = z.infer<typeof RegionBindingSchema> & {
-  source_reference_artifact: string
-  source_crop_filename: string
-}
+type MaterializedVisualRegionBinding = VisualRegionBindingManifest["regions"][number]
 type SourceImageDimensions = {
   width: number
   height: number
@@ -337,6 +326,7 @@ export async function materializeVisualRegionBindingPackage(
   manifestPath: string
   sourceImagePath: string
   sourceImageDimensions: SourceImageDimensions
+  slicingStrategy: z.infer<typeof VisualRegionSlicingStrategySchema>
   cropDirectory: string
   bboxOverlayArtifact: string
   contactSheetArtifact: string
@@ -355,6 +345,8 @@ export async function materializeVisualRegionBindingPackage(
   if (!sourceMeta.width || !sourceMeta.height) throw new Error(`Cannot read source PNG dimensions: ${sourceImagePath}`)
   if (sourceMeta.format !== "png")
     throw new Error(`VisualRegionBinding source image must decode as PNG: ${sourceImagePath}`)
+
+  assertHorizontalComponentBandCuts(input.regions)
 
   const packageName = safePathSegment(input.packageName ?? manifestStem(input.manifestPath ?? "visual-region-binding"))
   const cropDirectory = path.join(runtime.paths.absoluteDir, "visual-region-bindings", packageName)
@@ -384,6 +376,7 @@ export async function materializeVisualRegionBindingPackage(
       .toFile(cropPath)
     const materialized = {
       ...region,
+      reference_region_key: visualRegionReferenceKey(region),
       source_crop_filename: cropFileName,
       source_reference_artifact: publicPath(cropPath, runtime.projectRoot),
     }
@@ -409,23 +402,26 @@ export async function materializeVisualRegionBindingPackage(
     throw new Error(`VisualRegionBinding manifestPath must be a JSON file: ${input.manifestPath}`)
   }
   await fs.mkdir(path.dirname(manifestPath), { recursive: true })
-  const manifest = {
+  const manifest = VisualRegionBindingManifestSchema.parse({
     version: 1,
     purpose: "visual-region-binding-package",
     generated_at: new Date().toISOString(),
+    manifest_path: publicPath(manifestPath, runtime.projectRoot),
     source_image: publicPath(sourceImagePath, runtime.projectRoot),
     source_image_dimensions: { width: sourceMeta.width, height: sourceMeta.height },
+    slicing_strategy: input.slicing_strategy,
     crop_directory: publicPath(cropDirectory, runtime.projectRoot),
     bbox_overlay_artifact: publicPath(bboxOverlayPath, runtime.projectRoot),
     contact_sheet_artifact: publicPath(contactSheetPath, runtime.projectRoot),
     regions,
-  }
+  })
   await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2), "utf8")
 
   return {
     manifestPath: publicPath(manifestPath, runtime.projectRoot),
     sourceImagePath: publicPath(sourceImagePath, runtime.projectRoot),
     sourceImageDimensions: { width: sourceMeta.width, height: sourceMeta.height },
+    slicingStrategy: input.slicing_strategy,
     cropDirectory: publicPath(cropDirectory, runtime.projectRoot),
     bboxOverlayArtifact: publicPath(bboxOverlayPath, runtime.projectRoot),
     contactSheetArtifact: publicPath(contactSheetPath, runtime.projectRoot),
@@ -449,7 +445,7 @@ function manifestStem(input: string): string {
 }
 
 function assertBoxInsideImage(
-  box: z.infer<typeof RegionBoxSchema>,
+  box: z.infer<typeof VisualRegionBoxSchema>,
   imageWidth: number,
   imageHeight: number,
   regionID: string,
@@ -459,6 +455,34 @@ function assertBoxInsideImage(
       `VisualRegionBinding bbox for ${regionID} exceeds source image bounds: ` +
         `box=${box.x},${box.y},${box.width},${box.height} image=${imageWidth}x${imageHeight}`,
     )
+  }
+}
+
+function assertHorizontalComponentBandCuts(regions: z.infer<typeof VisualRegionBindingInputRegionSchema>[]): void {
+  const seenOrders = new Set<number>()
+  let previous: z.infer<typeof VisualRegionBindingInputRegionSchema> | undefined
+  for (const [index, region] of regions.entries()) {
+    const expectedOrder = index + 1
+    if (region.source_order !== expectedOrder) {
+      throw new Error(
+        `horizontal_component_bands requires regions to be submitted in contiguous source_order: ` +
+          `expected ${expectedOrder} for ${region.region_id}, got ${region.source_order}`,
+      )
+    }
+    if (seenOrders.has(region.source_order)) {
+      throw new Error(`Duplicate horizontal component source_order: ${region.source_order}`)
+    }
+    seenOrders.add(region.source_order)
+
+    if (previous && region.source_bbox.y < previous.source_bbox.y + previous.source_bbox.height) {
+      throw new Error(
+        `horizontal_component_bands regions must not vertically overlap: ` +
+          `${previous.region_id} order ${previous.source_order} ends at y=${
+            previous.source_bbox.y + previous.source_bbox.height
+          }, ${region.region_id} order ${region.source_order} starts at y=${region.source_bbox.y}`,
+      )
+    }
+    previous = region
   }
 }
 
@@ -473,7 +497,7 @@ function safePathSegment(input: string): string {
 
 function cropFileNameFor(
   index: number,
-  region: z.infer<typeof RegionBindingSchema>,
+  region: z.infer<typeof VisualRegionBindingInputRegionSchema>,
   sourceDimensions: SourceImageDimensions,
 ): string {
   const box = region.source_bbox
@@ -484,6 +508,13 @@ function cropFileNameFor(
       `src${sourceDimensions.width}x${sourceDimensions.height}`,
       `x${box.x}-y${box.y}-w${box.width}-h${box.height}`,
     ].join("__") + ".png"
+  )
+}
+
+function visualRegionReferenceKey(region: z.infer<typeof VisualRegionBindingInputRegionSchema>): string {
+  return normalizeVisualQaReferenceRegionKey(
+    `${region.region_id}@${region.viewport}`,
+    `VisualRegionBinding region ${region.region_id}`,
   )
 }
 

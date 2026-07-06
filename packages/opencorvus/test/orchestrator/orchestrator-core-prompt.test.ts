@@ -8,29 +8,44 @@ test("orchestrator core prompt wires Integrity history guidance", async () => {
   expect(prompt).toContain("modify_goal` must not add a new capability")
 })
 
-test("orchestrator core prompt leaves frontend evidence tool selection to orchestrator judgment", async () => {
+test("orchestrator core prompt leaves frontend evidence details outside the global scheduler core", async () => {
   const prompt = await Bun.file(new URL("../../src/prompt/core/orchestrator-core.txt", import.meta.url)).text()
-  expect(prompt).toContain("For a PRD/SPEC/report request about a webpage")
-  expect(prompt).toContain("Decide whether to invoke it from the")
-  expect(prompt).toContain("`frontend_research` and `frontend_design` are sibling evidence tools")
-  expect(prompt).toContain("frontend_research")
-  expect(prompt).toContain("not acquire webpage evidence")
-  expect(prompt).toContain("call `frontend_research` before `frontend_design`")
-  expect(prompt).toContain("do not call `frontend_design` first")
-  expect(prompt).toContain("missing or unusable prepared evidence")
-  expect(prompt).toContain(
-    "Same source URL with a different focus, viewport, interaction state, component, region, fidelity risk, or missing-detail question is still the same source-page scope",
-  )
-  expect(prompt).toContain("Different focus text for the same URL does not create a new page scope")
-  expect(prompt).toContain("not a hard-coded pair")
-  expect(prompt).toContain("not fixed lifecycle gates")
-  expect(prompt).toContain("Do not apply the UI-replication rule to document/research requests")
-  expect(prompt).toContain("research this page and form a PRD")
-  expect(prompt).toContain("the URL may be evidence for")
-  expect(prompt).toContain("`frontend_research`")
+  const normalized = prompt.replace(/\s+/g, " ")
+
+  expect(normalized).toContain("Use scheduler-projected webpage/source-evidence tools only when they are visible")
+  expect(normalized).toContain("the Orchestrator only decides whether the current workflow needs the visible evidence lane now")
+  expect(normalized).toContain("Source-evidence and visual-handoff tools are bounded evidence producers")
+  expect(normalized).toContain("consume the persisted artifact downstream")
+  expect(normalized).toContain("Domain-specific replica scope")
+  expect(normalized).toContain("belong to the active expert squad, tool descriptions, and specialist prompts")
+  expect(prompt).not.toContain("Page Skeleton Blueprint")
+  expect(prompt).not.toContain("visual_feedback_verification_failed_attempts")
+  expect(prompt).not.toContain("Same source URL with a different focus")
+  expect(prompt).not.toContain("Different focus text for the same URL does not create a new page scope")
   expect(prompt).not.toContain("call `frontend_research` with the supplied")
   expect(prompt).not.toContain("MUST be first")
   expect(prompt).not.toContain("Typical shape")
+})
+
+test("orchestrator core prompt forbids prose-only workflow decisions", async () => {
+  const prompt = await Bun.file(new URL("../../src/prompt/core/orchestrator-core.txt", import.meta.url)).text()
+  const normalized = prompt.replace(/\s+/g, " ")
+
+  expect(normalized).toContain("Narrative text is never a task decision")
+  expect(normalized).toContain("must also call the deciding tool (`select_expert_squad`, `build`, `modify_goal`, `question`, `fail_task`, `complete_task`, `propose_task`, `retry_task`, or another real decision tool)")
+  expect(normalized).toContain("`skill`, `read_context`, `query_failed_goals`, and plain prose do not count as a workflow decision")
+})
+
+test("orchestrator recovery guidance repairs no-diff producers without dependency bypass or generic Architect re-entry", async () => {
+  const prompt = await Bun.file(new URL("../../src/prompt/core/orchestrator-core.txt", import.meta.url)).text()
+  const agentSource = await Bun.file(new URL("../../src/orchestrator/agent.ts", import.meta.url)).text()
+  const toolsSource = await Bun.file(new URL("../../src/orchestrator/tools.ts", import.meta.url)).text()
+  const combined = `${prompt}\n${agentSource}\n${toolsSource}`.replace(/\s+/g, " ")
+
+  expect(combined).toContain("no_project_diff producer")
+  expect(combined).toContain("Do not delete a dependency edge to bypass `no_project_diff`")
+  expect(combined).toContain("Call architect only when the persisted architect artifact itself is proven invalid and named")
+  expect(combined).not.toContain("Re-run architect")
 })
 
 test("orchestrator dynamic workflow prompt passes task id for persisted step projection", async () => {

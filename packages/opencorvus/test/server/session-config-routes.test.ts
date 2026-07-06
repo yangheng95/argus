@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { readFile } from "fs/promises"
 import path from "path"
+import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
@@ -60,7 +61,7 @@ describe("session config route contract", () => {
     expect(source).toContain('operationId: "session.config.get"')
     expect(source).toContain('operationId: "session.config.update"')
     expect(source).toContain('validator("json", Config.Overlay)')
-    expect(source).toContain("Session.getInProject({ sessionID, projectID })")
+    expect(source).toContain("Session.assertLineageInProject({ sessionID, projectID })")
     expect(source).toContain("Session.assertConfigurableRoot(session)")
     expect(source).toContain("assertNoStoredNull(stored)")
     expect(source).toContain("Session.mergeConfigOverlayInProject")
@@ -151,6 +152,60 @@ describe("session config route contract", () => {
     expect(ownBody.origin.prompt.core).toBe("session")
   }, 30_000)
 
+  test("session config PATCH rejects current-project sessions with a foreign parent chain before preview", async () => {
+    await using one = await tmpdir({ git: true, config: { model: "opencorvus/auto" } })
+    await using two = await tmpdir({ git: true, config: { model: "opencorvus/auto" } })
+    const app = Server.App()
+    let twoSessionID = ""
+    let oneChildWithForeignParentID = ""
+
+    await Instance.provide({
+      directory: two.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "root", title: "project b config parent" })
+        twoSessionID = session.id
+        await Session.mergeConfigOverlay({
+          sessionID: twoSessionID,
+          patch: { prompt: { core: "project-b-config-parent-secret" } },
+        })
+      },
+    })
+    await Instance.provide({
+      directory: one.path,
+      fn: async () => {
+        const child: Session.Info = {
+          id: Identifier.descending("session"),
+          slug: "session-config-cross-parent-child",
+          projectID: Instance.project.id,
+          directory: one.path,
+          parentID: twoSessionID,
+          title: "project a config child with project b parent",
+          version: "test",
+          kind: "build",
+          time: {
+            created: Date.now(),
+            updated: Date.now(),
+          },
+        }
+        await Session.importSnapshot({ info: child, messages: [] })
+        oneChildWithForeignParentID = child.id
+      },
+    })
+
+    const foreignParentPatch = await app.request(`/session/${oneChildWithForeignParentID}/config`, {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        "x-opencorvus-directory": one.path,
+      },
+      body: JSON.stringify({ prompt_profile: { active: "general" } }),
+    })
+
+    expect(foreignParentPatch.status).toBe(404)
+    expect(await foreignParentPatch.text()).not.toContain("project-b-config-parent-secret")
+    expect((await Session.get(oneChildWithForeignParentID)).metadata?.configOverlay).toBeUndefined()
+  }, 30_000)
+
   test("Session.mergeConfigOverlay rejects foreign sessions in the active project context", async () => {
     await using one = await tmpdir({ git: true, config: { model: "opencorvus/auto" } })
     await using two = await tmpdir({ git: true, config: { model: "opencorvus/auto" } })
@@ -192,9 +247,9 @@ describe("session config route contract", () => {
     const returnIndex = source.indexOf("return c.json(await sessionConfig({ sessionID, projectID }))", start)
     const body = source.slice(start, returnIndex)
 
-    expect(body).toContain("await Session.getInProject({ sessionID, projectID })")
+    expect(body).toContain("await Session.assertLineageInProject({ sessionID, projectID })")
     expect(body).toContain('validateConfigModelReferences(patch, "configOverlay")')
-    expect(body.indexOf("Session.getInProject")).toBeLessThan(body.indexOf("validateConfigModelReferences"))
+    expect(body.indexOf("Session.assertLineageInProject")).toBeLessThan(body.indexOf("validateConfigModelReferences"))
     expect(body.indexOf("validateConfigModelReferences")).toBeLessThan(
       body.indexOf("Session.mergeConfigOverlayInProject"),
     )

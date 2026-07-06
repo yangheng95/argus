@@ -61,6 +61,38 @@ async function createSourceUserMessage(sessionID: string, text = "compact source
   return info
 }
 
+async function importCurrentProjectChildWithForeignParent(input: {
+  directory: string
+  parentID: string
+  title: string
+}) {
+  let sessionID = ""
+  await Instance.provide({
+    directory: input.directory,
+    fn: async () => {
+      const now = Date.now()
+      const child: Session.Info = {
+        id: Identifier.descending("session"),
+        slug: `queue-cross-parent-${Math.random().toString(36).slice(2)}`,
+        projectID: Instance.project.id,
+        directory: input.directory,
+        parentID: input.parentID,
+        title: input.title,
+        version: "test",
+        kind: "assistant",
+        metadata: {},
+        time: {
+          created: now,
+          updated: now,
+        },
+      }
+      await Session.importSnapshot({ info: child, messages: [] })
+      sessionID = child.id
+    },
+  })
+  return sessionID
+}
+
 async function waitForQueueStatus(id: string, status: string) {
   for (let i = 0; i < 50; i += 1) {
     const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())
@@ -533,6 +565,111 @@ describe("scheduler.task-queue-service", () => {
     })
 
     expect(prompt).toHaveBeenCalledTimes(0)
+  })
+
+  test("queued prompt with foreign parent lineage fails before prompting", async () => {
+    await using current = await tmpdir({ git: true })
+    await using foreign = await tmpdir({ git: true })
+    const prompt = spyOn(SessionPrompt, "prompt").mockResolvedValue(result())
+    let foreignParentID = ""
+
+    await Instance.provide({
+      directory: foreign.path,
+      fn: async () => {
+        foreignParentID = (await Session.create({ kind: "assistant", title: "foreign parent" })).id
+      },
+    })
+    const childID = await importCurrentProjectChildWithForeignParent({
+      directory: current.path,
+      parentID: foreignParentID,
+      title: "current child with foreign parent",
+    })
+
+    await Instance.provide({
+      directory: current.path,
+      fn: async () => {
+        const id = Identifier.ascending("task")
+        const now = Date.now()
+        Database.use((db) =>
+          db
+            .insert(TaskQueueTable)
+            .values({
+              id,
+              session_id: childID,
+              prompt: "must not prompt",
+              priority: "normal",
+              status: "queued",
+              source: "test",
+              metadata: sessionPromptMetadata(Instance.project.id, "must not prompt"),
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
+        )
+
+        await TaskQueueService.runNow()
+        const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())
+        expect(row?.status).toBe("failed")
+        expect(row?.time_started).toBeNull()
+        expect(row?.error_message).toContain("Session not found")
+      },
+    })
+
+    expect(prompt).not.toHaveBeenCalled()
+  })
+
+  test("running prompt with foreign parent lineage fails recovery before cancellation", async () => {
+    await using current = await tmpdir({
+      git: true,
+      config: { assistant: { activity: { task_queue_run_timeout_ms: 1000 } } },
+    })
+    await using foreign = await tmpdir({ git: true })
+    const cancel = spyOn(SessionPrompt, "cancel").mockImplementation(() => true)
+    let foreignParentID = ""
+
+    await Instance.provide({
+      directory: foreign.path,
+      fn: async () => {
+        foreignParentID = (await Session.create({ kind: "assistant", title: "foreign parent" })).id
+      },
+    })
+    const childID = await importCurrentProjectChildWithForeignParent({
+      directory: current.path,
+      parentID: foreignParentID,
+      title: "current running child with foreign parent",
+    })
+
+    await Instance.provide({
+      directory: current.path,
+      fn: async () => {
+        const id = Identifier.ascending("task")
+        const staleAt = Date.now() - 1500
+        Database.use((db) =>
+          db
+            .insert(TaskQueueTable)
+            .values({
+              id,
+              session_id: childID,
+              prompt: "must not recover",
+              priority: "normal",
+              status: "running",
+              source: "test",
+              metadata: sessionPromptMetadata(Instance.project.id, "must not recover"),
+              time_created: staleAt,
+              time_updated: staleAt,
+              time_started: staleAt,
+            })
+            .run(),
+        )
+
+        await TaskQueueService.runNow()
+        const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())
+        expect(row?.status).toBe("failed")
+        expect(row?.error_message).toContain("Session not found")
+      },
+    })
+
+    expect(cancel).not.toHaveBeenCalled()
   })
 
   test("direct execute prompt preserves agent-owned session identity", async () => {
@@ -1044,10 +1181,11 @@ describe("scheduler.task-queue-service", () => {
 
   test("cancelSessionPrompts stops claimed in-flight wake before it starts a loop", async () => {
     await using tmp = await tmpdir({ git: true })
-    const releaseGet = deferred()
-    let getBlocked = false
+    const releaseLineageAssertion = deferred()
+    let lineageAssertionBlocked = false
+    let lineageAssertionsForSession = 0
     let sessionID = ""
-    const originalGet = Session.get
+    const originalAssertLineageInProject = Session.assertLineageInProject
     const loop = spyOn(SessionPrompt, "loop").mockResolvedValue(result() as never)
 
     await Instance.provide({
@@ -1055,12 +1193,15 @@ describe("scheduler.task-queue-service", () => {
       fn: async () => {
         const session = await Session.create({ kind: "assistant" })
         sessionID = session.id
-        const get = spyOn(Session, "get").mockImplementation((async (id: string) => {
-          if (id === sessionID && !getBlocked) {
-            getBlocked = true
-            await releaseGet.promise
+        const assertLineageInProject = spyOn(Session, "assertLineageInProject").mockImplementation((async (input) => {
+          if (input.sessionID === sessionID) {
+            lineageAssertionsForSession += 1
+            if (lineageAssertionsForSession === 2 && !lineageAssertionBlocked) {
+              lineageAssertionBlocked = true
+              await releaseLineageAssertion.promise
+            }
           }
-          return originalGet(id)
+          return originalAssertLineageInProject(input)
         }) as never)
         const now = Date.now()
         const id = "task_claimed_cancel_" + Math.random().toString(36).slice(2)
@@ -1087,7 +1228,7 @@ describe("scheduler.task-queue-service", () => {
 
         const run = TaskQueueService.runNow()
         await waitForQueueStatus(id, "running")
-        await waitUntil(() => getBlocked, "claimed wake Session.get")
+        await waitUntil(() => lineageAssertionBlocked, "claimed wake Session.assertLineageInProject")
         const cancelled = TaskQueueService.cancelSessionPrompts({
           sessionIDs: [sessionID],
           reason: "task cancelled",
@@ -1099,7 +1240,7 @@ describe("scheduler.task-queue-service", () => {
           status: "running",
           error_message: null,
         })
-        releaseGet.resolve()
+        releaseLineageAssertion.resolve()
         await run
 
         const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())
@@ -1109,7 +1250,7 @@ describe("scheduler.task-queue-service", () => {
           error_message: "task cancelled",
         })
         expect(loop).toHaveBeenCalledTimes(0)
-        expect(get).toHaveBeenCalled()
+        expect(assertLineageInProject).toHaveBeenCalled()
       },
     })
   })

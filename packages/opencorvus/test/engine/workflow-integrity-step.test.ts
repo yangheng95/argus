@@ -25,6 +25,8 @@ import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
 const DEFAULT_VISUAL_QA_CHECK_ID = "check_dashboard_desktop"
+const DEFAULT_VISUAL_QA_SOURCE_REF = "visual_qa:review"
+const DEFAULT_VISUAL_QA_EVIDENCE_REF = "browser_preview_evidence:art_dashboard"
 
 function visualQaCheckItem(overrides: Record<string, unknown> = {}) {
   return {
@@ -37,8 +39,8 @@ function visualQaCheckItem(overrides: Record<string, unknown> = {}) {
     observed: "Dashboard desktop surface was checked with a fresh screenshot.",
     viewports: [{ width: 1440, height: 900 }],
     states: ["default"],
-    source_refs: ["visual_qa"],
-    evidence_refs: ["artifacts/dashboard.png"],
+    source_refs: [DEFAULT_VISUAL_QA_SOURCE_REF],
+    evidence_refs: [DEFAULT_VISUAL_QA_EVIDENCE_REF],
     ...overrides,
   }
 }
@@ -54,20 +56,19 @@ function visualQaReport(overrides: Record<string, unknown> = {}) {
         region: "dashboard",
         viewports: [{ width: 1440, height: 900 }],
         states: ["default"],
-        source_refs: ["visual_qa"],
-        evidence_refs: ["artifacts/dashboard.png"],
+        source_refs: [DEFAULT_VISUAL_QA_SOURCE_REF],
+        evidence_refs: [DEFAULT_VISUAL_QA_EVIDENCE_REF],
         notes: "Checked the dashboard surface.",
       },
     ],
     findings: [],
     production_blockers: [],
     unresolved_code_module_problems: [],
-    repairs: [],
     evidence: [
       {
         check_ids: [DEFAULT_VISUAL_QA_CHECK_ID],
         type: "screenshot",
-        ref: "artifacts/dashboard.png",
+        ref: DEFAULT_VISUAL_QA_EVIDENCE_REF,
         viewport: { width: 1440, height: 900 },
         state: "default",
         note: "Fresh visual QA screenshot.",
@@ -80,8 +81,6 @@ function visualQaReport(overrides: Record<string, unknown> = {}) {
       missing_regions: [],
       blocker_ids: [],
     },
-    commands: [],
-    changed_files: [],
     open_questions: [],
     fact_check_items: [],
     ...overrides,
@@ -94,8 +93,8 @@ function visualQaCoverage(checkID: string, overrides: Record<string, unknown> = 
     region: "dashboard",
     viewports: [{ width: 1440, height: 900 }],
     states: ["default"],
-    source_refs: ["visual_qa"],
-    evidence_refs: ["artifacts/dashboard.png"],
+    source_refs: [DEFAULT_VISUAL_QA_SOURCE_REF],
+    evidence_refs: [DEFAULT_VISUAL_QA_EVIDENCE_REF],
     notes: "Checked the dashboard surface.",
     ...overrides,
   }
@@ -105,7 +104,7 @@ function visualQaEvidence(checkID: string, overrides: Record<string, unknown> = 
   return {
     check_ids: [checkID],
     type: "screenshot",
-    ref: "artifacts/dashboard.png",
+    ref: DEFAULT_VISUAL_QA_EVIDENCE_REF,
     viewport: { width: 1440, height: 900 },
     state: "default",
     note: "Fresh visual QA screenshot.",
@@ -190,6 +189,7 @@ describe("pipeline workflow review topology", () => {
     expect(stepIDs).toEqual([
       "frontend_design",
       "frontend_research",
+      "deep_research",
       "analyze_intent",
       "requirements",
       "architect",
@@ -197,21 +197,25 @@ describe("pipeline workflow review topology", () => {
       "build",
       "visual_qa",
       "integrity",
+      "fact_check",
     ])
     expect(pipeline!.steps.find((step) => step.id === "frontend_design")?.after).toEqual([])
     expect(pipeline!.steps.find((step) => step.id === "frontend_research")?.after).toEqual([])
     expect(pipeline!.steps.find((step) => step.id === "analyze_intent")?.after).toEqual([
       "frontend_design",
       "frontend_research",
+      "deep_research",
     ])
     expect(pipeline!.steps.find((step) => step.id === "requirements")?.after).toEqual([
       "frontend_design",
       "frontend_research",
+      "deep_research",
     ])
     expect(pipeline!.steps.find((step) => step.id === "workload_analysis")?.after).toEqual(["architect"])
     expect(pipeline!.steps.find((step) => step.id === "build")?.after).toEqual(["workload_analysis"])
     expect(pipeline!.steps.find((step) => step.id === "visual_qa")?.after).toEqual(["build"])
     expect(pipeline!.steps.find((step) => step.id === "integrity")?.after).toEqual(["build"])
+    expect(pipeline!.steps.find((step) => step.id === "fact_check")?.after).toEqual(["integrity"])
     expect(pipeline!.steps.find((step) => step.id === "visual_qa")?.after).not.toContain("integrity")
     expect(stepIDs.indexOf("workload_analysis")).toBeGreaterThan(stepIDs.indexOf("architect"))
     expect(stepIDs.indexOf("workload_analysis")).toBeLessThan(stepIDs.indexOf("build"))
@@ -396,7 +400,7 @@ describe("pipeline workflow review topology", () => {
     expect(text).toContain("Pipeline 的 review report surface 是 `integrity`")
     expect(text).toContain("acceptance_specs / traceability / source-reference coverage / cross-goal contracts")
     expect(text).toContain("系统完整性 review report")
-    expect(text).toContain("所有 blocking build terminal 后、最终调度决定前的一次性 GUI")
+    expect(text).toContain("所有 blocking implementation work terminal 后、最终调度决定前的一次性 GUI")
     expect(text).not.toContain("post-integrity 前端 GUI 修复")
   })
 
@@ -975,20 +979,19 @@ describe("pipeline workflow review topology", () => {
                 region: "dashboard",
                 viewports: [{ width: 1440, height: 900 }],
                 states: ["default"],
-                source_refs: ["visual_qa"],
-                evidence_refs: ["art_missing_comparison"],
+                source_refs: [DEFAULT_VISUAL_QA_SOURCE_REF],
+                evidence_refs: ["browser_preview_evidence:art_missing_comparison"],
                 notes: "Claimed dashboard reference comparison.",
               },
             ],
             findings: [],
             production_blockers: [],
             unresolved_code_module_problems: [],
-            repairs: [],
             evidence: [
               {
                 check_ids: [DEFAULT_VISUAL_QA_CHECK_ID],
                 type: "reference_comparison",
-                ref: "art_missing_comparison",
+                ref: "browser_preview_evidence:art_missing_comparison",
                 viewport: { width: 1440, height: 900 },
                 state: "default",
                 note: "Unverified comparison ref string.",
@@ -997,19 +1000,17 @@ describe("pipeline workflow review topology", () => {
             reference_parity: {
               required: true,
               required_regions: ["dashboard@desktop"],
-              reference_comparison_evidence_refs: ["art_missing_comparison"],
+              reference_comparison_evidence_refs: ["browser_preview_evidence:art_missing_comparison"],
               missing_regions: [],
               blocker_ids: [],
             },
-            commands: [],
-            changed_files: [],
             open_questions: [],
             fact_check_items: [],
           }),
           {
             effectiveAccepted: false,
             blockingIssues: [
-              "no submitted reference comparison refs resolved to readable passed browser_preview_evidence.",
+              "no submitted reference comparison refs resolved to readable passed reference-comparison evidence.",
             ],
           },
         ),
@@ -1069,20 +1070,19 @@ describe("pipeline workflow review topology", () => {
                 region: "dashboard",
                 viewports: [{ width: 1440, height: 900 }],
                 states: ["default"],
-                source_refs: ["visual_qa"],
-                evidence_refs: ["art_missing_comparison"],
+                source_refs: [DEFAULT_VISUAL_QA_SOURCE_REF],
+                evidence_refs: ["browser_preview_evidence:art_missing_comparison"],
                 notes: "Claimed dashboard reference comparison.",
               },
             ],
             findings: [],
             production_blockers: [],
             unresolved_code_module_problems: [],
-            repairs: [],
             evidence: [
               {
                 check_ids: [DEFAULT_VISUAL_QA_CHECK_ID],
                 type: "reference_comparison",
-                ref: "art_missing_comparison",
+                ref: "browser_preview_evidence:art_missing_comparison",
                 viewport: { width: 1440, height: 900 },
                 state: "default",
                 note: "Unverified comparison ref string.",
@@ -1091,19 +1091,17 @@ describe("pipeline workflow review topology", () => {
             reference_parity: {
               required: true,
               required_regions: ["dashboard@desktop"],
-              reference_comparison_evidence_refs: ["art_missing_comparison"],
+              reference_comparison_evidence_refs: ["browser_preview_evidence:art_missing_comparison"],
               missing_regions: [],
               blocker_ids: [],
             },
-            commands: [],
-            changed_files: [],
             open_questions: [],
             fact_check_items: [],
           }),
           {
             effectiveAccepted: false,
             blockingIssues: [
-              "no submitted reference comparison refs resolved to readable passed browser_preview_evidence.",
+              "no submitted reference comparison refs resolved to readable passed reference-comparison evidence.",
             ],
           },
         ),
@@ -1258,8 +1256,8 @@ describe("pipeline workflow review topology", () => {
               reason: "The visible map is a placeholder instead of the required production component.",
               impact: "Users would see a misleading placeholder surface.",
               required_correction: "Replace the placeholder with the production map component.",
-              source_refs: ["visual_qa"],
-              evidence_refs: ["artifacts/dashboard.png"],
+              source_refs: [DEFAULT_VISUAL_QA_SOURCE_REF],
+              evidence_refs: [DEFAULT_VISUAL_QA_EVIDENCE_REF],
             },
           ],
           }),
@@ -1323,8 +1321,8 @@ describe("pipeline workflow review topology", () => {
                 reason: "This report field is intentionally inconsistent with the acceptance record.",
                 impact: "Projection must recompute acceptance from report fields.",
                 required_correction: "Treat the report as rejected.",
-                source_refs: ["visual_qa"],
-                evidence_refs: ["artifacts/dashboard.png"],
+                source_refs: [DEFAULT_VISUAL_QA_SOURCE_REF],
+                evidence_refs: [DEFAULT_VISUAL_QA_EVIDENCE_REF],
               },
             ],
           }),

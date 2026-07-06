@@ -589,18 +589,23 @@ export const InjectMessageInput = z.object({
   message: z.string().min(1),
 })
 
-const TaskMessageUserInfo = Message.User.extend({
-  orderKey: z.string().min(1),
-}).meta({
-  ref: "TaskMessageUserInfo",
-})
-const TaskMessageUserPart = Message.Part.and(
-  z.object({
+const TaskMessageUserInfo = z.lazy(() =>
+  Message.User.extend({
     orderKey: z.string().min(1),
+  }).meta({
+    ref: "TaskMessageUserInfo",
   }),
-).meta({
-  ref: "TaskMessageUserPart",
-})
+)
+const TaskMessageUserPart = z.lazy(() =>
+  Message.Part.and(
+    z.object({
+      orderKey: z.string().min(1),
+    }),
+  ).meta({
+    ref: "TaskMessageUserPart",
+  }),
+)
+const MessageVisibleWithPartsArray = z.lazy(() => Message.VisibleWithParts.array())
 
 export const TaskMessageResult = z.object({
   kind: z.enum(["goal", "plan", "note"]),
@@ -696,6 +701,34 @@ export const SpecSnapshot = z.object({
 // ---------------------------------------------------------------------------
 // MiniWorkflow — workflow state projected to TaskBoard
 // ---------------------------------------------------------------------------
+
+export const WorkflowSelectionPhase = z.object({
+  id: z.string(),
+  label: z.string(),
+  sessionKind: z.string(),
+})
+
+export const WorkflowSelectionStep = z.object({
+  id: z.string(),
+  tool: z.string(),
+  agentRole: z.string().optional(),
+  label: z.string(),
+  hint: z.string(),
+  scope: z.enum(["task", "goal"]),
+  skippable: z.boolean(),
+  after: z.array(z.string()),
+  outcomeCapability: z.string().optional(),
+  phases: WorkflowSelectionPhase.array().optional(),
+})
+
+export const WorkflowSelectionSnapshot = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  steps: WorkflowSelectionStep.array(),
+  goalLoopStepIDs: z.array(z.string()),
+})
+export type WorkflowSelectionSnapshot = z.infer<typeof WorkflowSelectionSnapshot>
 
 export const TaskBoardWorkflowPhase = z.object({
   id: z.string(),
@@ -917,6 +950,24 @@ export const TaskBoardGoalWorkflow = z.object({
   acceptanceSpecs: AcceptanceSpecSchema.array().optional(),
 })
 
+export const TaskBoardAgentOutcome = z.object({
+  id: z.string(),
+  provider: z.string(),
+  artifactKind: z.string(),
+  scope: z.enum(["task", "goal"]),
+  capabilities: z.string().array().optional(),
+  runID: z.string().optional(),
+  sessionID: z.string().optional(),
+  status: z.string(),
+  result: z.string().optional(),
+  summary: z.string().optional(),
+  error: z.string().optional(),
+  time: z.object({
+    created: z.number(),
+    updated: z.number(),
+  }),
+})
+
 export const AgentInvocationStatus = z.object({
   type: z.string(),
   reason: z.string().optional(),
@@ -996,6 +1047,10 @@ export const TaskBoard = z.object({
   architect: TaskBoardArchitect.optional(),
   /** Per-goal workflow groups with step-level progress */
   goalWorkflows: TaskBoardGoalWorkflow.array().optional(),
+  /** Task-scoped terminal outcomes from agent providers. Providers supply
+   *  compact label/value fields; board core does not expose provider-specific
+   *  schema such as Build commit or file lists. */
+  taskAgentOutcomes: TaskBoardAgentOutcome.array().optional(),
   /** Task-level rollup of every quality criterion that touched this task —
    *  per-goal evaluator outcomes, integrity acceptance review, and external
    *  quality checks (e.g. visual-diff). Persisted in engine_task.criteria_results
@@ -1114,7 +1169,7 @@ export const TaskConversationHydration = z.object({
   lastSequence: z.number().int().nonnegative(),
   messageWatermark: z.number().nonnegative(),
   board: TaskBoard,
-  transcript: Message.VisibleWithParts.array(),
+  transcript: MessageVisibleWithPartsArray,
   timeline: TimelineMessage.array(),
   events: TaskEvent.array(),
   eventReplay: TaskConversationEventReplay,
@@ -1146,7 +1201,7 @@ export const SessionEvent = z.object({
 
 export const SessionConversationHydration = z.object({
   board: SessionBoardEnvelope,
-  transcript: Message.VisibleWithParts.array(),
+  transcript: MessageVisibleWithPartsArray,
   timeline: TimelineMessage.array(),
   events: SessionEvent.array(),
   history: TaskConversationHistoryState,
@@ -1160,7 +1215,7 @@ export const TaskConversationEventPage = z.object({
 })
 
 export const TaskConversationHistoryPage = z.object({
-  transcript: Message.VisibleWithParts.array(),
+  transcript: MessageVisibleWithPartsArray,
   timeline: TimelineMessage.array(),
   events: TaskEvent.array(),
   view: TaskConversationView,
@@ -1586,6 +1641,7 @@ export const Event = {
       taskID: Identifier.schema("task"),
       workflowID: z.string(),
       workflowName: z.string(),
+      workflow: WorkflowSelectionSnapshot.optional(),
       summary: z.string(),
     }),
     { tier: 2 },

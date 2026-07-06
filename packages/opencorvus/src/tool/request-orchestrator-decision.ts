@@ -10,7 +10,12 @@ const RequestOrchestratorDecisionInput = z.object({
   summary: z.string().min(1).describe("Short human-readable summary of the scheduling issue."),
   details: z.string().min(1).describe("Concrete evidence and context the orchestrator must decide from."),
   blocking: z.boolean().describe("True when the worker cannot responsibly continue this turn without a decision."),
-  requested_decision: z.string().min(1).describe("The exact decision requested from the orchestrator."),
+  requested_decision: z
+    .string()
+    .min(1)
+    .describe(
+      "The scheduling question the orchestrator must answer. Do not use response action literals such as redispatch or redispatch_worker here.",
+    ),
   evidence_refs: z.array(z.string().min(1)).optional().describe("Artifact, file, event, session, or log references."),
   goal_id: z.string().min(1).optional().describe("Goal id if this request belongs to one goal."),
   goal_run_id: z.string().min(1).optional().describe("Goal run id if this request belongs to one attempt."),
@@ -141,7 +146,7 @@ export async function executeRequestOrchestratorDecision(
 export const RequestOrchestratorDecisionTool = Tool.define("request_orchestrator_decision", {
   description: `Create a visible worker-to-orchestrator coordination request for the current task.
 
-Use this when you need the orchestrator to choose scheduling, scope, retry, cancellation, user-question, or redispatch policy. This is not a blocking RPC: the request is persisted and the task orchestrator is woken after current live ownership can drain. If blocking=true, record the request and then end this worker turn through your required terminal/status tool instead of waiting silently.
+Use this when you need the orchestrator to choose scheduling, scope, retry, cancellation, or user-question policy. This is not a blocking RPC: the request is persisted and the task orchestrator is woken after current live ownership can drain. If blocking=true, record the request and then end this worker turn through your required terminal/status tool instead of waiting silently.
 
 Do not use task messages, hidden notes, or a new subtask chat to ask the orchestrator for a decision.`,
   parameters: RequestOrchestratorDecisionInput,

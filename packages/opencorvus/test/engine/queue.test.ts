@@ -87,6 +87,37 @@ Log.init({ print: false })
 
 const ENGINE_QUEUE_TEST_TIMEOUT_MS = TEST_DATABASE_LOCK_DIAGNOSTIC_TIMEOUT_MS + 15_000
 
+async function importCurrentProjectRootWithForeignParent(input: {
+  directory: string
+  foreignParentID: string
+  title: string
+}): Promise<Session.Info> {
+  const now = Date.now()
+  const info: Session.Info = {
+    id: Identifier.descending("session"),
+    slug: `queue-cross-parent-${Math.random().toString(36).slice(2)}`,
+    projectID: Instance.project.id,
+    directory: input.directory,
+    parentID: input.foreignParentID,
+    title: input.title,
+    version: "test",
+    kind: "root",
+    metadata: {},
+    time: {
+      created: now,
+      updated: now,
+    },
+  }
+  await Session.importSnapshot({ info, messages: [] })
+  return info
+}
+
+function queuedOperatorWakeLabels(taskID: string): string[] {
+  return Database.use((db) => db.select().from(EngineArtifactTable).where(eq(EngineArtifactTable.task_id, taskID)).all())
+    .filter((row) => row.kind === "queued_operator_wake")
+    .map((row) => row.label)
+}
+
 describe("engine queue", () => {
   afterEach(
     async () => {
@@ -243,6 +274,7 @@ describe("engine queue", () => {
         const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
         const taskID = `task_queue_wait_consume_${Date.now()}`
         const now = Date.now()
+        const session = await Session.create({ kind: "orchestrator", title: "task queue wait consume root" })
 
         Database.use((db) =>
           db
@@ -250,6 +282,7 @@ describe("engine queue", () => {
             .values({
               id: taskID,
               project_id: Instance.project.id,
+              session_id: session.id,
               source: "test",
               title: "active wait task",
               request: "consume pending wait before wake",
@@ -260,7 +293,7 @@ describe("engine queue", () => {
             })
             .run(),
         )
-        const scheduled = CronService.createTaskWake({
+        const scheduled = await CronService.createTaskWake({
           name: "task wait",
           reason: "external signal",
           projectId: Instance.project.id,
@@ -616,6 +649,87 @@ describe("engine queue", () => {
         expect(drained).toBe(false)
         expect(runTaskLoop).not.toHaveBeenCalled()
         expect(findRun(runID)?.status).toBe("blocked")
+      },
+    })
+  })
+
+  test("drainQueuedTaskEventIfUnowned preserves a queued wake when task root parent leaves the project", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
+    await using foreign = await tmpdir({ git: true, config: { model: "foreign/default" } })
+
+    let foreignParentID = ""
+    await Instance.provide({
+      directory: foreign.path,
+      fn: async () => {
+        foreignParentID = (await Session.create({ kind: "root", title: "foreign queued wake parent" })).id
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const now = Date.now()
+        const root = await importCurrentProjectRootWithForeignParent({
+          directory: tmp.path,
+          foreignParentID,
+          title: "polluted queued wake root",
+        })
+        const taskID = `task_queue_polluted_wake_${now}`
+
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "test",
+              title: "polluted queued wake task",
+              request: "queued wake must not cross project lineage",
+              priority: "normal",
+              time_started: now,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(EngineArtifactTable)
+            .values({
+              id: Identifier.ascending("artifact"),
+              task_id: taskID,
+              run_id: null,
+              goal_run_id: null,
+              acceptance_id: null,
+              kind: "queued_operator_wake",
+              label: "pending",
+              payload: {
+                wake_id: `wake_polluted_${now}`,
+                task_id: taskID,
+                source_kind: "operator_message",
+                event: {
+                  note: "queued operator wake for polluted lineage",
+                  operatorMessage: {
+                    text: "continue polluted lineage",
+                    source: "panel",
+                    messageID: `msg_polluted_${now}`,
+                  },
+                },
+                time_queued: now,
+                queued_by_process_id: process.pid,
+                queued_by_instance_directory: tmp.path,
+                queued_by_project_id: Instance.project.id,
+              },
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
+
+        await expect(drainQueuedTaskEventIfUnowned(taskID)).rejects.toThrow("Session not found")
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(runTaskLoop).not.toHaveBeenCalled()
+        expect(taskStatus(taskID)).toBe("active")
+        expect(queuedOperatorWakeLabels(taskID)).toEqual(["pending"])
       },
     })
   })
@@ -2069,6 +2183,58 @@ describe("engine queue", () => {
         expect(taskStatus(criticalID)).toBe("queued")
         expect(runTaskLoop).toHaveBeenCalledTimes(1)
         expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({ taskID: normalID })
+      },
+    })
+  })
+
+  test("startQueuedTaskNow rejects a queued task whose root session parent leaves the project before claiming", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
+    await using foreign = await tmpdir({ git: true, config: { model: "foreign/default" } })
+
+    let foreignParentID = ""
+    await Instance.provide({
+      directory: foreign.path,
+      fn: async () => {
+        foreignParentID = (await Session.create({ kind: "root", title: "foreign start-now parent" })).id
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const now = Date.now()
+        const root = await importCurrentProjectRootWithForeignParent({
+          directory: tmp.path,
+          foreignParentID,
+          title: "polluted start-now root",
+        })
+        const taskID = `task_queue_polluted_start_now_${now}`
+
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "test",
+              title: "polluted start-now task",
+              request: "start now must not cross project lineage",
+              priority: "normal",
+              queue_order: 0,
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
+        )
+
+        await expect(EngineService.startQueuedTaskNow(taskID)).rejects.toThrow("Session not found")
+
+        expect(runTaskLoop).not.toHaveBeenCalled()
+        expect(taskStatus(taskID)).toBe("queued")
+        expect(findTask(taskID)?.time_started).toBeNull()
+        expect(directoryQueueSnapshot(taskCwd(taskID)).queuedTaskIDs).toEqual([taskID])
       },
     })
   })

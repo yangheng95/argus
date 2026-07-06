@@ -27,6 +27,7 @@ import {
   FrontendTemplateStringItemToolInputSchema,
   FrontendTemplateSubmitSchema,
   FrontendTemplateToolInputSchema,
+  FrontendVisualRegionBindingManifestToolInputSchema,
   FrontendProjectToolInputSchema,
   InteractionSchema,
   LayoutSchema,
@@ -46,6 +47,10 @@ import {
   type VisualSpec,
   type VisualSpecCategory,
 } from "./schema"
+import {
+  VisualRegionBindingManifestSchema,
+  type VisualRegionBindingManifest,
+} from "./visual-region-binding-schema"
 import { limitSummary, markdownList, requireReportString } from "@/agent/report"
 
 export type { FrontendTemplateFinal } from "./schema"
@@ -405,6 +410,26 @@ function renderVisualValidationEvidence(
     .join("\n")
 }
 
+function renderVisualRegionBindings(items: readonly VisualRegionBindingManifest[]): string {
+  if (items.length === 0) return "- no structured VisualRegionBinding manifests submitted"
+  return items
+    .map((item) =>
+      [
+        `- ${item.manifest_path}: ${item.slicing_strategy}`,
+        `  - source_image: ${item.source_image}`,
+        `  - bbox_overlay_artifact: ${item.bbox_overlay_artifact}`,
+        `  - contact_sheet_artifact: ${item.contact_sheet_artifact}`,
+        `  - regions: ${item.regions
+          .map(
+            (region) =>
+              `${region.source_order}:${region.reference_region_key} -> ${region.source_reference_artifact}`,
+          )
+          .join(", ")}`,
+      ].join("\n"),
+    )
+    .join("\n")
+}
+
 function renderComponentInventoryFromReusePlan(
   items: readonly FrontendTemplateFinal["component_reuse_plan"][number][],
 ): string {
@@ -684,7 +709,7 @@ async function frontendTemplateStatus(
     artifactRoot: string
     artifactRootRelative?: string
     workspaceRoot: string
-    requireFrontendInnovateContract?: boolean
+    requireDesignDirectionContract?: boolean
   },
 ): Promise<string> {
   if (collector.final) return "FRONTEND_TEMPLATE_RESULT_STATUS: finalized"
@@ -712,7 +737,7 @@ async function frontendTemplateStatus(
   }
   const lines = [
     `FRONTEND_TEMPLATE_RESULT_STATUS: ${status}`,
-    `registered: template_items=${draft.frontend_template_sections?.length ?? 0}, design_directions=${draft.design_directions?.length ?? 0}, selected_direction=${draft.selected_design_direction_id || ""}, anti_slop_review=${draft.anti_slop_review?.length ?? 0}, fillable_items=${draft.fillable_module_items?.length ?? 0}, component_reuse=${draft.component_reuse_plan?.length ?? 0}, material_items=${draft.material_inventory_items?.length ?? 0}, quality_items=${draft.quality_project_items?.length ?? 0}, visual_items=${draft.visual_consistency_items?.length ?? 0}, data_items=${draft.ui_data_contract_items?.length ?? 0}, phase_outcomes=${draft.implementation_phase_outcomes?.length ?? 0}, visual_evidence=${draft.visual_validation_evidence?.length ?? 0}, iteration_notes=${draft.template_iteration_notes?.length ?? 0}`,
+    `registered: template_items=${draft.frontend_template_sections?.length ?? 0}, design_directions=${draft.design_directions?.length ?? 0}, selected_direction=${draft.selected_design_direction_id || ""}, anti_slop_review=${draft.anti_slop_review?.length ?? 0}, fillable_items=${draft.fillable_module_items?.length ?? 0}, component_reuse=${draft.component_reuse_plan?.length ?? 0}, material_items=${draft.material_inventory_items?.length ?? 0}, quality_items=${draft.quality_project_items?.length ?? 0}, visual_items=${draft.visual_consistency_items?.length ?? 0}, data_items=${draft.ui_data_contract_items?.length ?? 0}, phase_outcomes=${draft.implementation_phase_outcomes?.length ?? 0}, visual_evidence=${draft.visual_validation_evidence?.length ?? 0}, visual_region_bindings=${draft.visual_region_bindings?.length ?? 0}, iteration_notes=${draft.template_iteration_notes?.length ?? 0}`,
   ]
   if (collector.semantic_error) lines.push(`last_validation_error: ${collector.semantic_error}`)
   for (const diagnostic of diagnostics) lines.push(`visual_evidence_error: ${diagnostic}`)
@@ -734,7 +759,7 @@ async function submitFrontendTemplateDraft(input: {
   artifactRoot: string
   artifactRootRelative?: string
   workspaceRoot: string
-  requireFrontendInnovateContract: boolean
+  requireDesignDirectionContract: boolean
 }): Promise<string> {
   if (input.collector.final)
     return "Error: frontend template already submitted; duplicate submit_frontend_template ignored."
@@ -762,7 +787,7 @@ async function submitFrontendTemplateDraft(input: {
       artifactRoot: input.artifactRoot,
       artifactRootRelative: input.artifactRootRelative,
       workspaceRoot: input.workspaceRoot,
-      requireFrontendInnovateContract: input.requireFrontendInnovateContract,
+      requireDesignDirectionContract: input.requireDesignDirectionContract,
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -814,6 +839,7 @@ export function buildFrontendTemplateReport(collector: FrontendTemplateOutputCol
       `## Frontend Project\n${renderFrontendProjectReport(collector.final)}`,
       `## Visual Consistency Contract\n${collector.final.visual_consistency_contract}`,
       `## Visual Validation Evidence\n${renderVisualValidationEvidence(collector.final.visual_validation_evidence)}`,
+      `## Visual Region Bindings\n${renderVisualRegionBindings(collector.final.visual_region_bindings)}`,
       `## UI Data Contract\n${collector.final.ui_data_contract}`,
       `## Template Iteration Notes\n${markdownList(collector.final.template_iteration_notes)}`,
       `## Reference Artifacts\n${collector.final.reference_artifacts.length ? markdownList(collector.final.reference_artifacts) : "- no reference artifacts submitted"}`,
@@ -829,7 +855,7 @@ async function assertFrontendTemplateFinal(
     artifactRoot: string
     artifactRootRelative?: string
     workspaceRoot: string
-    requireFrontendInnovateContract?: boolean
+    requireDesignDirectionContract?: boolean
   },
 ): Promise<void> {
   const requiredRenderedFields = [
@@ -857,20 +883,20 @@ async function assertFrontendTemplateFinal(
       )
     }
   }
-  if (options.requireFrontendInnovateContract) {
+  if (options.requireDesignDirectionContract) {
     if (final.design_directions.length < 2) {
       throw new Error(
-        "frontend-innovate handoff requires at least two resource-backed design_directions before downstream Build work.",
+        "design-direction handoff contract requires at least two resource-backed design_directions before downstream Build work.",
       )
     }
     if (!final.selected_design_direction_id.trim()) {
       throw new Error(
-        "frontend-innovate handoff requires selected_design_direction_id so Build has one selected direction to implement.",
+        "design-direction handoff contract requires selected_design_direction_id so Build has one selected direction to implement.",
       )
     }
     if (final.anti_slop_review.length < 1) {
       throw new Error(
-        "frontend-innovate handoff requires anti_slop_review naming rejected shallow or generic design traits.",
+        "design-direction handoff contract requires anti_slop_review naming rejected shallow or generic design traits.",
       )
     }
   }
@@ -1582,6 +1608,40 @@ function sha256File(file: string): string {
   return createHash("sha256").update(fs.readFileSync(file)).digest("hex")
 }
 
+function resolveProjectRootFile(projectRoot: string, artifactPath: string, label: string): string {
+  const root = path.resolve(projectRoot)
+  const resolved = path.isAbsolute(artifactPath)
+    ? path.resolve(artifactPath)
+    : path.resolve(root, ...normalizeReportPath(artifactPath).split("/"))
+  const relative = path.relative(root, resolved)
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error(`${label} must stay inside the task project root: ${artifactPath}`)
+  }
+  if (!isReadableFile(resolved)) throw new Error(`${label} is not a readable file: ${artifactPath}`)
+  return resolved
+}
+
+function readVisualRegionBindingManifest(projectRoot: string, manifestPath: string): VisualRegionBindingManifest {
+  const manifestFile = resolveProjectRootFile(projectRoot, manifestPath, "visual_region_binding manifest_path")
+  const parsed = VisualRegionBindingManifestSchema.parse(JSON.parse(fs.readFileSync(manifestFile, "utf8")))
+  if (normalizeReportPath(parsed.manifest_path) !== normalizeReportPath(manifestPath)) {
+    throw new Error(
+      `visual_region_binding manifest_path mismatch: expected ${manifestPath}, got ${parsed.manifest_path}`,
+    )
+  }
+  resolveProjectRootFile(projectRoot, parsed.source_image, "visual_region_binding source_image")
+  resolveProjectRootFile(projectRoot, parsed.bbox_overlay_artifact, "visual_region_binding bbox_overlay_artifact")
+  resolveProjectRootFile(projectRoot, parsed.contact_sheet_artifact, "visual_region_binding contact_sheet_artifact")
+  for (const region of parsed.regions) {
+    resolveProjectRootFile(
+      projectRoot,
+      region.source_reference_artifact,
+      `visual_region_binding ${region.reference_region_key} source_reference_artifact`,
+    )
+  }
+  return parsed
+}
+
 async function isDecodedRasterImageFile(file: string): Promise<boolean> {
   try {
     const metadata = await sharp(file).metadata()
@@ -1705,6 +1765,10 @@ function collectVisualBaselineText(final: FrontendTemplateFinal): string {
     ...final.frontend_project.entrypoints,
     ...final.frontend_project.notes,
     ...final.visual_validation_evidence.map((item) => `${item.review_status}: ${item.review_summary}`),
+    ...final.visual_region_bindings.map(
+      (item) =>
+        `${item.manifest_path}\n${item.bbox_overlay_artifact}\n${item.contact_sheet_artifact}\n${item.regions.map((region) => region.reference_region_key).join("\n")}`,
+    ),
     ...final.template_iteration_notes,
     ...final.reference_artifacts,
     ...final.open_questions,
@@ -1753,13 +1817,13 @@ export function createFrontendTemplateOutputTools(
     artifactRoot?: string
     artifactRootRelative?: string
     workspaceRoot?: string
-    requireFrontendInnovateContract?: boolean
+    requireDesignDirectionContract?: boolean
   } = {},
 ) {
   const artifactRoot = path.resolve(options.artifactRoot ?? process.cwd())
   const artifactRootRelative = options.artifactRootRelative
   const workspaceRoot = path.resolve(options.workspaceRoot ?? process.cwd())
-  const requireFrontendInnovateContract = options.requireFrontendInnovateContract === true
+  const requireDesignDirectionContract = options.requireDesignDirectionContract === true
   let collector = emptyCollector()
 
   function assertIdFree(id: string): string | null {
@@ -2100,6 +2164,21 @@ export function createFrontendTemplateOutputTools(
       },
     }),
 
+    update_frontend_visual_region_binding: tool({
+      description:
+        "Register one structured VisualRegionBinding manifest produced by create_visual_region_binding_package. Use the manifestPath returned by that tool; this reads the JSON manifest and stores the verified crop rows for Architect reference_coverage binding.",
+      inputSchema: FrontendVisualRegionBindingManifestToolInputSchema,
+      execute: async (rawInput) => {
+        if (collector.final) return "Error: frontend template already submitted; collector is closed."
+        const input = FrontendVisualRegionBindingManifestToolInputSchema.parse(rawInput)
+        const manifest = readVisualRegionBindingManifest(workspaceRoot, input.manifest_path)
+        const items = arrayField<VisualRegionBindingManifest>(collector.draft, "visual_region_bindings")
+        const mode = upsertByStringKey(items, manifest, "manifest_path")
+        collector.semantic_error = undefined
+        return `OK: frontend visual region binding ${mode} (${manifest.regions.length} regions from ${manifest.manifest_path})`
+      },
+    }),
+
     update_frontend_question: tool({
       description: "Update one truly unobservable open question. Repeated identical questions are ignored.",
       inputSchema: FrontendTemplateStringItemToolInputSchema,
@@ -2122,7 +2201,7 @@ export function createFrontendTemplateOutputTools(
           artifactRoot,
           artifactRootRelative,
           workspaceRoot,
-          requireFrontendInnovateContract,
+          requireDesignDirectionContract,
         }),
     }),
 
@@ -2137,7 +2216,7 @@ export function createFrontendTemplateOutputTools(
           artifactRoot,
           artifactRootRelative,
           workspaceRoot,
-          requireFrontendInnovateContract,
+          requireDesignDirectionContract,
         }),
     }),
   }

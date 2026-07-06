@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import { Identifier } from "../../src/id/id"
 import { TaskPlan } from "../../src/memory/task-plan"
 import { Scratchpad } from "../../src/memory/scratchpad"
 import { Instance } from "../../src/project/instance"
@@ -30,6 +31,7 @@ describe("session artifact read routes", () => {
     await using two = await tmpdir({ git: true })
     const app = Server.App()
     let oneSessionID = ""
+    let oneChildWithForeignParentID = ""
     let twoSessionID = ""
 
     await Instance.provide({
@@ -56,6 +58,33 @@ describe("session artifact read routes", () => {
         twoSessionID = session.id
       },
     })
+    await Instance.provide({
+      directory: one.path,
+      fn: async () => {
+        const child: Session.Info = {
+          id: Identifier.descending("session"),
+          slug: "artifact-cross-parent-child",
+          projectID: Instance.project.id,
+          directory: one.path,
+          parentID: twoSessionID,
+          title: "project-a-artifacts-child-with-project-b-parent",
+          version: "test",
+          kind: "build",
+          time: {
+            created: Date.now(),
+            updated: Date.now(),
+          },
+        }
+        await Session.importSnapshot({ info: child, messages: [] })
+        Todo.update({
+          sessionID: child.id,
+          todos: [{ content: "cross-parent-todo-secret", status: "pending", priority: "high" }],
+        })
+        TaskPlan.add({ sessionID: child.id, goal: "cross-parent-task-secret" })
+        Scratchpad.set(child.id, "cross-parent-scratchpad-secret")
+        oneChildWithForeignParentID = child.id
+      },
+    })
 
     const foreignTodo = await app.request(`/session/${twoSessionID}/todo`, {
       headers: { "x-opencorvus-directory": one.path },
@@ -74,6 +103,24 @@ describe("session artifact read routes", () => {
     })
     expect(foreignScratchpad.status).toBe(404)
     expect(await foreignScratchpad.text()).not.toContain("project-b-scratchpad-secret")
+
+    const foreignParentTodo = await app.request(`/session/${oneChildWithForeignParentID}/todo`, {
+      headers: { "x-opencorvus-directory": one.path },
+    })
+    expect(foreignParentTodo.status).toBe(404)
+    expect(await foreignParentTodo.text()).not.toContain("cross-parent-todo-secret")
+
+    const foreignParentTaskPlan = await app.request(`/experimental/task-plan?sessionId=${oneChildWithForeignParentID}`, {
+      headers: { "x-opencorvus-directory": one.path },
+    })
+    expect(foreignParentTaskPlan.status).toBe(404)
+    expect(await foreignParentTaskPlan.text()).not.toContain("cross-parent-task-secret")
+
+    const foreignParentScratchpad = await app.request(`/experimental/scratchpad?sessionId=${oneChildWithForeignParentID}`, {
+      headers: { "x-opencorvus-directory": one.path },
+    })
+    expect(foreignParentScratchpad.status).toBe(404)
+    expect(await foreignParentScratchpad.text()).not.toContain("cross-parent-scratchpad-secret")
 
     const ownTodo = await app.request(`/session/${oneSessionID}/todo`, {
       headers: { "x-opencorvus-directory": one.path },

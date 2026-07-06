@@ -1,22 +1,25 @@
 import { tool } from "ai"
 import z from "zod"
 import { limitSummary, markdownList, requireReportString } from "@/agent/report"
-import { findReadableBrowserPreviewEvidenceByID } from "@/browser-preview/persist"
-import { browserPreviewEvidenceIDFromRef } from "@/browser-preview/persist"
+import {
+  browserPreviewEvidenceIDFromRef,
+  findReadableBrowserPreviewEvidenceByID,
+  type PersistedBrowserPreviewEvidence,
+} from "@/browser-preview/persist"
+import { referenceComparisonEvidenceIDFromRef } from "@/evidence/reference-comparison"
 import { FactCheckItemSchema } from "@/fact-check/schema"
 import { visualQaOpenBlockingFindings, visualQaReportAcceptanceSemantics } from "./acceptance-semantics"
 import { annotateVisualQaProblemDomRegion } from "./annotated-screenshot"
+import { parseVisualQaReferenceRegionKey } from "./reference-region-key"
 import {
   VISUAL_QA_MULTI_VIEWPORT_ALIGNMENT_CATEGORY,
   VisualQaCheckItemSchema,
-  VisualQaCommandSchema,
   VisualQaCoverageSchema,
   VisualQaEvidenceSchema,
   VisualQaFindingSchema,
   VisualQaProblemDomRegionSchema,
   VisualQaProductionBlockerSchema,
   VisualQaReferenceParitySchema,
-  VisualQaRepairSchema,
   VisualQaReportSchema,
   VisualQaUnresolvedCodeModuleProblemSchema,
   type VisualQaAcceptance,
@@ -38,11 +41,8 @@ export interface VisualQaCollector {
   production_blockers: VisualQaReport["production_blockers"]
   unresolved_code_module_problems: VisualQaReport["unresolved_code_module_problems"]
   problem_dom_regions: VisualQaReport["problem_dom_regions"]
-  repairs: VisualQaReport["repairs"]
   evidence: VisualQaReport["evidence"]
   reference_parity: VisualQaReport["reference_parity"]
-  commands: VisualQaReport["commands"]
-  changed_files: VisualQaReport["changed_files"]
   open_questions: VisualQaReport["open_questions"]
   fact_check_items: VisualQaReport["fact_check_items"]
   final?: VisualQaReport
@@ -57,7 +57,6 @@ function emptyCollector(): VisualQaCollector {
     production_blockers: [],
     unresolved_code_module_problems: [],
     problem_dom_regions: [],
-    repairs: [],
     evidence: [],
     reference_parity: {
       required: false,
@@ -66,8 +65,6 @@ function emptyCollector(): VisualQaCollector {
       missing_regions: [],
       blocker_ids: [],
     },
-    commands: [],
-    changed_files: [],
     open_questions: [],
     fact_check_items: [],
   }
@@ -79,16 +76,6 @@ const SubmitVisualQaReportSchema = z
     summary: z.string().min(1),
   })
   .strict()
-
-function parseReferenceRegionKey(key: string): { regionID: string; viewportID: string } | { issue: string } {
-  const [regionID, viewportID, extra] = key.split("@")
-  if (extra !== undefined || !regionID?.trim() || !viewportID?.trim()) {
-    return {
-      issue: `reference region "${key}" must use the exact format region_id@viewport_id, for example region_header@desktop.`,
-    }
-  }
-  return { regionID: regionID.trim(), viewportID: viewportID.trim() }
-}
 
 function upsertByID<T extends { id: string }>(items: T[], item: T): "registered" | "overwritten" {
   const existingIdx = items.findIndex((row) => row.id === item.id)
@@ -210,6 +197,27 @@ function collectorUnknownCheckIDIssues(
 }
 
 type VisualQaViewport = VisualQaReport["coverage"][number]["viewports"][number]
+type VisualQaEvidence = VisualQaReport["evidence"][number]
+
+const VISUAL_QA_SCREENSHOT_BEARING_EVIDENCE_TYPES = new Set<VisualQaEvidence["type"]>([
+  "screenshot",
+  "reference_comparison",
+  "visual_diff",
+])
+
+type BrowserPreviewVisualPassEvidence = Extract<
+  PersistedBrowserPreviewEvidence["operationKind"],
+  "preview-capture" | "reference-comparison" | "scroll-slice-comparison"
+>
+
+const VISUAL_QA_BROWSER_PREVIEW_PASS_OPERATIONS_BY_TYPE: Record<
+  Extract<VisualQaEvidence["type"], "screenshot" | "reference_comparison" | "visual_diff">,
+  readonly BrowserPreviewVisualPassEvidence[]
+> = {
+  screenshot: ["preview-capture"],
+  reference_comparison: ["reference-comparison"],
+  visual_diff: ["reference-comparison", "scroll-slice-comparison"],
+}
 
 function visualQaViewportKey(viewport: VisualQaViewport): string {
   const scale = viewport.device_scale_factor ?? 1
@@ -232,6 +240,19 @@ function collectVisualQaViewportKeys(report: VisualQaReport): Set<string> {
   return keys
 }
 
+function visualQaEvidenceRowsForViewport(input: {
+  report: VisualQaReport
+  checkIDs: ReadonlySet<string>
+  viewportKey: string
+}): VisualQaEvidence[] {
+  return input.report.evidence.filter((row) => {
+    if (!row.viewport) return false
+    if (visualQaViewportKey(row.viewport) !== input.viewportKey) return false
+    if (!VISUAL_QA_SCREENSHOT_BEARING_EVIDENCE_TYPES.has(row.type)) return false
+    return row.check_ids.some((checkID) => input.checkIDs.has(checkID))
+  })
+}
+
 function visualQaMultiViewportAlignmentIssues(report: VisualQaReport): string[] {
   const viewportKeys = collectVisualQaViewportKeys(report)
   if (viewportKeys.size <= 1) return []
@@ -244,12 +265,14 @@ function visualQaMultiViewportAlignmentIssues(report: VisualQaReport): string[] 
     ]
   }
   const alignmentCheckIDs = new Set(alignmentChecks.map((item) => item.id))
-  const alignmentCheckViewportCount = visualQaViewportKeySet(alignmentChecks.flatMap((item) => item.viewports)).size
-  const hasAlignmentCoverage = report.coverage.some(
+  const alignmentCheckViewportKeys = visualQaViewportKeySet(alignmentChecks.flatMap((item) => item.viewports))
+  const alignmentCheckViewportCount = alignmentCheckViewportKeys.size
+  const alignmentCoverageRows = report.coverage.filter(
     (row) =>
       row.check_ids.some((checkID) => alignmentCheckIDs.has(checkID)) &&
       visualQaViewportKeySet(row.viewports).size >= 2,
   )
+  const hasAlignmentCoverage = alignmentCoverageRows.length > 0
   const issues: string[] = []
   if (alignmentCheckViewportCount < 2) {
     issues.push(
@@ -259,6 +282,76 @@ function visualQaMultiViewportAlignmentIssues(report: VisualQaReport): string[] 
   if (!hasAlignmentCoverage) {
     issues.push("multi-viewport alignment check_item has no coverage row spanning at least two distinct viewports.")
   }
+  const scopedViewportKeys = new Set<string>([
+    ...alignmentCheckViewportKeys,
+    ...alignmentCoverageRows.flatMap((row) => [...visualQaViewportKeySet(row.viewports)]),
+  ])
+  for (const viewportKey of [...scopedViewportKeys].sort()) {
+    const evidenceRows = visualQaEvidenceRowsForViewport({ report, checkIDs: alignmentCheckIDs, viewportKey })
+    if (evidenceRows.length === 0) {
+      issues.push(
+        `multi-viewport alignment check_item lacks screenshot-bearing evidence for viewport ${viewportKey}; layout-geometry is diagnostic only and cannot satisfy cross-viewport visual acceptance.`,
+      )
+    }
+  }
+  return issues
+}
+
+async function visualQaToolResultAcceptanceIssues(
+  report: VisualQaReport,
+  context: VisualQaOutputToolContext,
+): Promise<string[]> {
+  if (!report.accepted) return []
+  const browserPreviewRows = report.evidence.flatMap((row) => {
+    const evidenceID = browserPreviewEvidenceIDFromRef(row.ref)
+    return evidenceID ? [{ row, evidenceID }] : []
+  })
+  if (browserPreviewRows.length === 0) return []
+  if (!context.taskID || !context.projectRoot) return []
+  const issues: string[] = []
+  const cache = new Map<string, PersistedBrowserPreviewEvidence | undefined>()
+  const readEvidence = async (evidenceID: string): Promise<PersistedBrowserPreviewEvidence | undefined> => {
+    if (cache.has(evidenceID)) return cache.get(evidenceID)
+    try {
+      const evidence = await findReadableBrowserPreviewEvidenceByID({
+        projectRoot: context.projectRoot!,
+        taskID: context.taskID!,
+        evidenceID,
+      })
+      cache.set(evidenceID, evidence)
+      return evidence
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      issues.push(`browser preview evidence ${evidenceID} is unreadable: ${detail}`)
+      cache.set(evidenceID, undefined)
+      return undefined
+    }
+  }
+
+  for (const { row, evidenceID } of browserPreviewRows) {
+    if (!VISUAL_QA_SCREENSHOT_BEARING_EVIDENCE_TYPES.has(row.type)) continue
+    const evidence = await readEvidence(evidenceID)
+    if (!evidence) {
+      issues.push(`visual QA ${row.type} evidence ref ${row.ref} does not resolve to readable browser preview evidence.`)
+      continue
+    }
+    const expectedOperations =
+      VISUAL_QA_BROWSER_PREVIEW_PASS_OPERATIONS_BY_TYPE[
+        row.type as Extract<VisualQaEvidence["type"], "screenshot" | "reference_comparison" | "visual_diff">
+      ]
+    if (!expectedOperations.includes(evidence.operationKind as BrowserPreviewVisualPassEvidence)) {
+      issues.push(
+        `visual QA ${row.type} evidence ref ${row.ref} resolved to browser preview operationKind=${evidence.operationKind}; expected ${expectedOperations.join(" or ")} passed evidence.`,
+      )
+      continue
+    }
+    if (evidence.status !== "passed") {
+      issues.push(
+        `visual QA ${row.type} evidence ref ${row.ref} resolved to browser preview status=${evidence.status}; tool execution completion is not acceptance.`,
+      )
+    }
+  }
+
   return issues
 }
 
@@ -298,11 +391,6 @@ function visualQaCheckGraphIssues(report: VisualQaReport, context: VisualQaOutpu
       id: row.id,
       checkIDs: row.check_ids,
     })),
-    ...report.repairs.map((row, index) => ({
-      label: "repair",
-      id: row.finding_ids.join(",") || `repair#${index + 1}`,
-      checkIDs: row.check_ids,
-    })),
   ]
   for (const row of checkRows) issues.push(...unknownCheckIDs(report, row.label, row.id, row.checkIDs))
   issues.push(...visualQaEvidenceRefIssues(report))
@@ -338,6 +426,7 @@ async function summarizeVisualQaReportFeedback(
 ): Promise<{ blockers: string[]; advisories: string[] }> {
   const semantics = visualQaReportAcceptanceSemantics(report)
   const blockers: string[] = [...semantics.selfReportIssues, ...visualQaCheckGraphIssues(report, context)]
+  blockers.push(...(await visualQaToolResultAcceptanceIssues(report, context)))
   const advisories: string[] = []
   const openBlocking = visualQaOpenBlockingFindings(report)
   if (!report.accepted && report.production_blockers.length === 0 && openBlocking.length === 0) {
@@ -345,9 +434,13 @@ async function summarizeVisualQaReportFeedback(
   }
   const referenceParityRequired = Boolean(context.referenceParityRequired || report.reference_parity.required)
   if (referenceParityRequired) {
+    const rawReferenceComparisonRefs = report.reference_parity.reference_comparison_evidence_refs
+    const invalidReferenceComparisonRefs = rawReferenceComparisonRefs.filter(
+      (ref) => !referenceComparisonEvidenceIDFromRef(ref),
+    )
     const refs = new Set(
-      report.reference_parity.reference_comparison_evidence_refs.flatMap((ref) => {
-        const evidenceID = browserPreviewEvidenceIDFromRef(ref)
+      rawReferenceComparisonRefs.flatMap((ref) => {
+        const evidenceID = referenceComparisonEvidenceIDFromRef(ref)
         return evidenceID ? [evidenceID] : []
       }),
     )
@@ -364,9 +457,20 @@ async function summarizeVisualQaReportFeedback(
     if (report.accepted && requiredRegionKeys.length === 0) {
       blockers.push("accepted=true was submitted for required reference parity without required reference regions.")
     }
-    if (report.accepted && refs.size === 0) {
+    if (report.accepted && rawReferenceComparisonRefs.length === 0) {
       blockers.push(
         "accepted=true was submitted for required reference parity without reference_comparison_evidence_refs.",
+      )
+    }
+    if (report.accepted && invalidReferenceComparisonRefs.length > 0) {
+      blockers.push(
+        `reference_comparison_evidence_refs contained refs outside the formal reference-comparison evidence protocol: ${invalidReferenceComparisonRefs.join(", ")}. ` +
+          "Use formal reference-comparison evidence refs; side-by-side PNG paths are supporting visual_diff evidence only.",
+      )
+    }
+    if (report.accepted && rawReferenceComparisonRefs.length > 0 && refs.size === 0) {
+      blockers.push(
+        "accepted=true was submitted for required reference parity with refs, but none resolved through the formal reference-comparison evidence protocol.",
       )
     }
     if (report.accepted && refs.size > 0) {
@@ -396,10 +500,10 @@ async function summarizeVisualQaReportFeedback(
           }
         }
         if (validEvidence.length === 0) {
-          blockers.push("no submitted reference comparison refs resolved to readable passed browser_preview_evidence.")
+          blockers.push("no submitted reference comparison refs resolved to readable passed reference-comparison evidence.")
         }
         for (const key of requiredRegionKeys) {
-          const parsed = parseReferenceRegionKey(key)
+          const parsed = parseVisualQaReferenceRegionKey(key)
           if ("issue" in parsed) {
             blockers.push(parsed.issue)
             continue
@@ -519,9 +623,6 @@ export function buildVisualQaReport(collector: VisualQaCollector) {
       `## Unresolved Code Module Problems\n${unresolvedProblemLines.length ? markdownList(unresolvedProblemLines) : "- none"}`,
       `## Problem DOM Regions\n${problemDomLines.length ? markdownList(problemDomLines) : "- none"}`,
       `## Evidence\n${report.evidence.length ? markdownList(report.evidence.map((item) => `${item.type}: ${item.ref} — ${item.note}`)) : "- no evidence submitted"}`,
-      `## Repairs\n${report.repairs.length ? markdownList(report.repairs.map((repair) => `${repair.files_changed.join(", ") || "(no files)"}: ${repair.reason}`)) : "- no repairs"}`,
-      `## Commands\n${report.commands.length ? markdownList(report.commands.map((command) => `${command.passed ? "passed" : "failed"} ${command.command}: ${command.detail}`)) : "- no commands"}`,
-      `## Changed Files\n${report.changed_files.length ? markdownList(report.changed_files) : "- none"}`,
       `## Open Questions\n${report.open_questions.length ? markdownList(report.open_questions) : "- none"}`,
     ].join("\n\n"),
   }
@@ -532,7 +633,7 @@ export function createVisualQaOutputTools(context: VisualQaOutputToolContext = {
   const tools = {
     register_visual_qa_check_item: tool({
       description:
-        "Register one concrete Visual QA check item before reporting coverage, evidence, findings, blockers, DOM regions, repairs, or final acceptance. Initial check registration may leave evidence_refs empty; final evidence support comes from registered evidence rows tied to the check ID or from registered evidence_refs on the item. Every report row must reference registered check item IDs.",
+        "Register one concrete Visual QA check item before reporting coverage, evidence, findings, blockers, DOM regions, unresolved code-module problems, or final acceptance. Initial check registration may leave evidence_refs empty; final evidence support comes from registered evidence rows tied to the check ID or from registered evidence_refs on the item. Every report row must reference registered check item IDs.",
       inputSchema: VisualQaCheckItemSchema,
       execute: async (raw) => {
         if (collector.final) return "Error: visual QA report already submitted; collector is closed."
@@ -558,7 +659,8 @@ export function createVisualQaOutputTools(context: VisualQaOutputToolContext = {
       },
     }),
     register_visual_qa_evidence: tool({
-      description: "Register one fresh Visual QA evidence item tied to registered check_ids.",
+      description:
+        "Register one fresh Visual QA evidence item tied to registered check_ids. The ref must be a durable OpenCorvus evidence ref such as browser_preview_evidence:* or an AttachmentStore /attachment/... URL, not a bare path or command string.",
       inputSchema: VisualQaEvidenceSchema,
       execute: async (raw) => {
         if (collector.final) return "Error: visual QA report already submitted; collector is closed."
@@ -660,41 +762,6 @@ export function createVisualQaOutputTools(context: VisualQaOutputToolContext = {
         return `OK: visual QA unresolved_code_module_problem "${row.id}" ${status} (${collector.unresolved_code_module_problems.length} total)`
       },
     }),
-    register_visual_qa_repair: tool({
-      description: "Register one Visual QA repair or repair verification tied to registered check_ids.",
-      inputSchema: VisualQaRepairSchema,
-      execute: async (raw) => {
-        if (collector.final) return "Error: visual QA report already submitted; collector is closed."
-        const row = VisualQaRepairSchema.parse(raw)
-        const checkIDIssues = collectorUnknownCheckIDIssues(collector, [
-          { label: "repair", id: row.finding_ids.join(",") || "repair", checkIDs: row.check_ids },
-        ])
-        if (checkIDIssues.length > 0) {
-          return `Error: visual QA repair references unregistered check items: ${checkIDIssues.join("; ")}`
-        }
-        collector.repairs.push(row)
-        return `OK: visual QA repair registered (${collector.repairs.length} total)`
-      },
-    }),
-    register_visual_qa_command: tool({
-      description: "Register one command run used by Visual QA.",
-      inputSchema: VisualQaCommandSchema,
-      execute: async (raw) => {
-        if (collector.final) return "Error: visual QA report already submitted; collector is closed."
-        const row = VisualQaCommandSchema.parse(raw)
-        collector.commands.push(row)
-        return `OK: visual QA command registered (${collector.commands.length} total)`
-      },
-    }),
-    register_visual_qa_changed_file: tool({
-      description: "Register one file changed by Visual QA.",
-      inputSchema: z.object({ file: z.string().min(1) }).strict(),
-      execute: async ({ file }) => {
-        if (collector.final) return "Error: visual QA report already submitted; collector is closed."
-        if (!collector.changed_files.includes(file)) collector.changed_files.push(file)
-        return `OK: visual QA changed file "${file}" registered (${collector.changed_files.length} total)`
-      },
-    }),
     register_visual_qa_open_question: tool({
       description: "Register one open question that prevents stronger Visual QA certainty.",
       inputSchema: z.object({ question: z.string().min(1) }).strict(),
@@ -720,17 +787,21 @@ export function createVisualQaOutputTools(context: VisualQaOutputToolContext = {
       inputSchema: VisualQaReferenceParitySchema,
       execute: async (raw) => {
         if (collector.final) return "Error: visual QA report already submitted; collector is closed."
-        collector.reference_parity = VisualQaReferenceParitySchema.parse(raw)
+        const parsed = VisualQaReferenceParitySchema.safeParse(raw)
+        if (!parsed.success) {
+          return `Error: visual QA reference_parity is invalid: ${parsed.error.message}`
+        }
+        collector.reference_parity = parsed.data
         return `OK: visual QA reference_parity set (required=${collector.reference_parity.required}, regions=${collector.reference_parity.required_regions.length})`
       },
     }),
     submit_visual_qa_report: tool({
       description:
         "Finalize the frontend visual GUI fidelity and functional QA report from registered check items and report rows. GUI means Graphical User Interface. " +
-        "Do not pass findings, coverage, evidence, blockers, DOM regions, repairs, or reference rows in this final call; register them first through the register_visual_qa_* tools. " +
+        "Do not pass findings, coverage, evidence, blockers, DOM regions, or reference rows in this final call; register them first through the register_visual_qa_* tools. " +
         "Use accepted=true only with fresh visual and functional evidence, no open critical/major findings, no production_blockers, and no unresolved_code_module_problems. " +
-        "When visual blockers map to rendered Document Object Model (DOM) nodes, include problem_dom_regions with selectors, HTML excerpts, computed styles, and code search terms for Build. " +
-        "When unrepairable production blockers expose a code-module issue, submit accepted=false and report unresolved_code_module_problems instead of requesting a new task.",
+        "When visual blockers map to rendered Document Object Model (DOM) nodes, include problem_dom_regions with selectors, HTML excerpts, computed styles, and code search terms for the current workflow implementation owner. " +
+        "When production blockers expose a code-module issue the current workflow implementation owner must change, submit accepted=false and report unresolved_code_module_problems instead of requesting a new task.",
       inputSchema: SubmitVisualQaReportSchema,
       execute: async (raw) => {
         if (collector.final)
@@ -749,11 +820,8 @@ export function createVisualQaOutputTools(context: VisualQaOutputToolContext = {
           production_blockers: collector.production_blockers,
           unresolved_code_module_problems: collector.unresolved_code_module_problems,
           problem_dom_regions: collector.problem_dom_regions,
-          repairs: collector.repairs,
           evidence: collector.evidence,
           reference_parity: collector.reference_parity,
-          commands: collector.commands,
-          changed_files: collector.changed_files,
           open_questions: collector.open_questions,
           fact_check_items: collector.fact_check_items,
         })

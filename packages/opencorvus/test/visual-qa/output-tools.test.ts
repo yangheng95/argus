@@ -9,12 +9,23 @@ import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { Database } from "../../src/storage/db"
 import { AttachmentStore } from "../../src/storage/attachment-store"
 import { createVisualQaOutputTools } from "../../src/visual-qa/output-tools"
-import { VISUAL_QA_MULTI_VIEWPORT_ALIGNMENT_CATEGORY, type VisualQaReport } from "../../src/visual-qa/schema"
+import {
+  VISUAL_QA_MULTI_VIEWPORT_ALIGNMENT_CATEGORY,
+  VisualQaReportSchema,
+  type VisualQaReport,
+} from "../../src/visual-qa/schema"
 import { persistTestBrowserPreviewTarget } from "../fixture/browser-preview"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
 const DEFAULT_CHECK_ID = "check_primary_visual_surface"
+const DEFAULT_SOURCE_REF = "decision_log:frontend_design/visual_consistency_contract"
+const SOURCE_REFERENCE_REF = "frontend_research:art_reference:ev_reference"
+const DEFAULT_EVIDENCE_REF = "browser_preview_evidence:art_desktop"
+const MOBILE_EVIDENCE_REF = "browser_preview_evidence:art_mobile"
+const MAP_EVIDENCE_REF = "browser_preview_evidence:art_map"
+const HERO_EVIDENCE_REF = "browser_preview_evidence:art_hero"
+const SUPPORTING_VISUAL_DIFF_REF = "frontend_design:side_by_side_png"
 
 function callTool(tools: Record<string, any>, name: string, input: unknown): Promise<string> {
   return tools[name].execute!(input as any, {} as any)
@@ -33,8 +44,8 @@ function checkItem(
     observed: "Fresh evidence shows the table density, state, and screenshot evidence match the task contract.",
     viewports: [{ width: 1440, height: 900 }],
     states: ["default"],
-    source_refs: ["decision_log:frontend_design/visual_consistency_contract"],
-    evidence_refs: ["artifacts/desktop.png"],
+    source_refs: [DEFAULT_SOURCE_REF],
+    evidence_refs: [DEFAULT_EVIDENCE_REF],
     ...overrides,
   }
 }
@@ -52,7 +63,7 @@ function referenceCheckItem(
     reference_region_key: referenceRegionKey,
     expected: "The implementation matches the authoritative reference crop for this region and viewport.",
     observed: "Fresh reference comparison evidence was inspected for this region and viewport.",
-    source_refs: ["reference.png"],
+    source_refs: [SOURCE_REFERENCE_REF],
     evidence_refs: [evidenceRef],
     ...overrides,
   })
@@ -69,8 +80,8 @@ function validReport(overrides: Partial<VisualQaReport> = {}): VisualQaReport {
         region: "home/table",
         viewports: [{ width: 1440, height: 900 }],
         states: ["default", "narrow"],
-        source_refs: ["decision_log:frontend_design/visual_consistency_contract"],
-        evidence_refs: ["artifacts/desktop.png"],
+        source_refs: [DEFAULT_SOURCE_REF],
+        evidence_refs: [DEFAULT_EVIDENCE_REF],
         notes: "Checked table density and responsive layout.",
       },
     ],
@@ -78,12 +89,11 @@ function validReport(overrides: Partial<VisualQaReport> = {}): VisualQaReport {
     production_blockers: [],
     unresolved_code_module_problems: [],
     problem_dom_regions: [],
-    repairs: [],
     evidence: [
       {
         check_ids: [DEFAULT_CHECK_ID],
         type: "screenshot",
-        ref: "artifacts/desktop.png",
+        ref: DEFAULT_EVIDENCE_REF,
         viewport: { width: 1440, height: 900 },
         state: "default",
         note: "Fresh screenshot from the real preview.",
@@ -96,20 +106,151 @@ function validReport(overrides: Partial<VisualQaReport> = {}): VisualQaReport {
       missing_regions: [],
       blocker_ids: [],
     },
-    commands: [
-      {
-        command: "node node_modules/playwright/cli.js test visual.spec.ts",
-        cwd: ".",
-        passed: true,
-        detail: "Visual smoke passed.",
-      },
-    ],
-    changed_files: [],
     open_questions: [],
     fact_check_items: [],
     ...overrides,
   }
 }
+
+test("visual QA report schema rejects legacy self-repair fields", () => {
+  const report = validReport()
+  expect(VisualQaReportSchema.safeParse({ ...report, repairs: [] }).success).toBe(false)
+  expect(VisualQaReportSchema.safeParse({ ...report, changed_files: [] }).success).toBe(false)
+  expect(VisualQaReportSchema.safeParse({ ...report, commands: [] }).success).toBe(false)
+  expect(
+    VisualQaReportSchema.safeParse({
+      ...report,
+      findings: [
+        {
+          id: "finding_legacy_repair_ref",
+          check_ids: [DEFAULT_CHECK_ID],
+          severity: "major",
+          status: "open",
+          claim: "Legacy repair ref must not be accepted.",
+          reproduction: "Submit a finding with repair_refs.",
+          region: "main surface",
+          evidence_refs: [DEFAULT_EVIDENCE_REF],
+          repair_refs: ["src/App.tsx"],
+        },
+      ],
+    }).success,
+  ).toBe(false)
+})
+
+test("visual QA report schema rejects unknown nested fields", () => {
+  const report = validReport()
+  expect(
+    VisualQaReportSchema.safeParse({
+      ...report,
+      check_items: [{ ...report.check_items[0]!, extra_nested: true }],
+    }).success,
+  ).toBe(false)
+  expect(
+    VisualQaReportSchema.safeParse({
+      ...report,
+      coverage: [{ ...report.coverage[0]!, extra_nested: true }],
+    }).success,
+  ).toBe(false)
+  expect(
+    VisualQaReportSchema.safeParse({
+      ...report,
+      evidence: [
+        {
+          ...report.evidence[0]!,
+          viewport: { width: 1440, height: 900, unexpected: true },
+        },
+      ],
+    }).success,
+  ).toBe(false)
+  expect(
+    VisualQaReportSchema.safeParse({
+      ...report,
+      reference_parity: { ...report.reference_parity, unexpected: true },
+    }).success,
+  ).toBe(false)
+  expect(
+    VisualQaReportSchema.safeParse({
+      ...report,
+      unresolved_code_module_problems: [
+        {
+          id: "ucmp_1",
+          check_ids: [DEFAULT_CHECK_ID],
+          code_module_reference: {
+            entity: "src/App.tsx",
+            problem: "Layout overflow remains visible.",
+            unexpected: true,
+          },
+          reason: "The Visual QA blocker maps to this module.",
+          blocker_ids: ["blocker_1"],
+          evidence_refs: [DEFAULT_EVIDENCE_REF],
+        },
+      ],
+    }).success,
+  ).toBe(false)
+})
+
+test("visual QA report schema rejects loose reference region keys", () => {
+  expect(
+    VisualQaReportSchema.safeParse({
+      ...validReport(),
+      check_items: [referenceCheckItem("main surface", DEFAULT_EVIDENCE_REF)],
+    }).success,
+  ).toBe(false)
+  expect(
+    VisualQaReportSchema.safeParse({
+      ...validReport(),
+      reference_parity: {
+        required: true,
+        required_regions: ["main surface"],
+        reference_comparison_evidence_refs: [],
+        missing_regions: [],
+        blocker_ids: [],
+      },
+    }).success,
+  ).toBe(false)
+})
+
+test("visual QA report schema rejects non-durable evidence refs", () => {
+  const report = validReport()
+  expect(
+    VisualQaReportSchema.safeParse({
+      ...report,
+      check_items: [checkItem({ evidence_refs: ["artifacts/desktop.png"] })],
+    }).success,
+  ).toBe(false)
+  expect(
+    VisualQaReportSchema.safeParse({
+      ...report,
+      check_items: [checkItem({ source_refs: ["reference.png"] })],
+    }).success,
+  ).toBe(false)
+  expect(
+    VisualQaReportSchema.safeParse({
+      ...report,
+      evidence: [
+        {
+          check_ids: [DEFAULT_CHECK_ID],
+          type: "command",
+          ref: "node node_modules/playwright/cli.js test visual.spec.ts",
+          note: "Command text is not a portable evidence ref.",
+        },
+      ],
+    }).success,
+  ).toBe(false)
+  expect(
+    VisualQaReportSchema.safeParse({
+      ...report,
+      evidence: [
+        {
+          check_ids: [DEFAULT_CHECK_ID],
+          type: "screenshot",
+          ref: "screenshot://local/top-viewport.png",
+          note: "Local screenshot labels are not portable evidence refs.",
+        },
+      ],
+    }).success,
+  ).toBe(false)
+})
 
 async function submitReport(
   kit: ReturnType<typeof createVisualQaOutputTools>,
@@ -124,13 +265,11 @@ async function submitReport(
     await callTool(kit.tools, "register_visual_qa_unresolved_code_module_problem", row)
   }
   for (const row of report.problem_dom_regions) await callTool(kit.tools, "register_visual_qa_problem_dom_region", row)
-  for (const row of report.repairs) await callTool(kit.tools, "register_visual_qa_repair", row)
-  for (const row of report.commands) await callTool(kit.tools, "register_visual_qa_command", row)
-  for (const file of report.changed_files) await callTool(kit.tools, "register_visual_qa_changed_file", { file })
   for (const question of report.open_questions)
     await callTool(kit.tools, "register_visual_qa_open_question", { question })
   for (const item of report.fact_check_items) await callTool(kit.tools, "register_visual_qa_fact_check_item", item)
-  await callTool(kit.tools, "set_visual_qa_reference_parity", report.reference_parity)
+  const referenceParityResult = await callTool(kit.tools, "set_visual_qa_reference_parity", report.reference_parity)
+  if (referenceParityResult.startsWith("Error:")) return referenceParityResult
   return callTool(kit.tools, "submit_visual_qa_report", {
     accepted: report.accepted,
     summary: report.summary,
@@ -146,7 +285,12 @@ async function seedReferenceComparisonEvidence(input: {
   taskID: string
   regionID?: string
   viewportID?: string
-  operationKind?: "preview-capture" | "reference-comparison" | "source-binding" | "layout-geometry"
+  operationKind?:
+    | "preview-capture"
+    | "reference-comparison"
+    | "scroll-slice-comparison"
+    | "source-binding"
+    | "layout-geometry"
   status?: "passed" | "failed"
 }): Promise<string> {
   Database.use((db) =>
@@ -174,7 +318,7 @@ async function seedReferenceComparisonEvidence(input: {
     await fs.writeFile(path.join(artifactDir, file), `png:${file}`)
   }
   const target = await persistTestBrowserPreviewTarget({ taskID: input.taskID, url: "http://127.0.0.1:4173/" })
-  return persistBrowserPreviewEvidence({
+  const evidenceID = await persistBrowserPreviewEvidence({
     projectRoot: input.projectDirectory,
     taskID: input.taskID,
     targetID: target.id,
@@ -191,6 +335,7 @@ async function seedReferenceComparisonEvidence(input: {
     },
     diagnostics: [],
   })
+  return `browser_preview_evidence:${evidenceID}`
 }
 
 describe("visual-qa output tools", () => {
@@ -199,7 +344,7 @@ describe("visual-qa output tools", () => {
     const result = await submitReport(kit, validReport({ evidence: [], coverage: [] }))
 
     expect(result).toContain("check graph is incomplete")
-    expect(result).toContain("unregistered evidence_ref: artifacts/desktop.png")
+    expect(result).toContain(`unregistered evidence_ref: ${DEFAULT_EVIDENCE_REF}`)
     expect(kit.getCollector().final).toBeUndefined()
   })
 
@@ -244,7 +389,7 @@ describe("visual-qa output tools", () => {
             reason: "The failed visual check has no concrete screenshot or functional evidence.",
             impact: "The report cannot prove the visible defect or its scope.",
             required_correction: "Register real visual evidence tied to the failed check.",
-            source_refs: ["decision_log:frontend_design/visual_consistency_contract"],
+            source_refs: [DEFAULT_SOURCE_REF],
             evidence_refs: [],
           },
         ],
@@ -258,7 +403,7 @@ describe("visual-qa output tools", () => {
 
   test("records accepted report without screenshot-bearing evidence as effective failure", async () => {
     const kit = createVisualQaOutputTools()
-    const commandRef = "node node_modules/playwright/cli.js test visual.spec.ts"
+    const commandRef = "build_attempt_outcome:out_visual_command"
     const result = await submitReport(
       kit,
       validReport({
@@ -269,7 +414,7 @@ describe("visual-qa output tools", () => {
             region: "home/table",
             viewports: [{ width: 1440, height: 900 }],
             states: ["default", "narrow"],
-            source_refs: ["decision_log:frontend_design/visual_consistency_contract"],
+            source_refs: [DEFAULT_SOURCE_REF],
             evidence_refs: [commandRef],
             notes: "Checked table behavior with command output only.",
           },
@@ -312,6 +457,12 @@ describe("visual-qa output tools", () => {
           })
             .png()
             .toFile(screenshotPath)
+          const screenshotRef = await AttachmentStore.writeFromPath(
+            Instance.project.id,
+            screenshotPath,
+            "image/png",
+            "desktop.png",
+          )
 
           const kit = createVisualQaOutputTools({
             taskID,
@@ -325,7 +476,7 @@ describe("visual-qa output tools", () => {
               id: "check_dom_annotation",
               status: "failed",
               region: "hero tabs",
-              evidence_refs: [screenshotPath],
+              evidence_refs: [screenshotRef.url],
               required_correction: "Repair the clipped tab row.",
             }),
           )
@@ -343,8 +494,8 @@ describe("visual-qa output tools", () => {
             computed_style: { display: "flex", overflow: "hidden" },
             attributes: { "data-testid": "hero-tabs", class: "hero-tabs is-clipped" },
             code_search_terms: ["hero-tabs", "is-clipped"],
-            evidence_refs: [screenshotPath],
-            notes: "Build should inspect the hero tab container spacing.",
+            evidence_refs: [screenshotRef.url],
+            notes: "The current workflow implementation owner should inspect the hero tab container spacing.",
           })
 
           expect(result).toContain("annotated_evidence_refs=/attachment/")
@@ -402,7 +553,7 @@ describe("visual-qa output tools", () => {
             impact: "Users would see a product surface that misrepresents the reference implementation.",
             required_correction: "Replace the simplified map with the source-backed topology implementation.",
             source_refs: ["frontend_design:reference_artifacts"],
-            evidence_refs: ["artifacts/map.png"],
+            evidence_refs: [MAP_EVIDENCE_REF],
           },
         ],
         unresolved_code_module_problems: [
@@ -416,7 +567,7 @@ describe("visual-qa output tools", () => {
             },
             reason: "Visual QA found a module-specific blocker that cannot be safely repaired in this review pass.",
             blocker_ids: ["blocker_map_fidelity"],
-            evidence_refs: ["artifacts/map.png"],
+            evidence_refs: [MAP_EVIDENCE_REF],
           },
         ],
         evidence: [
@@ -424,7 +575,7 @@ describe("visual-qa output tools", () => {
           {
             check_ids: ["check_map_fidelity"],
             type: "screenshot",
-            ref: "artifacts/map.png",
+            ref: MAP_EVIDENCE_REF,
             viewport: { width: 1440, height: 900 },
             state: "default",
             note: "Fresh screenshot shows the low-fidelity map placeholder.",
@@ -447,7 +598,7 @@ describe("visual-qa output tools", () => {
     const result = await submitReport(
       kit,
       validReport({
-        check_items: [checkItem(), referenceCheckItem("region_header@desktop", "artifacts/desktop.png")],
+        check_items: [checkItem(), referenceCheckItem("region_header@desktop", DEFAULT_EVIDENCE_REF)],
         evidence: [
           {
             ...validReport().evidence[0]!,
@@ -479,7 +630,7 @@ describe("visual-qa output tools", () => {
     const result = await submitReport(
       kit,
       validReport({
-        check_items: [checkItem(), referenceCheckItem("region_header@desktop", "artifacts/desktop.png")],
+        check_items: [checkItem(), referenceCheckItem("region_header@desktop", DEFAULT_EVIDENCE_REF)],
         evidence: [
           {
             ...validReport().evidence[0]!,
@@ -489,7 +640,7 @@ describe("visual-qa output tools", () => {
         reference_parity: {
           required: true,
           required_regions: ["region_header@desktop"],
-          reference_comparison_evidence_refs: ["browser_preview_evidence:missing_reference"],
+          reference_comparison_evidence_refs: ["browser_preview_evidence:art_missing_reference"],
           missing_regions: [],
           blocker_ids: [],
         },
@@ -498,7 +649,7 @@ describe("visual-qa output tools", () => {
 
     expect(result).toContain("check graph is incomplete")
     expect(result).toContain("reference_parity")
-    expect(result).toContain("browser_preview_evidence:missing_reference")
+    expect(result).toContain("browser_preview_evidence:art_missing_reference")
     expect(kit.getCollector().final).toBeUndefined()
   })
 
@@ -557,7 +708,7 @@ describe("visual-qa output tools", () => {
                   region: "region_header",
                   viewports: [{ width: 1440, height: 900 }],
                   states: ["default"],
-                  source_refs: ["reference.png"],
+                  source_refs: [SOURCE_REFERENCE_REF],
                   evidence_refs: [evidenceID],
                   notes: `Checked ${item.label}.`,
                 },
@@ -576,13 +727,198 @@ describe("visual-qa output tools", () => {
           expect(result, item.label).toContain("effective_accepted=false")
           expect(result, item.label).toContain("BLOCKERS")
           expect(result, item.label).toContain(
-            "no submitted reference comparison refs resolved to readable passed browser_preview_evidence",
+            "no submitted reference comparison refs resolved to readable passed reference-comparison evidence",
           )
           expect(kit.getCollector().acceptance?.effectiveAccepted, item.label).toBe(false)
         }
       },
     })
   }, 30_000)
+
+  test("records accepted visual diff backed by failed browser preview evidence as effective failure", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const taskID = `tsk_visualqa_failed_visual_diff_${Date.now()}`
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const evidenceRef = await seedReferenceComparisonEvidence({
+          projectDirectory: tmp.path,
+          taskID,
+          operationKind: "scroll-slice-comparison",
+          status: "failed",
+        })
+        const kit = createVisualQaOutputTools({
+          taskID,
+          projectRoot: tmp.path,
+        })
+        const result = await submitReport(
+          kit,
+          validReport({
+            check_items: [
+              checkItem({
+                evidence_refs: [evidenceRef],
+                observed: "The page-slice visual diff was submitted as proof.",
+              }),
+            ],
+            coverage: [
+              {
+                check_ids: [DEFAULT_CHECK_ID],
+                region: "home/table",
+                viewports: [{ width: 1440, height: 900 }],
+                states: ["default"],
+                source_refs: [DEFAULT_SOURCE_REF],
+                evidence_refs: [evidenceRef],
+                notes: "Checked the rendered page slice.",
+              },
+            ],
+            evidence: [
+              {
+                check_ids: [DEFAULT_CHECK_ID],
+                type: "visual_diff",
+                ref: evidenceRef,
+                viewport: { width: 1440, height: 900 },
+                state: "default",
+                note: "Scroll-slice visual diff tool result.",
+              },
+            ],
+          }),
+        )
+
+        expect(result).toContain("RECORDED")
+        expect(result).toContain("effective_accepted=false")
+        expect(result).toContain("resolved to browser preview status=failed")
+        expect(result).toContain("tool execution completion is not acceptance")
+        expect(kit.getCollector().acceptance?.effectiveAccepted).toBe(false)
+      },
+    })
+  }, 20_000)
+
+  test("records multi-viewport acceptance backed only by layout geometry as effective failure", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const taskID = `tsk_visualqa_layout_geometry_multi_viewport_${Date.now()}`
+    const alignmentCheckID = "check_multi_viewport_alignment"
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const evidenceRef = await seedReferenceComparisonEvidence({
+          projectDirectory: tmp.path,
+          taskID,
+          operationKind: "layout-geometry",
+        })
+        const kit = createVisualQaOutputTools({
+          taskID,
+          projectRoot: tmp.path,
+        })
+        const result = await submitReport(
+          kit,
+          validReport({
+            check_items: [
+              checkItem({ evidence_refs: [evidenceRef] }),
+              checkItem({
+                id: alignmentCheckID,
+                category: VISUAL_QA_MULTI_VIEWPORT_ALIGNMENT_CATEGORY,
+                question: "Do desktop rails stay aligned at both claimed widths?",
+                region: "home/table",
+                expected: "The shared desktop content rail remains coherent across scoped desktop widths.",
+                observed: "Layout geometry was submitted as the only cross-viewport proof.",
+                viewports: [
+                  { width: 1440, height: 900 },
+                  { width: 1280, height: 900 },
+                ],
+                evidence_refs: [evidenceRef],
+              }),
+            ],
+            coverage: [
+              {
+                check_ids: [alignmentCheckID],
+                region: "home/table multi-viewport alignment",
+                viewports: [
+                  { width: 1440, height: 900 },
+                  { width: 1280, height: 900 },
+                ],
+                states: ["default"],
+                source_refs: [DEFAULT_SOURCE_REF],
+                evidence_refs: [evidenceRef],
+                notes: "Submitted layout geometry as the cross-viewport visual proof.",
+              },
+            ],
+            evidence: [
+              {
+                check_ids: [DEFAULT_CHECK_ID, alignmentCheckID],
+                type: "visual_diff",
+                ref: evidenceRef,
+                viewport: { width: 1440, height: 900 },
+                state: "default",
+                note: "Layout geometry diagnostic cannot prove rendered visual acceptance.",
+              },
+              {
+                check_ids: [alignmentCheckID],
+                type: "visual_diff",
+                ref: evidenceRef,
+                viewport: { width: 1280, height: 900 },
+                state: "default",
+                note: "Layout geometry diagnostic cannot prove rendered visual acceptance.",
+              },
+            ],
+          }),
+        )
+
+        expect(result).toContain("RECORDED")
+        expect(result).toContain("effective_accepted=false")
+        expect(result).toContain("operationKind=layout-geometry")
+        expect(result).toContain("expected reference-comparison or scroll-slice-comparison passed evidence")
+        expect(kit.getCollector().acceptance?.effectiveAccepted).toBe(false)
+      },
+    })
+  }, 20_000)
+
+  test("rejects side-by-side PNG paths as formal reference parity refs", async () => {
+    const sideBySidePath = SUPPORTING_VISUAL_DIFF_REF
+    const kit = createVisualQaOutputTools({
+      referenceParityRequired: true,
+      requiredReferenceRegions: ["region_header@desktop"],
+    })
+    const result = await submitReport(
+      kit,
+      validReport({
+        check_items: [checkItem(), referenceCheckItem("region_header@desktop", sideBySidePath)],
+        evidence: [
+          validReport().evidence[0]!,
+          {
+            check_ids: ["check_region_header_desktop"],
+            type: "visual_diff",
+            ref: sideBySidePath,
+            viewport: { width: 1440, height: 900 },
+            state: "default",
+            note: "Side-by-side page slice comparison for visual inspection.",
+          },
+        ],
+        coverage: [
+          {
+            check_ids: ["check_region_header_desktop"],
+            region: "region_header",
+            viewports: [{ width: 1440, height: 900 }],
+            states: ["default"],
+            source_refs: [SOURCE_REFERENCE_REF],
+            evidence_refs: [sideBySidePath],
+            notes: "Checked the side-by-side slice as supporting evidence.",
+          },
+        ],
+        reference_parity: {
+          required: true,
+          required_regions: ["region_header@desktop"],
+          reference_comparison_evidence_refs: [sideBySidePath],
+          missing_regions: [],
+          blocker_ids: [],
+        },
+      }),
+    )
+
+    expect(result).toContain("reference_comparison_evidence_refs must contain formal reference-comparison evidence refs")
+    expect(result).toContain("side-by-side PNG paths are supporting visual_diff evidence only")
+    expect(result).not.toContain("without reference_comparison_evidence_refs")
+    expect(kit.getCollector().final).toBeUndefined()
+  })
 
   test("does not accept supporting evidence as formal reference comparison refs", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -605,9 +941,8 @@ describe("visual-qa output tools", () => {
         const result = await submitReport(
           kit,
           validReport({
-            check_items: [checkItem(), referenceCheckItem("region_header@desktop", evidenceID)],
+            check_items: [referenceCheckItem("region_header@desktop", evidenceID)],
             evidence: [
-              validReport().evidence[0]!,
               {
                 check_ids: ["check_region_header_desktop"],
                 type: "reference_comparison",
@@ -623,7 +958,7 @@ describe("visual-qa output tools", () => {
                 region: "region_header",
                 viewports: [{ width: 1440, height: 900 }],
                 states: ["default"],
-                source_refs: ["reference.png"],
+                source_refs: [SOURCE_REFERENCE_REF],
                 evidence_refs: [evidenceID],
                 notes: "Coverage references supporting evidence only.",
               },
@@ -871,9 +1206,8 @@ describe("visual-qa output tools", () => {
         const result = await submitReport(
           kit,
           validReport({
-            check_items: [checkItem(), referenceCheckItem("region_header@desktop", evidenceID)],
+            check_items: [referenceCheckItem("region_header@desktop", evidenceID)],
             evidence: [
-              validReport().evidence[0]!,
               {
                 check_ids: ["check_region_header_desktop"],
                 type: "reference_comparison",
@@ -889,7 +1223,7 @@ describe("visual-qa output tools", () => {
                 region: "region_header",
                 viewports: [{ width: 1440, height: 900 }],
                 states: ["default"],
-                source_refs: ["reference.png"],
+                source_refs: [SOURCE_REFERENCE_REF],
                 evidence_refs: [evidenceID],
                 notes: "Checked header reference comparison.",
               },
@@ -945,8 +1279,8 @@ describe("visual-qa output tools", () => {
               { width: 390, height: 844 },
             ],
             states: ["default"],
-            source_refs: ["decision_log:frontend_design/visual_consistency_contract"],
-            evidence_refs: ["artifacts/desktop.png", "artifacts/mobile.png"],
+            source_refs: [DEFAULT_SOURCE_REF],
+            evidence_refs: [DEFAULT_EVIDENCE_REF, MOBILE_EVIDENCE_REF],
             notes: "Checked the table in two scoped viewports but did not register cross-viewport alignment.",
           },
         ],
@@ -954,7 +1288,7 @@ describe("visual-qa output tools", () => {
           {
             check_ids: [DEFAULT_CHECK_ID],
             type: "screenshot",
-            ref: "artifacts/desktop.png",
+            ref: DEFAULT_EVIDENCE_REF,
             viewport: { width: 1440, height: 900 },
             state: "default",
             note: "Fresh desktop screenshot.",
@@ -962,7 +1296,7 @@ describe("visual-qa output tools", () => {
           {
             check_ids: [DEFAULT_CHECK_ID],
             type: "screenshot",
-            ref: "artifacts/mobile.png",
+            ref: MOBILE_EVIDENCE_REF,
             viewport: { width: 390, height: 844 },
             state: "default",
             note: "Fresh narrow viewport screenshot.",
@@ -997,7 +1331,7 @@ describe("visual-qa output tools", () => {
               { width: 1440, height: 900 },
               { width: 390, height: 844 },
             ],
-            evidence_refs: ["artifacts/desktop.png", "artifacts/mobile.png"],
+            evidence_refs: [DEFAULT_EVIDENCE_REF, MOBILE_EVIDENCE_REF],
           }),
         ],
         coverage: [
@@ -1006,8 +1340,8 @@ describe("visual-qa output tools", () => {
             region: "home/table",
             viewports: [{ width: 1440, height: 900 }],
             states: ["default"],
-            source_refs: ["decision_log:frontend_design/visual_consistency_contract"],
-            evidence_refs: ["artifacts/desktop.png"],
+            source_refs: [DEFAULT_SOURCE_REF],
+            evidence_refs: [DEFAULT_EVIDENCE_REF],
             notes: "Checked the default desktop table.",
           },
           {
@@ -1018,8 +1352,8 @@ describe("visual-qa output tools", () => {
               { width: 390, height: 844 },
             ],
             states: ["default"],
-            source_refs: ["decision_log:frontend_design/visual_consistency_contract"],
-            evidence_refs: ["artifacts/desktop.png", "artifacts/mobile.png"],
+            source_refs: [DEFAULT_SOURCE_REF],
+            evidence_refs: [DEFAULT_EVIDENCE_REF, MOBILE_EVIDENCE_REF],
             notes:
               "Checked shared layout anchors, gutters, wrapping, overflow, and control placement across both viewports.",
           },
@@ -1028,7 +1362,7 @@ describe("visual-qa output tools", () => {
           {
             check_ids: [DEFAULT_CHECK_ID, alignmentCheckID],
             type: "screenshot",
-            ref: "artifacts/desktop.png",
+            ref: DEFAULT_EVIDENCE_REF,
             viewport: { width: 1440, height: 900 },
             state: "default",
             note: "Fresh desktop screenshot.",
@@ -1036,7 +1370,7 @@ describe("visual-qa output tools", () => {
           {
             check_ids: [alignmentCheckID],
             type: "screenshot",
-            ref: "artifacts/mobile.png",
+            ref: MOBILE_EVIDENCE_REF,
             viewport: { width: 390, height: 844 },
             state: "default",
             note: "Fresh narrow viewport screenshot.",
@@ -1068,8 +1402,8 @@ describe("visual-qa output tools", () => {
             status: "failed",
             expected: "The hero heading scale, spacing, and section order match the reference.",
             observed: "The hero heading is too small and compressed compared with the reference.",
-            source_refs: ["reference.png"],
-            evidence_refs: ["artifacts/hero.png"],
+            source_refs: [SOURCE_REFERENCE_REF],
+            evidence_refs: [HERO_EVIDENCE_REF],
             required_correction: "Restore the reference heading scale, spacing, and section order.",
           }),
         ],
@@ -1082,8 +1416,8 @@ describe("visual-qa output tools", () => {
             reason: "The visual hierarchy no longer matches the authoritative reference.",
             impact: "The first viewport reads as a different product surface.",
             required_correction: "Restore the reference heading scale, spacing, and section order.",
-            source_refs: ["reference.png"],
-            evidence_refs: ["artifacts/hero.png"],
+            source_refs: [SOURCE_REFERENCE_REF],
+            evidence_refs: [HERO_EVIDENCE_REF],
           },
         ],
         unresolved_code_module_problems: [
@@ -1096,7 +1430,7 @@ describe("visual-qa output tools", () => {
             },
             reason: "Visual QA cannot safely complete the reference-structure repair in the current review pass.",
             blocker_ids: ["blocker_density"],
-            evidence_refs: ["artifacts/hero.png"],
+            evidence_refs: [HERO_EVIDENCE_REF],
           },
         ],
         problem_dom_regions: [
@@ -1127,7 +1461,7 @@ describe("visual-qa output tools", () => {
               "data-testid": "hero-heading",
             },
             code_search_terms: ["hero-heading", "hero-title", "United States market overview"],
-            evidence_refs: ["artifacts/hero.png"],
+            evidence_refs: [HERO_EVIDENCE_REF],
             notes: "The heading node is too small and compressed compared with the required hero hierarchy.",
           },
         ],
@@ -1136,7 +1470,7 @@ describe("visual-qa output tools", () => {
           {
             check_ids: ["check_hero_hierarchy"],
             type: "screenshot",
-            ref: "artifacts/hero.png",
+            ref: HERO_EVIDENCE_REF,
             viewport: { width: 1440, height: 900 },
             state: "default",
             note: "Fresh screenshot shows the compressed hero heading hierarchy.",
@@ -1217,7 +1551,7 @@ describe("visual-qa output tools", () => {
     const result = await callTool(kit.tools, "register_visual_qa_evidence", {
       check_ids: ["missing-check"],
       type: "screenshot",
-      ref: "artifacts/missing.png",
+      ref: "browser_preview_evidence:art_missing_check",
       viewport: { width: 1440, height: 900 },
       state: "default",
       note: "This evidence points at an unregistered check.",

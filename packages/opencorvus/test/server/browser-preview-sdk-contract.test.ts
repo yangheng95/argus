@@ -18,7 +18,7 @@ test("browser preview evidence SDK contract requires operationKind without a pre
 
   const sdkTypes = fs.readFileSync(SDK_TYPES_PATH, "utf8")
   expect(sdkTypes).toContain(
-    'operationKind: "preview-capture" | "reference-comparison" | "source-binding" | "layout-geometry"',
+    'operationKind: "preview-capture" | "reference-comparison" | "scroll-slice-comparison" | "source-binding" | "layout-geometry"',
   )
   expect(sdkTypes).not.toContain('operationKind?: "preview-capture"')
 })

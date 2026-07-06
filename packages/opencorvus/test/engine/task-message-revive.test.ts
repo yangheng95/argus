@@ -6,10 +6,12 @@ import {
   EngineArtifactTable,
   EngineInteractionRequestTable,
   EnginePlanVersionTable,
+  EngineProgressSnapshotTable,
   EngineTaskTable,
 } from "../../src/engine/engine.sql"
 import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
+import { ProjectTable } from "../../src/project/project.sql"
 import * as TaskLoop from "../../src/orchestrator/loop"
 import { findActivePlanForTask, findActiveRunForTask, findRun, findTask } from "../../src/engine/store"
 import { EngineRuntime } from "../../src/engine/runtime"
@@ -37,11 +39,13 @@ describe("EngineService.retryTask — active blocked run reopen", () => {
         const taskID = Identifier.ascending("task")
         const runID = Identifier.ascending("run")
         const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "retry blocked task root" })
         Database.use((db) => {
           db.insert(EngineTaskTable)
             .values({
               id: taskID,
               project_id: Instance.project.id,
+              session_id: root.id,
               source: "test",
               title: "Retry blocked task",
               request: "retry",
@@ -60,7 +64,7 @@ describe("EngineService.retryTask — active blocked run reopen", () => {
               label: "run-blocked",
               payload: {
                 plan_version_id: null,
-                session_id: null,
+                session_id: root.id,
                 executor: "opencorvus",
                 status: "blocked",
                 phase: "dispatch",
@@ -173,6 +177,46 @@ describe("EngineService.retryTask — active blocked run reopen", () => {
       },
     })
   })
+
+  test("retry rejects polluted task root lineage before clearing metadata or dispatching", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await importTaskRootWithForeignParent("retry polluted root")
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "test",
+              title: "Retry polluted root",
+              request: "retry should reject before mutation",
+              priority: "normal",
+              time_created: now - 2_000,
+              time_updated: now,
+              time_started: now - 1_000,
+              time_completed: now,
+              error: "task cancelled",
+              metadata: { cancelled: true, interrupted: true },
+            } as any)
+            .run()
+        })
+
+        await expect(EngineService.retryTask(taskID)).rejects.toThrow(/Session not found/)
+
+        const task = findTask(taskID)!
+        expect(task.error).toBe("task cancelled")
+        expect(task.time_completed).toBe(now)
+        expect(task.metadata).toMatchObject({ cancelled: true, interrupted: true })
+        expect(runTaskLoop).not.toHaveBeenCalled()
+      },
+    })
+  })
 })
 
 describe("EngineService.replanTask — structured replan intent", () => {
@@ -257,6 +301,55 @@ describe("EngineService.replanTask — structured replan intent", () => {
         expect(event?.operatorIntent).toEqual({ kind: "replan" })
         expect(event?.note).toContain("User requested replan")
         expect(event?.note).not.toContain("User requested retry")
+      },
+    })
+  })
+
+  test("replan rejects polluted task root lineage before superseding plans or dispatching", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const taskID = Identifier.ascending("task")
+        const planID = Identifier.ascending("plan")
+        const now = Date.now()
+        const root = await importTaskRootWithForeignParent("replan polluted root")
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "test",
+              title: "Replan polluted root",
+              request: "replan should reject before plan mutation",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+              metadata: { interrupted: true },
+            } as any)
+            .run()
+          db.insert(EnginePlanVersionTable)
+            .values({
+              id: planID,
+              task_id: taskID,
+              version: 1,
+              status: "active",
+              summary: "must stay active",
+              prompt: "old plan",
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
+
+        await expect(EngineService.replanTask(taskID)).rejects.toThrow(/Session not found/)
+
+        expect(findActivePlanForTask(taskID)?.id).toBe(planID)
+        expect(findTask(taskID)?.metadata).toMatchObject({ interrupted: true })
+        expect(runTaskLoop).not.toHaveBeenCalled()
       },
     })
   })
@@ -492,6 +585,48 @@ describe("EngineService.recordOperatorNote — active blocked run wake", () => {
         expect((task.metadata as { cancelled?: boolean; decision_log?: string[] } | null)?.cancelled).toBeUndefined()
         expect((task.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
         expect(runTaskLoop).toHaveBeenCalledTimes(1)
+      },
+    })
+  })
+
+  test("operator notes reject polluted task root lineage before progress snapshot or reopen", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await importTaskRootWithForeignParent("operator note polluted root")
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "test",
+              title: "Operator note polluted root",
+              request: "note should reject before progress mutation",
+              priority: "normal",
+              time_created: now - 2_000,
+              time_updated: now,
+              time_started: now - 1_000,
+              time_completed: now,
+              error: "previous failure",
+            } as any)
+            .run()
+        })
+
+        await expect(EngineService.recordOperatorNote(taskID, "please continue")).rejects.toThrow(/Session not found/)
+
+        const progressRows = Database.use((db) =>
+          db.select().from(EngineProgressSnapshotTable).where(eq(EngineProgressSnapshotTable.task_id, taskID)).all(),
+        )
+        expect(progressRows).toHaveLength(0)
+        const task = findTask(taskID)!
+        expect(task.error).toBe("previous failure")
+        expect(task.time_completed).toBe(now)
+        expect(runTaskLoop).not.toHaveBeenCalled()
       },
     })
   })
@@ -834,16 +969,20 @@ describe("EngineService.handleTaskMessage — active blocked run wake", () => {
 describe("appendTaskSessionMessage — no silent no-op", () => {
   test("source throws when task.session_id or message context is missing", async () => {
     const src = await fs.readFile(path.join(import.meta.dir, "..", "..", "src", "task-api", "index.ts"), "utf8")
+    const appendSource = src.match(
+      /async function appendTaskSessionMessage[\s\S]*?\n}\n\n\/\*\*\n \* Resolve the \{agent, model\}/,
+    )?.[0]
+    expect(appendSource).toBeTruthy()
     // The function signature must no longer admit `undefined` as a happy path.
-    expect(src).toMatch(
+    expect(appendSource).toMatch(
       /async function appendTaskSessionMessage[\s\S]*?Promise<\{\s*info: Message\.User;\s*parts: Message\.Part\[\]\s*\}>/,
     )
     // Both guard branches must throw rather than `return`.
-    expect(src).toMatch(/if \(!task\.session_id\) \{\s*throw new Error\(/)
-    expect(src).toMatch(/if \(!ctx\) \{\s*throw new Error\(/)
+    expect(appendSource).toMatch(/if \(!task\.session_id\) \{\s*throw new Error\(/)
+    expect(appendSource).toMatch(/if \(!ctx\) \{\s*throw new Error\(/)
     // The legacy silent-return wording is gone.
-    expect(src).not.toMatch(/if \(!task\.session_id\) return\b/)
-    expect(src).not.toMatch(/if \(!ctx\) return\b/)
+    expect(appendSource).not.toMatch(/if \(!task\.session_id\) return\b/)
+    expect(appendSource).not.toMatch(/if \(!ctx\) return\b/)
   })
 })
 
@@ -891,4 +1030,49 @@ async function seedRootSession(sessionID: string, text = "initial request") {
     ],
     touchSessionID: sessionID,
   })
+}
+
+async function importTaskRootWithForeignParent(title: string): Promise<Session.Info> {
+  const now = Date.now()
+  const suffix = `${now}_${Math.random().toString(16).slice(2)}`
+  const foreignProjectID = `project_foreign_task_parent_${suffix}`
+  Database.use((db) =>
+    db
+      .insert(ProjectTable)
+      .values({
+        id: foreignProjectID,
+        worktree: `${Instance.directory}-foreign-parent-${suffix}`,
+        name: `${title} foreign project`,
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
+  )
+  const foreignParent: Session.Info = {
+    id: Identifier.ascending("session"),
+    slug: `foreign-task-parent-${suffix}`,
+    projectID: foreignProjectID,
+    directory: Instance.directory,
+    title: `${title} foreign parent`,
+    version: "test",
+    kind: "root",
+    metadata: {},
+    time: { created: now, updated: now },
+  }
+  const child: Session.Info = {
+    id: Identifier.ascending("session"),
+    slug: `polluted-task-root-${suffix}`,
+    projectID: Instance.project.id,
+    directory: Instance.directory,
+    parentID: foreignParent.id,
+    title,
+    version: "test",
+    kind: "root",
+    metadata: {},
+    time: { created: now + 1, updated: now + 1 },
+  }
+  await Session.importSnapshot({ info: foreignParent, messages: [] })
+  await Session.importSnapshot({ info: child, messages: [] })
+  return child
 }

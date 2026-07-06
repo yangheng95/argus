@@ -1,3 +1,10 @@
+import {
+  validateAgentContextPackets,
+  type AgentContextMediaRefPart,
+  type AgentContextPacket,
+  type AgentContextStructuredPart,
+} from "@/agent/context-packet"
+
 export type BuildEvidenceRole =
   | "target_reference"
   | "previous_output"
@@ -32,6 +39,16 @@ export interface BuildEvidencePack {
 
 export type BuildEvidenceEntry = BuildEvidenceFile & { role: BuildEvidenceRole }
 
+export const BUILD_EVIDENCE_CONTEXT_PACKET_SCHEMA = "opencorvus.build.evidence.v1"
+
+const BUILD_EVIDENCE_ROLE_SET = new Set<BuildEvidenceRole>([
+  "target_reference",
+  "previous_output",
+  "comparison_artifact",
+  "visual_qa_annotation",
+  "visual_qa_diagnostic",
+])
+
 function assertEvidenceFile(file: BuildEvidenceFile, role: BuildEvidenceRole): BuildEvidenceFile {
   if (!file || typeof file.url !== "string" || file.url.length === 0) {
     throw new Error(`BuildEvidencePack ${role} entry requires a non-empty url`)
@@ -65,6 +82,197 @@ export function buildEvidenceTargetReferences(pack: BuildEvidencePack | undefine
 
 export function hasBuildEvidence(pack: BuildEvidencePack | undefined): boolean {
   return buildEvidenceEntries(pack).length > 0
+}
+
+export function buildEvidenceContextPacket(pack: BuildEvidencePack | undefined): AgentContextPacket | undefined {
+  const entries = buildEvidenceEntries(pack)
+  if (entries.length === 0) return undefined
+  const normalizedPack = buildEvidencePackFromEntries(entries)
+  const structuredPart: AgentContextStructuredPart = {
+    type: "structured",
+    schema: BUILD_EVIDENCE_CONTEXT_PACKET_SCHEMA,
+    label: "build_evidence_pack",
+    summary: buildEvidenceSummary(entries),
+    data: normalizedPack,
+  }
+  return {
+    id: "build-evidence-context",
+    title: "Build Evidence Context",
+    scope: "task",
+    parts: [
+      structuredPart,
+      ...entries.map((entry): AgentContextMediaRefPart => {
+      return {
+        type: "media_ref",
+        url: entry.url,
+        mime: entry.mime,
+        ...(entry.filename ? { filename: entry.filename } : {}),
+        ...(entry.label ? { label: entry.label } : {}),
+        ...(entry.sha ? { sha: entry.sha } : {}),
+        ...(typeof entry.size === "number" ? { size: entry.size } : {}),
+        ...(entry.scope ? { scope: entry.scope } : {}),
+      }
+    }),
+    ],
+  }
+}
+
+export function buildEvidencePackFromContextPackets(
+  packets: readonly AgentContextPacket[] | undefined,
+): BuildEvidencePack | undefined {
+  validateAgentContextPackets(packets ?? [])
+  const pack: BuildEvidencePack = {}
+  for (const packet of packets ?? []) {
+    for (const part of packet.parts) {
+      if (part.type !== "structured" || part.schema !== BUILD_EVIDENCE_CONTEXT_PACKET_SCHEMA) continue
+      mergeBuildEvidencePack(pack, parseBuildEvidencePackData(part.data))
+    }
+  }
+  return hasBuildEvidence(pack) ? pack : undefined
+}
+
+function appendEvidenceFile(pack: BuildEvidencePack, role: BuildEvidenceRole, file: BuildEvidenceFile) {
+  switch (role) {
+    case "target_reference":
+      pack.targetReferences = [...(pack.targetReferences ?? []), file]
+      break
+    case "previous_output":
+      pack.previousOutputs = [...(pack.previousOutputs ?? []), file]
+      break
+    case "comparison_artifact":
+      pack.comparisonArtifacts = [...(pack.comparisonArtifacts ?? []), file]
+      break
+    case "visual_qa_annotation":
+      pack.visualQaAnnotations = [...(pack.visualQaAnnotations ?? []), file]
+      break
+    case "visual_qa_diagnostic":
+      pack.visualQaDiagnostics = [...(pack.visualQaDiagnostics ?? []), file]
+      break
+  }
+}
+
+function buildEvidencePackFromEntries(entries: readonly BuildEvidenceEntry[]): BuildEvidencePack {
+  const pack: BuildEvidencePack = {}
+  for (const entry of entries) {
+    const { role, ...file } = entry
+    appendEvidenceFile(pack, role, file)
+  }
+  return pack
+}
+
+function mergeBuildEvidencePack(target: BuildEvidencePack, source: BuildEvidencePack): void {
+  for (const entry of buildEvidenceEntries(source)) {
+    const { role, ...file } = entry
+    appendEvidenceFile(target, role, file)
+  }
+}
+
+const BUILD_EVIDENCE_PACK_FIELDS = [
+  { field: "targetReferences", role: "target_reference" },
+  { field: "previousOutputs", role: "previous_output" },
+  { field: "comparisonArtifacts", role: "comparison_artifact" },
+  { field: "visualQaAnnotations", role: "visual_qa_annotation" },
+  { field: "visualQaDiagnostics", role: "visual_qa_diagnostic" },
+] as const
+
+function parseBuildEvidencePackData(data: unknown): BuildEvidencePack {
+  const record = objectRecord(data, BUILD_EVIDENCE_CONTEXT_PACKET_SCHEMA)
+  const allowedFields = new Set<string>(BUILD_EVIDENCE_PACK_FIELDS.map((entry) => entry.field))
+  for (const field of Object.keys(record)) {
+    if (!allowedFields.has(field)) {
+      throw new Error(`${BUILD_EVIDENCE_CONTEXT_PACKET_SCHEMA} contains unsupported field ${field}`)
+    }
+  }
+  const pack: BuildEvidencePack = {}
+  for (const { field, role } of BUILD_EVIDENCE_PACK_FIELDS) {
+    const value = record[field]
+    if (value === undefined) continue
+    if (!Array.isArray(value)) {
+      throw new Error(`${BUILD_EVIDENCE_CONTEXT_PACKET_SCHEMA}.${field} must be an array`)
+    }
+    value.forEach((item, index) => appendEvidenceFile(pack, role, parseEvidenceFile(item, role, `${field}[${index}]`)))
+  }
+  return pack
+}
+
+function parseEvidenceFile(data: unknown, role: BuildEvidenceRole, path: string): BuildEvidenceFile {
+  const record = objectRecord(data, `${BUILD_EVIDENCE_CONTEXT_PACKET_SCHEMA}.${path}`)
+  assertObjectFields(record, ["url", "mime", "sha", "filename", "intent", "source", "label", "size", "scope"], path)
+  const file: BuildEvidenceFile = {
+    url: requiredString(record.url, `${path}.url`),
+    mime: requiredString(record.mime, `${path}.mime`),
+  }
+  for (const key of ["sha", "filename", "intent", "source", "label"] as const) {
+    const value = optionalString(record[key], `${path}.${key}`)
+    if (value !== undefined) file[key] = value
+  }
+  if (record.size !== undefined) {
+    if (typeof record.size !== "number" || !Number.isFinite(record.size) || record.size < 0) {
+      throw new Error(`${BUILD_EVIDENCE_CONTEXT_PACKET_SCHEMA}.${path}.size must be a non-negative finite number`)
+    }
+    file.size = record.size
+  }
+  if (record.scope !== undefined) {
+    file.scope = parseEvidenceScope(record.scope, `${path}.scope`)
+  }
+  return assertEvidenceFile(file, role)
+}
+
+function parseEvidenceScope(data: unknown, path: string): BuildEvidenceFile["scope"] {
+  const record = objectRecord(data, `${BUILD_EVIDENCE_CONTEXT_PACKET_SCHEMA}.${path}`)
+  assertObjectFields(record, ["kind", "taskID", "goalID", "goalRunID"], path)
+  const kind = requiredString(record.kind, `${path}.kind`)
+  if (kind !== "task" && kind !== "goal" && kind !== "goal_run") {
+    throw new Error(`${BUILD_EVIDENCE_CONTEXT_PACKET_SCHEMA}.${path}.kind must be task, goal, or goal_run`)
+  }
+  return {
+    kind,
+    ...(optionalString(record.taskID, `${path}.taskID`) ? { taskID: optionalString(record.taskID, `${path}.taskID`) } : {}),
+    ...(optionalString(record.goalID, `${path}.goalID`) ? { goalID: optionalString(record.goalID, `${path}.goalID`) } : {}),
+    ...(optionalString(record.goalRunID, `${path}.goalRunID`) ? { goalRunID: optionalString(record.goalRunID, `${path}.goalRunID`) } : {}),
+  }
+}
+
+function assertObjectFields(record: Record<string, unknown>, allowedFields: readonly string[], path: string): void {
+  const allowed = new Set(allowedFields)
+  const unsupported = Object.keys(record).filter((key) => !allowed.has(key))
+  if (unsupported.length > 0) {
+    throw new Error(`${BUILD_EVIDENCE_CONTEXT_PACKET_SCHEMA}.${path} contains unsupported field ${unsupported[0]}`)
+  }
+}
+
+function objectRecord(data: unknown, path: string): Record<string, unknown> {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error(`${path} must be an object`)
+  }
+  return data as Record<string, unknown>
+}
+
+function requiredString(value: unknown, path: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`${BUILD_EVIDENCE_CONTEXT_PACKET_SCHEMA}.${path} requires a non-empty string`)
+  }
+  return value
+}
+
+function optionalString(value: unknown, path: string): string | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`${BUILD_EVIDENCE_CONTEXT_PACKET_SCHEMA}.${path} must be a non-empty string when present`)
+  }
+  return value
+}
+
+function buildEvidenceSummary(entries: readonly BuildEvidenceEntry[]): string {
+  const counts = new Map<BuildEvidenceRole, number>()
+  for (const entry of entries) counts.set(entry.role, (counts.get(entry.role) ?? 0) + 1)
+  return [...BUILD_EVIDENCE_ROLE_SET]
+    .map((role) => {
+      const count = counts.get(role) ?? 0
+      return count > 0 ? `${role}=${count}` : ""
+    })
+    .filter(Boolean)
+    .join("; ")
 }
 
 function evidenceDisplayName(file: BuildEvidenceFile, index: number): string {

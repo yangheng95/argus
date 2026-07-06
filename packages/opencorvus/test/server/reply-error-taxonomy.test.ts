@@ -53,8 +53,31 @@ describe("task agent session reply fails loudly when direct continuation is unav
           time_updated: input.now,
           time_started: input.now,
         })
-        .run(),
+      .run(),
     )
+  }
+
+  async function importCurrentProjectSession(input: {
+    directory: string
+    kind: Session.Info["kind"]
+    title: string
+    parentID?: string
+  }) {
+    const now = Date.now()
+    const info: Session.Info = {
+      id: Identifier.ascending("session"),
+      slug: `direct-reply-lineage-${Math.random().toString(36).slice(2)}`,
+      projectID: Instance.project.id,
+      directory: input.directory,
+      ...(input.parentID ? { parentID: input.parentID } : {}),
+      title: input.title,
+      version: "test",
+      kind: input.kind,
+      metadata: {},
+      time: { created: now, updated: now },
+    }
+    await Session.importSnapshot({ info, messages: [] })
+    return info
   }
 
   async function postReply(input: {
@@ -129,6 +152,47 @@ describe("task agent session reply fails loudly when direct continuation is unav
         expect(body.data?.kind).toBe("executor")
         expect(body.data?.sessionID).toBe(executor.id)
         await expectNoTaskRootWake({ rootID: root.id })
+      },
+    })
+  })
+
+  test("direct reply rejects polluted task-root lineage before reading worker messages", async () => {
+    await using current = await tmpdir({ git: true, config: { model: "test-provider/test-model" } })
+    await using foreign = await tmpdir({ git: true })
+    let foreignParentID = ""
+
+    await Instance.provide({
+      directory: foreign.path,
+      fn: async () => {
+        foreignParentID = (await Session.create({ kind: "root", title: "direct reply foreign parent" })).id
+      },
+    })
+
+    await Instance.provide({
+      directory: current.path,
+      fn: async () => {
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await importCurrentProjectSession({
+          directory: current.path,
+          kind: "root",
+          title: "direct reply polluted root",
+          parentID: foreignParentID,
+        })
+        const worker = await importCurrentProjectSession({
+          directory: current.path,
+          kind: "build",
+          title: "direct reply polluted worker",
+          parentID: root.id,
+        })
+        await seedTask({ taskID, rootID: root.id, now })
+        const messages = spyOn(Session, "messages")
+
+        const response = await postReply({ taskID, sessionID: worker.id, directory: current.path })
+
+        expect(response.status).not.toBe(200)
+        expect(await response.text()).toContain("Session not found")
+        expect(messages).not.toHaveBeenCalled()
       },
     })
   })

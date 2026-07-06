@@ -22,9 +22,20 @@ import {
   reviewIDForIntegrity,
 } from "@/review/stream"
 import type { ParsedRequirement, RequirementsDecision } from "@/requirements/types"
-import { AttachmentStore } from "@/storage/attachment-store"
+import {
+  agentContextPacketTextByStructuredSchema,
+  renderAgentContextPackets,
+  type AgentContextPacket,
+  withAttachmentContextPacket,
+} from "@/agent/context-packet"
 import { Log } from "@/util/log"
-import { createIntegrityAcceptanceTools } from "./acceptance-tools"
+import {
+  createIntegrityAcceptanceTools,
+  FRONTEND_DESIGN_INTEGRITY_CONTEXT_PACKET_SCHEMA,
+  implementationEvidenceFromContextPackets,
+  VISUAL_QA_IMPLEMENTATION_CONTEXT_PACKET_SCHEMA,
+  type IntegrityImplementationEvidenceContext,
+} from "./acceptance-tools"
 import { loadIntegrityPreviewToolInfos } from "./static-tools"
 import {
   buildPriorManifestIndex,
@@ -33,7 +44,11 @@ import {
   integrityFindingFingerprint,
   stableList,
 } from "./finding-manifest"
-import { renderIntegrityReplayContextPrompt, type IntegrityReplayContext } from "./replay-context"
+import {
+  integrityReplayContextFromContextPackets,
+  renderIntegrityReplayContextPrompt,
+  type IntegrityReplayContext,
+} from "./replay-context"
 import { renderSharedIntegrityPromptContext, sanitizeIntegrityPromptText } from "./shared-prompt"
 import type { RequirementStatusRow } from "./requirement-status"
 import {
@@ -182,7 +197,6 @@ export interface IntegrityResult extends IntegrityTeamReport {
 }
 
 type IntegrityEvidenceToolInput = NonNullable<Parameters<typeof createIntegrityAcceptanceTools>[0]>
-type IntegrityAcceptanceContext = NonNullable<IntegrityEvidenceToolInput["buildEvidence"]>
 type IntegrityEvidenceGoalInfo = NonNullable<IntegrityEvidenceToolInput["goals"]>[number]
 
 export type ReviewPromptInput = {
@@ -193,11 +207,8 @@ export type ReviewPromptInput = {
   requirementDecisions?: RequirementsDecision[]
   requirementStatus?: RequirementStatusRow[]
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
-  acceptance?: IntegrityAcceptanceContext
-  frontendDesign?: string
-  visualQa?: string
+  contextPackets?: AgentContextPacket[]
   projectRoot?: string
-  replayContext: IntegrityReplayContext
   signal?: AbortSignal
   taskID?: string
 }
@@ -463,19 +474,19 @@ function integrityCheckGraphIssues(report: IntegrityTeamReport, requirements?: P
   return issues
 }
 
-const INTEGRITY_EVIDENCE_PROMPT_MAX_CHARS = 9_800
+const INTEGRITY_EVIDENCE_PROMPT_MAX_CHARS = 9_200
 const INTEGRITY_CONSENSUS_REVIEWER_REPORTS_MAX_CHARS = 18_000
 const INTEGRITY_EVIDENCE_LIMITS = {
   userRequestChars: 800,
   requirementDescriptionChars: 120,
   requirementAcceptanceChars: 100,
   requirementNonGoalChars: 80,
-  requirements: 24,
+  requirements: 12,
   requirementStatusGoals: 4,
   requirementStatusSpecs: 6,
-  buildDirectories: 24,
-  buildSummaryChars: 500,
-  goals: 24,
+  implementationDirectories: 24,
+  implementationSummaryChars: 500,
+  goals: 8,
   goalObjectiveChars: 140,
   goalDirectories: 6,
   goalAcceptanceSpecs: 2,
@@ -502,11 +513,8 @@ export async function reviewIntegrity(input: {
   requirementDecisions?: RequirementsDecision[]
   requirementStatus?: RequirementStatusRow[]
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
-  acceptance?: IntegrityAcceptanceContext
-  frontendDesign?: string
-  visualQa?: string
+  contextPackets?: AgentContextPacket[]
   projectRoot?: string
-  replayContext?: IntegrityReplayContext
   signal?: AbortSignal
   taskID?: string
   task?: TaskRow
@@ -514,10 +522,13 @@ export async function reviewIntegrity(input: {
   continuation?: AgentSessionContinuation
   onSessionCreated?: (sessionID: string) => void
 }): Promise<IntegrityResult & { sessionID: string }> {
-  if (!input.replayContext) {
-    throw new Error("reviewIntegrity requires replayContext. Build it from integrity/replay-context before calling.")
+  if ((input as { replayContext?: unknown }).replayContext !== undefined) {
+    throw new Error("reviewIntegrity rejects direct replayContext input. Provide integrityReplayContextPacket in contextPackets.")
   }
-  const replayContext = input.replayContext
+  const replayContext = integrityReplayContextFromContextPackets(input.contextPackets)
+  if (!replayContext) {
+    throw new Error("reviewIntegrity requires an integrity replay context packet in contextPackets.")
+  }
   const attemptNumber = replayContext.attemptNumber
   if (input.taskID && !input.parentSessionID) {
     throw new Error(`reviewIntegrity requires parentSessionID for task-backed runs (taskID=${input.taskID}).`)
@@ -528,7 +539,10 @@ export async function reviewIntegrity(input: {
     if (softSessionID) input.onSessionCreated?.(softSessionID)
     return { ...result, sessionID: softSessionID ?? "" }
   }
-  const promptInput: ReviewPromptInput = { ...input, replayContext }
+  const promptInput: ReviewPromptInput = {
+    ...input,
+    contextPackets: withAttachmentContextPacket(input.contextPackets, input.attachments),
+  }
   const startedAt = Date.now()
   let activeReviewID: string | undefined = input.continuation
     ? reviewIDForIntegrity(input.continuation.sessionID)
@@ -548,28 +562,12 @@ export async function reviewIntegrity(input: {
       taskID: input.taskID,
       goals: input.goals,
       requirements: input.requirements,
-      acceptance: input.acceptance,
-      frontendDesign: input.frontendDesign,
-      visualQa: input.visualQa,
+      contextPackets: promptInput.contextPackets,
       projectRoot: input.projectRoot,
       attachments: input.attachments,
       signal: input.signal,
     }),
     buildUserPrompt: () => buildSingleSessionIntegrityPrompt(promptInput),
-    buildUserParts:
-      input.attachments && input.attachments.length > 0
-        ? async () => {
-            const text = buildSingleSessionIntegrityPrompt(promptInput)
-            const inline = await AttachmentStore.inlineFileParts(input.attachments!)
-            return [
-              {
-                type: "text" as const,
-                text: text + AttachmentStore.renderAttachmentInventory(input.attachments!),
-              },
-              ...inline,
-            ]
-          }
-        : undefined,
     terminalTool: {
       toolName: "submit_integrity_consensus",
       isSatisfied: (collector) => Boolean(collector.report),
@@ -615,7 +613,7 @@ export async function reviewIntegrity(input: {
 
   const result = out.collector.report
   if (!result) throw new Error("integrity review did not submit consensus report.")
-  const normalized = normalizeTeamReport(result, input.replayContext)
+  const normalized = normalizeTeamReport(result, replayContext)
   log.info("integrity team review completed", {
     verdict: normalized.verdict,
     reviewers: normalized.reviewers.length,
@@ -631,20 +629,16 @@ async function createSingleSessionIntegrityToolKit(input: {
   taskID?: string
   goals: GoalContractFields[]
   requirements?: ParsedRequirement[]
-  acceptance?: IntegrityAcceptanceContext
-  frontendDesign?: string
-  visualQa?: string
+  contextPackets?: AgentContextPacket[]
   projectRoot?: string
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
   signal?: AbortSignal
 }) {
   const evidenceTools = input.taskID
-    ? createIntegrityAcceptanceTools({
+      ? createIntegrityAcceptanceTools({
         taskID: input.taskID,
         goals: input.goals.map(goalToIntegrityEvidenceGoalInfo),
-        buildEvidence: input.acceptance,
-        frontendDesign: input.frontendDesign,
-        visualQa: input.visualQa,
+        contextPackets: input.contextPackets,
         attachments: input.attachments,
         signal: input.signal,
       })
@@ -888,10 +882,19 @@ export const IntegrityTestHooks = {
   emptyConsensusCollector,
 }
 
+function replayContextForPrompt(input: ReviewPromptInput): IntegrityReplayContext {
+  const context = integrityReplayContextFromContextPackets(input.contextPackets)
+  if (!context) {
+    throw new Error("Integrity prompt builders require integrityReplayContextPacket in contextPackets.")
+  }
+  return context
+}
+
 export function buildSupervisorPlanPrompt(input: ReviewPromptInput): string {
+  const replayContext = replayContextForPrompt(input)
   return [
     "# Integrity Supervisor Planning",
-    renderIntegrityReplayContextPrompt(input.replayContext),
+    renderIntegrityReplayContextPrompt(replayContext),
     renderSeverityNewEvidenceSection(input),
     [
       "First build a task-specific audit strategy. Derive `taskProfile`, `riskHypotheses`, and `coveragePlan` from the request promises, REQ summaries, goal summaries, replay context, and changed directory surface. Do not use a fixed checklist.",
@@ -900,8 +903,8 @@ export function buildSupervisorPlanPrompt(input: ReviewPromptInput): string {
       "Do not plan default reads of upstream_context, contract graph, visual specs, decision log, full file lists, or full diffs. Those are not initial audit material.",
       "Choose 2-6 independent reviewers for the actual task risk surface. Use the scale signals: larger goal/REQ/changed-directory surfaces should push the plan toward more reviewers; narrow surfaces can use fewer. Do not default to five reviewers. Do not use fixed dimensions or a stock checklist.",
       "When no prior integrity attempt exists for this task/spec snapshot, build the reviewer team from the task's actual risk surface.",
-      "When prior attempts exist, start from prior blocking findings, required repairs, and prior reviewer focuses. Verify whether prior blockers were actually repaired using build evidence since the latest review, then cover new or changed risk surfaces. Do not spend a fresh full team rediscovering the same unchanged blocker. If a prior blocker still appears unresolved, assign a reviewer to verify it as persistent with evidence rather than renaming it as a new finding.",
-      "Prior reviewer focuses are the list of surfaces that were inspected, not a proof that those surfaces are healthy or that uninspected surfaces are absent. Re-walk the actual task surface from the user request, REQ rows, goals, acceptance specs, changed directories, and build summaries. If a category looks uninspected in prior rounds, do not assume it is irrelevant -- it may have been missed. Match reviewers to surface by semantic responsibility, not by similarity to prior reviewer ids or names.",
+      "When prior attempts exist, start from prior blocking findings, required repairs, and prior reviewer focuses. Verify whether prior blockers were actually repaired using implementation evidence since the latest review, then cover new or changed risk surfaces. Do not spend a fresh full team rediscovering the same unchanged blocker. If a prior blocker still appears unresolved, assign a reviewer to verify it as persistent with evidence rather than renaming it as a new finding.",
+      "Prior reviewer focuses are the list of surfaces that were inspected, not a proof that those surfaces are healthy or that uninspected surfaces are absent. Re-walk the actual task surface from the user request, REQ rows, goals, acceptance specs, changed directories, and implementation summaries. If a category looks uninspected in prior rounds, do not assume it is irrelevant -- it may have been missed. Match reviewers to surface by semantic responsibility, not by similarity to prior reviewer ids or names.",
       "Use 2-3 reviewers when the replay context shows a narrow re-review with a small changed-directory set and a small number of prior blockers. Use 4-6 reviewers when the task spans many goals/requirements/acceptance specs, when changed directories cross several runtime surfaces, or when the replay context has no prior attempts. Avoid substantial overlap with prior reviewer focuses unless the rationale ties it to persistent blockers or changed repair evidence.",
     ].join("\n\n"),
     buildIntegrityEvidencePrompt(input),
@@ -910,9 +913,10 @@ export function buildSupervisorPlanPrompt(input: ReviewPromptInput): string {
 }
 
 export function buildSingleSessionIntegrityPrompt(input: ReviewPromptInput): string {
+  const replayContext = replayContextForPrompt(input)
   return [
     "# Integrity Review",
-    renderIntegrityReplayContextPrompt(input.replayContext),
+    renderIntegrityReplayContextPrompt(replayContext),
     renderSeverityNewEvidenceSection(input),
     renderSeverityReconciliationPass(),
     [
@@ -940,6 +944,7 @@ export function buildSingleSessionIntegrityPrompt(input: ReviewPromptInput): str
 }
 
 export function buildReviewerPrompt(input: ReviewPromptInput, scope: IntegrityReviewerScope): string {
+  const replayContext = replayContextForPrompt(input)
   return [
     "# Independent Integrity Reviewer",
     `Reviewer ID: ${scope.reviewerID}`,
@@ -947,7 +952,7 @@ export function buildReviewerPrompt(input: ReviewPromptInput, scope: IntegrityRe
     `Focus: ${scope.focus}`,
     "Adversarial questions:",
     markdownList(scope.adversarialQuestions),
-    renderIntegrityReplayContextPrompt(input.replayContext),
+    renderIntegrityReplayContextPrompt(replayContext),
     FINDING_TRACEABILITY_PROMPT,
     FINDING_MANIFEST_PROMPT,
     ADVERSARIAL_INVESTIGATION_PROMPT,
@@ -973,9 +978,10 @@ export function buildSupervisorConsensusPrompt(
   plan: IntegrityReviewerPlan,
   reports: IntegrityReviewerReport[],
 ): string {
+  const replayContext = replayContextForPrompt(input)
   return [
     "# Integrity Supervisor Consensus",
-    renderIntegrityReplayContextPrompt(input.replayContext),
+    renderIntegrityReplayContextPrompt(replayContext),
     renderSeverityNewEvidenceSection(input),
     renderSeverityReconciliationPass(),
     "Compare reviewer reports adversarially. If a blocking finding or unresolved blocking disagreement remains, do not pass.",
@@ -1020,14 +1026,45 @@ export function buildIntegrityEvidencePrompt(input: ReviewPromptInput): string {
   if (input.requirementStatus?.length) {
     sections.push(renderRequirementStatusSummary(input.requirementStatus))
   }
-  if (input.acceptance) {
-    sections.push(renderBuildEvidenceSummary(input.acceptance))
+  const implementationEvidence = implementationEvidenceFromContextPackets(input.contextPackets)
+  if (implementationEvidence) {
+    sections.push(renderImplementationEvidenceSummary(implementationEvidence))
   }
-  if (input.frontendDesign?.trim()) {
-    sections.push(renderFrontendDesignSummary(input.frontendDesign))
+  const frontendDesign = agentContextPacketTextByStructuredSchema(
+    input.contextPackets,
+    FRONTEND_DESIGN_INTEGRITY_CONTEXT_PACKET_SCHEMA,
+  )
+  if (frontendDesign) {
+    sections.push(renderFrontendDesignSummary(frontendDesign))
   }
-  if (input.visualQa?.trim()) {
-    sections.push(renderVisualQaSummary(input.visualQa))
+  const visualQa = agentContextPacketTextByStructuredSchema(
+    input.contextPackets,
+    VISUAL_QA_IMPLEMENTATION_CONTEXT_PACKET_SCHEMA,
+  )
+  if (visualQa) {
+    sections.push(renderVisualQaSummary(visualQa))
+  }
+  const genericContextPackets = (input.contextPackets ?? []).filter(
+    (packet) =>
+      packet.parts.length > 0 &&
+      !packet.parts.some(
+        (part) =>
+          part.type === "structured" &&
+          (part.schema === FRONTEND_DESIGN_INTEGRITY_CONTEXT_PACKET_SCHEMA ||
+            part.schema === VISUAL_QA_IMPLEMENTATION_CONTEXT_PACKET_SCHEMA),
+      ) &&
+      !implementationEvidenceFromContextPackets([packet]),
+  )
+  if (genericContextPackets.length > 0) {
+    sections.push(
+      [
+        "# Agent Context Packets",
+        "",
+        "The scheduler supplied these typed context packets as upstream task evidence. Media appears as refs only; inspect cited refs through available tools before making visual or file-content claims.",
+        "",
+        renderAgentContextPackets(genericContextPackets),
+      ].join("\n"),
+    )
   }
   sections.push(renderGoalContractSummary(input.goals))
   sections.push(renderScopeBoundedMaturityEvidenceSection(input))
@@ -1037,20 +1074,20 @@ export function buildIntegrityEvidencePrompt(input: ReviewPromptInput): string {
   )
 }
 
-function renderFrontendDesignSummary(frontendDesign: string): string {
+function renderFrontendDesignSummary(frontendDesignText: string): string {
   return [
     "# Frontend Design Contract",
-    sanitizePromptBlock(frontendDesign, 2_400),
+    sanitizePromptBlock(frontendDesignText, 2_400),
     "",
     "Reviewers must verify that reference-driven UI work follows this frontend replica contract, source manifest, web-clone-source handoff, source evidence expectations, and visual reference requirements.",
     'Use `inspect_integrity_evidence({ section: "frontend_design_contract" })` for the bounded full contract excerpt when this matters to your scope.',
   ].join("\n")
 }
 
-function renderVisualQaSummary(visualQa: string): string {
+function renderVisualQaSummary(visualQaText: string): string {
   return [
     "# Visual QA Implementation Defect Context",
-    sanitizePromptBlock(visualQa, 2_400),
+    sanitizePromptBlock(visualQaText, 2_400),
     "",
     "Use this only to audit implementation completeness and correctness for defects Visual QA localized. It is not the final rendered visual acceptance verdict; final visual acceptance artifacts are outside Integrity.",
     'Use `inspect_integrity_evidence({ section: "visual_qa_report" })` for the bounded implementation-defect excerpt when these defects matter to your scope.',
@@ -1111,14 +1148,14 @@ function renderRequirementStatusSummary(rows: RequirementStatusRow[]): string {
   return lines.join("\n")
 }
 
-function renderBuildEvidenceSummary(acceptance: IntegrityAcceptanceContext): string {
+function renderImplementationEvidenceSummary(acceptance: IntegrityImplementationEvidenceContext): string {
   const allChangedDirectories = promptPathDirectories(acceptance.changedFiles)
-  const changedDirectories = allChangedDirectories.slice(0, INTEGRITY_EVIDENCE_LIMITS.buildDirectories)
+  const changedDirectories = allChangedDirectories.slice(0, INTEGRITY_EVIDENCE_LIMITS.implementationDirectories)
   const allDiffDirectories = promptPathDirectories((acceptance.diffs ?? []).map((diff) => diff.file))
-  const diffDirectories = allDiffDirectories.slice(0, INTEGRITY_EVIDENCE_LIMITS.buildDirectories)
+  const diffDirectories = allDiffDirectories.slice(0, INTEGRITY_EVIDENCE_LIMITS.implementationDirectories)
   const lines = [
-    "# Build Evidence Context",
-    `Summary: ${sanitizePromptBlock(acceptance.summary || "(no summary)", INTEGRITY_EVIDENCE_LIMITS.buildSummaryChars)}`,
+    "# Implementation Evidence Context",
+    `Summary: ${sanitizePromptBlock(acceptance.summary || "(no summary)", INTEGRITY_EVIDENCE_LIMITS.implementationSummaryChars)}`,
     `Changed directories (${changedDirectories.length}/${allChangedDirectories.length}; files=${acceptance.changedFiles.length}):`,
     ...(changedDirectories.length > 0 ? changedDirectories.map((directory) => `- ${directory}`) : ["- (none)"]),
   ]
@@ -1172,11 +1209,12 @@ function renderAcceptanceSpecSummary(specs: readonly AcceptanceSpec[]): string {
 }
 
 export function renderSeverityNewEvidenceSection(input: ReviewPromptInput): string {
-  const latestAttempt = input.replayContext.priorAttempts.at(-1)
-  const oldAttempts = latestAttempt ? input.replayContext.priorAttempts.slice(0, -1).reverse() : []
-  const evidence = input.replayContext.buildEvidenceSinceLastReview
+  const replayContext = replayContextForPrompt(input)
+  const latestAttempt = replayContext.priorAttempts.at(-1)
+  const oldAttempts = latestAttempt ? replayContext.priorAttempts.slice(0, -1).reverse() : []
+  const evidence = replayContext.implementationEvidenceSinceLastReview
   const changedEvidenceLines = [
-    "Build evidence available for deciding whether later severity changes have new evidence:",
+    "Implementation evidence available for deciding whether later severity changes have new evidence:",
   ]
   if (evidence.sinceAttemptNumber !== undefined)
     changedEvidenceLines.push(`- Since attempt: #${evidence.sinceAttemptNumber}`)
@@ -1187,21 +1225,21 @@ export function renderSeverityNewEvidenceSection(input: ReviewPromptInput): stri
   changedEvidenceLines.push(
     `- Changed directories: ${changedDirectories.length > 0 ? changedDirectories.join(", ") : "(none)"}`,
   )
-  if (evidence.buildSummaries.length > 0) {
-    changedEvidenceLines.push("- Build summaries:")
-    for (const summary of evidence.buildSummaries.slice(0, 12)) {
-      changedEvidenceLines.push(`  - ${sanitizePromptBlock(summary, INTEGRITY_EVIDENCE_LIMITS.buildSummaryChars)}`)
+  if (evidence.implementationSummaries.length > 0) {
+    changedEvidenceLines.push("- Implementation summaries:")
+    for (const summary of evidence.implementationSummaries.slice(0, 12)) {
+      changedEvidenceLines.push(`  - ${sanitizePromptBlock(summary, INTEGRITY_EVIDENCE_LIMITS.implementationSummaryChars)}`)
     }
-    appendOmittedLine(changedEvidenceLines, evidence.buildSummaries.length, 12, "build summaries")
+    appendOmittedLine(changedEvidenceLines, evidence.implementationSummaries.length, 12, "implementation summaries")
   }
   const rendered = renderSharedIntegrityPromptContext({
     surface: "severity_context",
-    lineage: input.replayContext.lineage,
+    lineage: replayContext.lineage,
     latestAttempt,
     changedDirectories,
     changedEvidenceMarkdown: changedEvidenceLines.join("\n"),
     oldAttempts,
-    reviewerTextBlocks: renderPriorFindingsForSeverity(input.replayContext),
+    reviewerTextBlocks: renderPriorFindingsForSeverity(replayContext),
   }).promptMarkdown
 
   return [
@@ -1241,7 +1279,7 @@ function renderSeverityReconciliationPass(): string {
     "",
     "3. If a finding repeats a defect that was advisory in any prior attempt's report from replay context, and there is no Severity Discipline new evidence raising it to a bar clause (a)-(e), keep it advisory. Persistence alone is not a promotion trigger. A deeper reading of unchanged code or unchanged prior runtime output is not new evidence.",
     "",
-    '4. If a finding repeats a defect that was blocking in a prior attempt and the build evidence since that attempt does NOT show a repair on that surface, keep it blocking and mark `consensus=\"agreed\"` with a persistent note.',
+    '4. If a finding repeats a defect that was blocking in a prior attempt and the implementation evidence since that attempt does NOT show a repair on that surface, keep it blocking and mark `consensus=\"agreed\"` with a persistent note.',
   ].join("\n")
 }
 

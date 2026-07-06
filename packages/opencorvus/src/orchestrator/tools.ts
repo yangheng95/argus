@@ -76,6 +76,7 @@ import {
   renderFrontendDesignHandoffReference,
   frontendDesignArtifactPaths,
   parseFrontendProjectDecisionEntry,
+  parseVisualRegionBindingsDecisionEntry,
 } from "@/frontend-design/handoff"
 import { renderVisualContractPromptSection } from "@/frontend-design/prompt-section"
 import {
@@ -96,7 +97,6 @@ import {
   buildVisualHandoffStructuredPart,
   type BuildVisualHandoffContextData,
 } from "@/build/prompt-context"
-import { BuildSessionReplayPressure } from "@/build/session-replay-pressure"
 import {
   findNonStaleFrontendResearchBriefs,
   renderFrontendResearchArchitectPromptSection,
@@ -599,17 +599,20 @@ function frontendDesignBuildVisualHandoff(entries: readonly DecisionEntry[]): Bu
   for (const entry of entries) latest.set(entry.key, entry)
   const frontendProjectRole = parseFrontendProjectDecisionEntry(latest.get("frontend_project"))?.role
   const projectMode = frontendProjectModeForBuildHandoff(frontendProjectRole)
+  const visualRegionBindings = parseVisualRegionBindingsDecisionEntry(latest.get("visual_region_bindings"))
   const webCloneSource = projectMode === "source_baseline" || projectMode === "visual_baseline"
   const visualReference =
+    visualRegionBindings.length > 0 ||
     webCloneSource ||
     ["reference_artifacts", "visual_consistency_contract", "evidence_source_manifest"].some(
       (key) => latest.get(key)?.value.trim(),
     )
-  if (!visualReference && !webCloneSource && !projectMode) return undefined
+  if (!visualReference && !webCloneSource && !projectMode && visualRegionBindings.length === 0) return undefined
   return {
     ...(visualReference ? { visualReference } : {}),
     ...(webCloneSource ? { webCloneSource } : {}),
     ...(projectMode ? { projectMode } : {}),
+    ...(visualRegionBindings.length > 0 ? { visualRegionBindings } : {}),
   }
 }
 
@@ -971,27 +974,6 @@ async function selectGoalBuildRetrySession(input: {
   const contextUnavailableReason = contextUnavailableReasonFromAssistantError(latestAssistant)
   if (contextUnavailableReason) return { priorSessionID, contextUnavailableReason }
 
-  const pressureConfigScope = { taskID: input.taskID }
-  const pressure = BuildSessionReplayPressure.evaluate({
-    sessionID: priorSessionID,
-    config: await EffectiveConfig.effective(pressureConfigScope),
-    model: await resolveAgentModel("build", pressureConfigScope),
-  })
-  if (pressure.contextUnavailableReason) {
-    log.info("build retry selected fresh session for replay pressure", {
-      taskID: input.taskID,
-      goalID: input.goalID,
-      priorSessionID,
-      replayTokensEstimate: pressure.summary.replayTokensEstimate,
-      replayTokenLimit: pressure.limit.tokenLimit,
-      latestAssistantInputTokens: pressure.summary.latestAssistantInputTokens,
-      toolOutputChars: pressure.summary.toolOutputChars,
-      toolInputChars: pressure.summary.toolInputChars,
-      uncompactedToolParts: pressure.summary.uncompactedToolParts,
-    })
-    return { priorSessionID, contextUnavailableReason: pressure.contextUnavailableReason }
-  }
-
   const executor = input.executor ?? "opencorvus"
   if (executor !== "opencorvus") {
     const { readExecutorSessionRef } = await import("@/executor/session-ref")
@@ -1201,6 +1183,11 @@ async function requireTaskOrchestratorToolExecutionContext(
       `${toolName}: tool execution identity session ${toolExecution.orchestratorSessionID} belongs to task ${owningTaskID ?? "unknown"}, not ${expected.taskID}.`,
     )
   }
+  const task = await assertTaskRootSessionLineageForConfig(requireTask(expected.taskID))
+  await Session.assertLineageInProject({
+    sessionID: toolExecution.orchestratorSessionID,
+    projectID: task.project_id,
+  })
 
   let message: Message.WithParts
   try {
@@ -2276,6 +2263,18 @@ function directReplyModelResolutionContext(input: {
   return { sessionID: input.sessionID }
 }
 
+async function assertAgentCoordinationRequestSessionLineage(input: {
+  taskID: string
+  sessionID: string
+}): Promise<{ task: TaskWithRootSession; session: Session.Info }> {
+  const task = await assertTaskRootSessionLineageForConfig(requireTask(input.taskID))
+  const session = await Session.assertLineageInProject({
+    sessionID: input.sessionID,
+    projectID: task.project_id,
+  })
+  return { task, session }
+}
+
 function requireAgentCoordinationRequestForResponse(input: {
   taskID: string
   requestID: string
@@ -2403,7 +2402,10 @@ async function validateAgentCoordinationContinueTarget(input: {
   taskID: string
   request: AgentCoordinationRequestRow
 }) {
-  const session = await Session.get(input.request.payload.session_id)
+  const { session } = await assertAgentCoordinationRequestSessionLineage({
+    taskID: input.taskID,
+    sessionID: input.request.payload.session_id,
+  })
   const { kind, ownershipSource } = assertDirectReplySessionOwnership({
     taskID: input.taskID,
     sessionID: input.request.payload.session_id,
@@ -2475,8 +2477,10 @@ async function validateAgentCoordinationBuildRedispatch(input: {
   taskID: string
   request: AgentCoordinationRequestRow
 }) {
-  const task = requireTask(input.taskID)
-  const source = await Session.get(input.request.payload.session_id)
+  const { task, session: source } = await assertAgentCoordinationRequestSessionLineage({
+    taskID: input.taskID,
+    sessionID: input.request.payload.session_id,
+  })
   const { kind, ownershipSource } = assertDirectReplySessionOwnership({
     taskID: input.taskID,
     sessionID: input.request.payload.session_id,
@@ -2531,8 +2535,10 @@ async function validateAgentCoordinationIntentAnalysisRedispatch(input: {
   taskID: string
   request: AgentCoordinationRequestRow
 }) {
-  const task = requireTask(input.taskID)
-  const source = await Session.get(input.request.payload.session_id)
+  const { task, session: source } = await assertAgentCoordinationRequestSessionLineage({
+    taskID: input.taskID,
+    sessionID: input.request.payload.session_id,
+  })
   const { kind, ownershipSource } = assertDirectReplySessionOwnership({
     taskID: input.taskID,
     sessionID: input.request.payload.session_id,
@@ -2565,8 +2571,10 @@ async function validateAgentCoordinationExploreRedispatch(input: {
   taskID: string
   request: AgentCoordinationRequestRow
 }) {
-  const task = requireTask(input.taskID)
-  const source = await Session.get(input.request.payload.session_id)
+  const { task, session: source } = await assertAgentCoordinationRequestSessionLineage({
+    taskID: input.taskID,
+    sessionID: input.request.payload.session_id,
+  })
   const { kind, ownershipSource } = assertDirectReplySessionOwnership({
     taskID: input.taskID,
     sessionID: input.request.payload.session_id,
@@ -2599,8 +2607,10 @@ async function validateAgentCoordinationGoalWorkloadRedispatch(input: {
   taskID: string
   request: AgentCoordinationRequestRow
 }) {
-  const task = requireTask(input.taskID)
-  const source = await Session.get(input.request.payload.session_id)
+  const { task, session: source } = await assertAgentCoordinationRequestSessionLineage({
+    taskID: input.taskID,
+    sessionID: input.request.payload.session_id,
+  })
   const { kind, ownershipSource } = assertDirectReplySessionOwnership({
     taskID: input.taskID,
     sessionID: input.request.payload.session_id,
@@ -2643,8 +2653,10 @@ async function validateAgentCoordinationFactCheckRedispatch(input: {
   taskID: string
   request: AgentCoordinationRequestRow
 }) {
-  const task = requireTask(input.taskID)
-  const source = await Session.get(input.request.payload.session_id)
+  const { task, session: source } = await assertAgentCoordinationRequestSessionLineage({
+    taskID: input.taskID,
+    sessionID: input.request.payload.session_id,
+  })
   const { kind, ownershipSource } = assertDirectReplySessionOwnership({
     taskID: input.taskID,
     sessionID: input.request.payload.session_id,
@@ -2687,8 +2699,10 @@ async function validateAgentCoordinationFrontendResearchRedispatch(input: {
   taskID: string
   request: AgentCoordinationRequestRow
 }) {
-  const task = requireTask(input.taskID)
-  const source = await Session.get(input.request.payload.session_id)
+  const { task, session: source } = await assertAgentCoordinationRequestSessionLineage({
+    taskID: input.taskID,
+    sessionID: input.request.payload.session_id,
+  })
   const { kind, ownershipSource } = assertDirectReplySessionOwnership({
     taskID: input.taskID,
     sessionID: input.request.payload.session_id,
@@ -2729,8 +2743,10 @@ async function validateAgentCoordinationFrontendDesignRedispatch(input: {
   taskID: string
   request: AgentCoordinationRequestRow
 }) {
-  const task = requireTask(input.taskID)
-  const source = await Session.get(input.request.payload.session_id)
+  const { task, session: source } = await assertAgentCoordinationRequestSessionLineage({
+    taskID: input.taskID,
+    sessionID: input.request.payload.session_id,
+  })
   const { kind, ownershipSource } = assertDirectReplySessionOwnership({
     taskID: input.taskID,
     sessionID: input.request.payload.session_id,
@@ -2763,8 +2779,10 @@ async function validateAgentCoordinationDeepResearchRedispatch(input: {
   taskID: string
   request: AgentCoordinationRequestRow
 }) {
-  const task = requireTask(input.taskID)
-  const source = await Session.get(input.request.payload.session_id)
+  const { task, session: source } = await assertAgentCoordinationRequestSessionLineage({
+    taskID: input.taskID,
+    sessionID: input.request.payload.session_id,
+  })
   const { kind, ownershipSource } = assertDirectReplySessionOwnership({
     taskID: input.taskID,
     sessionID: input.request.payload.session_id,
@@ -2797,8 +2815,10 @@ async function validateAgentCoordinationRequirementsRedispatch(input: {
   taskID: string
   request: AgentCoordinationRequestRow
 }) {
-  const task = requireTask(input.taskID)
-  const source = await Session.get(input.request.payload.session_id)
+  const { task, session: source } = await assertAgentCoordinationRequestSessionLineage({
+    taskID: input.taskID,
+    sessionID: input.request.payload.session_id,
+  })
   const { kind, ownershipSource } = assertDirectReplySessionOwnership({
     taskID: input.taskID,
     sessionID: input.request.payload.session_id,
@@ -2831,8 +2851,10 @@ async function validateAgentCoordinationArchitectRedispatch(input: {
   taskID: string
   request: AgentCoordinationRequestRow
 }) {
-  const task = requireTask(input.taskID)
-  const source = await Session.get(input.request.payload.session_id)
+  const { task, session: source } = await assertAgentCoordinationRequestSessionLineage({
+    taskID: input.taskID,
+    sessionID: input.request.payload.session_id,
+  })
   const { kind, ownershipSource } = assertDirectReplySessionOwnership({
     taskID: input.taskID,
     sessionID: input.request.payload.session_id,
@@ -2869,8 +2891,10 @@ async function validateAgentCoordinationVisualQaRedispatch(input: {
   taskID: string
   request: AgentCoordinationRequestRow
 }) {
-  const task = requireTask(input.taskID)
-  const source = await Session.get(input.request.payload.session_id)
+  const { task, session: source } = await assertAgentCoordinationRequestSessionLineage({
+    taskID: input.taskID,
+    sessionID: input.request.payload.session_id,
+  })
   const { kind, ownershipSource } = assertDirectReplySessionOwnership({
     taskID: input.taskID,
     sessionID: input.request.payload.session_id,
@@ -2903,8 +2927,10 @@ async function validateAgentCoordinationIntegrityRedispatch(input: {
   taskID: string
   request: AgentCoordinationRequestRow
 }) {
-  const task = requireTask(input.taskID)
-  const source = await Session.get(input.request.payload.session_id)
+  const { task, session: source } = await assertAgentCoordinationRequestSessionLineage({
+    taskID: input.taskID,
+    sessionID: input.request.payload.session_id,
+  })
   const { kind, ownershipSource } = assertDirectReplySessionOwnership({
     taskID: input.taskID,
     sessionID: input.request.payload.session_id,
@@ -5394,6 +5420,73 @@ function targetEvidenceForBuild(task: TaskRow): BuildEvidenceFile[] {
   return taskAttachmentTargetEvidence(task)
 }
 
+function resolveGoalReferenceCropAbsolutePath(input: {
+  projectRoot: string
+  artifactPath: string
+  referenceCoverageID: string
+  referenceRegionKey: string
+}): string {
+  const root = path.resolve(input.projectRoot)
+  const abs = path.resolve(root, input.artifactPath)
+  const relative = path.relative(root, abs)
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error(
+      `Reference coverage ${input.referenceCoverageID} region ${input.referenceRegionKey} crop escapes task project root: ${input.artifactPath}`,
+    )
+  }
+  if (path.extname(abs).toLowerCase() !== ".png") {
+    throw new Error(
+      `Reference coverage ${input.referenceCoverageID} region ${input.referenceRegionKey} crop must be a PNG generated by VisualRegionBinding: ${input.artifactPath}`,
+    )
+  }
+  return abs
+}
+
+async function goalReferenceRegionTargetEvidenceForBuild(input: {
+  task: TaskRow
+  goalID: string
+  fidelity: ArchitectFidelityState
+  projectRoot: string
+}): Promise<BuildEvidenceFile[]> {
+  const files: BuildEvidenceFile[] = []
+  const seenRegionKeys = new Set<string>()
+  const rows = input.fidelity.referenceCoverage.filter((row) => row.goal_ids.includes(input.goalID))
+  for (const row of rows) {
+    for (const region of row.reference_regions) {
+      const key = region.reference_region_key
+      if (seenRegionKeys.has(key)) {
+        throw new Error(`Goal ${input.goalID} has duplicate reference region binding: ${key}`)
+      }
+      seenRegionKeys.add(key)
+      const abs = resolveGoalReferenceCropAbsolutePath({
+        projectRoot: input.projectRoot,
+        artifactPath: region.source_reference_artifact,
+        referenceCoverageID: row.id,
+        referenceRegionKey: key,
+      })
+      await fs.stat(abs)
+      const attachment = await AttachmentStore.writeFromPath(
+        input.task.project_id,
+        abs,
+        "image/png",
+        path.basename(abs),
+      )
+      files.push({
+        url: attachment.url,
+        mime: attachment.mime,
+        sha: attachment.sha,
+        size: attachment.size,
+        filename: attachment.filename,
+        intent: "visual_reference",
+        source: "frontend_design_visual_region_binding",
+        label: `${row.id}:${key}`,
+        scope: { kind: "goal", taskID: input.task.id, goalID: input.goalID },
+      })
+    }
+  }
+  return files
+}
+
 async function loadPreviousRenderedOutputEvidence(input: {
   taskID: string
   enabled: boolean
@@ -5433,9 +5526,20 @@ async function loadPreviousRenderedOutputEvidence(input: {
 async function composeBuildEvidencePack(input: {
   task: TaskRow
   includePreviousOutput: boolean
+  goalID?: string
+  fidelity?: ArchitectFidelityState
 }): Promise<BuildEvidencePack | undefined> {
-  const targetReferences = targetEvidenceForBuild(input.task)
   const projectRoot = taskPrimaryProjectRoot(input.task.id, { activeProjectID: Instance.project.id })
+  const goalReferenceTargets =
+    input.goalID && input.fidelity
+      ? await goalReferenceRegionTargetEvidenceForBuild({
+          task: input.task,
+          goalID: input.goalID,
+          fidelity: input.fidelity,
+          projectRoot,
+        })
+      : []
+  const targetReferences = input.goalID ? goalReferenceTargets : targetEvidenceForBuild(input.task)
   const previousOutput = await loadPreviousRenderedOutputEvidence({
     taskID: input.task.id,
     enabled: input.includePreviousOutput,
@@ -5711,6 +5815,19 @@ function renderFactCheckReport(report: FactCheckReport): string {
   return sections.join("\n\n")
 }
 
+type TaskWithRootSession = TaskRow & { session_id: string }
+
+async function assertTaskRootSessionLineageForConfig(task: TaskRow): Promise<TaskWithRootSession> {
+  if (!task.session_id) {
+    throw new Error(`Task ${task.id} has no root session`)
+  }
+  await Session.assertLineageInProject({
+    sessionID: task.session_id,
+    projectID: task.project_id,
+  })
+  return task as TaskWithRootSession
+}
+
 export function createOrchestratorTools(input: {
   taskID: string
   agentSessionID: string
@@ -5726,6 +5843,20 @@ export function createOrchestratorTools(input: {
 }) {
   const { taskID } = input
   const redispatchWorkflow = input.workflow
+
+  async function requireCurrentTaskRootSessionLineage(): Promise<TaskWithRootSession> {
+    const task = requireTask(taskID)
+    return assertTaskRootSessionLineageForConfig(task)
+  }
+
+  async function requireCurrentTaskAndAgentSessionLineage(): Promise<TaskWithRootSession> {
+    const task = await requireCurrentTaskRootSessionLineage()
+    await Session.assertLineageInProject({
+      sessionID: input.agentSessionID,
+      projectID: task.project_id,
+    })
+    return task
+  }
 
   function requireAgentCoordinationRedispatchBinding(agent: string): AgentCoordinationRedispatchBinding {
     if (!AgentRoleContract.isRoleID(agent)) {
@@ -6743,15 +6874,6 @@ export function createOrchestratorTools(input: {
   // Agents that need to ask the user a question do so directly via
   // `Question.ask`. Workflow steps never pause for input here.
 
-  const decisionControlTools = new Set([
-    "question",
-    "propose_task",
-    "complete_task",
-    "inject_operator_message",
-    "respond_agent_coordination",
-    "cancel_subagent",
-  ])
-
   function taskDecisionSignature() {
     return Database.use((db) => {
       const aggregate = (table: { task_id: unknown; time_updated: unknown }) =>
@@ -6808,10 +6930,25 @@ export function createOrchestratorTools(input: {
     return { output: String(result ?? ""), title: "", metadata: {} }
   }
 
+  function explicitDecisionEffectFromMetadata(metadata: object): OrchestratorDecisionEffect | undefined {
+    const raw = (metadata as Record<string, unknown>)[ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY]
+    return raw === "decision" || raw === "observation" || raw === "none" ? raw : undefined
+  }
+
+  function withExplicitDecisionEffectMetadata(result: unknown, effect: OrchestratorDecisionEffect): unknown {
+    const normalized = normalizeOrchestratorToolResult(result)
+    return {
+      ...normalized,
+      metadata: {
+        ...normalized.metadata,
+        [ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY]: effect,
+      },
+    }
+  }
+
   function decisionEffectForTool(name: string, before: string, after: string): OrchestratorDecisionEffect {
     if (isOrchestratorNoDecisionObservationToolName(name)) return "observation"
     if (before !== after) return "decision"
-    if (decisionControlTools.has(name)) return "decision"
     return "none"
   }
 
@@ -6872,7 +7009,7 @@ export function createOrchestratorTools(input: {
         const result = await execute(args, options)
         const after = taskDecisionSignature()
         const normalized = normalizeOrchestratorToolResult(result)
-        const effect = decisionEffectForTool(name, before, after)
+        const effect = explicitDecisionEffectFromMetadata(normalized.metadata) ?? decisionEffectForTool(name, before, after)
         return {
           ...normalized,
           metadata: {
@@ -8032,7 +8169,8 @@ export function createOrchestratorTools(input: {
       description:
         "Select the active expert squad prompt profile for this task's root session. " +
         "This writes only `prompt_profile.active` to the root session config overlay, so future Orchestrator wakes and dispatched agents compose prompts and scheduler capability from that expert squad. " +
-        "After the write it records visible selection evidence and schedules a visible continuation wake that reloads the active prompt profile and scheduler capability projection. " +
+        "After a real profile change it records visible selection evidence and schedules a visible continuation wake that reloads the active prompt profile and scheduler capability projection. " +
+        "If the requested profile is already active, it returns a no-op and does not dispatch a continuation wake. " +
         "It does not dispatch work, reroute the workflow, change models, mutate per-agent prompt fields, infer the profile from keywords, or change the tool table available in this current model call.",
       inputSchema: z
         .object({
@@ -8046,10 +8184,7 @@ export function createOrchestratorTools(input: {
         })
         .strict(),
       execute: async ({ profile_id, reason }) => {
-        const task = requireTask(taskID)
-        if (!task.session_id) {
-          throw new Error(`Task ${taskID} has no root session; cannot select expert squad ${profile_id}.`)
-        }
+        const task = await requireCurrentTaskAndAgentSessionLineage()
         const projectDirectory = await EffectiveConfig.directory({ sessionID: task.session_id })
         const beforeConfig = await EffectiveConfig.effective({ sessionID: task.session_id })
         const previewConfig = Config.mergeOverlay(beforeConfig, { prompt_profile: { active: profile_id } })
@@ -8059,6 +8194,24 @@ export function createOrchestratorTools(input: {
           config: previewConfig,
         })
         const before = beforeConfig.prompt_profile.active
+        if (before === profile_id) {
+          const capability = await PromptProfileResolver.resolveSchedulerCapability({
+            config: beforeConfig,
+            projectDirectory,
+          })
+          return withExplicitDecisionEffectMetadata(
+            [
+              `Expert squad already active for task ${taskID}.`,
+              `- previous: ${before}`,
+              `- active: ${profile_id}`,
+              `- capability_profile_id: ${capability.capabilityProfileID}`,
+              `- projection_hash: ${capability.projectionHash}`,
+              "- continuation_wake: not_scheduled",
+              `- reason: ${reason}`,
+            ].join("\n"),
+            "none",
+          )
+        }
         await Session.mergeConfigOverlay({
           sessionID: task.session_id,
           patch: { prompt_profile: { active: profile_id } },
@@ -8098,16 +8251,19 @@ export function createOrchestratorTools(input: {
         if (dispatchResult === "ignored") {
           throw new Error(`Expert squad selection persisted, but continuation wake dispatch was ignored for task ${taskID}.`)
         }
-        return [
-          `Expert squad selected for task ${taskID}.`,
-          `- previous: ${before}`,
-          `- active: ${profile_id}`,
-          `- capability_profile_id: ${capability.capabilityProfileID}`,
-          `- projection_hash: ${capability.projectionHash}`,
-          `- continuation_wake: ${dispatchResult}`,
-          `- reason: ${reason}`,
-          "This change affects future prompt composition and scheduler capability projection through the root session overlay only.",
-        ].join("\n")
+        return withExplicitDecisionEffectMetadata(
+          [
+            `Expert squad selected for task ${taskID}.`,
+            `- previous: ${before}`,
+            `- active: ${profile_id}`,
+            `- capability_profile_id: ${capability.capabilityProfileID}`,
+            `- projection_hash: ${capability.projectionHash}`,
+            `- continuation_wake: ${dispatchResult}`,
+            `- reason: ${reason}`,
+            "This change affects future prompt composition and scheduler capability projection through the root session overlay only.",
+          ].join("\n"),
+          "decision",
+        )
       },
     }),
     skill: tool({
@@ -8196,7 +8352,7 @@ export function createOrchestratorTools(input: {
       ].join("\n"),
       inputSchema: FrontendDesignInputSchema,
       execute: async ({ reason, urls, figma_url, materials, continuation_artifact_id }) => {
-        const task = requireTask(taskID)
+        const task = await requireCurrentTaskAndAgentSessionLineage()
         const hasContinuation = typeof continuation_artifact_id === "string" && continuation_artifact_id.length > 0
 
         // Guard: skip if no visual input available. Figma URL counts as visual.
@@ -8559,6 +8715,7 @@ export function createOrchestratorTools(input: {
             "frontend_design dispatch: visual input ready; calling agent analyze",
           )
 
+          await requireCurrentTaskAndAgentSessionLineage()
           const frontendDesignConfig = await EffectiveConfig.effective({ sessionID: input.agentSessionID })
           const frontendDesignProjectDirectory = await EffectiveConfig.directory({ sessionID: input.agentSessionID })
           const frontendDesignAttributes = await PromptProfileResolver.resolveFrontendDesignDynamicAttributes({
@@ -8735,6 +8892,15 @@ export function createOrchestratorTools(input: {
             value: analysis.visualConsistencyContract,
             reason: "Primary visual-fidelity contract for downstream implementation and acceptance review.",
           })
+          if (analysis.visualRegionBindings.length > 0) {
+            decisionLog.append({
+              phase: "frontend_design",
+              key: "visual_region_bindings",
+              value: JSON.stringify(analysis.visualRegionBindings, null, 2),
+              reason:
+                "Structured Frontend Design crop manifest rows from create_visual_region_binding_package for Architect reference_coverage.reference_regions.",
+            })
+          }
           decisionLog.append({
             phase: "frontend_design",
             key: "ui_data_contract",
@@ -9733,7 +9899,7 @@ export function createOrchestratorTools(input: {
         reason: z.string().optional().describe("Why this repository investigation is needed before the next stage."),
       }),
       execute: async ({ question, reason }) => {
-        const task = requireTask(taskID)
+        const task = await requireCurrentTaskAndAgentSessionLineage()
         const model = await resolveAgentModelRef("explore", { taskID, sessionID: input.agentSessionID })
         const promptLines = [
           "# Repository Investigation",
@@ -10495,6 +10661,10 @@ export function createOrchestratorTools(input: {
           orchestratorToolPartID: toolExecution.toolPartID,
         }
         const request = requireAgentCoordinationRequestForResponse({ taskID, requestID: request_id })
+        await assertAgentCoordinationRequestSessionLineage({
+          taskID,
+          sessionID: request.payload.session_id,
+        })
         const guidance = message?.trim()
         if (request.payload.status === "responded") {
           const response = await createAgentCoordinationResponse({
@@ -12987,8 +13157,8 @@ export function createOrchestratorTools(input: {
         reason: z.string().optional().describe("Why you decided to refine"),
       }),
       execute: async ({ focus }) => {
+        const task = await requireCurrentTaskAndAgentSessionLineage()
         await trackStepStart("refine")
-        const task = requireTask(taskID)
 
         // Gather acceptance context
         const goals = listGoals(taskID)
@@ -13219,7 +13389,7 @@ export function createOrchestratorTools(input: {
           .default("workflow"),
       }),
       execute: async ({ title, request, reason, evidence_anchor, priority, queue, kind }) => {
-        const task = requireTask(taskID)
+        const task = await requireCurrentTaskAndAgentSessionLineage()
         if (!hasConcreteProposedTaskEvidenceAnchor(evidence_anchor)) {
           return SubAgentProtocol.yieldResult({
             headline: "Follow-up task proposal rejected.",
@@ -13304,20 +13474,23 @@ export function createOrchestratorTools(input: {
           value: `Created follow-up task ${newTaskID}: ${title}\n\nReason: ${reason}`,
           reason: "propose_task_confirmed",
         })
-        return SubAgentProtocol.yieldResult({
-          headline: autoConfirmProposedTasks
-            ? "Follow-up task created automatically."
-            : "Follow-up task created after user confirmation.",
-          fields: [
-            ["new_task_id", newTaskID],
-            ["title", title],
-            ["kind", kind],
-            ["priority", priority],
-            ["queue", queue === true ? "true" : "false"],
-            ["parent_task_id", taskID],
-          ],
-          pointer: `new task ${newTaskID}; parent task ${taskID}`,
-        })
+        return withExplicitDecisionEffectMetadata(
+          SubAgentProtocol.yieldResult({
+            headline: autoConfirmProposedTasks
+              ? "Follow-up task created automatically."
+              : "Follow-up task created after user confirmation.",
+            fields: [
+              ["new_task_id", newTaskID],
+              ["title", title],
+              ["kind", kind],
+              ["priority", priority],
+              ["queue", queue === true ? "true" : "false"],
+              ["parent_task_id", taskID],
+            ],
+            pointer: `new task ${newTaskID}; parent task ${taskID}`,
+          }),
+          "decision",
+        )
       },
     }),
 
@@ -13547,6 +13720,7 @@ export function createOrchestratorTools(input: {
           let context: import("@/build/agent").BuildAgent.BuildContext | undefined
           let managedWorktree: import("@/build/agent").BuildAgent.RunInput["managedWorktree"] | undefined
           let callerOwnedBuildWorkDir: string | undefined
+          let callerOwnedBuildBaseRef: string | undefined
           let existingBuildSessionID: string | undefined
           let taskLevelBuildSessionContext:
             | { worktreeDir?: string; worktreeBranch?: string; worktreeBaseRef?: string }
@@ -13575,7 +13749,7 @@ export function createOrchestratorTools(input: {
             if (!contractGraph) {
               throw new Error(
                 `Cannot build goal ${goal.id}: missing architect_contract_graph artifact for task ${taskID}. ` +
-                  "Re-run architect so dependency reasons and graph contracts are available before build.",
+                  "Recover or create the scoped architect_contract_graph artifact before build; if a valid Architect artifact already exists, repair the graph artifact persistence instead of restarting the workflow.",
               )
             }
             const priorGoalRunForRetry = findLatestTipGoalRun(attachedGoalID)
@@ -13595,11 +13769,21 @@ export function createOrchestratorTools(input: {
                   `${architectContractGraphBlockers
                     .map((finding) => `${finding.code}: ${finding.message}`)
                     .join(" ")} ` +
-                  "Re-run architect so dependency reasons, graph contracts, and contract_audit ids are internally consistent before Build consumes them.",
+                  "Repair the specific dependency/contract inconsistency before Build consumes it. If a prior goal edit introduced the inconsistency, restore or correct that goal's dependency and contract links from persisted evidence. Call architect only when the persisted architect artifact itself is proven invalid and named.",
               )
             }
             if (selectedWorktreeUsage === "current_project") {
               callerOwnedBuildWorkDir = taskProjectDir
+              const baseResult = await runGit(["rev-parse", "HEAD"], {
+                cwd: callerOwnedBuildWorkDir,
+                timeoutProfile: "fast",
+              })
+              callerOwnedBuildBaseRef = baseResult.exitCode === 0 ? baseResult.text().trim() || undefined : undefined
+              if (!callerOwnedBuildBaseRef) {
+                throw new Error(
+                  `Cannot build goal ${goal.id} in current_project: git HEAD could not be resolved in ${callerOwnedBuildWorkDir}; current_project goal builds require a resolvable git base for host diff attribution.`,
+                )
+              }
             } else {
               // Phase B (2026-05-05): persistent worktree pointer comes from
               // the latest goal_run_attempt artifact, not engine_goal columns.
@@ -13755,6 +13939,8 @@ export function createOrchestratorTools(input: {
             const frontendDesign = renderFrontendDesignHandoffReference(taskID, {
               pathMode: "absolute",
               projectDir: taskProjectDir,
+              includeExcerpts: false,
+              goalScopedBuild: true,
             })
             const frontendResearch = renderFrontendResearchBuildPromptSection({
               taskID,
@@ -13852,6 +14038,8 @@ export function createOrchestratorTools(input: {
             // file repair of older messages.
             let evidencePack: BuildEvidencePack | undefined = await composeBuildEvidencePack({
               task,
+              goalID: goal.id,
+              fidelity: taskFidelity,
               includePreviousOutput:
                 retryEntries.length > 0 || Boolean(acceptanceFeedback) || Boolean(visualQaFeedback),
             })
@@ -14194,7 +14382,8 @@ export function createOrchestratorTools(input: {
             const diagnosticWorkDir =
               managedWorktree?.directory ?? taskLevelBuildSessionContext?.worktreeDir ?? callerOwnedBuildWorkDir
             const diagnosticBranch = managedWorktree?.branch ?? taskLevelBuildSessionContext?.worktreeBranch
-            const diagnosticBaseRef = managedWorktree?.baseRef ?? taskLevelBuildSessionContext?.worktreeBaseRef
+            const diagnosticBaseRef =
+              managedWorktree?.baseRef ?? taskLevelBuildSessionContext?.worktreeBaseRef ?? callerOwnedBuildBaseRef
             const facts: Pick<
               BuildRunOutput,
               | "worktreeDir"
@@ -14361,6 +14550,35 @@ export function createOrchestratorTools(input: {
                 }
               } else {
                 buildOutcome = { kind: "throw", error: runErr }
+              }
+            }
+
+            if (buildOutcome.kind === "ok" && attachedGoalID && callerOwnedBuildWorkDir && callerOwnedBuildBaseRef) {
+              const hasHostDiffFacts =
+                buildOutcome.result.diffBaseRef &&
+                buildOutcome.result.diffHeadRef &&
+                ((buildOutcome.result.diffs?.length ?? 0) > 0 ||
+                  (buildOutcome.result.actualChangedFiles?.length ?? 0) > 0)
+              if (!hasHostDiffFacts) {
+                const hostFacts = await collectBuildHostFactsForOutcome("current-project goal completion")
+                buildOutcome.result = {
+                  ...buildOutcome.result,
+                  worktreeDir: buildOutcome.result.worktreeDir ?? hostFacts.worktreeDir,
+                  worktreeBranch: buildOutcome.result.worktreeBranch ?? hostFacts.worktreeBranch,
+                  worktreeBaseRef: buildOutcome.result.worktreeBaseRef ?? hostFacts.worktreeBaseRef,
+                  diffs:
+                    buildOutcome.result.diffs && buildOutcome.result.diffs.length > 0
+                      ? buildOutcome.result.diffs
+                      : hostFacts.diffs,
+                  worktreeHead: buildOutcome.result.worktreeHead ?? hostFacts.worktreeHead,
+                  contributionCommitRef: buildOutcome.result.contributionCommitRef ?? hostFacts.contributionCommitRef,
+                  diffBaseRef: buildOutcome.result.diffBaseRef ?? hostFacts.diffBaseRef,
+                  diffHeadRef: buildOutcome.result.diffHeadRef ?? hostFacts.diffHeadRef,
+                  actualChangedFiles:
+                    buildOutcome.result.actualChangedFiles && buildOutcome.result.actualChangedFiles.length > 0
+                      ? buildOutcome.result.actualChangedFiles
+                      : hostFacts.actualChangedFiles,
+                }
               }
             }
 
@@ -15030,8 +15248,8 @@ export function createOrchestratorTools(input: {
     const decisionEntries = decisionLog.readByPhase("frontend_design")
     const templateIterationNotes = decisionLog.readByKey("template_iteration_notes")?.value ?? ""
     const referenceArtifacts = decisionLog.readByKey("reference_artifacts")?.value ?? ""
-    const frontendProject = decisionLog.readByKey("frontend_project")?.value ?? ""
-    const frontendProjectStatus = frontendProject.match(/^status:\s*(.+)$/m)?.[1]?.trim() ?? "unknown"
+    const frontendProjectStatus =
+      parseFrontendProjectDecisionEntry(decisionLog.readByKey("frontend_project"))?.status ?? "unknown"
     return {
       output,
       sessionID,

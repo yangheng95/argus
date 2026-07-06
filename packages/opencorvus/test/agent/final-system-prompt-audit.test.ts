@@ -9,7 +9,7 @@ async function readSrc(relativePath: string): Promise<string> {
 }
 
 describe("final system prompt audit", () => {
-  test("webpage clone routing text names frontend_research before frontend_design when the page skeleton is missing", async () => {
+  test("webpage clone routing text defers concrete workflow tools to the scheduler", async () => {
     const general = await readSrc("agent/prompt/general.txt")
     const explore = await readSrc("agent/prompt/explore.txt")
     const intent = await readSrc("prompt/core/intent-analysis-core.txt")
@@ -17,8 +17,10 @@ describe("final system prompt audit", () => {
 
     expect(general).not.toContain("caller should dispatch `frontend_design`")
     expect(explore).not.toContain("caller can dispatch `frontend_design`")
-    expect(general).toContain("`frontend_research` first when a source-backed Page Skeleton Blueprint is missing")
-    expect(explore).toContain("`frontend_research` first when a source-backed Page Skeleton Blueprint is missing")
+    expect(general).not.toContain("dispatch `frontend_research`")
+    expect(explore).not.toContain("dispatch `frontend_research`")
+    expect(general).toContain("current scheduler workflow's source-page investigation stage first")
+    expect(explore).toContain("current workflow's source-page investigation stage first")
 
     expect(intent).not.toContain("Frontend Design owns visual frontend template synthesis and webpage evidence.")
     expect(intent).toContain("Frontend Research owns source-page investigation and Page Skeleton Blueprint evidence")
@@ -35,7 +37,7 @@ describe("final system prompt audit", () => {
     expect(build).toContain("visual QA review, integrity review")
 
     expect(frontendDesign).not.toContain("acceptance can implement and verify")
-    expect(frontendDesign).toContain("build, visual_qa, and integrity can implement, review, and verify")
+    expect(frontendDesign).toContain("downstream scheduler-projected agents can implement, review, and verify")
   })
 
   test("orchestrator dynamic system context uses review terminology instead of retired acceptance-agent wording", async () => {

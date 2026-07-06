@@ -80,12 +80,11 @@ describe("core prompt hygiene", () => {
       // guidance made the prompt's live topology explicit.
       // Raised 505 -> 525 on 2026-05-31 for research evidence boundaries
       // while preserving prompt-over-host orchestration.
-      // Raised 525 -> 530 for source-URL research dispatch guidance.
-      // Raised 530 -> 565 on 2026-06-03 after splitting webpage
-      // functional/visual evidence from generic research into frontend_research.
-      // Raised 565 -> 580 on 2026-06-05 after renaming generic research to
-      // deep_research and documenting req/architect/build retrieval boundaries.
-      orchestrator: 580,
+      // Lowered to 535 on 2026-07-04 after externalized expert squads made
+      // frontend/webpage/visual domain policy live in project expert-squad
+      // packages, tool descriptions, and specialist prompts instead of the
+      // global scheduler core prompt.
+      orchestrator: 535,
       // Raised from 180 -> 190 on 2026-05-29 to make Requirements record
       // explicit workflow/visual/data/verification complexity calibration
       // without turning it into goal decomposition.
@@ -944,7 +943,11 @@ describe("core prompt hygiene", () => {
     expect(integrity).toContain("typecheck success")
     expect(integrity).toContain("leave that verdict to Visual QA / metrics acceptance")
     expect(integrity).not.toContain("visual acceptance virtual gate")
-    expect(orchestrator).toContain("Routine web-clone policy belongs to internal agent/tool prompts")
+    const normalizedOrchestrator = orchestrator.replace(/\s+/g, " ")
+    expect(normalizedOrchestrator).toContain("Domain-specific replica scope")
+    expect(normalizedOrchestrator).toContain(
+      "belong to the active expert squad, tool descriptions, and specialist prompts",
+    )
     expect(design).toContain("recurring webpage-clone workflow as internal policy")
     expect(buildOverlays).toContain("This overlay applies because the frontend_design handoff supplies")
 
@@ -1089,22 +1092,17 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain(
       "Repository investigation belongs to `analyze_intent`, `requirements`, or the registered `explore` subagent surface",
     )
-    expect(normalized).toContain("use the scheduler-projected visual review tool when it is visible and appropriate")
-    expect(normalized).toContain("peer post-implementation review agents")
-    expect(normalized).toContain("component truth and visible functionality first")
-    expect(normalized).toContain("static mock charts must become real chart implementations")
-    expect(normalized).toContain("structured report-only Visual QA review")
-    expect(normalized).toContain("not a repair agent")
-    expect(normalized).toContain("coarse-to-fine review feedback for the current workflow's implementation owner")
-    expect(normalized).toContain("effective_accepted=false")
-    expect(normalized).toContain("visual_feedback_verification_failed_attempts=1")
-    expect(normalized).toContain("failed twice consecutively")
-    expect(normalized).toContain("instead of sending the visual verdict to Integrity")
-    expect(normalized).toContain("Use the scheduler-projected system-completeness review tool")
-    expect(normalized).toContain("If it reports unresolved_code_module_problems")
+    expect(normalized).toContain("use the scheduler-projected visual review tool when it is visible")
+    expect(normalized).toContain("Visual review and system-completeness review are peer report-only evidence producers")
+    expect(normalized).toContain("all blocking implementation work is terminal")
+    expect(normalized).toContain("failed visual review as repair evidence")
+    expect(normalized).toContain("unresolved module-mapping blockers require an explicit same-task repair")
     expect(normalized).toContain(
-      "the scheduler must decide whether same-task implementation repair, question, fail_task, or `propose_task`",
+      "same-task repair, question, `fail_task`, or evidence-anchored `propose_task` decision",
     )
+    expect(normalized).not.toContain("static mock charts must become real chart implementations")
+    expect(normalized).not.toContain("visual_feedback_verification_failed_attempts=1")
+    expect(normalized).not.toContain("coarse-to-fine review feedback for the current workflow's implementation owner")
     expect(normalized).not.toContain("run `integrity` first")
     expect(normalized).not.toContain("call `visual_qa` after integrity")
     expect(normalized).not.toContain(["inspect", "only"].join("_"))
@@ -1247,10 +1245,11 @@ describe("core prompt hygiene", () => {
     expect(mission).toContain("scheduler-declared squad/team own the execution workflow visible to that task")
     expect(mission).not.toContain("requirements → architect → build → integrity")
     expect(mission).not.toContain("full executor pipeline")
-    expect(orchestrator).toContain("current scheduler-projected workflow tools")
-    expect(orchestrator).toContain("currently declared responsible agents")
-    expect(orchestrator).toContain("scheduler-projected visual review tool")
-    expect(orchestrator).toContain("scheduler-projected system-completeness review tool")
+    const normalizedOrchestrator = orchestrator.replace(/\s+/g, " ")
+    expect(normalizedOrchestrator).toContain("current workflow's visible evidence tools")
+    expect(normalizedOrchestrator).toContain("currently declared responsible agents")
+    expect(normalizedOrchestrator).toContain("scheduler-projected visual review tool")
+    expect(normalizedOrchestrator).toContain("system-completeness review are peer report-only evidence producers")
     expect(orchestrator).not.toContain("requirements, architect, build, visual_qa, or integrity")
     expect(orchestrator).not.toContain("move through requirements, architect, build, visual_qa, and integrity")
     expect(orchestrator).not.toContain("call `visual_qa` once near task completion")
@@ -1341,31 +1340,22 @@ describe("core prompt hygiene", () => {
     expect(normalized).not.toContain("with the returned `integrity_attempt_id`")
   })
 
-  test("orchestrator prompt keeps visual workflow ordering and verification-goal lifecycle coherent", async () => {
+  test("orchestrator prompt keeps source-evidence workflow generic after expert-squad externalization", async () => {
     const text = await readPrompt("orchestrator")
     const normalized = text.replace(/\s+/g, " ")
     expect(normalized).toContain(
-      "decide from the current workflow's visible tools whether a source-page investigation stage",
+      "For UI, webpage, reference-driven, or browser-visible work",
     )
-    expect(normalized).toContain("UI replication from visual reference")
-    expect(normalized).toContain("These tools are bounded evidence producers, not fixed lifecycle stages")
-    expect(normalized).not.toContain("fixed lifecycle gates")
-    expect(normalized).toContain("not repeatable repair tools")
-    expect(normalized).toContain("do not rerun frontend_research for that same page")
-    expect(normalized).toContain("additional source page URLs that still need their own prepared evidence")
-    expect(normalized).toContain(
-      "Same source URL with a different focus, viewport, interaction state, component, region, fidelity risk, or missing-detail question is still the same source-page scope",
-    )
-    expect(normalized).toContain(
-      "A new focus such as mobile viewport, hover state, map detail, data question, region, component, or fidelity risk on the same source URL is not an additional source page",
-    )
-    expect(normalized).toContain("Page Skeleton Blueprint")
-    expect(normalized).toContain("the `frontend_research` tool path prepares rendered webpage evidence")
-    expect(normalized).toContain(
-      "when a source-backed Page Skeleton Blueprint is missing, call `frontend_research` before `frontend_design`",
-    )
-    expect(normalized).toContain("do not call `frontend_design` first merely to materialize raw webpage evidence")
-    expect(normalized).toContain("do not let frontend_design invent or reorder the page skeleton")
+    expect(normalized).toContain("current workflow's visible evidence tools rather than hard-coding a frontend pipeline")
+    expect(normalized).toContain("source-evidence or visual-handoff producers when the downstream contract needs their persisted artifacts")
+    expect(normalized).toContain("Source-evidence and visual-handoff tools are bounded evidence producers")
+    expect(normalized).toContain("not fixed lifecycle gates")
+    expect(normalized).toContain("not repeated repair loops")
+    expect(normalized).toContain("consume the persisted artifact downstream")
+    expect(normalized).toContain("Domain-specific replica scope, desktop/mobile policy, visual proof ownership, and non-pass budgets belong to the active expert squad")
+    expect(normalized).not.toContain("Page Skeleton Blueprint")
+    expect(normalized).not.toContain("Same source URL with a different focus")
+    expect(normalized).not.toContain("visual_feedback_verification_failed_attempts")
     expect(normalized).not.toContain(
       "raw webpage evidence/source package materialization may require frontend_design first",
     )
@@ -1379,6 +1369,24 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain(
       "every verification/integration goal still needed for evidence is terminal before `integrity`",
     )
+  })
+
+  test("orchestrator core stays profile-neutral after expert-squad externalization", async () => {
+    const text = await readPrompt("orchestrator")
+    const normalized = text.replace(/\s+/g, " ")
+
+    expect(normalized).toContain("## Expert Squad Scheduling")
+    expect(normalized).toContain("Use the visible `skill` tool only to search or load mounted Orchestrator")
+    expect(normalized).toContain("call `select_expert_squad` with the named `profile_id`")
+    expect(normalized).toContain("prompt_profile.active")
+    expect(normalized).not.toContain("frontend-replica")
+    expect(normalized).not.toContain("frontend-innovate")
+    expect(normalized).not.toContain("frontend-automation-debug")
+    expect(normalized).not.toContain("acceptance attempt budget")
+    expect(normalized).not.toContain("failure taxonomy")
+    expect(normalized).not.toContain("one source component or meaningful region per goal")
+    expect(normalized).not.toContain("generally 10 or more goals")
+    expect(normalized).not.toContain("second consecutive evidence-backed rendered-feedback non-pass")
   })
 
   test("frontend design and frontend research prompts advertise bounded handoff semantics", async () => {
@@ -1481,7 +1489,7 @@ describe("core prompt hygiene", () => {
     const normalized = text.replace(/\s+/g, " ")
     expect(text).toContain("Do not stop to ask")
     expect(text).toContain("Would you like me")
-    expect(normalized).toContain("your build dispatch MUST say they are the authoritative source of truth")
-    expect(normalized).toContain("build must restore them 1:1 as closely as the stack allows")
+    expect(normalized).toContain("reference evidence is the authoritative source of truth")
+    expect(normalized).toContain("Build must restore it 1:1 as closely as the stack allows")
   })
 })

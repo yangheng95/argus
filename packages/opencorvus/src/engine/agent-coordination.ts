@@ -1,5 +1,6 @@
-import type { AgentCoordinationRedispatchBinding } from "@/agent/role-contract"
-export type { AgentCoordinationRedispatchBinding } from "@/agent/role-contract"
+import { WorkflowRegistry, type MiniWorkflow, type SchedulerAgentWorkflowBinding } from "@/engine/workflow"
+import { AgentRoleContract } from "@/agent/role-contract"
+export type AgentCoordinationRedispatchBinding = SchedulerAgentWorkflowBinding
 import { Event } from "@/engine/model"
 import { EngineProtocol } from "@/engine/protocol"
 import { Identifier } from "@/id/id"
@@ -290,6 +291,12 @@ function actionRowFromArtifact(row: AgentCoordinationArtifactRow): AgentCoordina
   }
 }
 
+function assertAgentCoordinationActionPayload(payload: AgentCoordinationActionPayload): void {
+  if (!normalizeAgentCoordinationActionPayload(payload)) {
+    throw new Error(`Malformed agent coordination action payload: ${payload.action_id}`)
+  }
+}
+
 function emitAgentCoordinationActionEventInTransaction(input: {
   taskID: string
   sessionID: string
@@ -325,8 +332,108 @@ function actionErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+function assertRequestedDecisionIsNotRedispatchActionLiteral(value: string): void {
+  const normalized = value.trim().toLowerCase()
+  if (normalized === "redispatch" || normalized === "redispatch_worker") {
+    throw new Error(
+      "Agent coordination requested_decision must describe the scheduling question, not the redispatch response action literal.",
+    )
+  }
+}
+
 function sameRedispatchBinding(left: unknown, right: AgentCoordinationRedispatchBinding | undefined): boolean {
   return JSON.stringify(left ?? null) === JSON.stringify(right ?? null)
+}
+
+const LEGACY_REDISPATCH_RESULT_FIELDS = ["workflow_tool_name", "stage", "target_kind"] as const
+
+function hasLegacyRedispatchResultFields(result: Record<string, unknown>): boolean {
+  return LEGACY_REDISPATCH_RESULT_FIELDS.some((field) => Object.hasOwn(result, field))
+}
+
+function normalizeRedispatchBinding(
+  value: unknown,
+  expectedAgent: string,
+): AgentCoordinationRedispatchBinding | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined
+  const candidate = value as Partial<AgentCoordinationRedispatchBinding>
+  if (
+    typeof candidate.workflow_tool_name !== "string" ||
+    typeof candidate.stage !== "string" ||
+    typeof candidate.target_kind !== "string"
+  ) {
+    return undefined
+  }
+  if (!WorkflowRegistry.isWorkflowToolName(candidate.workflow_tool_name)) return undefined
+  if (!AgentRoleContract.isRoleID(candidate.stage) || !AgentRoleContract.isRoleID(candidate.target_kind)) {
+    return undefined
+  }
+  if (candidate.stage !== expectedAgent || candidate.target_kind !== candidate.stage) return undefined
+  return {
+    workflow_tool_name: candidate.workflow_tool_name,
+    stage: candidate.stage,
+    target_kind: candidate.stage,
+  }
+}
+
+function deriveAgentCoordinationRedispatchBinding(input: {
+  decision: AgentCoordinationDecision
+  request: AgentCoordinationRequestRow
+  workflow?: MiniWorkflow
+}): AgentCoordinationRedispatchBinding | undefined {
+  if (input.decision !== "redispatch") return undefined
+  const binding = WorkflowRegistry.schedulerAgentWorkflowBindingsForWorkflow(input.workflow).find(
+    (candidate) => candidate.stage === input.request.payload.agent,
+  )
+  if (!binding) {
+    throw new Error(
+      `Agent coordination redispatch for ${input.request.payload.agent} requires a concrete scheduler workflow binding`,
+    )
+  }
+  return binding
+}
+
+function redispatchBindingFromExistingAction(input: {
+  request: AgentCoordinationRequestRow
+  existingAction: AgentCoordinationActionRow
+}): AgentCoordinationRedispatchBinding | undefined {
+  if (input.existingAction.payload.action !== "redispatch_worker") return undefined
+  const rawBinding = input.existingAction.payload.result?.redispatch_binding
+  if (!rawBinding || typeof rawBinding !== "object" || Array.isArray(rawBinding)) {
+    throw new Error(
+      `Agent coordination redispatch action ${input.existingAction.payload.action_id} has malformed redispatch_binding`,
+    )
+  }
+  const binding = normalizeRedispatchBinding(rawBinding, input.request.payload.agent)
+  if (!binding) {
+    throw new Error(
+      `Agent coordination redispatch action ${input.existingAction.payload.action_id} has invalid redispatch_binding`,
+    )
+  }
+  return binding
+}
+
+function mergeAgentCoordinationActionResult(input: {
+  current: AgentCoordinationActionPayload
+  patch: Record<string, unknown>
+}): Record<string, unknown> {
+  const currentResult = input.current.result ?? {}
+  if (input.current.action !== "redispatch_worker") return { ...currentResult, ...input.patch }
+
+  const currentBinding = normalizeRedispatchBinding(currentResult.redispatch_binding, input.current.target_agent)
+  if (!currentBinding) {
+    throw new Error(`Agent coordination redispatch action ${input.current.action_id} has invalid redispatch_binding`)
+  }
+  if (Object.hasOwn(input.patch, "redispatch_binding")) {
+    const patchBinding = normalizeRedispatchBinding(input.patch.redispatch_binding, input.current.target_agent)
+    if (!sameRedispatchBinding(patchBinding, currentBinding)) {
+      throw new Error(
+        `Agent coordination redispatch action ${input.current.action_id} cannot replace scheduler-derived redispatch_binding`,
+      )
+    }
+  }
+  const { redispatch_binding: _redispatchBinding, ...patchWithoutBinding } = input.patch
+  return { ...currentResult, ...patchWithoutBinding, redispatch_binding: currentResult.redispatch_binding }
 }
 
 function assertReplayMatchesExistingResponse(input: {
@@ -499,6 +606,7 @@ export async function createAgentCoordinationRequest(input: {
   now?: number
 }): Promise<AgentCoordinationRequestRow> {
   requireTask(input.taskID)
+  assertRequestedDecisionIsNotRedispatchActionLiteral(input.requestedDecision)
   const severity = input.severity ?? (input.blocking ? "blocked" : "info")
 
   const now = input.now ?? Date.now()
@@ -839,15 +947,9 @@ export async function createAgentCoordinationResponse(input: {
   decision: AgentCoordinationDecision
   reason: string
   message?: string
-  redispatchBinding?: AgentCoordinationRedispatchBinding
+  redispatchWorkflow?: MiniWorkflow
   now?: number
 }): Promise<AgentCoordinationResponseRow> {
-  if (input.decision === "redispatch" && !input.redispatchBinding) {
-    throw new Error("Agent coordination redispatch requires a concrete worker dispatcher action binding")
-  }
-  if (input.decision !== "redispatch" && input.redispatchBinding) {
-    throw new Error("Agent coordination redispatch binding is only valid for redispatch decisions")
-  }
   const now = input.now ?? Date.now()
   const responseID = Identifier.ascending("artifact")
   const actionID = Identifier.ascending("artifact")
@@ -858,6 +960,7 @@ export async function createAgentCoordinationResponse(input: {
   let request: AgentCoordinationRequestRow | undefined
   let payload: AgentCoordinationResponsePayload | undefined
   let actionPayload: AgentCoordinationActionPayload | undefined
+  let redispatchBinding: AgentCoordinationRedispatchBinding | undefined
 
   Database.transaction((db) => {
     const requestRow = db
@@ -921,7 +1024,14 @@ export async function createAgentCoordinationResponse(input: {
           decision: input.decision,
           reason: input.reason,
           ...(input.message ? { message: input.message } : {}),
-          ...(input.redispatchBinding ? { redispatchBinding: input.redispatchBinding } : {}),
+          ...(input.decision === "redispatch"
+            ? {
+                redispatchBinding: redispatchBindingFromExistingAction({
+                  request,
+                  existingAction,
+                }),
+              }
+            : {}),
         })
         responseArtifactID = existingResponse.artifactID
         responseTimeCreated = existingResponse.timeCreated
@@ -933,6 +1043,12 @@ export async function createAgentCoordinationResponse(input: {
       }
       throw new Error(`Agent coordination request ${input.requestID} is ${request.payload.status}`)
     }
+
+    redispatchBinding = deriveAgentCoordinationRedispatchBinding({
+      decision: input.decision,
+      request,
+      workflow: input.redispatchWorkflow,
+    })
 
     if (request.payload.last_failed_response_id || request.payload.last_failed_action_id) {
       if (!request.payload.last_failed_response_id || !request.payload.last_failed_action_id) {
@@ -1000,7 +1116,7 @@ export async function createAgentCoordinationResponse(input: {
           decision: input.decision,
           reason: input.reason,
           ...(input.message ? { message: input.message } : {}),
-          ...(input.redispatchBinding ? { redispatchBinding: input.redispatchBinding } : {}),
+          ...(redispatchBinding ? { redispatchBinding } : {}),
         })
         responseArtifactID = failedResponse.artifactID
         responseTimeCreated = failedResponse.timeCreated
@@ -1043,9 +1159,10 @@ export async function createAgentCoordinationResponse(input: {
       ...(request.payload.goal_run_id ? { goal_run_id: request.payload.goal_run_id } : {}),
       reason: input.reason,
       status: "pending",
-      ...(input.redispatchBinding ? { result: { redispatch_binding: input.redispatchBinding } } : {}),
+      ...(redispatchBinding ? { result: { redispatch_binding: redispatchBinding } } : {}),
       created_at: now,
     }
+    assertAgentCoordinationActionPayload(actionPayload)
 
     const updated = db
       .update(EngineArtifactTable)
@@ -1179,10 +1296,13 @@ async function updateAgentCoordinationAction(input: {
       ...current.payload,
       status: input.status,
       ...(input.workerMessageID ? { worker_message_id: input.workerMessageID } : {}),
-      ...(input.result !== undefined ? { result: { ...(current.payload.result ?? {}), ...input.result } } : {}),
+      ...(input.result !== undefined
+        ? { result: mergeAgentCoordinationActionResult({ current: current.payload, patch: input.result }) }
+        : {}),
       ...(input.status === "completed" ? { completed_at: now } : {}),
       ...(input.status === "failed" ? { failed_at: now, error: actionErrorMessage(input.error) } : {}),
     }
+    assertAgentCoordinationActionPayload(payload)
 
     updated = db
       .update(EngineArtifactTable)
@@ -1285,8 +1405,9 @@ export async function recordAgentCoordinationActionProgress(input: {
     }
     const payload: AgentCoordinationActionPayload = {
       ...current.payload,
-      result: { ...(current.payload.result ?? {}), ...input.result },
+      result: mergeAgentCoordinationActionResult({ current: current.payload, patch: input.result }),
     }
+    assertAgentCoordinationActionPayload(payload)
     updated = db
       .update(EngineArtifactTable)
       .set({ payload, time_updated: now })
@@ -1606,6 +1727,13 @@ function normalizeAgentCoordinationActionPayload(payload: unknown): AgentCoordin
     value.result !== undefined &&
     (!value.result || typeof value.result !== "object" || Array.isArray(value.result))
   ) {
+    return undefined
+  }
+  const result = value.result as Record<string, unknown> | undefined
+  if (result && hasLegacyRedispatchResultFields(result)) return undefined
+  if (value.action === "redispatch_worker") {
+    if (!result || !normalizeRedispatchBinding(result.redispatch_binding, value.target_agent)) return undefined
+  } else if (result?.redispatch_binding !== undefined) {
     return undefined
   }
   if (value.status === "pending") {

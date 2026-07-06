@@ -4,6 +4,11 @@ import z from "zod"
 import { Skill } from "@/skill/skill"
 import { SkillManager } from "@/skill/manager"
 import { SkillMount } from "@/skill/mounts"
+import { assertActiveProjectSession } from "../active-project-session"
+
+async function assertInputSessionInActiveProject(input: { sessionID?: string }): Promise<void> {
+  if (input.sessionID) await assertActiveProjectSession(input.sessionID)
+}
 
 export function SkillRoutes() {
   return new Hono()
@@ -56,7 +61,9 @@ export function SkillRoutes() {
         }),
       ),
       async (c) => {
-        return c.json(await SkillMount.matrix(c.req.valid("query")))
+        const input = c.req.valid("query")
+        await assertInputSessionInActiveProject(input)
+        return c.json(await SkillMount.matrix(input))
       },
     )
     .post(
@@ -78,7 +85,9 @@ export function SkillRoutes() {
       }),
       validator("json", SkillMount.MountInput),
       async (c) => {
-        return c.json(await SkillMount.mount(c.req.valid("json")))
+        const input = c.req.valid("json")
+        await assertInputSessionInActiveProject(input)
+        return c.json(await SkillMount.mount(input))
       },
     )
     .post(
@@ -100,7 +109,9 @@ export function SkillRoutes() {
       }),
       validator("json", SkillMount.MountInput),
       async (c) => {
-        return c.json(await SkillMount.unmount(c.req.valid("json")))
+        const input = c.req.valid("json")
+        await assertInputSessionInActiveProject(input)
+        return c.json(await SkillMount.unmount(input))
       },
     )
     .post(
@@ -122,7 +133,9 @@ export function SkillRoutes() {
       }),
       validator("json", SkillMount.ImportAndMountInput),
       async (c) => {
-        return c.json(await SkillMount.importAndMount(c.req.valid("json")))
+        const input = c.req.valid("json")
+        await assertInputSessionInActiveProject(input)
+        return c.json(await SkillMount.importAndMount(input))
       },
     )
     .get(

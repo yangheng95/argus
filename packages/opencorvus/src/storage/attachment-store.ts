@@ -400,24 +400,15 @@ export namespace AttachmentStore {
   // explicit per-item kind tag.
 
   /**
-   * Render an explicit textual inventory of EVERY task attachment — both the
-   * multimodal ones already inlined as file parts in the user message AND the
-   * reference-only ones the agent must fetch via the `read` tool.
-   *
-   * Why list multimodals in text too: image / pdf bytes ARE in the LLM's
-   * context window once `inlineFileParts` splices them as file parts, but
-   * without an accompanying textual mention the model frequently fails to
-   * acknowledge their existence (observed in benchmark: orchestrator
-   * dispatched architect / requirements without ever citing the user-uploaded
-   * screenshot, sub-agents then hallucinated layouts from the request prose
-   * alone). The text inventory anchors the file parts in the prompt's
-   * narrative so the model knows it has them and reasons about them
-   * explicitly.
+   * Render an explicit textual inventory of EVERY task attachment. This is a
+   * link/index context contract: image / pdf / audio / video files are listed
+   * as media refs, and text/json files are listed as document refs. Callers must
+   * not imply the bytes were hidden in the prompt; agents either inspect the
+   * cited refs through their visible tools or report the inspection gap.
    *
    * Returns "" when nothing to surface so the caller can `text + section`
    * unconditionally. Section header / hint string is configurable so the
-   * orchestrator can swap the default "you can read these" wording for its
-   * own "forwarded to sub-agents — cite by filename in your dispatch".
+   * orchestrator can swap the default wording for its own dispatch guidance.
    */
   export function renderAttachmentInventory(
     attachments: readonly AttachmentLike[] | undefined,
@@ -431,8 +422,7 @@ export namespace AttachmentStore {
     const header = opts.header ?? "## Task Attachments"
     const hint =
       opts.hint ??
-      "Multimodal attachments (image / pdf / audio / video) are already in your context as file parts. " +
-        "Reference-only attachments (text / json) are not inlined — fetch them via the `read` tool using the listed url."
+      "Attachments are provided as refs, not hidden prompt bytes. Inspect a listed ref only through visible tools that can read that MIME, and report an inspection gap when no such tool is available."
     const formatRow = (a: AttachmentLike, kind: "inline" | "reference", index: number) => {
       const sizeKb = typeof a.size === "number" ? `${Math.max(1, Math.round(a.size / 1024))} KB, ` : ""
       // displayFilename gives a generated readable name when the upload path
@@ -440,7 +430,7 @@ export namespace AttachmentStore {
       // as the user-visible name for the attachment.
       const name = displayFilename({ filename: a.filename, mime: a.mime, sha: a.sha, index })
       const mime = a.mime ?? "application/octet-stream"
-      const tag = kind === "inline" ? "[inlined as file part]" : "[reference — read via tool]"
+      const tag = kind === "inline" ? "[media_ref]" : "[text_ref]"
       return `- ${name} — ${mime} — ${sizeKb}${tag} url: ${a.url}`
     }
     const lines = [

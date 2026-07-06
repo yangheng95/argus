@@ -129,4 +129,73 @@ describe("taskStatusDetailFromBoard", () => {
     expect(detail.workflow?.steps.map((step) => step.rawStatus)).toEqual(["pending", "pending"])
     expect(detail.progress).toMatchObject({ total: 2, completed: 0, failed: 0, running: 0, pending: 2 })
   })
+
+  test("projects task-level direct build outcomes into status detail", () => {
+    const detail = taskStatusDetailFromBoard({
+      task: {
+        id: "tsk_status_snapshot_direct_build",
+        orderKey: "v1:task:003",
+        projectID: "project-status-snapshot",
+        source: "test",
+        title: "Direct build outcome status projection",
+        request: "Expose direct build outcome evidence in status snapshots.",
+        status: "active",
+        priority: "normal",
+        time: {
+          created: 1,
+          updated: 2,
+        },
+      },
+      agentInvocationDAG: emptyAgentInvocationDAG("tsk_status_snapshot_direct_build"),
+      workflow: {
+        id: "direct",
+        name: "Direct",
+        goalLoopStepIDs: [],
+        steps: [
+          {
+            id: "build",
+            orderKey: "v1:step:001",
+            label: "Build",
+            tool: "build",
+            scope: "task",
+            skippable: false,
+            status: "failed",
+          },
+        ],
+      },
+      taskAgentOutcomes: [
+        {
+          id: "artifact_direct_build_failed",
+          provider: "build",
+          artifactKind: "build_attempt_outcome",
+          scope: "task",
+          runID: "run_direct_build_failed",
+          sessionID: "ses_direct_build_failed",
+          status: "failed",
+          result: "failed",
+          summary: "Direct build failed before producing a verdict.",
+          error: "synthetic direct build infrastructure failure",
+          time: {
+            created: 3,
+            updated: 3,
+          },
+        },
+      ],
+    })
+
+    expect(detail.status).toBe("failed")
+    expect(detail.progress).toMatchObject({ total: 1, completed: 0, failed: 1, running: 0, pending: 0 })
+    expect(detail.workflow?.steps[0]).toMatchObject({ rawStatus: "failed", status: "failed" })
+    expect(detail.taskAgentOutcomes).toEqual([
+      expect.objectContaining({
+        id: "artifact_direct_build_failed",
+        provider: "build",
+        artifactKind: "build_attempt_outcome",
+        sessionID: "ses_direct_build_failed",
+        status: "failed",
+        result: "failed",
+        error: "synthetic direct build infrastructure failure",
+      }),
+    ])
+  })
 })

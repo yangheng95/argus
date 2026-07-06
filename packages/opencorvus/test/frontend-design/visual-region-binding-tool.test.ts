@@ -171,9 +171,11 @@ describe("frontend-design VisualRegionBinding materializer", () => {
           taskID,
           sourceImagePath: sourcePng,
           manifestPath: "docs/visual-region-binding.json",
+          slicing_strategy: "horizontal_component_bands",
           regions: [
             {
               region_id: "header",
+              source_order: 1,
               source_bbox: { x: 20, y: 30, width: 180, height: 70 },
               viewport: "desktop",
               region_scope: "global-header",
@@ -184,6 +186,7 @@ describe("frontend-design VisualRegionBinding materializer", () => {
             },
             {
               region_id: "chart",
+              source_order: 2,
               source_bbox: { x: 220, y: 120, width: 150, height: 90 },
               viewport: "desktop",
               region_scope: "macro-chart",
@@ -200,6 +203,8 @@ describe("frontend-design VisualRegionBinding materializer", () => {
         expect(result.sourceImageDimensions).toEqual({ width: 400, height: 260 })
         expect(result.regions[0]?.source_crop_filename).toBe("01-header__src400x260__x20-y30-w180-h70.png")
         expect(result.regions[1]?.source_crop_filename).toBe("02-chart__src400x260__x220-y120-w150-h90.png")
+        expect(result.regions[0]?.reference_region_key).toBe("header@desktop")
+        expect(result.regions[1]?.reference_region_key).toBe("chart@desktop")
         expect(
           result.regions[0]?.source_reference_artifact.endsWith("01-header__src400x260__x20-y30-w180-h70.png"),
         ).toBe(true)
@@ -212,10 +217,13 @@ describe("frontend-design VisualRegionBinding materializer", () => {
         const manifest = JSON.parse(await fs.readFile(path.join(tmp.path, result.manifestPath), "utf8"))
         expect(manifest.purpose).toBe("visual-region-binding-package")
         expect(manifest.source_image_dimensions).toEqual({ width: 400, height: 260 })
+        expect(manifest.slicing_strategy).toBe("horizontal_component_bands")
         expect(manifest.bbox_overlay_artifact).toBe(result.bboxOverlayArtifact)
         expect(manifest.contact_sheet_artifact).toBe(result.contactSheetArtifact)
         expect(manifest.regions[0]).toMatchObject({
           region_id: "header",
+          source_order: 1,
+          reference_region_key: "header@desktop",
           source_crop_filename: "01-header__src400x260__x20-y30-w180-h70.png",
           viewport: "desktop",
           region_scope: "global-header",
@@ -291,9 +299,11 @@ describe("frontend-design VisualRegionBinding materializer", () => {
           taskID,
           sourceImagePath: `${ProjectRuntimePaths.frontendDesignPaths("", taskID).webpageEvidenceRelative}/desktop-reference-full.png`,
           manifestPath: "docs/visual-region-binding.json",
+          slicing_strategy: "horizontal_component_bands",
           regions: [
             {
               region_id: "hero",
+              source_order: 1,
               source_bbox: { x: 20, y: 20, width: 80, height: 40 },
               viewport: "desktop",
               region_scope: "hero",
@@ -337,9 +347,11 @@ describe("frontend-design VisualRegionBinding materializer", () => {
 
         const input = {
           sourceImagePath: sourcePng,
+          slicing_strategy: "horizontal_component_bands",
           regions: [
             {
               region_id: "bad",
+              source_order: 1,
               source_bbox: { x: 80, y: 80, width: 30, height: 30 },
               viewport: "desktop",
               region_scope: "bad",
@@ -376,6 +388,7 @@ describe("frontend-design VisualRegionBinding materializer", () => {
         const regions = [
           {
             region_id: "dup",
+            source_order: 1,
             source_bbox: { x: 0, y: 0, width: 20, height: 20 },
             viewport: "desktop",
             region_scope: "header",
@@ -386,6 +399,7 @@ describe("frontend-design VisualRegionBinding materializer", () => {
           },
           {
             region_id: "dup",
+            source_order: 2,
             source_bbox: { x: 30, y: 30, width: 20, height: 20 },
             viewport: "desktop",
             region_scope: "header-repeat",
@@ -401,6 +415,7 @@ describe("frontend-design VisualRegionBinding materializer", () => {
           materializeVisualRegionBindingPackage({
             taskID: "tsk_duplicate",
             sourceImagePath: sourcePng,
+            slicing_strategy: "horizontal_component_bands",
             regions,
           }),
         ).rejects.toThrow("Duplicate VisualRegionBinding region")
@@ -411,9 +426,25 @@ describe("frontend-design VisualRegionBinding materializer", () => {
             taskID: "tsk_badmanifest",
             sourceImagePath: sourcePng,
             manifestPath: "docs/visual-region-binding.txt",
+            slicing_strategy: "horizontal_component_bands",
             regions: regions.slice(0, 1),
           }),
         ).rejects.toThrow("manifestPath must be a JSON file")
+
+        seedFrontendTask("tsk_badregionkey")
+        await expect(
+          materializeVisualRegionBindingPackage({
+            taskID: "tsk_badregionkey",
+            sourceImagePath: sourcePng,
+            slicing_strategy: "horizontal_component_bands",
+            regions: [
+              {
+                ...regions[0]!,
+                region_id: "bad@region",
+              },
+            ],
+          }),
+        ).rejects.toThrow("must use the exact format region_id@viewport_id")
 
         const outsidePath = path.join(os.tmpdir(), `opencorvus-outside-${Date.now()}.png`)
         await fs.copyFile(sourcePng, outsidePath)
@@ -423,12 +454,84 @@ describe("frontend-design VisualRegionBinding materializer", () => {
             materializeVisualRegionBindingPackage({
               taskID: "tsk_external",
               sourceImagePath: outsidePath,
+              slicing_strategy: "horizontal_component_bands",
               regions: regions.slice(0, 1),
             }),
           ).rejects.toThrow("sourceImagePath must stay inside the task primary project directory")
         } finally {
           await fs.rm(outsidePath, { force: true })
         }
+      },
+    })
+  })
+
+  test("rejects incoherent horizontal component band cuts", async () => {
+    await using tmp = await tmpdir()
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const sourcePng = path.join(tmp.path, "reference.png")
+        await sharp({
+          create: { width: 240, height: 260, channels: 4, background: "#ffffff" },
+        })
+          .png()
+          .toFile(sourcePng)
+
+        seedFrontendTask("tsk_bad_horizontal_order")
+        await expect(
+          materializeVisualRegionBindingPackage({
+            taskID: "tsk_bad_horizontal_order",
+            sourceImagePath: sourcePng,
+            slicing_strategy: "horizontal_component_bands",
+            regions: [
+              {
+                region_id: "header",
+                source_order: 2,
+                source_bbox: { x: 0, y: 0, width: 240, height: 60 },
+                viewport: "desktop",
+                region_scope: "global-header",
+                crop_intent: "full-region",
+                target_route: "/",
+                implementation_locator: "[data-region='header']",
+                component_files: ["src/Header.tsx"],
+              },
+            ],
+          }),
+        ).rejects.toThrow("contiguous source_order")
+
+        seedFrontendTask("tsk_bad_horizontal_overlap")
+        await expect(
+          materializeVisualRegionBindingPackage({
+            taskID: "tsk_bad_horizontal_overlap",
+            sourceImagePath: sourcePng,
+            slicing_strategy: "horizontal_component_bands",
+            regions: [
+              {
+                region_id: "hero",
+                source_order: 1,
+                source_bbox: { x: 0, y: 40, width: 240, height: 120 },
+                viewport: "desktop",
+                region_scope: "hero",
+                crop_intent: "full-region",
+                target_route: "/",
+                implementation_locator: "[data-region='hero']",
+                component_files: ["src/Hero.tsx"],
+              },
+              {
+                region_id: "table",
+                source_order: 2,
+                source_bbox: { x: 0, y: 150, width: 240, height: 90 },
+                viewport: "desktop",
+                region_scope: "table",
+                crop_intent: "full-region",
+                target_route: "/",
+                implementation_locator: "[data-region='table']",
+                component_files: ["src/Table.tsx"],
+              },
+            ],
+          }),
+        ).rejects.toThrow("must not vertically overlap")
       },
     })
   })

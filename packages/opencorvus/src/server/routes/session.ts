@@ -42,6 +42,7 @@ import {
 import { SessionAgentIdentity } from "@/session/agent-identity"
 import { awaitSessionPromptFinishedInScope, cancelSessionPromptInScope } from "@/engine/cancellation-scope"
 import { requireTimelineOrderKeyDomain, timelineOrderKey } from "@/timeline/order"
+import { assertActiveProjectSession, getActiveProjectSession } from "../active-project-session"
 
 const log = Log.create({ service: "server" })
 
@@ -156,7 +157,7 @@ async function sessionConfig(input: {
   projectID: string
 }): Promise<z.output<typeof SessionConfigResponse>> {
   const { sessionID, projectID } = input
-  const session = await Session.getInProject({ sessionID, projectID })
+  const session = await Session.assertLineageInProject({ sessionID, projectID })
   // R5.1 item 2: only a root session (task root or standalone root) owns a
   // config overlay; a child session is rejected (same guard as the write path).
   Session.assertConfigurableRoot(session)
@@ -171,14 +172,6 @@ async function sessionConfig(input: {
     config,
     origin: originTree(config, overlay) as Record<string, unknown>,
   }
-}
-
-async function getActiveProjectSession(sessionID: string) {
-  return Session.getInProject({ sessionID, projectID: Instance.project.id })
-}
-
-async function assertActiveProjectSession(sessionID: string) {
-  return getActiveProjectSession(sessionID)
 }
 
 export const SessionRoutes = lazy(() =>
@@ -379,13 +372,15 @@ export const SessionRoutes = lazy(() =>
         const sessionID = c.req.valid("param").sessionID
         const patch = c.req.valid("json")
         const projectID = Instance.project.id
-        await Session.getInProject({ sessionID, projectID })
+        await Session.assertLineageInProject({ sessionID, projectID })
         await validateConfigModelReferences(patch, "configOverlay")
         if (typeof patch.prompt_profile?.active === "string") {
           try {
+            const previewConfig = Config.mergeOverlay(await EffectiveConfig.effective({ sessionID }), patch)
             await PromptProfileResolver.assertKnownProfileID({
               projectDirectory: await EffectiveConfig.directory({ sessionID }),
               profileID: patch.prompt_profile.active,
+              config: previewConfig,
             })
           } catch (error) {
             return c.json(badRequestBody(error instanceof Error ? error.message : String(error)), 400)
@@ -660,7 +655,7 @@ export const SessionRoutes = lazy(() =>
       ),
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
-        await Session.getInProject({ sessionID, projectID: Instance.project.id })
+        await assertActiveProjectSession(sessionID)
         return c.json(await Todo.get(sessionID))
       },
     )

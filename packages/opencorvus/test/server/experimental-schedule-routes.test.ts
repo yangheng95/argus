@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { and, eq } from "../../src/storage/db"
 import { CronJobTable } from "../../src/scheduler/cron.sql"
 import { Database } from "../../src/storage/db"
+import { Identifier } from "../../src/id/id"
 import { EventJobTable } from "../../src/scheduler/event.sql"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
@@ -20,6 +21,36 @@ async function projectContext(directory: string, title: string) {
     },
   })
   return { projectID, sessionID }
+}
+
+async function importCurrentProjectChildWithForeignParent(input: {
+  directory: string
+  parentID: string
+  title: string
+}): Promise<string> {
+  let sessionID = ""
+  await Instance.provide({
+    directory: input.directory,
+    fn: async () => {
+      const child: Session.Info = {
+        id: Identifier.descending("session"),
+        slug: `cross-parent-${Math.random().toString(36).slice(2)}`,
+        projectID: Instance.project.id,
+        directory: input.directory,
+        parentID: input.parentID,
+        title: input.title,
+        version: "test",
+        kind: "build",
+        time: {
+          created: Date.now(),
+          updated: Date.now(),
+        },
+      }
+      await Session.importSnapshot({ info: child, messages: [] })
+      sessionID = child.id
+    },
+  })
+  return sessionID
 }
 
 function jsonHeaders(directory: string) {
@@ -43,6 +74,11 @@ describe("experimental schedule routes", () => {
     const app = Server.App()
     const a = await projectContext(projectA.path, `project-a-schedule-${suffix}`)
     const b = await projectContext(projectB.path, `project-b-schedule-${suffix}`)
+    const childWithForeignParentID = await importCurrentProjectChildWithForeignParent({
+      directory: projectA.path,
+      parentID: b.sessionID,
+      title: `project-a-schedule-child-${suffix}`,
+    })
     const foreignJobID = `cron_foreign_${suffix}`
 
     Database.use((db) =>
@@ -112,6 +148,27 @@ describe("experimental schedule routes", () => {
     })
     expect(foreignSessionCreate.status).toBe(404)
 
+    const foreignParentCreate = await app.request("/experimental/schedule", {
+      method: "POST",
+      headers: jsonHeaders(projectA.path),
+      body: JSON.stringify({
+        name: "foreign parent cron",
+        expression: "1m",
+        prompt: "must not bind child with project B parent",
+        sessionId: childWithForeignParentID,
+      }),
+    })
+    expect(foreignParentCreate.status).toBe(404)
+    expect(
+      Database.use((db) =>
+        db
+          .select()
+          .from(CronJobTable)
+          .where(and(eq(CronJobTable.project_id, a.projectID), eq(CronJobTable.name, "foreign parent cron")))
+          .get(),
+      ),
+    ).toBeUndefined()
+
     const validCreate = await app.request("/experimental/schedule", {
       method: "POST",
       headers: jsonHeaders(projectA.path),
@@ -163,6 +220,11 @@ describe("experimental schedule routes", () => {
     const app = Server.App()
     const a = await projectContext(projectA.path, `project-a-event-${suffix}`)
     const b = await projectContext(projectB.path, `project-b-event-${suffix}`)
+    const childWithForeignParentID = await importCurrentProjectChildWithForeignParent({
+      directory: projectA.path,
+      parentID: b.sessionID,
+      title: `project-a-event-child-${suffix}`,
+    })
     const foreignJobID = `evt_foreign_${suffix}`
 
     Database.use((db) =>
@@ -231,6 +293,27 @@ describe("experimental schedule routes", () => {
       }),
     })
     expect(foreignSessionCreate.status).toBe(404)
+
+    const foreignParentCreate = await app.request("/experimental/event-schedule", {
+      method: "POST",
+      headers: jsonHeaders(projectA.path),
+      body: JSON.stringify({
+        name: "foreign parent event",
+        eventType: "test.foreign.parent",
+        prompt: "must not bind child with project B parent",
+        sessionId: childWithForeignParentID,
+      }),
+    })
+    expect(foreignParentCreate.status).toBe(404)
+    expect(
+      Database.use((db) =>
+        db
+          .select()
+          .from(EventJobTable)
+          .where(and(eq(EventJobTable.project_id, a.projectID), eq(EventJobTable.name, "foreign parent event")))
+          .get(),
+      ),
+    ).toBeUndefined()
 
     const validCreate = await app.request("/experimental/event-schedule", {
       method: "POST",

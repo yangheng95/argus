@@ -7,6 +7,69 @@ import {
   buildSupervisorPlanPrompt,
   type ReviewPromptInput,
 } from "../../src/integrity/team-agent"
+import { textContextPacket } from "../../src/agent/context-packet"
+import { frontendDesignIntegrityContextPacket, implementationEvidenceContextPacket } from "../../src/integrity/acceptance-tools"
+import { integrityReplayContextPacket, type IntegrityReplayContext } from "../../src/integrity/replay-context"
+
+function baseReplayContext(): IntegrityReplayContext {
+  return {
+    attemptNumber: 2,
+    lineage: {
+      taskID: "tsk_severity_prompt",
+      activeSpecSnapshotID: "spec_active",
+      inheritedSpecSnapshotIDs: ["spec_prev"],
+      reason: "integrity_correction_lineage",
+    },
+    priorFactCheckAttempts: [],
+    priorAttempts: [
+      {
+        attemptNumber: 1,
+        artifactID: "art_prior",
+        timeCreated: Date.UTC(2026, 4, 23, 12),
+        phase: "post_build",
+        verdict: "concerns",
+        summary: "Prior attempt had advisory quota concern.",
+        reviewers: [{ reviewerID: "rev_storage", scope: "Storage", verdict: "concerns" }],
+        findings: [
+          {
+            id: "ADV-3-silent-quota-error",
+            severity: "advisory",
+            verdictImpact: "concerns",
+            title: "Quota warning can be clearer",
+            description: "safeSetItem swallows quota errors without user notification.",
+            repair: "Queue a visible quota advisory.",
+            filePaths: ["src/services/storage.ts"],
+            requirementIDs: [],
+            specIDs: [],
+          },
+        ],
+        blockingFindings: [],
+        requiredRepairs: [],
+        unresolvedDisagreements: [],
+        fact_check_items: [],
+      },
+    ],
+    implementationEvidenceSinceLastReview: {
+      sinceAttemptNumber: 1,
+      sinceTimeCreated: Date.UTC(2026, 4, 23, 12),
+      changedFiles: [],
+      diffs: [],
+      implementationSummaries: [],
+      goalRuns: [],
+      taskAgentOutcomes: [],
+    },
+    scaleSignals: {
+      goals: 1,
+      requirements: 1,
+      acceptanceSpecs: 0,
+      changedFilesTotal: 0,
+      changedFilesSinceLastReview: 0,
+      priorAttempts: 1,
+      priorBlockingFindings: 0,
+      phase: "post_build",
+    },
+  }
+}
 
 function promptInput(): ReviewPromptInput {
   return {
@@ -41,62 +104,7 @@ function promptInput(): ReviewPromptInput {
         reason: "Scope discipline requires the user to bound the maturity word.",
       },
     ],
-    replayContext: {
-      attemptNumber: 2,
-      lineage: {
-        taskID: "tsk_severity_prompt",
-        activeSpecSnapshotID: "spec_active",
-        inheritedSpecSnapshotIDs: ["spec_prev"],
-        reason: "integrity_correction_lineage",
-      },
-      priorFactCheckAttempts: [],
-      priorAttempts: [
-        {
-          attemptNumber: 1,
-          artifactID: "art_prior",
-          timeCreated: Date.UTC(2026, 4, 23, 12),
-          phase: "post_build",
-          verdict: "concerns",
-          summary: "Prior attempt had advisory quota concern.",
-          reviewers: [{ reviewerID: "rev_storage", scope: "Storage", verdict: "concerns" }],
-          findings: [
-            {
-              id: "ADV-3-silent-quota-error",
-              severity: "advisory",
-              verdictImpact: "concerns",
-              title: "Quota warning can be clearer",
-              description: "safeSetItem swallows quota errors without user notification.",
-              repair: "Queue a visible quota advisory.",
-              filePaths: ["src/services/storage.ts"],
-              requirementIDs: [],
-              specIDs: [],
-            },
-          ],
-          blockingFindings: [],
-          requiredRepairs: [],
-          unresolvedDisagreements: [],
-          fact_check_items: [],
-        },
-      ],
-      buildEvidenceSinceLastReview: {
-        sinceAttemptNumber: 1,
-        sinceTimeCreated: Date.UTC(2026, 4, 23, 12),
-        changedFiles: [],
-        diffs: [],
-        buildSummaries: [],
-        goalRuns: [],
-      },
-      scaleSignals: {
-        goals: 1,
-        requirements: 1,
-        acceptanceSpecs: 0,
-        changedFilesTotal: 0,
-        changedFilesSinceLastReview: 0,
-        priorAttempts: 1,
-        priorBlockingFindings: 0,
-        phase: "post_build",
-      },
-    },
+    contextPackets: [integrityReplayContextPacket(baseReplayContext())],
   }
 }
 
@@ -172,8 +180,11 @@ test("evidence prompt renders scope-bounded maturity read-through without local 
 
 test("evidence prompt includes bounded frontend-design contract", () => {
   const input = promptInput()
-  input.frontendDesign =
-    "## visual_consistency_contract\nMatch web-clone-source/reference.png with measured overlay evidence.\n\n## evidence_source_manifest\nweb-clone-source/implementation-blueprint.md"
+  input.contextPackets = [
+    frontendDesignIntegrityContextPacket(
+      "## visual_consistency_contract\nMatch web-clone-source/reference.png with measured overlay evidence.\n\n## evidence_source_manifest\nweb-clone-source/implementation-blueprint.md",
+    )!,
+  ]
 
   const prompt = buildIntegrityEvidencePrompt(input)
 
@@ -229,26 +240,32 @@ test("large integrity initial prompts stay compact and omit retired context surf
       kind: "feature",
       requirement_ids: [`REQ-${index + 1}`],
     })),
-    acceptance: {
-      summary: `Build summary ${"summary ".repeat(200)}`,
-      changedFiles: Array.from({ length: 60 }, (_, index) => `src/review-${(index % 12) + 1}/file-${index + 1}.ts`),
-      diffs: Array.from({ length: 60 }, (_, index) => ({
-        file: `src/review-${(index % 12) + 1}/file-${index + 1}.ts`,
-        diff: `DIFF_BODY_SHOULD_NOT_RENDER_${index} ${"diff ".repeat(200)}`,
-      })),
-    },
-    replayContext: {
-      ...promptInput().replayContext,
-      buildEvidenceSinceLastReview: {
-        changedFiles: Array.from({ length: 60 }, (_, index) => `src/replay-${(index % 12) + 1}/file-${index + 1}.ts`),
+    contextPackets: [
+      implementationEvidenceContextPacket({
+        summary: `Build summary ${"summary ".repeat(200)}`,
+        changedFiles: Array.from({ length: 60 }, (_, index) => `src/review-${(index % 12) + 1}/file-${index + 1}.ts`),
         diffs: Array.from({ length: 60 }, (_, index) => ({
-          file: `src/replay-${(index % 12) + 1}/file-${index + 1}.ts`,
-          status: "modified",
+          file: `src/review-${(index % 12) + 1}/file-${index + 1}.ts`,
+          diff: `DIFF_BODY_SHOULD_NOT_RENDER_${index} ${"diff ".repeat(200)}`,
         })),
-        buildSummaries: Array.from({ length: 20 }, (_, index) => `Replay summary ${index} ${"summary ".repeat(100)}`),
-        goalRuns: [],
-      },
-    },
+      }),
+      integrityReplayContextPacket({
+        ...baseReplayContext(),
+        implementationEvidenceSinceLastReview: {
+          changedFiles: Array.from({ length: 60 }, (_, index) => `src/replay-${(index % 12) + 1}/file-${index + 1}.ts`),
+          diffs: Array.from({ length: 60 }, (_, index) => ({
+            file: `src/replay-${(index % 12) + 1}/file-${index + 1}.ts`,
+            status: "modified",
+          })),
+          implementationSummaries: Array.from(
+            { length: 20 },
+            (_, index) => `Replay summary ${index} ${"summary ".repeat(100)}`,
+          ),
+          goalRuns: [],
+          taskAgentOutcomes: [],
+        },
+      }),
+    ],
   }
 
   const evidencePrompt = buildIntegrityEvidencePrompt(input)

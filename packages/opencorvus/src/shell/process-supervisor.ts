@@ -14,6 +14,7 @@ export namespace ProcessSupervisor {
     cwd?: string
     env?: NodeJS.ProcessEnv
     stdin?: "ignore" | "pipe"
+    requireProcessTreeCleanup?: boolean
   }
 
   export interface Handle {
@@ -127,7 +128,12 @@ export namespace ProcessSupervisor {
 
   async function spawnWindows(opts: SpawnOptions): Promise<Handle> {
     const helper = await resolveWindowsHelper()
-    if (!helper) return spawnWindowsManagedShell(opts)
+    if (!helper) {
+      if (opts.requireProcessTreeCleanup) {
+        throw new Error("Windows process supervisor helper is required for process-tree cleanup")
+      }
+      return spawnWindowsManagedShell(opts)
+    }
     const requestDir = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-supervisor-"))
     const requestPath = path.join(requestDir, "request.json")
     const pidPath = path.join(requestDir, "pid.txt")

@@ -1,4 +1,5 @@
 import { afterEach, expect, mock, test } from "bun:test"
+import { integrityReplayContextPacket } from "../../src/integrity/replay-context"
 
 let capturedPrompts: string[] = []
 
@@ -246,7 +247,8 @@ test("reviewIntegrity active path emits severity discipline, lineage replay, and
         reason: "Scope did not produce a bounded REQ for every maturity aspect.",
       },
     ],
-    replayContext: {
+    contextPackets: [
+      integrityReplayContextPacket({
       attemptNumber: 2,
       lineage: {
         taskID: "tsk_active_severity",
@@ -269,9 +271,15 @@ test("reviewIntegrity active path emits severity discipline, lineage replay, and
               id: "ADV-3-silent-quota-error",
               severity: "advisory",
               verdictImpact: "concerns",
+              fingerprint: "if_2222222222222222",
+              canonicalSymptom: "safeSetItem silently swallows quota errors without user notification",
               title: "safeSetItem quota warning missing",
               description: "safeSetItem swallows quota errors without user notification.",
               repair: "Consider a visible warning.",
+              verify: ["quota exhaustion remains advisory without new evidence"],
+              affectedSymbols: ["safeSetItem"],
+              sourceFindingIDs: [],
+              priorAttemptRefs: [],
               filePaths: ["src/services/storage.ts"],
               requirementIDs: [],
               specIDs: [],
@@ -280,16 +288,16 @@ test("reviewIntegrity active path emits severity discipline, lineage replay, and
           blockingFindings: [],
           requiredRepairs: [],
           unresolvedDisagreements: [],
-          fact_check_items: [],
         },
       ],
-      buildEvidenceSinceLastReview: {
+      implementationEvidenceSinceLastReview: {
         sinceAttemptNumber: 1,
         sinceTimeCreated: Date.UTC(2026, 4, 23, 12),
         changedFiles: [],
         diffs: [],
-        buildSummaries: ["No storage file changed after the advisory finding."],
+        implementationSummaries: ["No storage file changed after the advisory finding."],
         goalRuns: [],
+        taskAgentOutcomes: [],
       },
       scaleSignals: {
         goals: 1,
@@ -301,7 +309,8 @@ test("reviewIntegrity active path emits severity discipline, lineage replay, and
         priorBlockingFindings: 0,
         phase: "post_build",
       },
-    },
+    }),
+    ],
   })
 
   expect(capturedPrompts).toHaveLength(1)
