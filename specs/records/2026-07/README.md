@@ -1,5 +1,6 @@
 # July 2026 Records
 
+- [2026-07-06-dynamic-expert-agent-instance-review-plan.md](2026-07-06-dynamic-expert-agent-instance-review-plan.md) records the independent-agent review packet for modeling expert-squad dynamic virtual agent instances from base roles without fallback, second active state, or package-defined global roles.
 - [2026-07-06-frontend-design-tool-surface-sync.md](2026-07-06-frontend-design-tool-surface-sync.md) records the repair for `frontend_design` session startup failure where the runtime submit tool `update_frontend_visual_region_binding` was exposed but missing from the static frontend-design session tool list.
 - [2026-07-06-visual-qa-diagnostic-image-annotation-repair.md](2026-07-06-visual-qa-diagnostic-image-annotation-repair.md) records the Visual QA diagnostic image annotation repair that keeps accepted evidence strict while allowing DOM problem annotations to use image-bearing source-binding and scroll-slice Browser Preview evidence with accurate coordinate transforms.
 - [2026-07-06-software-testing-expert-squad-integration.md](2026-07-06-software-testing-expert-squad-integration.md) records the integration plan for importing OpenTest software-testing methodology into OpenCorvus as a `software-testing` expert-squad package with context protocol, package tools, payload release, and resolver-chain validation.
