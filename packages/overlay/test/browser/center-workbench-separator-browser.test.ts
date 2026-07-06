@@ -46,15 +46,9 @@ async function separatorState(page: OverlayPage) {
     const style = getComputedStyle(separator)
     const accentProbe = document.createElement("span")
     accentProbe.style.color = "var(--accent)"
-    const initialMaxWidthProbe = document.createElement("span")
-    initialMaxWidthProbe.style.position = "fixed"
-    initialMaxWidthProbe.style.visibility = "hidden"
-    initialMaxWidthProbe.style.width = "var(--ui-right-toolbar-panel-initial-max-width)"
-    document.body.append(accentProbe, initialMaxWidthProbe)
+    document.body.append(accentProbe)
     const accentColor = getComputedStyle(accentProbe).color
-    const rightToolbarPanelInitialMaxWidth = initialMaxWidthProbe.getBoundingClientRect().width
     accentProbe.remove()
-    initialMaxWidthProbe.remove()
     return {
       hidden: separator.hidden,
       disabled: separator.dataset.disabled ?? "",
@@ -76,8 +70,6 @@ async function separatorState(page: OverlayPage) {
       outlineOffset: style.outlineOffset,
       backgroundColor: style.backgroundColor,
       accentColor,
-      requirementsInitialWidthCapped: requirements.dataset.initialWidthCapped ?? "",
-      rightToolbarPanelInitialMaxWidth,
       workflowWidth: Math.round(workflow.getBoundingClientRect().width),
       requirementsWidth: Math.round(requirements.getBoundingClientRect().width),
     }
@@ -275,7 +267,7 @@ async function threeCenterWorkbenchPanelLayout(page: OverlayPage) {
   })
 }
 
-function assertThreeCenterWorkbenchPanelMinWidths(
+function assertThreeCenterWorkbenchPanelsFit(
   layout: Awaited<ReturnType<typeof threeCenterWorkbenchPanelLayout>>,
   label: string,
 ) {
@@ -288,19 +280,17 @@ function assertThreeCenterWorkbenchPanelMinWidths(
     ],
     `${label}: expected workflow, screenshots, and requirements to be open`,
   )
-  for (const panel of layout.panels) {
-    assert.ok(
-      panel.width >= layout.minWidth - 1,
-      `${label}: expected ${panel.id} width ${panel.width} to stay above ${layout.minWidth}`,
-    )
-  }
+  for (const panel of layout.panels) assert.ok(panel.width > 0, `${label}: expected ${panel.id} to have width`)
   for (let index = 1; index < layout.panels.length; index += 1) {
     assert.ok(
       layout.panels[index - 1].right <= layout.panels[index].left + 2,
       `${label}: expected open panels not to overlap: ${JSON.stringify(layout.panels)}`,
     )
   }
-  assert.ok(layout.bodyScrollWidth >= layout.bodyClientWidth, `${label}: workbench body should scroll, not compress`)
+  assert.ok(
+    layout.bodyScrollWidth <= layout.bodyClientWidth + 1,
+    `${label}: workbench body should fit panels without horizontal overflow: ${JSON.stringify(layout)}`,
+  )
 }
 
 test(
@@ -409,9 +399,7 @@ test(
       assert.ok(initial.minValue! < initial.maxValue!)
       assert.ok(initial.nowValue! >= initial.minValue!)
       assert.ok(initial.nowValue! <= initial.maxValue!)
-      assert.equal(initial.requirementsInitialWidthCapped, "true")
-      assert.ok(initial.requirementsWidth <= initial.rightToolbarPanelInitialMaxWidth + 1)
-      assert.ok(initial.workflowWidth > initial.requirementsWidth)
+      assert.ok(Math.abs(initial.workflowWidth - initial.requirementsWidth) <= 2, JSON.stringify(initial))
 
       await beginCenterWorkbenchResizeInstrumentation(page)
       await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="screenshots"]')
@@ -419,7 +407,7 @@ test(
       const screenshotsOpenEvents = await collectCenterWorkbenchResizeEvents(page)
       assertCenterWorkbenchResizeReadsAreDeferred(screenshotsOpenEvents, "screenshots toolbar open")
       const threePanelLayout = await threeCenterWorkbenchPanelLayout(page)
-      assertThreeCenterWorkbenchPanelMinWidths(threePanelLayout, "1280x760 three-panel layout")
+      assertThreeCenterWorkbenchPanelsFit(threePanelLayout, "1280x760 three-panel layout")
       await mkdir(resolve(".scratch"), { recursive: true })
       await writeFile(
         resolve(".scratch", "center-workbench-three-panel-min-width.png"),
@@ -428,7 +416,7 @@ test(
       await page.setViewport({ width: 1120, height: 720 })
       await page.waitForSelector("#centerWorkbenchScreenshots[data-open='true']", { visible: true })
       const minimumThreePanelLayout = await threeCenterWorkbenchPanelLayout(page)
-      assertThreeCenterWorkbenchPanelMinWidths(minimumThreePanelLayout, "1120x720 three-panel layout")
+      assertThreeCenterWorkbenchPanelsFit(minimumThreePanelLayout, "1120x720 three-panel layout")
       await writeFile(
         resolve(".scratch", "center-workbench-three-panel-min-width-1120.png"),
         await page.screenshot({ fullPage: true }),
@@ -436,7 +424,7 @@ test(
       await page.setViewport({ width: 1120, height: 1000 })
       await page.waitForSelector("#centerWorkbenchScreenshots[data-open='true']", { visible: true })
       const illegalTallLayout = await threeCenterWorkbenchPanelLayout(page)
-      assertThreeCenterWorkbenchPanelMinWidths(illegalTallLayout, "1120x1000 illegal-tall three-panel layout")
+      assertThreeCenterWorkbenchPanelsFit(illegalTallLayout, "1120x1000 illegal-tall three-panel layout")
       assert.equal(illegalTallLayout.viewportHeight, 1000)
       assert.ok(illegalTallLayout.aspectRatio > 1.5)
       assert.ok(
@@ -450,7 +438,7 @@ test(
       await page.setViewport({ width: 1600, height: 720 })
       await page.waitForSelector("#centerWorkbenchScreenshots[data-open='true']", { visible: true })
       const fullscreenWideLayout = await threeCenterWorkbenchPanelLayout(page)
-      assertThreeCenterWorkbenchPanelMinWidths(fullscreenWideLayout, "1600x720 fullscreen-wide three-panel layout")
+      assertThreeCenterWorkbenchPanelsFit(fullscreenWideLayout, "1600x720 fullscreen-wide three-panel layout")
       assert.equal(fullscreenWideLayout.viewportWidth, 1600)
       assert.ok(
         Math.abs(fullscreenWideLayout.shellWidth - fullscreenWideLayout.viewportWidth) <= 1,
@@ -500,7 +488,6 @@ test(
         initial.workflowWidth,
       )
       const pointerResized = await separatorState(page)
-      assert.equal(pointerResized.requirementsInitialWidthCapped, "false")
       assert.ok(pointerResized.workflowWidth - pointerResized.requirementsWidth > 80)
 
       await page.mouse.move(20, 20)

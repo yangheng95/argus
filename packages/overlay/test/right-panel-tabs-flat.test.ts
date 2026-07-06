@@ -55,16 +55,19 @@ describe("right side activity toolbar replaces horizontal panel tabs", () => {
     expect(itemGroupBody).toMatch(/gap:\s*0\b/)
   })
 
-  test("right toolbar popup panels share one initial max width source", () => {
+  test("right toolbar popup panels use responsive center-workbench sizing", () => {
     const tokens = readText("src/styles/tokens/design-language.css")
     const workspace = readText("src/styles/surfaces/workspace.css")
     const main = readText("src/main.tsx")
-    const cappedBody = ruleBody(workspace, '.center-workbench-view[data-open="true"][data-initial-width-capped="true"]')
+    const openBody = ruleBody(workspace, '.center-workbench-view[data-open="true"]')
 
-    expect(tokens).toContain("--ui-right-toolbar-panel-initial-max-width: calc(420px * var(--ui-scale));")
-    expect(cappedBody).toContain("max-width: var(--ui-right-toolbar-panel-initial-max-width);")
+    expect(tokens).not.toContain("--ui-right-toolbar-panel-initial-max-width")
+    expect(openBody).toContain("min-width: 0;")
+    expect(openBody).not.toContain("flex-shrink: 0;")
+    expect(workspace).not.toContain('data-initial-width-capped="true"')
+    expect(workspace).not.toContain("data-initial-width-capped")
     expect(workspace).not.toContain("max-width: calc(420px")
-    expect(main).toContain("const RIGHT_TOOLBAR_INITIAL_WIDTH_PANELS")
+    expect(main).not.toContain("const RIGHT_TOOLBAR_INITIAL_WIDTH_PANELS")
     for (const panel of [
       '"requirements"',
       '"architect"',
@@ -78,8 +81,8 @@ describe("right side activity toolbar replaces horizontal panel tabs", () => {
       expect(main).toContain(panel)
     }
     expect(main).not.toContain('"inspector"')
-    expect(main).toContain("body.dataset.initialWidthCapped")
-    expect(main).toContain("clearCenterWorkbenchPanelInitialWidthCap(metrics.leftPanel, metrics.rightPanel)")
+    expect(main).not.toContain("dataset.initialWidthCapped")
+    expect(main).not.toContain("clearCenterWorkbenchPanelInitialWidthCap")
     expect(main).not.toContain("--ui-sections-width")
     expect(main).not.toContain("rightPanelCollapsed")
     expect(main).not.toContain("sectionsWidth")

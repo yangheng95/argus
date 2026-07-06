@@ -424,12 +424,15 @@
 }
 
 /* Container query: when the composer container itself drops below
-   520px, hide the send label (icon-only mode). The meta controls stay
-   on one row so model/budget selection never drops into the old
-   three-line layout. */
+   520px, hide the send label and stack the meta controls so toolbar-open
+   workbench panels do not force selector button copy into clipped columns. */
 @container (max-width: 520px) {
   .chat-compose-row .oc-button[data-mode] {
     --oc-button-padding-x: calc(10px * var(--ui-scale));
+  }
+
+  .chat-compose-meta-left {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .chat-send-label {

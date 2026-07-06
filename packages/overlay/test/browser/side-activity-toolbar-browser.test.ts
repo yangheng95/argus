@@ -230,7 +230,7 @@ function assertMatchObject(actual: Record<string, unknown>, expected: Record<str
 }
 
 test(
-  "side activity toolbars open the focused center panel and cap initial right panel width",
+  "side activity toolbars open responsive center workbench panels",
   async () => {
     assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
     assert.equal(typeof globalThis.Bun, "undefined")
@@ -690,24 +690,11 @@ test(
             openPanelWidths: Array.from(
               document.querySelectorAll<HTMLElement>(".center-workbench-view[data-open='true']"),
             ).map((node) => Math.round(node.getBoundingClientRect().width)),
-            openPanelInitialWidthCapped: Array.from(
-              document.querySelectorAll<HTMLElement>(".center-workbench-view[data-open='true']"),
-            ).map((node) => node.dataset.initialWidthCapped || ""),
             workbenchPanelMinWidth: (() => {
               const probe = document.createElement("div")
               probe.style.position = "fixed"
               probe.style.visibility = "hidden"
               probe.style.width = "var(--ui-workbench-panel-min-width)"
-              document.body.append(probe)
-              const width = probe.getBoundingClientRect().width
-              probe.remove()
-              return width
-            })(),
-            rightToolbarPanelInitialMaxWidth: (() => {
-              const probe = document.createElement("div")
-              probe.style.position = "fixed"
-              probe.style.visibility = "hidden"
-              probe.style.width = "var(--ui-right-toolbar-panel-initial-max-width)"
               document.body.append(probe)
               const width = probe.getBoundingClientRect().width
               probe.remove()
@@ -1597,22 +1584,15 @@ test(
       })
       assert.deepEqual(twoPanelState.openPanels, ["task", "requirements"])
       const twoPanelWidths = twoPanelState.openPanelWidths as number[]
-      const initialWidthCapped = twoPanelState.openPanelInitialWidthCapped as string[]
-      const rightToolbarPanelInitialMaxWidth = twoPanelState.rightToolbarPanelInitialMaxWidth as number
-      assert.deepEqual(initialWidthCapped, ["false", "true"])
       assert.ok(
-        twoPanelWidths[1]! <= rightToolbarPanelInitialMaxWidth + 1,
-        JSON.stringify({ twoPanelWidths, rightToolbarPanelInitialMaxWidth }),
-      )
-      assert.ok(
-        twoPanelWidths[0]! > twoPanelWidths[1]!,
-        JSON.stringify({ twoPanelWidths, rightToolbarPanelInitialMaxWidth }),
+        Math.abs(twoPanelWidths[0]! - twoPanelWidths[1]!) <= 2,
+        JSON.stringify({ twoPanelWidths }),
       )
       const requirementsPanel = await page.$("#centerWorkbenchRequirements")
-      assert.ok(requirementsPanel, "requirements panel should exist before initial max-width screenshot")
-      const requirementsInitialMaxScreenshotPath = resolve(".scratch/right-toolbar-requirements-initial-max-width.png")
-      mkdirSync(dirname(requirementsInitialMaxScreenshotPath), { recursive: true })
-      writeFileSync(requirementsInitialMaxScreenshotPath, await requirementsPanel.screenshot({}))
+      assert.ok(requirementsPanel, "requirements panel should exist before responsive layout screenshot")
+      const requirementsResponsiveScreenshotPath = resolve(".scratch/right-toolbar-requirements-responsive-width.png")
+      mkdirSync(dirname(requirementsResponsiveScreenshotPath), { recursive: true })
+      writeFileSync(requirementsResponsiveScreenshotPath, await requirementsPanel.screenshot({}))
       const separatorSemantics = twoPanelState.workflowSeparator as {
         hidden: boolean
         disabled: string
@@ -1643,20 +1623,17 @@ test(
       await page.mouse.move(workflowEdge.x + 120, workflowEdge.y, { steps: 8 })
       await page.mouse.up()
       const resizedTwoPanelState = await waitForState(
-        "separator pointer resize should widen the workflow panel and clear the initial cap",
+        "separator pointer resize should widen the workflow panel",
         (state) => {
           const widths = state.openPanelWidths as number[]
-          const caps = state.openPanelInitialWidthCapped as string[]
           return (
             state.openPanels instanceof Array &&
-            widths[0]! - widths[1]! > 80 &&
-            caps.every((value) => value === "false")
+            widths[0]! - widths[1]! > 80
           )
         },
       )
       assert.deepEqual(resizedTwoPanelState.openPanels, ["task", "requirements"])
       assert.ok(resizedTwoPanelState.openPanelWidths[0]! - resizedTwoPanelState.openPanelWidths[1]! > 80)
-      assert.deepEqual(resizedTwoPanelState.openPanelInitialWidthCapped, ["false", "false"])
       const keyboardWidthBefore = resizedTwoPanelState.openPanelWidths[0]!
       await page.focus("#centerWorkbenchSeparatorWorkflow")
       await page.keyboard.press("ArrowLeft")
@@ -1799,7 +1776,17 @@ test(
       const workbenchPanelMinWidth = requirementsOpenState.workbenchPanelMinWidth as number
       assert.equal(requirementsPanelWidths.length, 6)
       assert.equal(
-        requirementsPanelWidths.every((width) => width >= workbenchPanelMinWidth - 1),
+        requirementsPanelWidths.every((width) => width > 0),
+        true,
+        JSON.stringify({
+          openPanels: requirementsOpenState.openPanels,
+          requirementsPanelWidths,
+          workbenchPanelMinWidth,
+          centerWorkbenchBodyOverflow: requirementsOpenState.centerWorkbenchBodyOverflow,
+        }),
+      )
+      assert.equal(
+        requirementsPanelWidths.some((width) => width < workbenchPanelMinWidth - 1),
         true,
         JSON.stringify({
           openPanels: requirementsOpenState.openPanels,
@@ -1813,10 +1800,13 @@ test(
         scrollWidth: number
       }
       assert.ok(
-        centerWorkbenchBodyOverflow.scrollWidth > centerWorkbenchBodyOverflow.clientWidth,
+        centerWorkbenchBodyOverflow.scrollWidth <= centerWorkbenchBodyOverflow.clientWidth + 1,
         JSON.stringify({ centerWorkbenchBodyOverflow, requirementsPanelWidths, workbenchPanelMinWidth }),
       )
       assert.equal((requirementsOpenState.workflowSeparator as { hidden: boolean }).hidden, false)
+      const multiPanelResponsiveScreenshotPath = resolve(".scratch/right-toolbar-responsive-six-panels.png")
+      mkdirSync(dirname(multiPanelResponsiveScreenshotPath), { recursive: true })
+      writeFileSync(multiPanelResponsiveScreenshotPath, await page.screenshot({ fullPage: true }))
 
       await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="assistant"]')
       await page.waitForFunction(

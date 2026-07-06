@@ -57,6 +57,15 @@ describe("composer shell stays tighter than the surrounding canvas", () => {
       /\.chat-compose-row\s+\.oc-button\[data-mode\]\s*\{[^}]*min-height:\s*var\(--chat-textarea-height\)\s*;/,
     )
   })
+
+  test("narrow composer panels stack meta controls instead of clipping selector copy", () => {
+    expect(COMPOSER).toMatch(
+      /@container \(max-width: 520px\)\s*\{[\s\S]*?\.chat-compose-meta-left\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s*;/,
+    )
+    expect(COMPOSER).toMatch(
+      /@container \(max-width: 360px\)\s*\{[\s\S]*?\.executor-dualbar\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s*;/,
+    )
+  })
 })
 
 describe("conversation chrome keeps the compact header rhythm", () => {

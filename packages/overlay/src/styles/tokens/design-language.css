@@ -171,7 +171,6 @@
   --ui-chat-priority-width: calc(640px * var(--ui-scale));
   --ui-chat-min-width: calc(500px * var(--ui-scale));
   --ui-workbench-panel-min-width: calc(280px * var(--ui-scale));
-  --ui-right-toolbar-panel-initial-max-width: calc(420px * var(--ui-scale));
 
   /* Theme swatch previews: the titlebar theme-picker shows a 12x12 chip
      for each available theme. These previews are metadata about *other*

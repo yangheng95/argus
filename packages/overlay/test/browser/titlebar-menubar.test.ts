@@ -1548,25 +1548,15 @@ test(
         const requirements = document.querySelector<HTMLElement>("#centerWorkbenchRequirements")!.getBoundingClientRect()
         const left = document.querySelector<HTMLElement>("#leftPaneResizer")!.getBoundingClientRect()
         const toolbar = document.querySelector<HTMLElement>("#solidRightActivityToolbar")!.getBoundingClientRect()
-        const initialMaxWidthProbe = document.createElement("span")
-        initialMaxWidthProbe.style.position = "fixed"
-        initialMaxWidthProbe.style.visibility = "hidden"
-        initialMaxWidthProbe.style.width = "var(--ui-right-toolbar-panel-initial-max-width)"
-        document.body.append(initialMaxWidthProbe)
-        const rightToolbarPanelInitialMaxWidth = initialMaxWidthProbe.getBoundingClientRect().width
-        initialMaxWidthProbe.remove()
         return {
           sidebar: sidebar.width,
           chat: chat.width,
           requirements: requirements.width,
-          rightToolbarPanelInitialMaxWidth,
           leftDivider: workspace.left - sidebar.right,
           rightDivider: toolbar.left - workbench.right,
           workbenchStartsAtWorkspace: Math.abs(workbench.left - workspace.left) <= 1,
           centerRequirementsActive:
             document.querySelector<HTMLElement>("#centerWorkbenchRequirements")?.dataset.active || "",
-          centerRequirementsInitialWidthCapped:
-            document.querySelector<HTMLElement>("#centerWorkbenchRequirements")?.dataset.initialWidthCapped || "",
           requirementsButtonActive:
             document.querySelector<HTMLElement>(
               '[data-ui="side-activity-button"][data-side="right"][data-activity="requirements"]',
@@ -1579,10 +1569,9 @@ test(
       const afterRequirementsOpenMessage = JSON.stringify(afterRequirementsOpen)
       assert.ok(afterRequirementsOpen.requirements > 300, afterRequirementsOpenMessage)
       assert.ok(
-        afterRequirementsOpen.requirements <= afterRequirementsOpen.rightToolbarPanelInitialMaxWidth + 2,
+        Math.abs(afterRequirementsOpen.chat - afterRequirementsOpen.requirements) <= 2,
         afterRequirementsOpenMessage,
       )
-      assert.ok(afterRequirementsOpen.chat > afterRequirementsOpen.requirements, afterRequirementsOpenMessage)
       assert.ok(afterRequirementsOpen.leftDivider <= 2, afterRequirementsOpenMessage)
       assert.ok(afterRequirementsOpen.rightDivider <= 2, afterRequirementsOpenMessage)
       assert.ok(
@@ -1591,7 +1580,6 @@ test(
       )
       assert.equal(afterRequirementsOpen.workbenchStartsAtWorkspace, true)
       assert.equal(afterRequirementsOpen.centerRequirementsActive, "true")
-      assert.equal(afterRequirementsOpen.centerRequirementsInitialWidthCapped, "true")
       assert.equal(afterRequirementsOpen.requirementsButtonActive, "true")
       assert.ok(afterRequirementsOpen.leftHandleWidth <= 2)
       assert.equal(afterRequirementsOpen.rightPaneResizerExists, false)
