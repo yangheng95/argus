@@ -1,5 +1,6 @@
 # July 2026 Records
 
+- [2026-07-06-frontend-design-tool-surface-sync.md](2026-07-06-frontend-design-tool-surface-sync.md) records the repair for `frontend_design` session startup failure where the runtime submit tool `update_frontend_visual_region_binding` was exposed but missing from the static frontend-design session tool list.
 - [2026-07-06-visual-qa-diagnostic-image-annotation-repair.md](2026-07-06-visual-qa-diagnostic-image-annotation-repair.md) records the Visual QA diagnostic image annotation repair that keeps accepted evidence strict while allowing DOM problem annotations to use image-bearing source-binding and scroll-slice Browser Preview evidence with accurate coordinate transforms.
 - [2026-07-06-cache-aware-build-session-retry-repair.md](2026-07-06-cache-aware-build-session-retry-repair.md) records the Build retry repair that removes raw transcript replay pressure as a fresh-session decision source after provider cache evidence proved valid sessions should be continued by appending real retry messages.
 - [2026-07-06-dsw-33987-agents-commit-rule.md](2026-07-06-dsw-33987-agents-commit-rule.md) records the `AGENTS.md` rule update that requires the current `v0.0.1beta` git-cc delivery line to use the `dsw-33987` commit subject prefix and removes the temporary `dsw-0000` subject from the latest pushed commit.

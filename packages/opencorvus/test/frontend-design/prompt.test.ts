@@ -906,6 +906,15 @@ describe("frontend-design prompt assembly", () => {
     expect(Object.keys(tools).some((name) => name.startsWith("register_"))).toBe(false)
   })
 
+  test("static frontend-design session tools include every incremental submit tool", () => {
+    const tools = FrontendDesignTestHooks.createFrontendSubmitTools(createFrontendTemplateOutputTools())
+    const sessionToolIDs = new Set<string>(FRONTEND_DESIGN_SESSION_TOOL_IDS)
+
+    for (const toolName of Object.keys(tools)) {
+      expect(sessionToolIDs.has(toolName)).toBe(true)
+    }
+  })
+
   test("text-only turns pin frontend_design to direct public report submission", () => {
     expect(
       FrontendDesignTestHooks.isTextOnlyNoVisualSource({

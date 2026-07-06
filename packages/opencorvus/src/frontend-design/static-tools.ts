@@ -57,6 +57,7 @@ export const FRONTEND_DESIGN_SESSION_TOOL_IDS = [
   "update_frontend_visual_evidence",
   "update_frontend_iteration_note",
   "update_frontend_reference",
+  "update_frontend_visual_region_binding",
   "update_frontend_question",
   "inspect_frontend_result_status",
   "submit_frontend_template",
