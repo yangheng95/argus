@@ -2,7 +2,13 @@ import { afterAll, afterEach, expect, test } from "bun:test"
 import { installRealOverlayI18n } from "./fixtures/i18n"
 import { setBoardStore as setBoardStoreRaw } from "../src/store/board"
 import { cardTreeStore } from "../src/store/card-tree"
-import { conversationAgentStore, hydrateConversationAgentView } from "../src/store/conversation-agents"
+import {
+  applyLiveConversationAgentMessageUpdated,
+  applyLiveConversationAgentSessionStatus,
+  conversationAgentStore,
+  hydrateConversationAgentView,
+  resetConversationAgentView,
+} from "../src/store/conversation-agents"
 import {
   cancelConversationReplay,
   conversationCardContainsMessage,
@@ -340,10 +346,73 @@ function fakeTransport(
   } satisfies HostTransport
 }
 
+function liveMessageUpdatedEvent(input: {
+  id: string
+  sessionID: string
+  channel: string
+  created: number
+  parentSessionID?: string
+  goalID?: string
+}) {
+  return {
+    type: "message.updated",
+    orderKey: messageOrderKey(input.id, input.created),
+    properties: {
+      info: {
+        id: input.id,
+        sessionID: input.sessionID,
+        role: "assistant",
+        resolvedRole: input.channel,
+        channel: input.channel,
+        agent: input.channel,
+        orderKey: messageOrderKey(input.id, input.created),
+        ...(input.parentSessionID ? { parentSessionID: input.parentSessionID } : {}),
+        ...(input.goalID ? { goalID: input.goalID } : {}),
+        time: { created: input.created },
+      },
+    },
+  }
+}
+
+function liveVisiblePartEvent(input: {
+  id: string
+  messageID: string
+  sessionID: string
+  channel: string
+  emittedAt: number
+  parentSessionID?: string
+  goalID?: string
+}) {
+  return {
+    type: "message.part.updated",
+    orderKey: messageOrderKey(input.messageID, input.emittedAt),
+    emittedAt: input.emittedAt,
+    properties: {
+      channel: input.channel,
+      resolvedRole: input.channel,
+      orderKey: messageOrderKey(input.messageID, input.emittedAt),
+      ...(input.parentSessionID ? { parentSessionID: input.parentSessionID } : {}),
+      ...(input.goalID ? { goalID: input.goalID } : {}),
+      part: {
+        id: input.id,
+        orderKey: partOrderKey(input.id, input.emittedAt + 1),
+        messageID: input.messageID,
+        sessionID: input.sessionID,
+        type: "text",
+        text: `visible ${input.messageID}`,
+      },
+    },
+  }
+}
+
 afterEach(() => {
   cancelConversationReplay()
   __setHostTransportForTest(undefined)
   resetWriter()
+  resetConversationAgentView()
+  setBoardStore("board", null)
+  setBoardStore("boardSyncPending", false)
+  setBoardStore("taskSequence", 0)
   setBoardStore("selectedSource", null)
 })
 
@@ -783,6 +852,132 @@ test("hydrateTaskConversation preserves agent rail records until the replacement
   expect(conversationAgentStore.records[0]?.stage).toBe("visual-qa")
 })
 
+test("hydrateTaskConversation preserves a live build target across the full clear-and-hydrate path", async () => {
+  resetWriter()
+  resetConversationAgentView()
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_live_build_hydrate" })
+  setBoardStore("board", {
+    snapshotVersion: "board:live-build-before-hydrate",
+    task: {
+      id: "tsk_live_build_hydrate",
+      orderKey: taskOrderKey("tsk_live_build_hydrate", 1_776_000_030_000),
+      status: "active",
+      request: "preserve live build target",
+      sessionID: "ses_root",
+      directory: TEST_DIRECTORY,
+      time: { created: 1_776_000_030_000 },
+      attachments: [],
+    },
+    goalWorkflows: [],
+    interactions: [],
+  })
+
+  const liveMessage = liveMessageUpdatedEvent({
+    id: "msg_live_build_hydrate",
+    sessionID: "ses_live_build_hydrate",
+    channel: "build",
+    created: 1_776_000_030_100,
+    parentSessionID: "ses_root",
+  })
+  const livePart = liveVisiblePartEvent({
+    id: "part_live_build_hydrate",
+    messageID: "msg_live_build_hydrate",
+    sessionID: "ses_live_build_hydrate",
+    channel: "build",
+    emittedAt: 1_776_000_030_100,
+    parentSessionID: "ses_root",
+  })
+
+  replayTaskEventToTree(liveMessage)
+  replayTaskEventToTree(livePart)
+  applyLiveConversationAgentSessionStatus("task:tsk_live_build_hydrate", {
+    type: "session.status",
+    orderKey: sessionOrderKey("ses_live_build_hydrate", 1_776_000_030_000),
+    emittedAt: 1_776_000_030_000,
+    properties: {
+      sessionID: "ses_live_build_hydrate",
+      channel: "build",
+      resolvedRole: "build",
+      parentSessionID: "ses_root",
+      status: { type: "streaming" },
+    },
+  })
+  applyLiveConversationAgentMessageUpdated("task:tsk_live_build_hydrate", liveMessage)
+
+  expect(conversationAgentStore.records[0]?.targetMessageID).toBe("msg_live_build_hydrate")
+  expect(conversationAgentStore.records[0]?.renderedCardID).toBe(
+    "build:session:ses_live_build_hydrate:message:msg_live_build_hydrate",
+  )
+
+  __setHostTransportForTest(
+    fakeTransport((req) => {
+      if (req.path !== "task/tsk_live_build_hydrate/conversation") {
+        throw new Error(`unexpected request path: ${req.path}`)
+      }
+      return {
+        status: 200,
+        ok: true,
+        headers: {},
+        body: {
+          board: {
+            snapshotVersion: "board:live-build-after-hydrate",
+            task: {
+              id: "tsk_live_build_hydrate",
+              orderKey: taskOrderKey("tsk_live_build_hydrate", 1_776_000_030_000),
+              status: "active",
+              request: "preserve live build target",
+              sessionID: "ses_root",
+              directory: TEST_DIRECTORY,
+              time: { created: 1_776_000_030_000 },
+              attachments: [],
+            },
+            goalWorkflows: [],
+            interactions: [],
+          },
+          transcript: [],
+          timeline: [],
+          events: [],
+          view: { topLevelSessionIDs: [], sessions: [], messages: [] },
+          agentView: {
+            sessions: [
+              {
+                sessionID: "ses_live_build_hydrate",
+                stage: "build",
+                parentSessionID: "ses_root",
+                messageIDs: [],
+                firstMessageTime: 1_776_000_030_000,
+                lastMessageTime: 1_776_000_030_000,
+                firstObservedAt: 1_776_000_030_000,
+                lastObservedAt: 1_776_000_030_000,
+                orderKey: sessionOrderKey("ses_live_build_hydrate", 1_776_000_030_000),
+                status: "running",
+                placement: "top_level",
+              },
+            ],
+            messages: [],
+            topLevelSessionIDs: [],
+          },
+          eventReplay: { cursor: 4, latestSequence: 4, complete: true, limit: 500, sinceTimestamp: null },
+          history: {
+            oldestTimestamp: null,
+            oldestOrderKey: null,
+            oldestMessageID: null,
+            hasMore: false,
+            limit: 160,
+          },
+          lastSequence: 4,
+          messageWatermark: 0,
+        },
+      }
+    }),
+  )
+
+  await expect(hydrateTaskConversation("tsk_live_build_hydrate", { directory: TEST_DIRECTORY })).resolves.toBe(4)
+  expect(conversationAgentStore.records.map((record) => record.sessionID)).toEqual(["ses_live_build_hydrate"])
+  expect(conversationAgentStore.records[0]?.targetMessageID).toBe("msg_live_build_hydrate")
+  expect(conversationAgentStore.records[0]?.renderedCardID).toBeUndefined()
+})
+
 test("hydrateTaskConversation renders the live tail first and prepends older history on demand", async () => {
   resetWriter()
   setBoardStore("selectedSource", { kind: "task", id: "tsk_lazy" })
@@ -1216,6 +1411,7 @@ test("history paging continues when a goal phase card exists but its target mess
     goalWorkflows: [
       {
         goalID: "gol_phase",
+        orderKey: boardOrderKey("gol_phase", 1_776_000_010_100, 60),
         goalTitle: "Phase goal",
         goalObjective: "Keep build output visible",
         time: { created: 1_776_000_010_100 },
@@ -1224,11 +1420,14 @@ test("history paging continues when a goal phase card exists but its target mess
         steps: [
           {
             stepID: "build",
+            orderKey: boardOrderKey("gol_phase-build", 1_776_000_010_100, 61),
             label: "Executor",
             status: "completed",
             startedAt: 1_776_000_010_100,
+            payload: { buildSessionID: "ses_build_old" },
             phases: {
               build: {
+                orderKey: boardOrderKey("gol_phase-build-build", 1_776_000_010_120, 62),
                 status: "completed",
                 startedAt: 1_776_000_010_120,
                 completedAt: 1_776_000_010_700,
@@ -1440,6 +1639,12 @@ test("history paging continues when a goal phase card exists but its target mess
   )
   expect(cardTreeStore.cards[phaseCardID]).toBeDefined()
   expect(conversationCardContainsMessage(phaseCardID, "msg_build_old")).toBe(false)
+  expect(conversationAgentStore.records.find((record) => record.sessionID === "ses_build_old")?.renderedCardID).toBe(
+    "step:gol_phase:build",
+  )
+  expect(conversationAgentStore.records.find((record) => record.sessionID === "ses_build_old")?.targetMessageID).toBe(
+    "msg_build_old",
+  )
 
   await expect(
     loadConversationHistoryUntilCard(phaseCardID, "tsk_phase_history", { messageID: "msg_build_old" }),
@@ -1481,6 +1686,7 @@ test("goal phase history can hydrate a build session directly by session id", as
     goalWorkflows: [
       {
         goalID: "gol_phase_session",
+        orderKey: boardOrderKey("gol_phase_session", 1_776_000_020_100, 60),
         goalTitle: "Phase session goal",
         goalObjective: "Load old build transcript by session id",
         time: { created: 1_776_000_020_100 },
@@ -1489,12 +1695,14 @@ test("goal phase history can hydrate a build session directly by session id", as
         steps: [
           {
             stepID: "build",
+            orderKey: boardOrderKey("gol_phase_session-build", 1_776_000_020_100, 61),
             label: "Executor",
             status: "completed",
             startedAt: 1_776_000_020_100,
             payload: { buildSessionID: "ses_build_session" },
             phases: {
               build: {
+                orderKey: boardOrderKey("gol_phase_session-build-build", 1_776_000_020_120, 62),
                 status: "completed",
                 startedAt: 1_776_000_020_120,
                 completedAt: 1_776_000_020_700,
@@ -1690,6 +1898,12 @@ test("goal phase history can hydrate a build session directly by session id", as
   )
   expect(cardTreeStore.cards[phaseCardID]?.phaseSessionID).toBe("ses_build_session")
   expect(conversationCardContainsMessage(phaseCardID, "msg_build_session")).toBe(false)
+  expect(
+    conversationAgentStore.records.find((record) => record.sessionID === "ses_build_session")?.renderedCardID,
+  ).toBe("step:gol_phase_session:build")
+  expect(
+    conversationAgentStore.records.find((record) => record.sessionID === "ses_build_session")?.targetMessageID,
+  ).toBe("msg_build_session")
 
   await expect(
     loadConversationHistoryUntilCard(phaseCardID, "tsk_phase_session", {

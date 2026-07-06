@@ -22,6 +22,7 @@ test("task debug info keeps the concise workflow identity header", () => {
   expect(debugInfo).toContain("runtime.db:")
   expect(debugInfo).toContain("task.session:")
   expect(debugInfo).toContain("task.run.id:")
+  expect(debugInfo).toContain("Task Agent Outcomes (${taskAgentOutcomes.length}):")
   expect(debugInfo).toContain("Goals (${goalWorkflows.length}):")
   expect(main).toContain("buildTaskDebugBlob(boardStore.board, appStore.enginePaths)")
 })
@@ -39,6 +40,60 @@ test("task debug info includes only the compact Files panel board projection sum
   expect(debugInfo).toContain("outcomes=${outcomes.size")
   expect(debugInfo).toContain("noAcceptance=${noAcceptanceReasons.size")
   expect(debugInfo).not.toContain("commits=${commitRefs.size")
+})
+
+test("task debug info includes task-level direct build attempts outside goals", () => {
+  const blob = buildTaskDebugBlob(
+    {
+      task: {
+        id: "tsk_debug_direct_build",
+        title: "Debug direct build outcome",
+        status: "failed",
+        terminalReason: "failed",
+        directory: "C:/repo",
+        sessionID: "ses_debug_direct_build",
+        activeRunID: "run_debug_direct_build",
+        time: { created: Date.now(), updated: Date.now() },
+      },
+      project: {
+        id: "proj_debug_direct_build",
+        name: "Debug project",
+        worktree: "C:/canonical/project",
+      },
+      taskAgentOutcomes: [
+        {
+          id: "artifact_debug_direct_build",
+          provider: "build",
+          artifactKind: "build_attempt_outcome",
+          scope: "task",
+          runID: "run_debug_direct_build",
+          sessionID: "ses_debug_direct_build_child",
+          status: "completed",
+          result: "delivered",
+        },
+      ],
+      goalWorkflows: [],
+    },
+    { database: "C:/runtime/opencorvus.db" },
+  )
+
+  expect(blob).toContain("Task Agent Outcomes (1):")
+  expect(blob).toContain("artifact_debug_direct_build")
+  expect(blob).toContain("provider=build; kind=build_attempt_outcome")
+  expect(blob).toContain("status=completed; result=delivered")
+  expect(blob).toContain("run=run_debug_direct_build; session=ses_debug_direct_build_child")
+  expect(blob).not.toContain("actualChangedFiles")
+  expect(blob).not.toContain("publishedCommit")
+  expect(blob).toContain("Goals (0):")
+})
+
+test("mission status client type mirrors task-level build outcomes and aborted raw statuses", () => {
+  const mission = source("src/services/mission.ts")
+
+  expect(mission).toContain('"pending" | "running" | "completed" | "skipped" | "failed" | "aborted"')
+  expect(mission).toContain("export interface TaskStatusAgentOutcome")
+  expect(mission).toContain('scope: "task" | "goal"')
+  expect(mission).toContain("taskAgentOutcomes: TaskStatusAgentOutcome[]")
 })
 
 test("task debug info explains zero changed files with terminal build outcome", () => {

@@ -20,6 +20,7 @@ export interface AgentWorkflowRecord {
   agentName: string
   stage: string
   rawStage?: string
+  viewSource?: "hydrate" | "live"
   status: AgentWorkflowStatus
   orderKey?: string
   startedAt: number

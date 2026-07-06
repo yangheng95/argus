@@ -95,6 +95,14 @@ function debugGoalBoardFiles(gw: any): string {
   )
 }
 
+function debugTaskAgentOutcome(outcome: any): string {
+  return (
+    `provider=${String(outcome?.provider ?? "?")}; kind=${String(outcome?.artifactKind ?? "?")}; ` +
+    `status=${String(outcome?.status ?? "?")}; result=${String(outcome?.result ?? "-")}; ` +
+    `run=${String(outcome?.runID ?? "-")}; session=${String(outcome?.sessionID ?? "-")}`
+  )
+}
+
 export function buildTaskDebugBlob(board: any, runtimePaths?: RuntimeDebugPaths): string {
   const task = board?.task
   const id = typeof task?.id === "string" ? task.id : ""
@@ -103,6 +111,7 @@ export function buildTaskDebugBlob(board: any, runtimePaths?: RuntimeDebugPaths)
   const projectWorktree = String(board?.project?.worktree ?? "-")
   const serverUrl = getServerUrl()
   const goalWorkflows: any[] = Array.isArray(board?.goalWorkflows) ? board.goalWorkflows : []
+  const taskAgentOutcomes: any[] = Array.isArray(board?.taskAgentOutcomes) ? board.taskAgentOutcomes : []
   const lines: string[] = []
   const push = (...l: string[]) => lines.push(...l)
 
@@ -122,6 +131,17 @@ export function buildTaskDebugBlob(board: any, runtimePaths?: RuntimeDebugPaths)
     `task.run.id:    ${String(task?.activeRunID ?? "-")}`,
     `task.time.created: ${formatDebugTime(task?.time?.created)}`,
     `task.time.updated: ${formatDebugTime(task?.time?.updated ?? task?.time?.created)}`,
+    ``,
+    `Task Agent Outcomes (${taskAgentOutcomes.length}):`,
+  )
+  if (taskAgentOutcomes.length === 0) {
+    push(`  (none)`)
+  } else {
+    for (const outcome of taskAgentOutcomes) {
+      push(`  ${String(outcome?.id ?? "?")}  ${debugTaskAgentOutcome(outcome)}`)
+    }
+  }
+  push(
     ``,
     `Goals (${goalWorkflows.length}):`,
   )

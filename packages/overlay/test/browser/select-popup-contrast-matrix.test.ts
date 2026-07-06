@@ -88,22 +88,22 @@ test("shared Select popup consumers keep readable options on a light popup surfa
         </head>
         <body data-theme="light">
           <main class="select-popup-matrix" aria-label="Select popup contrast matrix">
-            <section class="select-popup-sample" data-select-sample="prompt-profile">
+            <section class="select-popup-sample" data-select-sample="expert-squad">
               <strong>Expert Squad</strong>
-              <div class="oc-select-content prompt-profile-select-content" data-expanded="">
-                <ul class="oc-select-listbox prompt-profile-select-listbox" role="listbox">
-                  <li class="oc-select-option prompt-profile-select-option" role="option" aria-selected="false">
-                    <span class="oc-select-option-copy prompt-profile-select-option-copy"><span>General</span><small>Baseline prompt set.</small></span>
+              <div class="oc-select-content expert-squad-select-content" data-expanded="">
+                <ul class="oc-select-listbox expert-squad-select-listbox" role="listbox">
+                  <li class="oc-select-option expert-squad-select-option" role="option" aria-selected="false">
+                    <span class="oc-select-option-copy expert-squad-select-option-copy"><span>General</span><small>Baseline prompt set.</small></span>
                   </li>
-                  <li class="oc-select-option prompt-profile-select-option" role="option" aria-selected="false" data-highlighted="">
-                    <span class="oc-select-option-copy prompt-profile-select-option-copy"><span>Research</span><small>Evidence gathering squad.</small></span>
+                  <li class="oc-select-option expert-squad-select-option" role="option" aria-selected="false" data-highlighted="">
+                    <span class="oc-select-option-copy expert-squad-select-option-copy"><span>Research</span><small>Evidence gathering squad.</small></span>
                   </li>
-                  <li class="oc-select-option prompt-profile-select-option" role="option" aria-selected="true" data-selected="">
-                    <span class="oc-select-option-copy prompt-profile-select-option-copy"><span>Frontend</span><small>Visual UI verification squad.</small></span>
+                  <li class="oc-select-option expert-squad-select-option" role="option" aria-selected="true" data-selected="">
+                    <span class="oc-select-option-copy expert-squad-select-option-copy"><span>Frontend</span><small>Visual UI verification squad.</small></span>
                     <span class="oc-select-indicator">✓</span>
                   </li>
-                  <li class="oc-select-option prompt-profile-select-option" role="option" aria-selected="true" data-selected="" data-highlighted="">
-                    <span class="oc-select-option-copy prompt-profile-select-option-copy"><span>Benchmark</span><small>Regression verification squad.</small></span>
+                  <li class="oc-select-option expert-squad-select-option" role="option" aria-selected="true" data-selected="" data-highlighted="">
+                    <span class="oc-select-option-copy expert-squad-select-option-copy"><span>Benchmark</span><small>Regression verification squad.</small></span>
                     <span class="oc-select-indicator">✓</span>
                   </li>
                 </ul>
@@ -321,7 +321,7 @@ test("shared Select popup consumers keep readable options on a light popup surfa
 
     assert.deepEqual(
       result.map((sample) => sample.id),
-      ["prompt-profile", "agent-model", "settings-form", "app-dialog", "browser-preview", "log-level"],
+      ["expert-squad", "agent-model", "settings-form", "app-dialog", "browser-preview", "log-level"],
     )
     assert.equal(
       OVERLAY_STYLE_HREFS.indexOf("surfaces/composer.css") < OVERLAY_STYLE_HREFS.indexOf("surfaces/field.css"),

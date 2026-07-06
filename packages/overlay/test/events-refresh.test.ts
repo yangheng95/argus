@@ -256,7 +256,7 @@ function goalPhaseBoard(
       sessionID: "ses_root",
       status: "active",
       request: "refresh",
-      time: { created: 1_776_000_100_000 },
+      time: { created: 1_776_000_100_000, started: 1_776_000_100_000 },
       attachments: [],
     },
     workflow: {
@@ -830,7 +830,7 @@ test("goal phase part waits for fresh board projection before selected-task reco
   expect(cardTreeStore.cards["build:session:ses_phase_build:message:msg_phase_stale"]).toBeUndefined()
 })
 
-test("goal phase part without pending board sync keeps backend projection invariant loud", () => {
+test("goal phase part without pending board sync stays visible top-level when the board no longer owns the goal", () => {
   resetWriter()
   const requests: Array<{ path: string; query?: Record<string, string> }> = []
   const streams: Array<{ path: string; query?: Record<string, string> }> = []
@@ -841,14 +841,20 @@ test("goal phase part without pending board sync keeps backend projection invari
   setBoardStore("snapshotVersion", "board:no-pending-goal-phase")
   setBoardStore("boardSyncPending", false)
 
-  expect(() => routeSSEEvent(goalPhasePartEvent())).toThrow(
-    "goal phase goal_phase_stale/build/build missing backend board projection",
+  expect(routeSSEEvent(goalPhasePartEvent())).toBe(true)
+  expect(cardTreeStore.cards["step:goal_phase_stale:build:phase:build"]).toBeUndefined()
+  expect(cardTreeStore.cards["build:session:ses_phase_build:message:msg_phase_stale"]).toEqual(
+    expect.objectContaining({
+      kind: "agent",
+      sessionID: "ses_phase_build",
+      messageID: "msg_phase_stale",
+    }),
   )
   expect(requests).toEqual([])
   expect(streams).toEqual([])
 })
 
-test("goal phase part with fresh board still missing phase stays loud on replay", async () => {
+test("goal phase part with a fresh board that still lacks the goal owner replays as top-level", async () => {
   resetWriter()
   const requests: Array<{ path: string; query?: Record<string, string> }> = []
   const streams: Array<{ path: string; query?: Record<string, string> }> = []
@@ -871,7 +877,15 @@ test("goal phase part with fresh board still missing phase stays loud on replay"
   await waitForStreamCount(streams, 1)
   expect(boardStore.boardSyncPending).toBe(false)
 
-  expect(() => routeSSEEvent(event)).toThrow("goal phase goal_phase_stale/build/build missing backend board projection")
+  expect(routeSSEEvent(event)).toBe(true)
+  expect(cardTreeStore.cards["step:goal_phase_stale:build:phase:build"]).toBeUndefined()
+  expect(cardTreeStore.cards["build:session:ses_phase_build:message:msg_phase_stale"]).toEqual(
+    expect.objectContaining({
+      kind: "agent",
+      sessionID: "ses_phase_build",
+      messageID: "msg_phase_stale",
+    }),
+  )
 })
 
 test("goal phase fresh board failure does not reopen selected-task stream", async () => {
@@ -905,7 +919,7 @@ test("goal phase fresh board failure does not reopen selected-task stream", asyn
   }
 })
 
-test("goal phase owner mismatch is not recovered as stale board projection", () => {
+test("goal phase owner mismatch stays visible top-level instead of forcing stale phase recovery", () => {
   resetWriter()
   const requests: Array<{ path: string; query?: Record<string, string> }> = []
   const streams: Array<{ path: string; query?: Record<string, string> }> = []
@@ -915,7 +929,7 @@ test("goal phase owner mismatch is not recovered as stale board projection", () 
   setBoardStore("taskSequence", 5)
   setBoardStore("boardSyncPending", true)
 
-  expect(() =>
+  expect(
     routeSSEEvent(
       goalPhasePartEvent({
         goalID: "goal_phase_owner",
@@ -924,7 +938,15 @@ test("goal phase owner mismatch is not recovered as stale board projection", () 
         partID: "part_phase_owner",
       }),
     ),
-  ).toThrow("goal phase goal_phase_owner/build/build expected session ses_phase_owner, got ses_phase_other")
+  ).toBe(true)
+  expect(cardTreeStore.cards["step:goal_phase_owner:build:phase:build"]?.phaseSessionID).toBe("ses_phase_owner")
+  expect(cardTreeStore.cards["build:session:ses_phase_other:message:msg_phase_owner"]).toEqual(
+    expect.objectContaining({
+      kind: "agent",
+      sessionID: "ses_phase_other",
+      messageID: "msg_phase_owner",
+    }),
+  )
   expect(requests).toEqual([])
   expect(streams).toEqual([])
 })

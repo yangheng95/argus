@@ -133,21 +133,21 @@ export interface TaskStatusWorkflowStep {
   scope: "task" | "goal"
   tool: string
   status: MissionExecutionStatus
-  rawStatus: "pending" | "running" | "completed" | "skipped" | "failed"
+  rawStatus: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
 }
 
 export interface TaskStatusGoalStep {
   stepID: string
   label: string
   status: MissionExecutionStatus
-  rawStatus: "pending" | "running" | "completed" | "skipped" | "failed"
+  rawStatus: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
   startedAt?: number
   completedAt?: number
   summary?: string
   phases?: Array<{
     phaseID: string
     status: MissionExecutionStatus
-    rawStatus: "pending" | "running" | "completed" | "skipped" | "failed"
+    rawStatus: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
     startedAt?: number
     completedAt?: number
   }>
@@ -163,6 +163,30 @@ export interface TaskStatusGoalDetail {
   priority: "blocking" | "advisory"
   progress: StatusProgress
   steps: TaskStatusGoalStep[]
+}
+
+export interface TaskStatusAgentOutcomeField {
+  label: string
+  value: string
+}
+
+export interface TaskStatusAgentOutcome {
+  id: string
+  provider: string
+  artifactKind: string
+  scope: "task" | "goal"
+  capabilities?: string[]
+  runID?: string
+  sessionID?: string
+  status: string
+  result?: string
+  summary?: string
+  error?: string
+  fields?: TaskStatusAgentOutcomeField[]
+  time: {
+    created: number
+    updated: number
+  }
 }
 
 export interface TaskStatusDetail {
@@ -181,6 +205,7 @@ export interface TaskStatusDetail {
     steps: TaskStatusWorkflowStep[]
   }
   goals: TaskStatusGoalDetail[]
+  taskAgentOutcomes: TaskStatusAgentOutcome[]
   time: {
     created: number
     updated: number

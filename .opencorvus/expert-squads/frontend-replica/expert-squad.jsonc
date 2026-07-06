@@ -3,7 +3,7 @@
   "id": "frontend-replica",
   "label": "Frontend Replica",
   "description": "Source URL/reference-screenshot replica, desktop surface ledger, bounded evidence-backed acceptance, source evidence, and rendered proof expert squad.",
-  "version": "2026.07.03",
+  "version": "2026.07.05",
   "readme": "README.md",
   "selector": {
     "summary": "Source URL/reference-screenshot replica, desktop surface ledger, bounded evidence-backed acceptance, source evidence, and rendered proof expert squad.",

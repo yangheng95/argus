@@ -77,6 +77,10 @@ export default defineConfig({
   define: {
     __OPENCORVUS_OVERLAY_VERSION__: JSON.stringify(overlayVersion),
   },
+  esbuild: {
+    jsx: "automatic",
+    jsxImportSource: "solid-js",
+  },
   root: "src",
   server: {
     port: 5173,

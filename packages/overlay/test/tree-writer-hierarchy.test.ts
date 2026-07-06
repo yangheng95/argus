@@ -1829,7 +1829,7 @@ test("message arrival applies buffered lifecycle status without creating a dupli
   expect(cardTreeStore.order).toContain(messageCardID)
 })
 
-test("goal phase message rejects missing backend board projection", () => {
+test("goal-owned build message without a current board owner stays on a turn card", () => {
   resetWriter()
   setBoardStore("board", {
     task: {
@@ -1846,27 +1846,112 @@ test("goal phase message rejects missing backend board projection", () => {
   })
   setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
 
+  applyEvent({
+    type: "message.updated",
+    orderKey: messageOrderKey("msg_build_phase_stub", 1_776_000_003_000),
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("build", {
+        id: "msg_build_phase_stub",
+        orderKey: messageOrderKey("msg_build_phase_stub", 1_776_000_003_000),
+        sessionID: "ses_build_phase_stub",
+        role: "assistant",
+        parentSessionID: ROOT_SID,
+        goalID: "goal_phase_stub",
+        time: { created: 1_776_000_003_000 },
+      }),
+    },
+  })
+
+  const phaseCardID = "step:goal_phase_stub:build:phase:build"
+  const messageCardID = "build:session:ses_build_phase_stub:message:msg_build_phase_stub"
+  expect(cardTreeStore.cards[phaseCardID]).toBeUndefined()
+  expect(cardTreeStore.cards[messageCardID]).toEqual(
+    expect.objectContaining({
+      id: messageCardID,
+      kind: "agent",
+      sessionID: "ses_build_phase_stub",
+      messageID: "msg_build_phase_stub",
+    }),
+  )
+})
+
+test("goal phase message stays loud when the current board owner exists but its phase card is missing", () => {
+  resetWriter()
+  setBoardStore("board", {
+    task: {
+      id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, 1_776_000_000_000),
+      status: "active",
+      request: "phase card must already exist when current board proves ownership",
+      sessionID: ROOT_SID,
+      time: { created: 1_776_000_000_000 },
+      attachments: [],
+    },
+    workflow: {
+      steps: [
+        {
+          id: "build",
+          orderKey: boardOrderKey(`${TASK_ID}-workflow-build`, 1_776_000_000_100, 61),
+          label: "Executor",
+          phases: [{ id: "build", label: "Build", sessionKind: "build" }],
+        },
+      ],
+    },
+    goalWorkflows: [
+      {
+        goalID: "goal_phase_stub",
+        orderKey: boardOrderKey("goal_phase_stub", 1_776_000_000_100, 60),
+        goalTitle: "Phase stub",
+        goalStatus: "running",
+        time: { created: 1_776_000_000_100 },
+        orderIndex: 0,
+        retryCount: 0,
+        steps: [
+          {
+            stepID: "build",
+            orderKey: boardOrderKey("goal_phase_stub_build", 1_776_000_000_100, 61),
+            label: "Executor",
+            status: "running",
+            startedAt: 1_776_000_000_100,
+            payload: { buildSessionID: "ses_build_phase_owner" },
+            phases: {
+              build: {
+                status: "running",
+                startedAt: 1_776_000_000_100,
+                orderKey: boardOrderKey("goal_phase_stub_build_build", 1_776_000_000_100, 62),
+              },
+            },
+          },
+        ],
+      },
+    ],
+    interactions: [],
+  })
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
+  applyEvent({ type: "task.updated", properties: { taskID: TASK_ID } })
+
+  const phaseCardID = "step:goal_phase_stub:build:phase:build"
+  delete (cardTreeStore.cards as any)[phaseCardID]
+
   expect(() =>
     applyEvent({
       type: "message.updated",
-      orderKey: messageOrderKey("msg_build_phase_stub", 1_776_000_003_000),
+      orderKey: messageOrderKey("msg_build_phase_owner", 1_776_000_003_100),
       properties: {
         taskID: TASK_ID,
         info: stampedInfo("build", {
-          id: "msg_build_phase_stub",
-          orderKey: messageOrderKey("msg_build_phase_stub", 1_776_000_003_000),
-          sessionID: "ses_build_phase_stub",
+          id: "msg_build_phase_owner",
+          orderKey: messageOrderKey("msg_build_phase_owner", 1_776_000_003_100),
+          sessionID: "ses_build_phase_owner",
           role: "assistant",
           parentSessionID: ROOT_SID,
           goalID: "goal_phase_stub",
-          time: { created: 1_776_000_003_000 },
+          time: { created: 1_776_000_003_100 },
         }),
       },
     }),
   ).toThrow("goal phase goal_phase_stub/build/build missing backend board projection")
-
-  const phaseCardID = "step:goal_phase_stub:build:phase:build"
-  expect(cardTreeStore.cards[phaseCardID]).toBeUndefined()
 })
 
 test("session.error marks the session card with the original stream error", () => {
@@ -3758,7 +3843,7 @@ test("phase-absorbed build card orders prompt parts before later assistant outpu
   ])
 })
 
-test("phase card ignores stale lifecycle from older replaced session owner", () => {
+test("stale build owner falls back to its own turn card while the current phase stays intact", () => {
   seedTurnBoard("phase stale lifecycle owner")
 
   const goalID = "goal_phase_stale_owner"
@@ -3839,26 +3924,31 @@ test("phase card ignores stale lifecycle from older replaced session owner", () 
   })
   expect(cardTreeStore.cards[phaseCardID]?.phaseSessionID).toBe(currentSessionID)
 
-  expect(() =>
-    applyEvent({
-      type: "message.updated",
-      orderKey: messageOrderKey("msg_phase_stale", 1_776_000_000_200),
-      properties: {
-        taskID: TASK_ID,
-        info: stampedInfo("build", {
-          id: "msg_phase_stale",
-          orderKey: messageOrderKey("msg_phase_stale", 1_776_000_000_200),
-          sessionID: staleSessionID,
-          role: "assistant",
-          resolvedRole: "build",
-          agent: "build",
-          parentSessionID: ROOT_SID,
-          goalID,
-          time: { created: 1_776_000_000_200 },
-        }),
-      },
+  applyEvent({
+    type: "message.updated",
+    orderKey: messageOrderKey("msg_phase_stale", 1_776_000_000_200),
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("build", {
+        id: "msg_phase_stale",
+        orderKey: messageOrderKey("msg_phase_stale", 1_776_000_000_200),
+        sessionID: staleSessionID,
+        role: "assistant",
+        resolvedRole: "build",
+        agent: "build",
+        parentSessionID: ROOT_SID,
+        goalID,
+        time: { created: 1_776_000_000_200 },
+      }),
+    },
+  })
+  expect(cardTreeStore.cards[`build:session:${staleSessionID}:message:msg_phase_stale`]).toEqual(
+    expect.objectContaining({
+      kind: "agent",
+      sessionID: staleSessionID,
+      messageID: "msg_phase_stale",
     }),
-  ).toThrow(`goal phase ${goalID}/build/build expected session ${currentSessionID}, got ${staleSessionID}`)
+  )
   expect(cardTreeStore.cards[phaseCardID]?.phaseSessionID).toBe(currentSessionID)
 
   applyEvent({

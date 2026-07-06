@@ -184,7 +184,7 @@ describe("settings primitives — Solid exports", () => {
       "extension-row-main",
       "extension-row-actions",
       "extension-status",
-      "prompt-profile-list-item",
+      "expert-squad-list-item",
     ]) {
       expect(source).not.toContain(legacy)
     }

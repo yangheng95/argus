@@ -256,6 +256,7 @@ function resetSelectedTaskRecoveryTestState(): void {
   resetSelectedLiveCursor()
   setBoardStore("selectedSource", null)
   setBoardStore("taskSequence", 0)
+  setBoardStore("boardSyncPending", false)
   setBoardStore("board", null)
 }
 

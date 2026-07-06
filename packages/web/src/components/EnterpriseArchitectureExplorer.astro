@@ -999,7 +999,7 @@ const docsHref = locale === "zh" ? "/docs/zh-cn/concepts/enterprise-architecture
       contracts: [
         ["agent-team", "a2a-coordination", { en: "Workers create coordination requests with evidence refs and expected owner.", zh: "Worker 创建带 evidence refs 与目标 owner 的协作请求。" }],
         ["a2a-coordination", "orchestrator-host", { en: "respond_agent_coordination claims the request and records response/action artifacts.", zh: "respond_agent_coordination 认领请求并记录 response/action artifact。" }],
-        ["orchestrator-host", "agent-team", { en: "Redispatch is tied to the request artifact and responsible agent kind.", zh: "Redispatch 绑定 request artifact 和负责 agent kind。" }],
+        ["orchestrator-host", "agent-team", { en: "Redispatch is tied to the response action artifact and scheduler workflow binding.", zh: "Redispatch 绑定 response action artifact 和 scheduler workflow binding。" }],
         ["a2a-coordination", "engine-spine", { en: "All A2A traffic remains queryable in engine_artifact.", zh: "所有 A2A 流量都可在 engine_artifact 中查询。" }],
       ],
     },
@@ -1271,7 +1271,7 @@ const docsHref = locale === "zh" ? "/docs/zh-cn/concepts/enterprise-architecture
       ],
       boundaries: [
         { en: "Not free-form peer chat between agents.", zh: "不是 agent 之间的自由聊天。" },
-        { en: "Redispatch must be tied to responsible agent kind and request id.", zh: "Redispatch 必须绑定负责 agent kind 与 request id。" },
+        { en: "Redispatch must be tied to scheduler workflow binding and response/action artifacts.", zh: "Redispatch 必须绑定 scheduler workflow binding 与 response/action artifact。" },
       ],
       records: ["agent_coordination_request", "agent_coordination_response", "agent_coordination_action"],
       sources: [

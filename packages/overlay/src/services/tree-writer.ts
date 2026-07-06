@@ -791,7 +791,7 @@ function handleMessageUpdated(event: any): void {
   }
   const agent = typeof info.agent === "string" ? info.agent : ""
   const parentSessionID = String(info.parentSessionID || "")
-  const goalID = String(info.goalID || "")
+  const rawGoalID = String(info.goalID || "")
   const incomingTimeCreated = Number(info?.time?.created)
   if (!(incomingTimeCreated > 0)) {
     throw new Error(
@@ -820,6 +820,7 @@ function handleMessageUpdated(event: any): void {
   // channel is a bridge bug, not a case we silently accommodate.
   const stage = deriveSessionStage(info)
   if (stage === "filtered") return
+  const goalID = displayGoalIDForLiveRouting(stage, rawGoalID, sessionID)
   const displayRole = displayRoleForResolvedRole(rawResolvedRole)
   const nextMessageInfo: MessageInfo = {
     id,
@@ -857,7 +858,7 @@ function handleMessageUpdated(event: any): void {
     orderKey,
     time: timeCreated,
     stampServerTime: true,
-    deferHierarchy: !isPhaseAbsorbedSession(stage, goalID),
+    deferHierarchy: !isPhaseAbsorbedSession(stage, goalID, sessionID),
   })
   const needsIntegrityHierarchyRebuild =
     !isPhase && stage === "integrity" && Boolean(parentSessionID || session.parentSessionID)
@@ -1014,10 +1015,11 @@ function ensurePartProjection(
     const stage = deriveSessionStage(route)
     if (stage === "filtered") return null
     displayRole = displayRoleForResolvedRole(route.resolvedRole)
+    const goalID = displayGoalIDForLiveRouting(stage, route.goalID, sessionID)
     session = ensureSessionProjection(sessionID, {
       stage,
       parentSessionID: route.parentSessionID,
-      goalID: route.goalID,
+      goalID,
     })
     cardID = session.messageCardIDs.get(messageID)
   }
@@ -1040,7 +1042,7 @@ function ensurePartProjection(
       resolvedRole: displayRole,
       agent: displayRole,
       parentSessionID: route.parentSessionID,
-      goalID: route.goalID,
+      goalID: session.goalID,
       orderKey: route.orderKey,
       time: messageTime,
       serverTimeConfirmed: false,
@@ -1091,7 +1093,7 @@ function handlePartUpdated(event: any): void {
   })
   if (!projection) return
   const { session, cardID, messageID: projectedMessageID, displayRole } = projection
-  if (isPhaseAbsorbedSession(session.stage, session.goalID) && conversationPartHasDisplay(part)) {
+  if (isPhaseAbsorbedSession(session.stage, session.goalID, session.sessionID) && conversationPartHasDisplay(part)) {
     const message = messages.get(projectedMessageID)
     const boundaryTime =
       message?.time ??
@@ -1131,7 +1133,7 @@ function projectPersistedConversationPart(info: any, part: any): void {
   if (!conversationPartIsProjectable(part)) return
 
   upsertPart(session, messageID, cardID, partID, { ...part, orderKey: partOrderKey })
-  if (isPhaseAbsorbedSession(session.stage, session.goalID) && conversationPartHasDisplay(part)) {
+  if (isPhaseAbsorbedSession(session.stage, session.goalID, session.sessionID) && conversationPartHasDisplay(part)) {
     ensureBoundaryPart(session, cardID, messageID, message.resolvedRole, message.time)
     reorderPhaseCardParts(cardID)
   }
@@ -1481,10 +1483,11 @@ function ensureLifecycleSessionProjection(event: any, sessionID: string): Sessio
   if (stage === "filtered") return undefined
   if (!stage) return existing
 
+  const goalID = displayGoalIDForLiveRouting(stage, String(props.goalID || existing?.goalID || ""), sessionID)
   return ensureSessionProjection(sessionID, {
     stage,
     parentSessionID: String(props.parentSessionID || existing?.parentSessionID || ""),
-    goalID: String(props.goalID || existing?.goalID || ""),
+    goalID,
   })
 }
 
@@ -2177,23 +2180,86 @@ function ensureSessionProjection(sessionID: string, opts: EnsureSessionOpts): Se
   return info
 }
 
+type LiveGoalPhaseRouting =
+  | { kind: "top_level" }
+  | { kind: "goal_phase"; phase: { stepID: string; phaseID: string } }
+  | { kind: "await_board"; phase: { stepID: string; phaseID: string } }
+
+function workflowPhaseDefinitionForBoard(
+  board: any,
+  stepID: string,
+  stage: string,
+): { stepID: string; phaseID: string } | null {
+  const steps = Array.isArray(board?.workflow?.steps) ? board.workflow.steps : []
+  const step = steps.find((candidate: any) => String(candidate?.id || "") === stepID)
+  const phases = Array.isArray(step?.phases) ? step.phases : []
+  for (const phase of phases) {
+    if (String(phase?.sessionKind || "") !== stage) continue
+    const phaseID = String(phase?.id || "")
+    if (!phaseID) continue
+    return { stepID, phaseID }
+  }
+  return null
+}
+
+function liveGoalPhaseRouting(stage: string, goalID: string, sessionID: string): LiveGoalPhaseRouting {
+  if (!goalID) return { kind: "top_level" }
+  const normalizedStage = String(stage || "").trim()
+  if (!normalizedStage) throw new Error(`goal-owned session ${goalID} missing stage for phase projection`)
+  if (normalizedStage === "executor") return { kind: "top_level" }
+  const candidate = goalStagePhaseID(normalizedStage)
+  if (!candidate) {
+    throw new Error(`goal-owned session ${goalID} stage ${normalizedStage} is not declared as a workflow phase`)
+  }
+
+  const board = boardStore.board
+  const goalWorkflows = Array.isArray(board?.goalWorkflows) ? board.goalWorkflows : []
+  const goalWorkflow = goalWorkflows.find((goal: any) => String(goal?.goalID || "") === goalID)
+  if (!goalWorkflow) {
+    return boardStore.boardSyncPending ? { kind: "await_board", phase: candidate } : { kind: "top_level" }
+  }
+
+  const steps = Array.isArray(goalWorkflow?.steps) ? goalWorkflow.steps : []
+  for (const step of steps) {
+    const stepID = String(step?.stepID || "")
+    if (!stepID) continue
+    const phase = workflowPhaseDefinitionForBoard(board, stepID, normalizedStage)
+    if (!phase) continue
+    const phaseEntries =
+      step?.phases && typeof step.phases === "object" && !Array.isArray(step.phases)
+        ? (step.phases as Record<string, unknown>)
+        : undefined
+    const phaseEntry = phaseEntries?.[phase.phaseID] as { startedAt?: unknown } | undefined
+    if (!(Number(phaseEntry?.startedAt || 0) > 0)) continue
+    if (phase.phaseID !== "build") return { kind: "goal_phase", phase }
+    const buildSessionID =
+      typeof step?.payload?.buildSessionID === "string" && step.payload.buildSessionID.length > 0
+        ? step.payload.buildSessionID
+        : ""
+    if (!sessionID || !buildSessionID || buildSessionID === sessionID) {
+      return { kind: "goal_phase", phase }
+    }
+    return { kind: "top_level" }
+  }
+
+  return boardStore.boardSyncPending ? { kind: "await_board", phase: candidate } : { kind: "top_level" }
+}
+
+function displayGoalIDForLiveRouting(stage: string, goalID: string, sessionID: string): string {
+  return liveGoalPhaseRouting(stage, goalID, sessionID).kind === "top_level" ? "" : goalID
+}
+
 /** Is this session folded into a goal phase card under a goal?
  *  Phase-absorbed sessions do NOT get message-turn cards — their parts
  *  accumulate on the single phase card. */
-function isPhaseAbsorbedSession(stage: string, goalID: string): boolean {
-  return Boolean(resolveGoalStagePhase(stage, goalID))
+function isPhaseAbsorbedSession(stage: string, goalID: string, sessionID: string): boolean {
+  return Boolean(resolveGoalStagePhase(stage, goalID, sessionID))
 }
 
-function resolveGoalStagePhase(stage: string, goalID: string): { stepID: string; phaseID: string } | null {
-  if (!goalID) return null
-  const normalizedStage = String(stage || "").trim()
-  if (!normalizedStage) throw new Error(`goal-owned session ${goalID} missing stage for phase projection`)
-  if (normalizedStage === "executor") return null
-  const phase = goalStagePhaseID(normalizedStage)
-  if (!phase) {
-    throw new Error(`goal-owned session ${goalID} stage ${normalizedStage} is not declared as a workflow phase`)
-  }
-  return phase
+function resolveGoalStagePhase(stage: string, goalID: string, sessionID: string): { stepID: string; phaseID: string } | null {
+  const routing = liveGoalPhaseRouting(stage, goalID, sessionID)
+  if (routing.kind === "top_level") return null
+  return routing.phase
 }
 
 /** Resolve the display card id for ONE message turn of a session.
@@ -2215,7 +2281,7 @@ function resolveTurnCardID(
   cardID: string
   isPhase: boolean
 } {
-  const phase = resolveGoalStagePhase(stage, goalID)
+  const phase = resolveGoalStagePhase(stage, goalID, sessionID)
   if (phase) {
     // Read the board-projected run id for context; the phase card id stays
     // attempt-invariant because goalPhaseCardID does not include run id.
@@ -2577,7 +2643,7 @@ export function renderedConversationCardTargetForGoalPhase(input: {
 }): RenderedConversationCardTarget | null {
   const goalID = String(input?.goalID || "")
   if (!goalID) return null
-  const phase = resolveGoalStagePhase(String(input?.stage || ""), goalID)
+  const phase = resolveGoalStagePhase(String(input?.stage || ""), goalID, String(input?.sessionID || ""))
   if (!phase) return null
   const explicitStepID = String(input?.stepID || "")
   const explicitPhaseID = String(input?.phaseID || "")
@@ -2798,7 +2864,7 @@ function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void 
     if (!session) continue
     const stage = message.stage || session.stage
     const goalID = message.goalID || session.goalID
-    if (isPhaseAbsorbedSession(stage, goalID)) continue
+    if (isPhaseAbsorbedSession(stage, goalID, message.sessionID)) continue
     projectionItems.push({ kind: "message", orderKey: message.orderKey, message })
   }
   projectionItems.push(...visibleTimelineBoundaryCards())
@@ -3656,7 +3722,7 @@ function sessionSortOrderKey(cardID: string | undefined): string {
  *  which is managed as a step child by rebuildGoalStepCards. Integrity
  *  has no messageCardIDs but pins activeCardID to its dedicated card. */
 function sessionOwnedCardIDs(info: SessionInfo): string[] {
-  if (isPhaseAbsorbedSession(info.stage, info.goalID)) return []
+  if (isPhaseAbsorbedSession(info.stage, info.goalID, info.sessionID)) return []
   const ids = new Set<string>()
   for (const cid of info.messageCardIDs.values()) ids.add(cid)
   if (info.activeCardID) ids.add(info.activeCardID)

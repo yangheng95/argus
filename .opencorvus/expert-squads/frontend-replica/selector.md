@@ -24,6 +24,7 @@ The reason must cite task evidence, such as source URL, reference screenshot, de
 ## Source authority
 
 - Source URL/screenshot/DOM/computed-style/interaction evidence defines the replica contract. Target project primitives, component libraries, data mocks, and business code are subordinate implementation choices.
+- For full-page reference screenshots, Frontend Design must inspect the coordinate atlas, choose horizontal component-band cuts, call `create_visual_region_binding_package` with `slicing_strategy: "horizontal_component_bands"` and contiguous `source_order`, review the returned overlay/contact sheet, call `update_frontend_visual_region_binding` with the returned manifestPath, and publish `reference_region_key` crop rows for downstream goal binding before Architect writes visible goals.
 - Source evidence rows are not user-visible deliverables by themselves. They become implementation work only after Requirements or Architect maps them to a visible component, state, region, interaction, asset, table, chart, map, or media slot with target files and rendered acceptance.
 - Do not accept screenshot-only prose, source-row labels, or unchecked design summaries as proof that the rendered implementation matches the source. The proof must tie source evidence to local rendered output and the owning implementation surface.
 
@@ -49,6 +50,7 @@ The reason must cite task evidence, such as source URL, reference screenshot, de
 - Do not mix several user-visible source components, unrelated regions, or a whole page into one Build goal.
 - Normal webpage replica decomposition generally needs 10 or more goals. Fewer goals require source evidence that the page has fewer than 10 meaningful user-visible components or regions, plus an explicit Architect note explaining why each remaining goal is still one component or region.
 - Keep each goal tied to its source evidence, target implementation files, Component Interaction Matrix entries, and rendered verification evidence. A support goal such as source registry or shared mock contracts may exist only when it writes shared source/data modules consumed by user-visible region goals.
+- Architect must bind each visible replica goal to completed Frontend Design crop rows through structured `reference_coverage.reference_regions`; crop ownership must not depend on filenames, prose labels, screenshot titles, overlay card ids, or reinterpreting the whole-page reference image.
 - Do not accept `no_project_diff`, documentation-only output, screenshot-only commentary, blank spacer changes, or source-evidence restatement as completion for a Build goal that was supposed to implement a visible surface.
 
 ## Failure taxonomy
