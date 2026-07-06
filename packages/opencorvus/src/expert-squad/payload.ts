@@ -86,8 +86,29 @@ import payload__opencorvus_expert_squads_frontend_replica_agents_requirements_sy
 import payload__opencorvus_expert_squads_frontend_replica_agents_visual_qa_system_md from "../../../../.opencorvus/expert-squads/frontend-replica/agents/visual-qa/system.md" with { type: "text" }
 import payload__opencorvus_expert_squads_frontend_replica_expert_squad_jsonc from "../../../../.opencorvus/expert-squads/frontend-replica/expert-squad.jsonc" with { type: "text" }
 import payload__opencorvus_expert_squads_frontend_replica_selector_md from "../../../../.opencorvus/expert-squads/frontend-replica/selector.md" with { type: "text" }
+import payload__opencorvus_expert_squads_software_testing_README_md from "../../../../.opencorvus/expert-squads/software-testing/README.md" with { type: "text" }
+import payload__opencorvus_expert_squads_software_testing_agents_architect_system_md from "../../../../.opencorvus/expert-squads/software-testing/agents/architect/system.md" with { type: "text" }
+import payload__opencorvus_expert_squads_software_testing_agents_build_skills_test_implementation_SKILL_md from "../../../../.opencorvus/expert-squads/software-testing/agents/build/skills/test-implementation/SKILL.md" with { type: "text" }
+import payload__opencorvus_expert_squads_software_testing_agents_build_system_md from "../../../../.opencorvus/expert-squads/software-testing/agents/build/system.md" with { type: "text" }
+import payload__opencorvus_expert_squads_software_testing_agents_deep_research_system_md from "../../../../.opencorvus/expert-squads/software-testing/agents/deep-research/system.md" with { type: "text" }
+import payload__opencorvus_expert_squads_software_testing_agents_fact_check_system_md from "../../../../.opencorvus/expert-squads/software-testing/agents/fact-check/system.md" with { type: "text" }
+import payload__opencorvus_expert_squads_software_testing_agents_general_system_md from "../../../../.opencorvus/expert-squads/software-testing/agents/general/system.md" with { type: "text" }
+import payload__opencorvus_expert_squads_software_testing_agents_goal_workload_analyst_system_md from "../../../../.opencorvus/expert-squads/software-testing/agents/goal-workload-analyst/system.md" with { type: "text" }
+import payload__opencorvus_expert_squads_software_testing_agents_integrity_skills_test_review_SKILL_md from "../../../../.opencorvus/expert-squads/software-testing/agents/integrity/skills/test-review/SKILL.md" with { type: "text" }
+import payload__opencorvus_expert_squads_software_testing_agents_integrity_system_md from "../../../../.opencorvus/expert-squads/software-testing/agents/integrity/system.md" with { type: "text" }
+import payload__opencorvus_expert_squads_software_testing_agents_intent_analysis_system_md from "../../../../.opencorvus/expert-squads/software-testing/agents/intent-analysis/system.md" with { type: "text" }
+import payload__opencorvus_expert_squads_software_testing_agents_orchestrator_skills_workflow_SKILL_md from "../../../../.opencorvus/expert-squads/software-testing/agents/orchestrator/skills/workflow/SKILL.md" with { type: "text" }
+import payload__opencorvus_expert_squads_software_testing_agents_orchestrator_system_md from "../../../../.opencorvus/expert-squads/software-testing/agents/orchestrator/system.md" with { type: "text" }
+import payload__opencorvus_expert_squads_software_testing_agents_requirements_system_md from "../../../../.opencorvus/expert-squads/software-testing/agents/requirements/system.md" with { type: "text" }
+import payload__opencorvus_expert_squads_software_testing_agents_visual_qa_system_md from "../../../../.opencorvus/expert-squads/software-testing/agents/visual-qa/system.md" with { type: "text" }
+import payload__opencorvus_expert_squads_software_testing_expert_squad_jsonc from "../../../../.opencorvus/expert-squads/software-testing/expert-squad.jsonc" with { type: "text" }
+import payload__opencorvus_expert_squads_software_testing_selector_md from "../../../../.opencorvus/expert-squads/software-testing/selector.md" with { type: "text" }
+import payload__opencorvus_expert_squads_software_testing_tools_test_artifact_inventory_ts from "../../../../.opencorvus/expert-squads/software-testing/tools/test-artifact-inventory.ts" with { type: "text" }
+import payload__opencorvus_expert_squads_software_testing_tools_test_protocol_contract_ts from "../../../../.opencorvus/expert-squads/software-testing/tools/test-protocol-contract.ts" with { type: "text" }
 
 import type { ExpertSquadRegistry } from "./registry"
+
+const textPayload = (value: unknown): string => value as string
 
 export const payloadPackageSources: readonly ExpertSquadRegistry.EmbeddedPackageSource[] = [
   {
@@ -206,6 +227,40 @@ export const payloadPackageSources: readonly ExpertSquadRegistry.EmbeddedPackage
       "agents/visual-qa/system.md": payload__opencorvus_expert_squads_frontend_replica_agents_visual_qa_system_md,
       "expert-squad.jsonc": payload__opencorvus_expert_squads_frontend_replica_expert_squad_jsonc,
       "selector.md": payload__opencorvus_expert_squads_frontend_replica_selector_md,
+    },
+  },
+  {
+    id: "software-testing",
+    manifestText: payload__opencorvus_expert_squads_software_testing_expert_squad_jsonc,
+    files: {
+      "README.md": payload__opencorvus_expert_squads_software_testing_README_md,
+      "agents/architect/system.md": payload__opencorvus_expert_squads_software_testing_agents_architect_system_md,
+      "agents/build/skills/test-implementation/SKILL.md":
+        payload__opencorvus_expert_squads_software_testing_agents_build_skills_test_implementation_SKILL_md,
+      "agents/build/system.md": payload__opencorvus_expert_squads_software_testing_agents_build_system_md,
+      "agents/deep-research/system.md": payload__opencorvus_expert_squads_software_testing_agents_deep_research_system_md,
+      "agents/fact-check/system.md": payload__opencorvus_expert_squads_software_testing_agents_fact_check_system_md,
+      "agents/general/system.md": payload__opencorvus_expert_squads_software_testing_agents_general_system_md,
+      "agents/goal-workload-analyst/system.md":
+        payload__opencorvus_expert_squads_software_testing_agents_goal_workload_analyst_system_md,
+      "agents/integrity/skills/test-review/SKILL.md":
+        payload__opencorvus_expert_squads_software_testing_agents_integrity_skills_test_review_SKILL_md,
+      "agents/integrity/system.md": payload__opencorvus_expert_squads_software_testing_agents_integrity_system_md,
+      "agents/intent-analysis/system.md":
+        payload__opencorvus_expert_squads_software_testing_agents_intent_analysis_system_md,
+      "agents/orchestrator/skills/workflow/SKILL.md":
+        payload__opencorvus_expert_squads_software_testing_agents_orchestrator_skills_workflow_SKILL_md,
+      "agents/orchestrator/system.md": payload__opencorvus_expert_squads_software_testing_agents_orchestrator_system_md,
+      "agents/requirements/system.md": payload__opencorvus_expert_squads_software_testing_agents_requirements_system_md,
+      "agents/visual-qa/system.md": payload__opencorvus_expert_squads_software_testing_agents_visual_qa_system_md,
+      "expert-squad.jsonc": payload__opencorvus_expert_squads_software_testing_expert_squad_jsonc,
+      "selector.md": payload__opencorvus_expert_squads_software_testing_selector_md,
+      "tools/test-artifact-inventory.ts": textPayload(
+        payload__opencorvus_expert_squads_software_testing_tools_test_artifact_inventory_ts,
+      ),
+      "tools/test-protocol-contract.ts": textPayload(
+        payload__opencorvus_expert_squads_software_testing_tools_test_protocol_contract_ts,
+      ),
     },
   },
 ]

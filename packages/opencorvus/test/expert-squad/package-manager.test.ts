@@ -191,6 +191,7 @@ describe("ExpertSquadPackageManager", () => {
       "frontend-automation-debug",
       "frontend-innovate",
       "frontend-replica",
+      "software-testing",
     ])
 
     for (const source of payloadPackageSources) {

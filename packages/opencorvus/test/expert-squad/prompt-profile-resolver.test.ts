@@ -36,6 +36,7 @@ const pipelineWorkflow = WorkflowRegistry.resolveSync("pipeline")!
 const directWorkflow = WorkflowRegistry.resolveSync("direct")!
 
 const retiredStaticProfileIDs = ["frontend-replica", "frontend-automation-debug", "frontend-innovate", "backend", "algorithm"] as const
+const SOFTWARE_TESTING_EXPERT_SQUAD_ID = "software-testing"
 const packageMcpServerPath = path.join(import.meta.dir, "../fixture/package-mcp-server.ts")
 
 function packageMcpDefinition(capabilities: { prompts?: string[]; resources?: string[] }) {
@@ -481,6 +482,161 @@ describe("PromptProfileResolver", () => {
     expect(packageToolResult.output).toContain(`source-evidence:orchestrator:unit:${project.path}`)
     expect(packageToolResult.metadata.package_tool_ref).toBe(packageToolRef)
     expect(packageToolResult.metadata.provider_tool_name).toBe(packageToolProviderName)
+  })
+
+  test("projects repository software-testing selector, scheduler tools, and worker tools", async () => {
+    await using project = await tmpdir({ git: true })
+    await copyRepositoryExpertSquadPackage(project.path, SOFTWARE_TESTING_EXPERT_SQUAD_ID)
+    const testCaseRoot = path.join(project.path, "cases", "login")
+    await fs.mkdir(path.join(testCaseRoot, ".opentest"), { recursive: true })
+    await fs.mkdir(path.join(testCaseRoot, "runs", "2026-07-06"), { recursive: true })
+    await fs.writeFile(path.join(testCaseRoot, "TEST.md"), "# Login regression\n\n- testPoint: login accepts valid user\n")
+    await fs.writeFile(path.join(testCaseRoot, "script.ts"), "export async function run() { return true }\n")
+    await fs.writeFile(path.join(testCaseRoot, ".opentest", "ctx.d.ts"), "export interface TestContext { click(selector: string): Promise<void> }\n")
+    await fs.writeFile(path.join(testCaseRoot, "runs", "2026-07-06", "result.json"), '{"status":"passed"}\n')
+    await fs.writeFile(
+      path.join(project.path, "package.json"),
+      JSON.stringify({ scripts: { test: "bun test", "test:e2e": "playwright test" } }, null, 2),
+    )
+
+    const generalProjection = await PromptProfileResolver.resolveSkillProjection({
+      projectDirectory: project.path,
+      config: Config.Info.parse({ prompt_profile: { active: "general" } }),
+      defaultSkills: [],
+      agentIDs: ["orchestrator"],
+    })
+    expect(generalProjection.selectorSkillNames).toContain("software-testing-expert-squad")
+    expect(generalProjection.skills.find((skill) => skill.name === "software-testing-expert-squad")?.content).toContain(
+      "Software Testing Expert Squad Selector",
+    )
+
+    const config = Config.Info.parse({ prompt_profile: { active: SOFTWARE_TESTING_EXPERT_SQUAD_ID } })
+    const activeProjection = await PromptProfileResolver.resolveSkillProjection({
+      projectDirectory: project.path,
+      config,
+      defaultSkills: [],
+      agentIDs: ["orchestrator", "build", "integrity"],
+    })
+    expect(activeProjection.selectorSkillNames).toEqual(["software-testing-expert-squad"])
+    expect(activeProjection.productionSkillNames).toEqual(
+      expect.arrayContaining(["software-testing-workflow", "software-test-implementation", "software-test-review"]),
+    )
+
+    const inventoryRef = `${SOFTWARE_TESTING_EXPERT_SQUAD_ID}/shared/test-artifact-inventory`
+    const protocolRef = `${SOFTWARE_TESTING_EXPERT_SQUAD_ID}/shared/test-protocol-contract`
+    const inventoryProviderName = PromptProfileResolver.packageToolProviderName(inventoryRef)
+    const protocolProviderName = PromptProfileResolver.packageToolProviderName(protocolRef)
+    const schedulerCapability = await PromptProfileResolver.resolveSchedulerCapability({
+      projectDirectory: project.path,
+      config,
+    })
+
+    expect(schedulerCapability.promptProfileID).toBe(SOFTWARE_TESTING_EXPERT_SQUAD_ID)
+    expect(schedulerCapability.builtInToolIDs).toEqual(
+      expect.arrayContaining(["requirements", "architect", "build", "visual_qa", "integrity", "fact_check"]),
+    )
+    expect(schedulerCapability.packageToolRefs).toEqual([inventoryRef, protocolRef])
+    expect(schedulerCapability.packageToolProviderNames).toEqual([inventoryProviderName, protocolProviderName])
+
+    const { tools: rawTools } = createOrchestratorTools({
+      taskID: "tsk_software_testing_projection",
+      agentSessionID: "ses_software_testing_projection",
+    })
+    const schedulerTools = await PromptProfileResolver.projectOrchestratorTools(rawTools, schedulerCapability, {
+      projectDirectory: project.path,
+      workflow: pipelineWorkflow,
+    })
+    expect(Object.hasOwn(schedulerTools, "build")).toBe(true)
+    expect(Object.hasOwn(schedulerTools, "integrity")).toBe(true)
+    expect(Object.hasOwn(schedulerTools, protocolProviderName)).toBe(true)
+    expect(Object.hasOwn(schedulerTools, protocolRef)).toBe(false)
+
+    const protocolResult = await (schedulerTools[protocolProviderName] as any).execute(
+      {
+        system_under_test: "login flow",
+        test_scope: "valid-user regression",
+        surfaces: ["gui", "integration"],
+        context_inputs: ["cases/login/TEST.md", "cases/login/script.ts", "cases/login/.opentest/ctx.d.ts"],
+        acceptance_outputs: ["cases/login/runs/2026-07-06/result.json"],
+        execution_command: "bun test cases/login/script.ts",
+        risk_level: "P1",
+      },
+      {
+        toolCallId: "call_software_testing_protocol",
+        opencorvus: {
+          sessionID: "ses_software_testing_projection",
+          messageID: "msg_software_testing_projection",
+          toolCallID: "call_software_testing_protocol",
+        },
+      },
+    )
+    const protocol = JSON.parse(protocolResult.output) as {
+      workflow_position: Array<{ tool: string }>
+      tool_availability: { package_tools: Array<{ ref: string }> }
+    }
+    expect(protocol.workflow_position.map((item) => item.tool)).toEqual(
+      expect.arrayContaining(["requirements", "architect", "build", "integrity", "fact_check"]),
+    )
+    expect(protocol.tool_availability.package_tools.map((item) => item.ref)).toEqual([inventoryRef, protocolRef])
+    expect(protocolResult.metadata.package_tool_ref).toBe(protocolRef)
+
+    const buildCapability = await PromptProfileResolver.resolveWorkerCapability({
+      projectDirectory: project.path,
+      agentID: "build",
+      config,
+    })
+    expect(buildCapability.packageToolRefs).toEqual([inventoryRef, protocolRef])
+
+    const workerTools = await PromptProfileResolver.projectWorkerTools(
+      { read: { kind: "dummy-read" } },
+      buildCapability,
+      { projectDirectory: project.path },
+    )
+    expect(Object.hasOwn(workerTools, "read")).toBe(true)
+    expect(Object.hasOwn(workerTools, inventoryProviderName)).toBe(true)
+    expect(Object.hasOwn(workerTools, inventoryRef)).toBe(false)
+
+    const inventoryResult = await (workerTools[inventoryProviderName] as any).execute(
+      { root: ".", max_files: 400 },
+      {
+        toolCallId: "call_software_testing_inventory",
+        opencorvus: {
+          sessionID: "ses_software_testing_worker",
+          messageID: "msg_software_testing_worker",
+          toolCallID: "call_software_testing_inventory",
+        },
+      },
+    )
+    const inventory = JSON.parse(inventoryResult.output) as {
+      test_cases: Array<{
+        directory: string
+        test_md: string
+        script_ts: string | null
+        context_contract: string | null
+        run_result_count: number
+      }>
+      context_files: string[]
+      run_results: string[]
+      package_scripts: Array<{ script: string; command: string }>
+    }
+    expect(inventory.test_cases).toContainEqual(
+      expect.objectContaining({
+        directory: "cases/login",
+        test_md: "cases/login/TEST.md",
+        script_ts: "cases/login/script.ts",
+        context_contract: "cases/login/.opentest/ctx.d.ts",
+        run_result_count: 1,
+      }),
+    )
+    expect(inventory.context_files).toContain("cases/login/.opentest/ctx.d.ts")
+    expect(inventory.run_results).toContain("cases/login/runs/2026-07-06/result.json")
+    expect(inventory.package_scripts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ script: "test", command: "bun test" }),
+        expect.objectContaining({ script: "test:e2e", command: "playwright test" }),
+      ]),
+    )
+    expect(inventoryResult.metadata.package_tool_ref).toBe(inventoryRef)
   })
 
   test("projects scheduler default tool refs from the runtime tool map", async () => {
@@ -1594,6 +1750,7 @@ describe("PromptProfileResolver", () => {
         "frontend-automation-debug-expert-squad",
         "frontend-innovate-expert-squad",
         "frontend-replica-expert-squad",
+        "software-testing-expert-squad",
       ]),
     )
     const frontendReplicaSelector = projection.skills.find((skill) => skill.name === "frontend-replica-expert-squad")

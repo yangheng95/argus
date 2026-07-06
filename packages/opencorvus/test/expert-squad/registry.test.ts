@@ -4,6 +4,7 @@ import { EngineConfig } from "../../src/engine/config"
 import { WorkflowRegistry } from "../../src/engine/workflow"
 import { builtInPackageSources } from "../../src/expert-squad/builtin"
 import { ExpertSquadRegistry } from "../../src/expert-squad/registry"
+import { repositoryExpertSquadRoot } from "../fixture/expert-squad"
 import { tmpdir } from "../fixture/fixture"
 import fs from "fs/promises"
 import path from "path"
@@ -219,6 +220,35 @@ describe("ExpertSquadRegistry", () => {
       expect(loaded.readmeContent).toBe(embedded.readmeContent)
       expect(loaded.displayPrefix).toBe(embedded.displayPrefix)
     }
+  })
+
+  test("loads the repository software-testing package with workflow and package tool refs", async () => {
+    const loaded = await ExpertSquadRegistry.loadPackage(repositoryExpertSquadRoot("software-testing"))
+
+    expect(loaded.id).toBe("software-testing")
+    expect(loaded.selector?.ref).toBe("selector/software-testing")
+    expect(loaded.packageSkillRefs.has("software-testing/orchestrator/workflow")).toBe(true)
+    expect(loaded.packageSkillRefs.has("software-testing/build/test-implementation")).toBe(true)
+    expect(loaded.packageSkillRefs.has("software-testing/integrity/test-review")).toBe(true)
+    expect(loaded.packageToolRefs.has("software-testing/shared/test-artifact-inventory")).toBe(true)
+    expect(loaded.packageToolRefs.has("software-testing/shared/test-protocol-contract")).toBe(true)
+    expect(loaded.manifest.capability_projection.scheduler.package_tool_refs).toEqual([
+      "software-testing/shared/test-artifact-inventory",
+      "software-testing/shared/test-protocol-contract",
+    ])
+    expect(loaded.explicitSchedulerWorkflowTools).toEqual([
+      "analyze_intent",
+      "requirements",
+      "architect",
+      "deep_research",
+      "workload_analysis",
+      "build",
+      "visual_qa",
+      "integrity",
+      "fact_check",
+    ])
+    expect(loaded.promptProfile.agents.build).toContain("Implement and run software tests")
+    expect(loaded.promptProfile.agents.integrity).toContain("Review the complete testing evidence chain")
   })
 
   test("rejects blank README because it is Orchestrator prompt content", async () => {

@@ -1,0 +1,42 @@
+# Software Testing Expert Squad Selector
+
+Use `software-testing` when the user asks OpenCorvus to design, implement, execute, debug, review, or harden software tests.
+
+Select this expert squad for:
+
+- New automated test coverage for API, GUI, integration, visual, regression, performance, security, or data workflows.
+- Converting requirements, bug reports, product specs, or existing manual checks into executable tests.
+- Creating or repairing test artifacts such as `TEST.md`, `script.ts`, fixtures, Playwright tests, unit tests, integration tests, or CI test scripts.
+- Analyzing failing tests where the decision depends on stale script versus real product bug.
+- Building test execution evidence, reports, acceptance sheets, or release-readiness review from test runs.
+- Auditing test quality: fake assertions, missing verification after actions, weak fixtures, unbounded waits, flaky timing, or missing negative paths.
+
+Do not select this squad for:
+
+- Feature implementation with no test design/execution goal.
+- Pure frontend visual replica work where the target is layout parity, not test coverage.
+- Backend feature work where tests are only a secondary implementation detail and the main request is product behavior.
+
+Vocabulary: API means Application Programming Interface; GUI means Graphical User Interface; CI means Continuous Integration; SUT means System Under Test.
+
+## Expert Contract
+
+An expert software-testing result must include a test-validity model, not just files named like tests:
+
+1. SUT boundary: name the product surface, API, command, user path, integration, or data workflow under test.
+2. Test oracle: state the expected result, invariant, snapshot, reference behavior, error condition, accessibility behavior, visual comparison, or business rule that makes the test meaningful.
+3. Control model: define fixtures, credentials, environment, seed data, mocks, adapters, clocks, network assumptions, and cleanup needed to make the result reproducible.
+4. Assertion strength: prove the test observes behavior after action, includes relevant negative or edge paths, and cannot pass because of a fake assertion, stale fixture, or no-op script.
+5. Failure classification: when a run fails, distinguish stale script, missing fixture, toolchain failure, flaky timing, and real product bug with step-level evidence.
+6. Execution proof: record the exact command, changed test files, run artifact paths, screenshots/logs when relevant, and no-activity timeout expectations.
+7. Release judgment: final review must tie scenarios, assertions, command output, artifacts, and unresolved risks to the release or quality decision.
+
+Do not accept tests that were not run, assertions that do not observe product behavior, uncontrolled fixture state, failure reclassification without evidence, or a reported pass that cannot be tied to changed artifacts and run output.
+
+Before selecting, inspect task evidence and, when useful, call the visible `skill` tool for this selector. Then call:
+
+```json
+{ "profile_id": "software-testing", "reason": "The task requires software test design/execution/review evidence." }
+```
+
+After selection, continue in the next Orchestrator wake with the package tools and workflow overlays loaded.
