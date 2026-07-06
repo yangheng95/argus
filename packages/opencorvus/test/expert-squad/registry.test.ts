@@ -328,6 +328,8 @@ describe("ExpertSquadRegistry", () => {
       testMarkdown: "# Missing frontmatter\n",
       script: validScript,
       context: contextContract,
+      acceptance: '{"status":"accepted"}\n',
+      result: '{"status":"passed"}\n',
     })
     await expect(
       engine.validateOpenTestCase({ contract, projectDirectory: tmp.path, testDirectory: "missing-frontmatter" }),
@@ -343,6 +345,8 @@ describe("ExpertSquadRegistry", () => {
     await writeCase("missing-steps-export", {
       script: "export async function run() { return true }\n",
       context: contextContract,
+      acceptance: '{"status":"accepted"}\n',
+      result: '{"status":"passed"}\n',
     })
     await expect(
       engine.validateOpenTestCase({ contract, projectDirectory: tmp.path, testDirectory: "missing-steps-export" }),
@@ -358,6 +362,8 @@ describe("ExpertSquadRegistry", () => {
         "",
       ].join("\n"),
       context: contextContract,
+      acceptance: '{"status":"accepted"}\n',
+      result: '{"status":"passed"}\n',
     })
     await expect(
       engine.validateOpenTestCase({ contract, projectDirectory: tmp.path, testDirectory: "unmarked-test-point" }),
@@ -378,6 +384,8 @@ describe("ExpertSquadRegistry", () => {
         "",
       ].join("\n"),
       context: contextContract,
+      acceptance: '{"status":"accepted"}\n',
+      result: '{"status":"passed"}\n',
     })
     await expect(
       engine.validateOpenTestCase({ contract, projectDirectory: tmp.path, testDirectory: "extra-duplicate-mark" }),
@@ -388,6 +396,126 @@ describe("ExpertSquadRegistry", () => {
         'ctx.mark_point "not declared" is not declared in testPoints',
       ]),
     })
+
+    await writeCase("missing-context", {
+      script: validScript,
+      acceptance: '{"status":"accepted"}\n',
+      result: '{"status":"passed"}\n',
+    })
+    await expect(
+      engine.validateOpenTestCase({ contract, projectDirectory: tmp.path, testDirectory: "missing-context" }),
+    ).resolves.toMatchObject({ valid: false, errors: expect.arrayContaining(["missing .opentest/ctx.d.ts"]) })
+
+    await writeCase("missing-acceptance", {
+      script: validScript,
+      context: contextContract,
+      result: '{"status":"passed"}\n',
+    })
+    await expect(
+      engine.validateOpenTestCase({ contract, projectDirectory: tmp.path, testDirectory: "missing-acceptance" }),
+    ).resolves.toMatchObject({ valid: false, errors: expect.arrayContaining(["missing .opentest/acceptance.json"]) })
+
+    await writeCase("missing-run-result", {
+      script: validScript,
+      context: contextContract,
+      acceptance: '{"status":"accepted"}\n',
+    })
+    await expect(
+      engine.validateOpenTestCase({ contract, projectDirectory: tmp.path, testDirectory: "missing-run-result" }),
+    ).resolves.toMatchObject({
+      valid: false,
+      errors: expect.arrayContaining([expect.stringContaining("run result artifact")]),
+    })
+
+    await writeCase("commented-and-top-level-mark", {
+      script: [
+        "export const steps = []",
+        '// ctx.mark_point("login accepts valid user")',
+        'const text = "ctx.mark_point(\\"renders home\\")"',
+        'ctx.mark_point("renders home")',
+        "",
+      ].join("\n"),
+      context: contextContract,
+      acceptance: '{"status":"accepted"}\n',
+      result: '{"status":"passed"}\n',
+    })
+    const commented = await engine.validateOpenTestCase({
+      contract,
+      projectDirectory: tmp.path,
+      testDirectory: "commented-and-top-level-mark",
+    })
+    expect(commented.valid).toBe(false)
+    expect(commented.mark_points).toEqual([])
+    expect(commented.errors).toEqual(
+      expect.arrayContaining([
+        'testPoints "login accepts valid user" has no matching ctx.mark_point',
+        'testPoints "renders home" has no matching ctx.mark_point',
+      ]),
+    )
+
+    await writeCase("active-script-edited", {
+      script: validScript,
+      context: contextContract,
+      acceptance: '{"status":"accepted"}\n',
+      result: '{"status":"passed"}\n',
+    })
+    const activeCaseRoot = path.join(tmp.path, "active-script-edited")
+    const oldDate = new Date(Date.now() - 30_000)
+    const midDate = new Date(Date.now() - 20_000)
+    const newDate = new Date(Date.now() - 10_000)
+    await fs.utimes(path.join(activeCaseRoot, "TEST.md"), oldDate, oldDate)
+    await fs.utimes(path.join(activeCaseRoot, ".opentest", "acceptance.json"), midDate, midDate)
+    await fs.utimes(path.join(activeCaseRoot, "script.ts"), newDate, newDate)
+    await fs.utimes(path.join(activeCaseRoot, ".opentest", "runs", "nested", "result.json"), newDate, newDate)
+    const activeEdited = await engine.validateOpenTestCase({
+      contract,
+      projectDirectory: tmp.path,
+      testDirectory: "active-script-edited",
+    })
+    expect(activeEdited.valid).toBe(true)
+    expect(activeEdited.lifecycle.declared_status).toBe("active")
+    expect(activeEdited.lifecycle.effective_status).toBe("draft")
+    expect(activeEdited.lifecycle.active_downgraded_to_draft).toBe(true)
+
+    await writeCase("draft-updated-acceptance", {
+      testMarkdown: [
+        "---",
+        "testName: Login regression",
+        "status: draft",
+        "testPoints:",
+        "  - name: login accepts valid user",
+        "  - name: renders home",
+        "---",
+        "# Login regression",
+        "",
+      ].join("\n"),
+      script: validScript,
+      context: contextContract,
+      acceptance: '{"status":"accepted-after-draft-run"}\n',
+      result: '{"status":"passed"}\n',
+    })
+    const draftCaseRoot = path.join(tmp.path, "draft-updated-acceptance")
+    await fs.utimes(path.join(draftCaseRoot, ".opentest", "runs", "nested", "result.json"), midDate, midDate)
+    await fs.utimes(path.join(draftCaseRoot, ".opentest", "acceptance.json"), newDate, newDate)
+    await expect(
+      engine.validateOpenTestCase({ contract, projectDirectory: tmp.path, testDirectory: "draft-updated-acceptance" }),
+    ).resolves.toMatchObject({
+      valid: false,
+      lifecycle: expect.objectContaining({ draft_run_updates_acceptance: true }),
+      errors: expect.arrayContaining(["model draft run must not update .opentest/acceptance.json"]),
+    })
+
+    expect(() =>
+      engine.parseProtocolContract(
+        JSON.stringify({
+          ...contract,
+          artifacts: {
+            ...contract.artifacts,
+            acceptance: "",
+          },
+        }),
+      ),
+    ).toThrow(/OpenTest protocol contract invalid: artifacts\.acceptance/)
   })
 
   test("rejects blank README because it is Orchestrator prompt content", async () => {
@@ -619,6 +747,24 @@ describe("ExpertSquadRegistry", () => {
     await writeFile(packageRoot, "virtual-agents/build/system.md", "virtual build prompt")
 
     await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(
+      /agents\.build must be absent when a virtual agent is declared/,
+    )
+  })
+
+  test("loadCatalogPackage rejects invalid virtual-agent package declarations", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, {
+      virtual_agents: {
+        build: {
+          id: "frontend-replica-builder",
+          label: "Frontend Replica Builder",
+          prompt: "virtual-agents/build/system.md",
+        },
+      },
+    })
+    await writeFile(packageRoot, "virtual-agents/build/system.md", "virtual build prompt")
+
+    await expect(ExpertSquadRegistry.loadCatalogPackage(packageRoot)).rejects.toThrow(
       /agents\.build must be absent when a virtual agent is declared/,
     )
   })

@@ -13,7 +13,11 @@ import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { WorkerTurnDescriptor } from "../../src/agent/worker-turn-descriptor"
 import { AgentRuntimeMetadata } from "../../src/session/agent-runtime-metadata"
 import type { SessionKind } from "../../src/session/session.sql"
-import { PROJECT_EXPERT_SQUAD_ID, writeProjectExpertSquadPackage } from "../fixture/expert-squad"
+import {
+  copyRepositoryExpertSquadPackage,
+  PROJECT_EXPERT_SQUAD_ID,
+  writeProjectExpertSquadPackage,
+} from "../fixture/expert-squad"
 import { PromptProfileResolver } from "../../src/expert-squad/prompt-profile-resolver"
 import {
   claimStageContinuationRequest,
@@ -239,6 +243,168 @@ test(
     })
 
     expect(promptCalls).toHaveLength(1)
+  },
+  { timeout: RUNNER_PROMPT_TEST_TIMEOUT_MILLISECONDS },
+)
+
+test(
+  "runAgentSession rejects virtual agent IDs as runtime agentName values",
+  async () => {
+    mock.module("@/agent/model", () => ({
+      resolveAgentModel: async () => {
+        throw new Error("model resolution should not run for invalid agentName")
+      },
+    }))
+    const { runAgentSession } = await import("../../src/agent/runner")
+
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        prompt_profile: { active: "software-testing" },
+      },
+    })
+    await copyRepositoryExpertSquadPackage(tmp.path, "software-testing")
+
+    const toolKit: AgentToolKit<Record<string, never>> = {
+      tools: {},
+      getCollector: () => ({}),
+      buildReport: () => ({ summary: "ok", detail: "ok" }),
+    }
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expect(
+          runAgentSession({
+            kind: "build",
+            agentName: "opentest-implementer",
+            core: BUILD_CORE,
+            sessionTitle: "virtual agent identity rejection",
+            toolKit,
+            buildUserPrompt: () => "implement the request",
+          }),
+        ).rejects.toThrow(/agentName "opentest-implementer" must equal base role "build"/)
+      },
+    })
+  },
+  { timeout: RUNNER_PROMPT_TEST_TIMEOUT_MILLISECONDS },
+)
+
+test(
+  "runAgentSession keeps base role identity while attaching software-testing virtual metadata",
+  async () => {
+    mock.module("@/agent/model", () => ({
+      resolveAgentModel: async () => ({
+        providerID: "test",
+        api: { id: "mock" },
+      }),
+    }))
+    const { runAgentSession } = await import("../../src/agent/runner")
+
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        prompt_profile: { active: "software-testing" },
+      },
+    })
+    await copyRepositoryExpertSquadPackage(tmp.path, "software-testing")
+    const inventoryProviderName = PromptProfileResolver.packageToolProviderName(
+      "software-testing/shared/test-artifact-inventory",
+    )
+    const protocolProviderName = PromptProfileResolver.packageToolProviderName(
+      "software-testing/shared/opentest-protocol-engine",
+    )
+
+    const promptCalls: Array<Parameters<typeof SessionPrompt.prompt>[0]> = []
+    spyOn(SessionPrompt, "prompt").mockImplementation(async (input) => {
+      promptCalls.push(input)
+      return {
+        info: {
+          id: "msg_runner_virtual_identity_assistant",
+          sessionID: input.sessionID,
+          role: "assistant",
+          parentID: input.messageID,
+          time: { created: Date.now() },
+          agent: input.agent ?? "build",
+          providerID: input.model?.providerID ?? "test",
+          modelID: input.model?.modelID ?? "mock",
+          cost: 0,
+          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          path: { cwd: tmp.path, root: tmp.path },
+        },
+        parts: [
+          {
+            id: "prt_runner_virtual_identity_assistant",
+            sessionID: input.sessionID,
+            messageID: "msg_runner_virtual_identity_assistant",
+            type: "text",
+            text: "done",
+          },
+        ],
+      } as Awaited<ReturnType<typeof SessionPrompt.prompt>>
+    })
+
+    const toolKit: AgentToolKit<Record<string, never>> = {
+      tools: {
+        read: tool({
+          description: "Projected worker read tool.",
+          inputSchema: z.object({}),
+          execute: async () => "read",
+        }),
+      },
+      getCollector: () => ({}),
+      buildReport: () => ({ summary: "ok", detail: "ok" }),
+    }
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const capability = await PromptProfileResolver.resolveWorkerCapability({
+          projectDirectory: tmp.path,
+          agentID: "build",
+          config: Config.Info.parse({ prompt_profile: { active: "software-testing" } }),
+        })
+        const out = await runAgentSession({
+          kind: "build",
+          core: BUILD_CORE,
+          sessionTitle: "software-testing virtual worker metadata",
+          toolKit,
+          buildUserPrompt: () => "implement the request",
+        })
+
+        const descriptor = WorkerTurnDescriptor.latestForSession(out.session.id)
+        const contract = SessionPrompt.getSessionRuntimeContract(out.session.id)
+        expect(promptCalls).toHaveLength(1)
+        expect(promptCalls[0].agent).toBe("build")
+        expect(descriptor?.payload.agent).toBe("build")
+        expect(descriptor?.payload.roleContractID).toBe("build")
+        expect(descriptor?.payload.workflow.sessionKind).toBe("build")
+        expect(contract?.identity.agentKind).toBe("build")
+        expect(descriptor?.payload.capability).toMatchObject({
+          promptProfileID: "software-testing",
+          capabilityProfileID: "software-testing",
+          projectionHash: capability.projectionHash,
+          virtualAgent: expect.objectContaining({
+            baseRole: "build",
+            virtualAgentID: "opentest-implementer",
+            label: "OpenTest Implementer",
+          }),
+        })
+        expect(contract?.identity).toMatchObject({
+          promptProfileID: "software-testing",
+          capabilityProfileID: "software-testing",
+          projectionHash: capability.projectionHash,
+          virtualAgent: expect.objectContaining({
+            baseRole: "build",
+            virtualAgentID: "opentest-implementer",
+          }),
+        })
+        expect(Object.keys(contract?.tools ?? {}).sort()).toEqual(
+          ["read", inventoryProviderName, protocolProviderName].sort(),
+        )
+        SessionPrompt.clearSessionRuntimeContract(out.session.id)
+      },
+    })
   },
   { timeout: RUNNER_PROMPT_TEST_TIMEOUT_MILLISECONDS },
 )

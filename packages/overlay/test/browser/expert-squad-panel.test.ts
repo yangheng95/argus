@@ -279,6 +279,24 @@ test("expert squads settings renders package identity, projections, lifecycle ac
         virtualAgents: Array.from(
           document.querySelectorAll<HTMLElement>('[data-ui="expert-squad-active-agent-projection"] .expert-squad-projection-row'),
         ).map((node) => node.textContent?.replace(/\s+/g, " ").trim() ?? ""),
+        virtualAgentLayout: Array.from(
+          document.querySelectorAll<HTMLElement>('[data-ui="expert-squad-active-agent-projection"] .expert-squad-projection-row'),
+        ).map((node) => {
+          const strong = node.querySelector<HTMLElement>("strong")
+          const small = node.querySelector<HTMLElement>("small")
+          const strongRect = strong?.getBoundingClientRect()
+          const smallRect = small?.getBoundingClientRect()
+          const rowRect = node.getBoundingClientRect()
+          const smallStyle = small ? getComputedStyle(small) : undefined
+          return {
+            gridColumnStart: smallStyle?.gridColumnStart ?? "",
+            gridColumnEnd: smallStyle?.gridColumnEnd ?? "",
+            smallLeft: smallRect?.left ?? 0,
+            strongLeft: strongRect?.left ?? 0,
+            smallRight: smallRect?.right ?? 0,
+            rowRight: rowRect.right,
+          }
+        }),
         targets: Array.from(document.querySelectorAll<HTMLElement>(".expert-squad-target")).map((node) => ({
           hasOverlay: node.dataset.hasOverlay ?? "",
           text: node.textContent?.replace(/\s+/g, " ").trim() ?? "",
@@ -303,6 +321,16 @@ test("expert squads settings renders package identity, projections, lifecycle ac
     assert.match(state.selector, /desktop UI parity/)
     assert.equal(state.projectionRows.some((row) => row.includes("package_tool_refs") && row.includes("source-evidence")), true)
     assert.equal(state.virtualAgents.some((row) => row.includes("frontend-replica-builder") && row.includes("build")), true)
+    assert.equal(
+      state.virtualAgentLayout.every(
+        (row) =>
+          row.gridColumnStart === "2" &&
+          row.gridColumnEnd === "auto" &&
+          row.smallLeft >= row.strongLeft - 1 &&
+          row.smallRight <= row.rowRight + 1,
+      ),
+      true,
+    )
     assert.equal(state.targets.every((target) => target.hasOverlay === "true" && target.text.includes("Read-only")), true)
     assert.equal(state.legacyPromptPanel, false)
     assert.equal(state.textareas, 0)

@@ -709,6 +709,54 @@ describe("PromptProfileResolver", () => {
     expect(validation.artifacts.run_results).toEqual(["cases/login/.opentest/runs/2026-07-06/result.json"])
   })
 
+  test("active virtual worker projection hash follows virtual prompt and package resource content", async () => {
+    await using project = await tmpdir({ git: true })
+    await copyRepositoryExpertSquadPackage(project.path, SOFTWARE_TESTING_EXPERT_SQUAD_ID)
+    const config = Config.Info.parse({ prompt_profile: { active: SOFTWARE_TESTING_EXPERT_SQUAD_ID } })
+
+    const before = await PromptProfileResolver.resolveWorkerCapability({
+      projectDirectory: project.path,
+      agentID: "build",
+      config,
+    })
+    expect(before.virtualAgent?.virtualAgentID).toBe("opentest-implementer")
+
+    const packageRoot = path.join(project.path, ".opencorvus", "expert-squads", SOFTWARE_TESTING_EXPERT_SQUAD_ID)
+    await fs.writeFile(
+      path.join(packageRoot, "virtual-agents", "build", "system.md"),
+      `${before.virtualAgent?.label}\nChanged virtual prompt content.\n`,
+    )
+    const afterVirtualPrompt = await PromptProfileResolver.resolveWorkerCapability({
+      projectDirectory: project.path,
+      agentID: "build",
+      config,
+    })
+    expect(afterVirtualPrompt.projectionHash).not.toBe(before.projectionHash)
+    expect(afterVirtualPrompt.virtualAgent?.projectionHash).not.toBe(before.virtualAgent?.projectionHash)
+
+    await fs.writeFile(
+      path.join(packageRoot, "agents", "build", "skills", "test-implementation", "SKILL.md"),
+      "---\nname: software-test-implementation\n---\nChanged package skill content.\n",
+    )
+    const afterSkill = await PromptProfileResolver.resolveWorkerCapability({
+      projectDirectory: project.path,
+      agentID: "build",
+      config,
+    })
+    expect(afterSkill.projectionHash).not.toBe(afterVirtualPrompt.projectionHash)
+
+    await fs.writeFile(
+      path.join(packageRoot, "tools", "opentest-protocol-engine.ts"),
+      "export default null\n// changed package tool source\n",
+    )
+    const afterTool = await PromptProfileResolver.resolveWorkerCapability({
+      projectDirectory: project.path,
+      agentID: "build",
+      config,
+    })
+    expect(afterTool.projectionHash).not.toBe(afterSkill.projectionHash)
+  })
+
   test("projects scheduler default tool refs from the runtime tool map", async () => {
     await using project = await tmpdir({ git: true })
     const defaultToolRef = "default/tool/project-index"
@@ -1675,7 +1723,7 @@ describe("PromptProfileResolver", () => {
     ).resolves.toBeDefined()
   })
 
-  test("general selector projection does not parse inactive package MCP definitions", async () => {
+  test("general catalog rejects invalid inactive package while selector projection avoids inactive MCP parsing", async () => {
     await using project = await tmpdir({ git: true })
     const inactiveRoot = await writeProjectExpertSquadPackage(project.path)
     await Bun.write(path.join(inactiveRoot, "mcp", "broken.jsonc"), "{")
@@ -1698,27 +1746,23 @@ describe("PromptProfileResolver", () => {
     expect(generalPrompt).toContain("# General")
     expect(generalPrompt).not.toContain("PROJECT_README_ORCHESTRATOR_APPEND_ONLY")
 
-    const catalog = await PromptProfileResolver.catalog({
-      config: generalConfig,
-      projectActive: "general",
-      sessionOverride: null,
-      scope: { kind: "project", directory: project.path },
-      defaultSkills: [],
-    })
-    expect(catalog.active.effective).toBe("general")
-    expect(catalog.squads.find((profile) => profile.id === PROJECT_EXPERT_SQUAD_ID)).toMatchObject({
-      built_in: false,
-      capability_profile_id: PROJECT_EXPERT_SQUAD_ID,
-      agents: { build: "project build overlay" },
-    })
+    await expect(
+      PromptProfileResolver.catalog({
+        config: generalConfig,
+        projectActive: "general",
+        sessionOverride: null,
+        scope: { kind: "project", directory: project.path },
+        defaultSkills: [],
+      }),
+    ).rejects.toThrow(/invalid JSONC/)
 
-    const projection = await PromptProfileResolver.resolveSkillProjection({
+    const selectorProjection = await PromptProfileResolver.resolveSkillProjection({
       projectDirectory: project.path,
       config: generalConfig,
       defaultSkills: [],
       agentIDs: ["orchestrator"],
     })
-    const selector = projection.skills.find((skill) => skill.name === `${PROJECT_EXPERT_SQUAD_ID}-expert-squad`)
+    const selector = selectorProjection.skills.find((skill) => skill.name === `${PROJECT_EXPERT_SQUAD_ID}-expert-squad`)
     expect(selector?.content).toContain("PROJECT_SELECTOR_FULL_INSTRUCTIONS")
     expect(selector?.location).toBe(path.join(inactiveRoot, "selector.md"))
 

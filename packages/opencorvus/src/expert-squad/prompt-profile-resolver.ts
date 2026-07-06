@@ -256,10 +256,14 @@ export namespace PromptProfileResolver {
 
   async function projectCatalogPackages(
     projectDirectory: string,
-  ): Promise<Record<string, ExpertSquadRegistry.CatalogPackage>> {
-    const result: Record<string, ExpertSquadRegistry.CatalogPackage> = {}
+    config?: ConfigLike,
+  ): Promise<Record<string, ExpertSquadRegistry.LoadedPackage>> {
+    const result: Record<string, ExpertSquadRegistry.LoadedPackage> = {}
     for (const entry of await discoverProjectPackages(projectDirectory)) {
-      const loaded = await ExpertSquadRegistry.loadCatalogPackage(path.join(canonicalBase(projectDirectory), entry.id))
+      const loaded = await ExpertSquadRegistry.loadPackage(
+        path.join(canonicalBase(projectDirectory), entry.id),
+        config ? packageLoadOptions(config) : {},
+      )
       assertNoBuiltInCollision(loaded.id)
       result[loaded.id] = loaded
     }
@@ -346,19 +350,146 @@ export namespace PromptProfileResolver {
     return JSON.stringify(value)
   }
 
+  function normalizeRelative(value: string) {
+    return value.split(path.sep).join("/")
+  }
+
   function virtualAgentProjectionHash(input: {
     promptProfileID: string
     expertSquadID: string
     baseRole: AgentRoleID
     virtualAgent: ExpertSquadRegistry.VirtualAgentDefinition & { promptContent?: string }
     projection?: ExpertSquadRegistry.Projection
+    resourceFingerprint?: unknown
   }) {
     return createHash("sha256").update(stable(input)).digest("hex")
+  }
+
+  function packageRefParts(pkgID: string, ref: string): { owner: string; name: string } {
+    const prefix = `${pkgID}/`
+    if (!ref.startsWith(prefix)) throw new Error(`Package ref ${JSON.stringify(ref)} must be namespaced by ${pkgID}`)
+    const parts = ref.slice(prefix.length).split("/")
+    const owner = parts.shift()
+    if (!owner || parts.length === 0) throw new Error(`Package ref ${JSON.stringify(ref)} is incomplete`)
+    return { owner, name: parts.join("/") }
+  }
+
+  function packageSkillDigestPath(pkg: ExpertSquadRegistry.LoadedPackage, ref: string) {
+    const { owner, name } = packageRefParts(pkg.id, ref)
+    return owner === "shared"
+      ? path.join(pkg.root, "skills", name, "SKILL.md")
+      : path.join(pkg.root, "agents", owner, "skills", name, "SKILL.md")
+  }
+
+  async function packageTextFileDigest(paths: string[], ref: string): Promise<{ ref: string; path: string; sha256: string }> {
+    let lastMissing: NodeJS.ErrnoException | undefined
+    for (const file of paths) {
+      const text = await readFile(file, "utf8").catch((error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") {
+          lastMissing = error
+          return undefined
+        }
+        throw error
+      })
+      if (typeof text === "string") {
+        return {
+          ref,
+          path: normalizeRelative(file),
+          sha256: createHash("sha256").update(text).digest("hex"),
+        }
+      }
+    }
+    throw new Error(`Projected package ref ${JSON.stringify(ref)} has no readable source file`, { cause: lastMissing })
+  }
+
+  function packageToolCandidatePaths(pkg: ExpertSquadRegistry.LoadedPackage, ref: string) {
+    const { owner, name } = packageRefParts(pkg.id, ref)
+    const base =
+      owner === "shared"
+        ? path.join(pkg.root, "tools", name)
+        : path.join(pkg.root, "agents", owner, "tools", name)
+    return [`${base}.ts`, `${base}.js`]
+  }
+
+  function packageMcpServerRefFromTypedRef(ref: string): string {
+    for (const marker of ["/tool/", "/prompt/", "/resource/"]) {
+      const index = ref.lastIndexOf(marker)
+      if (index >= 0) return ref.slice(0, index)
+    }
+    return ref
+  }
+
+  function packageMcpCandidatePaths(pkg: ExpertSquadRegistry.LoadedPackage, ref: string) {
+    const serverRef = packageMcpServerRefFromTypedRef(ref)
+    const { owner, name } = packageRefParts(pkg.id, serverRef)
+    const base =
+      owner === "shared"
+        ? path.join(pkg.root, "mcp", name)
+        : path.join(pkg.root, "agents", owner, "mcp", name)
+    return [`${base}.jsonc`, `${base}.json`]
+  }
+
+  async function projectedPackageResourceFingerprint(input: {
+    active: ActiveProfilePackage
+    projection: ExpertSquadRegistry.Projection
+    virtualAgent?: ExpertSquadRegistry.VirtualAgentDefinition & { promptContent?: string }
+    includeReadme?: boolean
+    includeSelector?: boolean
+  }) {
+    const staticFingerprint = {
+      ...(input.includeReadme ? { readme_sha256: createHash("sha256").update(input.active.pkg.readmeContent).digest("hex") } : {}),
+      ...(input.includeSelector && input.active.pkg.selectorInstructions
+        ? {
+            selector_sha256: createHash("sha256").update(input.active.pkg.selectorInstructions).digest("hex"),
+          }
+        : {}),
+      ...(input.virtualAgent
+        ? {
+            virtual_agent: {
+              id: input.virtualAgent.id,
+              label: input.virtualAgent.label,
+              description: input.virtualAgent.description,
+              prompt: input.virtualAgent.prompt,
+              prompt_sha256: createHash("sha256").update(input.virtualAgent.promptContent ?? "").digest("hex"),
+            },
+          }
+        : {}),
+    }
+    if (input.active.builtIn) return staticFingerprint
+    const loadedPackage = input.active.pkg
+    const skillDigests = await Promise.all(
+      [...input.projection.package_skill_refs]
+        .sort((left, right) => left.localeCompare(right))
+        .map((ref) => packageTextFileDigest([packageSkillDigestPath(loadedPackage, ref)], ref)),
+    )
+    const toolDigests = await Promise.all(
+      [...input.projection.package_tool_refs]
+        .sort((left, right) => left.localeCompare(right))
+        .map((ref) => packageTextFileDigest(packageToolCandidatePaths(loadedPackage, ref), ref)),
+    )
+    const mcpRefs = new Set<string>([
+      ...input.projection.package_mcp_server_refs,
+      ...input.projection.package_mcp_tool_refs.map(packageMcpServerRefFromTypedRef),
+      ...input.projection.package_mcp_prompt_refs.map(packageMcpServerRefFromTypedRef),
+      ...input.projection.package_mcp_resource_refs.map(packageMcpServerRefFromTypedRef),
+    ])
+    const mcpDigests = await Promise.all(
+      [...mcpRefs]
+        .sort((left, right) => left.localeCompare(right))
+        .map((ref) => packageTextFileDigest(packageMcpCandidatePaths(loadedPackage, ref), ref)),
+    )
+    return {
+      ...staticFingerprint,
+      package_skill_digests: skillDigests,
+      package_tool_digests: toolDigests,
+      package_mcp_digests: mcpDigests,
+    }
   }
 
   function virtualAgentForRole(input: {
     active: ActiveProfilePackage
     role: AgentRoleID
+    resourceFingerprint?: unknown
   }): ResolvedVirtualAgent | undefined {
     const virtualAgent = input.active.pkg.promptProfile.virtualAgents[input.role]
     if (!virtualAgent) return undefined
@@ -375,6 +506,7 @@ export namespace PromptProfileResolver {
         baseRole: input.role,
         virtualAgent,
         projection: input.active.pkg.manifest.capability_projection.agents[input.role],
+        resourceFingerprint: input.resourceFingerprint,
       }),
     }
   }
@@ -533,6 +665,12 @@ export namespace PromptProfileResolver {
         )
       }
     }
+    const resourceFingerprint = await projectedPackageResourceFingerprint({
+      active,
+      projection: scheduler,
+      includeReadme: true,
+      includeSelector: true,
+    })
     return {
       promptProfileID: active.profileID,
       expertSquadID: active.pkg.id,
@@ -549,6 +687,7 @@ export namespace PromptProfileResolver {
           ...packageMcpToolProviderNames,
         ],
         dynamicAttributes: active.pkg.manifest.dynamic_attributes,
+        resourceFingerprint,
       }),
       scheduler,
       builtInToolIDs,
@@ -618,7 +757,14 @@ export namespace PromptProfileResolver {
     const packageMcpPromptProviderNames = packageMcpPromptRefs.map(packageMcpPromptProviderName)
     const packageMcpResourceRefs = active.builtIn ? [] : projection.package_mcp_resource_refs
     const packageMcpResourceProviderNames = packageMcpResourceRefs.map(packageMcpResourceProviderName)
-    const virtualAgent = virtualAgentForRole({ active, role: input.agentID })
+    const rawVirtualAgent = active.pkg.promptProfile.virtualAgents[input.agentID]
+    const resourceFingerprint = await projectedPackageResourceFingerprint({
+      active,
+      projection,
+      virtualAgent: rawVirtualAgent,
+      includeReadme: input.agentID === "orchestrator",
+    })
+    const virtualAgent = virtualAgentForRole({ active, role: input.agentID, resourceFingerprint })
     return {
       promptProfileID: active.profileID,
       expertSquadID: active.pkg.id,
@@ -636,6 +782,7 @@ export namespace PromptProfileResolver {
           ...packageMcpToolProviderNames,
         ],
         dynamicAttributes: active.pkg.manifest.dynamic_attributes,
+        resourceFingerprint,
       }),
       projection,
       builtInToolIDs,
@@ -2585,7 +2732,7 @@ export namespace PromptProfileResolver {
   export async function catalog(input: ExpertSquadCatalogInput): Promise<ExpertSquadCatalog> {
     const active = PromptProfile.activeID(input.config)
     const projectDirectory = input.scope.directory
-    const projectPackagesByID = await projectCatalogPackages(projectDirectory)
+    const projectPackagesByID = await projectCatalogPackages(projectDirectory, input.config)
     const squads: ExpertSquadCatalogSummary[] = [
       ...Object.entries(builtInPackages).map(([id, pkg]) =>
         catalogSummaryFromPackage({

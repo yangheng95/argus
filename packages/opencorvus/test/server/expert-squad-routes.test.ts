@@ -7,6 +7,7 @@ import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { resetDatabase } from "../fixture/db"
 import {
+  copyRepositoryExpertSquadPackage,
   PROJECT_EXPERT_SQUAD_ID,
   projectExpertSquadFiles,
   writeSourceExpertSquadPackage,
@@ -110,6 +111,105 @@ describe("expert-squad routes", () => {
             "frontend-replica-expert-squad",
           ]),
         )
+      },
+    })
+  }, 20000)
+
+  test("GET /expert-squad/catalog returns active software-testing virtual agent projection only from resolver output", async () => {
+    await using project = await tmpdir({ git: true })
+    await copyRepositoryExpertSquadPackage(project.path, "software-testing")
+
+    await Instance.provide({
+      directory: project.path,
+      fn: async () => {
+        const app = Server.App()
+        const patchResponse = await app.request("/config", {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": project.path,
+          },
+          body: JSON.stringify({
+            prompt_profile: {
+              active: "software-testing",
+            },
+          }),
+        })
+        expect(patchResponse.status, await patchResponse.clone().text()).toBe(200)
+
+        const response = await app.request("/expert-squad/catalog", {
+          headers: {
+            "x-opencorvus-directory": project.path,
+          },
+        })
+
+        expect(response.status, await response.clone().text()).toBe(200)
+        const body = (await response.json()) as {
+          active: { effective: string; project: string; session_override: string | null }
+          squads: Array<{ id: string; projected_agents: string[]; virtual_agents: Array<{ base_role: string; virtual_agent_id: string }> }>
+          active_agent_projection: {
+            source_expert_squad_id: string
+            prompt_profile_active: string
+            agents: Array<{
+              base_role: string
+              virtual_agent_id: string
+              package_skill_refs: string[]
+              package_tool_refs: string[]
+              package_mcp_server_refs: string[]
+            }>
+          }
+          active_skill_projection: { projected_agent_ids: string[]; projected_tool_ids: string[] }
+        }
+        expect(body.active).toEqual({
+          effective: "software-testing",
+          project: "software-testing",
+          session_override: null,
+        })
+        expect(body.active_agent_projection.source_expert_squad_id).toBe("software-testing")
+        expect(body.active_agent_projection.prompt_profile_active).toBe("software-testing")
+        expect(body.active_agent_projection.agents.map((agent) => agent.base_role).sort()).toEqual(["build", "integrity"])
+        expect(body.active_agent_projection.agents.map((agent) => agent.virtual_agent_id).sort()).toEqual([
+          "opentest-implementer",
+          "opentest-reviewer",
+        ])
+        expect(body.active_agent_projection.agents).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              base_role: "build",
+              virtual_agent_id: "opentest-implementer",
+              package_skill_refs: ["software-testing/build/test-implementation"],
+              package_tool_refs: [
+                "software-testing/shared/test-artifact-inventory",
+                "software-testing/shared/opentest-protocol-engine",
+              ],
+              package_mcp_server_refs: [],
+            }),
+            expect.objectContaining({
+              base_role: "integrity",
+              virtual_agent_id: "opentest-reviewer",
+              package_skill_refs: ["software-testing/integrity/test-review"],
+              package_tool_refs: [
+                "software-testing/shared/test-artifact-inventory",
+                "software-testing/shared/opentest-protocol-engine",
+              ],
+              package_mcp_server_refs: [],
+            }),
+          ]),
+        )
+        expect(body.active_agent_projection.agents.some((agent) => agent.base_role === "requirements")).toBe(false)
+        expect(body.active_agent_projection.agents.some((agent) => agent.base_role === "architect")).toBe(false)
+        expect(body.active_agent_projection.agents.some((agent) => agent.base_role === "visual-qa")).toBe(false)
+        expect(body.active_skill_projection.projected_agent_ids.sort()).toEqual(["build", "integrity", "orchestrator"])
+        expect(body.active_skill_projection.projected_tool_ids).not.toContain("requirements")
+        expect(body.active_skill_projection.projected_tool_ids).not.toContain("architect")
+        expect(body.active_skill_projection.projected_tool_ids).not.toContain("visual_qa")
+
+        const softwareTesting = body.squads.find((squad) => squad.id === "software-testing")
+        expect(softwareTesting?.projected_agents.sort()).toEqual(["build", "integrity"])
+        expect(softwareTesting?.virtual_agents.map((agent) => agent.virtual_agent_id).sort()).toEqual([
+          "opentest-implementer",
+          "opentest-reviewer",
+        ])
       },
     })
   }, 20000)

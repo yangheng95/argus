@@ -43,6 +43,7 @@ export function projectionHash(input: {
   projection: ExpertSquadRegistry.Projection
   toolIDs: string[]
   dynamicAttributes: ExpertSquadRegistry.Manifest["dynamic_attributes"]
+  resourceFingerprint?: unknown
 }) {
   return createHash("sha256").update(stable(input)).digest("hex")
 }

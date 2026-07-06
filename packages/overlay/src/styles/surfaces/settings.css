@@ -2278,6 +2278,16 @@ button.s-row:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.expert-squad-projection-row small {
+  grid-column: 2;
+  min-width: 0;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--ui-font-tiny);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .expert-squad-target {
   display: grid;
   gap: calc(7px * var(--ui-scale));

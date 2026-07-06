@@ -1085,12 +1085,7 @@ export namespace ExpertSquadRegistry {
   }
 
   export async function loadCatalogPackage(root: string): Promise<CatalogPackage> {
-    const metadata = await readPackageMetadata(root, { canonicalFolder: true })
-    return {
-      ...metadata,
-      selectorInstructions: await readCatalogSelectorInstructions(metadata),
-      promptProfile: await readPromptProfile(metadata),
-    }
+    return loadValidatedPackage(root, { canonicalFolder: true })
   }
 
   export async function discover(root: string): Promise<PackageCatalogEntry[]> {

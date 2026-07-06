@@ -521,7 +521,13 @@ function buildContinuationUserPrompt(input: AgentSessionContinuation): string {
 export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promise<RunAgentSessionOutput<C>> {
   const { kind } = input
   const role = roleIDForAgentRun(kind)
-  const agentName = input.agentName ?? kind
+  const agentName = input.agentName ?? role
+  if (agentName !== role) {
+    throw new AgentRunError(
+      kind,
+      `agentName ${JSON.stringify(agentName)} must equal base role ${JSON.stringify(role)}; virtual agent IDs are resolver metadata only`,
+    )
+  }
   if (input.continuation && input.existingSessionID && input.continuation.sessionID !== input.existingSessionID) {
     throw new AgentRunError(
       kind,
@@ -554,7 +560,7 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
       return undefined
     })
   } else {
-    model = await resolveAgentModel(agentName, configScope).catch((err) => {
+    model = await resolveAgentModel(role, configScope).catch((err) => {
       modelResolutionError = err
       return undefined
     })
@@ -567,7 +573,7 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
           ? String(modelResolutionError)
           : input.model
             ? `${input.model.providerID}/${input.model.modelID} did not resolve`
-            : `agent ${agentName} did not resolve a default model`
+            : `agent ${role} did not resolve a default model`
     throw new AgentRunError(
       kind,
       `no LLM model available: ${detail}`,
@@ -597,7 +603,7 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
   // without having to memory.search for it (rule 23 / rule 22).
   const composed = input.rawSystemPrompt
     ? { prompt: input.core }
-    : await composeSystemPrompt(agentName, input.core, configScope)
+    : await composeSystemPrompt(role, input.core, configScope)
   const liveContext = input.taskID ? TaskContext.snapshot(input.taskID) : ""
   const baseSystemPrompt = [composed.prompt, liveContext.trim().length > 0 ? liveContext : undefined]
     .filter((section): section is string => typeof section === "string" && section.trim().length > 0)
@@ -793,8 +799,8 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
   const descriptor = WorkerTurnDescriptor.create({
     sessionID: session.id,
     payload: {
-      agent: agentName,
-      roleContractID: agentName,
+      agent: role,
+      roleContractID: role,
       model: { providerID: model.providerID, modelID: model.api.id },
       prompt: {
         systemMode: "complete",
@@ -822,7 +828,7 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
   SessionPrompt.setSessionRuntimeContract(session.id, {
     identity: {
       sessionID: session.id,
-      agentKind: agentName,
+      agentKind: role,
       ...capabilityIdentity,
       workerTurnDescriptorID: descriptor.id,
       workerTurnDescriptorHash: descriptor.hash,
@@ -857,7 +863,7 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
         const promptArgs: Parameters<typeof SessionPrompt.prompt>[0] = {
           sessionID: session.id,
           model: { providerID: model!.providerID, modelID: model!.api.id },
-          agent: agentName,
+          agent: role,
           system: systemPrompt,
           systemMode: "complete",
           tools: enableMap,
