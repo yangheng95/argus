@@ -566,7 +566,7 @@ export function ChatComposer(props: ChatComposerProps) {
     return props.expertSquads.find((squad) => squad.id === props.expertSquadID) ?? null
   })
   const expertSquadLabel = createMemo(() => {
-    return selectedExpertSquad()?.label ?? props.expertSquadID
+    return selectedExpertSquad()?.display_label ?? props.expertSquadID
   })
   const expertSquadDisabled = createMemo(() => props.expertSquads.length === 0 || !props.enabled || props.busy)
 
@@ -715,7 +715,7 @@ export function ChatComposer(props: ChatComposerProps) {
             value={selectedExpertSquad()}
             onChange={selectExpertSquad}
             optionValue="id"
-            optionTextValue="label"
+            optionTextValue={(option) => option.display_label}
             disabled={expertSquadDisabled()}
             disallowEmptySelection
             gutter={4}
@@ -732,7 +732,7 @@ export function ChatComposer(props: ChatComposerProps) {
             icon={<Icon name="caret-down" size={9} />}
             optionData={(option) => ({
               "data-squad-id": option.id,
-              title: option.description ?? option.label,
+              title: option.description ?? option.display_label,
             })}
             renderValue={() => (
               <span class="expert-squad-select-copy">
@@ -740,7 +740,7 @@ export function ChatComposer(props: ChatComposerProps) {
                 <span class="expert-squad-select-value">{expertSquadLabel()}</span>
               </span>
             )}
-            renderOptionLabel={(option) => option.label}
+            renderOptionLabel={(option) => option.display_label}
             renderOptionDescription={(option) => option.description}
           />
           <ExecutorSelector />

@@ -80,12 +80,14 @@ test("expert squads settings renders package identity, projections, lifecycle ac
       {
         id: "general",
         label: "General",
+        display_prefix: "Builtin",
         description: "Baseline expert squad.",
         built_in: true,
       },
       {
         id: "frontend-replica",
         label: "Frontend Replica",
+        display_prefix: "Builtin",
         description: "Visual UI verification squad.",
         built_in: false,
         agents: {
@@ -96,6 +98,7 @@ test("expert squads settings renders package identity, projections, lifecycle ac
       {
         id: "backend",
         label: "Backend",
+        display_prefix: "Builtin",
         description: "Route and persistence squad.",
         built_in: false,
         agents: {
@@ -279,9 +282,9 @@ test("expert squads settings renders package identity, projections, lifecycle ac
     assert.match(state.effectiveActive, /Frontend Replica/)
     assert.match(state.projection, /frontend-replica/)
     assert.deepEqual(state.list, [
-      { label: "General", active: "false", current: "", tag: "BUTTON" },
-      { label: "Frontend Replica", active: "true", current: "true", tag: "BUTTON" },
-      { label: "Backend", active: "false", current: "", tag: "BUTTON" },
+      { label: "Builtin/General", active: "false", current: "", tag: "BUTTON" },
+      { label: "Builtin/Frontend Replica", active: "true", current: "true", tag: "BUTTON" },
+      { label: "Builtin/Backend", active: "false", current: "", tag: "BUTTON" },
     ])
     assert.match(state.readme, /Frontend Replica/)
     assert.match(state.selector, /desktop UI parity/)

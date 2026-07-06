@@ -15,6 +15,7 @@ const expertSquadPanel = readFileSync(
   join(OVERLAY_ROOT, "src", "components", "settings", "ExpertSquadPanel.tsx"),
   "utf8",
 )
+const chatComposer = readFileSync(join(OVERLAY_ROOT, "src", "components", "ChatComposer.tsx"), "utf8")
 const dialogStore = readFileSync(join(OVERLAY_ROOT, "src", "store", "dialog.ts"), "utf8")
 const configHost = readFileSync(join(OVERLAY_ROOT, "src", "components", "ConfigDialogHost.tsx"), "utf8")
 const settingsCss = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "settings.css"), "utf8")
@@ -58,9 +59,11 @@ describe("expert squad settings surface", () => {
     expect(expertSquadPanel).toContain("setProjectExpertSquadActive")
     expect(expertSquadPanel).toContain("setSessionExpertSquadActive")
     expect(expertSquadPanel).toContain("catalog()?.active.session_override")
+    expect(expertSquadPanel).toContain("squad.display_label")
     expect(expertSquadPanel).toContain("squad.readme.content")
     expect(expertSquadPanel).toContain("squad.selector")
     expect(expertSquadPanel).toContain("squad.capability_projection.scheduler")
+    expect(chatComposer).toContain("option.display_label")
   })
 
   test("surface remains read-only for package prompt text and has no prompt editor residue", () => {

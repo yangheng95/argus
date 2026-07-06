@@ -131,6 +131,35 @@ describe("ExpertSquadRegistry", () => {
     expect(loaded.readmeContent).toBe("# Frontend Replica")
   })
 
+  test("reads display prefix from README front matter without adding it to prompt content", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path)
+    await writeFile(
+      packageRoot,
+      "README.md",
+      "---\nexpert_squad_display_prefix: Partner\n---\n\n# Frontend Replica\n",
+    )
+
+    const loaded = await ExpertSquadRegistry.loadPackage(packageRoot)
+    const [catalogEntry] = await ExpertSquadRegistry.discover(tmp.path)
+
+    expect(loaded.displayPrefix).toBe("Partner")
+    expect(loaded.readmeContent).toBe("# Frontend Replica")
+    expect(catalogEntry?.displayPrefix).toBe("Partner")
+  })
+
+  test("rejects malformed README display prefix metadata", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path)
+    await writeFile(
+      packageRoot,
+      "README.md",
+      "---\nexpert_squad_display_prefix: \"Bad/Prefix\"\n---\n\n# Frontend Replica\n",
+    )
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/invalid README front matter/)
+  })
+
   test("discovers packages under .opencorvus expert-squads", async () => {
     await using tmp = await tmpdir()
     await writeValidPackage(tmp.path, {
@@ -188,6 +217,7 @@ describe("ExpertSquadRegistry", () => {
       expect(PromptProfile.builtIns[loaded.id]).toEqual(embedded.promptProfile)
       expect(loaded.readmePath.endsWith(path.join(source.id, "README.md"))).toBe(true)
       expect(loaded.readmeContent).toBe(embedded.readmeContent)
+      expect(loaded.displayPrefix).toBe(embedded.displayPrefix)
     }
   })
 

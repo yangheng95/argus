@@ -4,6 +4,7 @@ import type { OrchestratorWorkflowToolName, SchedulerAgentWorkflowBinding } from
 import { Filesystem } from "@/util/filesystem"
 import type { Dirent } from "fs"
 import { lstat, readdir, realpath } from "fs/promises"
+import matter from "gray-matter"
 import { parse as parseJsonc, type ParseError, printParseErrorCode } from "jsonc-parser"
 import path from "path"
 import z from "zod"
@@ -20,6 +21,17 @@ export namespace ExpertSquadRegistry {
   const RelativePath = z.string().min(1)
   const Ref = z.string().min(1)
   const RefSegment = z.string().min(1).regex(/^[^/\\]+$/, "canonical ref segments cannot contain / or \\")
+  const DisplayPrefix = z
+    .string()
+    .trim()
+    .min(1)
+    .max(80)
+    .regex(/^[^\r\n/\\]+$/, "display prefix cannot contain line breaks or path separators")
+  const ReadmeFrontMatter = z
+    .object({
+      expert_squad_display_prefix: DisplayPrefix.optional(),
+    })
+    .passthrough()
 
   const Selector = z
     .object({
@@ -125,6 +137,7 @@ export namespace ExpertSquadRegistry {
     label: string
     description?: string
     version?: string
+    displayPrefix?: string
     selector?: SelectorMetadata
     selectorInstructions?: string
   }
@@ -174,6 +187,7 @@ export namespace ExpertSquadRegistry {
     label: string
     description?: string
     version?: string
+    displayPrefix?: string
     selector?: SelectorMetadata
     manifest: Manifest
     readmeContent: string
@@ -213,6 +227,21 @@ export namespace ExpertSquadRegistry {
 
   export function parseManifestText(text: string, source: string): Manifest {
     return Manifest.parse(parseJsoncText(text, source))
+  }
+
+  function parseReadmeText(text: string, context: string): { content: string; displayPrefix?: string } {
+    const parsed = matter(text)
+    const frontMatter = ReadmeFrontMatter.safeParse(parsed.data ?? {})
+    if (!frontMatter.success) {
+      const details = frontMatter.error.issues.map((issue) => issue.message).join("; ")
+      throw new Error(`${context}: invalid README front matter: ${details}`)
+    }
+    const content = parsed.content.trim()
+    if (!content) throw new Error(`${context}: referenced file is blank`)
+    return {
+      content,
+      displayPrefix: frontMatter.data.expert_squad_display_prefix,
+    }
   }
 
   function assertRoleID(value: string, context: string): asserts value is AgentRoleID {
@@ -673,14 +702,14 @@ export namespace ExpertSquadRegistry {
     }
 
     const readmePath = await assertFile(normalizedRoot, manifest.readme, "readme")
-    const readmeContent = (await Filesystem.readText(readmePath)).trim()
-    if (!readmeContent) throw new Error("readme: referenced file is blank")
+    const readme = parseReadmeText(await Filesystem.readText(readmePath), "readme")
     return {
       id: manifest.id,
       root: normalizedRoot,
       manifestPath,
       readmePath,
-      readmeContent,
+      readmeContent: readme.content,
+      displayPrefix: readme.displayPrefix,
       label: manifest.label,
       description: manifest.description,
       version: manifest.version,
@@ -703,6 +732,7 @@ export namespace ExpertSquadRegistry {
       label: metadata.label,
       description: metadata.description,
       version: metadata.version,
+      displayPrefix: metadata.displayPrefix,
       selector: metadata.selector,
       selectorInstructions: await readCatalogSelectorInstructions(metadata),
     }
@@ -730,10 +760,7 @@ export namespace ExpertSquadRegistry {
     if (typeof readmeContent !== "string") {
       throw new Error(`built-in expert squad ${manifest.id}: missing ${manifest.readme}`)
     }
-    const trimmedReadme = readmeContent.trim()
-    if (!trimmedReadme) {
-      throw new Error(`built-in expert squad ${manifest.id}: blank ${manifest.readme}`)
-    }
+    const readme = parseReadmeText(readmeContent, `built-in expert squad ${manifest.id} ${manifest.readme}`)
 
     let selectorInstructions: string | undefined
     if (manifest.selector?.instructions) {
@@ -767,9 +794,10 @@ export namespace ExpertSquadRegistry {
       label: manifest.label,
       description: manifest.description,
       version: manifest.version,
+      displayPrefix: readme.displayPrefix,
       selector: selectorMetadata(manifest),
       manifest,
-      readmeContent: trimmedReadme,
+      readmeContent: readme.content,
       selectorInstructions,
       promptProfile: {
         label: manifest.label,

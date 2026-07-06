@@ -1,3 +1,7 @@
+---
+expert_squad_display_prefix: Builtin
+---
+
 # Frontend Replica
 
 Source URL/reference-screenshot replica, desktop surface ledger, bounded evidence-backed acceptance, source evidence, and rendered proof expert squad.

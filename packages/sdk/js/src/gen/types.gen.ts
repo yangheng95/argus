@@ -8896,6 +8896,8 @@ export type ExpertSquadCatalogResponses = {
         }
       }
       version?: string
+      display_prefix?: string
+      display_label: string
       source:
         | {
             kind: "built_in"

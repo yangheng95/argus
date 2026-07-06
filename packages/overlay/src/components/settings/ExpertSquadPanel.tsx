@@ -117,7 +117,7 @@ export default function ExpertSquadPanel() {
     })
   })
   const selectedTargetCount = createMemo(() => squadTargets().length)
-  const squadNameByID = (id: string): string => squads().find((item) => item.id === id)?.label ?? id
+  const squadNameByID = (id: string): string => squads().find((item) => item.id === id)?.display_label ?? id
   const scopeLabel = createMemo(() =>
     expertSquadCatalogScope().kind === "session" ? t("expert_squad.scope_session") : t("expert_squad.scope_project"),
   )
@@ -416,7 +416,7 @@ export default function ExpertSquadPanel() {
                         }
                       >
                         <div class="expert-squad-list-copy">
-                          <strong>{squad.label}</strong>
+                          <strong>{squad.display_label}</strong>
                           <span>{squad.id}</span>
                           <Show when={squad.description}>
                             <small>{squad.description}</small>
@@ -432,7 +432,7 @@ export default function ExpertSquadPanel() {
                     <div class="expert-squad-detail" data-ui="expert-squad-detail">
                       <div class="expert-squad-detail-head">
                         <div class="expert-squad-detail-copy">
-                          <strong>{squad.label}</strong>
+                          <strong>{squad.display_label}</strong>
                           <span>{squad.id}</span>
                           <Show when={squad.description}>
                             <small>{squad.description}</small>

@@ -1,3 +1,7 @@
+---
+expert_squad_display_prefix: Builtin
+---
+
 # General
 
 No domain-specific expert overlay.

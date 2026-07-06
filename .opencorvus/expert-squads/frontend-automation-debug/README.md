@@ -1,3 +1,7 @@
+---
+expert_squad_display_prefix: Builtin
+---
+
 # Frontend Automation Debug
 
 Frontend automation, browser runtime debugging, visual regression, and reproducible evidence focused expert squad.

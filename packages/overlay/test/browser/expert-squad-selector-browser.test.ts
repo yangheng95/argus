@@ -42,10 +42,17 @@ test("expert squad selector clears stale catalog state before task submit after 
     active: "frontend-replica",
     projectActive: "frontend-replica",
     squads: [
-      { id: "general", label: "General", description: "General Baseline expert squad.", built_in: true },
+      {
+        id: "general",
+        label: "General",
+        display_prefix: "Builtin",
+        description: "General Baseline expert squad.",
+        built_in: true,
+      },
       {
         id: "frontend-replica",
         label: "Frontend Replica",
+        display_prefix: "Builtin",
         description: "Visual UI verification squad.",
         built_in: false,
       },
@@ -313,16 +320,16 @@ const scenarios = [
     triggerLabel: "Expert Squad",
     screenshotName: "expert-squad-selector-runtime-highlighted-en-US.png",
     labels: [
-      "General Baseline expert squad.",
-      "Frontend Replica Visual UI verification squad.",
-      "Backend Contract and data integrity squad.",
+      "Builtin/General Baseline expert squad.",
+      "Builtin/Frontend Replica Visual UI verification squad.",
+      "Builtin/Backend Contract and data integrity squad.",
     ],
   },
   {
     locale: "zh-CN",
     triggerLabel: "专家团",
     screenshotName: "expert-squad-selector-runtime-highlighted-zh-CN.png",
-    labels: ["通用 基础专家团。", "前端 视觉界面验证专家团。", "后端 契约和数据完整性专家团。"],
+    labels: ["Builtin/通用 基础专家团。", "Builtin/前端 视觉界面验证专家团。", "Builtin/后端 契约和数据完整性专家团。"],
   },
 ] satisfies Array<{ locale: "en-US" | "zh-CN"; triggerLabel: string; screenshotName: string; labels: string[] }>
 
@@ -339,18 +346,21 @@ for (const scenario of scenarios) {
         {
           id: "general",
           label: localized ? "通用" : "General",
+          display_prefix: "Builtin",
           description: localized ? "基础专家团。" : "Baseline expert squad.",
           built_in: true,
         },
         {
           id: "frontend-replica",
           label: localized ? "前端" : "Frontend Replica",
+          display_prefix: "Builtin",
           description: localized ? "视觉界面验证专家团。" : "Visual UI verification squad.",
           built_in: false,
         },
         {
           id: "backend",
           label: localized ? "后端" : "Backend",
+          display_prefix: "Builtin",
           description: localized ? "契约和数据完整性专家团。" : "Contract and data integrity squad.",
           built_in: false,
         },

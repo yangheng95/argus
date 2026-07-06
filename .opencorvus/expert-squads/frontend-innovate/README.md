@@ -1,3 +1,7 @@
+---
+expert_squad_display_prefix: Builtin
+---
+
 # Frontend Innovate
 
 Frontend design-resource synthesis, task-first redesign philosophy, named direction comparison, selected implementation handoff, and rendered evidence review expert squad.

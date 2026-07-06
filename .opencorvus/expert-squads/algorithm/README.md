@@ -1,3 +1,7 @@
+---
+expert_squad_display_prefix: Builtin
+---
+
 # Algorithm
 
 Correctness, complexity, benchmark, and adversarial-case focused expert squad.

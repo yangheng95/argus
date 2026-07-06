@@ -2,6 +2,7 @@ export interface ExpertSquadFixture {
   id: string
   label: string
   description?: string
+  display_prefix?: string
   built_in?: boolean
   editable?: boolean
   agents?: Record<string, string>
@@ -43,9 +44,12 @@ export function emptyExpertSquadProjectionEntry() {
 export function expertSquadOptionFixture(squad: ExpertSquadFixture) {
   const agents = squad.agents ?? {}
   const builtIn = squad.built_in ?? squad.id === "general"
+  const displayLabel = squad.display_prefix ? `${squad.display_prefix}/${squad.label}` : squad.label
   return {
     id: squad.id,
     label: squad.label,
+    display_prefix: squad.display_prefix,
+    display_label: displayLabel,
     description: squad.description,
     built_in: builtIn,
     editable: squad.editable ?? false,
@@ -86,6 +90,7 @@ export function expertSquadCatalogFixture(input: ExpertSquadCatalogFixtureInput 
       {
         id: "general",
         label: "General",
+        display_prefix: "Builtin",
         description: "General expert squad.",
       },
     ]
@@ -130,12 +135,14 @@ export function frontendReplicaExpertSquadCatalog() {
       {
         id: "general",
         label: "General",
+        display_prefix: "Builtin",
         description: "General expert squad.",
         built_in: true,
       },
       {
         id: "frontend-replica",
         label: "Frontend Replica",
+        display_prefix: "Builtin",
         description: "Frontend Replica project expert squad.",
         built_in: false,
       },

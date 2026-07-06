@@ -53,6 +53,8 @@ export interface ExpertSquadOption {
   label: string
   description?: string
   version?: string
+  display_prefix?: string
+  display_label: string
   built_in: boolean
   editable: boolean
   agents: Record<string, string>

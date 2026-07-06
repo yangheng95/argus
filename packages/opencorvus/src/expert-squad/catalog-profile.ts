@@ -8,6 +8,7 @@ import type { ExpertSquadRegistry } from "@/expert-squad/registry"
 export type ExpertSquadCatalogPackage = {
   id: string
   version?: string
+  displayPrefix?: string
   selector?: ExpertSquadRegistry.SelectorMetadata
   selectorInstructions?: string
   readmeContent?: string
@@ -145,6 +146,10 @@ export function defaultMcpResourceProviderName(ref: string): string {
   return packageProviderName("default_mcp_resource", ref)
 }
 
+function displayLabel(label: string, prefix: string | undefined): string {
+  return prefix ? `${prefix}/${label}` : label
+}
+
 export function catalogProfileFromPackage(input: {
   id: string
   pkg: ExpertSquadCatalogPackage
@@ -241,6 +246,8 @@ export function catalogSummaryFromPackage(input: {
   return {
     ...profile,
     version: input.pkg.version,
+    display_prefix: input.pkg.displayPrefix,
+    display_label: displayLabel(profile.label, input.pkg.displayPrefix),
     source,
     readme: {
       path: "README.md",

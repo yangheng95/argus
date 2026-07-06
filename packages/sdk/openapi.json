@@ -13121,6 +13121,12 @@
                           "version": {
                             "type": "string"
                           },
+                          "display_prefix": {
+                            "type": "string"
+                          },
+                          "display_label": {
+                            "type": "string"
+                          },
                           "source": {
                             "anyOf": [
                               {
@@ -13243,6 +13249,7 @@
                           "projection_hash",
                           "projected_agents",
                           "capability_projection",
+                          "display_label",
                           "source",
                           "readme",
                           "dynamic_attributes"
