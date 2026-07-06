@@ -649,7 +649,7 @@
         <div class="metric">
           <em>6</em>
           <b>专家团</b>
-          <span>PromptProfile 内置档，装配 prompt overlays 与 scheduler capability。</span>
+          <span>ExpertSquad packages；内置只保留 general，其余由 .opencorvus 项目包提供。</span>
         </div>
         <div class="metric">
           <em>2</em>
@@ -948,9 +948,9 @@
             <rect x="520" y="150" width="340" height="160" rx="18" fill="#f2e8dc" stroke="#c89b68" stroke-width="1.8" />
             <rect x="576" y="128" width="80" height="32" rx="10" fill="#f2e8dc" stroke="#c89b68" stroke-width="1.8" />
             <rect x="718" y="128" width="80" height="32" rx="10" fill="#f2e8dc" stroke="#c89b68" stroke-width="1.8" />
-            <text x="544" y="184" class="pillar-title" fill="#8a5a2b">PromptProfile.builtIns</text>
-            <text x="544" y="218" class="node-copy">frontend-replica · frontend-innovate</text>
-            <text x="544" y="246" class="node-copy">backend · algorithm · automation-debug</text>
+            <text x="544" y="184" class="pillar-title" fill="#8a5a2b">ExpertSquad packages</text>
+            <text x="544" y="218" class="node-copy">built-in: general only</text>
+            <text x="544" y="246" class="node-copy">project: .opencorvus/expert-squads</text>
             <text x="544" y="276" class="quiet-copy">selected by prompt_profile.active</text>
           </g>
 
@@ -968,9 +968,9 @@
             <rect x="1238" y="132" width="302" height="178" rx="18" fill="#e7efe6" stroke="#aebfae" />
             <rect x="1294" y="112" width="58" height="28" rx="9" fill="#e7efe6" stroke="#aebfae" />
             <text x="1262" y="170" class="pillar-title">Block B · CAPABILITY</text>
-            <text x="1262" y="206" class="node-copy">tool_ids · selector/production skills</text>
-            <text x="1262" y="232" class="node-copy">projected agents · include_mcp_tools</text>
-            <text x="1262" y="258" class="node-copy">projection_hash</text>
+            <text x="1262" y="206" class="node-copy">built_in_tool_ids · skill refs</text>
+            <text x="1262" y="232" class="node-copy">tool refs · MCP typed refs</text>
+            <text x="1262" y="258" class="node-copy">projected agents · projection_hash</text>
             <text x="1262" y="286" class="quiet-copy">installs next exact runtime contract</text>
           </g>
 
@@ -1127,7 +1127,7 @@
           html: `<p>Agent 间调度用 <b>durable artifact</b> 与可见投影表达，<b>不用</b>隐藏消息或 direct child-session reply。每个方向只有一个入口。</p>
             <h4>三个方向</h4>
             <ul>
-              <li><b>Worker → Orchestrator</b>：<code>request_orchestrator_decision</code> → 写 <code>agent_coordination_request</code> + <code>agent.coordination.requested</code>，唤醒 task orchestrator。</li>
+              <li><b>Worker → Orchestrator</b>：<code>request_orchestrator_decision</code> → 写 <code>agent_coordination_request</code> + <code>agent.coordination.requested</code>，唤醒 task orchestrator；<code>requested_decision</code> 只能描述调度问题，不能填 <code>redispatch</code> / <code>redispatch_worker</code> action literal。</li>
               <li><b>Operator → Orchestrator</b>：<code>POST …/operator-steer</code> → <code>agent_coordination_request(origin="operator_steer")</code>。</li>
               <li><b>Orchestrator → worker / action</b>：<code>respond_agent_coordination</code> 认领 pending request，写 response / action，再执行 continue / cancel_worker / ask_user / fail_task / redispatch。</li>
             </ul>
@@ -1311,7 +1311,7 @@
         },
         "squad-frontend-replica": {
           kicker: "Expert Squad", title: "Frontend Replica",
-          src: "src/agent/prompt-profile.ts · PromptProfile.builtIns",
+          src: ".opencorvus/expert-squads/frontend-replica",
           html: `<p>参照复刻、网页复制、视觉证据与设计系统聚焦的专家团。</p>
             <ul>
               <li>聚焦桌面源信息架构、模块顺序、密度、状态与可见 parity。</li>
@@ -1322,7 +1322,7 @@
         },
         "squad-frontend-innovate": {
           kicker: "Expert Squad", title: "Frontend Innovate",
-          src: "src/agent/prompt-profile.ts",
+          src: ".opencorvus/expert-squads/frontend-innovate",
           html: `<p>企业 / 产品级前端设计综合：构思、对比、收敛与 anti-slop 复核。</p>
             <ul>
               <li>frontend-design 产出多个命名方向，拒绝浅稿，再提交一份可实现的产品设计 handoff。</li>
@@ -1332,7 +1332,7 @@
         },
         "squad-backend": {
           kicker: "Expert Squad", title: "Backend",
-          src: "src/agent/prompt-profile.ts",
+          src: ".opencorvus/expert-squads/backend",
           html: `<p>API / 状态 / 数据 / 集成与运行正确性聚焦。</p>
             <ul>
               <li>优先请求与数据契约、状态归属、持久化边界、可观测性与确定性失败处理。</li>
@@ -1341,7 +1341,7 @@
         },
         "squad-algorithm": {
           kicker: "Expert Squad", title: "Algorithm",
-          src: "src/agent/prompt-profile.ts",
+          src: ".opencorvus/expert-squads/algorithm",
           html: `<p>正确性、复杂度、benchmark 与对抗用例聚焦。</p>
             <ul>
               <li>需求写成证明目标：不变量、界、边界用例、验收指标与可度量性能义务。</li>
@@ -1350,7 +1350,7 @@
         },
         "squad-automation-debug": {
           kicker: "Expert Squad", title: "Frontend Automation Debug",
-          src: "src/agent/prompt-profile.ts",
+          src: ".opencorvus/expert-squads/frontend-automation-debug",
           html: `<p>前端自动化、浏览器运行时调试、视觉回归与可复现证据聚焦。</p>
             <ul>
               <li>把渲染面当可执行检查：交互、布局状态、可访问性信号与截图必须支撑每条验收主张。</li>
@@ -1359,9 +1359,9 @@
         },
         "squad-general": {
           kicker: "Expert Squad", title: "General",
-          src: "src/agent/prompt-profile.ts",
+          src: "src/expert-squad/builtin/general",
           html: `<p>设计目标是薄 general：保留选择、提问、读取上下文、生命周期控制等最小调度能力，不默认暴露领域 workflow dispatch surface。</p>
-            <p>专家团切换走可见路径：<code>config.prompt_profile.active</code> 或 Orchestrator 的 <code>select_expert_squad</code> 工具，不是 host 端关键词路由；project 自定义 profile 不能覆盖内置档。</p>`
+            <p>专家团切换走可见路径：<code>config.prompt_profile.active</code> 或 Orchestrator 的 <code>select_expert_squad</code> 工具，不是 host 端关键词路由；project expert-squad package ID 不能覆盖内置 <code>general</code>。</p>`
         },
         "axis-executor": {
           kicker: "扩展轴", title: "Executor — 执行器",
@@ -1417,7 +1417,7 @@
           kicker: "架构红线", title: "无隐藏消息",
           src: "13-agent-communication-matrix.md",
           html: `<p>A2A 调度由 durable artifact 与可见投影表达，<b>不</b>用隐藏消息或 direct child-session reply。</p>
-            <p>worker 请求调度只能走 <code>request_orchestrator_decision</code>，不走 task-root message / hidden note / 新 subtask chat。</p>`
+            <p>worker 请求调度只能走 <code>request_orchestrator_decision</code>，且只能描述调度问题，不能直接请求 <code>redispatch</code> action；不走 task-root message / hidden note / 新 subtask chat。</p>`
         },
         "rl-req-trace": {
           kicker: "架构红线", title: "需求穷尽追溯",
@@ -1448,12 +1448,12 @@
             </ul>`
         },
         "wiring-catalog": {
-          kicker: "专家团积木 · ② 目录", title: "PromptProfile.builtIns",
-          src: "src/expert-squad/builtin/* · src/expert-squad/prompt-profile-resolver.ts",
-          html: `<p>专家团目录是一组 package-backed <b>PromptProfile</b>。新的积木模型要求它同时拥有 prompt overlays 与 capability projection，不能让 UI、SkillMount 或 Orchestrator 各造一套规则。</p>
+          kicker: "专家团积木 · ② 目录", title: "ExpertSquad packages",
+          src: "src/expert-squad/builtin/general · .opencorvus/expert-squads · src/expert-squad/prompt-profile-resolver.ts",
+          html: `<p>专家团目录是一组 package-backed <b>PromptProfile</b>。内置目录只保留 <code>general</code>；领域专家团从项目 <code>.opencorvus/expert-squads/&lt;id&gt;</code> 动态加载。新的积木模型要求它同时拥有 prompt overlays 与 capability projection，不能让 UI、SkillMount 或 Orchestrator 各造一套规则。</p>
             <div class="kv"><div><b>Prompt</b><span>{ agents: { agentID → prompt overlay } }</span></div>
-            <div><b>Capability</b><span>{ scheduler: tool_ids / skill_names / include_mcp_tools }</span></div></div>
-            <p>内置档：frontend-replica · frontend-innovate · backend · algorithm · frontend-automation-debug · general。</p>
+            <div><b>Capability</b><span>{ scheduler, agents: built_in_tool_ids + default/package skill/tool/MCP refs }</span></div></div>
+            <p>内置档：general。项目包：frontend-replica · frontend-innovate · backend · algorithm · frontend-automation-debug。</p>
             <h4>关键</h4>
             <ul>
               <li>不同档的 <code>agents</code> 键不同——即覆盖<b>不同的 agent 子集</b>；不在映射里的 agent 拿基线 prompt。</li>
@@ -1463,8 +1463,8 @@
         },
         "wiring-skill-discovery": {
           kicker: "专家团积木 · ① 决策输入", title: "Mounted selector skills",
-          src: "src/expert-squad/builtin/*/selector.md · expert-squad.jsonc · orchestrator/tools.ts (skill)",
-          html: `<p>selector skill 是 Orchestrator 可见的选档证据面：内置 selector 从 clear-text expert-squad package manifest 与 <code>selector.md</code> 派生，帮助模型读取专家团适用条件，再决定是否调用 <code>select_expert_squad</code>。</p>
+          src: ".opencorvus/expert-squads/*/selector.md · expert-squad.jsonc · orchestrator/tools.ts (skill)",
+          html: `<p>selector skill 是 Orchestrator 可见的选档证据面：项目 selector 从 clear-text expert-squad package manifest 与顶层 <code>selector.md</code> 派生，帮助模型读取专家团适用条件，再决定是否调用 <code>select_expert_squad</code>。</p>
             <p>它不替代生产 workflow skill，也不通过关键词匹配自动装配专家团。active profile 后续能看到哪些 production skills，必须来自同一个 PromptProfile capability projection。</p>`
         },
         "wiring-select": {
@@ -1493,9 +1493,10 @@
         "wiring-prompt-arm": {
           kicker: "专家团积木 · Block A", title: "PROMPT overlays",
           src: "src/agent/runner.ts · src/expert-squad/prompt-profile-resolver.ts",
-          html: `<p>每个被 dispatch 的 agent 在 session 组装时，<b>有效 system prompt</b> 由三段拼接：</p>
+          html: `<p>每个被 dispatch 的 agent 在 session 组装时，<b>有效 system prompt</b> 由明确顺序拼接：</p>
             <div class="kv">
               <div><b>base</b><span>该 role 的 core prompt（不变）</span></div>
+              <div><b>README</b><span>active package README.md，仅追加给 Orchestrator</span></div>
               <div><b>overlay</b><span>overlayFor(agentID) = active profile.agents[agentID]（专家团驱动）</span></div>
               <div><b>append</b><span>用户 / effective agent 的 prompt_append</span></div>
             </div>
@@ -1505,10 +1506,11 @@
         "wiring-tool-arm": {
           kicker: "专家团积木 · Block B", title: "Scheduler capability projection",
           src: "PromptProfile capability projection · Orchestrator exact runtime contract",
-          html: `<p>能力投影是专家团积木的 scheduler 半边：active PromptProfile 派生当前 Orchestrator 能看见的工具、selector skills、production skills、projected agents 与 <code>include_mcp_tools</code>。</p>
+          html: `<p>能力投影是专家团积木的 scheduler 半边：active PromptProfile 派生当前 Orchestrator 能看见的 built-in tools、default/package skills、default/package tools、default/package MCP typed refs 与 projected agents。</p>
             <ul>
-              <li><code>tool_ids</code> 投影 Orchestrator exact runtime contract。</li>
-              <li><code>selector_skill_names</code> 与 <code>production_skill_names</code> 派生 skill 可见面。</li>
+              <li><code>built_in_tool_ids</code> 与 projected default/package tool refs 投影 Orchestrator exact runtime contract。</li>
+              <li><code>default_skill_refs</code>、<code>package_skill_refs</code> 与 selector metadata 派生 skill 可见面。</li>
+              <li><code>default_mcp_tool_refs</code>、<code>package_mcp_tool_refs</code>、<code>default_mcp_prompt_refs</code>、<code>package_mcp_prompt_refs</code>、<code>default_mcp_resource_refs</code>、<code>package_mcp_resource_refs</code> 是 MCP 暴露的唯一能力来源。</li>
               <li><code>projection_hash</code> 让 continuation / retry 不会被后续 profile 变化静默重解释。</li>
             </ul>
             <p><code>AgentToolPool</code> 仍是最大声明目录，不等同于 active effective surface。</p>`

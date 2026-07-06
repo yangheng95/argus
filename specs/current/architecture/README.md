@@ -30,6 +30,7 @@ This directory contains the living OpenCorvus architecture source of truth. Date
 | [12-overlay-card-system.md](12-overlay-card-system.md)               | Overlay card shell, payload, policy, and writer model.                            |
 | [13-agent-communication-matrix.md](13-agent-communication-matrix.md) | Agent communication routes and allowed ownership boundaries.                      |
 | [14-agent-runtime-mode.md](14-agent-runtime-mode.md)                 | Agent spec, runtime mode, context strategy, and budget policy.                    |
+| [15-agent-context-packet.md](15-agent-context-packet.md)             | Shared agent context packet protocol for text, structured, and multimodal refs.   |
 | [16-unified-teardown.md](16-unified-teardown.md)                     | Minimal session runtime, orchestrator ownership, and cleanup boundaries.          |
 | [18-webpage-replica-agent-workflow.md](18-webpage-replica-agent-workflow.md) | Webpage replica workflow agent topology, evidence handoff, and review feedback loops. |
 | [99-principles.md](99-principles.md)                                 | Core principles, anti-patterns, and non-negotiable constraints.                   |

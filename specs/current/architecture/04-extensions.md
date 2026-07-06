@@ -40,7 +40,7 @@
 **调用链**：
 
 ```
-Orchestrator build tool → build/agent.ts (`build.worktreeUsage` 由 LLM 选择 managed_worktree / current_project；省略时 goal 默认 managed worktree、task-level direct 默认当前 caller-owned workDir) →
+Orchestrator build tool → build/agent.ts (`build.worktreeUsage` 由 LLM 选择 managed_worktree / current_project；省略时 goal 默认 managed worktree、task-level implementation build 默认当前 caller-owned workDir) →
    ExecutorRegistry.requireCoding() → external coding executor → diff evidence
    + goal/runner.ts::cleanupGoalWorkspace 在 worktree 生命周期末端回收
 ```
@@ -61,6 +61,33 @@ Orchestrator build tool → build/agent.ts (`build.worktreeUsage` 由 LLM 选择
 **与 executor 的区别**：plugin 提供 hook 能力（生命周期回调、auth、rewrite），**不承担**"在 worktree 里跑完整任务产生 diff" 的职责。
 
 > 旧版本的 `plugin/codex.ts` · `plugin/copilot.ts` 已删除 —— 这两家都作为 executor（`executor/codex-*`）收编，不再存在 plugin 形态。
+
+## Expert Squad Package —— Agent 能力包
+
+**代码**：`src/expert-squad/` · `src/agent/prompt-profile.ts` · `src/skill/` ·
+`src/engine/workflow.ts`
+
+Expert squad 是 OpenCorvus 内部的 scenario / agent capability package，不是外部
+Codex skill。运行时内置 package 只保留通用 `general`；非通用 squad 的分发形态是
+payload，必须先释放成项目目录 `.opencorvus/expert-squads/<id>/`，再通过普通
+package discovery / catalog 进入运行时：
+
+- `expert-squad.jsonc` 声明 profile identity、agent prompt overlays、skills、
+  package tools、package MCP servers/tools；
+- `selector.md` 是 Orchestrator-visible selector skill 的完整说明来源；
+- `PromptProfile.builtIns` 只保留通用内置 profile；非通用 squad 即使随应用分发，
+  也先释放为明文项目 package，再通过 package 发现 / 加载进入 catalog；
+- `PromptProfileResolver` 负责把当前 active expert squad 投影成 scheduler
+  capability、worker capability、visible selector skills、skills、package tools
+  和 scoped package MCP providers；
+- workflow 仍由 scheduler scope 的 `WorkflowRegistry` 声明。Expert squad 可以声明
+  可见能力和 role overlays，但不能创建第二套 workflow、dispatch、context packet
+  或 broad task-manipulation tool。
+
+Personal Codex skills, local checklists, or historical task records may describe
+how a developer once edited these packages, but they are not runtime authority
+for expert-squad behavior. When they disagree with current code, tests, or
+`specs/current/**`, current repository sources win.
 
 ## MCP —— Model Context Protocol
 

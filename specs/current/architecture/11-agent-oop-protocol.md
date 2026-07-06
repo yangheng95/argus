@@ -16,6 +16,7 @@ class hierarchy exists.
 | `agent/agent.ts`                     | Registers native agent identities, display metadata, prompt ownership, and declared tool include/exclude adapters. |
 | `agent/role-contract.ts`             | Defines `AgentRoleContract` and the role IDs used by UI/config surfaces.                                           |
 | `agent/runner.ts`                    | Runs agent sessions through the shared session/LLM runtime.                                                        |
+| `agent/context-packet.ts`            | Defines the shared, workflow-neutral context packet protocol for text, structured data, and multimodal refs.      |
 | `prompt/core/*.txt`                  | Source-controlled prompts for orchestrator and specialist workflow roles.                                          |
 | `orchestrator/tools.ts`              | Owns workflow dispatch tools and specialist-session creation.                                                      |
 | `session/loop.ts` / `session/llm.ts` | Own streaming model calls, tool execution, message parts, and session lifecycle.                                   |
@@ -43,6 +44,16 @@ registry query as current behavior.
 - Session-style prompts live under `packages/opencorvus/src/agent/prompt/*.txt`.
 - Project config can override configured prompt keys through the config layer.
 - Skills are appended by the skill-loading path, not by a separate agent class.
+
+## Context Handoff
+
+Agent-to-agent and scheduler-to-worker evidence handoff uses
+[`15-agent-context-packet.md`](15-agent-context-packet.md) as the current
+architecture contract. New agent roles must consume upstream context through
+`AgentContextPacket[]` and must publish reusable handoff data as text,
+structured schema-bearing parts, or link/index-based media refs. They must not
+create role-specific context aliases, route by producer `source` labels, or
+inline media bytes in prompt context.
 
 ## Retired Roles
 

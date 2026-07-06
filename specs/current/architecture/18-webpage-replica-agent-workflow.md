@@ -185,9 +185,9 @@ files. Agents do not secretly message each other.
 | Host webpage evidence runner | `.opencorvus/r/t/<task>/fd/webpage-evidence/*` including `reference.png`, `capture.html`, `prd-evidence-summary.md`, `source-ir/*`, `source-skeleton/*`, interaction screenshots, and visual candidates | `frontend_research`, `frontend_design`, Build through design handoff, Visual QA through reference evidence | The rendered source evidence is the source of truth for page structure, pixels, style, layout, content, and interaction states. |
 | Host source package creation | `.opencorvus/r/t/<task>/fd/web-clone-source/*` including `implementation-blueprint.md`, `web-clone-context.md`, `web-clone-implementation-contract.json`, source IR, source skeleton, CSS sidecars, assets, and `reference.png` | `frontend_design`, Build | This is mandatory source-backed implementation input. It is not copied as an app deliverable. |
 | `frontend_research` | `frontend_research_brief` and compact projections | `frontend_design`, `requirements`, `architect`, Build | It is a coverage index for components, evidence IDs, interaction states, data questions, and fidelity risks. |
-| `frontend_design` | `decision_log phase=frontend_design`, `task.design_specs`, public report, frontend project role, visual evidence, source manifest | `requirements`, `architect`, Build, Visual QA, Integrity | For webpage replicas, the handoff names `web-clone-source` and may create `frontend-design-skeleton` as source evidence plus `visual-html-skeleton` as visual baseline. |
+| `frontend_design` | `decision_log phase=frontend_design`, `task.design_specs`, public report, frontend project role, visual evidence, source manifest, VisualRegionBinding crop manifest with `reference_region_key` rows | `requirements`, `architect`, Build, Visual QA, Integrity | For webpage replicas, the handoff names `web-clone-source` and may create `frontend-design-skeleton` as source evidence plus `visual-html-skeleton` as visual baseline. Full-page reference slicing is model-authored: Frontend Design inspects a coordinate atlas, submits bboxes, then reviews the crop overlay/contact sheet. |
 | `requirements` | Active requirement spec snapshot and `REQ-N` rows | `architect`, Build, Integrity, workflow prompt | Build direct rework after review feedback must still receive active requirements. |
-| `architect` | Goal graph, acceptance specs, source coverage, contract graph, decision-log entries | `workload_analysis`, Build, Integrity | The webpage clone goal graph should derive from source IR and cover component source, data/API/state adapters, interactions, and runtime visual verification. |
+| `architect` | Goal graph, acceptance specs, source coverage, `reference_coverage.reference_regions`, contract graph, decision-log entries | `workload_analysis`, Build, Integrity | The webpage clone goal graph should derive from source IR and cover component source, data/API/state adapters, interactions, and runtime visual verification. Architect binds Frontend Design crop rows to goals; Frontend Design does not invent future goal ids. |
 | `workload_analysis` | Goal workload brief and concerns | Orchestrator, Build, possibly Architect rerun | Advisory, not a gate. |
 | Build | `build_session_contract`, BuildResult from `report_build_result`, changed-file facts, verification/browser evidence | Orchestrator, Visual QA, Integrity, future Build retry | Passed Build evidence is implementation evidence, not task completion. |
 | Visual QA | Structured VisualQaReport, acceptance semantics, `decision_log phase=visual_qa` report records, problem DOM regions | Orchestrator, Build, Integrity, workflow projection | Failed Visual QA becomes first-class `visualQaFeedback` for Build, not hidden acceptance feedback. |
@@ -227,6 +227,38 @@ baseline and cites rendered visual evidence.
 
 The two are peers under Orchestrator. `frontend_research` may inform
 `frontend_design`; neither owns final requirements, goals, or completion.
+
+### Goal-Bound Reference Crops
+
+Full-page reference screenshot slicing belongs to the model-visible Frontend
+Design workflow, not to host-side automatic region guessing. Frontend Design
+uses `create_visual_region_coordinate_atlas` to inspect absolute source
+coordinates, chooses visible component or region bounding boxes, calls
+`create_visual_region_binding_package`, and inspects the generated bbox overlay
+plus contact sheet before final handoff.
+
+The crop manifest records physical evidence only: each crop row carries a
+stable `reference_region_key` in `region_id@viewport_id` form, a
+`source_reference_artifact` PNG path, the source bbox, crop intent, and the
+manifest path. It does not carry goal ids because Frontend Design runs before
+Architect creates the goal graph.
+
+Architect is the goal binding source. It registers
+`reference_coverage.reference_regions` for the goals that own the corresponding
+visible source regions. Orchestrator filters those rows for the active Build
+goal, stores the referenced crop PNGs through AttachmentStore, and injects them
+as goal-scoped Build Evidence Pack target references. For every goal-scoped
+Build dispatch, task-level images or the full-page reference are not mixed into
+the target contract as substitutes. If the current goal has no Architect
+reference-coverage rows, or rows with no crop rows, Orchestrator stays in
+goal-bound reference mode and injects no task-level visual substitute; Build
+must surface the missing `reference_region_key` crop as a blocker. Goal-scoped
+Build context may keep source/component pointers, but it must not expand
+`web-clone-source/reference.png`, source manifest full-page image refs, or a
+required full-page reference-image instruction; whole-page reference inspection
+belongs to Frontend Design slicing and final Visual Quality Assurance. Crop row
+identity is the `reference_region_key`, not the PNG checksum, so two visually
+identical crop files remain distinct goal-bound target references.
 
 ### Requirements And Architect Own Scope Shape
 

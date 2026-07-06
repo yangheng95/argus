@@ -74,6 +74,17 @@ build agent 处理任何前端页面、组件、可视化、overlay、preview、
 
 **15.** 禁止任何合成消息、伪消息、隐藏消息或只给模型/只给界面看的消息分叉。所有对话都必须走自然角色间对话：用户、编排器、agent、tool/result 等真实参与者各自发真实消息；消息流必须显示所有消息，禁止用 visibility/audience/synthetic/ignored 等标记制造双路消息。
 
+**15.1（专家团解耦边界 — 2026-07-06）.** 专家团是 OpenCorvus 内部 scenario / agent capability package，不是全局 core prompt、普通 Codex skill、plugin、UI filter 或旧 `PromptProfile.builtIns` 的别名集合。
+
+- 非 `general` 专家团只能以 `.opencorvus/expert-squads/<id>/` 项目 package 存在；随应用分发的非通用专家团也必须先 release 成这个明文项目 package，再走普通 discovery / catalog / resolver 路径。运行时内置 package 默认只保留 `general`，除非当前任务明确重开这一架构边界。
+- `expert-squad.jsonc` 的 manifest `id` 是唯一专家团身份；目录名、ZIP 文件名、显示 label、selector skill 名、MCP server 名或相似命名都不能决定身份，禁止为改名/相似名增加 fallback、兼容 alias、猜测加载或 UI-only 过滤。
+- `prompt_profile.active` 是唯一 active expert-squad 选择来源；禁止新增第二个 active squad 字段、session shadow state、隐藏消息或合成配置来表达“当前专家团”。
+- `PromptProfileResolver` 是唯一运行时投影面，负责把 active expert squad 投影到 scheduler capability、worker capability、visible selector skills、skills、package tools、scoped MCP providers、catalog 和 skill-mount surface。禁止让 catalog、overlay、SkillTool、MCP 或 worker 各自扫描 inactive package 资源形成多源投影。
+- 领域专家团规则必须放在 package README、`selector.md`、agent role overlay、package skills/tools/MCP 中；全局 Orchestrator/core prompt 只保留专家团协议、生命周期和投影边界，禁止把 frontend-replica 等具体专家团的领域策略写回 global core 或废弃的 built-in skill 文件。
+- 专家团可以声明可见能力和 role overlays，但不能创建第二套 workflow、dispatch、context packet、task manipulation tool 或调度状态机；workflow 仍由 scheduler scope 的 `WorkflowRegistry` 和真实工具调用承担。
+- 普通 skill import 不得隐式创建、release、选择或覆盖专家团；payload release 只能作为显式 provisioning，把缺失 package 写入项目目录，且禁止自动覆盖已有项目 package。
+- 修改专家团加载、投影、catalog、import/export、payload 或 overlay surface 时，必须用 registry / manager / resolver / route / overlay 的真实路径测试验证 active 与 inactive package 隔离，不能只用 prompt 字符串测试证明完成。
+
 ---
 
 ## 三、代码质量与技术债

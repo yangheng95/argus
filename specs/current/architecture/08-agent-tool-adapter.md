@@ -17,7 +17,7 @@ There is no runtime permission-deny adapter standing in for tool visibility. `pe
 
 Built-in agents are registered in `Agent.buildState(...)` with `tools: AgentToolPool.assignment(<role>)`. Their tool pools are not configurable through `opencorvus.jsonc`; `config.agent.<built-in>.tools` throws because the canonical pool is the single source for built-in visibility.
 
-Custom agents use `AgentToolPool.customDefault()` unless their config supplies a normalized `ToolPoolAssignment`. Custom assignments use the same `global` / `private` shape as built-ins.
+Custom agents use `AgentToolPool.customDefault()` unless their config supplies a normalized `ToolPoolAssignment`. The custom default excludes scheduler/control-plane tools such as `panel`, `request_orchestrator_decision`, and `wait`; explicit custom assignments reject the same scoped orchestration tools. Custom workers must not receive lifecycle or orchestration control. Custom assignments use the same `global` / `private` shape as built-ins.
 
 ## Role Pools
 
@@ -40,7 +40,7 @@ Custom agents use `AgentToolPool.customDefault()` unless their config supplies a
 
 ## Registry Flow
 
-1. `ToolRegistry.all()` loads shared built-in global tools plus configured plugin/custom tools.
+1. `ToolRegistry.all()` loads shared built-in global tools plus configured plugin/custom tools. Custom and plugin tools must have unique non-canonical IDs; they may not shadow built-in global or private OpenCorvus tool IDs.
 2. If an agent is present, `AgentToolPool.privateRegistryTools(agent.name, agent.tools)` loads private tools whose IDs are visible in the assignment.
 3. The combined list is filtered by `AgentToolPool.visibleToolIDs(agent.tools)`.
 4. `apply_patch` versus `edit` / `write` is selected from the model ID.
