@@ -9,9 +9,10 @@
 
 ### Acceptance Criteria
 
-- `AGENTS.md` explicitly says commits for the current `v0.0.1beta` git-cc delivery line must use the `dsw-33987` subject prefix.
-- The existing pushed `dsw-0000: add expert squad display prefixes` commit is rewritten to use `dsw-33987`.
-- The rewrite is pushed to `myhexin/v0.0.1beta` only after confirming the remote still matches local `HEAD`, using lease protection for the history update.
+- `AGENTS.md` explicitly says later commits for the current `v0.0.1beta` git-cc delivery line must use the `dsw-33987` subject prefix.
+- The previously pushed latest `dsw-0000: add expert squad display prefixes` commit was rewritten to use `dsw-33987` because it was the current delivery commit and the remote had not moved.
+- Older already-submitted history is not rewritten solely for prefix uniformity.
+- Any future history rewrite requires an explicit user request that also accounts for upstream merge impact.
 - Existing unrelated dirty worktree changes, including the pre-existing `AGENTS.md` expert-squad rule hunk, are preserved and not folded into this change.
 
 ### Hard Constraints
@@ -41,7 +42,8 @@
 - Local `HEAD` before this rule update: `028bd41d1e dsw-0000: add expert squad display prefixes`.
 - `git rev-list --left-right --count myhexin/v0.0.1beta...HEAD` returned `0 0` after fetching `myhexin v0.0.1beta`, so the remote currently matches local `HEAD`.
 - `AGENTS.md` already contains an unstaged expert-squad rule addition outside this task; this change must stage only the new `dsw-33987` rule hunk from `AGENTS.md`.
-- Post-push second review found 23 non-`dsw-33987` subjects in `dev..HEAD`, including `dsw-0000`, `dsw-2374`, and `dsw-435`; the task is not complete until every remaining non-`dsw-33987` subject in the delivery range is rewritten too.
+- Post-push second review found 23 non-`dsw-33987` subjects in older `dev..HEAD` history, including `dsw-0000`, `dsw-2374`, and `dsw-435`.
+- User correction on 2026-07-06: "已经提交的不要管，不要破坏当前分支." Therefore older submitted commits are out of scope; the rule applies to future commits and safely amendable unpushed/current commits, not broad history rewrites.
 
 ### Independent Agent Feedback
 
@@ -49,10 +51,10 @@
 
 ## Implementation Plan
 
-1. Add a focused rule under `AGENTS.md` rule 33 requiring `dsw-33987` for the current `v0.0.1beta` git-cc delivery line.
+1. Add a focused rule under `AGENTS.md` rule 33 requiring `dsw-33987` for later commits on the current `v0.0.1beta` git-cc delivery line.
 2. Update this monthly records index so the rule change remains discoverable.
 3. Run documentation link health and whitespace checks for the touched files.
 4. Stage only the focused rule/spec/index hunks.
 5. Amend the last commit subject from `dsw-0000` to `dsw-33987`.
-6. Rewrite any remaining non-`dsw-33987` subject in `dev..HEAD` to `dsw-33987` while preserving commit tree content and parent order.
-7. Fetch `myhexin v0.0.1beta` again and force-push with lease only if the remote has not moved.
+6. Do not rewrite older submitted commits solely for prefix uniformity.
+7. Do not push again from a branch that has unrelated local commits ahead of `myhexin/v0.0.1beta` without a separate user instruction.
