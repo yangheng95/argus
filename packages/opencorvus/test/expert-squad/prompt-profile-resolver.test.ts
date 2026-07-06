@@ -538,7 +538,7 @@ describe("PromptProfileResolver", () => {
     })
     expect(generalProjection.selectorSkillNames).toContain("software-testing-expert-squad")
     expect(generalProjection.skills.find((skill) => skill.name === "software-testing-expert-squad")?.content).toContain(
-      "Software Testing Expert Squad Selector",
+      "WuJiang/OpenTest Expert Squad Selector",
     )
 
     const config = Config.Info.parse({ prompt_profile: { active: SOFTWARE_TESTING_EXPERT_SQUAD_ID } })

@@ -1,9 +1,9 @@
 ---
 name: software-testing-workflow
-description: Use when coordinating a software-testing expert squad task through the existing OpenCorvus workflow and package tools.
+description: Use when coordinating a WuJiang/OpenTest expert squad task through the existing OpenCorvus workflow and package tools.
 ---
 
-# Software Testing Workflow
+# WuJiang/OpenTest Workflow
 
 Use this skill after the `software-testing` expert squad is active.
 

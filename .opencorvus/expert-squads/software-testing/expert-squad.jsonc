@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "id": "software-testing",
-  "label": "Software Testing",
-  "description": "Software test design, implementation, execution, evidence, and failure-triage focused expert squad.",
+  "label": "WuJiang/OpenTest",
+  "description": "WuJiang/OpenTest software test design, implementation, execution, evidence, and failure-triage focused expert squad.",
   "version": "2026.07.06",
   "readme": "README.md",
   "selector": {

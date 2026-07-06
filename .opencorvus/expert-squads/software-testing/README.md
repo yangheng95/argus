@@ -2,15 +2,15 @@
 expert_squad_display_prefix: Builtin
 ---
 
-# Software Testing
+# WuJiang/OpenTest
 
-Software Testing is the OpenCorvus expert squad for designing, implementing, executing, and reviewing software tests with durable evidence.
+WuJiang/OpenTest is the OpenCorvus expert squad for designing, implementing, executing, and reviewing software tests with durable evidence.
 
 Vocabulary: API means Application Programming Interface; GUI means Graphical User Interface; QA means Quality Assurance; SUT means System Under Test.
 
 ## Expert Contract
 
-This squad treats "expert" as a falsifiable testing contract. A software-testing result is expert-grade only when the test proves the intended system behavior and the evidence can be rerun:
+This squad treats "expert" as a falsifiable testing contract. A WuJiang/OpenTest result is expert-grade only when the test proves the intended system behavior and the evidence can be rerun:
 
 1. System Under Test boundary: name the product surface, API (Application Programming Interface), command, user path, integration, or data workflow under test.
 2. Test oracle: state the expected result, invariant, snapshot, reference behavior, error condition, accessibility behavior, visual comparison, or business rule that makes the test meaningful.

@@ -205,6 +205,8 @@ describe("expert-squad routes", () => {
         expect(body.active_skill_projection.projected_tool_ids).not.toContain("visual_qa")
 
         const softwareTesting = body.squads.find((squad) => squad.id === "software-testing")
+        expect(softwareTesting?.label).toBe("WuJiang/OpenTest")
+        expect(softwareTesting?.display_label).toBe("Builtin/WuJiang/OpenTest")
         expect(softwareTesting?.projected_agents.sort()).toEqual(["build", "integrity"])
         expect(softwareTesting?.virtual_agents.map((agent) => agent.virtual_agent_id).sort()).toEqual([
           "opentest-implementer",

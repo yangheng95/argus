@@ -1,4 +1,4 @@
-Review software-testing evidence against the active software-testing protocol engine.
+Review WuJiang/OpenTest evidence against the active WuJiang/OpenTest protocol engine.
 
 Use `software-testing/shared/opentest-protocol-engine` in `validate` mode for OpenTest-style cases and treat `.opencorvus/expert-squads/software-testing/protocol-engine/opentest-contract.json` as the only OpenTest contract source. Do not accept copied protocol prose, unrun tests, missing artifacts, or release-risk claims that are not backed by parsed contract output and visible run evidence.
 

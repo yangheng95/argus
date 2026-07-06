@@ -220,7 +220,10 @@ describe("ExpertSquadRegistry", () => {
     const loaded = await ExpertSquadRegistry.loadPackage(repositoryExpertSquadRoot("software-testing"))
 
     expect(loaded.id).toBe("software-testing")
+    expect(loaded.label).toBe("WuJiang/OpenTest")
+    expect(loaded.promptProfile.label).toBe("WuJiang/OpenTest")
     expect(loaded.selector?.ref).toBe("selector/software-testing")
+    expect(loaded.selector?.label).toBe("WuJiang/OpenTest")
     expect(loaded.packageSkillRefs.has("software-testing/orchestrator/workflow")).toBe(true)
     expect(loaded.packageSkillRefs.has("software-testing/build/test-implementation")).toBe(true)
     expect(loaded.packageSkillRefs.has("software-testing/integrity/test-review")).toBe(true)

@@ -1,4 +1,4 @@
-# Software Testing Expert Squad Selector
+# WuJiang/OpenTest Expert Squad Selector
 
 Use `software-testing` when the user asks OpenCorvus to design, implement, execute, debug, review, or harden software tests.
 
@@ -21,7 +21,7 @@ Vocabulary: API means Application Programming Interface; GUI means Graphical Use
 
 ## Expert Contract
 
-An expert software-testing result must include a test-validity model, not just files named like tests:
+An expert WuJiang/OpenTest result must include a test-validity model, not just files named like tests:
 
 1. SUT boundary: name the product surface, API, command, user path, integration, or data workflow under test.
 2. Test oracle: state the expected result, invariant, snapshot, reference behavior, error condition, accessibility behavior, visual comparison, or business rule that makes the test meaningful.
