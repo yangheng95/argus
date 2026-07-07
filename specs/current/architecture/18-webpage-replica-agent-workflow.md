@@ -4,7 +4,6 @@
 > `packages/opencorvus/src/orchestrator/tools.ts`,
 > `packages/opencorvus/src/orchestrator/webpage-evidence.ts`,
 > `packages/opencorvus/src/frontend-research/agent.ts`,
-> `packages/opencorvus/src/frontend-design/agent.ts`,
 > `packages/opencorvus/src/build/prompt-context.ts`,
 > `packages/opencorvus/src/visual-qa/agent.ts`,
 > `packages/opencorvus/src/integrity/team-agent.ts`, and
@@ -104,7 +103,6 @@ flowchart TD
   WE["webpage-evidence/*"]
   WCS["web-clone-source/*"]
   FR["frontend_research"]
-  FD["frontend_design"]
   IA["analyze_intent<br/>(optional)"]
   R["requirements"]
   A["architect"]
@@ -119,30 +117,22 @@ flowchart TD
   H --> WE
   H --> WCS
   O --> FR
-  O --> FD
   WE -.-> FR
-  WE -.-> FD
   WCS -.-> FR
-  WCS -.-> FD
   O --> IA
   O --> R
   FR -.-> R
-  FD -.-> R
   O --> A
   R -.-> A
   FR -.-> A
-  FD -.-> A
   O --> W
   A -.-> W
-  FD -.-> W
   O --> B
   R -.-> B
   A -.-> B
   FR -.-> B
-  FD -.-> B
   WCS -.-> B
   O --> V
-  FD -.-> V
   B -.-> V
   O --> IT
   R -.-> IT
@@ -164,35 +154,34 @@ files. Agents do not secretly message each other.
 
 ## Direct Runtime Calls
 
-| Caller | Callee | Runtime path | Webpage replica role |
-| --- | --- | --- | --- |
-| Orchestrator | host webpage evidence runner | `ensureLiveWebpageEvidence()` before frontend stages when a live URL is provided | Materializes task runtime, extracts rendered page evidence, compiles/analyzes it, captures runtime states, and creates `web-clone-source`. This is infrastructure, not an agent. |
-| Orchestrator | `frontend_research` | `frontend_research` tool | Publishes source-backed investigation packets from host-prepared webpage evidence. It does not create the implementation template, requirements, goals, or next-route plan. |
-| Orchestrator | `frontend_design` | `frontend_design` tool | Produces visual/source handoff, frontend template, source-editable visual skeleton contract, visual consistency contract, and downstream notes. For webpage replicas, it must anchor to `webpage-evidence` and `web-clone-source`. |
-| Orchestrator | `analyze_intent` | `analyze_intent` tool | Optional clarification / complexity analysis, usually after webpage evidence when the scope is ambiguous. |
-| Orchestrator | `requirements` | `requirements` tool | Registers `REQ-N` rows and foundational decisions from user request plus evidence. It does not produce goals. |
-| Orchestrator | `architect` | `architect` tool | Decomposes requirements into ordered goals, acceptance specs, traceability, source-reference coverage, and cross-goal contracts. |
-| Orchestrator | `workload_analysis` | `workload_analysis` tool | Read-only goal sizing review. It can produce concerns, but it does not modify goals and is not a gate. |
-| Orchestrator | `build` | `build` tool | Runs implementation in a managed build session/worktree. For normal pipeline work it is goal-scoped; after review feedback it may be task-level scoped direct rework with active requirements and review feedback. |
-| Orchestrator | `visual_qa` | `visual_qa` tool | Runs frontend GUI/product review near task completion after blocking builds are terminal. It can repair in-scope defects, but its report is evidence for Orchestrator, not lifecycle authority. |
-| Orchestrator | `integrity` | `integrity` tool | Runs system completeness review after blocking build evidence is available. It returns pass / non-pass report evidence; Orchestrator decides completion, repair, follow-up, question, or failure. |
-| Build | `general` / `explore` | `task` sub-agent tool | Optional worker-side help for scoped implementation exploration. This is not the main webpage workflow and must obey task-specific no-subtask constraints when present. |
+| Caller       | Callee                       | Runtime path                                                                     | Webpage replica role                                                                                                                                                                                               |
+| ------------ | ---------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Orchestrator | host webpage evidence runner | `ensureLiveWebpageEvidence()` before frontend stages when a live URL is provided | Materializes task runtime, extracts rendered page evidence, compiles/analyzes it, captures runtime states, and creates `web-clone-source`. This is infrastructure, not an agent.                                   |
+| Orchestrator | `frontend_research`          | `frontend_research` tool                                                         | Publishes source-backed investigation packets from host-prepared webpage evidence. It does not create the implementation template, requirements, goals, or next-route plan.                                        |
+| Orchestrator | `analyze_intent`             | `analyze_intent` tool                                                            | Optional clarification / complexity analysis, usually after webpage evidence when the scope is ambiguous.                                                                                                          |
+| Orchestrator | `requirements`               | `requirements` tool                                                              | Registers `REQ-N` rows and foundational decisions from user request plus evidence. It does not produce goals.                                                                                                      |
+| Orchestrator | `architect`                  | `architect` tool                                                                 | Decomposes requirements into ordered goals, acceptance specs, traceability, source-reference coverage, and cross-goal contracts.                                                                                   |
+| Orchestrator | `workload_analysis`          | `workload_analysis` tool                                                         | Read-only goal sizing review. It can produce concerns, but it does not modify goals and is not a gate.                                                                                                             |
+| Orchestrator | `build`                      | `build` tool                                                                     | Runs implementation in a managed build session/worktree. For normal pipeline work it is goal-scoped; after review feedback it may be task-level scoped direct rework with active requirements and review feedback. |
+| Orchestrator | `visual_qa`                  | `visual_qa` tool                                                                 | Runs frontend GUI/product review near task completion after blocking builds are terminal. It can repair in-scope defects, but its report is evidence for Orchestrator, not lifecycle authority.                    |
+| Orchestrator | `integrity`                  | `integrity` tool                                                                 | Runs system completeness review after blocking build evidence is available. It returns pass / non-pass report evidence; Orchestrator decides completion, repair, follow-up, question, or failure.                  |
+| Build        | `general` / `explore`        | `task` sub-agent tool                                                            | Optional worker-side help for scoped implementation exploration. This is not the main webpage workflow and must obey task-specific no-subtask constraints when present.                                            |
 
 ## Durable Handoff Surfaces
 
-| Producer | Handoff | Consumers | Notes |
-| --- | --- | --- | --- |
-| Host webpage evidence runner | `.opencorvus/r/t/<task>/fd/webpage-evidence/*` including `reference.png`, `capture.html`, `prd-evidence-summary.md`, `source-ir/*`, `source-skeleton/*`, interaction screenshots, and visual candidates | `frontend_research`, `frontend_design`, Build through design handoff, Visual QA through reference evidence | The rendered source evidence is the source of truth for page structure, pixels, style, layout, content, and interaction states. |
-| Host source package creation | `.opencorvus/r/t/<task>/fd/web-clone-source/*` including `implementation-blueprint.md`, `web-clone-context.md`, `web-clone-implementation-contract.json`, source IR, source skeleton, CSS sidecars, assets, and `reference.png` | `frontend_design`, Build | This is mandatory source-backed implementation input. It is not copied as an app deliverable. |
-| `frontend_research` | `frontend_research_brief` and compact projections | `frontend_design`, `requirements`, `architect`, Build | It is a coverage index for components, evidence IDs, interaction states, data questions, and fidelity risks. |
-| `frontend_design` | `decision_log phase=frontend_design`, `task.design_specs`, public report, frontend project role, visual evidence, source manifest, VisualRegionBinding crop manifest with `reference_region_key` rows | `requirements`, `architect`, Build, Visual QA, Integrity | For webpage replicas, the handoff names `web-clone-source` and may create `frontend-design-skeleton` as source evidence plus `visual-html-skeleton` as visual baseline. Full-page reference slicing is model-authored: Frontend Design inspects a coordinate atlas, submits bboxes, then reviews the crop overlay/contact sheet. |
-| `requirements` | Active requirement spec snapshot and `REQ-N` rows | `architect`, Build, Integrity, workflow prompt | Build direct rework after review feedback must still receive active requirements. |
-| `architect` | Goal graph, acceptance specs, source coverage, `reference_coverage.reference_regions`, contract graph, decision-log entries | `workload_analysis`, Build, Integrity | The webpage clone goal graph should derive from source IR and cover component source, data/API/state adapters, interactions, and runtime visual verification. Architect binds Frontend Design crop rows to goals; Frontend Design does not invent future goal ids. |
-| `workload_analysis` | Goal workload brief and concerns | Orchestrator, Build, possibly Architect rerun | Advisory, not a gate. |
-| Build | `build_session_contract`, BuildResult from `report_build_result`, changed-file facts, verification/browser evidence | Orchestrator, Visual QA, Integrity, future Build retry | Passed Build evidence is implementation evidence, not task completion. |
-| Visual QA | Structured VisualQaReport, acceptance semantics, `decision_log phase=visual_qa` report records, problem DOM regions | Orchestrator, Build, Integrity, workflow projection | Failed Visual QA becomes first-class `visualQaFeedback` for Build, not hidden acceptance feedback. |
-| Integrity | `engine_artifact kind=integrity_attempt`, markdown report, required repairs | Orchestrator, Build, workflow projection | Integrity non-pass is completed review evidence, not a failed lifecycle gate. |
-| Orchestrator | Lifecycle tool call and visible task events | User, task board, next workflow turn | `complete_task` / `fail_task` are explicit Orchestrator decisions. |
+| Producer                                   | Handoff                                                                                                                                                                                                                         | Consumers                                                                     | Notes                                                                                                                                                                                                                                                                               |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Host webpage evidence runner               | `.opencorvus/r/t/<task>/fd/webpage-evidence/*` including `reference.png`, `capture.html`, `prd-evidence-summary.md`, `source-ir/*`, `source-skeleton/*`, interaction screenshots, and visual candidates                         | `frontend_research`, Build, Visual QA                                         | The rendered source evidence is the source of truth for page structure, pixels, style, layout, content, and interaction states.                                                                                                                                                     |
+| Host source package creation               | `.opencorvus/r/t/<task>/fd/web-clone-source/*` including `implementation-blueprint.md`, `web-clone-context.md`, `web-clone-implementation-contract.json`, source IR, source skeleton, CSS sidecars, assets, and `reference.png` | Build                                                                         | This is mandatory source-backed implementation input. It is not copied as an app deliverable.                                                                                                                                                                                       |
+| `frontend_research`                        | `frontend_research_brief` and compact projections                                                                                                                                                                               | `requirements`, `architect`, Build                                            | It is a coverage index for components, evidence IDs, interaction states, data questions, and fidelity risks.                                                                                                                                                                        |
+| Existing/custom `frontend_design` evidence | `decision_log phase=frontend_design`, `task.design_specs`, public report, frontend project role, visual evidence, source manifest, VisualRegionBinding crop manifest with `reference_region_key` rows                           | `requirements`, `architect`, Build, Visual QA, Integrity when already present | The frontend-design implementation is retained for explicit custom workflows and historical handoff consumption, but it is not dispatched by the normal frontend-replica pipeline.                                                                                                  |
+| `requirements`                             | Active requirement spec snapshot and `REQ-N` rows                                                                                                                                                                               | `architect`, Build, Integrity, workflow prompt                                | Build direct rework after review feedback must still receive active requirements.                                                                                                                                                                                                   |
+| `architect`                                | Goal graph, acceptance specs, source coverage, optional `reference_coverage.reference_regions`, contract graph, decision-log entries                                                                                            | `workload_analysis`, Build, Integrity                                         | The webpage clone goal graph should derive from source IR and cover component source, data/API/state adapters, interactions, and runtime visual verification. Architect binds declared source/reference evidence to goals and preserves existing crop rows when they already exist. |
+| `workload_analysis`                        | Goal workload brief and concerns                                                                                                                                                                                                | Orchestrator, Build, possibly Architect rerun                                 | Advisory, not a gate.                                                                                                                                                                                                                                                               |
+| Build                                      | `build_session_contract`, BuildResult from `report_build_result`, changed-file facts, verification/browser evidence                                                                                                             | Orchestrator, Visual QA, Integrity, future Build retry                        | Passed Build evidence is implementation evidence, not task completion.                                                                                                                                                                                                              |
+| Visual QA                                  | Structured VisualQaReport, acceptance semantics, `decision_log phase=visual_qa` report records, problem DOM regions                                                                                                             | Orchestrator, Build, Integrity, workflow projection                           | Failed Visual QA becomes first-class `visualQaFeedback` for Build, not hidden acceptance feedback.                                                                                                                                                                                  |
+| Integrity                                  | `engine_artifact kind=integrity_attempt`, markdown report, required repairs                                                                                                                                                     | Orchestrator, Build, workflow projection                                      | Integrity non-pass is completed review evidence, not a failed lifecycle gate.                                                                                                                                                                                                       |
+| Orchestrator                               | Lifecycle tool call and visible task events                                                                                                                                                                                     | User, task board, next workflow turn                                          | `complete_task` / `fail_task` are explicit Orchestrator decisions.                                                                                                                                                                                                                  |
 
 ## Webpage-Specific Stage Boundaries
 
@@ -212,53 +201,42 @@ If this layer fails, downstream agents should report the missing concrete files
 or evidence phase. They should not invent page facts from memory or use a
 second source of truth.
 
-### `frontend_research` Versus `frontend_design`
+### Frontend Research And Source Evidence
 
 `frontend_research` answers "what is on this source page, where are the risks,
 and what must later agents inspect?" It produces work packets and compact
 pointers.
 
-`frontend_design` answers "what is the visual/source handoff and implementable
-frontend contract?" It can use `create_frontend_skeleton_project` to create a
-React/Vite source-evidence project under `frontend-design-skeleton`, but that
-project is not the acceptance app root. For visual-skeleton-first webpage
-replica work, `frontend_design` reports a separate static `visual-html-skeleton`
-baseline and cites rendered visual evidence.
-
-The two are peers under Orchestrator. `frontend_research` may inform
-`frontend_design`; neither owns final requirements, goals, or completion.
+Normal frontend-replica workflow no longer dispatches `frontend_design`.
+Requirements, Architect, Build, Visual Quality Assurance, and Integrity consume
+host-prepared webpage evidence, `web-clone-source`, and `frontend_research`
+compact projections directly. If a custom workflow or older task already
+produced `frontend_design` handoff artifacts, downstream agents may consume
+those artifacts as existing evidence; they must not require a fresh
+frontend-design run.
 
 ### Goal-Bound Reference Crops
 
-Full-page reference screenshot slicing belongs to the model-visible Frontend
-Design workflow, not to host-side automatic region guessing. Frontend Design
-uses `create_visual_region_coordinate_atlas` to inspect absolute source
-coordinates, chooses visible component or region bounding boxes, calls
-`create_visual_region_binding_package`, and inspects the generated bbox overlay
-plus contact sheet before final handoff.
+Full-page reference screenshot ownership is expressed through the active source
+and reference evidence contract. Architect is the goal binding source. It
+registers source coverage and, when the evidence contract already declares
+crop rows, `reference_coverage.reference_regions` for the goals that own the
+corresponding visible source regions.
 
-The crop manifest records physical evidence only: each crop row carries a
-stable `reference_region_key` in `region_id@viewport_id` form, a
+The crop manifest, when present, records physical evidence only: each crop row
+carries a stable `reference_region_key` in `region_id@viewport_id` form, a
 `source_reference_artifact` PNG path, the source bbox, crop intent, and the
-manifest path. It does not carry goal ids because Frontend Design runs before
-Architect creates the goal graph.
+manifest path. It does not carry goal ids.
 
-Architect is the goal binding source. It registers
-`reference_coverage.reference_regions` for the goals that own the corresponding
-visible source regions. Orchestrator filters those rows for the active Build
-goal, stores the referenced crop PNGs through AttachmentStore, and injects them
-as goal-scoped Build Evidence Pack target references. For every goal-scoped
-Build dispatch, task-level images or the full-page reference are not mixed into
-the target contract as substitutes. If the current goal has no Architect
-reference-coverage rows, or rows with no crop rows, Orchestrator stays in
-goal-bound reference mode and injects no task-level visual substitute; Build
-must surface the missing `reference_region_key` crop as a blocker. Goal-scoped
-Build context may keep source/component pointers, but it must not expand
-`web-clone-source/reference.png`, source manifest full-page image refs, or a
-required full-page reference-image instruction; whole-page reference inspection
-belongs to Frontend Design slicing and final Visual Quality Assurance. Crop row
-identity is the `reference_region_key`, not the PNG checksum, so two visually
-identical crop files remain distinct goal-bound target references.
+Orchestrator filters declared reference rows for the active Build goal, stores
+the referenced crop PNGs through AttachmentStore, and injects them as
+goal-scoped Build Evidence Pack target references. For every goal-scoped Build
+dispatch, task-level images or the full-page reference are not mixed into the
+target contract as substitutes. If the current goal declares crop rows and the
+rows cannot be resolved, Build must surface the missing `reference_region_key`
+crop as a blocker. Goal-scoped Build context may keep source/component
+pointers, but it must not expand whole-page reference images as substitutes for
+declared goal-bound rows.
 
 ### Requirements And Architect Own Scope Shape
 
@@ -274,7 +252,7 @@ runtime visual verification.
 Build consumes the upstream handoff through explicit prompt overlays:
 
 - Frontend Research Build Pointers
-- Frontend Design Handoff
+- Existing/custom Frontend Design Handoff when already present
 - Webpage Clone Source-Baseline Overlay
 - Visual Reference Overlay
 - Integrity Rework Overlay
@@ -282,11 +260,10 @@ Build consumes the upstream handoff through explicit prompt overlays:
 - Acceptance Repair Overlay
 
 For webpage clones, the source-baseline overlay requires Build to resolve
-`web-clone-source/...` and `frontend-design-skeleton/...` under the task-runtime
-frontend-design root, inspect source IR and style profiles before CSS repair,
-and fail with a concrete blocker if required source files are missing. Build
-must not replace source-backed repair with a blank-page rebuild or screenshot
-wrapper.
+`web-clone-source/...` under the task-runtime frontend evidence root, inspect
+source IR and style profiles before CSS repair, and fail with a concrete
+blocker if required source files are missing. Build must not replace
+source-backed repair with a blank-page rebuild or screenshot wrapper.
 
 ### Visual QA And Integrity Are Peer Review Surfaces
 
@@ -339,16 +316,17 @@ operator instruction explicitly asks for it or Visual QA actually inspects more
 than one viewport. A prompt artifact such as `specs/artifacts/tc_clone_prompt.md`
 can add stricter task-local constraints, for example a single round with no
 repeated pre-Architect agents. In that case, Orchestrator should consume the
-already persisted `frontend_research` / `frontend_design` evidence during repair
-instead of re-running those stages as a convenience loop.
+already persisted `frontend_research` evidence and any existing custom
+`frontend_design` handoff during repair instead of re-running stages as a
+convenience loop.
 
 ## Debug Checklist
 
 1. Missing source evidence: inspect `ensureLiveWebpageEvidence()` progress,
    `webpage-evidence-failure.json`, and the primary artifact set.
-2. Missing research/design context: inspect `frontend_research_brief`,
-   `decision_log phase=frontend_design`, and the frontend-design public report
-   manifest.
+2. Missing source/research context: inspect `frontend_research_brief`,
+   `web-clone-source`, and any existing custom `decision_log phase=frontend_design`
+   handoff.
 3. Build ignored source evidence: inspect Build prompt overlay IDs and verify
    that `webpage-clone-source-baseline` rendered.
 4. Visual repair did not happen: inspect `decision_log phase=visual_qa` full

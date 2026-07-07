@@ -42,3 +42,7 @@ Package prompt overlays:
 - visual-qa: agents/visual-qa/system.md
 - integrity: agents/integrity/system.md
 - orchestrator: agents/orchestrator/system.md
+
+`frontend-design` remains packaged for explicit non-default workflow use and
+historical handoff consumption, but the normal frontend-replica workflow does
+not dispatch it.

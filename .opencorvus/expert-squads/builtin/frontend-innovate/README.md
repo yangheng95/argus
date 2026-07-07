@@ -4,7 +4,7 @@ expert_squad_display_prefix: Builtin
 
 # Frontend Innovate
 
-Frontend design-resource synthesis, task-first redesign philosophy, named direction comparison, selected implementation handoff, and rendered evidence review expert squad.
+Frontend design-resource synthesis, competitor-informed redesign, task-first design philosophy, HTML design draft ground truth, named direction comparison, selected implementation handoff, and rendered evidence review expert squad.
 
 Vocabulary: CSS means Cascading Style Sheets; HTML means HyperText Markup Language; QA means Quality Assurance; URL means Uniform Resource Locator.
 
@@ -15,12 +15,14 @@ This squad treats "expert" as a falsifiable design-convergence contract. A front
 1. Resource boundary: list the screenshots, HyperText Markup Language material, Cascading Style Sheets material, Figma material, source URL evidence, product constraints, and target project components that are allowed to inform the design.
 2. User-task model: name the audience, page job, primary path, secondary paths, failure states, and convenience problem before judging appearance.
 3. Direction discipline: produce competing named directions when the task asks for redesign/innovation, compare each against the same evidence, and record why rejected directions or generic traits fail the page job.
-4. Selected handoff: convert the selected direction into component families, data/state needs, copy tone, interaction semantics, accessibility behavior, design-system/library reuse, and implementation boundaries.
-5. Evidence separation: keep source/design resources separate from rendered implementation proof; do not replace missing Figma or source evidence with unrelated screenshots.
-6. Rendered proof: verify the implemented direction through screenshots, primary task path, keyboard/focus behavior, loading/empty/error states, and any named accessibility or performance checks.
-7. Acceptance proof: final evidence must tie selected-direction rationale, implementation changes, Visual quality assurance review, and Integrity review to the same resource set.
+4. Competitor/reference evidence: register each evidence-backed competitor or design-reference webpage URL, screenshot artifact, viewport, digest, inspected elements, and influence on the selected direction as structured `competitor_reference_evidence`.
+5. Selected HTML design draft: convert the selected direction into source-editable `visual-html-skeleton` HTML/Cascading Style Sheets files, component families, data/state needs, copy tone, interaction semantics, accessibility behavior, design-system/library reuse, and implementation boundaries.
+6. Evidence separation: keep source-page and competitor/design resources separate from the selected rendered HTML design draft; do not replace missing Figma, source, or competitor evidence with unrelated screenshots.
+7. Rendered design proof: verify the HTML design draft through real rendered screenshots before downstream implementation.
+8. Rendered implementation proof: verify the implemented direction through screenshots, primary task path, keyboard/focus behavior, loading/empty/error states, and any named accessibility or performance checks.
+9. Acceptance proof: final evidence must tie selected-direction rationale, competitor/reference screenshots, HTML design draft evidence, implementation changes, Visual quality assurance review, and Integrity review to the same resource set.
 
-Do not call frontend innovation expert-grade when it produces a pretty but ungrounded layout, skips direction comparison, uses novelty without product evidence, implements a discarded draft, omits accessibility or state behavior, or accepts design prose without rendered proof.
+Do not call frontend innovation expert-grade when it produces a pretty but ungrounded layout, skips direction comparison, guesses competitor webpages, uses novelty without product evidence, implements a discarded draft, omits accessibility or state behavior, or accepts design prose without rendered HTML design proof.
 
 ## Agent Communication
 

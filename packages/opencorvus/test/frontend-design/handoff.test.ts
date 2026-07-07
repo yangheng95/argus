@@ -256,3 +256,92 @@ test("frontend-design goal-scoped handoff does not expose full-page source manif
     },
   })
 })
+
+test("frontend-innovate goal-scoped handoff keeps HTML design ground truth guidance without compact excerpts", async () => {
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const log = createDecisionLog(taskID)
+      log.append({
+        phase: "frontend_design",
+        key: "public_report",
+        value: "Frontend Innovate public report exists for goal scoped build.",
+        reason: "public terminal report",
+      })
+      log.append({
+        phase: "frontend_design",
+        key: "frontend_project",
+        value: JSON.stringify({
+          status: "created",
+          role: "visual_baseline_input",
+          project_root: "visual-html-skeleton",
+          source_package: "web-clone-source",
+          entrypoints: ["visual-html-skeleton/index.html"],
+          generation_tool: "frontend-innovate",
+          notes: ["selected HTML design draft"],
+        }),
+        reason: "visual baseline project",
+      })
+      log.append({
+        phase: "frontend_design",
+        key: "selected_design_direction",
+        value: "direction-operator-console",
+        reason: "selected frontend innovate design direction",
+      })
+      log.append({
+        phase: "frontend_design",
+        key: "visual_validation_evidence",
+        value: JSON.stringify([
+          {
+            id: "operator-console-html-design-desktop",
+            render_target: "visual-html-skeleton",
+            rendered_entrypoint: "visual-html-skeleton/index.html",
+            screenshot_artifact: "visual-html-skeleton/previews/operator-console-desktop.png",
+            renderer: "node_playwright_static_file",
+            viewport: "desktop-1440x900",
+            capture_mode: "viewport",
+            screenshot_sha256: "a".repeat(64),
+            review_status: "reviewed_no_blocking_debt",
+            review_summary: "HTML design draft reviewed.",
+          },
+        ]),
+        reason: "rendered HTML design draft evidence",
+      })
+      log.append({
+        phase: "frontend_design",
+        key: "competitor_reference_evidence",
+        value: JSON.stringify([
+          {
+            id: "competitor-command-center",
+            evidence_source: "deep_research",
+            source_page_ref: "frontend_research_brief:source-command-center",
+            competitor_url: "https://competitor.example.com/command-center",
+            screenshot_artifact: "competitor-references/command-center-desktop.png",
+            screenshot_sha256: "c".repeat(64),
+            viewport: "desktop-1440x900",
+            inspected_elements: ["risk queue", "allocation grid"],
+            influence_on_selected_direction: "Selected direction uses command-center density.",
+            source_refs: ["deep_research:competitor-command-center", "competitor-references/command-center-desktop.png"],
+          },
+        ]),
+        reason: "competitor screenshot evidence",
+      })
+
+      const handoff = renderFrontendDesignHandoffReference(taskID, {
+        includeExcerpts: false,
+        pathMode: "absolute",
+        projectDir: tmp.path,
+        goalScopedBuild: true,
+      })
+
+      expect(handoff).toContain("Frontend Innovate HTML Design Ground Truth Guidance")
+      expect(handoff).toContain("selected_design_direction=`direction-operator-console`")
+      expect(handoff).toContain("visual-html-skeleton")
+      expect(handoff).toContain("visual_validation_evidence")
+      expect(handoff).toContain("competitor-command-center")
+      expect(handoff).toContain("https://competitor.example.com/command-center")
+      expect(handoff).toContain("competitor-references/command-center-desktop.png")
+      expect(handoff).not.toContain("### Compact Decision-Log Excerpts")
+    },
+  })
+}, 30_000)

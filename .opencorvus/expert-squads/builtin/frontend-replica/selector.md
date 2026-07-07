@@ -28,17 +28,16 @@ Do not accept source-row prose, screenshot-only commentary, no project diff, sca
 
 - Treat frontend replica as a multi-agent source-evidence implementation task, not as a single blind Build pass. The normal scheduler-declared path is source evidence, Requirements, Architect goals, per-goal Build, Visual QA, Integrity, then Orchestrator lifecycle decision.
 - Treat `frontend_research` as source-page investigation and page-skeleton evidence ownership.
-- Treat `frontend_design` as a single-shot task-scope handoff producer for the replica contract, material inventory, source handoff, and layout/style/data/interaction constraints.
 - Treat `architect` and `build` as consumers of that evidence, not as replacements for source investigation.
 - Treat `visual_qa` as rendered screenshot and interaction evidence review after implementation reaches a visible surface.
 - Do not use implementation work without source URL, screenshot, DOM, or computed-style evidence to invent a new page structure when source evidence exists.
 - After an agent has already produced its task-scope artifact, consume the persisted artifact instead of calling that same agent again for another angle. Exceptions are explicit retry of a failed/incomplete call, Build implementation or repair, Visual QA review or re-review, and Integrity review or re-review after repair.
-- Do not re-run Requirements, Architect, `frontend_research`, `frontend_design`, or the whole workflow as a convenience loop after their valid artifacts exist. If evidence proves a prior artifact invalid, name the invalid artifact and exact evidence, then perform a scoped retry/correction rather than restarting the workflow.
+- Do not re-run Requirements, Architect, `frontend_research`, or the whole workflow as a convenience loop after their valid artifacts exist. If evidence proves a prior artifact invalid, name the invalid artifact and exact evidence, then perform a scoped retry/correction rather than restarting the workflow.
 
 ## Source authority
 
 - Source URL/screenshot/DOM/computed-style/interaction evidence defines the replica contract. Target project primitives, component libraries, data mocks, and business code are subordinate implementation choices.
-- For full-page reference screenshots, Frontend Design must inspect the coordinate atlas, choose horizontal component-band cuts, call `create_visual_region_binding_package` with `slicing_strategy: "horizontal_component_bands"` and contiguous `source_order`, review the returned overlay/contact sheet, call `update_frontend_visual_region_binding` with the returned manifestPath, and publish `reference_region_key` crop rows for downstream goal binding before Architect writes visible goals.
+- Use task-scoped webpage evidence, source IR, source screenshots, computed styles, interaction observations, frontend research briefs, and explicitly declared visual-region manifests as the source authority. Do not dispatch `frontend_design` as part of the normal frontend-replica workflow.
 - Source evidence rows are not user-visible deliverables by themselves. They become implementation work only after Requirements or Architect maps them to a visible component, state, region, interaction, asset, table, chart, map, or media slot with target files and rendered acceptance.
 - Do not accept screenshot-only prose, source-row labels, or unchecked design summaries as proof that the rendered implementation matches the source. The proof must tie source evidence to local rendered output and the owning implementation surface.
 
@@ -64,7 +63,7 @@ Do not accept source-row prose, screenshot-only commentary, no project diff, sca
 - Do not mix several user-visible source components, unrelated regions, or a whole page into one Build goal.
 - Normal webpage replica decomposition generally needs 10 or more goals. Fewer goals require source evidence that the page has fewer than 10 meaningful user-visible components or regions, plus an explicit Architect note explaining why each remaining goal is still one component or region.
 - Keep each goal tied to its source evidence, target implementation files, Component Interaction Matrix entries, and rendered verification evidence. A support goal such as source registry or shared mock contracts may exist only when it writes shared source/data modules consumed by user-visible region goals.
-- Architect must bind each visible replica goal to completed Frontend Design crop rows through structured `reference_coverage.reference_regions`; crop ownership must not depend on filenames, prose labels, screenshot titles, overlay card ids, or reinterpreting the whole-page reference image.
+- Architect must bind each visible replica goal to explicit source/reference evidence through `reference_coverage` and source coverage. If the active evidence contract already declares `reference_coverage.reference_regions`, preserve those exact rows; otherwise do not invent crop rows, filenames, prose labels, screenshot titles, overlay card ids, or whole-page reinterpretations.
 - Do not accept `no_project_diff`, documentation-only output, screenshot-only commentary, blank spacer changes, or source-evidence restatement as completion for a Build goal that was supposed to implement a visible surface.
 
 ## Failure taxonomy
@@ -95,7 +94,7 @@ Do not accept source-row prose, screenshot-only commentary, no project diff, sca
 
 - Treat source page height, full-page screenshot dimensions, region y coordinates, and footer transition positions as diagnostic measurements for locating real visible source content and region boundaries. They are not implementation targets by themselves.
 - Requirements and Architect must not turn a measured y coordinate, footer boundary, or document height into acceptance that can be satisfied by empty spacer bands, blank margin/padding, `height`/`min-height` filler, phantom cards, or unrendered media slots.
-- Frontend Design must describe geometry together with the visible source sections, assets, canvas/image captures, repeated content, and footer material that occupy that region; if the source evidence is missing, mark the region as evidence debt instead of asking downstream agents to pad the page.
+- Upstream source evidence must describe geometry together with the visible source sections, assets, canvas/image captures, repeated content, and footer material that occupy that region; if the source evidence is missing, mark the region as evidence debt instead of asking downstream agents to pad the page.
 - Build must not align a footer, page edge, scroll slice, or full-page height by adding blank CSS space. If the rendered page is short or a source interval is empty, restore the missing source-backed content/assets/interactions or report the concrete blocker.
 - Visual QA must reject large blank bands between completed regions, empty thumbnail/canvas/image slots, or CSS filler inserted to match source geometry as production blockers. The report should cite the source/reference slice and the owning DOM/source module that must be repaired.
 
@@ -118,7 +117,7 @@ Micro-adjustments include spacing, state, asset, selector, or interaction correc
 
 If evidence shows a major incident, do not pretend a micro-adjustment can fix it. Major incidents include wrong page information architecture, wrong source page, missing reference evidence, an invalid goal graph, or completed goals built on a false premise.
 
-For a major incident, call `propose_task` with the lesson learned, the exact evidence that invalidated this task, and the corrected task scope. The proposed task must carry forward what was learned instead of restarting blindly.
+For a major incident, call `manage_task` with `action: "propose_task"`, the lesson learned, the exact evidence that invalidated this task, and the corrected task scope. The proposed task must carry forward what was learned instead of restarting blindly.
 
 ## Completion evidence
 

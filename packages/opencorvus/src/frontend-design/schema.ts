@@ -34,6 +34,10 @@ function isTemporaryCaptureArtifact(input: string): boolean {
   return normalized.includes("/opencorvus-capture/") || normalized.startsWith("opencorvus-capture/")
 }
 
+function isRasterScreenshotArtifact(input: string): boolean {
+  return /\.(?:png|jpe?g|webp)$/i.test(artifactBasename(input))
+}
+
 function isLocalPreviewUrl(input: string): boolean {
   const normalized = normalizedArtifactPath(input)
   if (/^(?:https?:\/\/)?(?:localhost|127\.0\.0\.1|\[::1\])(?:[:/?#]|$)/i.test(normalized)) return true
@@ -423,6 +427,45 @@ export const VisualValidationEvidenceSchema = z
   .strict()
 export type VisualValidationEvidence = z.infer<typeof VisualValidationEvidenceSchema>
 
+export const CompetitorReferenceEvidenceSchema = z
+  .object({
+    id: z
+      .string()
+      .min(1)
+      .regex(/^competitor-[a-z0-9][a-z0-9-]*$/, "id must start with 'competitor-' and contain only [a-z0-9-]"),
+    evidence_source: z
+      .enum(["user_provided", "frontend_research", "deep_research", "task_material"])
+      .describe("Where this competitor/design-reference webpage evidence came from; never guessed by frontend_design."),
+    source_page_ref: SourceReferenceStringSchema.describe(
+      "Frontend Research source-page artifact, URL, or brief ref that motivated this competitor/reference comparison.",
+    ),
+    competitor_url: z
+      .string()
+      .url()
+      .refine((value) => value.startsWith("http://") || value.startsWith("https://"), {
+        message: "competitor_url must be an HTTP(S) webpage URL from user/frontend_research/deep_research/task evidence",
+      })
+      .describe("Evidence-backed competitor or design-reference webpage URL. Do not invent or infer URLs."),
+    screenshot_artifact: SourceReferenceStringSchema.refine(isRasterScreenshotArtifact, {
+      message: "competitor screenshot_artifact must be a task/source evidence raster image",
+    }).describe("Task-scoped screenshot artifact captured from competitor_url or its materialized evidence."),
+    screenshot_sha256: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/i, "screenshot_sha256 must be a 64 character hex digest"),
+    viewport: z.string().min(1).describe("Viewport/device state used for the competitor screenshot."),
+    inspected_elements: z
+      .array(z.string().min(1))
+      .min(1)
+      .describe("Concrete competitor page regions/patterns inspected before redesign."),
+    influence_on_selected_direction: z
+      .string()
+      .min(1)
+      .describe("How this reference influenced or constrained the selected HTML design draft."),
+    source_refs: SourceReferenceListSchema.min(1).describe("Durable evidence refs, briefs, screenshots, or bundles."),
+  })
+  .strict()
+export type CompetitorReferenceEvidence = z.infer<typeof CompetitorReferenceEvidenceSchema>
+
 const OptionalMarkdownField = (description: string) =>
   z
     .string()
@@ -476,6 +519,12 @@ export const FrontendTemplateFinalSchema = z
       .default([])
       .describe(
         "Rejected shallow/generic design traits and the resource-backed corrections. Frontend Innovate tasks use this selected-direction review before handoff.",
+      ),
+    competitor_reference_evidence: z
+      .array(CompetitorReferenceEvidenceSchema)
+      .default([])
+      .describe(
+        "Frontend Innovate competitor/design-reference webpage screenshots inspected before redesign. Each item must come from user, frontend_research, deep_research, or task material evidence; frontend_design must not invent URLs.",
       ),
     fillable_modules: OptionalMarkdownField(
       "Modules/slots frontend_design filled or left as explicit source debt: page modules, data modules, interactions, state, adapters, and verification modules.",
@@ -734,6 +783,8 @@ export const ToolVisualValidationEvidenceSchema = z
   })
   .strict()
 
+export const ToolCompetitorReferenceEvidenceSchema = CompetitorReferenceEvidenceSchema
+
 export const FrontendTemplateSubmitSchema = z
   .object({
     final: z.literal(true).describe("Explicit confirmation that all frontend template fragments are registered."),
@@ -831,6 +882,7 @@ export const FrontendTemplateToolInputSchema = z
     design_directions: z.array(ToolDesignDirectionSchema).default([]),
     selected_design_direction_id: z.string().default(""),
     anti_slop_review: z.array(ToolAntiSlopReviewItemSchema).default([]),
+    competitor_reference_evidence: z.array(ToolCompetitorReferenceEvidenceSchema).default([]),
     fillable_modules: z.string().default(""),
     fillable_module_items: z.array(ToolCompactTemplateItemSchema).default([]),
     component_inventory: z.string().default(""),

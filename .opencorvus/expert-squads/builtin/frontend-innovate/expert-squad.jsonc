@@ -14,23 +14,8 @@
     "scheduler": {
       "role_base": true,
       "built_in_tool_ids": [
-        "analyze_intent",
-        "requirements",
-        "architect",
-        "frontend_research",
-        "frontend_design",
-        "deep_research",
-        "workload_analysis",
-        "build",
-        "visual_qa",
-        "integrity",
-        "fact_check",
-        "explore",
-        "add_goal",
-        "modify_goal",
-        "complete_goal",
-        "delete_goal",
-        "propose_task",
+        "dispatch_agent",
+        "manage_task",
         "refine",
         "browser_preview",
         "bash"
@@ -91,8 +76,12 @@
     }
   },
   "dynamic_attributes": {
+    "scheduler": {
+      "default_workflow_id": "frontend_innovate"
+    },
     "frontend_design": {
-      "require_design_direction_contract": true
+      "require_design_direction_contract": true,
+      "require_html_design_ground_truth": true
     }
   },
   "agents": {

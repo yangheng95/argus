@@ -92,13 +92,22 @@ export namespace ExpertSquadRegistry {
   const FrontendDesignDynamicAttributes = z
     .object({
       require_design_direction_contract: z.boolean().optional().default(false),
+      require_html_design_ground_truth: z.boolean().optional().default(false),
+    })
+    .strict()
+
+  const SchedulerDynamicAttributes = z
+    .object({
+      default_workflow_id: z.string().min(1).optional(),
     })
     .strict()
 
   const DynamicAttributes = z
     .object({
+      scheduler: SchedulerDynamicAttributes.optional().default({}),
       frontend_design: FrontendDesignDynamicAttributes.optional().default({
         require_design_direction_contract: false,
+        require_html_design_ground_truth: false,
       }),
     })
     .strict()
@@ -115,7 +124,11 @@ export namespace ExpertSquadRegistry {
       selector: Selector,
       capability_projection: CapabilityProjection,
       dynamic_attributes: DynamicAttributes.optional().default({
-        frontend_design: { require_design_direction_contract: false },
+        scheduler: {},
+        frontend_design: {
+          require_design_direction_contract: false,
+          require_html_design_ground_truth: false,
+        },
       }),
       agents: z.record(z.string(), AgentDefinition).default({}),
       virtual_agents: z.record(z.string(), VirtualAgentDefinition).default({}),
@@ -1212,15 +1225,13 @@ export namespace ExpertSquadRegistry {
       }
     }
 
-    const explicitSchedulerWorkflowTools = manifest.capability_projection.scheduler.built_in_tool_ids.filter(
-      (toolID): toolID is OrchestratorWorkflowToolName => workflowByTool.has(toolID as OrchestratorWorkflowToolName),
+    const explicitSchedulerWorkflowTools = manifest.capability_projection.scheduler.built_in_tool_ids.includes(
+      "dispatch_agent",
     )
-    for (const workflowTool of explicitSchedulerWorkflowTools) {
-      const role = workflowByTool.get(workflowTool)!
-      if (!manifest.capability_projection.agents[role]) {
-        throw new Error(`capability_projection.scheduler.${workflowTool} requires capability_projection.agents.${role}`)
-      }
-    }
+      ? [...workflowByTool.entries()]
+          .filter(([, role]) => Boolean(manifest.capability_projection.agents[role]))
+          .map(([workflowTool]) => workflowTool)
+      : []
 
     const promptProfile = await readPromptProfile(metadata)
     return {

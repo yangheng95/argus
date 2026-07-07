@@ -49,6 +49,7 @@ export const FRONTEND_DESIGN_SESSION_TOOL_IDS = [
   "update_frontend_design_direction",
   "select_frontend_design_direction",
   "update_frontend_anti_slop_review",
+  "update_frontend_competitor_reference",
   "update_frontend_material",
   "update_frontend_project",
   "update_frontend_component_reuse",

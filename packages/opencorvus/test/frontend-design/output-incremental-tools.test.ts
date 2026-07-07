@@ -810,6 +810,116 @@ test("design-direction contract submit requires multiple directions, selection, 
   )
 })
 
+test("frontend innovate HTML design ground-truth contract rejects implementation targets", async () => {
+  const kit = await registerMinimalFrontendResult(
+    createFrontendTemplateOutputTools({
+      requireDesignDirectionContract: true,
+      requireHtmlDesignGroundTruth: true,
+    }),
+  )
+
+  const result = await callTool(kit.tools, "submit_frontend_template", { final: true })
+
+  expect(result).toContain(
+    "Frontend Innovate HTML design ground-truth contract requires final_acceptance_mode=visual_baseline_allowed",
+  )
+  expect(kit.getCollector().final).toBeUndefined()
+})
+
+async function registerFrontendInnovateDesignEvidence(
+  kit: ReturnType<typeof createFrontendTemplateOutputTools>,
+  options: { includeCompetitorEvidence?: boolean; citeCompetitorInSelectedDirection?: boolean } = {},
+) {
+  const includeCompetitorEvidence = options.includeCompetitorEvidence ?? true
+  const citeCompetitorInSelectedDirection = options.citeCompetitorInSelectedDirection ?? true
+  const selectedEvidenceRefs = ["web-clone-source/reference.png", "visual-html-skeleton/index.html"]
+  if (citeCompetitorInSelectedDirection) selectedEvidenceRefs.push("competitor-command-center")
+  await callTool(kit.tools, "update_frontend_design_direction", {
+    id: "direction-operator-console",
+    name: "Operator console",
+    concept: "Dense command surface informed by source task flow and competitor command-center screenshot evidence.",
+    evidence_refs: selectedEvidenceRefs,
+    tradeoffs: "Higher density fits repeated monitoring but needs strong status hierarchy.",
+    implementation_notes: "Implement the selected source-editable visual-html-skeleton draft.",
+  })
+  await callTool(kit.tools, "update_frontend_design_direction", {
+    id: "direction-editorial-dashboard",
+    name: "Editorial dashboard",
+    concept: "Lower-density summary design with weaker repeated-task fit.",
+    evidence_refs: ["web-clone-source/reference.png"],
+    tradeoffs: "Easier first impression but weaker for monitoring and allocation workflows.",
+    implementation_notes: "Rejected before downstream build.",
+  })
+  await callTool(kit.tools, "select_frontend_design_direction", {
+    id: "direction-operator-console",
+  })
+  await callTool(kit.tools, "update_frontend_anti_slop_review", {
+    id: "anti-slop-generic-cards",
+    rejected_trait: "Generic card-heavy dashboard without evidence-backed workflow density.",
+    evidence: "Source and competitor screenshots both show repeated command-center work.",
+    correction: "Use dense table/card hybrids and explicit risk/allocation hierarchy.",
+  })
+  if (includeCompetitorEvidence) {
+    await callTool(kit.tools, "update_frontend_competitor_reference", {
+      id: "competitor-command-center",
+      evidence_source: "deep_research",
+      source_page_ref: "frontend_research_brief:source-command-center",
+      competitor_url: "https://competitor.example.com/command-center",
+      screenshot_artifact: "competitor-references/command-center-desktop.png",
+      screenshot_sha256: "c".repeat(64),
+      viewport: "desktop-1440x900",
+      inspected_elements: ["risk queue", "allocation grid", "audit timeline"],
+      influence_on_selected_direction:
+        "Selected direction borrows the dense operational hierarchy while preserving source-page content constraints.",
+      source_refs: ["deep_research:competitor-command-center", "competitor-references/command-center-desktop.png"],
+    })
+  }
+}
+
+test(
+  "frontend innovate HTML design ground-truth contract requires competitor screenshot evidence",
+  async () => {
+    const fixture = await createVisualBaselineFixture()
+    const missingCompetitor = createFrontendTemplateOutputTools({
+      artifactRoot: fixture.root,
+      workspaceRoot: fixture.root,
+      requireDesignDirectionContract: true,
+      requireHtmlDesignGroundTruth: true,
+    })
+    await registerVisualBaselineResult(missingCompetitor, {
+      captureMode: "full_page",
+      screenshotSha256: fixture.screenshotSha256,
+      sourceReferenceSha256: fixture.sourceReferenceSha256,
+    })
+    await registerFrontendInnovateDesignEvidence(missingCompetitor, { includeCompetitorEvidence: false })
+
+    const missingResult = await callTool(missingCompetitor.tools, "submit_frontend_template", { final: true })
+
+    expect(missingResult).toContain("requires at least one evidence-backed competitor_reference_evidence")
+    expect(missingCompetitor.getCollector().final).toBeUndefined()
+
+    const complete = createFrontendTemplateOutputTools({
+      artifactRoot: fixture.root,
+      workspaceRoot: fixture.root,
+      requireDesignDirectionContract: true,
+      requireHtmlDesignGroundTruth: true,
+    })
+    await registerVisualBaselineResult(complete, {
+      captureMode: "full_page",
+      screenshotSha256: fixture.screenshotSha256,
+      sourceReferenceSha256: fixture.sourceReferenceSha256,
+    })
+    await registerFrontendInnovateDesignEvidence(complete)
+
+    const completeResult = await callTool(complete.tools, "submit_frontend_template", { final: true })
+
+    expect(completeResult).toContain("OK")
+    expect(complete.getCollector().final?.competitor_reference_evidence[0]?.id).toBe("competitor-command-center")
+    expect(complete.buildReport().detail).toContain("## Competitor Reference Evidence")
+  },
+  30_000,
+)
+
 test(
   "visual baseline submit validates full-page screenshot evidence with explicit capture mode",
   async () => {

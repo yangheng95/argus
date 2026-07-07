@@ -60,6 +60,7 @@ type ConfigLike = {
   prompt_profile?: PromptProfileConfig
   mcp?: Config.Info["mcp"]
   assistant?: Config.Info["assistant"]
+  experimental?: Config.Info["experimental"]
 }
 
 export namespace PromptProfileResolver {
@@ -71,11 +72,7 @@ export namespace PromptProfileResolver {
     config: ConfigLike
     projectActive: string
     sessionOverride: string | null
-    scope: {
-      kind: "project" | "session"
-      directory: string
-      sessionID?: string
-    }
+    scope: { kind: "project"; directory: string } | { kind: "session"; directory: string; sessionID: string }
     defaultSkills?: Skill.Info[]
     agentIDs?: string[]
     workflow?: MiniWorkflow
@@ -119,6 +116,7 @@ export namespace PromptProfileResolver {
     defaultMcpResourceRefs: string[]
     defaultMcpResourceProviderNames: string[]
     defaultMcpServers: Record<string, Config.Mcp>
+    globalMcpTimeout?: number
     packageMcpToolRefs: string[]
     packageMcpToolProviderNames: string[]
     packageMcpPromptRefs: string[]
@@ -167,6 +165,7 @@ export namespace PromptProfileResolver {
     defaultMcpResourceRefs: string[]
     defaultMcpResourceProviderNames: string[]
     defaultMcpServers: Record<string, Config.Mcp>
+    globalMcpTimeout?: number
     packageMcpToolRefs: string[]
     packageMcpToolProviderNames: string[]
     packageMcpPromptRefs: string[]
@@ -181,6 +180,7 @@ export namespace PromptProfileResolver {
 
   export interface FrontendDesignDynamicAttributes {
     requireDesignDirectionContract: boolean
+    requireHtmlDesignGroundTruth: boolean
   }
 
   export interface SkillProjectionInput extends ProjectScope {
@@ -277,15 +277,20 @@ export namespace PromptProfileResolver {
     return loaded
   }
 
-  async function projectPromptProfiles(projectDirectory: string): Promise<Record<string, PromptProfileDefinition>> {
+  async function projectPromptProfiles(
+    projectDirectory: string,
+  ): Promise<Record<string, PromptProfileDefinition>> {
     return Object.fromEntries(
-      Object.entries(await projectCatalogPackages(projectDirectory)).map(([id, loaded]) => [id, loaded.promptProfile]),
+      Object.entries(await projectCatalogPackages(projectDirectory)).map(([id, loaded]) => [
+        id,
+        loaded.promptProfile,
+      ]),
     )
   }
 
   export async function definitions(
     projectDirectory: string,
-    _config?: ConfigLike,
+    _config: ConfigLike = Config.Info.parse({}),
   ): Promise<Record<string, PromptProfileDefinition>> {
     return {
       ...PromptProfile.builtIns,
@@ -343,6 +348,7 @@ export namespace PromptProfileResolver {
     baseRole: AgentRoleID
     virtualAgent: ExpertSquadRegistry.VirtualAgentDefinition & { promptContent?: string }
     projection?: ExpertSquadRegistry.Projection
+    defaultMcpServers?: unknown
     resourceFingerprint?: unknown
   }) {
     return createHash("sha256").update(stable(input)).digest("hex")
@@ -481,6 +487,7 @@ export namespace PromptProfileResolver {
   function virtualAgentForRole(input: {
     active: ActiveProfilePackage
     role: AgentRoleID
+    defaultMcpServers?: Record<string, Config.Mcp>
     resourceFingerprint?: unknown
   }): ResolvedVirtualAgent | undefined {
     const virtualAgent = input.active.pkg.promptProfile.virtualAgents[input.role]
@@ -498,12 +505,21 @@ export namespace PromptProfileResolver {
         baseRole: input.role,
         virtualAgent,
         projection: input.active.pkg.manifest.capability_projection.agents[input.role],
+        defaultMcpServers: input.defaultMcpServers,
         resourceFingerprint: input.resourceFingerprint,
       }),
     }
   }
 
-  async function activeVirtualAgents(active: ActiveProfilePackage): Promise<ResolvedVirtualAgent[]> {
+  function defaultMcpRefsForProjection(projection: ExpertSquadRegistry.Projection): string[] {
+    return [
+      ...projection.default_mcp_tool_refs,
+      ...projection.default_mcp_prompt_refs,
+      ...projection.default_mcp_resource_refs,
+    ]
+  }
+
+  async function activeVirtualAgents(active: ActiveProfilePackage, config: ConfigLike): Promise<ResolvedVirtualAgent[]> {
     return await Promise.all(
       Object.keys(active.pkg.promptProfile.virtualAgents)
       .sort()
@@ -524,7 +540,8 @@ export namespace PromptProfileResolver {
           virtualAgent: rawVirtualAgent,
           includeReadme: role === "orchestrator",
         })
-        const projected = virtualAgentForRole({ active, role, resourceFingerprint })
+        const defaultMcpServers = defaultMcpServersForRefs(config, defaultMcpRefsForProjection(projection))
+        const projected = virtualAgentForRole({ active, role, defaultMcpServers, resourceFingerprint })
         if (!projected) throw new Error(`Active expert squad ${active.profileID} lost virtual agent projection for ${role}`)
         return projected
       }),
@@ -535,10 +552,13 @@ export namespace PromptProfileResolver {
     id: string
     pkg: PackageWithCapability
     builtIn: boolean
+    config?: ConfigLike
   }): PromptProfileCatalogProfile {
+    const scheduler = input.pkg.manifest.capability_projection.scheduler
     return catalogProfileFromCapabilityPackage({
       ...input,
-      builtInToolIDs: expandedSchedulerBuiltInToolIDs(input.pkg.manifest.capability_projection.scheduler),
+      builtInToolIDs: expandedSchedulerBuiltInToolIDs(scheduler),
+      defaultMcpServers: input.config ? defaultMcpServersForRefs(input.config, defaultMcpRefsForProjection(scheduler)) : undefined,
     })
   }
 
@@ -546,10 +566,13 @@ export namespace PromptProfileResolver {
     id: string
     pkg: PackageWithCapability
     builtIn: boolean
+    config?: ConfigLike
   }): ExpertSquadCatalogSummary {
+    const scheduler = input.pkg.manifest.capability_projection.scheduler
     return catalogSummaryFromCapabilityPackage({
       ...input,
-      builtInToolIDs: expandedSchedulerBuiltInToolIDs(input.pkg.manifest.capability_projection.scheduler),
+      builtInToolIDs: expandedSchedulerBuiltInToolIDs(scheduler),
+      defaultMcpServers: input.config ? defaultMcpServersForRefs(input.config, defaultMcpRefsForProjection(scheduler)) : undefined,
     })
   }
 
@@ -653,6 +676,7 @@ export namespace PromptProfileResolver {
   function workflowToolRoleMap(
     toolIDs: readonly string[],
     config: ConfigLike,
+    agentProjection: Record<string, unknown>,
   ): Map<OrchestratorWorkflowToolName, AgentRoleID> {
     const declared = new Map<OrchestratorWorkflowToolName, AgentRoleID>()
     for (const binding of WorkflowRegistry.schedulerAgentWorkflowBindingsForEngineConfig(
@@ -661,6 +685,12 @@ export namespace PromptProfileResolver {
       declared.set(binding.workflow_tool_name, binding.stage)
     }
     const result = new Map<OrchestratorWorkflowToolName, AgentRoleID>()
+    if (toolIDs.includes("dispatch_agent")) {
+      for (const [workflowTool, role] of declared) {
+        if (Object.hasOwn(agentProjection, role)) result.set(workflowTool, role)
+      }
+      return result
+    }
     for (const toolID of toolIDs) {
       if (!WorkflowRegistry.isWorkflowToolName(toolID)) continue
       const role = declared.get(toolID as OrchestratorWorkflowToolName)
@@ -680,6 +710,15 @@ export namespace PromptProfileResolver {
     })
   }
 
+  function defaultWorkflowForCatalog(config: ConfigLike): MiniWorkflow {
+    const engineConfig = EngineConfig.fromAssistantConfig(config.assistant)
+    const workflow = WorkflowRegistry.listForEngineConfig(engineConfig).find((item) => item.id === engineConfig.default_workflow)
+    if (!workflow) {
+      throw new Error(`assistant.default_workflow references unknown workflow ${JSON.stringify(engineConfig.default_workflow)}`)
+    }
+    return workflow
+  }
+
   function expandedSchedulerBuiltInToolIDs(projection: ExpertSquadRegistry.Projection): string[] {
     return schedulerBuiltInToolIDsFromProjection(projection)
   }
@@ -696,6 +735,16 @@ export namespace PromptProfileResolver {
   ): Promise<ResolvedSchedulerCapability> {
     const loadOptions = packageLoadOptions(input.config)
     const active = await packageForActiveProfile(input)
+    const engineConfig = EngineConfig.fromAssistantConfig(input.config.assistant)
+    const defaultWorkflowID = active.pkg.manifest.dynamic_attributes.scheduler.default_workflow_id
+    if (
+      defaultWorkflowID &&
+      !WorkflowRegistry.listForEngineConfig(engineConfig).some((workflow) => workflow.id === defaultWorkflowID)
+    ) {
+      throw new Error(
+        `Active expert squad ${JSON.stringify(active.profileID)} references unknown scheduler default workflow ${JSON.stringify(defaultWorkflowID)}`,
+      )
+    }
     const scheduler = active.pkg.manifest.capability_projection.scheduler
     const builtInToolIDs = expandedSchedulerBuiltInToolIDs(scheduler)
     const defaultToolRefs = scheduler.default_tool_refs
@@ -713,6 +762,7 @@ export namespace PromptProfileResolver {
       ...defaultMcpPromptRefs,
       ...defaultMcpResourceRefs,
     ])
+    const globalMcpTimeout = input.config.experimental?.mcp_timeout
     const packageMcpToolRefs = effectivePackageMcpRefs({
       active,
       projection: scheduler,
@@ -734,7 +784,11 @@ export namespace PromptProfileResolver {
       context: "capability_projection.scheduler",
     })
     const packageMcpResourceProviderNames = packageMcpResourceRefs.map(packageMcpResourceProviderName)
-    const projectedWorkflowToolRoles = workflowToolRoleMap(builtInToolIDs, input.config)
+    const projectedWorkflowToolRoles = workflowToolRoleMap(
+      builtInToolIDs,
+      input.config,
+      active.pkg.manifest.capability_projection.agents,
+    )
     const projectedWorkflowTools = [...projectedWorkflowToolRoles.keys()]
     for (const [workflowTool, role] of projectedWorkflowToolRoles) {
       if (!active.pkg.manifest.capability_projection.agents[role]) {
@@ -765,6 +819,7 @@ export namespace PromptProfileResolver {
           ...packageMcpToolProviderNames,
         ],
         dynamicAttributes: active.pkg.manifest.dynamic_attributes,
+        defaultMcpServers,
         resourceFingerprint,
       }),
       scheduler,
@@ -780,6 +835,7 @@ export namespace PromptProfileResolver {
       defaultMcpResourceRefs,
       defaultMcpResourceProviderNames,
       defaultMcpServers,
+      globalMcpTimeout,
       packageMcpToolRefs,
       packageMcpToolProviderNames,
       packageMcpPromptRefs,
@@ -801,12 +857,18 @@ export namespace PromptProfileResolver {
     return {
       requireDesignDirectionContract:
         active.pkg.manifest.dynamic_attributes.frontend_design.require_design_direction_contract,
+      requireHtmlDesignGroundTruth:
+        active.pkg.manifest.dynamic_attributes.frontend_design.require_html_design_ground_truth,
     }
   }
 
-  export async function resolveWorkerCapability(input: WorkerCapabilityInput): Promise<ResolvedWorkerCapability> {
+  async function resolveWorkerCapabilityForActive(input: {
+    active: ActiveProfilePackage
+    config: ConfigLike
+    agentID: AgentRoleID
+  }): Promise<ResolvedWorkerCapability> {
     const loadOptions = packageLoadOptions(input.config)
-    const active = await packageForActiveProfile(input)
+    const active = input.active
     const projection = active.pkg.manifest.capability_projection.agents[input.agentID]
     if (!projection) {
       throw new Error(
@@ -829,6 +891,7 @@ export namespace PromptProfileResolver {
       ...defaultMcpPromptRefs,
       ...defaultMcpResourceRefs,
     ])
+    const globalMcpTimeout = input.config.experimental?.mcp_timeout
     const packageMcpToolRefs = effectivePackageMcpRefs({
       active,
       projection,
@@ -857,7 +920,12 @@ export namespace PromptProfileResolver {
       virtualAgent: rawVirtualAgent,
       includeReadme: input.agentID === "orchestrator",
     })
-    const virtualAgent = virtualAgentForRole({ active, role: input.agentID, resourceFingerprint })
+    const virtualAgent = virtualAgentForRole({
+      active,
+      role: input.agentID,
+      defaultMcpServers,
+      resourceFingerprint,
+    })
     return {
       promptProfileID: active.profileID,
       expertSquadID: active.pkg.id,
@@ -875,6 +943,7 @@ export namespace PromptProfileResolver {
           ...packageMcpToolProviderNames,
         ],
         dynamicAttributes: active.pkg.manifest.dynamic_attributes,
+        defaultMcpServers,
         resourceFingerprint,
       }),
       projection,
@@ -890,6 +959,7 @@ export namespace PromptProfileResolver {
       defaultMcpResourceRefs,
       defaultMcpResourceProviderNames,
       defaultMcpServers,
+      globalMcpTimeout,
       packageMcpToolRefs,
       packageMcpToolProviderNames,
       packageMcpPromptRefs,
@@ -901,6 +971,15 @@ export namespace PromptProfileResolver {
       ...(virtualAgent ? { virtualAgent } : {}),
       includeMcpTools: false,
     }
+  }
+
+  export async function resolveWorkerCapability(input: WorkerCapabilityInput): Promise<ResolvedWorkerCapability> {
+    const active = await packageForActiveProfile(input)
+    return resolveWorkerCapabilityForActive({
+      active,
+      config: input.config,
+      agentID: input.agentID,
+    })
   }
 
   type AiSdkExecutionOptions = {
@@ -1259,6 +1338,7 @@ export namespace PromptProfileResolver {
     providerName: string
     mcpServers: Record<string, Config.Mcp>
     cwd: string
+    globalMcpTimeout?: number
   }): Promise<ProjectedMcpPrompt> {
     const { serverName, promptName } = defaultMcpPromptPartsFromRef(input.ref)
     const mcp = input.mcpServers[serverName]
@@ -1268,6 +1348,7 @@ export namespace PromptProfileResolver {
       mcp,
       promptName,
       cwd: input.cwd,
+      globalTimeout: input.globalMcpTimeout,
     })
     return {
       ...info,
@@ -1279,6 +1360,7 @@ export namespace PromptProfileResolver {
           mcp,
           promptName,
           cwd: input.cwd,
+          globalTimeout: input.globalMcpTimeout,
           args,
         }),
       getProjectionPayload: (args?: Record<string, string>) =>
@@ -1287,6 +1369,7 @@ export namespace PromptProfileResolver {
           mcp,
           promptName,
           cwd: input.cwd,
+          globalTimeout: input.globalMcpTimeout,
           args,
         }),
     }
@@ -1297,6 +1380,7 @@ export namespace PromptProfileResolver {
     providerName: string
     mcpServers: Record<string, Config.Mcp>
     cwd: string
+    globalMcpTimeout?: number
   }): Promise<ProjectedMcpResource> {
     const { serverName, resourceName } = defaultMcpResourcePartsFromRef(input.ref)
     const mcp = input.mcpServers[serverName]
@@ -1306,6 +1390,7 @@ export namespace PromptProfileResolver {
       mcp,
       resourceName,
       cwd: input.cwd,
+      globalTimeout: input.globalMcpTimeout,
     })
     return {
       ...info,
@@ -1317,6 +1402,7 @@ export namespace PromptProfileResolver {
           mcp,
           resourceName,
           cwd: input.cwd,
+          globalTimeout: input.globalMcpTimeout,
         }),
       readProjectionPayload: () =>
         MCP.readScopedResourceProjectionPayload({
@@ -1324,6 +1410,7 @@ export namespace PromptProfileResolver {
           mcp,
           resourceName,
           cwd: input.cwd,
+          globalTimeout: input.globalMcpTimeout,
         }),
     }
   }
@@ -1335,6 +1422,7 @@ export namespace PromptProfileResolver {
     >
     ref: string
     providerName: string
+    globalMcpTimeout?: number
   }): Promise<ProjectedMcpPrompt> {
     if (!input.pkg.packageMcpPromptRefs.has(input.ref)) {
       throw new Error(`Active expert squad ${input.pkg.id} projects missing package MCP prompt ${input.ref}.`)
@@ -1350,6 +1438,7 @@ export namespace PromptProfileResolver {
       mcp,
       promptName,
       cwd,
+      globalTimeout: input.globalMcpTimeout,
     })
     return {
       ...info,
@@ -1362,6 +1451,7 @@ export namespace PromptProfileResolver {
           mcp,
           promptName,
           cwd,
+          globalTimeout: input.globalMcpTimeout,
           args,
         }),
       getProjectionPayload: (args?: Record<string, string>) =>
@@ -1370,6 +1460,7 @@ export namespace PromptProfileResolver {
           mcp,
           promptName,
           cwd,
+          globalTimeout: input.globalMcpTimeout,
           args,
         }),
     }
@@ -1382,6 +1473,7 @@ export namespace PromptProfileResolver {
     >
     ref: string
     providerName: string
+    globalMcpTimeout?: number
   }): Promise<ProjectedMcpResource> {
     if (!input.pkg.packageMcpResourceRefs.has(input.ref)) {
       throw new Error(`Active expert squad ${input.pkg.id} projects missing package MCP resource ${input.ref}.`)
@@ -1397,6 +1489,7 @@ export namespace PromptProfileResolver {
       mcp,
       resourceName,
       cwd,
+      globalTimeout: input.globalMcpTimeout,
     })
     return {
       ...info,
@@ -1409,6 +1502,7 @@ export namespace PromptProfileResolver {
           mcp,
           resourceName,
           cwd,
+          globalTimeout: input.globalMcpTimeout,
         }),
       readProjectionPayload: () =>
         MCP.readScopedResourceProjectionPayload({
@@ -1416,6 +1510,7 @@ export namespace PromptProfileResolver {
           mcp,
           resourceName,
           cwd,
+          globalTimeout: input.globalMcpTimeout,
         }),
     }
   }
@@ -1427,6 +1522,7 @@ export namespace PromptProfileResolver {
     >
     ref: string
     providerName: string
+    globalMcpTimeout?: number
   }) {
     if (!input.pkg.packageMcpToolRefs.has(input.ref)) {
       throw new Error(`Active expert squad ${input.pkg.id} projects missing package MCP tool ${input.ref}.`)
@@ -1440,6 +1536,7 @@ export namespace PromptProfileResolver {
       mcp: mcpConfigFromDefinition(definition),
       toolName,
       cwd: path.dirname(sourcePath),
+      globalTimeout: input.globalMcpTimeout,
     })
     const execute = (rawTool as { execute?: (args: unknown, options?: unknown) => unknown }).execute
     if (typeof execute !== "function") throw new Error(`Package MCP tool ${input.ref} is not executable.`)
@@ -1503,6 +1600,7 @@ export namespace PromptProfileResolver {
     providerName: string
     mcpServers: Record<string, Config.Mcp>
     cwd: string
+    globalMcpTimeout?: number
   }) {
     const { serverName, toolName } = defaultMcpToolPartsFromRef(input.ref)
     const mcp = input.mcpServers[serverName]
@@ -1512,6 +1610,7 @@ export namespace PromptProfileResolver {
       mcp,
       toolName,
       cwd: input.cwd,
+      globalTimeout: input.globalMcpTimeout,
     })
     const execute = (rawTool as { execute?: (args: unknown, options?: unknown) => unknown }).execute
     if (typeof execute !== "function") throw new Error(`Default MCP tool ${input.ref} is not executable.`)
@@ -1551,6 +1650,7 @@ export namespace PromptProfileResolver {
     mcpServers: Record<string, Config.Mcp>
     cwd: string
     context: string
+    globalMcpTimeout?: number
   }): Promise<Record<string, T>> {
     const result: Record<string, T> = {}
     const seenRefs = new Set<string>()
@@ -1567,6 +1667,7 @@ export namespace PromptProfileResolver {
         providerName,
         mcpServers: input.mcpServers,
         cwd: input.cwd,
+        globalMcpTimeout: input.globalMcpTimeout,
       })) as T
     }
     return result
@@ -1578,6 +1679,7 @@ export namespace PromptProfileResolver {
     mcpServers: Record<string, Config.Mcp>
     cwd: string
     context: string
+    globalMcpTimeout?: number
   }): Promise<Record<string, ProjectedMcpPrompt>> {
     const result: Record<string, ProjectedMcpPrompt> = {}
     const seenRefs = new Set<string>()
@@ -1594,6 +1696,7 @@ export namespace PromptProfileResolver {
         providerName,
         mcpServers: input.mcpServers,
         cwd: input.cwd,
+        globalMcpTimeout: input.globalMcpTimeout,
       })
     }
     return result
@@ -1605,6 +1708,7 @@ export namespace PromptProfileResolver {
     mcpServers: Record<string, Config.Mcp>
     cwd: string
     context: string
+    globalMcpTimeout?: number
   }): Promise<Record<string, ProjectedMcpResource>> {
     const result: Record<string, ProjectedMcpResource> = {}
     const seenRefs = new Set<string>()
@@ -1621,6 +1725,7 @@ export namespace PromptProfileResolver {
         providerName,
         mcpServers: input.mcpServers,
         cwd: input.cwd,
+        globalMcpTimeout: input.globalMcpTimeout,
       })
     }
     return result
@@ -1632,6 +1737,7 @@ export namespace PromptProfileResolver {
     expertSquadID: string
     packageRoot?: string
     workflowBindings: SchedulerAgentWorkflowBinding[]
+    globalMcpTimeout?: number
   }
 
   async function loadActivePackageForMcpProjection(
@@ -1677,6 +1783,7 @@ export namespace PromptProfileResolver {
         pkg,
         ref,
         providerName,
+        globalMcpTimeout: input.capability.globalMcpTimeout,
       })
     }
     return result
@@ -1705,6 +1812,7 @@ export namespace PromptProfileResolver {
         pkg,
         ref,
         providerName,
+        globalMcpTimeout: input.capability.globalMcpTimeout,
       })
     }
     return result
@@ -1743,6 +1851,7 @@ export namespace PromptProfileResolver {
         pkg,
         ref,
         providerName,
+        globalMcpTimeout: capability.globalMcpTimeout,
       })) as T
     }
     return result
@@ -1781,6 +1890,7 @@ export namespace PromptProfileResolver {
         pkg,
         ref,
         providerName,
+        globalMcpTimeout: capability.globalMcpTimeout,
       })) as T
     }
     return result
@@ -1820,6 +1930,7 @@ export namespace PromptProfileResolver {
             mcpServers: capability.defaultMcpServers,
             cwd: input.projectDirectory!,
             context,
+            globalMcpTimeout: capability.globalMcpTimeout,
           })
         : {}
     const packageItems = await packageMcpPrompts({
@@ -1850,6 +1961,7 @@ export namespace PromptProfileResolver {
             mcpServers: capability.defaultMcpServers,
             cwd: input.toolDirectory ?? input.projectDirectory!,
             context,
+            globalMcpTimeout: capability.globalMcpTimeout,
           })
         : {}
     const packageItems = await packageMcpPrompts({
@@ -1880,6 +1992,7 @@ export namespace PromptProfileResolver {
             mcpServers: capability.defaultMcpServers,
             cwd: input.projectDirectory!,
             context,
+            globalMcpTimeout: capability.globalMcpTimeout,
           })
         : {}
     const packageItems = await packageMcpResources({
@@ -1910,6 +2023,7 @@ export namespace PromptProfileResolver {
             mcpServers: capability.defaultMcpServers,
             cwd: input.toolDirectory ?? input.projectDirectory!,
             context,
+            globalMcpTimeout: capability.globalMcpTimeout,
           })
         : {}
     const packageItems = await packageMcpResources({
@@ -2286,6 +2400,7 @@ export namespace PromptProfileResolver {
         mcpServers: capability.defaultMcpServers,
         cwd: input.projectDirectory,
         context: `Active expert squad ${JSON.stringify(capability.promptProfileID)}`,
+        globalMcpTimeout: capability.globalMcpTimeout,
       })
       for (const [providerName, defaultMcpTool] of Object.entries(defaultMcpRuntimeTools)) {
         if (Object.hasOwn(projected, providerName) || Object.hasOwn(tools, providerName)) {
@@ -2370,6 +2485,7 @@ export namespace PromptProfileResolver {
         mcpServers: capability.defaultMcpServers,
         cwd: input.toolDirectory ?? input.projectDirectory,
         context: `Active expert squad ${JSON.stringify(capability.promptProfileID)} ${capability.agentID}`,
+        globalMcpTimeout: capability.globalMcpTimeout,
       })
       for (const [providerName, defaultMcpTool] of Object.entries(defaultMcpRuntimeTools)) {
         if (Object.hasOwn(projected, providerName) || Object.hasOwn(tools, providerName)) {
@@ -2531,7 +2647,7 @@ export namespace PromptProfileResolver {
 
   type SkillSourceKind = "default" | "package" | "selector"
   type ProjectSelectorPackage = {
-    pkg: ExpertSquadRegistry.PackageCatalogEntry
+    pkg: Parameters<typeof selectorSkillFromPackage>[0]["pkg"]
     location: string
   }
 
@@ -2567,7 +2683,9 @@ export namespace PromptProfileResolver {
     return unique([...capabilityAgentIDs, ...projectedAgentIDsFromSkills(skills)])
   }
 
-  async function selectorCatalog(projectDirectory: string | undefined): Promise<ProjectSelectorPackage[]> {
+  async function selectorCatalog(
+    projectDirectory: string | undefined,
+  ): Promise<ProjectSelectorPackage[]> {
     if (!projectDirectory) return []
     const selectors: ProjectSelectorPackage[] = []
     for (const entry of await discoverProjectPackages(projectDirectory)) {
@@ -2575,7 +2693,10 @@ export namespace PromptProfileResolver {
       if (!entry.selector) continue
       const selectorInstructions = await ExpertSquadRegistry.readSelectorInstructions(entry)
       selectors.push({
-        pkg: { ...entry, selectorInstructions },
+        pkg: {
+          ...entry,
+          selectorInstructions,
+        },
         location: path.join(entry.root, "selector.md"),
       })
     }
@@ -2691,7 +2812,7 @@ export namespace PromptProfileResolver {
     const selectorSkillNames = selectorSkills.map((skill) => skill.name)
     const projectedSkills = [...projected.values()].map((entry) => entry.skill)
     const skillSurfaceAgentIDs = skillProjectionAgentIDs(active.profileID, projectedAgentIDs, projectedSkills)
-    const virtualAgents = (await activeVirtualAgents(active)).filter((virtualAgent) =>
+    const virtualAgents = (await activeVirtualAgents(active, input.config)).filter((virtualAgent) =>
       skillSurfaceAgentIDs.includes(virtualAgent.baseRole),
     )
     const uniqueProductionSkillNames = [...projected.entries()]
@@ -2807,25 +2928,48 @@ export namespace PromptProfileResolver {
   async function activeAgentProjection(input: {
     active: ActiveProfilePackage
     promptProfileActive: string
+    config: ConfigLike
   }): Promise<ExpertSquadCatalog["active_agent_projection"]> {
-    const agents = (await activeVirtualAgents(input.active)).map((virtualAgent) => {
-      const projection = input.active.pkg.manifest.capability_projection.agents[virtualAgent.baseRole]
-      if (!projection) {
-        throw new Error(
-          `Active expert squad ${input.active.profileID} virtual_agents.${virtualAgent.baseRole} requires capability_projection.agents.${virtualAgent.baseRole}`,
-        )
-      }
-      return {
-        base_role: virtualAgent.baseRole,
-        virtual_agent_id: virtualAgent.virtualAgentID,
-        label: virtualAgent.label,
-        ...(virtualAgent.description ? { description: virtualAgent.description } : {}),
-        projection_hash: virtualAgent.projectionHash,
-        package_skill_refs: projection.package_skill_refs,
-        package_tool_refs: projection.package_tool_refs,
-        package_mcp_server_refs: projection.package_mcp_server_refs,
-      }
-    })
+    const agents = await Promise.all(
+      Object.keys(input.active.pkg.promptProfile.virtualAgents)
+        .sort()
+        .map(async (role) => {
+          if (!AgentRoleContract.isRoleID(role)) {
+            throw new Error(
+              `Active expert squad ${input.active.profileID} has invalid virtual agent base role ${JSON.stringify(role)}`,
+            )
+          }
+          const capability = await resolveWorkerCapabilityForActive({
+            active: input.active,
+            config: input.config,
+            agentID: role,
+          })
+          const virtualAgent = capability.virtualAgent
+          if (!virtualAgent) {
+            throw new Error(`Active expert squad ${input.active.profileID} lost virtual agent projection for ${role}`)
+          }
+          return {
+            base_role: capability.agentID,
+            virtual_agent_id: virtualAgent.virtualAgentID,
+            label: virtualAgent.label,
+            ...(virtualAgent.description ? { description: virtualAgent.description } : {}),
+            projection_hash: virtualAgent.projectionHash,
+            built_in_tool_ids: capability.builtInToolIDs,
+            default_skill_refs: capability.projection.default_skill_refs,
+            package_skill_refs: capability.projection.package_skill_refs,
+            default_tool_refs: capability.defaultToolRefs,
+            package_tool_refs: capability.packageToolRefs,
+            default_mcp_server_refs: capability.projection.default_mcp_server_refs,
+            package_mcp_server_refs: capability.projection.package_mcp_server_refs,
+            default_mcp_tool_refs: capability.defaultMcpToolRefs,
+            package_mcp_tool_refs: capability.packageMcpToolRefs,
+            default_mcp_prompt_refs: capability.defaultMcpPromptRefs,
+            package_mcp_prompt_refs: capability.packageMcpPromptRefs,
+            default_mcp_resource_refs: capability.defaultMcpResourceRefs,
+            package_mcp_resource_refs: capability.packageMcpResourceRefs,
+          }
+        }),
+    )
     return {
       source_expert_squad_id: input.active.pkg.id,
       prompt_profile_active: input.promptProfileActive,
@@ -2852,6 +2996,7 @@ export namespace PromptProfileResolver {
           id,
           pkg,
           builtIn: true,
+          config: input.config,
         }),
       ),
       ...Object.entries(projectPackagesByID).map(([id, pkg]) =>
@@ -2859,6 +3004,7 @@ export namespace PromptProfileResolver {
           id,
           pkg,
           builtIn: false,
+          config: input.config,
         }),
       ),
     ]
@@ -2874,7 +3020,7 @@ export namespace PromptProfileResolver {
       config: input.config,
       defaultSkills: input.defaultSkills,
       agentIDs: input.agentIDs,
-      workflow: input.workflow,
+      workflow: input.workflow ?? defaultWorkflowForCatalog(input.config),
     }
     const skillProjection =
       input.defaultSkills === undefined
@@ -2896,6 +3042,7 @@ export namespace PromptProfileResolver {
       active_agent_projection: await activeAgentProjection({
         active: activePackage,
         promptProfileActive: active,
+        config: input.config,
       }),
       active_skill_projection: {
         active_squad_id: skillProjection.expertSquadID,

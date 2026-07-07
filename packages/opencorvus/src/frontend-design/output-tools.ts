@@ -36,6 +36,7 @@ import {
   ToolAntiSlopReviewItemSchema,
   ToolBaselineReplacementPlanItemSchema,
   ToolComponentReusePlanItemSchema,
+  ToolCompetitorReferenceEvidenceSchema,
   ToolDesignDirectionSchema,
   ToolDesignDirectionSelectionSchema,
   ToolImplementationPhaseOutcomeSchema,
@@ -384,6 +385,27 @@ function renderAntiSlopReview(items: readonly FrontendTemplateFinal["anti_slop_r
     .join("\n")
 }
 
+function renderCompetitorReferenceEvidence(
+  items: readonly FrontendTemplateFinal["competitor_reference_evidence"][number][],
+): string {
+  if (items.length === 0) return "- no competitor/reference webpage screenshot evidence submitted"
+  return items
+    .map((item) =>
+      [
+        `- ${item.id}: ${item.competitor_url}`,
+        `  - evidence_source: ${item.evidence_source}`,
+        `  - source_page_ref: ${item.source_page_ref}`,
+        `  - screenshot_artifact: ${item.screenshot_artifact}`,
+        `  - screenshot_sha256: ${item.screenshot_sha256}`,
+        `  - viewport: ${item.viewport}`,
+        `  - inspected_elements: ${item.inspected_elements.join(", ")}`,
+        `  - influence_on_selected_direction: ${item.influence_on_selected_direction}`,
+        `  - source_refs: ${item.source_refs.join(", ")}`,
+      ].join("\n"),
+    )
+    .join("\n")
+}
+
 function renderVisualValidationEvidence(
   items: readonly FrontendTemplateFinal["visual_validation_evidence"][number][],
 ): string {
@@ -710,6 +732,7 @@ async function frontendTemplateStatus(
     artifactRootRelative?: string
     workspaceRoot: string
     requireDesignDirectionContract?: boolean
+    requireHtmlDesignGroundTruth?: boolean
   },
 ): Promise<string> {
   if (collector.final) return "FRONTEND_TEMPLATE_RESULT_STATUS: finalized"
@@ -737,7 +760,7 @@ async function frontendTemplateStatus(
   }
   const lines = [
     `FRONTEND_TEMPLATE_RESULT_STATUS: ${status}`,
-    `registered: template_items=${draft.frontend_template_sections?.length ?? 0}, design_directions=${draft.design_directions?.length ?? 0}, selected_direction=${draft.selected_design_direction_id || ""}, anti_slop_review=${draft.anti_slop_review?.length ?? 0}, fillable_items=${draft.fillable_module_items?.length ?? 0}, component_reuse=${draft.component_reuse_plan?.length ?? 0}, material_items=${draft.material_inventory_items?.length ?? 0}, quality_items=${draft.quality_project_items?.length ?? 0}, visual_items=${draft.visual_consistency_items?.length ?? 0}, data_items=${draft.ui_data_contract_items?.length ?? 0}, phase_outcomes=${draft.implementation_phase_outcomes?.length ?? 0}, visual_evidence=${draft.visual_validation_evidence?.length ?? 0}, visual_region_bindings=${draft.visual_region_bindings?.length ?? 0}, iteration_notes=${draft.template_iteration_notes?.length ?? 0}`,
+    `registered: template_items=${draft.frontend_template_sections?.length ?? 0}, design_directions=${draft.design_directions?.length ?? 0}, selected_direction=${draft.selected_design_direction_id || ""}, anti_slop_review=${draft.anti_slop_review?.length ?? 0}, competitor_evidence=${draft.competitor_reference_evidence?.length ?? 0}, fillable_items=${draft.fillable_module_items?.length ?? 0}, component_reuse=${draft.component_reuse_plan?.length ?? 0}, material_items=${draft.material_inventory_items?.length ?? 0}, quality_items=${draft.quality_project_items?.length ?? 0}, visual_items=${draft.visual_consistency_items?.length ?? 0}, data_items=${draft.ui_data_contract_items?.length ?? 0}, phase_outcomes=${draft.implementation_phase_outcomes?.length ?? 0}, visual_evidence=${draft.visual_validation_evidence?.length ?? 0}, visual_region_bindings=${draft.visual_region_bindings?.length ?? 0}, iteration_notes=${draft.template_iteration_notes?.length ?? 0}`,
   ]
   if (collector.semantic_error) lines.push(`last_validation_error: ${collector.semantic_error}`)
   for (const diagnostic of diagnostics) lines.push(`visual_evidence_error: ${diagnostic}`)
@@ -760,6 +783,7 @@ async function submitFrontendTemplateDraft(input: {
   artifactRootRelative?: string
   workspaceRoot: string
   requireDesignDirectionContract: boolean
+  requireHtmlDesignGroundTruth: boolean
 }): Promise<string> {
   if (input.collector.final)
     return "Error: frontend template already submitted; duplicate submit_frontend_template ignored."
@@ -788,6 +812,7 @@ async function submitFrontendTemplateDraft(input: {
       artifactRootRelative: input.artifactRootRelative,
       workspaceRoot: input.workspaceRoot,
       requireDesignDirectionContract: input.requireDesignDirectionContract,
+      requireHtmlDesignGroundTruth: input.requireHtmlDesignGroundTruth,
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -829,6 +854,7 @@ export function buildFrontendTemplateReport(collector: FrontendTemplateOutputCol
       `## Design Directions\n${renderDesignDirections(collector.final.design_directions)}`,
       `## Selected Design Direction\n${collector.final.selected_design_direction_id || "- none"}`,
       `## Rejected Generic Traits Review\n${renderAntiSlopReview(collector.final.anti_slop_review)}`,
+      `## Competitor Reference Evidence\n${renderCompetitorReferenceEvidence(collector.final.competitor_reference_evidence)}`,
       `## Fillable Modules\n${collector.final.fillable_modules}`,
       `## Implementation Problems And Agent Handoff\n${collector.final.completeness_review}`,
       `## Implementation Phase Outcomes\n${renderImplementationPhaseOutcomes(collector.final.implementation_phase_outcomes)}`,
@@ -856,6 +882,7 @@ async function assertFrontendTemplateFinal(
     artifactRootRelative?: string
     workspaceRoot: string
     requireDesignDirectionContract?: boolean
+    requireHtmlDesignGroundTruth?: boolean
   },
 ): Promise<void> {
   const requiredRenderedFields = [
@@ -897,6 +924,47 @@ async function assertFrontendTemplateFinal(
     if (final.anti_slop_review.length < 1) {
       throw new Error(
         "design-direction handoff contract requires anti_slop_review naming rejected shallow or generic design traits.",
+      )
+    }
+  }
+  if (options.requireHtmlDesignGroundTruth) {
+    if (final.final_acceptance_mode !== "visual_baseline_allowed") {
+      throw new Error(
+        "Frontend Innovate HTML design ground-truth contract requires final_acceptance_mode=visual_baseline_allowed.",
+      )
+    }
+    if (final.frontend_project.role !== "visual_baseline_input") {
+      throw new Error(
+        "Frontend Innovate HTML design ground-truth contract requires frontend_project.role=visual_baseline_input with a source-editable visual-html-skeleton design draft.",
+      )
+    }
+    if (final.design_directions.length < 2 || !final.selected_design_direction_id.trim()) {
+      throw new Error(
+        "Frontend Innovate HTML design ground-truth contract requires at least two design_directions and one selected_design_direction_id before downstream Build work.",
+      )
+    }
+    if (final.anti_slop_review.length < 1) {
+      throw new Error(
+        "Frontend Innovate HTML design ground-truth contract requires anti_slop_review for rejected generic redesign traits.",
+      )
+    }
+    if (final.competitor_reference_evidence.length < 1) {
+      throw new Error(
+        "Frontend Innovate HTML design ground-truth contract requires at least one evidence-backed competitor_reference_evidence row with a webpage URL and screenshot artifact.",
+      )
+    }
+    const selectedDirection = final.design_directions.find((item) => item.id === final.selected_design_direction_id)
+    const competitorEvidenceRefs = new Set(
+      final.competitor_reference_evidence.flatMap((item) => [
+        item.id,
+        item.screenshot_artifact,
+        item.competitor_url,
+        ...item.source_refs,
+      ]),
+    )
+    if (!selectedDirection?.evidence_refs.some((ref) => competitorEvidenceRefs.has(ref))) {
+      throw new Error(
+        "Frontend Innovate HTML design ground-truth contract requires the selected design direction to cite submitted competitor_reference_evidence.",
       )
     }
   }
@@ -1762,6 +1830,10 @@ function collectVisualBaselineText(final: FrontendTemplateFinal): string {
     ),
     final.selected_design_direction_id,
     ...final.anti_slop_review.map((item) => `${item.id}: ${item.rejected_trait}\n${item.evidence}\n${item.correction}`),
+    ...final.competitor_reference_evidence.map(
+      (item) =>
+        `${item.id}: ${item.competitor_url}\n${item.screenshot_artifact}\n${item.influence_on_selected_direction}\n${item.source_refs.join("\n")}`,
+    ),
     ...final.frontend_project.entrypoints,
     ...final.frontend_project.notes,
     ...final.visual_validation_evidence.map((item) => `${item.review_status}: ${item.review_summary}`),
@@ -1818,12 +1890,14 @@ export function createFrontendTemplateOutputTools(
     artifactRootRelative?: string
     workspaceRoot?: string
     requireDesignDirectionContract?: boolean
+    requireHtmlDesignGroundTruth?: boolean
   } = {},
 ) {
   const artifactRoot = path.resolve(options.artifactRoot ?? process.cwd())
   const artifactRootRelative = options.artifactRootRelative
   const workspaceRoot = path.resolve(options.workspaceRoot ?? process.cwd())
   const requireDesignDirectionContract = options.requireDesignDirectionContract === true
+  const requireHtmlDesignGroundTruth = options.requireHtmlDesignGroundTruth === true
   let collector = emptyCollector()
 
   function assertIdFree(id: string): string | null {
@@ -2057,6 +2131,20 @@ export function createFrontendTemplateOutputTools(
       },
     }),
 
+    update_frontend_competitor_reference: tool({
+      description:
+        "Update one evidence-backed competitor/design-reference webpage screenshot row for Frontend Innovate. The URL must come from user input, frontend_research, deep_research, or task material evidence; never invent competitor URLs.",
+      inputSchema: ToolCompetitorReferenceEvidenceSchema,
+      execute: async (rawInput) => {
+        if (collector.final) return "Error: frontend template already submitted; collector is closed."
+        const input = ToolCompetitorReferenceEvidenceSchema.parse(rawInput)
+        const items = arrayField<typeof input>(collector.draft, "competitor_reference_evidence")
+        const mode = upsertByStringKey(items, input, "id")
+        collector.semantic_error = undefined
+        return `OK: competitor reference evidence "${input.id}" ${mode} (${items.length} total)`
+      },
+    }),
+
     update_frontend_material: tool({
       description:
         "Update one material/asset inventory item. Include CSS/tokens, assets, data fixtures, text samples, icons, fonts, or dense resources needed for reproduction.",
@@ -2202,6 +2290,7 @@ export function createFrontendTemplateOutputTools(
           artifactRootRelative,
           workspaceRoot,
           requireDesignDirectionContract,
+          requireHtmlDesignGroundTruth,
         }),
     }),
 
@@ -2217,6 +2306,7 @@ export function createFrontendTemplateOutputTools(
           artifactRootRelative,
           workspaceRoot,
           requireDesignDirectionContract,
+          requireHtmlDesignGroundTruth,
         }),
     }),
   }

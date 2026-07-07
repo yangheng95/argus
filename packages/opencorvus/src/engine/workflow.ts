@@ -1,11 +1,13 @@
 /**
  * MiniWorkflow — 两个声明式工作流模板
  *
- * 系统只内置两条路径：
+ * 系统内置少量声明式路径：
  *   1. **direct**   — build
  *      用于显式 kind=build 的单文件改动 / bugfix / 配置调整 / 短篇调试。无需 requirements / architect / goals。
- *   2. **pipeline** — (frontend_design + frontend_research + deep_research) → analyze_intent → requirements → architect → workload_analysis → per-goal[build] → visual_qa / integrity → fact_check
+ *   2. **pipeline** — (frontend_research + deep_research) → analyze_intent → requirements → architect → workload_analysis → per-goal[build] → visual_qa / integrity → fact_check
  *      用于多文件功能、UI 复刻、跨模块重构、需要验收标准的任务。
+ *   3. **frontend_innovate** — frontend_research / deep_research → frontend_design → requirements / architect → build → visual_qa / integrity
+ *      用于 Frontend Innovate HTML 设计稿作为下游参考真值的网页重设计任务。
  *
  * Pipeline 以 build 做实现、以 visual_qa 做 frontend post-build review evidence，
  * 以 integrity 做 session-bound review report。旧 host acceptance mechanism 已禁用，不再作为推荐 workflow 的验收步骤。
@@ -90,7 +92,7 @@ export type OrchestratorWorkflowToolName =
   | "explore"
   | "integrity"
 
-const ORCHESTRATOR_WORKFLOW_TOOL_NAMES = [
+export const ORCHESTRATOR_WORKFLOW_TOOL_NAMES = [
   "requirements",
   "architect",
   "frontend_design",
@@ -225,31 +227,21 @@ const DIRECT: MiniWorkflow = {
 /** pipeline — 完整开发流程。
  *
  *  适合：多文件功能 / UI 复刻 / 跨模块重构 / 需要明确验收标准的任务。
- *  流程：(frontend_design / frontend_research / deep_research 按证据需要) → analyze_intent → requirements → architect → workload_analysis → per-goal[build] → visual_qa / integrity → fact_check → orchestrator lifecycle decision；
+ *  流程：(frontend_research / deep_research 按证据需要) → analyze_intent → requirements → architect → workload_analysis → per-goal[build] → visual_qa / integrity → fact_check → orchestrator lifecycle decision；
  *  visual_qa 是所有 blocking build terminal 后、最终调度决定前的一次性前端视觉/产品审查证据；integrity 是 session-bound review report：pass / non-pass 都只返回证据，完成与失败由编排器显式决定。
  */
 const PIPELINE: MiniWorkflow = {
   id: "pipeline",
   name: "Pipeline",
   description:
-    "(frontend_design / frontend_research / deep_research 按证据需要) → analyze_intent → requirements → architect → workload_analysis → per-goal[build] → visual_qa / integrity → fact_check。多文件功能 / UI 复刻 / 跨模块重构。",
+    "(frontend_research / deep_research 按证据需要) → analyze_intent → requirements → architect → workload_analysis → per-goal[build] → visual_qa / integrity → fact_check。多文件功能 / UI 复刻 / 跨模块重构。",
   steps: [
-    {
-      id: "frontend_design",
-      tool: "frontend_design",
-      agentRole: "frontend-design",
-      label: "Design",
-      hint: "视觉/网页/图片/Figma 参考任务的前端设计/复刻专职阶段。负责 materialization/source handoff 证据获取与落成，产出前端实现级 frontend template、visual_consistency_contract、evidence_source_manifest；网页复刻还要产出 reference.png + web-clone-source/implementation-blueprint.md + source-ir/component-tree.json + source-ir/content-model.json + source-ir/layout-map.json + source-ir/style-profile.json + source-ir/style-tokens.json + source-ir/interaction-hints.json + source-ir/interaction-state-snapshots.json + source-skeleton/critical.css + visual-surface-candidates.json 作为 build 开发入口（截图是视觉真值，style-profile 是区域级样式复用材料，web-clone-source blueprint/source IR/assets 是 LLM 写 React/Vue 等源码的主入口，frontend-design source skeleton/CSS sidecars 必须先成为实现基底，不能被当成旁路参考后从空白页手搓）。",
-      scope: "task",
-      skippable: true,
-      after: [],
-    },
     {
       id: "frontend_research",
       tool: "frontend_research",
       agentRole: "frontend-research",
       label: "Frontend Research",
-      hint: "网页/URL 参考任务的调查分工阶段。source URL 存在时由 host 先准备 rendered webpage evidence；frontend_research 基于证据、源 URL、可见区域、组件/数据/交互/样式疑点和 fidelity risk，发布 source-backed frontend_research_brief/webpage_contract。frontend_design 通过 Page Skeleton Blueprint 消费它作为页面信息架构，requirements、architect、build 消费各自 compact projection 作为 investigation work packets。它用小 update_* result tools 分块登记 brief，不提交巨型 terminal payload；不写 final PRD、不产出 frontend implementation template、不调用 build、不选择下一步路线。",
+      hint: "网页/URL 参考任务的调查分工阶段。source URL 存在时由 host 先准备 rendered webpage evidence；frontend_research 基于证据、源 URL、可见区域、组件/数据/交互/样式疑点和 fidelity risk，发布 source-backed frontend_research_brief/webpage_contract。requirements、architect、build 消费各自 compact projection 作为 investigation work packets。它用小 update_* result tools 分块登记 brief，不提交巨型 terminal payload；不写 final PRD、不产出 frontend implementation template、不调用 build、不选择下一步路线。",
       scope: "task",
       skippable: true,
       after: [],
@@ -269,10 +261,10 @@ const PIPELINE: MiniWorkflow = {
       tool: "analyze_intent",
       agentRole: "intent-analysis",
       label: "Intent",
-      hint: "解读用户真实意图：意图分类、复杂度、缺失槽位、阻断澄清。按需调用 —— request 模糊或 scope 不清时跑。视觉/网页参考任务通常等 frontend_design/frontend_research 证据完成后再跑。",
+      hint: "解读用户真实意图：意图分类、复杂度、缺失槽位、阻断澄清。按需调用 —— request 模糊或 scope 不清时跑。视觉/网页参考任务通常等 host evidence/frontend_research 证据完成后再跑。",
       scope: "task",
       skippable: true,
-      after: ["frontend_design", "frontend_research", "deep_research"],
+      after: ["frontend_research", "deep_research"],
     },
     {
       id: "requirements",
@@ -282,7 +274,7 @@ const PIPELINE: MiniWorkflow = {
       hint: "分析输入并分解为 REQ-N + 基础决策。多文件 / 需要显式验收标准时按需调用；trivial direct edit 可跳过。",
       scope: "task",
       skippable: true,
-      after: ["frontend_design", "frontend_research", "deep_research"],
+      after: ["frontend_research", "deep_research"],
     },
     {
       id: "architect",
@@ -306,7 +298,7 @@ const PIPELINE: MiniWorkflow = {
     },
     {
       // Per-goal 实现：每个 goal 派发到 build agent（在 worktree 中）。
-      // Orchestrator calls the unified `build` tool with goalID; the build
+      // Orchestrator calls `dispatch_agent` with target="build" and goalID; the build
       // prompt carries a budgeted architecture-consensus view. After the
       // build completes, post-build architecture_review runs and its full
       // findings are returned inline in the build tool result — host does
@@ -316,7 +308,7 @@ const PIPELINE: MiniWorkflow = {
       tool: "build",
       agentRole: "build",
       label: "Executor",
-      hint: "执行器在隔离 worktree 中完成一个 goal。每个 build 收到架构共识输入；build 完成后 architecture_review 的完整反馈会原文返回给 orchestrator，由 orchestrator LLM 自行决定后续动作（modify_goal / build / architect / integrity / fail_task）。",
+      hint: "执行器在隔离 worktree 中完成一个 goal。每个 build 收到架构共识输入；build 完成后 architecture_review 的完整反馈会原文返回给 orchestrator，由 orchestrator LLM 自行决定后续动作（manage_task modify_goal / dispatch_agent build / dispatch_agent architect / dispatch_agent integrity / manage_task fail_task）。",
       scope: "goal",
       skippable: false,
       after: ["workload_analysis"],
@@ -327,7 +319,7 @@ const PIPELINE: MiniWorkflow = {
       tool: "visual_qa",
       agentRole: "visual-qa",
       label: "Visual QA",
-      hint: "所有 blocking implementation work terminal 后、最终调度决定前的一次性 GUI 视觉/功能/产品审查证据。GUI=Graphical User Interface，图形用户界面。它消费 task-scoped upstream evidence 以及可选 prior integrity evidence；优先做截图对比和逐屏截图分析，禁止用一次性整页截图 judge 当结论；先审组件真实性和可见功能，再审布局结构，最后才审样式微调。它是 report-only review，不编辑文件，不是 host gate，不替代 integrity，也不是 integrity 的前置状态机；effective_accepted=false 或 production_blockers>0 时由 orchestrator 基于证据和当前 workflow 声明的 implementation owner 选择 repair lane / question / propose_task / fail_task。",
+      hint: "所有 blocking implementation work terminal 后、最终调度决定前的一次性 GUI 视觉/功能/产品审查证据。GUI=Graphical User Interface，图形用户界面。它消费 task-scoped upstream evidence 以及可选 prior integrity evidence；优先做截图对比和逐屏截图分析，禁止用一次性整页截图 judge 当结论；先审组件真实性和可见功能，再审布局结构，最后才审样式微调。它是 report-only review，不编辑文件，不是 host gate，不替代 integrity，也不是 integrity 的前置状态机；effective_accepted=false 或 production_blockers>0 时由 orchestrator 基于证据和当前 workflow 声明的 implementation owner 选择 repair lane / question / manage_task propose_task / manage_task fail_task。",
       scope: "task",
       skippable: true,
       after: ["build"],
@@ -337,7 +329,7 @@ const PIPELINE: MiniWorkflow = {
       tool: "integrity",
       agentRole: "integrity",
       label: "Review",
-      hint: "系统完整性 review report：在所有 blocking goal build 完成后按证据需要调用。Integrity 在自己的 session 内审查 requirement mining、语义完整性、contract graph 与 delivered system。pass / non-pass 都只返回可操作报告，orchestrator 显式选择 complete_task / modify_goal / build / architect / propose_task / question / fail_task。",
+      hint: "系统完整性 review report：在所有 blocking goal build 完成后按证据需要调用。Integrity 在自己的 session 内审查 requirement mining、语义完整性、contract graph 与 delivered system。pass / non-pass 都只返回可操作报告，orchestrator 显式选择 manage_task complete_task / manage_task modify_goal / dispatch_agent build / dispatch_agent architect / manage_task propose_task / question / manage_task fail_task。",
       scope: "task",
       skippable: false,
       after: ["build"],
@@ -356,6 +348,127 @@ const PIPELINE: MiniWorkflow = {
   goalLoopStepIDs: ["build"],
 }
 
+const FRONTEND_INNOVATE: MiniWorkflow = {
+  id: "frontend_innovate",
+  name: "Frontend Innovate",
+  description:
+    "(frontend_research / deep_research) → frontend_design → analyze_intent → requirements → architect → workload_analysis → per-goal[build] → visual_qa / integrity → fact_check。用于竞品证据驱动的网页重设计和 HTML 设计稿真值交付。",
+  steps: [
+    {
+      id: "frontend_research",
+      tool: "frontend_research",
+      agentRole: "frontend-research",
+      label: "Frontend Research",
+      hint: "源网页调查阶段。source URL 存在时由 host 准备 rendered webpage evidence；frontend_research 产出 source-backed webpage_contract/Page Skeleton Blueprint，供 frontend_design 识别当前页面信息架构、内容、交互和约束。",
+      scope: "task",
+      skippable: true,
+      after: [],
+    },
+    {
+      id: "deep_research",
+      tool: "deep_research",
+      agentRole: "deep-research",
+      label: "Deep Research",
+      hint: "竞品网页、行业模式、当前文档/API 等多源外部事实的只读证据收集阶段。只使用用户给定或证据发现的 URL/资料；不把未验证竞品猜测交给 frontend_design。",
+      scope: "task",
+      skippable: true,
+      after: [],
+    },
+    {
+      id: "frontend_design",
+      tool: "frontend_design",
+      agentRole: "frontend-design",
+      label: "Design",
+      hint: "Frontend Innovate 设计稿阶段：消费 frontend_research/deep_research/user-provided reference evidence，检查当前页和证据化竞品网页截图，比较多个重设计方向，选择一个方向，并交付 screenshot-validated source-editable `visual-html-skeleton` HTML/CSS 设计稿作为 downstream Build / Visual QA / Integrity 的参考真值。网页复刻证据存在时，web-clone-source/implementation-blueprint.md、source-ir/component-tree.json、source-ir/style-profile.json、source-skeleton/critical.css 是实现入口；web-clone-source blueprint/source IR/assets 是 LLM 写 React/Vue 等源码的主入口，frontend-design source skeleton/CSS sidecars 必须先成为实现基底，不能被当成旁路参考后从空白页手搓。竞品证据缺失时报告 blocked/incomplete，不猜 URL。",
+      scope: "task",
+      skippable: false,
+      after: ["frontend_research", "deep_research"],
+    },
+    {
+      id: "analyze_intent",
+      tool: "analyze_intent",
+      agentRole: "intent-analysis",
+      label: "Intent",
+      hint: "解读用户真实意图。Frontend Innovate 任务通常等 frontend_design HTML 设计稿真值完成后再校正 scope、缺失槽位和阻断问题。",
+      scope: "task",
+      skippable: true,
+      after: ["frontend_design"],
+    },
+    {
+      id: "requirements",
+      tool: "requirements",
+      agentRole: "requirements",
+      label: "Requirements",
+      hint: "基于用户请求、source evidence、竞品证据和 frontend_design HTML 设计稿真值分解 REQ-N。原始 source 页面和竞品页面是证据输入；下游视觉目标是 frontend_design 的 rendered HTML design draft。",
+      scope: "task",
+      skippable: true,
+      after: ["frontend_design", "analyze_intent"],
+    },
+    {
+      id: "architect",
+      tool: "architect",
+      agentRole: "architect",
+      label: "Architect",
+      hint: "权威分解者：以 frontend_design public report、visual-html-skeleton、visual_validation_evidence、设计方向和 source/competitor evidence 为输入拆 goals。Build 的视觉目标绑定到 HTML 设计稿真值和其截图证据，不回退到原始网页像素复刻。",
+      scope: "task",
+      skippable: true,
+      after: ["requirements"],
+    },
+    {
+      id: "workload_analysis",
+      tool: "workload_analysis",
+      agentRole: "goal-workload-analyst",
+      label: "Workload",
+      hint: "只读 goal 定型复核：检查每个 goal 是否覆盖 HTML 设计稿、组件/数据/交互、验证和竞品/source traceability。它不创建/修改 goal。",
+      scope: "task",
+      skippable: true,
+      after: ["architect"],
+    },
+    {
+      id: "build",
+      tool: "build",
+      agentRole: "build",
+      label: "Executor",
+      hint: "执行器实现 Architect goal。Frontend Innovate goal 的视觉目标来自 frontend_design HTML 设计稿和 rendered screenshot evidence；原始 source/竞品 evidence 用于约束内容与设计 rationale，不作为最终像素复刻目标。",
+      scope: "goal",
+      skippable: false,
+      after: ["workload_analysis"],
+      phases: [{ id: "build", label: "Build", sessionKind: "build" }],
+    },
+    {
+      id: "visual_qa",
+      tool: "visual_qa",
+      agentRole: "visual-qa",
+      label: "Visual QA",
+      hint: "所有 blocking implementation work terminal 后执行的 GUI review。Frontend Innovate 视觉对照源是 frontend_design HTML 设计稿及其 screenshot evidence；检查最终实现是否忠实实现 selected direction、状态、布局、内容和可用性。",
+      scope: "task",
+      skippable: true,
+      after: ["build"],
+    },
+    {
+      id: "integrity",
+      tool: "integrity",
+      agentRole: "integrity",
+      label: "Review",
+      hint: "系统完整性 review report：审查用户需求、source/competitor evidence、frontend_design HTML 设计稿真值、goal contract、Build 交付和 Visual QA evidence 是否一致。",
+      scope: "task",
+      skippable: false,
+      after: ["build"],
+    },
+    {
+      id: "fact_check",
+      tool: "fact_check",
+      agentRole: "fact-check",
+      label: "Fact Check",
+      hint: "Integrity pass 后按需验证 worker terminal report 中的 fact_check_items。",
+      scope: "task",
+      skippable: true,
+      after: ["integrity"],
+    },
+  ],
+  goalLoopStepIDs: ["build"],
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // 内置 Workflow 注册表
 // ═══════════════════════════════════════════════════════════════════
@@ -363,6 +476,7 @@ const PIPELINE: MiniWorkflow = {
 const BUILT_IN: Record<string, MiniWorkflow> = {
   direct: DIRECT,
   pipeline: PIPELINE,
+  frontend_innovate: FRONTEND_INNOVATE,
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -458,9 +572,7 @@ export namespace WorkflowRegistry {
     return schedulerAgentWorkflowBindingsForWorkflow(workflow).find((binding) => binding.stage === role)
   }
 
-  export function schedulerAgentWorkflowBindingForToolSync(
-    tool: string,
-  ): SchedulerAgentWorkflowBinding | undefined {
+  export function schedulerAgentWorkflowBindingForToolSync(tool: string): SchedulerAgentWorkflowBinding | undefined {
     return schedulerAgentWorkflowBindingsSync().find((binding) => binding.workflow_tool_name === tool)
   }
 
@@ -534,11 +646,7 @@ export function workflowSelectionSnapshot(workflow: MiniWorkflow): MiniWorkflow 
   }
 }
 
-function parseWorkflowSelectionSnapshot(
-  value: unknown,
-  taskID: string,
-  workflowID: string,
-): MiniWorkflow | undefined {
+function parseWorkflowSelectionSnapshot(value: unknown, taskID: string, workflowID: string): MiniWorkflow | undefined {
   if (value === undefined || value === null) return undefined
   const parsed = WorkflowSelectionSnapshot.safeParse(value)
   if (!parsed.success) {
@@ -879,7 +987,7 @@ export function renderWorkflowPrompt(workflow: MiniWorkflow, state: WorkflowStat
       }
     }
 
-    lines.push(`${num}. [${step.scope}] ${step.tool} — ${step.hint}${skip} ${statusTag}`)
+    lines.push(`${num}. [${step.scope}] dispatch_agent target=${step.tool} — ${step.hint}${skip} ${statusTag}`)
   }
 
   if (workflow.goalLoopStepIDs.length > 0) {
@@ -891,9 +999,9 @@ export function renderWorkflowPrompt(workflow: MiniWorkflow, state: WorkflowStat
   }
 
   lines.push("")
-    lines.push(
-      "NOTE: 上面是按需调用的可见进度，不是必须按序触发的状态机。每个 stage agent 是否调用由你 " +
-      "（编排器）按 request 形态决定 —— 跳过等同于显式选择，理由要在 reasoning 里讲清楚。Pipeline 的 review report surface 是 `integrity`；" +
+  lines.push(
+    "NOTE: 上面是按需调用的可见进度，不是必须按序触发的状态机。每个 stage agent 是否调用由你 " +
+      "（编排器）按 request 形态决定 —— 跳过等同于显式选择，理由要在 reasoning 里讲清楚。Pipeline 的 review report surface 是 dispatch_agent target=integrity；" +
       "integrity pass / non-pass 都只返回 session-bound review evidence，完成、修复、提问、拆 follow-up 或失败由编排器基于证据显式决定。",
   )
 

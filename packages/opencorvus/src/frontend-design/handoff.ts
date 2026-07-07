@@ -1,6 +1,6 @@
 import { createDecisionLog, type DecisionEntry } from "@/decision-log"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
-import { FrontendProjectToolInputSchema } from "@/frontend-design/schema"
+import { CompetitorReferenceEvidenceSchema, FrontendProjectToolInputSchema } from "@/frontend-design/schema"
 import { VisualRegionBindingManifestSchema, type VisualRegionBindingManifest } from "./visual-region-binding-schema"
 import { z } from "zod"
 
@@ -40,10 +40,15 @@ export const FRONTEND_DESIGN_COMPLETION_KEYS = [
 
 const FRONTEND_DESIGN_ADDITIONAL_HANDOFF_KEYS = [
   "final_acceptance_mode",
+  "design_directions",
+  "selected_design_direction",
+  "anti_slop_review",
+  "competitor_reference_evidence",
   "component_reuse_plan",
   "baseline_replacement_plan",
   "quality_project_contract",
   "frontend_project",
+  "visual_validation_evidence",
   "reference_artifacts",
   "visual_region_bindings",
 ] as const
@@ -93,11 +98,53 @@ export function parseVisualRegionBindingsDecisionEntry(entry: DecisionEntry | un
   return z.array(VisualRegionBindingManifestSchema).parse(raw)
 }
 
+function parseCompetitorReferenceEvidenceDecisionEntry(entry: DecisionEntry | undefined) {
+  if (!entry) return []
+  let raw: unknown
+  try {
+    raw = JSON.parse(entry.value)
+  } catch (err) {
+    throw new Error("frontend_design competitor_reference_evidence decision must be schema JSON", {
+      cause: err,
+    })
+  }
+  return z.array(CompetitorReferenceEvidenceSchema).parse(raw)
+}
+
+function renderCompetitorReferenceGuidance(entries: Map<string, DecisionEntry>): string[] {
+  const evidence = parseCompetitorReferenceEvidenceDecisionEntry(entries.get("competitor_reference_evidence"))
+  if (evidence.length === 0) return []
+  const lines = ["", "### Competitor Reference Evidence"]
+  for (const item of evidence) {
+    lines.push(`- ${item.id}: ${item.competitor_url}`)
+    lines.push(`  - screenshot_artifact: ${item.screenshot_artifact}`)
+    lines.push(`  - source_page_ref: ${item.source_page_ref}`)
+    lines.push(`  - influence: ${item.influence_on_selected_direction}`)
+  }
+  return lines
+}
+
 function renderSourceRegionRefactorGuidance(entries: Map<string, DecisionEntry>): string {
   const frontendProject = parseFrontendProjectDecisionEntry(entries.get("frontend_project"))
   const isVisualBaseline = frontendProject?.role === "visual_baseline_input"
   const isSourceBaseline = frontendProject?.role === "source_baseline_input"
+  const selectedDesignDirection = entries.get("selected_design_direction")?.value.trim()
   if (!isSourceBaseline && !isVisualBaseline) return ""
+
+  if (isVisualBaseline && selectedDesignDirection) {
+    return [
+      "## Frontend Innovate HTML Design Ground Truth Guidance",
+      "",
+      `Dynamic interpretation from the frontend_design decision log: this handoff delivers a competitor-informed, source-editable static HTML/CSS design draft. Treat \`visual-html-skeleton\` plus structured \`visual_validation_evidence\` as the downstream visual ground truth for selected_design_direction=\`${selectedDesignDirection}\`.`,
+      "",
+      "- Requirements: express downstream work as implementing the selected HTML design draft. Original source-page evidence and competitor evidence are traceability/rationale inputs, not the final pixel-parity target.",
+      "- Architect: bind goals to the selected design direction, `visual-html-skeleton` files, rendered screenshot evidence, `design_resource_manifest`, interaction/state expectations, and source/competitor evidence refs. Do not replace this with a raw source-page clone target.",
+      "- Build: transcribe the screenshot-validated HTML design draft into maintainable project source with semantic components, data modules, scoped styles, asset ownership, and mature library choices for hard UI domains while preserving parity against the design draft evidence.",
+      "- Visual QA/Integrity: compare delivered UI against frontend_design HTML design draft screenshots and selected-direction contract first; use original source and competitor evidence to verify rationale, completeness, content constraints, and prohibited generic traits.",
+      "- Evidence rule: if `visual_validation_evidence` is missing or names blocking debt, report unfinished frontend_design work instead of rebuilding from guesses.",
+      ...renderCompetitorReferenceGuidance(entries),
+    ].join("\n")
+  }
 
   if (isVisualBaseline) {
     return [
@@ -192,9 +239,14 @@ export function renderFrontendDesignHandoffReference(
     )
   }
 
-  if (!includeExcerpts) return lines.join("\n")
-
   const sourceRegionGuidance = renderSourceRegionRefactorGuidance(entries)
+  if (!includeExcerpts) {
+    if (options?.goalScopedBuild && sourceRegionGuidance) {
+      lines.push("")
+      lines.push(sourceRegionGuidance)
+    }
+    return lines.join("\n")
+  }
   if (sourceRegionGuidance) {
     lines.push("")
     lines.push(sourceRegionGuidance)

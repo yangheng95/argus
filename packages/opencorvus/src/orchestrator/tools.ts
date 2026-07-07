@@ -228,6 +228,7 @@ import {
 import { ProtocolEventTable } from "@/protocol/protocol.sql"
 
 import {
+  ORCHESTRATOR_WORKFLOW_TOOL_NAMES,
   findStepByTool,
   WorkflowRegistry,
   type WorkflowState,
@@ -329,8 +330,20 @@ function latestDecisionEntriesByKey(entries: DecisionEntry[]): DecisionEntry[] {
 
 const ProposedTaskEvidenceAnchorSchema = z.object({
   kind: z
-    .enum(["code_module", "document", "artifact", "expert_squad", "benchmark", "toolchain", "route", "data_contract", "other"])
-    .describe("Concrete evidence anchor kind. Use code_module for source modules, document for docs/specs, and expert_squad for prompt/profile/squad assets."),
+    .enum([
+      "code_module",
+      "document",
+      "artifact",
+      "expert_squad",
+      "benchmark",
+      "toolchain",
+      "route",
+      "data_contract",
+      "other",
+    ])
+    .describe(
+      "Concrete evidence anchor kind. Use code_module for source modules, document for docs/specs, and expert_squad for prompt/profile/squad assets.",
+    ),
   entity: z.string().min(1).describe("Concrete entity the follow-up task must change or verify."),
   observed_problem: z
     .string()
@@ -367,6 +380,47 @@ const StageContinuationArtifactIDField = z
     "Explicit stage_continuation_request artifact id returned by this same stage after a terminal finalizer miss. " +
       "Use only to continue that exact child session; omit for a fresh stage run.",
   )
+
+const RequirementsInputSchema = z
+  .object({
+    reason: z.string().optional().describe("Why you decided to analyze requirements"),
+    continuation_artifact_id: StageContinuationArtifactIDField,
+  })
+  .strict()
+
+const ArchitectInputSchema = z
+  .object({
+    reason: z.string().optional().describe("Why you decided to run architect"),
+    continuation_artifact_id: StageContinuationArtifactIDField,
+  })
+  .strict()
+
+const WorkloadAnalysisInputSchema = z
+  .object({
+    reason: z.string().optional().describe("Why you decided to run workload analysis"),
+    continuation_artifact_id: StageContinuationArtifactIDField,
+  })
+  .strict()
+
+const AnalyzeIntentInputSchema = z
+  .object({
+    reason: z
+      .string()
+      .optional()
+      .describe("Why you decided to run intent analysis (first-wake / re-entry / scope change)"),
+    continuation_artifact_id: StageContinuationArtifactIDField,
+  })
+  .strict()
+
+const ExploreInputSchema = z
+  .object({
+    question: z
+      .string()
+      .min(1)
+      .describe("The focused repository question the explore subagent must answer with file/symbol evidence."),
+    reason: z.string().optional().describe("Why this repository investigation is needed before the next stage."),
+  })
+  .strict()
 
 function stageInputDigest(value: unknown): string {
   return createHash("sha256")
@@ -531,7 +585,11 @@ async function hostPreparedFrontendProjectEvidenceSnapshot(taskID: string) {
   }
 }
 
-function requirementsPromptEvidenceSnapshot(taskID: string, task: TaskRow, contextPackets: readonly AgentContextPacket[]) {
+function requirementsPromptEvidenceSnapshot(
+  taskID: string,
+  task: TaskRow,
+  contextPackets: readonly AgentContextPacket[],
+) {
   return continuationEvidenceSnapshot({
     attachments: taskArrayField(task, "attachments"),
     design_specs: taskArrayField(task, "design_specs"),
@@ -594,7 +652,9 @@ function frontendProjectModeForBuildHandoff(
   }
 }
 
-function frontendDesignBuildVisualHandoff(entries: readonly DecisionEntry[]): BuildVisualHandoffContextData | undefined {
+function frontendDesignBuildVisualHandoff(
+  entries: readonly DecisionEntry[],
+): BuildVisualHandoffContextData | undefined {
   const latest = new Map<string, DecisionEntry>()
   for (const entry of entries) latest.set(entry.key, entry)
   const frontendProjectRole = parseFrontendProjectDecisionEntry(latest.get("frontend_project"))?.role
@@ -604,8 +664,8 @@ function frontendDesignBuildVisualHandoff(entries: readonly DecisionEntry[]): Bu
   const visualReference =
     visualRegionBindings.length > 0 ||
     webCloneSource ||
-    ["reference_artifacts", "visual_consistency_contract", "evidence_source_manifest"].some(
-      (key) => latest.get(key)?.value.trim(),
+    ["reference_artifacts", "visual_consistency_contract", "evidence_source_manifest"].some((key) =>
+      latest.get(key)?.value.trim(),
     )
   if (!visualReference && !webCloneSource && !projectMode && visualRegionBindings.length === 0) return undefined
   return {
@@ -643,7 +703,8 @@ function frontendDesignContextPacketsForTask(input: {
   idPrefix: string
   titlePrefix: string
 }): AgentContextPacket[] {
-  const frontendDesignEntries = input.frontendDesignEntries ?? createDecisionLog(input.task.id).readByPhase("frontend_design")
+  const frontendDesignEntries =
+    input.frontendDesignEntries ?? createDecisionLog(input.task.id).readByPhase("frontend_design")
   return [
     ...buildAgentContextPackets([
       {
@@ -1136,6 +1197,7 @@ type OrchestratorToolExecutionContext = {
   orchestratorMessageID: string
   toolCallID: string
   toolPartID: string
+  visibleToolName: string
 }
 
 type TaskOrchestratorToolExecutionExpectation = {
@@ -1143,8 +1205,26 @@ type TaskOrchestratorToolExecutionExpectation = {
   agentSessionID: string
 }
 
+function optionsWithVisibleOrchestratorToolName(options: unknown, visibleToolName: string): unknown {
+  const record = options && typeof options === "object" && !Array.isArray(options) ? options : {}
+  const meta =
+    (record as { opencorvus?: unknown }).opencorvus &&
+    typeof (record as { opencorvus?: unknown }).opencorvus === "object" &&
+    !Array.isArray((record as { opencorvus?: unknown }).opencorvus)
+      ? (record as { opencorvus: Record<string, unknown> }).opencorvus
+      : {}
+  return {
+    ...(record as object),
+    opencorvus: {
+      ...meta,
+      visibleToolName,
+    },
+  }
+}
+
 function requireOrchestratorToolExecutionContext(options: unknown, toolName: string): OrchestratorToolExecutionContext {
   const meta = (options as { opencorvus?: Record<string, unknown> } | undefined)?.opencorvus
+  const visibleToolName = typeof meta?.visibleToolName === "string" ? meta.visibleToolName : toolName
   const orchestratorSessionID = typeof meta?.sessionID === "string" ? meta.sessionID : ""
   const orchestratorMessageID = typeof meta?.messageID === "string" ? meta.messageID : ""
   const toolCallID = typeof meta?.toolCallID === "string" ? meta.toolCallID : ""
@@ -1154,7 +1234,7 @@ function requireOrchestratorToolExecutionContext(options: unknown, toolName: str
       `${toolName}: missing real tool execution identity; refusing to run because ownership cannot be tied to a persisted message/tool part.`,
     )
   }
-  return { orchestratorSessionID, orchestratorMessageID, toolCallID, toolPartID }
+  return { orchestratorSessionID, orchestratorMessageID, toolCallID, toolPartID, visibleToolName }
 }
 
 async function requireTaskOrchestratorToolExecutionContext(
@@ -1212,9 +1292,9 @@ async function requireTaskOrchestratorToolExecutionContext(
       `${toolName}: persisted tool part ${toolExecution.toolPartID} was not found on orchestrator message ${toolExecution.orchestratorMessageID}.`,
     )
   }
-  if (part.type !== "tool" || part.callID !== toolExecution.toolCallID || part.tool !== toolName) {
+  if (part.type !== "tool" || part.callID !== toolExecution.toolCallID || part.tool !== toolExecution.visibleToolName) {
     throw new Error(
-      `${toolName}: persisted tool part ${toolExecution.toolPartID} does not match tool=${toolName} callID=${toolExecution.toolCallID}.`,
+      `${toolName}: persisted tool part ${toolExecution.toolPartID} does not match visible tool=${toolExecution.visibleToolName} callID=${toolExecution.toolCallID}.`,
     )
   }
   return toolExecution
@@ -1503,7 +1583,7 @@ function renderEvidenceSourceManifest(input: {
   lines.push(`Canonical frontend_design public report file: ${paths.templateRelative}`)
   lines.push(`Canonical source manifest file: ${paths.manifestRelative}`)
   lines.push(
-    "Canonical decision-log entries: phase=frontend_design keys public_report, frontend_template, final_acceptance_mode, fillable_modules, component_reuse_plan, baseline_replacement_plan, quality_project_contract, frontend_project, material_inventory, visual_consistency_contract, ui_data_contract, template_iteration_notes, completeness_review, open_questions.",
+    "Canonical decision-log entries: phase=frontend_design keys public_report, frontend_template, final_acceptance_mode, design_directions, selected_design_direction, anti_slop_review, competitor_reference_evidence, fillable_modules, component_reuse_plan, baseline_replacement_plan, quality_project_contract, frontend_project, material_inventory, visual_consistency_contract, visual_validation_evidence, ui_data_contract, template_iteration_notes, completeness_review, open_questions.",
   )
   lines.push(
     "Optional visual anchors: task.design_specs, when present. They are secondary to visual_consistency_contract.",
@@ -1954,6 +2034,43 @@ const IntegrityInputSchema = z
 
 type IntegrityToolInput = z.infer<typeof IntegrityInputSchema>
 
+const ProposeTaskInputSchema = z
+  .object({
+    title: z.string().min(1).describe("Concise title for the proposed new task."),
+    request: z
+      .string()
+      .min(1)
+      .describe(
+        "Complete, self-contained request for the proposed new task. Must name the concrete evidence anchor entity and describe the specific observed problem it must solve.",
+      ),
+    reason: z
+      .string()
+      .min(1)
+      .describe(
+        "Evidence-backed reason this should inherit from the current task as separate follow-up work instead of changing the current task. Must include or point to the concrete evidence anchor entity.",
+      ),
+    evidence_anchor: ProposedTaskEvidenceAnchorSchema.describe(
+      "Required concrete evidence anchor. This is the scheduler-owned child-task admission contract; do not infer it from generic prose.",
+    ),
+    priority: z
+      .enum(["critical", "high", "normal", "low"])
+      .describe("Priority for the proposed follow-up task. Defaults to normal when no urgency evidence exists.")
+      .default("normal"),
+    queue: z
+      .boolean()
+      .default(false)
+      .describe(
+        "Set false only for independent follow-up work that can start immediately. Set true when this follow-up depends on prerequisite work or should otherwise wait in the directory queue.",
+      ),
+    kind: z
+      .enum(["workflow", "build"])
+      .describe(
+        "Task engine kind for the follow-up: workflow for planned multi-stage work, build for direct execution.",
+      )
+      .default("workflow"),
+  })
+  .strict()
+
 const CompleteTaskInputSchema = z
   .object({
     summary: z
@@ -1964,6 +2081,183 @@ const CompleteTaskInputSchema = z
       ),
   })
   .strict()
+
+const FailTaskInputSchema = z
+  .object({
+    error: z.string().describe("Why the task failed"),
+  })
+  .strict()
+
+const CancelTaskInputSchema = z
+  .object({
+    reason: z.string().describe("Why you are cancelling the task"),
+  })
+  .strict()
+
+const RetryTaskInputSchema = z
+  .object({
+    reason: z.string().describe("Why you are retrying the task"),
+  })
+  .strict()
+
+const ManageTaskActionInputSchemas = {
+  propose_task: ProposeTaskInputSchema,
+  complete_task: CompleteTaskInputSchema,
+  fail_task: FailTaskInputSchema,
+  cancel_task: CancelTaskInputSchema,
+  retry_task: RetryTaskInputSchema,
+  add_goal: AddGoalInputSchema,
+  modify_goal: ModifyGoalInputSchema,
+  complete_goal: CompleteGoalInputSchema,
+  delete_goal: DeleteGoalInputSchema,
+} satisfies Record<string, z.ZodTypeAny>
+
+const MANAGE_TASK_ACTION_NAMES = Object.keys(ManageTaskActionInputSchemas) as [
+  keyof typeof ManageTaskActionInputSchemas,
+  ...(keyof typeof ManageTaskActionInputSchemas)[],
+]
+
+const ManageTaskInputSchema = z
+  .object({
+    action: z
+      .enum(MANAGE_TASK_ACTION_NAMES)
+      .describe("Task or goal lifecycle action to execute through the single scheduler task-management tool."),
+    title: z.string().min(1).optional(),
+    request: z.string().min(1).optional(),
+    reason: z.string().min(1).optional(),
+    error: z.string().optional(),
+    summary: z.string().min(1).optional(),
+    evidence_anchor: ProposedTaskEvidenceAnchorSchema.optional(),
+    priority: z.enum(["critical", "high", "normal", "low"]).optional(),
+    queue: z.boolean().optional(),
+    kind: z.enum(["workflow", "build"]).optional(),
+    goal: GoalContractFieldsSchema.omit({ id: true }).optional(),
+    goalID: z.string().min(1).optional(),
+    updates: GoalContractUpdateSchema.optional(),
+  })
+  .strict()
+
+const ManageTaskActionInputSchema = z
+  .object({
+    action: z.enum(MANAGE_TASK_ACTION_NAMES),
+  })
+  .passthrough()
+
+const BuildInputSchema = z
+  .object({
+    request: z
+      .string()
+      .optional()
+      .describe(
+        "For per-goal builds: omit on normal retry when persisted build, acceptance, or integrity failure facts already identify the error. Populate only with one exact new operator/error fact not already persisted. It does not replace the goal's objective / acceptance_specs / owned_paths. For task-level direct builds (no goalID): required; include the user's request plus concise rejected acceptance details the build agent must address.",
+      ),
+    reason: z
+      .string()
+      .describe(
+        "One sentence explaining why this build is valid now: explicit kind=build, per-goal pipeline execution, post-acceptance whole-task rework, or a conscious direct-build decision for this workflow task.",
+      ),
+    goalID: z
+      .string()
+      .optional()
+      .describe(
+        "Optional goal id this build is scoped to. Set when build is invoked as a per-goal worker inside the pipeline workflow. Omit for task-level direct builds.",
+      ),
+    directBuildIntent: z
+      .literal("modify_files")
+      .optional()
+      .describe(
+        "Required for task-level direct builds on kind=workflow tasks. The only valid direct intent is modify_files: a scoped implementation/rework build. Build is not a repository investigation endpoint.",
+      ),
+    worktreeUsage: z
+      .enum(["managed_worktree", "current_project"])
+      .optional()
+      .describe(
+        "Optional execution-directory choice. managed_worktree creates or reuses a build-managed git worktree and exposes merge_back. current_project runs in the active project directory as caller-owned workDir and does not expose merge_back. Omitted values use the schema defaults: goal-scoped builds use managed_worktree; task-level direct builds use current_project.",
+      ),
+    userConfirmedStaleIntegrityData: z
+      .boolean()
+      .optional()
+      .describe(
+        "Set true only after the user explicitly confirmed continuing while the latest completed integrity session is status=artifact_missing and its durable integrity_attempt artifact could not be recovered.",
+      ),
+  })
+  .strict()
+
+const SchedulerDispatchTargetInputSchemas = {
+  requirements: RequirementsInputSchema,
+  architect: ArchitectInputSchema,
+  frontend_design: FrontendDesignInputSchema,
+  frontend_research: FrontendResearchInputSchema,
+  deep_research: DeepResearchInputSchema,
+  visual_qa: VisualQaInputSchema,
+  workload_analysis: WorkloadAnalysisInputSchema,
+  analyze_intent: AnalyzeIntentInputSchema,
+  fact_check: FactCheckInputSchema,
+  build: BuildInputSchema,
+  explore: ExploreInputSchema,
+  integrity: IntegrityInputSchema,
+} satisfies Record<OrchestratorWorkflowToolName, z.ZodTypeAny>
+
+function dispatchAgentTargetNamesForWorkflow(
+  workflow: MiniWorkflow | undefined,
+): [OrchestratorWorkflowToolName, ...OrchestratorWorkflowToolName[]] {
+  void workflow
+  const source = ORCHESTRATOR_WORKFLOW_TOOL_NAMES
+  const targets: OrchestratorWorkflowToolName[] = []
+  for (const toolName of source) {
+    if (!Object.hasOwn(SchedulerDispatchTargetInputSchemas, toolName)) continue
+    if (!targets.includes(toolName)) targets.push(toolName)
+  }
+  if (targets.length === 0) {
+    throw new Error("dispatch_agent requires at least one workflow target")
+  }
+  return targets as [OrchestratorWorkflowToolName, ...OrchestratorWorkflowToolName[]]
+}
+
+function dispatchAgentInputSchemaForWorkflow(workflow: MiniWorkflow | undefined) {
+  return z
+    .object({
+      target: z
+        .enum(dispatchAgentTargetNamesForWorkflow(workflow))
+        .describe("Workflow target to dispatch through the single scheduler agent-dispatch tool."),
+      reason: z.string().optional(),
+      continuation_artifact_id: StageContinuationArtifactIDField,
+      urls: FrontendDesignUrlsField,
+      figma_url: FrontendDesignFigmaUrlField,
+      materials: FrontendDesignMaterialsField,
+      source_urls: z.array(z.string().min(1)).optional(),
+      focus: z.string().optional(),
+      target_deliverable: z.enum(["prd", "spec", "research_report", "implementation_input", "mixed"]).optional(),
+      app_url: z.string().optional(),
+      preview_command: z.string().optional(),
+      target_session_id: z.string().min(1).optional(),
+      target_agent: z.string().min(1).optional(),
+      fact_check_items: FactCheckItemListSchema.optional(),
+      question: z.string().min(1).optional(),
+      request: z.string().optional(),
+      goalID: z.string().optional(),
+      directBuildIntent: z.literal("modify_files").optional(),
+      worktreeUsage: z.enum(["managed_worktree", "current_project"]).optional(),
+      userConfirmedStaleIntegrityData: z.boolean().optional(),
+    })
+    .strict()
+}
+
+type DispatchAgentToolInput = z.infer<ReturnType<typeof dispatchAgentInputSchemaForWorkflow>>
+
+const DispatchAgentTargetInputSchema = z
+  .object({
+    target: z.enum(dispatchAgentTargetNamesForWorkflow(undefined)),
+  })
+  .passthrough()
+
+const backgroundGoalBuilds = new Set<Promise<unknown>>()
+
+export async function awaitOrchestratorBackgroundGoalBuilds() {
+  while (backgroundGoalBuilds.size > 0) {
+    await Promise.allSettled([...backgroundGoalBuilds])
+  }
+}
 
 const IntegrityStageInputSchema = z
   .object({
@@ -6317,13 +6611,13 @@ export function createOrchestratorTools(input: {
           `Do not treat an older artifact as the current verdict until recovery or explicit user confirmation.`
         : outcome.verdict === "pass" && outcome.phase === "post_build"
           ? `Integrity verdict: pass — ${outcome.perDimension.join(", ")}. ` +
-            `Pass report persisted. Use this report as evidence when you decide whether to call complete_task with a completion summary.`
+            `Pass report persisted. Use this report as evidence when you decide whether to call manage_task action=complete_task with a completion summary.`
           : outcome.verdict === "pass"
             ? `Integrity verdict: pass — ${outcome.perDimension.join(", ")}. ` +
               `Pre-build integrity passed; this is review evidence, not a terminal lifecycle decision.`
             : `Integrity verdict: ${outcome.verdict} — ${outcome.perDimension.join(", ")}. ` +
               `Nothing in code supersedes goals, opens new attempts, blocks the run, or mutates the graph based on this verdict. ` +
-              `Read the full markdown below and choose modify_goal / build({goalID}) / architect / fail_task explicitly.`
+              `Read the full markdown below and choose manage_task action=modify_goal / dispatch_agent target=build with goalID / dispatch_agent target=architect / manage_task action=fail_task explicitly.`
       return SubAgentProtocol.yieldResult({
         headline,
         fields: [
@@ -6362,7 +6656,7 @@ export function createOrchestratorTools(input: {
     if (!activeSpec) {
       return {
         status: "blocked",
-        headline: "integrity: no active spec snapshot — call `architect` first.",
+        headline: "integrity: no active spec snapshot — call dispatch_agent target=architect first.",
         pointer: `task ${taskID}`,
       }
     }
@@ -6370,7 +6664,7 @@ export function createOrchestratorTools(input: {
     if (dbGoals.length === 0) {
       return {
         status: "blocked",
-        headline: "integrity: no goals on the active spec snapshot — call `architect` first.",
+        headline: "integrity: no goals on the active spec snapshot — call dispatch_agent target=architect first.",
         pointer: `spec ${activeSpec.id}`,
       }
     }
@@ -6487,11 +6781,12 @@ export function createOrchestratorTools(input: {
     // beyond the structural decomposition. Treating in-flight runs as
     // post_build would let the freshness evidence accept attempts that
     // were taken mid-build, which is what codex review §6.4 #8 flagged.
-    const phase: "pre_build" | "post_build" = requirementStatus.some((r) =>
-      r.claimingGoals.some((g) => g.runStatus !== "unstarted" && isTerminalGoalRunStatus(g.runStatus)),
-    ) || hasTerminalImplementationOutcome
-      ? "post_build"
-      : "pre_build"
+    const phase: "pre_build" | "post_build" =
+      requirementStatus.some((r) =>
+        r.claimingGoals.some((g) => g.runStatus !== "unstarted" && isTerminalGoalRunStatus(g.runStatus)),
+      ) || hasTerminalImplementationOutcome
+        ? "post_build"
+        : "pre_build"
     const lineage = buildSpecSnapshotLineage({
       taskID,
       activeSpecSnapshotID: activeSpec.id,
@@ -7009,7 +7304,8 @@ export function createOrchestratorTools(input: {
         const result = await execute(args, options)
         const after = taskDecisionSignature()
         const normalized = normalizeOrchestratorToolResult(result)
-        const effect = explicitDecisionEffectFromMetadata(normalized.metadata) ?? decisionEffectForTool(name, before, after)
+        const effect =
+          explicitDecisionEffectFromMetadata(normalized.metadata) ?? decisionEffectForTool(name, before, after)
         return {
           ...normalized,
           metadata: {
@@ -7040,11 +7336,11 @@ export function createOrchestratorTools(input: {
       return {
         status: "missing_requirements",
         result: SubAgentProtocol.yieldResult({
-          headline: "architect: no active requirements spec snapshot — call `requirements` first.",
+          headline: "architect: no active requirements spec snapshot — call dispatch_agent target=requirements first.",
           summary:
             "Architect decomposition requires the durable REQ-N requirements snapshot. " +
             "No architect session was started because the prior spec has been cleared or has not been created.",
-          fields: [["next_action", "requirements"]],
+          fields: [["next_action", "dispatch_agent target=requirements"]],
           pointer: "read_context scope=decisions",
         }),
       }
@@ -7358,7 +7654,7 @@ export function createOrchestratorTools(input: {
           headline:
             `Architect decomposition complete: ${persisted.length} goals, ${result.contractGraph.contracts.length} contracts.` +
             (deletedIDs.length > 0 ? ` Removed ${deletedIDs.length} prior goal(s).` : "") +
-            ` Eligible per-goal builds are now visible; read each build report and worktree facts, then decide modify_goal / build / architect / integrity / fail_task explicitly from current evidence.`,
+            ` Eligible per-goal builds are now visible; read each build report and worktree facts, then decide manage_task action=modify_goal / dispatch_agent target=build / dispatch_agent target=architect / dispatch_agent target=integrity / manage_task action=fail_task explicitly from current evidence.`,
           summary: result.summary,
           fields: [
             ["goals", persisted.map((g) => `${g.id} ${g.title}`)],
@@ -8212,13 +8508,8 @@ export function createOrchestratorTools(input: {
             "none",
           )
         }
-        await Session.mergeConfigOverlay({
-          sessionID: task.session_id,
-          patch: { prompt_profile: { active: profile_id } },
-        })
-        const afterConfig = await EffectiveConfig.effective({ sessionID: task.session_id })
         const capability = await PromptProfileResolver.resolveSchedulerCapability({
-          config: afterConfig,
+          config: previewConfig,
           projectDirectory,
         })
         const continuationNote = [
@@ -8229,6 +8520,29 @@ export function createOrchestratorTools(input: {
           `Projection hash: ${capability.projectionHash}.`,
           "Reload the active prompt profile and scheduler capability projection, then continue scheduling from current task evidence.",
         ].join("\n")
+        await Session.mergeConfigOverlay({
+          sessionID: task.session_id,
+          patch: { prompt_profile: { active: profile_id } },
+        })
+        const { dispatchTaskLoop } = await import("@/engine/queue")
+        let dispatchResult: Awaited<ReturnType<typeof dispatchTaskLoop>>
+        try {
+          dispatchResult = await dispatchTaskLoop({
+            taskID,
+            event: { note: continuationNote },
+          })
+          if (dispatchResult === "ignored") {
+            throw new Error(
+              `Expert squad selection continuation wake was ignored for task ${taskID}; root session prompt_profile.active was restored to ${before}.`,
+            )
+          }
+        } catch (error) {
+          await Session.mergeConfigOverlay({
+            sessionID: task.session_id,
+            patch: { prompt_profile: { active: before } },
+          })
+          throw error
+        }
         createDecisionLog(taskID).append({
           phase: "orchestrator",
           key: "select_expert_squad",
@@ -8243,14 +8557,6 @@ export function createOrchestratorTools(input: {
           ].join("\n"),
           reason: "select_expert_squad",
         })
-        const { dispatchTaskLoop } = await import("@/engine/queue")
-        const dispatchResult = await dispatchTaskLoop({
-          taskID,
-          event: { note: continuationNote },
-        })
-        if (dispatchResult === "ignored") {
-          throw new Error(`Expert squad selection persisted, but continuation wake dispatch was ignored for task ${taskID}.`)
-        }
         return withExplicitDecisionEffectMetadata(
           [
             `Expert squad selected for task ${taskID}.`,
@@ -8294,23 +8600,18 @@ export function createOrchestratorTools(input: {
         "contracts are all produced by the Architect — do NOT expect them from " +
         "this step.\n\n" +
         "USE WHEN: the work is multi-file with implicit acceptance criteria, OR you " +
-        "intend to call `architect` next (architect needs the REQ-N rows), OR " +
+        "intend to dispatch target `architect` next (architect needs the REQ-N rows), OR " +
         "foundational decisions are ambiguous and the build agent would otherwise " +
         "guess.\n" +
         "SKIP WHEN: a previous `requirements` result already succeeded and the active " +
-        "spec snapshot still matches the current user scope; call `architect` next. " +
+        "spec snapshot still matches the current user scope; dispatch target `architect` next. " +
         "Before any execution has begun, rerun only after an operator scope change or concrete evidence that the active REQ snapshot is invalid. " +
-        "Once any goal/build execution has begun, never rerun `requirements` in this task; repair point issues with goal/build tools or create a separate inheriting workflow task with `propose_task` when the active REQ snapshot omitted load-bearing request constraints.\n" +
+        "Once any goal/build execution has begun, never rerun `requirements` in this task; repair point issues with goal/build actions or create a separate inheriting workflow task with `manage_task` action=propose_task when the active REQ snapshot omitted load-bearing request constraints.\n" +
         "SKIP WHEN: trivial direct edit (single-file bug fix, typo / config tweak); " +
         "build agent can run against the user's text alone and integrity has enough " +
         "signal in the request and build evidence to verify. Frontend evidence tools are available candidates when the full task context " +
         "needs visual/reference material for requirements analysis.",
-      inputSchema: z
-        .object({
-          reason: z.string().optional().describe("Why you decided to analyze requirements"),
-          continuation_artifact_id: StageContinuationArtifactIDField,
-        })
-        .strict(),
+      inputSchema: RequirementsInputSchema,
       execute: async ({ reason, continuation_artifact_id }) => {
         const task = requireTask(taskID)
         const dispatch = await dispatchRequirementsStage({
@@ -8733,6 +9034,7 @@ export function createOrchestratorTools(input: {
             attachments: enrichedHasAttachments ? designVisuals : undefined,
             designResourceManifest,
             requireDesignDirectionContract: frontendDesignAttributes.requireDesignDirectionContract,
+            requireHtmlDesignGroundTruth: frontendDesignAttributes.requireHtmlDesignGroundTruth,
             taskID,
             parentSessionID: input.agentSessionID,
             signal: input.signal,
@@ -8862,6 +9164,33 @@ export function createOrchestratorTools(input: {
           })
           decisionLog.append({
             phase: "frontend_design",
+            key: "design_directions",
+            value: JSON.stringify(analysis.designDirections ?? [], null, 2),
+            reason:
+              "Frontend Innovate design alternatives considered before selecting the HTML design draft ground truth.",
+          })
+          decisionLog.append({
+            phase: "frontend_design",
+            key: "selected_design_direction",
+            value: analysis.selectedDesignDirectionID,
+            reason: "Selected frontend-design direction for downstream implementation.",
+          })
+          decisionLog.append({
+            phase: "frontend_design",
+            key: "anti_slop_review",
+            value: JSON.stringify(analysis.antiSlopReview ?? [], null, 2),
+            reason:
+              "Rejected generic redesign traits and the evidence-backed correction used by the selected direction.",
+          })
+          decisionLog.append({
+            phase: "frontend_design",
+            key: "competitor_reference_evidence",
+            value: JSON.stringify(analysis.competitorReferenceEvidence ?? [], null, 2),
+            reason:
+              "Evidence-backed competitor/reference webpage URLs, screenshots, and selected-direction influence used by Frontend Innovate.",
+          })
+          decisionLog.append({
+            phase: "frontend_design",
             key: "implementation_phase_outcomes",
             value: JSON.stringify(analysis.implementationPhaseOutcomes ?? [], null, 2),
             reason:
@@ -8885,6 +9214,13 @@ export function createOrchestratorTools(input: {
             key: "frontend_project",
             value: JSON.stringify(analysis.frontendProject, null, 2),
             reason: "Concrete frontend-design skeleton/project baseline for downstream Build refinement.",
+          })
+          decisionLog.append({
+            phase: "frontend_design",
+            key: "visual_validation_evidence",
+            value: JSON.stringify(analysis.visualValidationEvidence ?? [], null, 2),
+            reason:
+              "Rendered screenshot proof for the frontend-design HTML draft. In Frontend Innovate this is the downstream visual ground truth evidence.",
           })
           decisionLog.append({
             phase: "frontend_design",
@@ -9023,14 +9359,9 @@ export function createOrchestratorTools(input: {
         "re-run architect merely to widen owned_paths or bless ordinary shared-file " +
         "edits; build sessions may edit outside responsibility paths when needed " +
         "and must explain every touched file in files_changed[]. For contract-level " +
-        "point fixes prefer `modify_goal`. Frontend evidence tools are available candidates when the full task context " +
+        "point fixes prefer `manage_task` action=modify_goal. Frontend evidence tools are available candidates when the full task context " +
         "needs visual/reference material for architecture.",
-      inputSchema: z
-        .object({
-          reason: z.string().optional().describe("Why you decided to run architect"),
-          continuation_artifact_id: StageContinuationArtifactIDField,
-        })
-        .strict(),
+      inputSchema: ArchitectInputSchema,
       execute: async ({ reason, continuation_artifact_id }) => {
         const task = requireTask(taskID)
         const dispatch = await dispatchArchitectStage({
@@ -9072,14 +9403,9 @@ export function createOrchestratorTools(input: {
         "SKIP WHEN: the goal set is trivial (one obvious goal). Advisory — the workflow can proceed " +
         "without it.\n" +
         "AFTER it returns: goals flagged with `decomposition_concern` are evidence for an architect " +
-        "re-size — prefer `modify_goal` for single-field fixes, re-enter `architect` only for genuinely " +
+        "re-size — prefer `manage_task` action=modify_goal for single-field fixes, re-enter `dispatch_agent` target=architect only for genuinely " +
         "new structure (a split). Briefs feed the next per-goal `build` automatically.",
-      inputSchema: z
-        .object({
-          reason: z.string().optional().describe("Why you decided to run workload analysis"),
-          continuation_artifact_id: StageContinuationArtifactIDField,
-        })
-        .strict(),
+      inputSchema: WorkloadAnalysisInputSchema,
       execute: async ({ reason, continuation_artifact_id }) => {
         const task = requireTask(taskID)
         const activeSpec = findActiveSpecForTask(task.id)
@@ -9229,7 +9555,7 @@ export function createOrchestratorTools(input: {
           return SubAgentProtocol.yieldResult({
             headline:
               `Workload analysis complete: ${result.briefs.length} goals analyzed, ${flagged.length} flagged with decomposition_concern. ` +
-              "For flagged goals consider Architect re-sizing (modify_goal for single-field fixes / architect for a split); " +
+              "For flagged goals consider Architect re-sizing (manage_task action=modify_goal for single-field fixes / dispatch_agent target=architect for a split); " +
               "otherwise dispatch per-goal build — each build now carries its workload brief.",
             summary: result.summary,
             fields: [
@@ -9287,7 +9613,7 @@ export function createOrchestratorTools(input: {
         "interaction-state checks, console/network review, and evidence-backed localization of visual or functional defects. " +
         "It consumes scheduler-provided task context packets and reviews coarse-to-fine: component truth and visible functionality first, layout/composition second, micro-style polish last. " +
         "It reviews from a picky professional design QA perspective, lists production_blockers when the product cannot generate or ship, and does not use visual scores, one-shot whole-page screenshots, or judge verdicts as the verdict. " +
-        "If it returns effective_accepted=false with unresolved_code_module_problems, the scheduler must decide whether to repair in the current task or call propose_task from that evidence. " +
+        "If it returns effective_accepted=false with unresolved_code_module_problems, the scheduler must decide whether to repair in the current task or call manage_task action=propose_task from that evidence. " +
         "It may use skills and task-scoped browser_preview evidence, but it is report-only and does not edit files or run shell repair commands. " +
         "It does NOT acquire new webpage clone evidence and is NOT the final acceptance authority. Visual QA and integrity are peer review agents; neither one replaces the Orchestrator lifecycle decision, Visual QA does not replace integrity, Visual QA is not integrity's workflow prerequisite, and neither one is the other's workflow prerequisite.",
       inputSchema: VisualQaInputSchema,
@@ -9328,8 +9654,8 @@ export function createOrchestratorTools(input: {
         "disagreements. A post-build pass verdict records review evidence for the Orchestrator's completion decision; it does not complete or block the task by itself. Non-pass findings " +
         "are persisted as evidence only: this review never rewrites requirements, " +
         "never upserts goals, and the host never auto-supersedes attempts or " +
-        "auto-routes findings — you read the markdown and choose modify_goal / " +
-        "build({goalID}) / architect / fail_task explicitly. Goal builds record " +
+        "auto-routes findings — you read the markdown and choose manage_task action=modify_goal / " +
+        "dispatch_agent target=build with goalID / dispatch_agent target=architect / manage_task action=fail_task explicitly. Goal builds record " +
         "build reports as review input.\n\n" +
         "USE WHEN: architect just produced a non-trivial goal graph (≥3 goals, OR " +
         "cross-goal contracts, OR foundational decisions architect derived rather " +
@@ -9384,8 +9710,8 @@ export function createOrchestratorTools(input: {
         "- verdict=clean → proceed.\n" +
         "- verdict=minor_corrections → quote corrections in your next user-facing " +
         "message, proceed.\n" +
-        "- verdict=needs_orchestrator_action → invoke modify_goal / propose_task / " +
-        "fail_task per the corrected[i].recommended_action.\n" +
+        "- verdict=needs_orchestrator_action → invoke manage_task action=modify_goal / action=propose_task / " +
+        "action=fail_task per the corrected[i].recommended_action.\n" +
         "- verdict=inconclusive → retry fact_check or proceed with a caveat note.",
       inputSchema: FactCheckInputSchema,
       execute: async (args) => {
@@ -9651,15 +9977,7 @@ export function createOrchestratorTools(input: {
         "change), OR a previous analyze_intent on this task is still valid, OR the " +
         "work is a clear single-edit fix where downstream agents have nothing to " +
         "misread.",
-      inputSchema: z
-        .object({
-          reason: z
-            .string()
-            .optional()
-            .describe("Why you decided to run intent analysis (first-wake / re-entry / scope change)"),
-          continuation_artifact_id: StageContinuationArtifactIDField,
-        })
-        .strict(),
+      inputSchema: AnalyzeIntentInputSchema,
       execute: async ({ reason, continuation_artifact_id }) => {
         const task = requireTask(taskID)
         await trackStepStart("analyze_intent")
@@ -9891,13 +10209,7 @@ export function createOrchestratorTools(input: {
         "file, symbol, architecture, or dependency facts needed before requirements or implementation. The " +
         "result is returned to this orchestrator turn and persisted to phase=explore decision log plus an " +
         "exploration artifact for later wakes. Do not use for implementation or file edits.",
-      inputSchema: z.object({
-        question: z
-          .string()
-          .min(1)
-          .describe("The focused repository question the explore subagent must answer with file/symbol evidence."),
-        reason: z.string().optional().describe("Why this repository investigation is needed before the next stage."),
-      }),
+      inputSchema: ExploreInputSchema,
       execute: async ({ question, reason }) => {
         const task = await requireCurrentTaskAndAgentSessionLineage()
         const model = await resolveAgentModelRef("explore", { taskID, sessionID: input.agentSessionID })
@@ -9990,11 +10302,11 @@ export function createOrchestratorTools(input: {
       description:
         "Append one new executable goal to the current workflow graph when the latest operator message " +
         "or current task evidence adds a concrete in-scope surface that is not covered by any existing goal. " +
-        "Use this instead of `modify_goal` when the work is a new capability/surface, and instead of " +
-        "`architect` when the existing graph boundary is still valid and only one well-scoped goal is missing. " +
+        "Use this action instead of manage_task action=modify_goal when the work is a new capability/surface, and instead of " +
+        "dispatch_agent target=architect when the existing graph boundary is still valid and only one well-scoped goal is missing. " +
         "Do not use for broad re-decomposition, vague scope expansion, or follow-up work outside the current " +
-        "task contract — use `architect`, `question`, or `propose_task` from evidence in those cases. " +
-        "After this returns, dispatch `build({ goalID })` when dependencies are satisfied.",
+        "task contract — use dispatch_agent target=architect, `question`, or manage_task action=propose_task from evidence in those cases. " +
+        "After this returns, dispatch_agent target=build with goalID when dependencies are satisfied.",
       inputSchema: AddGoalInputSchema,
       execute: async ({ goal, reason }) => {
         const task = requireTask(taskID)
@@ -10075,7 +10387,7 @@ export function createOrchestratorTools(input: {
             ["plan_node_id", added.planNodeID ?? "(no active plan node yet)"],
             ["depends_on", (goal.depends_on ?? []).join(", ") || "(none)"],
           ],
-          pointer: `current task snapshot; then build({ goalID: "${added.id}" }) when dependencies are passed`,
+          pointer: `current task snapshot; then dispatch_agent target=build with goalID="${added.id}" when dependencies are passed`,
         })
       },
     }),
@@ -10470,13 +10782,10 @@ export function createOrchestratorTools(input: {
         if (scope === "agent_outcomes") {
           const outcomes = collectAgentOutcomesForTask(taskID)
           if (outcomes.length > 0) {
-            output.add(
-              `\n## Agent outcomes (${outcomes.length})`,
-              {
-                pointer: "read_context scope=agent_outcomes",
-                sectionCap: READ_CONTEXT_AGENT_OUTCOME_CHAR_CAP,
-              },
-            )
+            output.add(`\n## Agent outcomes (${outcomes.length})`, {
+              pointer: "read_context scope=agent_outcomes",
+              sectionCap: READ_CONTEXT_AGENT_OUTCOME_CHAR_CAP,
+            })
             for (const outcome of outcomes.slice(0, 12)) {
               const scopeLabel = outcome.scope === "task" ? "task-level" : "goal-level"
               const error = outcome.error ? ` error=${readContextTrimText(outcome.error, outcome.id, 180)}` : ""
@@ -10544,9 +10853,7 @@ export function createOrchestratorTools(input: {
         "Integrity reports are evidence, not a failure trigger by themselves. " +
         "Not for: a single non-pass review, a transient build error, or a guess that the task is hopeless. " +
         "Pair with a concrete history excerpt in the error field.",
-      inputSchema: z.object({
-        error: z.string().describe("Why the task failed"),
-      }),
+      inputSchema: FailTaskInputSchema,
       execute: async ({ error }, options) => {
         requireOrchestratorToolExecutionContext(options, "fail_task")
         const { cleaned } = await failCurrentTask({ error, cleanupReason: "fail_task" })
@@ -10557,9 +10864,7 @@ export function createOrchestratorTools(input: {
     cancel_task: tool({
       description:
         "Cancel the task immediately. Use when the user explicitly asks to stop or abandon the current work.",
-      inputSchema: z.object({
-        reason: z.string().describe("Why you are cancelling the task"),
-      }),
+      inputSchema: CancelTaskInputSchema,
       execute: async ({ reason }, options) => {
         requireOrchestratorToolExecutionContext(options, "cancel_task")
         await EngineService.cancelTask(taskID)
@@ -10569,9 +10874,7 @@ export function createOrchestratorTools(input: {
 
     retry_task: tool({
       description: "Retry the same task when the operator wants a fresh scheduling pass from the latest evidence.",
-      inputSchema: z.object({
-        reason: z.string().describe("Why you are retrying the task"),
-      }),
+      inputSchema: RetryTaskInputSchema,
       execute: async ({ reason }, options) => {
         requireOrchestratorToolExecutionContext(options, "retry_task")
         await EngineService.retryTask(taskID)
@@ -10581,7 +10884,7 @@ export function createOrchestratorTools(input: {
 
     inject_operator_message: tool({
       description:
-        "Read the latest already-recorded operator message for this orchestrator wake. This does not create another task message and does not resume a child executor/build session; use build({ goalID, request }) for build retry/continuation.",
+        "Read the latest already-recorded operator message for this orchestrator wake. This does not create another task message and does not resume a child executor/build session; use dispatch_agent target=build with goalID/request for build retry/continuation.",
       inputSchema: z.object({
         reason: z.string().describe("Why this operator message should be injected into the current execution"),
       }),
@@ -10615,7 +10918,7 @@ export function createOrchestratorTools(input: {
           decision: z
             .enum(["continue", "cancel_worker", "redispatch", "fail_task", "ask_user"])
             .describe(
-              "continue appends a visible message to the requesting worker session after runtime-contract validation; cancel_worker aborts the requesting worker; ask_user opens a real task interaction; fail_task marks the task failed through the terminal lifecycle helper; redispatch is valid only when the request's worker kind maps to a concrete scheduler workflow tool that executes a visible action. Same-session replay without that workflow tool binding is rejected and keeps the request pending.",
+              "continue appends a visible message to the requesting worker session after runtime-contract validation; cancel_worker aborts the requesting worker; ask_user opens a real task interaction; fail_task marks the task failed through the terminal lifecycle helper; redispatch is valid only when the request's worker kind maps to a concrete dispatch_agent target that executes a visible action. Same-session replay without that target binding is rejected and keeps the request pending.",
             ),
           message: z
             .string()
@@ -10674,7 +10977,7 @@ export function createOrchestratorTools(input: {
             decision,
             reason,
             ...(guidance ? { message: guidance } : {}),
-          ...(decision === "redispatch" ? { redispatchWorkflow: input.workflow } : {}),
+            ...(decision === "redispatch" ? { redispatchWorkflow: input.workflow } : {}),
           })
           const replayResult = replayedAgentCoordinationActionResult({ taskID, response })
           if (replayResult) return replayResult
@@ -10861,7 +11164,7 @@ export function createOrchestratorTools(input: {
         if (decision === "redispatch") {
           const redispatchAgent = request.payload.agent
           const schedulerRedispatchStrategies = {
-            "build": async () => {
+            build: async () => {
               let target: Awaited<ReturnType<typeof validateAgentCoordinationBuildRedispatch>>
               try {
                 target = await validateAgentCoordinationBuildRedispatch({ taskID, request })
@@ -11032,7 +11335,7 @@ export function createOrchestratorTools(input: {
                 `build session ${dispatch.sessionID} started goal_run ${dispatch.goalRunID}.`
               )
             },
-            "analyze_intent": async () => {
+            analyze_intent: async () => {
               let target: Awaited<ReturnType<typeof validateAgentCoordinationIntentAnalysisRedispatch>>
               try {
                 target = await validateAgentCoordinationIntentAnalysisRedispatch({ taskID, request })
@@ -11153,7 +11456,7 @@ export function createOrchestratorTools(input: {
                 `intent_analysis session ${dispatch.sessionID} recorded intent_summary.`
               )
             },
-            "explore": async () => {
+            explore: async () => {
               let target: Awaited<ReturnType<typeof validateAgentCoordinationExploreRedispatch>>
               try {
                 target = await validateAgentCoordinationExploreRedispatch({ taskID, request })
@@ -11213,7 +11516,9 @@ export function createOrchestratorTools(input: {
                 const existingExploreDecisionIDs = new Set(
                   listDecisionLogEntriesForPhase({ taskID, phase: "explore" }).map((entry) => entry.id),
                 )
-                const existingExplorationArtifactIDs = new Set(listExplorationArtifacts({ taskID }).map((row) => row.id))
+                const existingExplorationArtifactIDs = new Set(
+                  listExplorationArtifacts({ taskID }).map((row) => row.id),
+                )
                 await recordAgentCoordinationActionProgress({
                   taskID,
                   actionID: response.payload.action_id,
@@ -11302,7 +11607,7 @@ export function createOrchestratorTools(input: {
                 `explore session ${dispatch.sessionID} recorded repository investigation.`
               )
             },
-            "workload_analysis": async () => {
+            workload_analysis: async () => {
               let target: Awaited<ReturnType<typeof validateAgentCoordinationGoalWorkloadRedispatch>>
               try {
                 target = await validateAgentCoordinationGoalWorkloadRedispatch({ taskID, request })
@@ -11435,7 +11740,7 @@ export function createOrchestratorTools(input: {
                 `workload_analysis session ${dispatch.sessionID} persisted workload artifact ${dispatch.artifactID}.`
               )
             },
-            "fact_check": async () => {
+            fact_check: async () => {
               let target: Awaited<ReturnType<typeof validateAgentCoordinationFactCheckRedispatch>>
               try {
                 target = await validateAgentCoordinationFactCheckRedispatch({ taskID, request })
@@ -11580,7 +11885,7 @@ export function createOrchestratorTools(input: {
                 `and persisted fact_check_attempt ${dispatch.artifactID}.`
               )
             },
-            "architect": async () => {
+            architect: async () => {
               let target: Awaited<ReturnType<typeof validateAgentCoordinationArchitectRedispatch>>
               try {
                 target = await validateAgentCoordinationArchitectRedispatch({ taskID, request })
@@ -11723,7 +12028,7 @@ export function createOrchestratorTools(input: {
                 `architect session ${dispatch.sessionID} persisted spec ${dispatch.specSnapshotID}.`
               )
             },
-            "requirements": async () => {
+            requirements: async () => {
               let target: Awaited<ReturnType<typeof validateAgentCoordinationRequirementsRedispatch>>
               try {
                 target = await validateAgentCoordinationRequirementsRedispatch({ taskID, request })
@@ -11849,7 +12154,7 @@ export function createOrchestratorTools(input: {
                 `requirements session ${dispatch.sessionID} persisted spec ${dispatch.specSnapshotID}.`
               )
             },
-            "frontend_design": async () => {
+            frontend_design: async () => {
               let target: Awaited<ReturnType<typeof validateAgentCoordinationFrontendDesignRedispatch>>
               try {
                 target = await validateAgentCoordinationFrontendDesignRedispatch({ taskID, request })
@@ -11944,7 +12249,7 @@ export function createOrchestratorTools(input: {
                 `frontend_design session ${dispatch.sessionID} persisted ${dispatch.decisionEntriesCount} decision entries.`
               )
             },
-            "frontend_research": async () => {
+            frontend_research: async () => {
               let target: Awaited<ReturnType<typeof validateAgentCoordinationFrontendResearchRedispatch>>
               try {
                 target = await validateAgentCoordinationFrontendResearchRedispatch({ taskID, request })
@@ -12061,7 +12366,7 @@ export function createOrchestratorTools(input: {
                 `frontend_research session ${dispatch.sessionID} persisted brief ${dispatch.artifactID}.`
               )
             },
-            "deep_research": async () => {
+            deep_research: async () => {
               let target: Awaited<ReturnType<typeof validateAgentCoordinationDeepResearchRedispatch>>
               try {
                 target = await validateAgentCoordinationDeepResearchRedispatch({ taskID, request })
@@ -12192,7 +12497,7 @@ export function createOrchestratorTools(input: {
                 `deep_research session ${dispatch.sessionID} persisted brief ${dispatch.artifactID}.`
               )
             },
-            "visual_qa": async () => {
+            visual_qa: async () => {
               let target: Awaited<ReturnType<typeof validateAgentCoordinationVisualQaRedispatch>>
               try {
                 target = await validateAgentCoordinationVisualQaRedispatch({ taskID, request })
@@ -12318,7 +12623,7 @@ export function createOrchestratorTools(input: {
                 `visual_qa session ${dispatch.sessionID} recorded report.`
               )
             },
-            "integrity": async () => {
+            integrity: async () => {
               let target: Awaited<ReturnType<typeof validateAgentCoordinationIntegrityRedispatch>>
               try {
                 target = await validateAgentCoordinationIntegrityRedispatch({ taskID, request })
@@ -13027,7 +13332,7 @@ export function createOrchestratorTools(input: {
       description:
         "Abort a specific live-owned child agent session when explicit cancellation evidence requires it. " +
         "Missing root build ownership is not child lifecycle evidence and must not be used to cancel a running build. " +
-        "After cancellation, explicitly re-dispatch the SAME goal or stage under the SAME contract before escalating to modify_goal, architect, propose_task, fail_task, or question. " +
+        "After cancellation, explicitly re-dispatch the SAME goal or stage under the SAME contract before escalating to manage_task action=modify_goal, dispatch_agent target=architect, manage_task action=propose_task, manage_task action=fail_task, or question. " +
         "You may pass session_id directly, goal_id for the latest live attempt, or goal_run_id directly. " +
         "Do not use this to answer a pending A2A coordination request; use respond_agent_coordination decision='cancel_worker' so the cancellation is bound to request/response/action artifacts.",
       inputSchema: z
@@ -13354,40 +13659,7 @@ export function createOrchestratorTools(input: {
         "Workflow tasks do not rewind earlier stages in place: when the active workflow contract is fundamentally wrong and cannot be repaired by modify_goal, architect, or targeted build inside the current task, create a new inheriting workflow task instead of rerunning requirements/plan/executor. " +
         "Use it when failed visual_qa evidence reports unresolved_code_module_problems for unrepairable production blockers and the scheduler decides the problem belongs in separate inheriting work. " +
         "It is also the right path when reviewers keep demanding a capability the original user request never authorised, and adding it inside the current task would expand scope beyond what the user agreed to.",
-      inputSchema: z.object({
-        title: z.string().min(1).describe("Concise title for the proposed new task."),
-        request: z
-          .string()
-          .min(1)
-          .describe(
-            "Complete, self-contained request for the proposed new task. Must name the concrete evidence anchor entity and describe the specific observed problem it must solve.",
-          ),
-        reason: z
-          .string()
-          .min(1)
-          .describe(
-            "Evidence-backed reason this should inherit from the current task as separate follow-up work instead of changing the current task. Must include or point to the concrete evidence anchor entity.",
-          ),
-        evidence_anchor: ProposedTaskEvidenceAnchorSchema.describe(
-          "Required concrete evidence anchor. This is the scheduler-owned child-task admission contract; do not infer it from generic prose.",
-        ),
-        priority: z
-          .enum(["critical", "high", "normal", "low"])
-          .describe("Priority for the proposed follow-up task. Defaults to normal when no urgency evidence exists.")
-          .default("normal"),
-        queue: z
-          .boolean()
-          .default(false)
-          .describe(
-            "Set false only for independent follow-up work that can start immediately. Set true when this follow-up depends on prerequisite work or should otherwise wait in the directory queue.",
-          ),
-        kind: z
-          .enum(["workflow", "build"])
-          .describe(
-            "Task engine kind for the follow-up: workflow for planned multi-stage work, build for direct execution.",
-          )
-          .default("workflow"),
-      }),
+      inputSchema: ProposeTaskInputSchema,
       execute: async ({ title, request, reason, evidence_anchor, priority, queue, kind }) => {
         const task = await requireCurrentTaskAndAgentSessionLineage()
         if (!hasConcreteProposedTaskEvidenceAnchor(evidence_anchor)) {
@@ -13527,45 +13799,7 @@ export function createOrchestratorTools(input: {
         "criteria, cross-module refactors, new subsystems — those go through requirements → architect → " +
         "per-goal build → integrity (the pipeline workflow). Frontend evidence tools are available candidates " +
         "when the full task context needs visual/reference material for build dispatch.",
-      inputSchema: z
-        .object({
-          request: z
-            .string()
-            .optional()
-            .describe(
-              "For per-goal builds: omit on normal retry when persisted build, acceptance, or integrity failure facts already identify the error. Populate only with one exact new operator/error fact not already persisted. It does not replace the goal's objective / acceptance_specs / owned_paths. For task-level direct builds (no goalID): required; include the user's request plus concise rejected acceptance details the build agent must address.",
-            ),
-          reason: z
-            .string()
-            .describe(
-              "One sentence explaining why this build is valid now: explicit kind=build, per-goal pipeline execution, post-acceptance whole-task rework, or a conscious direct-build decision for this workflow task.",
-            ),
-          goalID: z
-            .string()
-            .optional()
-            .describe(
-              "Optional goal id this build is scoped to. Set when build is invoked as a per-goal worker inside the pipeline workflow. Omit for task-level direct builds.",
-            ),
-          directBuildIntent: z
-            .literal("modify_files")
-            .optional()
-            .describe(
-              "Required for task-level direct builds on kind=workflow tasks. The only valid direct intent is modify_files: a scoped implementation/rework build. Build is not a repository investigation endpoint.",
-            ),
-          worktreeUsage: z
-            .enum(["managed_worktree", "current_project"])
-            .optional()
-            .describe(
-              "Optional execution-directory choice. managed_worktree creates or reuses a build-managed git worktree and exposes merge_back. current_project runs in the active project directory as caller-owned workDir and does not expose merge_back. Omitted values use the schema defaults: goal-scoped builds use managed_worktree; task-level direct builds use current_project.",
-            ),
-          userConfirmedStaleIntegrityData: z
-            .boolean()
-            .optional()
-            .describe(
-              "Set true only after the user explicitly confirmed continuing while the latest completed integrity session is status=artifact_missing and its durable integrity_attempt artifact could not be recovered.",
-            ),
-        })
-        .strict(),
+      inputSchema: BuildInputSchema,
       execute: async (
         { request = "", reason, goalID, directBuildIntent, worktreeUsage, userConfirmedStaleIntegrityData },
         options,
@@ -13712,8 +13946,9 @@ export function createOrchestratorTools(input: {
         }
 
         try {
-          const { BuildAgent, collectGoalContributionDiffs, resolveGoalContributionRefs } =
-            await import("@/build/agent")
+          const { BuildAgent, collectGoalContributionDiffs, resolveGoalContributionRefs } = await import(
+            "@/build/agent"
+          )
           const { Worktree } = await import("@/worktree")
           type BuildRunOutput = Awaited<ReturnType<typeof BuildAgent.run>>
           let target: import("@/build/types").BuildTarget
@@ -14147,8 +14382,7 @@ export function createOrchestratorTools(input: {
             const buildEvidencePacket = buildEvidenceContextPacket(evidencePack)
             if (buildEvidencePacket) contextPackets.push(buildEvidencePacket)
             context =
-              requirements.length > 0 ||
-              contextPackets.length > 0
+              requirements.length > 0 || contextPackets.length > 0
                 ? {
                     requirements: requirements.length > 0 ? requirements : undefined,
                     contextPackets: contextPackets.length > 0 ? contextPackets : undefined,
@@ -14797,7 +15031,8 @@ export function createOrchestratorTools(input: {
             // the orchestrator's existing tool-error / wake-loop logic isn't
             // disturbed — only the persistent state was previously orphaned.
             if (buildOutcome.kind === "throw") {
-              const errorMessage = buildOutcome.error instanceof Error ? buildOutcome.error.message : String(buildOutcome.error)
+              const errorMessage =
+                buildOutcome.error instanceof Error ? buildOutcome.error.message : String(buildOutcome.error)
               closeBuildOwnership("failed", errorMessage)
               if (isTaskLevelBuild) {
                 const hostFacts = await collectBuildHostFactsForOutcome("generic throw")
@@ -14990,9 +15225,9 @@ export function createOrchestratorTools(input: {
               `${factBlock}\n\n` +
               `### Next step\n` +
               `Read the build report and the worktree facts above. Cross-check the LLM's files_changed/commit_ref against the worktree facts; if they disagree, factor that into your next call. ` +
-              `When terminal goal refill facts appear, choose build({goalID}) / modify_goal / architect / propose_task / fail_task / question from the build evidence and task context; route product, dependency, git-worktree, port, and toolchain blockers to the responsible same-task owner instead of passively waiting for sibling builds. ` +
-              `For frontend/browser-visible work, run \`visual_qa\` only once near task completion after all blocking implementation work is terminal and before the Orchestrator lifecycle decision. If visual_qa returns effective_accepted=false with unresolved_code_module_problems, decide whether to repair in the current task or call \`propose_task\` from that evidence only at terminal handoff. ` +
-              `Call \`integrity\` as a review report after all blocking implementation work is terminal when adversarial system review evidence is needed; visual_qa and integrity are peer review agents, not replacements for each other. Use Integrity's report as evidence, then decide explicitly whether to repair, ask, fail, propose follow-up, or call \`complete_task\` with a completion summary. Before completing the task, use integrity earlier only when integrated evidence raises a real question about requirement mining or system integrity.`
+              `When terminal goal refill facts appear, choose dispatch_agent target=build with goalID / manage_task action=modify_goal / dispatch_agent target=architect / manage_task action=propose_task / manage_task action=fail_task / question from the build evidence and task context; route product, dependency, git-worktree, port, and toolchain blockers to the responsible same-task owner instead of passively waiting for sibling builds. ` +
+              `For frontend/browser-visible work, run dispatch_agent target=visual_qa only once near task completion after all blocking implementation work is terminal and before the Orchestrator lifecycle decision. If visual_qa returns effective_accepted=false with unresolved_code_module_problems, decide whether to repair in the current task or call manage_task action=propose_task from that evidence only at terminal handoff. ` +
+              `Call dispatch_agent target=integrity as a review report after all blocking implementation work is terminal when adversarial system review evidence is needed; visual_qa and integrity are peer review agents, not replacements for each other. Use Integrity's report as evidence, then decide explicitly whether to repair, ask, fail, propose follow-up, or call manage_task action=complete_task with a completion summary. Before completing the task, use integrity earlier only when integrated evidence raises a real question about requirement mining or system integrity.`
             )
           }
 
@@ -15027,8 +15262,8 @@ export function createOrchestratorTools(input: {
               `### Next step\n` +
               `This build is now running asynchronously. Do not call wait for sibling builds to finish before reacting to terminal goal refill facts. ` +
               `If no next dispatchable, failed, or refill facts exist, stop this wake; terminal goal refill will wake the next decision. ` +
-              `When a goal reaches terminal status, the next task snapshot will surface refill evidence and ordered dispatchable goals; choose build({goalID}) / modify_goal / architect / propose_task / fail_task / question from those facts. ` +
-              `Call integrity only after all blocking implementation work is terminal.`
+              `When a goal reaches terminal status, the next task snapshot will surface refill evidence and ordered dispatchable goals; choose dispatch_agent target=build with goalID / manage_task action=modify_goal / dispatch_agent target=architect / manage_task action=propose_task / manage_task action=fail_task / question from those facts. ` +
+              `Call dispatch_agent target=integrity only after all blocking implementation work is terminal.`
             )
           }
 
@@ -15080,8 +15315,8 @@ export function createOrchestratorTools(input: {
         "browser preview, dependency materialization, or toolchain blockers " +
         "encountered while scheduling work. This is NOT a deliverable " +
         "producer, NOT a code authoring lane, NOT a research/content tool, " +
-        "and NOT a shortcut around requirements / architect / build / " +
-        "visual_qa / integrity. The system prompt carries the executor " +
+        "and NOT a shortcut around dispatch_agent targets such as requirements, architect, build, " +
+        "visual_qa, or integrity. The system prompt carries the executor " +
         "boundary; this schema intentionally does not gate command syntax.",
       inputSchema: z.object({
         command: z
@@ -15139,26 +15374,48 @@ export function createOrchestratorTools(input: {
         supervisor.stderr?.on("data", append)
 
         let timedOut = false
-        const terminate = () => supervisor.terminate()
+        let terminationPromise: Promise<number> | undefined
+        let resolveTerminationRequested: ((promise: Promise<number>) => void) | undefined
+        const terminationRequested = new Promise<Promise<number>>((resolve) => {
+          resolveTerminationRequested = resolve
+        })
+        const requestTermination = (reason: string) => {
+          if (!terminationPromise) {
+            terminationPromise = ProcessSupervisor.terminateAndWaitForExit(supervisor, `orchestrator bash ${reason}`)
+            terminationPromise.catch(() => undefined)
+            resolveTerminationRequested?.(terminationPromise)
+          }
+          return terminationPromise
+        }
         const timer = setTimeout(() => {
           timedOut = true
-          void terminate()
+          requestTermination(`timeout ${ms}ms`)
         }, ms)
 
         const onAbort = () => {
-          void terminate()
+          requestTermination("abort")
         }
+        if (input.signal?.aborted) requestTermination("abort")
         input.signal?.addEventListener("abort", onAbort, { once: true })
 
         let exitCode: number | null = null
+        let primaryError: unknown
         try {
-          exitCode = await supervisor.exited
-        } catch {
-          exitCode = null
+          exitCode = await Promise.race([supervisor.exited, terminationRequested.then((cleanup) => cleanup)])
+          if (terminationPromise) {
+            exitCode = await terminationPromise
+          }
+        } catch (error) {
+          primaryError = error
+          throw error
         } finally {
           clearTimeout(timer)
           input.signal?.removeEventListener("abort", onAbort)
-          await supervisor.dispose()
+          try {
+            await ProcessSupervisor.disposeAndWaitForExit(supervisor, "orchestrator bash")
+          } catch (error) {
+            if (!primaryError) throw error
+          }
         }
 
         const MAX_OUTPUT = 30_000
@@ -15182,7 +15439,7 @@ export function createOrchestratorTools(input: {
     wait: tool({
       description:
         WaitToolDescription +
-        " In orchestrator context, wait is NOT a substitute for `question` (operator input required), `fail_task` (no responsible same-task repair), or a real workflow decision from the current task snapshot. Never use wait for live build completion, live sibling goal completion, or terminal refill polling. After wait returns, decide from the refreshed task snapshot before the next dispatch.",
+        " In orchestrator context, wait is NOT a substitute for `question` (operator input required), `manage_task` action=fail_task (no responsible same-task repair), or a real workflow decision from the current task snapshot. Never use wait for live build completion, live sibling goal completion, or terminal refill polling. After wait returns, decide from the refreshed task snapshot before the next dispatch.",
       inputSchema: WaitToolParameters,
       execute: async ({ duration_ms, reason }) => {
         const result = await executeWait({
@@ -15610,12 +15867,59 @@ export function createOrchestratorTools(input: {
     }
   }
 
+  const dispatchAgentInputSchema = dispatchAgentInputSchemaForWorkflow(input.workflow)
+  const dispatchAgentTool = tool({
+    description:
+      "Single scheduler agent dispatch tool. Use target to select the worker agent stage, then provide the target-specific fields. " +
+      "This replaces separate visible worker-stage tools such as requirements, architect, build, visual_qa, integrity, fact_check, research, workload, intent analysis, and explore.",
+    inputSchema: dispatchAgentInputSchema,
+    execute: async (toolInput, options) => {
+      const { target, ...targetInput } = DispatchAgentTargetInputSchema.parse(toolInput) as DispatchAgentToolInput
+      const targetTool = (tools as Record<string, { execute?: (args: unknown, options: unknown) => Promise<unknown> }>)[
+        target
+      ]
+      if (typeof targetTool?.execute !== "function") {
+        throw new Error(`dispatch_agent target ${target} is not backed by an internal scheduler tool`)
+      }
+      return await targetTool.execute(targetInput, optionsWithVisibleOrchestratorToolName(options, "dispatch_agent"))
+    },
+  })
+
+  const manageTaskTool = tool({
+    description:
+      "Single scheduler task-management tool. Use action to select task or goal lifecycle behavior, then provide action-specific fields. " +
+      "This replaces separate visible lifecycle tools such as propose_task, complete_task, fail_task, cancel_task, retry_task, add_goal, modify_goal, complete_goal, and delete_goal.",
+    inputSchema: ManageTaskInputSchema,
+    execute: async (toolInput, options) => {
+      const { action, ...rawActionInput } = ManageTaskInputSchema.parse(toolInput)
+      const actionSchema = ManageTaskActionInputSchemas[action]
+      const actionInput = actionSchema.parse(rawActionInput)
+      const actionTool = (tools as Record<string, { execute?: (args: unknown, options: unknown) => Promise<unknown> }>)[
+        action
+      ]
+      if (typeof actionTool?.execute !== "function") {
+        throw new Error(`manage_task action ${action} is not backed by an internal scheduler tool`)
+      }
+      return await actionTool.execute(actionInput, optionsWithVisibleOrchestratorToolName(options, "manage_task"))
+    },
+  })
+
+  const publicTools: Record<string, unknown> = {
+    ...tools,
+    dispatch_agent: dispatchAgentTool,
+    manage_task: manageTaskTool,
+  }
+  for (const hidden of [...ORCHESTRATOR_WORKFLOW_TOOL_NAMES, ...MANAGE_TASK_ACTION_NAMES]) {
+    delete publicTools[hidden]
+  }
+
   // Phase 5-g: the deprecated dispatch tools (dispatch_goal / exec_goal /
   // submit_execution / retry_goal / create_run) that the 5-c filter hid
-  // from the LLM are now fully deleted. Build is the single dispatch tool.
+  // from the LLM are now fully deleted. Current worker dispatch goes through
+  // dispatch_agent; task and goal lifecycle actions go through manage_task.
   const toolsWithDecisionMetadata = Object.fromEntries(
-    Object.entries(tools).map(([name, raw]) => [name, withDecisionEffectMetadata(name, raw)]),
-  ) as typeof tools
+    Object.entries(publicTools).map(([name, raw]) => [name, withDecisionEffectMetadata(name, raw)]),
+  )
   return {
     tools: toolsWithDecisionMetadata,
   }

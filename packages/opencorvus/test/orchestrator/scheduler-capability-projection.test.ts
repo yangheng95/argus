@@ -1,8 +1,12 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
+import * as EngineQueue from "../../src/engine/queue"
+import { EffectiveConfig } from "../../src/config/effective"
+import { createDecisionLog } from "../../src/decision-log"
 import { Identifier } from "../../src/id/id"
 import { Orchestrator } from "../../src/orchestrator/agent"
 import { createOrchestratorTools } from "../../src/orchestrator/tools"
+import { WorkflowRegistry, type MiniWorkflow } from "../../src/engine/workflow"
 import * as TaskLoop from "../../src/orchestrator/loop"
 import { PromptProfileResolver } from "../../src/expert-squad/prompt-profile-resolver"
 import { Instance } from "../../src/project/instance"
@@ -25,10 +29,7 @@ const expectedSchedulerRoleBaseToolIDs = [
   "question",
   "read_context",
   "query_failed_goals",
-  "complete_task",
-  "fail_task",
-  "cancel_task",
-  "retry_task",
+  "manage_task",
   "wait",
   "inject_operator_message",
   "respond_agent_coordination",
@@ -188,6 +189,57 @@ describe("orchestrator scheduler capability projection", () => {
     await resetDatabase()
   })
 
+  test("orchestrator public scheduler surface collapses dispatch and lifecycle tools", async () => {
+    const workflow = WorkflowRegistry.resolveSync("pipeline")!
+    const { tools } = createOrchestratorTools({
+      taskID: "tsk_unified_surface",
+      agentSessionID: "ses_unified_surface",
+      workflow,
+    })
+    const publicTools = tools as Record<string, { execute?: (input: unknown, options?: unknown) => Promise<unknown> }>
+
+    expect(Object.hasOwn(publicTools, "dispatch_agent")).toBe(true)
+    expect(Object.hasOwn(publicTools, "manage_task")).toBe(true)
+
+    for (const hidden of [
+      "requirements",
+      "architect",
+      "frontend_research",
+      "frontend_design",
+      "deep_research",
+      "visual_qa",
+      "workload_analysis",
+      "integrity",
+      "fact_check",
+      "explore",
+      "build",
+      "propose_task",
+      "complete_task",
+      "fail_task",
+      "cancel_task",
+      "retry_task",
+      "add_goal",
+      "modify_goal",
+      "complete_goal",
+      "delete_goal",
+    ]) {
+      expect(Object.hasOwn(publicTools, hidden), `${hidden} must not be public`).toBe(false)
+    }
+
+    const manageTaskExecute = publicTools.manage_task.execute
+    const dispatchAgentExecute = publicTools.dispatch_agent.execute
+    expect(typeof manageTaskExecute).toBe("function")
+    expect(typeof dispatchAgentExecute).toBe("function")
+
+    await expect(manageTaskExecute!({ action: "fail_task" }, toolOptions("manage_task_missing_error"))).rejects.toThrow()
+    await expect(
+      dispatchAgentExecute!(
+        { target: "build", reason: "missing goal or request" },
+        toolOptions("dispatch_agent_missing_build_input"),
+      ),
+    ).rejects.toThrow()
+  })
+
   test("general wake installs only the explicit scheduler role-base tools", async () => {
     const captured = await captureOrchestratorRuntimeContract({ profileID: "general" })
 
@@ -198,6 +250,10 @@ describe("orchestrator scheduler capability projection", () => {
     expect(captured.identity.projectionHash).toMatch(/^[a-f0-9]{64}$/)
     expect(captured.includeMcpTools).toBe(false)
     expect(captured.toolIDs).toEqual([...expectedSchedulerRoleBaseToolIDs])
+    expect(captured.toolIDs).not.toContain("complete_task")
+    expect(captured.toolIDs).not.toContain("fail_task")
+    expect(captured.toolIDs).not.toContain("cancel_task")
+    expect(captured.toolIDs).not.toContain("retry_task")
     expect(captured.toolIDs).not.toContain("build")
     expect(captured.toolIDs).not.toContain("frontend_design")
     expect(captured.toolIDs).not.toContain("browser_preview")
@@ -229,10 +285,11 @@ describe("orchestrator scheduler capability projection", () => {
     expect(captured.toolIDs.slice(0, expectedSchedulerRoleBaseToolIDs.length)).toEqual([
       ...expectedSchedulerRoleBaseToolIDs,
     ])
-    expect(captured.toolIDs).toContain("frontend_research")
-    expect(captured.toolIDs).toContain("frontend_design")
-    expect(captured.toolIDs).toContain("visual_qa")
+    expect(captured.toolIDs).toContain("dispatch_agent")
     expect(captured.toolIDs).toContain("browser_preview")
+    expect(captured.toolIDs).not.toContain("frontend_research")
+    expect(captured.toolIDs).not.toContain("frontend_design")
+    expect(captured.toolIDs).not.toContain("visual_qa")
     expect(captured.toolIDs).not.toContain("deep_research")
   })
 
@@ -249,7 +306,7 @@ describe("orchestrator scheduler capability projection", () => {
     expect(captured.identity.projectionHash).toMatch(/^[a-f0-9]{64}$/)
     expect(captured.toolIDs).toContain("select_expert_squad")
     expect(captured.toolIDs).toContain("skill")
-    expect(captured.toolIDs).toContain("build")
+    expect(captured.toolIDs).toContain("dispatch_agent")
     expect(captured.toolIDs).toContain("bash")
     expect(captured.toolIDs).toContain("browser_preview")
     for (const hidden of [
@@ -268,6 +325,77 @@ describe("orchestrator scheduler capability projection", () => {
     }
   })
 
+  test("pipeline dispatch_agent target schema disconnects frontend_design without deleting custom workflow support", () => {
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+    expect(pipeline.steps.map((step) => step.tool)).not.toContain("frontend_design")
+
+    const { tools } = createOrchestratorTools({
+      taskID: "tsk_pipeline_dispatch_schema",
+      agentSessionID: "ses_pipeline_dispatch_schema",
+      workflow: pipeline,
+    })
+    expect(Object.hasOwn(tools, "frontend_design")).toBe(false)
+    expect(
+      tools.dispatch_agent.inputSchema!.safeParse({
+        target: "frontend_design",
+        reason: "visual reference",
+        urls: ["https://example.com"],
+      }).success,
+    ).toBe(false)
+    expect(
+      tools.dispatch_agent.inputSchema!.safeParse({
+        target: "frontend_research",
+        reason: "source page investigation",
+      }).success,
+    ).toBe(true)
+
+    const customFrontendDesignWorkflow = {
+      ...pipeline,
+      id: "custom-frontend-design",
+      name: "Custom Frontend Design",
+      steps: [
+        {
+          id: "frontend_design",
+          tool: "frontend_design",
+          agentRole: "frontend-design",
+          label: "Design",
+          hint: "Custom workflow frontend_design step.",
+          scope: "task",
+          skippable: true,
+          after: [],
+        },
+      ],
+      goalLoopStepIDs: [],
+    } satisfies MiniWorkflow
+    const customTools = createOrchestratorTools({
+      taskID: "tsk_custom_dispatch_schema",
+      agentSessionID: "ses_custom_dispatch_schema",
+      workflow: customFrontendDesignWorkflow,
+    }).tools
+    expect(
+      customTools.dispatch_agent.inputSchema!.safeParse({
+        target: "frontend_design",
+        reason: "visual reference",
+        urls: ["https://example.com"],
+      }).success,
+    ).toBe(true)
+
+    const innovateWorkflow = WorkflowRegistry.resolveSync("frontend_innovate")!
+    expect(innovateWorkflow.steps.map((step) => step.tool)).toContain("frontend_design")
+    const innovateTools = createOrchestratorTools({
+      taskID: "tsk_frontend_innovate_dispatch_schema",
+      agentSessionID: "ses_frontend_innovate_dispatch_schema",
+      workflow: innovateWorkflow,
+    }).tools
+    expect(
+      innovateTools.dispatch_agent.inputSchema!.safeParse({
+        target: "frontend_design",
+        reason: "redesign from source and competitor evidence",
+        urls: ["https://example.com"],
+      }).success,
+    ).toBe(true)
+  })
+
   test("project package wake installs scheduler package tools without MCP activation", async () => {
     const captured = await captureOrchestratorRuntimeContract({
       profileID: PROJECT_EXPERT_SQUAD_ID,
@@ -280,8 +408,9 @@ describe("orchestrator scheduler capability projection", () => {
     expect(captured.includeMcpTools).toBe(false)
     expect(captured.toolIDs).toContain("select_expert_squad")
     expect(captured.toolIDs).toContain("skill")
-    expect(captured.toolIDs).toContain("build")
+    expect(captured.toolIDs).toContain("dispatch_agent")
     expect(captured.toolIDs).toContain(packageToolProviderName)
+    expect(captured.toolIDs).not.toContain("build")
     expect(captured.toolIDs).not.toContain(`${PROJECT_EXPERT_SQUAD_ID}/orchestrator/source-evidence`)
     expect(captured.toolIDs).not.toContain("source-evidence")
     expect(captured.toolIDs).not.toContain("build-evidence")
@@ -339,6 +468,7 @@ describe("orchestrator scheduler capability projection", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        await copyRepositoryExpertSquadPackage(tmp.path, "frontend-replica")
         const now = Date.now()
         const taskID = Identifier.ascending("task")
         const root = await Session.create({ kind: "root", title: "scheduler transition selection" })
@@ -398,13 +528,110 @@ describe("orchestrator scheduler capability projection", () => {
     expect(captured?.includeMcpTools).toBe(false)
     expect(captured?.toolIDs).toContain("select_expert_squad")
     expect(captured?.toolIDs).toContain("skill")
-    expect(captured?.toolIDs).toContain("frontend_research")
-    expect(captured?.toolIDs).toContain("frontend_design")
-    expect(captured?.toolIDs).toContain("visual_qa")
-    expect(captured?.toolIDs).toContain("integrity")
+    expect(captured?.toolIDs).toContain("dispatch_agent")
     expect(captured?.toolIDs).toContain("browser_preview")
     expect(captured?.toolIDs).toContain("bash")
+    expect(captured?.toolIDs).not.toContain("frontend_research")
+    expect(captured?.toolIDs).not.toContain("frontend_design")
+    expect(captured?.toolIDs).not.toContain("visual_qa")
+    expect(captured?.toolIDs).not.toContain("integrity")
     expect(captured?.toolIDs).not.toContain("deep_research")
     expect(captured?.toolIDs).not.toContain("fact_check")
+  }, 20_000)
+
+  test("select_expert_squad restores the previous active profile when continuation wake is ignored", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "mock-control/control" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await copyRepositoryExpertSquadPackage(tmp.path, "frontend-replica")
+        const now = Date.now()
+        const taskID = Identifier.ascending("task")
+        const root = await Session.create({ kind: "root", title: "scheduler ignored selection" })
+        await Session.mergeConfigOverlay({
+          sessionID: root.id,
+          patch: {
+            model: "mock-control/control",
+            prompt_profile: { active: "general" },
+          },
+        })
+        insertWorkflowTask({
+          taskID,
+          rootSessionID: root.id,
+          now,
+          title: "scheduler ignored selection",
+        })
+        const dispatchTaskLoop = spyOn(EngineQueue, "dispatchTaskLoop").mockResolvedValue("ignored")
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: root.id,
+          signal: new AbortController().signal,
+        })
+
+        await expect(
+          tools.select_expert_squad.execute(
+            {
+              profile_id: "frontend-replica",
+              reason: "The task requires reference screenshot replica workflow evidence.",
+            },
+            toolOptions("select_expert_squad_ignored_dispatch"),
+          ),
+        ).rejects.toThrow(/continuation wake was ignored/)
+
+        expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
+        expect((await EffectiveConfig.effective({ sessionID: root.id })).prompt_profile.active).toBe("general")
+        expect(createDecisionLog(taskID).readByKey("select_expert_squad")).toBeUndefined()
+      },
+    })
+  })
+
+  test("select_expert_squad restores the previous active profile when continuation wake throws", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "mock-control/control" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await copyRepositoryExpertSquadPackage(tmp.path, "frontend-replica")
+        const now = Date.now()
+        const taskID = Identifier.ascending("task")
+        const root = await Session.create({ kind: "root", title: "scheduler thrown selection" })
+        await Session.mergeConfigOverlay({
+          sessionID: root.id,
+          patch: {
+            model: "mock-control/control",
+            prompt_profile: { active: "general" },
+          },
+        })
+        insertWorkflowTask({
+          taskID,
+          rootSessionID: root.id,
+          now,
+          title: "scheduler thrown selection",
+        })
+        const dispatchTaskLoop = spyOn(EngineQueue, "dispatchTaskLoop").mockRejectedValue(
+          new Error("synthetic continuation dispatch failure"),
+        )
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: root.id,
+          signal: new AbortController().signal,
+        })
+
+        await expect(
+          tools.select_expert_squad.execute(
+            {
+              profile_id: "frontend-replica",
+              reason: "The task requires reference screenshot replica workflow evidence.",
+            },
+            toolOptions("select_expert_squad_thrown_dispatch"),
+          ),
+        ).rejects.toThrow("synthetic continuation dispatch failure")
+
+        expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
+        expect((await EffectiveConfig.effective({ sessionID: root.id })).prompt_profile.active).toBe("general")
+        expect(createDecisionLog(taskID).readByKey("select_expert_squad")).toBeUndefined()
+      },
+    })
   })
 })

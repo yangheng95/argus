@@ -173,6 +173,37 @@ function workflowDeclaringAgentRole(role: AgentRoleID, tool: OrchestratorWorkflo
   }
 }
 
+type OrchestratorTools = ReturnType<typeof createOrchestratorTools>["tools"]
+
+type ManageTaskTestAction =
+  | "propose_task"
+  | "complete_task"
+  | "fail_task"
+  | "cancel_task"
+  | "retry_task"
+  | "add_goal"
+  | "modify_goal"
+  | "complete_goal"
+  | "delete_goal"
+
+async function runDispatchAgentTool(
+  tools: OrchestratorTools,
+  target: OrchestratorWorkflowToolName,
+  input: Record<string, unknown> = {},
+  options?: any,
+) {
+  return await tools.dispatch_agent.execute({ target, ...input }, options)
+}
+
+async function runManageTaskTool(
+  tools: OrchestratorTools,
+  action: ManageTaskTestAction,
+  input: Record<string, unknown> = {},
+  options?: any,
+) {
+  return await tools.manage_task.execute({ action, ...input }, options)
+}
+
 let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
 let reviewIntegrityImpl: ((input: any) => Promise<any>) | undefined
 let computeRequirementStatusSnapshotImpl: ((input: any) => any[]) | undefined
@@ -906,12 +937,15 @@ function minimalFrontendDesignResult(input: { sessionID: string }) {
       generation_tool: "frontend-design",
       notes: ["A2A redispatch preserved the existing visual reference."],
     },
+    visualValidationEvidence: [],
     visualConsistencyContract: "Match the visual reference hierarchy.",
+    visualRegionBindings: [],
     uiDataContract: "No backend data contract in this fixture.",
     templateIterationNotes: ["Checked visual evidence coverage.", "Checked downstream implementation feasibility."],
     completenessReview: "Frontend design handoff is complete for this fixture.",
     referenceArtifacts: ["ref.png"],
     openQuestions: [],
+    competitorReferenceEvidence: [],
     report: {
       summary: "Recovered frontend template from A2A redispatch.",
       detail: "Frontend design public report.",
@@ -2958,7 +2992,7 @@ describe("orchestrator tools", () => {
         }
 
         await expect(
-          tools.explore.execute(
+          runDispatchAgentTool(tools, "explore",
             {
               question: "Which files are relevant?",
               reason: "This should fail before model resolution.",
@@ -2969,7 +3003,7 @@ describe("orchestrator tools", () => {
         expect(exploreCalled).toBe(false)
 
         await expect(
-          tools.frontend_design.execute(
+          runDispatchAgentTool(tools, "frontend_design",
             {
               reason: "This should fail before frontend design evidence preparation.",
             },
@@ -2988,7 +3022,7 @@ describe("orchestrator tools", () => {
         ).rejects.toThrow("Session not found")
 
         await expect(
-          tools.propose_task.execute(
+          runManageTaskTool(tools, "propose_task",
             {
               title: "Follow-up must not be created",
               request: "Create a follow-up task from polluted lineage.",
@@ -3136,7 +3170,7 @@ describe("orchestrator tools", () => {
           workflowState: createWorkflowState(pipeline),
         })
 
-        const result = await tools.fail_task.execute(
+        const result = await runManageTaskTool(tools, "fail_task",
           { error: "persistent integrity failure" },
           buildToolOptions("fail_task"),
         )
@@ -3197,7 +3231,7 @@ describe("orchestrator tools", () => {
           workflowState: createWorkflowState(pipeline),
         })
 
-        const result = await tools.integrity.execute(
+        const result = await runDispatchAgentTool(tools, "integrity",
           { reason: "post-build completion evidence" },
           buildToolOptions("integrity"),
         )
@@ -3275,7 +3309,7 @@ describe("orchestrator tools", () => {
           workflowState: createWorkflowState(pipeline),
         })
 
-        await tools.integrity.execute({ reason: "post-build repair evidence" }, buildToolOptions("integrity"))
+        await runDispatchAgentTool(tools, "integrity", { reason: "post-build repair evidence" }, buildToolOptions("integrity"))
 
         const statuses = Database.use((db) =>
           db
@@ -3339,7 +3373,7 @@ describe("orchestrator tools", () => {
           workflowState: createWorkflowState(pipeline),
         })
 
-        const result = await tools.complete_task.execute(
+        const result = await runManageTaskTool(tools, "complete_task",
           { summary: "Explicit Orchestrator completion from durable task evidence" },
           buildToolOptions("complete_task"),
         )
@@ -3389,7 +3423,7 @@ describe("orchestrator tools", () => {
           workflow: pipeline,
           workflowState: createWorkflowState(pipeline),
         })
-        const emptySummaryResult = await tools.complete_task.execute(
+        const emptySummaryResult = await runManageTaskTool(tools, "complete_task",
           { summary: "   " },
           buildToolOptions("complete_task_empty_summary"),
         )
@@ -3397,13 +3431,13 @@ describe("orchestrator tools", () => {
         expect(toolText(emptySummaryResult)).toContain("summary is required")
         expect(deriveTaskStatus(findTask(taskID)!)).toBe("active")
 
-        const completed = await tools.complete_task.execute(
+        const completed = await runManageTaskTool(tools, "complete_task",
           { summary: "Completed by Orchestrator after reviewing durable evidence" },
           buildToolOptions("complete_task"),
         )
         expect(toolText(completed)).toContain(`Task ${taskID} completed`)
 
-        const terminalResult = await tools.complete_task.execute(
+        const terminalResult = await runManageTaskTool(tools, "complete_task",
           { summary: "duplicate completion" },
           buildToolOptions("complete_task_terminal"),
         )
@@ -3444,10 +3478,10 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        await expect(tools.cancel_task.execute({ reason: "operator stopped the task" }, {} as any)).rejects.toThrow(
+        await expect(runManageTaskTool(tools, "cancel_task", { reason: "operator stopped the task" }, {} as any)).rejects.toThrow(
           /cancel_task: missing real tool execution identity/,
         )
-        await expect(tools.retry_task.execute({ reason: "operator requested retry" }, {} as any)).rejects.toThrow(
+        await expect(runManageTaskTool(tools, "retry_task", { reason: "operator requested retry" }, {} as any)).rejects.toThrow(
           /retry_task: missing real tool execution identity/,
         )
       },
@@ -3577,7 +3611,7 @@ describe("orchestrator tools", () => {
           workflowState: createWorkflowState(pipeline),
         })
 
-        const result = await tools.build.execute(
+        const result = await runDispatchAgentTool(tools, "build",
           {
             goalID,
             request: "Retry by fixing the storage load validator.",
@@ -3669,7 +3703,7 @@ describe("orchestrator tools", () => {
         })
 
         await expect(
-          tools.build.execute(
+          runDispatchAgentTool(tools, "build",
             {
               goalID,
               reason: "Per-goal build should reject persisted graph/audit mismatch before starting build.",
@@ -3765,7 +3799,7 @@ describe("orchestrator tools", () => {
         })
 
         await expect(
-          tools.build.execute(
+          runDispatchAgentTool(tools, "build",
             {
               goalID,
               reason: "Per-goal build should reject persisted contract graph blockers before starting build.",
@@ -3831,7 +3865,7 @@ describe("orchestrator tools", () => {
           workflowState: createWorkflowState(pipeline),
         })
 
-        const result = await tools.frontend_research.execute(
+        const result = await runDispatchAgentTool(tools, "frontend_research",
           {
             reason: "Need visible webpage investigation packets.",
             source_urls: ["https://example.com/page"],
@@ -3911,7 +3945,7 @@ describe("orchestrator tools", () => {
           workflowState: createWorkflowState(pipeline),
         })
 
-        const result = await tools.frontend_research.execute(
+        const result = await runDispatchAgentTool(tools, "frontend_research",
           {
             reason: "Need visible webpage investigation packets.",
             source_urls: ["https://example.com/page"],
@@ -3984,7 +4018,7 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.requirements.execute(
+        const result = await runDispatchAgentTool(tools, "requirements",
           { reason: "Need durable protocol requirements before architecture." },
           buildToolOptions("requirements"),
         )
@@ -4060,7 +4094,7 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.deep_research.execute(
+        const result = await runDispatchAgentTool(tools, "deep_research",
           {
             reason: "Need external source-backed implementation facts.",
             target_deliverable: "research_report",
@@ -4171,7 +4205,7 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.visual_qa.execute(
+        const result = await runDispatchAgentTool(tools, "visual_qa",
           {
             reason: "Need final frontend GUI review.",
             focus: "Main screen",
@@ -4216,7 +4250,7 @@ describe("orchestrator tools", () => {
           productionBlockerIDs: ["missing-rendered-reference-comparison", "missing_reference_region:main_surface@desktop"],
         })
 
-        const secondResult = await tools.visual_qa.execute(
+        const secondResult = await runDispatchAgentTool(tools, "visual_qa",
           {
             reason: "Re-check after implementation repair.",
             focus: "Main screen",
@@ -4386,7 +4420,7 @@ describe("orchestrator tools", () => {
               agentSessionID: parent.id,
               signal: new AbortController().signal,
             })
-            const result = await tools.visual_qa.execute(
+            const result = await runDispatchAgentTool(tools, "visual_qa",
               {
                 reason: "Need final frontend GUI review.",
                 focus: "Economy page",
@@ -4554,7 +4588,7 @@ describe("orchestrator tools", () => {
           workflowState: createWorkflowState(pipeline),
         })
 
-        const consumedResult = await tools.frontend_research.execute(
+        const consumedResult = await runDispatchAgentTool(tools, "frontend_research",
           {
             reason: "try consumed continuation",
             continuation_artifact_id: consumed.artifactID,
@@ -4566,7 +4600,7 @@ describe("orchestrator tools", () => {
         expect(consumedText).toContain("consumed")
         expect(consumedText).toContain("msg_consumed_continuation")
 
-        const claimFailedResult = await tools.frontend_research.execute(
+        const claimFailedResult = await runDispatchAgentTool(tools, "frontend_research",
           {
             reason: "try claim-failed continuation",
             continuation_artifact_id: claimFailed.artifactID,
@@ -4578,7 +4612,7 @@ describe("orchestrator tools", () => {
         expect(claimFailedText).toContain("claim_failed")
         expect(claimFailedText).toContain("append recovery prompt failed")
 
-        const staleClaimResult = await tools.frontend_research.execute(
+        const staleClaimResult = await runDispatchAgentTool(tools, "frontend_research",
           {
             reason: "try claimed continuation from previous process",
             continuation_artifact_id: staleClaim.artifactID,
@@ -11692,7 +11726,7 @@ describe("orchestrator tools", () => {
         })
 
         const modifyResult = toolText(
-          await tools.modify_goal.execute(
+          await runManageTaskTool(tools, "modify_goal",
             {
               goalID,
               updates: { objective: "Mutated while live" },
@@ -11707,7 +11741,7 @@ describe("orchestrator tools", () => {
         expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(1)
 
         const completeResult = toolText(
-          await tools.complete_goal.execute(
+          await runManageTaskTool(tools, "complete_goal",
             {
               goalID,
               reason: "should be rejected while live owned",
@@ -11716,7 +11750,7 @@ describe("orchestrator tools", () => {
           ),
         )
         const deleteResult = toolText(
-          await tools.delete_goal.execute(
+          await runManageTaskTool(tools, "delete_goal",
             {
               goalID,
               reason: "should be rejected while live owned",
@@ -11815,7 +11849,7 @@ describe("orchestrator tools", () => {
           })
 
           const modifyResult = toolText(
-            await tools.modify_goal.execute(
+            await runManageTaskTool(tools, "modify_goal",
               {
                 goalID,
                 updates: { objective: "Mutated while session active" },
@@ -11825,7 +11859,7 @@ describe("orchestrator tools", () => {
             ),
           )
           const completeResult = toolText(
-            await tools.complete_goal.execute(
+            await runManageTaskTool(tools, "complete_goal",
               {
                 goalID,
                 reason: "should be rejected while session active",
@@ -11834,7 +11868,7 @@ describe("orchestrator tools", () => {
             ),
           )
           const deleteResult = toolText(
-            await tools.delete_goal.execute(
+            await runManageTaskTool(tools, "delete_goal",
               {
                 goalID,
                 reason: "should be rejected while session active",
@@ -11908,7 +11942,7 @@ describe("orchestrator tools", () => {
         })
 
         const modifyResult = toolText(
-          await tools.modify_goal.execute(
+          await runManageTaskTool(tools, "modify_goal",
             {
               goalID,
               updates: { objective: "Mutated while live goal_run exists" },
@@ -11977,7 +12011,7 @@ describe("orchestrator tools", () => {
         })
 
         const result = toolText(
-          await tools.modify_goal.execute(
+          await runManageTaskTool(tools, "modify_goal",
             {
               goalID,
               updates: { objective: "Clarified completed objective" },
@@ -12067,7 +12101,7 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.add_goal.execute(
+        const result = await runManageTaskTool(tools, "add_goal",
           {
             goal: {
               title: "Operator requested follow-up goal",
@@ -12174,7 +12208,7 @@ describe("orchestrator tools", () => {
         })
 
         const result = toolText(
-          await tools.complete_goal.execute(
+          await runManageTaskTool(tools, "complete_goal",
             {
               goalID,
               reason: "Current task evidence proves this goal is already satisfied without a build attempt.",
@@ -12261,7 +12295,7 @@ describe("orchestrator tools", () => {
         })
 
         const result = toolText(
-          await tools.complete_goal.execute(
+          await runManageTaskTool(tools, "complete_goal",
             {
               goalID,
               reason: "Current task evidence proves this stale audit row is already satisfied.",
@@ -12392,7 +12426,7 @@ describe("orchestrator tools", () => {
         })
 
         const result = toolText(
-          await tools.delete_goal.execute(
+          await runManageTaskTool(tools, "delete_goal",
             {
               goalID: removedGoalID,
               reason: "Current evidence proves this goal is obsolete and its remaining dependent work is independent.",
@@ -12470,7 +12504,7 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
         const result = toolText(
-          await tools.complete_goal.execute(
+          await runManageTaskTool(tools, "complete_goal",
             {
               goalID,
               reason: "Current task evidence proves this stale live row has no live worker and is satisfied.",
@@ -12539,7 +12573,7 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
         const result = toolText(
-          await tools.delete_goal.execute(
+          await runManageTaskTool(tools, "delete_goal",
             {
               goalID,
               reason: "Current evidence proves this stale live goal is obsolete.",
@@ -12618,7 +12652,7 @@ describe("orchestrator tools", () => {
         })
 
         const completeResult = toolText(
-          await tools.complete_goal.execute(
+          await runManageTaskTool(tools, "complete_goal",
             {
               goalID,
               reason: "should not complete while build is live",
@@ -12627,7 +12661,7 @@ describe("orchestrator tools", () => {
           ),
         )
         const deleteResult = toolText(
-          await tools.delete_goal.execute(
+          await runManageTaskTool(tools, "delete_goal",
             {
               goalID,
               reason: "should not delete while build is live",
@@ -13193,7 +13227,7 @@ describe("orchestrator tools", () => {
           workflowState,
         })
 
-        const result = await tools.build.execute(
+        const result = await runDispatchAgentTool(tools, "build",
           {
             request: "Implement the page directly.",
             reason: "Scoped workflow task; direct build is enough.",
@@ -13509,7 +13543,7 @@ describe("orchestrator tools", () => {
           workflowState: createWorkflowState(pipeline),
         })
 
-        const result = await tools.build.execute(
+        const result = await runDispatchAgentTool(tools, "build",
           {
             request: "Repair the market tabs using the latest Visual QA report.",
             reason: "Task-level rework after Visual QA failure.",
@@ -13663,7 +13697,7 @@ describe("orchestrator tools", () => {
         })
 
         await expect(
-          tools.build.execute(
+          runDispatchAgentTool(tools, "build",
             {
               request: "Repair the page after Visual QA feedback.",
               reason: "Task-level direct build infrastructure failure coverage.",
@@ -13783,7 +13817,7 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.build.execute(
+        const result = await runDispatchAgentTool(tools, "build",
           {
             goalID,
             reason: "Per-goal pipeline execution in the current project directory.",
@@ -13890,7 +13924,7 @@ describe("orchestrator tools", () => {
           workflowState: createWorkflowState(pipeline),
         })
 
-        const result = await tools.build.execute(
+        const result = await runDispatchAgentTool(tools, "build",
           {
             request: "Implement through an isolated managed worktree.",
             reason: "Scoped direct implementation with explicit isolation.",
@@ -13961,7 +13995,7 @@ describe("orchestrator tools", () => {
           workflowState,
         })
 
-        const result = await tools.build.execute(
+        const result = await runDispatchAgentTool(tools, "build",
           {
             request: "Explore the component tree without changing files.",
             reason: "Need repository investigation before implementation.",
@@ -14038,7 +14072,7 @@ describe("orchestrator tools", () => {
           workflowState: createWorkflowState(pipeline),
         })
 
-        const result = await tools.propose_task.execute(
+        const result = await runManageTaskTool(tools, "propose_task",
           {
             title: "Harden generated component tests",
             request:
@@ -14148,7 +14182,7 @@ describe("orchestrator tools", () => {
           workflowState: createWorkflowState(pipeline),
         })
 
-        await tools.propose_task.execute(
+        await runManageTaskTool(tools, "propose_task",
           {
             title: "Repair spec index",
             request:
@@ -14167,7 +14201,7 @@ describe("orchestrator tools", () => {
           buildToolOptions(),
         )
 
-        await tools.propose_task.execute(
+        await runManageTaskTool(tools, "propose_task",
           {
             title: "Review frontend replica expert squad prompt",
             request:
@@ -14273,7 +14307,7 @@ describe("orchestrator tools", () => {
           workflowState: createWorkflowState(pipeline),
         })
 
-        const result = await tools.propose_task.execute(
+        const result = await runManageTaskTool(tools, "propose_task",
           {
             title: "Improve project quality",
             request: "Do another polish pass and improve project quality.",
@@ -14290,7 +14324,7 @@ describe("orchestrator tools", () => {
         expect(text).toContain("concrete evidence anchor")
         expect(text).toContain("no new task was created")
 
-        const noEvidenceResult = await tools.propose_task.execute(
+        const noEvidenceResult = await runManageTaskTool(tools, "propose_task",
           {
             title: "Improve docs",
             request: "Improve the docs page later.",
@@ -14388,7 +14422,7 @@ describe("orchestrator tools", () => {
           workflowState: createWorkflowState(pipeline),
         })
 
-        const result = await tools.propose_task.execute(
+        const result = await runManageTaskTool(tools, "propose_task",
           {
             title: "Validate release notes",
             request:
@@ -14496,7 +14530,7 @@ describe("orchestrator tools", () => {
           workflowState: createWorkflowState(pipeline),
         })
 
-        const result = await tools.propose_task.execute(
+        const result = await runManageTaskTool(tools, "propose_task",
           {
             title: "Run second verification pass",
             request:
@@ -14585,7 +14619,7 @@ describe("orchestrator tools", () => {
           workflowState: createWorkflowState(pipeline),
         })
 
-        const proposal = tools.propose_task.execute(
+        const proposal = runManageTaskTool(tools, "propose_task",
           {
             title: "Optional cleanup",
             request:
@@ -14767,7 +14801,7 @@ describe("orchestrator tools", () => {
           workflowState,
         })
 
-        const result = await tools.frontend_design.execute(
+        const result = await runDispatchAgentTool(tools, "frontend_design",
           {
             reason: "Figma MCP visual reference requires frontend template",
             figma_url: figmaUrl,
@@ -14849,7 +14883,7 @@ describe("orchestrator tools", () => {
         })
 
         await expect(
-          tools.frontend_design.execute(
+          runDispatchAgentTool(tools, "frontend_design",
             {
               reason: "Material failure must stop the design handoff.",
               materials: ["reference.html", "missing.html"],
@@ -14931,7 +14965,7 @@ describe("orchestrator tools", () => {
         })
 
         await expect(
-          tools.frontend_design.execute(
+          runDispatchAgentTool(tools, "frontend_design",
             {
               reason: "Material paths must not escape the project root.",
               materials: [outsideFile],
@@ -15134,6 +15168,7 @@ describe("orchestrator tools", () => {
           designAnalyzeImpl = async (input) => {
             expect(input.parentSessionID).toBe(parent.id)
             expect(input.requireDesignDirectionContract).toBe(true)
+            expect(input.requireHtmlDesignGroundTruth).toBe(true)
             expect(input.designResourceManifest?.entries).toHaveLength(1)
             expect(input.designResourceManifest.entries[0]).toMatchObject({
               kind: "html",
@@ -15154,7 +15189,7 @@ describe("orchestrator tools", () => {
               techStack: ["React", "CSS modules", "local data fixtures"],
               frontendTemplate:
                 "Implement direction-operator-console: redesign the existing enterprise market command center around the primary monitor-risk-allocate path with audit-ready panels and source-backed HTML material.",
-              finalAcceptanceMode: "maintainable_replacement_required",
+              finalAcceptanceMode: "visual_baseline_allowed",
               fillableModules: "market overview, risk queue, allocation grid, compliance trail",
               componentInventory: "MarketShell, AllocationGrid, RiskQueue, AuditTimeline",
               componentReusePlan: [
@@ -15174,19 +15209,37 @@ describe("orchestrator tools", () => {
               baselineReplacementPlan: [],
               implementationPhaseOutcomes: [],
               qualityProjectContract:
-                "Selected direction direction-operator-console must ship as semantic enterprise product UI with visible task hierarchy, keyboard/focus states, and screenshot proof, not generic cards.",
+                "Selected direction direction-operator-console is first delivered as screenshot-validated visual-html-skeleton ground truth, then transcribed into semantic enterprise product UI with visible task hierarchy, keyboard/focus states, and screenshot proof.",
               materialInventory: "design_resource_manifest includes reference.html as the source HTML design material.",
               frontendProject: {
-                status: "not_created",
-                role: "implementation_target",
-                project_root: "packages/overlay",
-                source_package: "",
-                entrypoints: ["src/selected-operator-console.tsx"],
+                status: "created",
+                role: "visual_baseline_input",
+                project_root: "visual-html-skeleton",
+                source_package: "web-clone-source",
+                entrypoints: ["visual-html-skeleton/index.html", "visual-html-skeleton/styles/tokens.css"],
                 generation_tool: "frontend-innovate",
-                notes: ["Build implements selected direction after draft evidence."],
+                notes: ["Build implements selected direction from HTML design draft evidence."],
               },
+              visualValidationEvidence: [
+                {
+                  id: "operator-console-html-design-desktop",
+                  render_target: "visual-html-skeleton",
+                  rendered_entrypoint: "visual-html-skeleton/index.html",
+                  screenshot_artifact: "visual-html-skeleton/previews/operator-console-desktop.png",
+                  source_reference_artifact: "web-clone-source/reference.png",
+                  renderer: "node_playwright_static_file",
+                  viewport: "desktop-1440x900",
+                  capture_mode: "viewport",
+                  screenshot_sha256: "a".repeat(64),
+                  source_reference_sha256: "b".repeat(64),
+                  diff_artifact: "visual-html-skeleton/previews/operator-console-diff.png",
+                  review_status: "reviewed_no_blocking_debt",
+                  review_summary: "Stubbed orchestration test evidence: HTML design draft is the selected visual ground truth.",
+                },
+              ],
+              visualRegionBindings: [],
               visualConsistencyContract:
-                "Selected design direction direction-operator-console wins; reject generic card-heavy dashboards.",
+                "Selected design direction direction-operator-console wins; visual-html-skeleton screenshot evidence is the downstream ground truth; reject generic card-heavy dashboards.",
               uiDataContract:
                 "Use local fixture rows for positions, alerts, allocation, and compliance events, including loading, empty, and error states.",
               templateIterationNotes: [
@@ -15197,6 +15250,51 @@ describe("orchestrator tools", () => {
                 "Frontend Innovate handoff is complete: existing URL task audit, two directions, selected direction, rejected generic traits review, accessibility expectations, and manifest-backed HTML material.",
               referenceArtifacts: ["reference.html", "design_resource_manifest"],
               openQuestions: [],
+              designDirections: [
+                {
+                  id: "direction-operator-console",
+                  name: "Operator console",
+                  concept: "Dense command surface for repeated enterprise market work.",
+                  evidence_refs: ["reference.html", "design_resource_manifest", "competitor-command-center"],
+                  tradeoffs: "Higher density requires careful state hierarchy.",
+                  implementation_notes: "Implement visual-html-skeleton as the selected downstream ground truth.",
+                },
+                {
+                  id: "direction-editorial-dashboard",
+                  name: "Editorial dashboard",
+                  concept: "Narrative overview with lower operational density.",
+                  evidence_refs: ["reference.html"],
+                  tradeoffs: "Lower density weakens monitor-risk-allocate workflow.",
+                  implementation_notes: "Rejected before implementation.",
+                },
+              ],
+              selectedDesignDirectionID: "direction-operator-console",
+              antiSlopReview: [
+                {
+                  id: "anti-slop-generic-cards",
+                  rejected_trait: "Generic card-heavy SaaS layout.",
+                  evidence: "reference.html shows repeated operational monitoring and allocation work.",
+                  correction: "Dense command surface with visible risk and allocation state.",
+                },
+              ],
+              competitorReferenceEvidence: [
+                {
+                  id: "competitor-command-center",
+                  evidence_source: "deep_research",
+                  source_page_ref: "frontend_research_brief:source-command-center",
+                  competitor_url: "https://competitor.example.com/command-center",
+                  screenshot_artifact: "competitor-references/command-center-desktop.png",
+                  screenshot_sha256: "c".repeat(64),
+                  viewport: "desktop-1440x900",
+                  inspected_elements: ["risk queue", "allocation grid", "audit timeline"],
+                  influence_on_selected_direction:
+                    "Selected direction uses competitor command-center density while preserving source-page evidence constraints.",
+                  source_refs: [
+                    "deep_research:competitor-command-center",
+                    "competitor-references/command-center-desktop.png",
+                  ],
+                },
+              ],
               report: {
                 summary: "Selected direction-operator-console for enterprise market command center.",
                 detail: [
@@ -15224,6 +15322,8 @@ describe("orchestrator tools", () => {
             const frontendDesignPacket = contextPacketText(input.context, "frontend_design")
             expect(frontendDesignPacket).toContain("direction-operator-console")
             expect(frontendDesignPacket).toContain("design_resource_manifest")
+            expect(frontendDesignPacket).toContain("competitor-command-center")
+            expect(frontendDesignPacket).toContain("competitor-references/command-center-desktop.png")
             await markBuildSlotAcquired(input, sessionID)
             const targetID = input.target?.id ?? "task"
             const changedPath =
@@ -15382,8 +15482,18 @@ describe("orchestrator tools", () => {
             prompt_profile: { active: "frontend-innovate" },
           })
 
-          const researchResult = await tools.frontend_research.execute(
+          const frontendInnovateWorkflow = WorkflowRegistry.resolveSync("frontend_innovate")!
+          const { tools: frontendInnovateTools } = createOrchestratorTools({
+            taskID,
+            agentSessionID: parent.id,
+            signal: new AbortController().signal,
+            workflow: frontendInnovateWorkflow,
+            workflowState: createWorkflowState(frontendInnovateWorkflow),
+          })
+
+          const researchResult = await frontendInnovateTools.dispatch_agent.execute(
             {
+              target: "frontend_research",
               reason: "Investigate the source page before design convergence.",
               source_urls: [sourceURL],
               focus:
@@ -15407,8 +15517,9 @@ describe("orchestrator tools", () => {
             ),
           ).toHaveLength(1)
 
-          const designResult = await tools.frontend_design.execute(
+          const designResult = await frontendInnovateTools.dispatch_agent.execute(
             {
+              target: "frontend_design",
               reason: "HTML material must become the Frontend Innovate design handoff.",
               materials: ["reference.html"],
             },
@@ -15432,8 +15543,9 @@ describe("orchestrator tools", () => {
           expect((manifests[0]?.payload as any).entries.map((entry: any) => entry.kind)).toEqual(["html"])
 
           for (const goalID of [consoleDraftGoalID, editorialDraftGoalID, selectedImplementationGoalID]) {
-            const buildResult = await tools.build.execute(
+            const buildResult = await frontendInnovateTools.dispatch_agent.execute(
               {
+                target: "build",
                 goalID,
                 reason: "Frontend Innovate bounded Build draft or selected implementation.",
               },
@@ -15442,6 +15554,11 @@ describe("orchestrator tools", () => {
             expectGoalBuildStarted(buildResult)
             await waitForGoalStatus(goalID, "passed")
           }
+          await waitForCondition("frontend innovate completed goal workspaces reclaimed", () =>
+            [consoleDraftGoalID, editorialDraftGoalID, selectedImplementationGoalID].every(
+              (goalID) => findGoalLatestWorkspace(goalID).directory === null,
+            ),
+          )
 
           expect(buildSessions).toHaveLength(3)
           expect(new Set(buildSessions).size).toBe(3)
@@ -15459,8 +15576,9 @@ describe("orchestrator tools", () => {
           )
           expect(buildContracts).toHaveLength(3)
 
-          const visualResult = await tools.visual_qa.execute(
+          const visualResult = await frontendInnovateTools.dispatch_agent.execute(
             {
+              target: "visual_qa",
               reason: "Review the selected Frontend Innovate implementation.",
               focus: "Selected operator console direction",
               app_url: "http://127.0.0.1:5173",
@@ -15476,12 +15594,13 @@ describe("orchestrator tools", () => {
               .some((entry) => entry.key === "latest_summary"),
           ).toBe(true)
 
-          const integrityResult = await tools.integrity.execute(
-            { reason: "Final Frontend Innovate chain review." },
+          const integrityResult = await frontendInnovateTools.dispatch_agent.execute(
+            { target: "integrity", reason: "Final Frontend Innovate chain review." },
             buildToolOptions("frontend_innovate_integrity"),
           )
           expect(toolText(integrityResult)).toContain("integrity_attempt_id")
           expect(contextPacketText(integrityInput, "frontend_design")).toContain("anti-slop-generic-cards")
+          expect(contextPacketText(integrityInput, "frontend_design")).toContain("competitor-command-center")
           expect(
             findLatestIntegrityAttemptArtifact({
               taskID,
@@ -15489,13 +15608,14 @@ describe("orchestrator tools", () => {
               phase: "post_build",
             })?.artifactID,
           ).toBeTruthy()
+          await TaskLoop.awaitTaskLoopIdle(taskID, 15_000)
         },
       })
     } finally {
       if (home === undefined) delete process.env.OPENCORVUS_TEST_HOME
       else process.env.OPENCORVUS_TEST_HOME = home
     }
-  }, 30000)
+  }, 60_000)
 
   test("goal build re-reads dependency status before dispatch", async () => {
     const now = Date.now()
@@ -15581,7 +15701,7 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.build.execute(
+        const result = await runDispatchAgentTool(tools, "build",
           {
             goalID: childGoalID,
             reason: "stale orchestrator view",
@@ -15687,7 +15807,7 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.build.execute(
+        const result = await runDispatchAgentTool(tools, "build",
           {
             goalID: childGoalID,
             reason: "dependency was falsely projected as delivered",
@@ -15747,7 +15867,7 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.architect.execute({}, {} as any)
+        const result = await runDispatchAgentTool(tools, "architect", {}, {} as any)
 
         expect(toolText(result)).toContain("no active requirements spec snapshot")
         expect(toolText(result)).toContain("requirements")
@@ -15880,7 +16000,7 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.architect.execute({}, {} as any)
+        const result = await runDispatchAgentTool(tools, "architect", {}, {} as any)
         expect(toolText(result)).toContain("Architect decomposition complete")
 
         const activeSpec = findActiveSpecForTask(taskID)
@@ -15975,7 +16095,7 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.build.execute(
+        const result = await runDispatchAgentTool(tools, "build",
           {
             goalID,
             reason: "Per-goal pipeline execution.",
@@ -16277,7 +16397,7 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.build.execute({ goalID, reason: "Scoped goal execution." }, buildToolOptions())
+        const result = await runDispatchAgentTool(tools, "build", { goalID, reason: "Scoped goal execution." }, buildToolOptions())
 
         expectGoalBuildStarted(result)
         await waitForGoalStatus(goalID, "passed")
@@ -16386,7 +16506,7 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.build.execute(
+        const result = await runDispatchAgentTool(tools, "build",
           {
             goalID,
             reason: "Verify Build input evidence contract persistence.",
@@ -16496,7 +16616,7 @@ describe("orchestrator tools", () => {
           workflowState: createWorkflowState(pipeline),
         })
 
-        const result = await tools.build.execute(
+        const result = await runDispatchAgentTool(tools, "build",
           {
             request: "Repair implementation using task evidence.",
             reason: "Validate direct build input evidence owner.",
@@ -16700,7 +16820,7 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.build.execute(
+        const result = await runDispatchAgentTool(tools, "build",
           {
             goalID,
             request: "Implement the goal",
@@ -16804,7 +16924,7 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.build.execute(
+        const result = await runDispatchAgentTool(tools, "build",
           {
             goalID,
             request: "Implement the goal",
@@ -16970,7 +17090,7 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.build.execute(
+        const result = await runDispatchAgentTool(tools, "build",
           {
             goalID,
             request: "Retry the failed goal with fresh context wording in the operator text.",
@@ -17092,7 +17212,7 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.build.execute(
+        const result = await runDispatchAgentTool(tools, "build",
           {
             goalID,
             request: "Retry by continuing the previous provider session.",
@@ -17207,7 +17327,7 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.build.execute(
+        const result = await runDispatchAgentTool(tools, "build",
           {
             goalID,
             request: "Retry in a fresh context using the same worktree.",
@@ -17340,7 +17460,7 @@ describe("orchestrator tools", () => {
             signal: new AbortController().signal,
           })
 
-          const result = await tools.build.execute(
+          const result = await runDispatchAgentTool(tools, "build",
             {
               goalID,
               request: "Retry in a fresh context using the same worktree.",
@@ -17453,7 +17573,7 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.build.execute(
+        const result = await runDispatchAgentTool(tools, "build",
           {
             goalID,
             request: "Retry in a fresh context using the same worktree.",
@@ -17544,7 +17664,7 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.build.execute(
+        const result = await runDispatchAgentTool(tools, "build",
           {
             goalID,
             request: "Retry in a fresh context using the same worktree.",
@@ -17641,7 +17761,7 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.build.execute(
+        const result = await runDispatchAgentTool(tools, "build",
           {
             goalID,
             request: "Retry in a fresh context using the same external worktree.",
@@ -17728,7 +17848,7 @@ describe("orchestrator tools", () => {
             signal: new AbortController().signal,
           })
 
-          const result = await tools.build.execute(
+          const result = await runDispatchAgentTool(tools, "build",
             {
               goalID,
               request: "Implement the goal",
@@ -17824,7 +17944,7 @@ describe("orchestrator tools", () => {
             signal: new AbortController().signal,
           })
 
-          const result = await tools.build.execute(
+          const result = await runDispatchAgentTool(tools, "build",
             {
               goalID,
               request: "Implement the goal",
@@ -17918,7 +18038,7 @@ describe("orchestrator tools", () => {
 
           let error: unknown
           try {
-            await tools.build.execute(
+            await runDispatchAgentTool(tools, "build",
               {
                 goalID,
                 request: "Start duplicate build",
@@ -18021,7 +18141,7 @@ describe("orchestrator tools", () => {
             signal: new AbortController().signal,
           })
 
-          const result = await tools.build.execute(
+          const result = await runDispatchAgentTool(tools, "build",
             {
               goalID,
               request: "Implement the goal",
@@ -18169,7 +18289,7 @@ describe("orchestrator tools", () => {
             signal: new AbortController().signal,
           })
 
-          const result = await tools.build.execute(
+          const result = await runDispatchAgentTool(tools, "build",
             {
               goalID,
               request: "Implement the goal",
@@ -18255,7 +18375,7 @@ describe("orchestrator tools", () => {
             signal: new AbortController().signal,
           })
 
-          const result = await tools.build.execute(
+          const result = await runDispatchAgentTool(tools, "build",
             {
               goalID,
               request: "Implement the goal",
@@ -18339,7 +18459,7 @@ describe("orchestrator tools", () => {
             signal: new AbortController().signal,
           })
 
-          const result = await tools.build.execute(
+          const result = await runDispatchAgentTool(tools, "build",
             {
               goalID,
               request: "Implement the goal",
@@ -18473,7 +18593,7 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.build.execute(
+        const result = await runDispatchAgentTool(tools, "build",
           {
             goalID,
             request: "Implement without substituting the task-level captured design material image.",
@@ -18602,7 +18722,7 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.build.execute(
+        const result = await runDispatchAgentTool(tools, "build",
           {
             goalID,
             request: "Apply acceptance visual feedback",

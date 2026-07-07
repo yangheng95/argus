@@ -136,6 +136,7 @@ export namespace FrontendDesignAgent {
       generation_tool: string
       notes: string[]
     }
+    visualValidationEvidence: FrontendTemplateFinal["visual_validation_evidence"]
     visualConsistencyContract: string
     visualRegionBindings: FrontendTemplateFinal["visual_region_bindings"]
     uiDataContract: string
@@ -146,6 +147,7 @@ export namespace FrontendDesignAgent {
     designDirections: FrontendTemplateFinal["design_directions"]
     selectedDesignDirectionID: string
     antiSlopReview: FrontendTemplateFinal["anti_slop_review"]
+    competitorReferenceEvidence: FrontendTemplateFinal["competitor_reference_evidence"]
     processTrace: ProcessTrace
     processTraceArtifact?: string
     iterationStateArtifact?: string
@@ -175,6 +177,7 @@ export namespace FrontendDesignAgent {
     /** Upstream agent handoff packets supplied by the scheduler. */
     contextPackets?: AgentContextPacket[]
     requireDesignDirectionContract?: boolean
+    requireHtmlDesignGroundTruth?: boolean
     taskID?: string
     /** Parent session — a child "frontend-design" session is created under it. */
     parentSessionID?: string
@@ -213,6 +216,7 @@ export namespace FrontendDesignAgent {
       artifactRootRelative: frontendRuntimePaths?.relativeDir,
       workspaceRoot: Instance.worktree,
       requireDesignDirectionContract: input.requireDesignDirectionContract === true,
+      requireHtmlDesignGroundTruth: input.requireHtmlDesignGroundTruth === true,
     })
     const submitFrontendTemplateTool = createFrontendSubmitTools(outputToolKit)
     const hostPreparedFrontendProject = await resolveHostPreparedFrontendProject(input.taskID)
@@ -313,6 +317,7 @@ export namespace FrontendDesignAgent {
       qualityProjectContract: structured.quality_project_contract,
       materialInventory: structured.material_inventory,
       frontendProject: structured.frontend_project,
+      visualValidationEvidence: structured.visual_validation_evidence,
       visualConsistencyContract: structured.visual_consistency_contract,
       visualRegionBindings: structured.visual_region_bindings,
       uiDataContract: structured.ui_data_contract,
@@ -323,6 +328,7 @@ export namespace FrontendDesignAgent {
       designDirections: structured.design_directions,
       selectedDesignDirectionID: structured.selected_design_direction_id,
       antiSlopReview: structured.anti_slop_review,
+      competitorReferenceEvidence: structured.competitor_reference_evidence,
       processTrace,
       processTraceArtifact,
       iterationStateArtifact,
