@@ -25,6 +25,8 @@ import { SkillTool } from "../../src/tool/skill"
 import { MCP } from "../../src/mcp"
 import { Config } from "../../src/config/config"
 import { copyRepositoryExpertSquadPackage } from "../fixture/expert-squad"
+import { createOrchestratorTools } from "../../src/orchestrator/tools"
+import { WorkflowRegistry } from "../../src/engine/workflow"
 
 const dummyTool = () =>
   tool({
@@ -880,19 +882,19 @@ describe("extras execute-return normalisation (integration via resolveTools)", (
     await using tmp = await tmpdir({
       git: true,
       init: async (dir) => {
-        const skillDir = path.join(dir, ".opencorvus", "skill", "runtime-needs-webpage-extract")
+        const skillDir = path.join(dir, ".opencorvus", "skill", "runtime-needs-bash")
         await Bun.write(
           path.join(skillDir, "SKILL.md"),
           `---
-name: runtime-needs-webpage-extract
-description: Skill requiring a frontend-design tool that is not in this exact runtime contract.
+name: runtime-needs-bash
+description: Skill requiring a canonical tool that is not in this exact runtime contract.
 required_tools:
-  - webpage_extract
+  - bash
 mounted_agents:
   - frontend-design
 ---
 
-# Runtime Needs Webpage Extract
+# Runtime Needs Bash
 `,
         )
       },
@@ -963,10 +965,10 @@ mounted_agents:
           expect(Object.keys(resolved).sort()).toEqual(["skill", "submit_frontend_template"])
           await expect(
             (resolved.skill as any).execute(
-              { name: "runtime-needs-webpage-extract" },
+              { name: "runtime-needs-bash" },
               { toolCallId: "call_runtime_skill_surface" },
             ),
-          ).rejects.toThrow('Skill "runtime-needs-webpage-extract" not found or not allowed')
+          ).rejects.toThrow('Skill "runtime-needs-bash" not found or not allowed')
           SessionLoop.clearSessionRuntimeContract(sessionID)
         },
       })
@@ -1200,6 +1202,78 @@ describe("extra tool provider schema preparation", () => {
         { toolCallId: "call_build_string_error" },
       ),
     ).rejects.toThrow("Invalid input for tool report_build_result")
+  })
+
+  test("strips GPT strict-schema null placeholders for dispatch_agent target branches with optional literals", async () => {
+    const workflow = WorkflowRegistry.resolveSync("pipeline")!
+    const { tools } = createOrchestratorTools({
+      taskID: "tsk_dispatch_null_placeholders",
+      agentSessionID: "ses_dispatch_null_placeholders",
+      signal: new AbortController().signal,
+      workflow,
+    })
+    const reason =
+      "Current graph state: gol_001 completed; gol_002 is the only dependency-unblocked blocking goal."
+    const pollutedInput = {
+      reason,
+      source_urls: null,
+      focus: null,
+      continuation_artifact_id: null,
+      target: "build",
+      target_deliverable: null,
+      request: null,
+      goalID: "gol_dispatch_null_placeholders",
+      directBuildIntent: null,
+      worktreeUsage: "managed_worktree",
+      userConfirmedStaleIntegrityData: null,
+      app_url: null,
+      preview_command: null,
+      target_session_id: null,
+      target_agent: null,
+      fact_check_items: null,
+    }
+    let seenArgs: unknown
+    const prepared = SessionLoop.prepareProviderTool({
+      name: "dispatch_agent",
+      source: "extra",
+      model: hexinGptModel,
+      tool: tool({
+        description: "dispatch agent schema materialization test",
+        inputSchema: (tools.dispatch_agent as { inputSchema: unknown }).inputSchema as any,
+        async execute(args) {
+          seenArgs = args
+          return { output: "ok", title: "", metadata: {} }
+        },
+      }),
+    }) as any
+
+    await prepared.execute(pollutedInput, { toolCallId: "call_dispatch_agent_null_placeholders" })
+    expect(seenArgs).toEqual({
+      reason,
+      target: "build",
+      goalID: "gol_dispatch_null_placeholders",
+      worktreeUsage: "managed_worktree",
+    })
+
+    await expect(
+      prepared.execute(
+        {
+          ...pollutedInput,
+          target_agent: "opentest-build-agent",
+        },
+        { toolCallId: "call_dispatch_agent_non_null_unknown" },
+      ),
+    ).rejects.toThrow("Invalid input for tool dispatch_agent")
+
+    await expect(
+      prepared.execute(
+        {
+          ...pollutedInput,
+          directBuildIntent: "wrong_intent",
+        },
+        { toolCallId: "call_dispatch_agent_wrong_literal" },
+      ),
+    ).rejects.toThrow("Invalid input for tool dispatch_agent")
   })
 
   test("adds v6-aware model output conversion for project tool-result objects", () => {

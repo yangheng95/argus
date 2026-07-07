@@ -1231,17 +1231,25 @@ export namespace SessionLoop {
     const record = schema as Record<string, unknown>
     const variants = Array.isArray(record.anyOf) ? record.anyOf : Array.isArray(record.oneOf) ? record.oneOf : undefined
     if (!variants) return schema
+    const valueRecord = value as Record<string, unknown>
     for (const variant of variants) {
       if (!variant || typeof variant !== "object" || Array.isArray(variant)) continue
-      const properties = (variant as Record<string, unknown>).properties
+      const variantRecord = variant as Record<string, unknown>
+      const properties = variantRecord.properties
       if (!properties || typeof properties !== "object" || Array.isArray(properties)) continue
+      const required = new Set(
+        Array.isArray(variantRecord.required)
+          ? variantRecord.required.filter((item) => typeof item === "string")
+          : [],
+      )
       let matchedConst = false
       let mismatched = false
       for (const [key, propertySchema] of Object.entries(properties as Record<string, unknown>)) {
         if (!propertySchema || typeof propertySchema !== "object" || Array.isArray(propertySchema)) continue
         if (!("const" in propertySchema)) continue
+        if (!required.has(key)) continue
         matchedConst = true
-        if ((value as Record<string, unknown>)[key] !== (propertySchema as Record<string, unknown>).const) {
+        if (valueRecord[key] !== (propertySchema as Record<string, unknown>).const) {
           mismatched = true
           break
         }
