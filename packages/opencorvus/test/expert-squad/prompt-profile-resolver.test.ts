@@ -880,12 +880,13 @@ describe("PromptProfileResolver", () => {
       projectDirectory: project.path,
       config,
       defaultSkills: [],
-      agentIDs: ["orchestrator", "requirements", "architect", "build", "integrity", "visual-qa"],
+      agentIDs: ["orchestrator", "intent-analysis", "requirements", "architect", "build", "integrity", "visual-qa"],
     })
     expect(activeProjection.selectorSkillNames).toEqual(["opentest-expert-squad"])
     expect(activeProjection.productionSkillNames).toEqual(
       expect.arrayContaining([
         "opentest-workflow",
+        "software-test-intent-analysis",
         "software-test-requirements",
         "software-test-architecture",
         "software-test-implementation",
@@ -905,7 +906,7 @@ describe("PromptProfileResolver", () => {
 
     expect(schedulerCapability.promptProfileID).toBe(OPENTEST_EXPERT_SQUAD_ID)
     expect(schedulerCapability.builtInToolIDs).toEqual(expect.arrayContaining(["dispatch_agent", "manage_task"]))
-    for (const hidden of ["requirements", "architect", "build", "integrity"]) {
+    for (const hidden of ["analyze_intent", "requirements", "architect", "build", "integrity"]) {
       expect(schedulerCapability.builtInToolIDs).not.toContain(hidden)
     }
     for (const unusedTool of ["visual_qa", "fact_check"]) {
@@ -928,6 +929,7 @@ describe("PromptProfileResolver", () => {
     expect(Object.hasOwn(schedulerTools, "architect")).toBe(false)
     expect(Object.hasOwn(schedulerTools, "build")).toBe(false)
     expect(Object.hasOwn(schedulerTools, "integrity")).toBe(false)
+    expect(Object.hasOwn(schedulerTools, "analyze_intent")).toBe(false)
     expect(Object.hasOwn(schedulerTools, "visual_qa")).toBe(false)
     expect(Object.hasOwn(schedulerTools, "fact_check")).toBe(false)
     expect(Object.hasOwn(schedulerTools, protocolProviderName)).toBe(true)
@@ -959,6 +961,20 @@ describe("PromptProfileResolver", () => {
     expect(contract.contract.script.required_export).toBe("steps")
     expect(contract.contract.script.mark_point_callee).toBe("ctx.mark_point")
     expect(contractResult.metadata.package_tool_ref).toBe(protocolRef)
+
+    const intentCapability = await PromptProfileResolver.resolveWorkerCapability({
+      projectDirectory: project.path,
+      agentID: "intent-analysis",
+      config,
+    })
+    expect(intentCapability.packageToolRefs).toEqual([protocolRef])
+    expect(intentCapability.projection.package_skill_refs).toEqual(["opentest/intent-analysis/test-intent-analysis"])
+    expect(intentCapability.virtualAgent).toMatchObject({
+      baseRole: "intent-analysis",
+      virtualAgentID: "opentest-intent-analyst",
+      label: "OpenTest Intent Analyst",
+      expertSquadID: OPENTEST_EXPERT_SQUAD_ID,
+    })
 
     const requirementsCapability = await PromptProfileResolver.resolveWorkerCapability({
       projectDirectory: project.path,

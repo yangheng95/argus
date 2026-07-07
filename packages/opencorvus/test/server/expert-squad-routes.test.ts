@@ -353,11 +353,13 @@ describe("expert-squad routes", () => {
             "architect",
             "build",
             "integrity",
+            "intent-analysis",
             "requirements",
             "visual-qa",
           ])
           expect(body.active_agent_projection.agents.map((agent) => agent.virtual_agent_id).sort()).toEqual([
             "opentest-implementer",
+            "opentest-intent-analyst",
             "opentest-requirements-analyst",
             "opentest-reviewer",
             "opentest-test-architect",
@@ -366,6 +368,15 @@ describe("expert-squad routes", () => {
           const activeAgentsByRole = new Map(
             body.active_agent_projection.agents.map((agent) => [agent.base_role, agent]),
           )
+          expect(activeAgentsByRole.get("intent-analysis")).toMatchObject({
+            virtual_agent_id: "opentest-intent-analyst",
+            default_skill_refs: [],
+            package_skill_refs: ["opentest/intent-analysis/test-intent-analysis"],
+            default_tool_refs: [],
+            package_tool_refs: ["opentest/shared/opentest-protocol-engine"],
+            default_mcp_server_refs: [],
+            package_mcp_server_refs: [],
+          })
           expect(activeAgentsByRole.get("requirements")).toMatchObject({
             virtual_agent_id: "opentest-requirements-analyst",
             default_skill_refs: [],
@@ -420,6 +431,7 @@ describe("expert-squad routes", () => {
             "architect",
             "build",
             "integrity",
+            "intent-analysis",
             "orchestrator",
             "requirements",
             "visual-qa",
@@ -438,9 +450,17 @@ describe("expert-squad routes", () => {
           const opentest = body.squads.find((squad) => squad.id === "opentest")
           expect(opentest?.label).toBe("OpenTest")
           expect(opentest?.display_label).toBe("WuJiang/OpenTest")
-          expect(opentest?.projected_agents.sort()).toEqual(["architect", "build", "integrity", "requirements", "visual-qa"])
+          expect(opentest?.projected_agents.sort()).toEqual([
+            "architect",
+            "build",
+            "integrity",
+            "intent-analysis",
+            "requirements",
+            "visual-qa",
+          ])
           expect(opentest?.virtual_agents.map((agent) => agent.virtual_agent_id).sort()).toEqual([
             "opentest-implementer",
+            "opentest-intent-analyst",
             "opentest-requirements-analyst",
             "opentest-reviewer",
             "opentest-test-architect",

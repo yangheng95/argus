@@ -672,13 +672,26 @@ describe("skill routes", () => {
         }
         expect(body.active_profile).toBe("opentest")
         expect(body.projected_agents).toEqual(
-          expect.arrayContaining(["orchestrator", "requirements", "architect", "build", "integrity", "visual-qa"]),
+          expect.arrayContaining([
+            "orchestrator",
+            "intent-analysis",
+            "requirements",
+            "architect",
+            "build",
+            "integrity",
+            "visual-qa",
+          ]),
         )
+        expect(body.projected_agents).not.toContain("opentest-intent-analyst")
         expect(body.projected_agents).not.toContain("opentest-requirements-analyst")
         expect(body.projected_agents).not.toContain("opentest-test-architect")
         expect(body.projected_agents).not.toContain("opentest-implementer")
         expect(body.projected_agents).not.toContain("opentest-reviewer")
         expect(body.projected_agents).not.toContain("opentest-visual-qa-reviewer")
+        expect(body.agents.find((agent) => agent.name === "intent-analysis")?.virtual_agent).toMatchObject({
+          id: "opentest-intent-analyst",
+          label: "OpenTest Intent Analyst",
+        })
         expect(body.agents.find((agent) => agent.name === "requirements")?.virtual_agent).toMatchObject({
           id: "opentest-requirements-analyst",
           label: "OpenTest Requirements Analyst",
@@ -700,10 +713,12 @@ describe("skill routes", () => {
           label: "OpenTest Visual QA Reviewer",
         })
         expect(body.project_mounts.agents?.requirements).toContain("software-test-requirements")
+        expect(body.project_mounts.agents?.["intent-analysis"]).toContain("software-test-intent-analysis")
         expect(body.project_mounts.agents?.architect).toContain("software-test-architecture")
         expect(body.project_mounts.agents?.build).toContain("software-test-implementation")
         expect(body.project_mounts.agents?.integrity).toContain("software-test-review")
         expect(body.project_mounts.agents?.["visual-qa"]).toContain("software-visual-test-review")
+        expect(body.project_mounts.agents?.["opentest-intent-analyst"]).toBeUndefined()
         expect(body.project_mounts.agents?.["opentest-requirements-analyst"]).toBeUndefined()
         expect(body.project_mounts.agents?.["opentest-test-architect"]).toBeUndefined()
         expect(body.project_mounts.agents?.["opentest-implementer"]).toBeUndefined()

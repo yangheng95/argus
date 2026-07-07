@@ -305,6 +305,7 @@ describe("ExpertSquadRegistry", () => {
     expect(loaded.selector?.ref).toBe("selector/opentest")
     expect(loaded.selector?.label).toBe("OpenTest")
     expect(loaded.packageSkillRefs.has("opentest/orchestrator/workflow")).toBe(true)
+    expect(loaded.packageSkillRefs.has("opentest/intent-analysis/test-intent-analysis")).toBe(true)
     expect(loaded.packageSkillRefs.has("opentest/requirements/test-requirements")).toBe(true)
     expect(loaded.packageSkillRefs.has("opentest/architect/test-architecture")).toBe(true)
     expect(loaded.packageSkillRefs.has("opentest/build/test-implementation")).toBe(true)
@@ -317,12 +318,13 @@ describe("ExpertSquadRegistry", () => {
       "opentest/shared/opentest-protocol-engine",
     ])
     expect([...loaded.explicitSchedulerWorkflowTools].sort()).toEqual(
-      ["architect", "build", "integrity", "requirements", "visual_qa"].sort(),
+      ["analyze_intent", "architect", "build", "integrity", "requirements", "visual_qa"].sort(),
     )
     expect(Object.keys(loaded.manifest.capability_projection.agents).sort()).toEqual([
       "architect",
       "build",
       "integrity",
+      "intent-analysis",
       "requirements",
       "visual-qa",
     ])
@@ -333,6 +335,7 @@ describe("ExpertSquadRegistry", () => {
     }
     expect(Object.keys(loaded.manifest.agents)).toEqual(["orchestrator"])
     expect(agentRoleDirectories).toEqual(["orchestrator"])
+    expect(loaded.promptProfile.virtualAgents["intent-analysis"]?.id).toBe("opentest-intent-analyst")
     expect(loaded.promptProfile.virtualAgents.requirements?.id).toBe("opentest-requirements-analyst")
     expect(loaded.promptProfile.virtualAgents.architect?.id).toBe("opentest-test-architect")
     expect(loaded.promptProfile.virtualAgents.build?.id).toBe("opentest-implementer")
@@ -350,6 +353,12 @@ describe("ExpertSquadRegistry", () => {
       "opentest/shared/opentest-protocol-engine",
       "opentest/shared/opentest-runner",
     ])
+    expect(loaded.manifest.capability_projection.agents["intent-analysis"].package_tool_refs).toEqual([
+      "opentest/shared/opentest-protocol-engine",
+    ])
+    expect(loaded.promptProfile.virtualAgents["intent-analysis"]?.promptContent).toContain(
+      ".opencorvus/expert-squads/wujiang/opentest/protocol-engine/opentest-contract.json",
+    )
     expect(loaded.promptProfile.virtualAgents.requirements?.promptContent).toContain(
       ".opencorvus/expert-squads/wujiang/opentest/protocol-engine/opentest-contract.json",
     )
@@ -364,6 +373,9 @@ describe("ExpertSquadRegistry", () => {
     )
     expect(loaded.promptProfile.virtualAgents["visual-qa"]?.promptContent).toContain(
       ".opencorvus/expert-squads/wujiang/opentest/protocol-engine/opentest-contract.json",
+    )
+    expect(loaded.promptProfile.virtualAgents["intent-analysis"]?.promptContent).not.toContain(
+      ".opencorvus/expert-squads/opentest/",
     )
     expect(loaded.promptProfile.virtualAgents.requirements?.promptContent).not.toContain(
       ".opencorvus/expert-squads/opentest/",

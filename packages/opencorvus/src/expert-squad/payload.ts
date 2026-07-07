@@ -99,6 +99,8 @@ import payload_opentest_virtual_agents_build_skills_test_implementation_SKILL_md
 import payload_opentest_virtual_agents_build_system_md from "../../../../.opencorvus/expert-squads/wujiang/opentest/virtual-agents/build/system.md" with { type: "text" }
 import payload_opentest_virtual_agents_integrity_skills_test_review_SKILL_md from "../../../../.opencorvus/expert-squads/wujiang/opentest/virtual-agents/integrity/skills/test-review/SKILL.md" with { type: "text" }
 import payload_opentest_virtual_agents_integrity_system_md from "../../../../.opencorvus/expert-squads/wujiang/opentest/virtual-agents/integrity/system.md" with { type: "text" }
+import payload_opentest_virtual_agents_intent_analysis_skills_test_intent_analysis_SKILL_md from "../../../../.opencorvus/expert-squads/wujiang/opentest/virtual-agents/intent-analysis/skills/test-intent-analysis/SKILL.md" with { type: "text" }
+import payload_opentest_virtual_agents_intent_analysis_system_md from "../../../../.opencorvus/expert-squads/wujiang/opentest/virtual-agents/intent-analysis/system.md" with { type: "text" }
 import payload_opentest_virtual_agents_requirements_skills_test_requirements_SKILL_md from "../../../../.opencorvus/expert-squads/wujiang/opentest/virtual-agents/requirements/skills/test-requirements/SKILL.md" with { type: "text" }
 import payload_opentest_virtual_agents_requirements_system_md from "../../../../.opencorvus/expert-squads/wujiang/opentest/virtual-agents/requirements/system.md" with { type: "text" }
 import payload_opentest_virtual_agents_visual_qa_skills_visual_test_review_SKILL_md from "../../../../.opencorvus/expert-squads/wujiang/opentest/virtual-agents/visual-qa/skills/visual-test-review/SKILL.md" with { type: "text" }
@@ -252,6 +254,8 @@ export const payloadPackageSources: readonly ExpertSquadRegistry.EmbeddedPackage
       "virtual-agents/build/system.md": textPayload(payload_opentest_virtual_agents_build_system_md),
       "virtual-agents/integrity/skills/test-review/SKILL.md": textPayload(payload_opentest_virtual_agents_integrity_skills_test_review_SKILL_md),
       "virtual-agents/integrity/system.md": textPayload(payload_opentest_virtual_agents_integrity_system_md),
+      "virtual-agents/intent-analysis/skills/test-intent-analysis/SKILL.md": textPayload(payload_opentest_virtual_agents_intent_analysis_skills_test_intent_analysis_SKILL_md),
+      "virtual-agents/intent-analysis/system.md": textPayload(payload_opentest_virtual_agents_intent_analysis_system_md),
       "virtual-agents/requirements/skills/test-requirements/SKILL.md": textPayload(payload_opentest_virtual_agents_requirements_skills_test_requirements_SKILL_md),
       "virtual-agents/requirements/system.md": textPayload(payload_opentest_virtual_agents_requirements_system_md),
       "virtual-agents/visual-qa/skills/visual-test-review/SKILL.md": textPayload(payload_opentest_virtual_agents_visual_qa_skills_visual_test_review_SKILL_md),

@@ -312,11 +312,13 @@ describe("ExpertSquadPackageManager", () => {
         selector: ["## Expert Contract", "test-validity model", "Do not accept tests that were not run"],
         overlays: [
           ["agents/orchestrator/system.md", "WuJiang/OpenTest Expert Contract"],
+          ["virtual-agents/intent-analysis/system.md", "active OpenTest protocol engine"],
           ["virtual-agents/requirements/system.md", "active OpenTest protocol engine"],
           ["virtual-agents/architect/system.md", "active OpenTest protocol engine"],
           ["virtual-agents/build/system.md", "active WuJiang/OpenTest protocol engine"],
           ["virtual-agents/integrity/system.md", "active WuJiang/OpenTest protocol engine"],
           ["virtual-agents/visual-qa/system.md", "active WuJiang/OpenTest protocol engine"],
+          ["virtual-agents/intent-analysis/skills/test-intent-analysis/SKILL.md", "software-test-intent-analysis"],
           ["virtual-agents/requirements/skills/test-requirements/SKILL.md", "software-test-requirements"],
           ["virtual-agents/architect/skills/test-architecture/SKILL.md", "software-test-architecture"],
           ["virtual-agents/visual-qa/skills/visual-test-review/SKILL.md", "software-visual-test-review"],
@@ -343,6 +345,8 @@ describe("ExpertSquadPackageManager", () => {
     expect(Object.keys(source!.files)).toContain("protocol-engine/opentest-protocol-engine.ts")
     expect(Object.keys(source!.files)).toContain("tools/opentest-protocol-engine.ts")
     expect(Object.keys(source!.files)).toContain("tools/opentest-runner.ts")
+    expect(Object.keys(source!.files)).toContain("virtual-agents/intent-analysis/system.md")
+    expect(Object.keys(source!.files)).toContain("virtual-agents/intent-analysis/skills/test-intent-analysis/SKILL.md")
     expect(Object.keys(source!.files)).toContain("virtual-agents/visual-qa/system.md")
     expect(Object.keys(source!.files)).toContain("virtual-agents/visual-qa/skills/visual-test-review/SKILL.md")
     expect(Object.keys(source!.files)).not.toContain("tools/test-artifact-inventory.ts")

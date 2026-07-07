@@ -495,10 +495,9 @@ describe("orchestrator scheduler capability projection", () => {
     })
 
     expect(capability.projectedWorkflowTools).toEqual(
-      expect.arrayContaining(["requirements", "architect", "build", "visual_qa", "integrity"]),
+      expect.arrayContaining(["analyze_intent", "requirements", "architect", "build", "visual_qa", "integrity"]),
     )
     for (const hiddenTarget of [
-      "analyze_intent",
       "frontend_research",
       "deep_research",
       "workload_analysis",
@@ -518,6 +517,10 @@ describe("orchestrator scheduler capability projection", () => {
     const schema = tools.dispatch_agent.inputSchema!
 
     for (const validInput of [
+      {
+        target: "analyze_intent",
+        reason: "OpenTest intent classification and missing-input analysis.",
+      },
       {
         target: "requirements",
         reason: "OpenTest requirements intake.",
@@ -544,10 +547,6 @@ describe("orchestrator scheduler capability projection", () => {
     }
 
     for (const invalidInput of [
-      {
-        target: "analyze_intent",
-        reason: "OpenTest does not define the intent-analysis worker role.",
-      },
       {
         target: "frontend_research",
         reason: "OpenTest does not define frontend research.",
