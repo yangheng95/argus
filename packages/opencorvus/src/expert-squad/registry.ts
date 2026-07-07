@@ -462,6 +462,8 @@ export namespace ExpertSquadRegistry {
     await walk(root, rootEntries)
   }
 
+  type McpCapabilityCollectionMode = "runtime" | "catalog"
+
   async function collectRolePackageRefs(input: {
     roleRoot: string
     refBase: string
@@ -472,6 +474,7 @@ export namespace ExpertSquadRegistry {
     mcpPromptRefs: Set<string>
     mcpResourceRefs: Set<string>
     context: string
+    mcpCapabilityMode: McpCapabilityCollectionMode
   }) {
     await collectSkillRefs(
       path.join(input.roleRoot, "skills"),
@@ -490,10 +493,44 @@ export namespace ExpertSquadRegistry {
       mcpToolRefs: input.mcpToolRefs,
       mcpPromptRefs: input.mcpPromptRefs,
       mcpResourceRefs: input.mcpResourceRefs,
+      capabilityMode: input.mcpCapabilityMode,
     })
   }
 
-  async function collectPackageRefs(root: string, manifest: Manifest) {
+  function collectProjectionMcpTypedRefsForCatalog(
+    manifest: Manifest,
+    sets: {
+      mcpServerRefs: Set<string>
+      mcpToolRefs: Set<string>
+      mcpPromptRefs: Set<string>
+      mcpResourceRefs: Set<string>
+    },
+  ) {
+    const projections: Array<[string, Projection]> = [
+      ["capability_projection.scheduler", manifest.capability_projection.scheduler],
+      ...Object.entries(manifest.capability_projection.agents).map(
+        ([agentID, projection]) => [`capability_projection.agents.${agentID}`, projection] as [string, Projection],
+      ),
+    ]
+    const addTypedRef = (ref: string, kind: "tool" | "prompt" | "resource", context: string) => {
+      const serverRef = packageMcpServerRefFromTypedRef(ref, kind, context)
+      assertPackageRef(serverRef, manifest.id, sets.mcpServerRefs, context)
+      if (kind === "tool") sets.mcpToolRefs.add(ref)
+      else if (kind === "prompt") sets.mcpPromptRefs.add(ref)
+      else sets.mcpResourceRefs.add(ref)
+    }
+    for (const [context, projection] of projections) {
+      for (const ref of projection.package_mcp_tool_refs) addTypedRef(ref, "tool", context)
+      for (const ref of projection.package_mcp_prompt_refs) addTypedRef(ref, "prompt", context)
+      for (const ref of projection.package_mcp_resource_refs) addTypedRef(ref, "resource", context)
+    }
+  }
+
+  async function collectPackageRefs(
+    root: string,
+    manifest: Manifest,
+    options: { mcpCapabilityMode?: McpCapabilityCollectionMode } = {},
+  ) {
     const skillRefs = new Set<string>()
     const toolRefs = new Set<string>()
     const mcpServerRefs = new Set<string>()
@@ -501,6 +538,7 @@ export namespace ExpertSquadRegistry {
     const mcpPromptRefs = new Set<string>()
     const mcpResourceRefs = new Set<string>()
     const id = manifest.id
+    const mcpCapabilityMode = options.mcpCapabilityMode ?? "runtime"
 
     const agentRoot = path.join(root, "agents")
     for (const agentEntry of await readOptionalDirectoryEntries(agentRoot, "agents")) {
@@ -526,6 +564,7 @@ export namespace ExpertSquadRegistry {
         mcpPromptRefs,
         mcpResourceRefs,
         context: `agents.${agent}`,
+        mcpCapabilityMode,
       })
     }
 
@@ -547,6 +586,7 @@ export namespace ExpertSquadRegistry {
         mcpPromptRefs,
         mcpResourceRefs,
         context: `virtual-agents.${role}`,
+        mcpCapabilityMode,
       })
     }
 
@@ -562,7 +602,17 @@ export namespace ExpertSquadRegistry {
       mcpToolRefs,
       mcpPromptRefs,
       mcpResourceRefs,
+      capabilityMode: mcpCapabilityMode,
     })
+
+    if (mcpCapabilityMode === "catalog") {
+      collectProjectionMcpTypedRefsForCatalog(manifest, {
+        mcpServerRefs,
+        mcpToolRefs,
+        mcpPromptRefs,
+        mcpResourceRefs,
+      })
+    }
 
     return { skillRefs, toolRefs, mcpServerRefs, mcpToolRefs, mcpPromptRefs, mcpResourceRefs }
   }
@@ -595,6 +645,7 @@ export namespace ExpertSquadRegistry {
       mcpToolRefs: Set<string>
       mcpPromptRefs: Set<string>
       mcpResourceRefs: Set<string>
+      capabilityMode: McpCapabilityCollectionMode
     },
   ) {
     for (const file of await collectFileEntries(dir, dir)) {
@@ -603,6 +654,7 @@ export namespace ExpertSquadRegistry {
       assertCanonicalRefSegment(serverID, `${dir}/${file}`)
       const serverRef = `${refBase}/${serverID}`
       addRef(sets.mcpServerRefs, serverRef, dir)
+      if (sets.capabilityMode === "catalog") continue
       const raw = await readJsoncFile(path.join(dir, file))
       const capabilities = McpDefinition.parse(raw).capabilities
       for (const tool of capabilities.tools) addRef(sets.mcpToolRefs, `${serverRef}/tool/${tool}`, `${serverRef}.tools`)
@@ -1295,7 +1347,7 @@ export namespace ExpertSquadRegistry {
     const { manifest } = metadata
     validatePromptProfileManifest(manifest)
     const selectorInstructions = await readCatalogSelectorInstructions(metadata)
-    const refs = await collectPackageRefs(metadata.root, manifest)
+    const refs = await collectPackageRefs(metadata.root, manifest, { mcpCapabilityMode: "catalog" })
     return {
       ...metadata,
       manifest,

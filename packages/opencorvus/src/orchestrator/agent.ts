@@ -720,6 +720,7 @@ export namespace Orchestrator {
         agentSessionID: agentSession.id,
         signal: ctrl.signal,
         workflow,
+        dispatchAgentTargets: schedulerCapability.projectedWorkflowTools,
         workflowState,
         operatorMessage: event?.operatorMessage,
       })

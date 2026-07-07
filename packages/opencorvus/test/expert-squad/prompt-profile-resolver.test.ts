@@ -342,7 +342,7 @@ describe("PromptProfileResolver", () => {
     expect(capability.packageMcpResourceRefs).toEqual([schedulerPackageMcpResourceRef])
   })
 
-  test.serial("expands inactive catalog package MCP server refs into typed projection refs", async () => {
+  test.serial("keeps inactive catalog package MCP server refs unexpanded until active projection", async () => {
     await using project = await tmpdir({ git: true })
     const schedulerPackageMcpServerRef = `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/package-browser`
     const buildPackageMcpServerRef = `${PROJECT_EXPERT_SQUAD_ID}/build/package-browser`
@@ -367,23 +367,39 @@ describe("PromptProfileResolver", () => {
 
     expect(catalog.active.effective).toBe("general")
     expect(inactive?.capability_projection.scheduler.package_mcp_server_refs).toEqual([schedulerPackageMcpServerRef])
-    expect(inactive?.capability_projection.scheduler.package_mcp_tool_refs).toEqual([
+    expect(inactive?.capability_projection.scheduler.package_mcp_tool_refs).toEqual([])
+    expect(inactive?.capability_projection.scheduler.package_mcp_prompt_refs).toEqual([])
+    expect(inactive?.capability_projection.scheduler.package_mcp_resource_refs).toEqual([])
+    expect(inactive?.capability_projection.agents.build.package_mcp_server_refs).toEqual([buildPackageMcpServerRef])
+    expect(inactive?.capability_projection.agents.build.package_mcp_tool_refs).toEqual([])
+    expect(inactive?.capability_projection.agents.build.package_mcp_prompt_refs).toEqual([])
+    expect(inactive?.capability_projection.agents.build.package_mcp_resource_refs).toEqual([])
+
+    const activeCatalog = await PromptProfileResolver.catalog({
+      config: Config.Info.parse({ prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } }),
+      projectActive: PROJECT_EXPERT_SQUAD_ID,
+      sessionOverride: null,
+      scope: { kind: "project", directory: project.path },
+      defaultSkills: [],
+    })
+    const active = activeCatalog.squads.find((entry) => entry.id === PROJECT_EXPERT_SQUAD_ID)
+    expect(activeCatalog.active.effective).toBe(PROJECT_EXPERT_SQUAD_ID)
+    expect(active?.capability_projection.scheduler.package_mcp_tool_refs).toEqual([
       `${schedulerPackageMcpServerRef}/tool/snapshot`,
     ])
-    expect(inactive?.capability_projection.scheduler.package_mcp_prompt_refs).toEqual([
+    expect(active?.capability_projection.scheduler.package_mcp_prompt_refs).toEqual([
       `${schedulerPackageMcpServerRef}/prompt/inspect`,
     ])
-    expect(inactive?.capability_projection.scheduler.package_mcp_resource_refs).toEqual([
+    expect(active?.capability_projection.scheduler.package_mcp_resource_refs).toEqual([
       `${schedulerPackageMcpServerRef}/resource/dom`,
     ])
-    expect(inactive?.capability_projection.agents.build.package_mcp_server_refs).toEqual([buildPackageMcpServerRef])
-    expect(inactive?.capability_projection.agents.build.package_mcp_tool_refs).toEqual([
+    expect(active?.capability_projection.agents.build.package_mcp_tool_refs).toEqual([
       `${buildPackageMcpServerRef}/tool/snapshot`,
     ])
-    expect(inactive?.capability_projection.agents.build.package_mcp_prompt_refs).toEqual([
+    expect(active?.capability_projection.agents.build.package_mcp_prompt_refs).toEqual([
       `${buildPackageMcpServerRef}/prompt/inspect`,
     ])
-    expect(inactive?.capability_projection.agents.build.package_mcp_resource_refs).toEqual([
+    expect(active?.capability_projection.agents.build.package_mcp_resource_refs).toEqual([
       `${buildPackageMcpServerRef}/resource/dom`,
     ])
   })

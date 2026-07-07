@@ -2190,23 +2190,29 @@ const SchedulerDispatchTargetInputSchemas = {
 
 function dispatchAgentTargetNamesForWorkflow(
   workflow: MiniWorkflow | undefined,
+  projectedTargets?: readonly OrchestratorWorkflowToolName[],
 ): [OrchestratorWorkflowToolName, ...OrchestratorWorkflowToolName[]] {
   const source = workflow?.steps.map((step) => step.tool) ?? ORCHESTRATOR_WORKFLOW_TOOL_NAMES
+  const projectedTargetSet = projectedTargets ? new Set(projectedTargets) : undefined
   const targets: OrchestratorWorkflowToolName[] = []
   for (const toolName of source) {
     if (!Object.hasOwn(SchedulerDispatchTargetInputSchemas, toolName)) continue
+    if (projectedTargetSet && !projectedTargetSet.has(toolName)) continue
     if (!targets.includes(toolName)) targets.push(toolName)
   }
   if (targets.length === 0) {
-    throw new Error("dispatch_agent requires at least one workflow target")
+    throw new Error("dispatch_agent requires at least one workflow target after active capability projection")
   }
   return targets as [OrchestratorWorkflowToolName, ...OrchestratorWorkflowToolName[]]
 }
 
-function dispatchAgentInputSchemaForWorkflow(workflow: MiniWorkflow | undefined) {
+function dispatchAgentInputSchemaForWorkflow(
+  workflow: MiniWorkflow | undefined,
+  projectedTargets?: readonly OrchestratorWorkflowToolName[],
+) {
   return z.discriminatedUnion(
     "target",
-    dispatchAgentTargetNamesForWorkflow(workflow).map((target) =>
+    dispatchAgentTargetNamesForWorkflow(workflow, projectedTargets).map((target) =>
       SchedulerDispatchTargetInputSchemas[target].safeExtend({
         target: z
           .literal(target)
@@ -6104,6 +6110,7 @@ export function createOrchestratorTools(input: {
   agentSessionID: string
   signal?: AbortSignal
   workflow?: import("@/engine/workflow").MiniWorkflow
+  dispatchAgentTargets?: readonly import("@/engine/workflow").OrchestratorWorkflowToolName[]
   workflowState?: import("@/engine/workflow").WorkflowState
   operatorMessage?: {
     text: string
@@ -15857,7 +15864,7 @@ export function createOrchestratorTools(input: {
     }
   }
 
-  const dispatchAgentInputSchema = dispatchAgentInputSchemaForWorkflow(input.workflow)
+  const dispatchAgentInputSchema = dispatchAgentInputSchemaForWorkflow(input.workflow, input.dispatchAgentTargets)
   const dispatchAgentTool = tool({
     description:
       "Single scheduler agent dispatch tool. Use target to select the worker agent stage, then provide the target-specific fields. " +

@@ -1,5 +1,6 @@
 # July 2026 Records
 
+- [2026-07-07-dispatch-agent-projected-target-schema.md](2026-07-07-dispatch-agent-projected-target-schema.md) records the root repair for `dispatch_agent` exposing workflow targets such as `analyze_intent` after OpenTest is active even though the active expert-squad capability projection does not define those worker roles.
 - [2026-07-07-packaged-expert-squad-plugin-runtime.md](2026-07-07-packaged-expert-squad-plugin-runtime.md) records the sidecar packaging repair for OpenTest tasks pausing before goal creation because packaged expert-squad package tools could not resolve `@opencorvus-ai/plugin` from the embedded runtime `package.json`.
 - [2026-07-07-windows-wmic-process-cleanup-retirement.md](2026-07-07-windows-wmic-process-cleanup-retirement.md) records the repair that removes the remaining `wmic.exe` dependency from shared Windows process cleanup by moving parent-PID tree termination into the existing native process supervisor helper.
 - [2026-07-07-dependency-contract-single-source-repair.md](2026-07-07-dependency-contract-single-source-repair.md) records the root repair for Orchestrator goal dependency edits creating a split between executable `engine_goal.depends_on` and the persisted Architect contract graph dependency contracts.

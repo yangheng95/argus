@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import * as EngineQueue from "../../src/engine/queue"
+import { Config } from "../../src/config/config"
 import { EffectiveConfig } from "../../src/config/effective"
 import { createDecisionLog } from "../../src/decision-log"
 import { Identifier } from "../../src/id/id"
@@ -482,6 +483,106 @@ describe("orchestrator scheduler capability projection", () => {
         urls: ["https://example.com"],
       }).success,
     ).toBe(true)
+  })
+
+  test("dispatch_agent target schema intersects OpenTest active projection with workflow targets", async () => {
+    await using project = await tmpdir({ git: true })
+    await copyRepositoryExpertSquadPackage(project.path, "opentest")
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+    const capability = await PromptProfileResolver.resolveSchedulerCapability({
+      projectDirectory: project.path,
+      config: Config.Info.parse({ prompt_profile: { active: "opentest" } }),
+    })
+
+    expect(capability.projectedWorkflowTools).toEqual(
+      expect.arrayContaining(["requirements", "architect", "build", "visual_qa", "integrity"]),
+    )
+    for (const hiddenTarget of [
+      "analyze_intent",
+      "frontend_research",
+      "deep_research",
+      "workload_analysis",
+      "fact_check",
+    ]) {
+      expect(capability.projectedWorkflowTools, `OpenTest must not project ${hiddenTarget}`).not.toContain(
+        hiddenTarget,
+      )
+    }
+
+    const { tools } = createOrchestratorTools({
+      taskID: "tsk_opentest_dispatch_schema",
+      agentSessionID: "ses_opentest_dispatch_schema",
+      workflow: pipeline,
+      dispatchAgentTargets: capability.projectedWorkflowTools,
+    })
+    const schema = tools.dispatch_agent.inputSchema!
+
+    for (const validInput of [
+      {
+        target: "requirements",
+        reason: "OpenTest requirements intake.",
+      },
+      {
+        target: "architect",
+        reason: "OpenTest test architecture.",
+      },
+      {
+        target: "build",
+        reason: "OpenTest test implementation now has accepted goals.",
+        goalID: "gol_opentest_case_design",
+      },
+      {
+        target: "visual_qa",
+        reason: "Review browser and screenshot test evidence.",
+      },
+      {
+        target: "integrity",
+        reason: "Review OpenTest evidence.",
+      },
+    ]) {
+      expect(schema.safeParse(validInput).success, `${validInput.target} should be dispatchable`).toBe(true)
+    }
+
+    for (const invalidInput of [
+      {
+        target: "analyze_intent",
+        reason: "OpenTest does not define the intent-analysis worker role.",
+      },
+      {
+        target: "frontend_research",
+        reason: "OpenTest does not define frontend research.",
+        source_urls: ["https://example.com"],
+      },
+      {
+        target: "deep_research",
+        topic: "OpenTest does not define deep research.",
+        reason: "Unsupported by the active OpenTest projection.",
+      },
+      {
+        target: "workload_analysis",
+        reason: "OpenTest does not define workload analysis.",
+      },
+      {
+        target: "fact_check",
+        target_session_id: "ses_worker_report",
+        fact_check_items: [
+          {
+            claim: "OpenTest dispatch schema was narrowed by active projection.",
+            confidence: "high",
+            category: "protocol",
+            source: "test",
+          },
+        ],
+        reason: "OpenTest does not define fact-check.",
+      },
+      {
+        target: "requirements",
+        target_agent: "opentest-requirements-analyst",
+        reason: "Virtual agent ids are package metadata, not dispatch input.",
+      },
+    ]) {
+      expect(schema.safeParse(invalidInput).success, `${invalidInput.target} should be rejected`).toBe(false)
+    }
   })
 
   test("project package wake installs scheduler package tools without MCP activation", async () => {
