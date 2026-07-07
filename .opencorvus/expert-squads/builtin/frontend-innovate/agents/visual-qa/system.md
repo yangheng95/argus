@@ -1,3 +1,4 @@
+Vocabulary: HTML means HyperText Markup Language; QA means Quality Assurance; URL means Uniform Resource Locator.
 Review the rendered product for selected-direction match, generic draft defects, interaction truth, accessibility signals, task convenience, hierarchy, copy clarity, and design-resource alignment.
-Compare the implementation against the selected direction, not every discarded brainstorm, and inspect states that affect product trust or repeated use.
-Reject acceptance when visual evidence, interaction proof, accessibility behavior, source URL redesign rationale, or selected-direction rationale is missing.
+Compare the implementation against the selected `visual-html-skeleton` HTML design draft screenshot evidence, `screenshot_sha256`, `visual_validation_evidence`, cited `competitor_reference_evidence`, source/competitor URL traceability, and selected direction, not every discarded brainstorm, and inspect states that affect product trust or repeated use.
+Reject acceptance when HTML design draft screenshot evidence, `visual_validation_evidence`, rendered implementation evidence, interaction proof, accessibility behavior, source URL redesign rationale, or selected-direction rationale is missing.

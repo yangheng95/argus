@@ -1,7 +1,7 @@
 # Expert Squad Selector Contract Completion
 
 Date: 2026-07-08
-Status: Implemented and verified
+Status: Implemented, adversarially reviewed, and verified
 Owner: Codex
 
 ## Recall
@@ -55,6 +55,18 @@ The user asked Codex to review the current expert-squad definitions against the 
 - `packages/opencorvus/test/expert-squad/registry.test.ts`
 - `packages/opencorvus/test/expert-squad/package-manager.test.ts`
 - `packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts`
+- `packages/opencorvus/src/expert-squad/registry.ts`
+- `.opencorvus/expert-squads/builtin/frontend-innovate/agents/frontend-design/system.md`
+- `.opencorvus/expert-squads/builtin/frontend-innovate/agents/build/system.md`
+- `.opencorvus/expert-squads/builtin/frontend-innovate/agents/visual-qa/system.md`
+- `.opencorvus/expert-squads/builtin/frontend-innovate/agents/integrity/system.md`
+- `.opencorvus/expert-squads/builtin/backend/selector.md`
+- `.opencorvus/expert-squads/builtin/backend/expert-squad.jsonc`
+- `.opencorvus/expert-squads/builtin/backend/agents/*/system.md`
+- `.opencorvus/expert-squads/builtin/algorithm/selector.md`
+- `.opencorvus/expert-squads/builtin/frontend-replica/selector.md`
+- `.opencorvus/expert-squads/builtin/frontend-replica/agents/build/system.md`
+- `.opencorvus/expert-squads/builtin/frontend-replica/agents/visual-qa/system.md`
 
 ### Repository Search Evidence
 
@@ -68,10 +80,34 @@ The user asked Codex to review the current expert-squad definitions against the 
   - Finding: current source packages do not contain the old `software-testing` identity, but `algorithm` and `backend` lack `selector.md` and manifest selector metadata while selector-backed packages expose selector contracts.
 - `rg -n "selector|selector skills|payload packages carry|repository expert-squad packages|project packages" packages/opencorvus/test/expert-squad/registry.test.ts packages/opencorvus/test/expert-squad/package-manager.test.ts packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts`
   - Finding: existing tests validate selector mechanics and formal contracts, but `payload packages carry formal expert contracts` only checks selector text for frontend and OpenTest packages; it does not require selector-visible contracts for all payload expert squads.
+- `rg -n "selector|schema_version|expert-squad.jsonc|missing selector|without selector" packages/opencorvus/test/expert-squad packages/opencorvus/test/server .opencorvus/expert-squads -g "*.ts" -g "*.jsonc" -g "*.md"`
+  - Finding: `registry.test.ts` still had an explicit `omitted selector does not generate selector metadata` expectation, which preserved the selector-less package bypass.
+- `rg -n "goal-workload-analyst|visual-html-skeleton|visual_validation_evidence|competitor_reference_evidence|screenshot_sha256|SHA-256|RPC|CLI|SDK|\bUI\b|\bAPI\b|\bMCP\b" .opencorvus/expert-squads/builtin .opencorvus/expert-squads/wujiang/opentest packages/opencorvus/test/expert-squad/package-manager.test.ts -g "*.md" -g "*.jsonc" -g "*.ts"`
+  - Finding: `backend` projected `goal-workload-analyst` without a backend-specific role overlay; `frontend-innovate` downstream overlays did not all name the HTML design draft evidence contract; selected standalone selector/overlay files contained unexplained abbreviations.
 
 ### Independent Agent Feedback
 
-Not used. The issue is a direct definition/protocol completion with existing registry, resolver, and payload tests.
+Round 1 used three independent read-only agents with explicit instructions not to edit, commit, push, create worktrees, or delegate further.
+
+- Bernoulli found a protocol validation gap: `ExpertSquadRegistry` still allowed non-general selector-less packages because manifest `selector` was optional and selector rendering returned `undefined`.
+- Fermat found a proof gap: `algorithm` and `backend` had source/payload selector text, but no release/manager/resolver test proved they became visible selector skills after payload release.
+- Sartre found prompt contract gaps: `frontend-innovate` downstream overlays did not all carry the `visual-html-skeleton` and `visual_validation_evidence` contract; `frontend-innovate` frontend-design omitted full `competitor_reference_evidence` field guidance; `backend` projected `goal-workload-analyst` without a backend role overlay; some standalone selector/overlay files used unexplained abbreviations.
+
+Round 2 used three independent read-only agents after the first repair pass.
+
+- Herschel found no new actionable issue in registry/runtime selector projection, payload generation, or tracked payload-source verification.
+- Banach found that `frontend-innovate` Build still did not explicitly carry `visual_validation_evidence` or `competitor_reference_evidence`, Visual QA and Integrity still used URL without local vocabulary, and the formal contract test was too weak to catch role-field regressions.
+- Lorentz found that the selector-less registry exemption was keyed only by `id === "general"` instead of `namespace === "builtin" && id === "general"`, and that the resolver validation command depended on a mechanical Bun timeout override instead of an inactivity-aware test.
+
+Round 3 used three independent read-only agents after the second repair pass.
+
+- Hooke found no new code-contract gap, but required the validation record to disclose that unrelated dirty worktree changes mean validation commands are current-worktree evidence rather than clean staged-only checkout evidence.
+- Anscombe confirmed the prompt text itself was repaired, but found the `frontend-innovate` formal contract test was still too loose because it used scattered string checks instead of a per-role required-field matrix.
+
+Round 4 used two independent read-only agents after the role-matrix test repair.
+
+- Chandrasekhar found a stale fixed-duration timeout command in the implementation-plan validation list; the passed-command list was already corrected, but the plan text still contradicted the no mechanical timeout cleanup.
+- Pauli found that the role matrix and prompt text still did not lock `screenshot_sha256`, URL vocabulary, and the exact `HTML design draft screenshot evidence` wording across all four `frontend-innovate` roles.
 
 ## Diagnosis
 
@@ -91,8 +127,8 @@ The fix is to add first-class selector definitions to `algorithm` and `backend`,
 6. Run focused validation:
    - `bun packages/opencorvus/script/generate-expert-squad-payload.ts`
    - `bun test packages/opencorvus/test/expert-squad/registry.test.ts`
-   - `bun test --timeout 30000 packages/opencorvus/test/expert-squad/package-manager.test.ts --test-name-pattern "payload package sources match|payload packages carry formal expert contracts"`
-   - `bun test --timeout 30000 packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts --test-name-pattern "projects selector skills only from explicitly installed project packages|resolves general skill projection to selector skills"`
+   - `bun test packages/opencorvus/test/expert-squad/package-manager.test.ts --test-name-pattern "payload package sources match|payload packages expose selector-visible expert contracts|payload packages carry formal expert contracts|released payload packages project selector skills through the resolver|releases payload packages into an empty project|payload release rejects existing non-directory targets"`
+   - `bun test packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts --test-name-pattern "projects selector skills only from explicitly installed project packages|resolves general skill projection to selector skills"`
    - `bun test packages/opencorvus/test/script/historical-docs-links.test.ts`
    - `git diff --check`
 
@@ -105,6 +141,19 @@ The fix is to add first-class selector definitions to `algorithm` and `backend`,
 - Added payload tests that require every payload-distributed package to expose selector metadata and a selector-visible expert contract.
 - Extended formal expert-contract payload assertions so `algorithm` and `backend` selector content is covered, not just README and role overlays.
 - Updated the July records index for this record.
+- Tightened `ExpertSquadRegistry` so selector metadata may be omitted only by the built-in runtime `builtin/general` package.
+- Replaced the old selector-less registry expectation with a rejection test.
+- Added a payload release plus `PromptProfileResolver.resolveSkillProjection` test proving every released payload package, including `algorithm` and `backend`, projects an Orchestrator-mounted selector skill with `required_tools: ["select_expert_squad"]`.
+- Added the missing `backend` `goal-workload-analyst` prompt overlay and manifest/README binding.
+- Strengthened `frontend-innovate` role overlays so Frontend Design, Build, Visual QA, and Integrity all carry the `visual-html-skeleton`, HTML design draft screenshot evidence, and `visual_validation_evidence` contract.
+- Added local vocabulary lines for standalone selector/overlay files that use abbreviations.
+- Restricted the selector-less registry exemption to `builtin/general` and added a `project/general` rejection test.
+- Converted the slow `PromptProfileResolver` selector-skill projection test to `{ timeout: 0 }` plus `withPromptProfileResolverInactivityTimeout`, so the test uses no-activity timeout semantics rather than a fixed elapsed-time override.
+- Strengthened the `frontend-innovate` formal-contract payload test into a role-field matrix covering `visual-html-skeleton`, `competitor_reference_evidence`, `screenshot_sha256`, `visual_validation_evidence`, HTML design draft screenshot evidence, and local URL vocabulary.
+- During focused package-manager validation, the existing non-directory payload-release test exposed an outdated expected error string; the assertion was updated to the current manager error emitted by the owning path.
+- Converted the `frontend-innovate` overlay assertions to an explicit role-by-role matrix for Frontend Design, Build, Visual QA, and Integrity so each role locks the fields it must carry.
+- Removed stale fixed-duration timeout validation commands from the implementation plan.
+- Strengthened the `frontend-innovate` role matrix and overlays so all four roles carry source/competitor URL traceability, `screenshot_sha256`, exact HTML design draft screenshot evidence wording, `competitor_reference_evidence`, `visual_validation_evidence`, and `visual-html-skeleton` where applicable.
 
 ## Validation Results
 
@@ -112,15 +161,17 @@ Initial validation findings:
 
 - `payload packages expose selector-visible expert contracts` first failed because the new assertion required the exact `## Expert Contract` heading, while `frontend-automation-debug` intentionally uses `## Expert Debug Contract`. The test was corrected to require an Expert/Contract selector section without weakening package-specific formal-contract assertions.
 - The same test then failed because OpenTest selector text did not contain the literal `select_expert_squad` tool name. This was a real selector protocol gap; `wujiang/opentest/selector.md` was repaired and payload was regenerated.
+- Third-round review noted that the worktree still contains unrelated unstaged and untracked user changes outside this staged expert-squad repair. The commands below are current-worktree validation evidence, not a clean staged-only checkout proof. No staged/unstaged overlap exists on the expert-squad files touched here; isolating staged-only verification would require hiding or moving unrelated user changes, which was intentionally not done.
 
 Passed:
 
 - `bun packages/opencorvus/script/generate-expert-squad-payload.ts`
-- `bun test packages/opencorvus/test/expert-squad/registry.test.ts --timeout 30000`
-- `bun test --timeout 30000 packages/opencorvus/test/expert-squad/package-manager.test.ts --test-name-pattern "payload package sources match|payload packages expose selector-visible expert contracts|payload packages carry formal expert contracts"`
-- `bun test --timeout 30000 packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts --test-name-pattern "projects selector skills only from explicitly installed project packages|resolves general skill projection to selector skills"`
-- `bun test packages/opencorvus/test/expert-squad/payload-generation.test.ts --timeout 30000`
-- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts --timeout 30000`
+- `bun packages/opencorvus/script/generate-expert-squad-payload.ts` after adversarial-review fixes
+- `bun test packages/opencorvus/test/expert-squad/registry.test.ts`
+- `bun test packages/opencorvus/test/expert-squad/package-manager.test.ts --test-name-pattern "payload package sources match|payload packages expose selector-visible expert contracts|payload packages carry formal expert contracts|released payload packages project selector skills through the resolver|releases payload packages into an empty project|payload release rejects existing non-directory targets"`
+- `bun test packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts --test-name-pattern "projects selector skills only from explicitly installed project packages|resolves general skill projection to selector skills"`
+- `bun test packages/opencorvus/test/expert-squad/payload-generation.test.ts`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts`
 - `bun run --cwd packages/opencorvus typecheck`
 - `git diff --check`
 - `git diff --cached --check`

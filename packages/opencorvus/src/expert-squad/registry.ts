@@ -46,7 +46,6 @@ export namespace ExpertSquadRegistry {
       }),
     })
     .strict()
-    .optional()
 
   const AgentDefinition = z
     .object({
@@ -124,7 +123,7 @@ export namespace ExpertSquadRegistry {
       description: z.string().optional(),
       version: z.string().min(1).optional(),
       readme: z.literal("README.md"),
-      selector: Selector,
+      selector: Selector.optional(),
       capability_projection: CapabilityProjection,
       dynamic_attributes: DynamicAttributes.optional().default({
         scheduler: {},
@@ -137,6 +136,15 @@ export namespace ExpertSquadRegistry {
       virtual_agents: z.record(z.string(), VirtualAgentDefinition).default({}),
     })
     .strict()
+    .superRefine((manifest, ctx) => {
+      if (!(manifest.namespace === "builtin" && manifest.id === "general") && !manifest.selector) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["selector"],
+          message: "project expert squad manifest requires selector metadata",
+        })
+      }
+    })
 
   export type Manifest = z.infer<typeof Manifest>
   export type Projection = z.infer<typeof Projection>

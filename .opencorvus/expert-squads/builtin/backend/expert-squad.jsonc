@@ -99,6 +99,9 @@
     "fact-check": {
       "prompt": "agents/fact-check/system.md"
     },
+    "goal-workload-analyst": {
+      "prompt": "agents/goal-workload-analyst/system.md"
+    },
     "integrity": {
       "prompt": "agents/integrity/system.md"
     },

@@ -3114,52 +3114,58 @@ describe("PromptProfileResolver", () => {
     ).rejects.toThrow("must export default ToolDefinition")
   })
 
-  test.serial("resolves general skill projection to selector skills and ordinary installed skills", async () => {
-    await using project = await tmpdir({
-      git: true,
-      init: async (dir) => {
-        await Bun.write(
-          path.join(dir, ".opencorvus", "skill", "unreferenced-default", "SKILL.md"),
-          [
-            "---",
-            "name: unreferenced-default",
-            "description: Default ordinary skill that remains in the system skill collection.",
-            "mounted_agents:",
-            "  - build",
-            "---",
-            "",
-            "# Unreferenced Default",
-          ].join("\n"),
-        )
-      },
-    })
-    await writeProjectExpertSquadPackage(project.path)
+  test.serial("resolves general skill projection to selector skills and ordinary installed skills", { timeout: 0 }, async () => {
+    await withPromptProfileResolverInactivityTimeout("general selector skill projection", 15_000, async (activity) => {
+      await using project = await tmpdir({
+        git: true,
+        init: async (dir) => {
+          await Bun.write(
+            path.join(dir, ".opencorvus", "skill", "unreferenced-default", "SKILL.md"),
+            [
+              "---",
+              "name: unreferenced-default",
+              "description: Default ordinary skill that remains in the system skill collection.",
+              "mounted_agents:",
+              "  - build",
+              "---",
+              "",
+              "# Unreferenced Default",
+            ].join("\n"),
+          )
+        },
+      })
+      activity("created project with ordinary skill")
+      await writeProjectExpertSquadPackage(project.path)
+      activity("installed project expert squad")
 
-    await Instance.provide({
-      directory: project.path,
-      fn: async () => {
-        const projection = await PromptProfileResolver.resolveSkillProjection({
-          projectDirectory: project.path,
-          config: Config.Info.parse({ prompt_profile: { active: "general" } }),
-          agentIDs: ["orchestrator", "build"],
-        })
+      await Instance.provide({
+        directory: project.path,
+        fn: async () => {
+          const projection = await PromptProfileResolver.resolveSkillProjection({
+            projectDirectory: project.path,
+            config: Config.Info.parse({ prompt_profile: { active: "general" } }),
+            agentIDs: ["orchestrator", "build"],
+          })
+          activity("resolved general skill projection")
 
-        expect(projection.activeProfile).toBe("general")
-        expect(projection.projectedAgentIDs).toEqual(["orchestrator", "build"])
-        expect(projection.selectorSkillNames).toEqual([`${PROJECT_EXPERT_SQUAD_ID}-expert-squad`])
-        expect(projection.productionSkillNames).toContain("unreferenced-default")
-        expect(projection.projectedSkillNames).toEqual(projection.skills.map((skill) => skill.name))
-        expect(projection.projectedSkillNames).toContain(`${PROJECT_EXPERT_SQUAD_ID}-expert-squad`)
-        expect(
-          projection.skills.find((skill) => skill.name === `${PROJECT_EXPERT_SQUAD_ID}-expert-squad`)?.content,
-        ).toContain("PROJECT_SELECTOR_FULL_INSTRUCTIONS")
-        expect(projection.projectedSkillNames).not.toContain("scheduler")
-        expect(projection.projectedSkillNames).not.toContain("implementation")
-        expect(projection.projectedSkillNames).toContain("unreferenced-default")
-        expect(projection.skills.find((skill) => skill.name === "unreferenced-default")?.mounted_agents).toEqual([
-          "build",
-        ])
-      },
+          expect(projection.activeProfile).toBe("general")
+          expect(projection.projectedAgentIDs).toEqual(["orchestrator", "build"])
+          expect(projection.selectorSkillNames).toEqual([`${PROJECT_EXPERT_SQUAD_ID}-expert-squad`])
+          expect(projection.productionSkillNames).toContain("unreferenced-default")
+          expect(projection.projectedSkillNames).toEqual(projection.skills.map((skill) => skill.name))
+          expect(projection.projectedSkillNames).toContain(`${PROJECT_EXPERT_SQUAD_ID}-expert-squad`)
+          expect(
+            projection.skills.find((skill) => skill.name === `${PROJECT_EXPERT_SQUAD_ID}-expert-squad`)?.content,
+          ).toContain("PROJECT_SELECTOR_FULL_INSTRUCTIONS")
+          expect(projection.projectedSkillNames).not.toContain("scheduler")
+          expect(projection.projectedSkillNames).not.toContain("implementation")
+          expect(projection.projectedSkillNames).toContain("unreferenced-default")
+          expect(projection.skills.find((skill) => skill.name === "unreferenced-default")?.mounted_agents).toEqual([
+            "build",
+          ])
+        },
+      })
+      activity("validated projected skills")
     })
   })
 

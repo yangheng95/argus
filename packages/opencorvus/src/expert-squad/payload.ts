@@ -24,6 +24,7 @@ import payload_backend_agents_deep_research_system_md from "../../../../.opencor
 import payload_backend_agents_explore_system_md from "../../../../.opencorvus/expert-squads/builtin/backend/agents/explore/system.md" with { type: "text" }
 import payload_backend_agents_fact_check_system_md from "../../../../.opencorvus/expert-squads/builtin/backend/agents/fact-check/system.md" with { type: "text" }
 import payload_backend_agents_general_system_md from "../../../../.opencorvus/expert-squads/builtin/backend/agents/general/system.md" with { type: "text" }
+import payload_backend_agents_goal_workload_analyst_system_md from "../../../../.opencorvus/expert-squads/builtin/backend/agents/goal-workload-analyst/system.md" with { type: "text" }
 import payload_backend_agents_integrity_system_md from "../../../../.opencorvus/expert-squads/builtin/backend/agents/integrity/system.md" with { type: "text" }
 import payload_backend_agents_intent_analysis_system_md from "../../../../.opencorvus/expert-squads/builtin/backend/agents/intent-analysis/system.md" with { type: "text" }
 import payload_backend_agents_mission_system_md from "../../../../.opencorvus/expert-squads/builtin/backend/agents/mission/system.md" with { type: "text" }
@@ -150,6 +151,7 @@ export const payloadPackageSources: readonly ExpertSquadRegistry.EmbeddedPackage
       "agents/explore/system.md": textPayload(payload_backend_agents_explore_system_md),
       "agents/fact-check/system.md": textPayload(payload_backend_agents_fact_check_system_md),
       "agents/general/system.md": textPayload(payload_backend_agents_general_system_md),
+      "agents/goal-workload-analyst/system.md": textPayload(payload_backend_agents_goal_workload_analyst_system_md),
       "agents/integrity/system.md": textPayload(payload_backend_agents_integrity_system_md),
       "agents/intent-analysis/system.md": textPayload(payload_backend_agents_intent_analysis_system_md),
       "agents/mission/system.md": textPayload(payload_backend_agents_mission_system_md),

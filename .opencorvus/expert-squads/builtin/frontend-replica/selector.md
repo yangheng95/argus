@@ -2,7 +2,7 @@
 
 Use this skill when the task is a frontend replica task: webpage clone, reference-screenshot port, reference-page recreation, design-system rewrite that must preserve source structure, or a UI task whose acceptance depends on source URL/screenshot/DOM evidence.
 
-Vocabulary: CSS means Cascading Style Sheets; DOM means Document Object Model; QA means Quality Assurance; UI means User Interface; URL means Uniform Resource Locator.
+Vocabulary: CSS means Cascading Style Sheets; DOM means Document Object Model; MCP means Model Context Protocol; QA means Quality Assurance; UI means User Interface; URL means Uniform Resource Locator.
 
 ## First action
 

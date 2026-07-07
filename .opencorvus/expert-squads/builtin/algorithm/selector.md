@@ -2,6 +2,8 @@
 
 Use `select_expert_squad` with `profile_id` `algorithm` when the user's request depends on algorithmic correctness, complexity, numerical semantics, reproducible benchmark evidence, or adversarial counterexample handling.
 
+Vocabulary: API means Application Programming Interface; UI means User Interface.
+
 ## Activation Criteria
 
 Select this expert squad when the task includes any of these surfaces:

@@ -4,8 +4,10 @@ import { mkdirSync, writeFileSync } from "fs"
 import fs from "fs/promises"
 import path from "path"
 import { pathToFileURL } from "url"
+import { Config } from "../../src/config/config"
 import { ExpertSquadPackageManager } from "../../src/expert-squad/manager"
 import { payloadPackageSources } from "../../src/expert-squad/payload"
+import { PromptProfileResolver } from "../../src/expert-squad/prompt-profile-resolver"
 import { ExpertSquadRegistry } from "../../src/expert-squad/registry"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
@@ -295,6 +297,7 @@ describe("ExpertSquadPackageManager", () => {
         overlays: [
           ["agents/orchestrator/system.md", "backend Expert Contract"],
           ["agents/build/system.md", "runtime path, state effects, and failure behavior"],
+          ["agents/goal-workload-analyst/system.md", "backend Expert Contract"],
         ],
       },
       {
@@ -303,8 +306,41 @@ describe("ExpertSquadPackageManager", () => {
         selector: ["## Expert Contract", "design-convergence model", "Do not accept a frontend innovation result"],
         overlays: [
           ["agents/orchestrator/system.md", "frontend innovation Expert Contract"],
-          ["agents/frontend-design/system.md", "competitor/source resources are missing"],
         ],
+        overlayMatrix: {
+          "agents/frontend-design/system.md": [
+            "URL means Uniform Resource Locator",
+            "visual-html-skeleton",
+            "HTML design draft screenshot evidence",
+            "competitor_reference_evidence",
+            "screenshot_sha256",
+            "visual_validation_evidence",
+          ],
+          "agents/build/system.md": [
+            "URL means Uniform Resource Locator",
+            "visual-html-skeleton",
+            "HTML design draft screenshot evidence",
+            "competitor_reference_evidence",
+            "screenshot_sha256",
+            "visual_validation_evidence",
+          ],
+          "agents/visual-qa/system.md": [
+            "URL means Uniform Resource Locator",
+            "visual-html-skeleton",
+            "HTML design draft screenshot evidence",
+            "competitor_reference_evidence",
+            "screenshot_sha256",
+            "visual_validation_evidence",
+          ],
+          "agents/integrity/system.md": [
+            "URL means Uniform Resource Locator",
+            "visual-html-skeleton",
+            "HTML design draft screenshot evidence",
+            "competitor_reference_evidence",
+            "screenshot_sha256",
+            "visual_validation_evidence",
+          ],
+        },
       },
       {
         id: "frontend-replica",
@@ -349,6 +385,11 @@ describe("ExpertSquadPackageManager", () => {
         for (const fragment of contract.selector) expect(source!.files["selector.md"]).toContain(fragment)
       }
       for (const [relativePath, fragment] of contract.overlays) expect(source!.files[relativePath]).toContain(fragment)
+      if ("overlayMatrix" in contract) {
+        for (const [relativePath, fragments] of Object.entries(contract.overlayMatrix)) {
+          for (const fragment of fragments) expect(source!.files[relativePath], relativePath).toContain(fragment)
+        }
+      }
     }
   })
 
@@ -453,6 +494,46 @@ describe("ExpertSquadPackageManager", () => {
         "utf8",
       ),
     ).toBe("# Project-owned Frontend Replica\n")
+  })
+
+  test("released payload packages project selector skills through the resolver", async () => {
+    await using project = await tmpdir({ git: true })
+
+    await ExpertSquadPackageManager.releasePayloadPackages({ projectDirectory: project.path })
+
+    const projection = await PromptProfileResolver.resolveSkillProjection({
+      projectDirectory: project.path,
+      config: Config.Info.parse({ prompt_profile: { active: "general" } }),
+      defaultSkills: [],
+      agentIDs: ["orchestrator"],
+    })
+    const expectedSelectorNames = payloadPackageSources.map((source) => `${source.id}-expert-squad`).sort()
+
+    expect([...projection.selectorSkillNames].sort()).toEqual(expectedSelectorNames)
+    for (const source of payloadPackageSources) {
+      const skill = projection.skills.find((candidate) => candidate.name === `${source.id}-expert-squad`)
+      expect(skill).toMatchObject({
+        required_tools: ["select_expert_squad"],
+        mounted_agents: ["orchestrator"],
+        builtin: false,
+        location: path.join(
+          project.path,
+          ".opencorvus",
+          "expert-squads",
+          source.namespace,
+          source.id,
+          "selector.md",
+        ),
+      })
+      expect(skill?.content).toContain("select_expert_squad")
+      expect(skill?.content).toContain(source.id)
+    }
+    expect(projection.skills.find((skill) => skill.name === "algorithm-expert-squad")?.content).toContain(
+      "falsifiable correctness model",
+    )
+    expect(projection.skills.find((skill) => skill.name === "backend-expert-squad")?.content).toContain(
+      "real runtime contract",
+    )
   })
 
   test("payload release ignores stale direct-child roots while installing namespaced payload packages", async () => {
@@ -611,7 +692,7 @@ describe("ExpertSquadPackageManager", () => {
     await fs.writeFile(targetRoot, "not a package directory")
 
     await expect(ExpertSquadPackageManager.releasePayloadPackages({ projectDirectory: project.path })).rejects.toThrow(
-      "expected package directory",
+      "Expert squad target exists and is not a directory",
     )
   })
 

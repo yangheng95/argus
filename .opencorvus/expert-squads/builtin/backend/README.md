@@ -37,5 +37,6 @@ Package prompt overlays:
 - build: agents/build/system.md
 - deep-research: agents/deep-research/system.md
 - fact-check: agents/fact-check/system.md
+- goal-workload-analyst: agents/goal-workload-analyst/system.md
 - integrity: agents/integrity/system.md
 - orchestrator: agents/orchestrator/system.md

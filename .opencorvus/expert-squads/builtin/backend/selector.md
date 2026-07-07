@@ -2,6 +2,8 @@
 
 Use `select_expert_squad` with `profile_id` `backend` when the user's request depends on backend API behavior, state transitions, schema ownership, storage semantics, permission checks, error responses, integration contracts, or operational runtime behavior.
 
+Vocabulary: API means Application Programming Interface; CLI means Command-Line Interface; OpenAPI means OpenAPI Specification; RPC means Remote Procedure Call; SDK means Software Development Kit.
+
 ## Activation Criteria
 
 Select this expert squad when the task includes any of these surfaces:

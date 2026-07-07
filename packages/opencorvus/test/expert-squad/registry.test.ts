@@ -1127,13 +1127,26 @@ describe("ExpertSquadRegistry", () => {
     await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow()
   })
 
-  test("omitted selector does not generate selector metadata", async () => {
+  test("rejects non-general packages without selector metadata", async () => {
     await using tmp = await tmpdir()
     const packageRoot = await writeValidPackage(tmp.path, { selector: undefined })
 
-    const loaded = await ExpertSquadRegistry.loadPackage(packageRoot)
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(
+      /project expert squad manifest requires selector metadata/,
+    )
+  })
 
-    expect(loaded.selector).toBeUndefined()
+  test("rejects project general packages without selector metadata", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(
+      tmp.path,
+      { namespace: "project", id: "general", selector: undefined },
+      "project/general",
+    )
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(
+      /project expert squad manifest requires selector metadata/,
+    )
   })
 
   test("allows manifest-declared selector instructions only as top-level selector.md", async () => {
