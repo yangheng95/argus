@@ -5,7 +5,13 @@ import test from "node:test"
 
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
-import { expertSquadCatalogFixture } from "./expert-squad-fixture.ts"
+import {
+  expertSquadCatalogFixture,
+  projectedDefaultMcpToolID,
+  projectedPackageMcpToolID,
+  projectedPackageToolID,
+  projectedToolIDs,
+} from "./expert-squad-fixture.ts"
 import { installBrowserErrorCollector } from "./error-collector.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
 
@@ -52,6 +58,24 @@ const SESSION_TASK_ID = "expert-squad-session-scope"
 const SESSION_ID = "ses_expert_squad_root"
 const DIRECTORY = "D:/overlay/workspace/app"
 const SESSION_TASK_TIME = 1_777_000_000_000
+const FRONTEND_REPLICA_ORCHESTRATOR_SOURCE_EVIDENCE_REF = "frontend-replica/orchestrator/source-evidence"
+const FRONTEND_REPLICA_ORCHESTRATOR_SOURCE_EVIDENCE_TOOL_ID = projectedPackageToolID(
+  FRONTEND_REPLICA_ORCHESTRATOR_SOURCE_EVIDENCE_REF,
+)
+const FRONTEND_REPLICA_BUILD_VISUAL_QA_REF = "frontend-replica/build/visual-qa"
+const FRONTEND_REPLICA_BUILD_VISUAL_QA_TOOL_ID = projectedPackageToolID(FRONTEND_REPLICA_BUILD_VISUAL_QA_REF)
+const DEFAULT_BROWSER_SNAPSHOT_REF = "default/mcp/browser/tool/snapshot"
+const DEFAULT_BROWSER_SNAPSHOT_TOOL_ID = projectedDefaultMcpToolID(DEFAULT_BROWSER_SNAPSHOT_REF)
+const FRONTEND_REPLICA_BUILD_BROWSER_INSPECT_TOOL_REF = "frontend-replica/build/browser/tool/inspect"
+const FRONTEND_REPLICA_BUILD_BROWSER_INSPECT_TOOL_ID = projectedPackageMcpToolID(
+  FRONTEND_REPLICA_BUILD_BROWSER_INSPECT_TOOL_REF,
+)
+const FRONTEND_REPLICA_BUILD_BROWSER_SESSION_REF = "frontend-replica/build/browser-session"
+const FRONTEND_REPLICA_ORCHESTRATOR_BROWSER_SESSION_REF = "frontend-replica/orchestrator/browser-session"
+const BACKEND_BUILD_ROUTE_EVIDENCE_REF = "backend/build/route-evidence"
+const BACKEND_BUILD_ROUTE_EVIDENCE_TOOL_ID = projectedPackageToolID(BACKEND_BUILD_ROUTE_EVIDENCE_REF)
+const BACKEND_INTEGRITY_ROUTE_REVIEW_REF = "backend/integrity/route-review"
+const BACKEND_INTEGRITY_ROUTE_REVIEW_TOOL_ID = projectedPackageToolID(BACKEND_INTEGRITY_ROUTE_REVIEW_REF)
 
 function orderKey(domain: string, rank: number, time: number, id: string, sequence = 0): string {
   return `v1:${String(time).padStart(16, "0")}:${String(rank).padStart(16, "0")}:${String(sequence).padStart(16, "0")}:${domain}:${id}`
@@ -77,6 +101,76 @@ function taskItem() {
       orderKey: taskOrderKey(SESSION_TASK_ID, SESSION_TASK_TIME),
       time: { created: SESSION_TASK_TIME, started: SESSION_TASK_TIME + 1, updated: SESSION_TASK_TIME + 2 },
     },
+  }
+}
+
+function frontendReplicaPanelActiveSkillProjection() {
+  return {
+    active_squad_id: "frontend-replica",
+    capability_profile_id: "frontend-replica",
+    built_in: false,
+    projection_hash: "test-frontend-replica",
+    projected_agent_ids: ["orchestrator", "build"],
+    projected_tool_ids: projectedToolIDs(
+      FRONTEND_REPLICA_BUILD_VISUAL_QA_TOOL_ID,
+      FRONTEND_REPLICA_BUILD_BROWSER_INSPECT_TOOL_ID,
+    ),
+    selector_skill_names: [],
+    production_skill_names: ["frontend-replica-build"],
+    projected_skill_names: ["frontend-replica-build"],
+    skills: [],
+  }
+}
+
+function frontendReplicaSettingsActiveSkillProjection() {
+  return {
+    active_squad_id: "frontend-replica",
+    capability_profile_id: "frontend-replica",
+    built_in: false,
+    projection_hash: "test-frontend-replica",
+    projected_agent_ids: ["orchestrator", "build"],
+    projected_tool_ids: projectedToolIDs(
+      FRONTEND_REPLICA_ORCHESTRATOR_SOURCE_EVIDENCE_TOOL_ID,
+      DEFAULT_BROWSER_SNAPSHOT_TOOL_ID,
+      FRONTEND_REPLICA_BUILD_VISUAL_QA_TOOL_ID,
+      FRONTEND_REPLICA_BUILD_BROWSER_INSPECT_TOOL_ID,
+    ),
+    selector_skill_names: ["frontend-replica-expert-squad"],
+    production_skill_names: ["frontend-replica-build"],
+    projected_skill_names: ["frontend-replica-expert-squad", "frontend-replica-build"],
+    skills: [],
+  }
+}
+
+function backendActiveSkillProjection() {
+  return {
+    active_squad_id: "backend",
+    capability_profile_id: "backend",
+    built_in: false,
+    projection_hash: "test-backend",
+    projected_agent_ids: ["orchestrator", "build", "integrity"],
+    projected_tool_ids: projectedToolIDs(BACKEND_BUILD_ROUTE_EVIDENCE_TOOL_ID, BACKEND_INTEGRITY_ROUTE_REVIEW_TOOL_ID),
+    selector_skill_names: [],
+    production_skill_names: ["backend-route-tests"],
+    projected_skill_names: ["backend-route-tests"],
+    skills: [],
+  }
+}
+
+function activeSkillProjectionFor(activeID: string) {
+  if (activeID === "frontend-replica") return frontendReplicaSettingsActiveSkillProjection()
+  if (activeID === "backend") return backendActiveSkillProjection()
+  return {
+    active_squad_id: activeID,
+    capability_profile_id: activeID,
+    built_in: activeID === "general",
+    projection_hash: `test-${activeID}`,
+    projected_tool_ids: [],
+    projected_agent_ids: activeID === "general" ? [] : ["orchestrator"],
+    selector_skill_names: [],
+    production_skill_names: [],
+    projected_skill_names: [],
+    skills: [],
   }
 }
 
@@ -107,6 +201,10 @@ function panelCatalog(sessionOverride: string | null) {
     active: sessionOverride ?? "frontend-replica",
     projectActive: "frontend-replica",
     sessionOverride,
+    activeSkillProjection:
+      (sessionOverride ?? "frontend-replica") === "backend"
+        ? backendActiveSkillProjection()
+        : frontendReplicaPanelActiveSkillProjection(),
     targets: [
       {
         id: "build",
@@ -136,12 +234,19 @@ function panelCatalog(sessionOverride: string | null) {
             base_role: "build",
             virtual_agent_id: "frontend-replica-builder",
             label: "Frontend Replica Builder",
-            package_skill_refs: ["frontend-replica/build/implementation"],
-            package_tool_refs: ["frontend-replica/build/visual-qa"],
-            package_mcp_server_refs: ["frontend-replica/build/browser"],
-            package_mcp_prompt_refs: ["frontend-replica/build/browser/prompt/inspect"],
           },
         ],
+        capability_projection: {
+          agents: {
+            build: {
+              package_skill_refs: ["frontend-replica/build/implementation"],
+              package_tool_refs: [FRONTEND_REPLICA_BUILD_VISUAL_QA_REF],
+              package_mcp_server_refs: [FRONTEND_REPLICA_BUILD_BROWSER_SESSION_REF],
+              package_mcp_tool_refs: [FRONTEND_REPLICA_BUILD_BROWSER_INSPECT_TOOL_REF],
+              package_mcp_prompt_refs: ["frontend-replica/build/browser/prompt/inspect"],
+            },
+          },
+        },
       },
       {
         id: "backend",
@@ -150,27 +255,27 @@ function panelCatalog(sessionOverride: string | null) {
         display_prefix: "Builtin",
         description: "Route and persistence squad.",
         built_in: false,
+        capability_projection: {
+          agents: {
+            build: {
+              package_skill_refs: ["backend/build/route-tests"],
+              package_tool_refs: [BACKEND_BUILD_ROUTE_EVIDENCE_REF],
+            },
+            integrity: {
+              package_tool_refs: [BACKEND_INTEGRITY_ROUTE_REVIEW_REF],
+            },
+          },
+        },
         virtual_agents: [
           {
             base_role: "build",
             virtual_agent_id: "backend-builder",
             label: "Backend Builder",
-            package_skill_refs: ["backend/build/route-tests"],
-            package_tool_refs: ["backend/build/route-evidence"],
           },
         ],
       },
     ],
   })
-  const activeSquad = catalog.squads.find((squad) => squad.id === catalog.active.effective)
-  catalog.active_skill_projection.projected_agent_ids =
-    activeSquad?.virtual_agents.map((agent) => agent.base_role) ?? []
-  catalog.active_skill_projection.projected_tool_ids = catalog.active_agent_projection.agents.flatMap(
-    (agent) => agent.package_tool_refs,
-  )
-  catalog.active_skill_projection.projected_skill_names = catalog.active_agent_projection.agents.flatMap(
-    (agent) => agent.package_skill_refs,
-  )
   return catalog
 }
 
@@ -188,6 +293,7 @@ test("expert squads settings renders package identity, projections, lifecycle ac
   const catalog = expertSquadCatalogFixture({
     active: "frontend-replica",
     projectActive: "frontend-replica",
+    activeSkillProjection: frontendReplicaSettingsActiveSkillProjection(),
     targets: [
       {
         id: "build",
@@ -224,14 +330,21 @@ test("expert squads settings renders package identity, projections, lifecycle ac
             virtual_agent_id: "frontend-replica-builder",
             label: "Frontend Replica Builder",
             description: "Projected package expert on the build base role.",
-            package_skill_refs: ["frontend-replica/build/implementation"],
-            package_tool_refs: ["frontend-replica/build/visual-qa"],
-            package_mcp_server_refs: ["frontend-replica/build/browser"],
-            default_mcp_tool_refs: ["default/mcp/browser/tool/snapshot"],
-            package_mcp_prompt_refs: ["frontend-replica/build/browser/prompt/inspect"],
-            package_mcp_resource_refs: ["frontend-replica/build/browser/resource/dom"],
           },
         ],
+        capability_projection: {
+          agents: {
+            build: {
+              package_skill_refs: ["frontend-replica/build/implementation"],
+              package_tool_refs: [FRONTEND_REPLICA_BUILD_VISUAL_QA_REF],
+              package_mcp_server_refs: [FRONTEND_REPLICA_BUILD_BROWSER_SESSION_REF],
+              default_mcp_tool_refs: [DEFAULT_BROWSER_SNAPSHOT_REF],
+              package_mcp_tool_refs: [FRONTEND_REPLICA_BUILD_BROWSER_INSPECT_TOOL_REF],
+              package_mcp_prompt_refs: ["frontend-replica/build/browser/prompt/inspect"],
+              package_mcp_resource_refs: ["frontend-replica/build/browser/resource/dom"],
+            },
+          },
+        },
       },
       {
         id: "backend",
@@ -239,13 +352,22 @@ test("expert squads settings renders package identity, projections, lifecycle ac
         display_prefix: "Builtin",
         description: "Route and persistence squad.",
         built_in: false,
+        capability_projection: {
+          agents: {
+            build: {
+              package_skill_refs: ["backend/build/route-tests"],
+              package_tool_refs: [BACKEND_BUILD_ROUTE_EVIDENCE_REF],
+            },
+            integrity: {
+              package_tool_refs: [BACKEND_INTEGRITY_ROUTE_REVIEW_REF],
+            },
+          },
+        },
         virtual_agents: [
           {
             base_role: "build",
             virtual_agent_id: "backend-builder",
             label: "Backend Builder",
-            package_skill_refs: ["backend/build/route-tests"],
-            package_tool_refs: ["backend/build/route-evidence"],
           },
         ],
       },
@@ -261,27 +383,21 @@ test("expert squads settings renders package identity, projections, lifecycle ac
     instructions_path: "selector.md",
     instructions: "# Selector\n\nUse browser evidence before selecting.",
   }
-  frontendReplica.capability_projection.scheduler.package_tool_refs = ["frontend-replica/orchestrator/source-evidence"]
+  frontendReplica.capability_projection.scheduler.package_tool_refs = [
+    FRONTEND_REPLICA_ORCHESTRATOR_SOURCE_EVIDENCE_REF,
+  ]
   frontendReplica.capability_projection.scheduler.package_skill_refs = ["frontend-replica/selector"]
-  frontendReplica.capability_projection.scheduler.default_mcp_server_refs = ["default/mcp/browser"]
-  frontendReplica.capability_projection.scheduler.package_mcp_server_refs = ["frontend-replica/orchestrator/browser"]
-  frontendReplica.capability_projection.scheduler.default_mcp_tool_refs = ["default/mcp/browser/tool/snapshot"]
+  frontendReplica.capability_projection.scheduler.default_mcp_tool_refs = [DEFAULT_BROWSER_SNAPSHOT_REF]
+  frontendReplica.capability_projection.scheduler.package_mcp_server_refs = [
+    FRONTEND_REPLICA_ORCHESTRATOR_BROWSER_SESSION_REF,
+  ]
   frontendReplica.capability_projection.scheduler.package_mcp_prompt_refs = [
     "frontend-replica/orchestrator/browser/prompt/inspect",
   ]
   frontendReplica.capability_projection.scheduler.package_mcp_resource_refs = [
     "frontend-replica/orchestrator/browser/resource/dom",
   ]
-  frontendReplica.capability_projection.agents.build.package_tool_refs = ["frontend-replica/build/visual-qa"]
-  catalog.active_skill_projection = {
-    ...catalog.active_skill_projection,
-    active_squad_id: "frontend-replica",
-    projected_agent_ids: ["build"],
-    projected_tool_ids: ["frontend-replica/orchestrator/source-evidence", "frontend-replica/build/visual-qa"],
-    selector_skill_names: ["frontend-replica-expert-squad"],
-    production_skill_names: ["frontend-replica-build"],
-    projected_skill_names: ["frontend-replica-expert-squad", "frontend-replica-build"],
-  }
+  frontendReplica.capability_projection.agents.build.package_tool_refs = [FRONTEND_REPLICA_BUILD_VISUAL_QA_REF]
   assert.equal(
     catalog.squads.every((squad) => Object.keys(squad.agents).length === 0),
     true,
@@ -321,23 +437,11 @@ test("expert squads settings renders package identity, projections, lifecycle ac
   }
 
   function setCatalogProjectActive(activeID: string) {
-    const activeSquad = catalog.squads.find((squad) => squad.id === activeID)
     catalog.active.effective = activeID
     catalog.active.project = activeID
     catalog.active.session_override = null
     catalog.active_agent_projection = activeAgentProjection(activeID)
-    catalog.active_skill_projection = {
-      active_squad_id: activeID,
-      capability_profile_id: activeID,
-      built_in: activeID === "general",
-      projection_hash: `test-${activeID}`,
-      projected_tool_ids: catalog.active_agent_projection.agents.flatMap((agent) => agent.package_tool_refs),
-      projected_agent_ids: activeSquad?.virtual_agents.map((agent) => agent.base_role) ?? [],
-      selector_skill_names: [],
-      production_skill_names: [],
-      projected_skill_names: catalog.active_agent_projection.agents.flatMap((agent) => agent.package_skill_refs),
-      skills: [],
-    }
+    catalog.active_skill_projection = activeSkillProjectionFor(activeID)
   }
 
   const server = await startBrowserFixture(async (req) => {
@@ -551,13 +655,7 @@ test("expert squads settings renders package identity, projections, lifecycle ac
     )
     assert.equal(
       state.projectionRows.some(
-        (row) => row.includes("default_mcp_server_refs") && row.includes("default/mcp/browser"),
-      ),
-      true,
-    )
-    assert.equal(
-      state.projectionRows.some(
-        (row) => row.includes("package_mcp_server_refs") && row.includes("frontend-replica/orchestrator/browser"),
+        (row) => row.includes("package_mcp_server_refs") && row.includes(FRONTEND_REPLICA_ORCHESTRATOR_BROWSER_SESSION_REF),
       ),
       true,
     )
@@ -578,7 +676,7 @@ test("expert squads settings renders package identity, projections, lifecycle ac
       true,
     )
     assert.equal(
-      state.virtualAgents.some((row) => row.includes("4 MCP refs")),
+      state.virtualAgents.some((row) => row.includes("5 MCP refs")),
       true,
       JSON.stringify(state.virtualAgents),
     )
@@ -677,9 +775,9 @@ test("expert squads settings renders package identity, projections, lifecycle ac
     assert.match(activatedState.projectActive, /Backend/)
     assert.match(activatedState.effectiveActive, /Backend/)
     assert.match(activatedState.projection, /backend/i)
-    assert.match(activatedState.projection, /1 agents/)
+    assert.match(activatedState.projection, /3 agents/)
     assert.match(activatedState.projection, /1 skills/)
-    assert.match(activatedState.projection, /1 tools/)
+    assert.match(activatedState.projection, /2 tools/)
     assert.equal(
       activatedState.virtualAgents.some(
         (row) => row.includes("backend-builder") && row.includes("1 skills") && row.includes("1 tools"),
@@ -941,7 +1039,7 @@ test("expert squads settings clears a session override back to project inheritan
           row.includes("frontend-replica-builder") &&
           row.includes("1 skills") &&
           row.includes("1 tools") &&
-          row.includes("2 MCP refs"),
+          row.includes("3 MCP refs"),
       ),
       true,
       JSON.stringify(after.virtualAgents),

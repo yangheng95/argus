@@ -124,9 +124,9 @@ test("rejects non-canonical skill required_tools at parse time", async () => {
         path.join(skillDir, "SKILL.md"),
         `---
 name: retired-tool-skill
-description: Invalid retired tool ID fixture.
+description: Invalid frontend extraction tool ID fixture.
 required_tools:
-  - webpage_render
+  - webpage_extract
 ---
 
 # Retired Tool Skill
@@ -138,7 +138,7 @@ required_tools:
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      await expect(Skill.all()).rejects.toThrow("webpage_render is not a canonical OpenCorvus tool ID")
+      await expect(Skill.all()).rejects.toThrow("webpage_extract is not a canonical OpenCorvus tool ID")
     },
   })
 })

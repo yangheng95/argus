@@ -16195,7 +16195,12 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await runDispatchAgentTool(tools, "architect", {}, {} as any)
+        const result = await runDispatchAgentTool(
+          tools,
+          "architect",
+          { reason: "Verify missing requirements preflight before architecture." },
+          {} as any,
+        )
 
         expect(toolText(result)).toContain("no active requirements spec snapshot")
         expect(toolText(result)).toContain("requirements")
@@ -16328,7 +16333,12 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await runDispatchAgentTool(tools, "architect", {}, {} as any)
+        const result = await runDispatchAgentTool(
+          tools,
+          "architect",
+          { reason: "Promote requirements into architecture goals." },
+          {} as any,
+        )
         expect(toolText(result)).toContain("Architect decomposition complete")
 
         const activeSpec = findActiveSpecForTask(taskID)

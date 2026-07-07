@@ -485,6 +485,49 @@ describe("orchestrator scheduler capability projection", () => {
     ).toBe(true)
   })
 
+  test("dispatch_agent fact_check rejects target_agent assertions that disagree with the target session kind", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "mock-control/control" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const taskID = Identifier.ascending("task")
+        const root = await Session.create({ kind: "root", title: "fact-check target-agent mismatch root" })
+        const worker = await Session.create({
+          kind: "build",
+          parentID: root.id,
+          title: "fact-check target-agent mismatch worker",
+        })
+        insertWorkflowTask({
+          taskID,
+          rootSessionID: root.id,
+          now,
+          title: "fact-check target-agent mismatch",
+        })
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: root.id,
+          workflow: WorkflowRegistry.resolveSync("pipeline")!,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.dispatch_agent.execute(
+          {
+            target: "fact_check",
+            target_session_id: worker.id,
+            target_agent: "requirements",
+            fact_check_items: [],
+            reason: "Validate fact-check target agent assertion before dispatch.",
+          },
+          {},
+        )
+        const text = typeof result === "string" ? result : JSON.stringify(result)
+        expect(text).toContain(`target_agent mismatch for ${worker.id}: caller asserted requirements`)
+      },
+    })
+  })
+
   test("dispatch_agent target schema intersects OpenTest active projection with workflow targets", async () => {
     await using project = await tmpdir({ git: true })
     await copyRepositoryExpertSquadPackage(project.path, "opentest")

@@ -27,6 +27,7 @@ import { materializeMcpToolResult } from "@/mcp/materialize"
 import { Bus } from "../bus"
 import { ProviderTransform } from "../provider/transform"
 import { ProviderSchema } from "../provider/schema"
+import { requiresOpenAIStrictToolSchema } from "../provider/strict-tool-schema"
 import { SystemPrompt } from "./system"
 import { EffectiveConfig } from "@/config/effective"
 import { resolveAgentModel } from "@/agent/model"
@@ -1160,7 +1161,7 @@ export namespace SessionLoop {
     const schema = asSchema(input.inputSchema as never) as {
       validate?: (args: unknown) => Promise<ValidationResult>
     }
-    const args = shouldStripProviderNullOptionals(input.model)
+    const args = requiresOpenAIStrictToolSchema(input.model)
       ? stripProviderNullOptionals(input.name, input.inputSchema, input.args)
       : input.args
     if (typeof schema.validate !== "function") return args
@@ -1173,13 +1174,6 @@ export namespace SessionLoop {
     }
     if (result.success) return result.value
     throw invalidProviderToolInput(input.name, args, result.error)
-  }
-
-  function shouldStripProviderNullOptionals(model: Provider.Model): boolean {
-    if (model.api.npm === "@ai-sdk/openai" || model.api.npm === "@ai-sdk/azure") return true
-    if (model.api.npm !== "@ai-sdk/openai-compatible") return false
-    const id = `${model.id} ${model.api.id}`.toLowerCase()
-    return /(^|[\/\s])gpt-[\w.-]+/.test(id)
   }
 
   function stripProviderNullOptionals(toolName: string, inputSchema: unknown, args: unknown): unknown {

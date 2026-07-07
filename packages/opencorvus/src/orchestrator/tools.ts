@@ -383,21 +383,21 @@ const StageContinuationArtifactIDField = z
 
 const RequirementsInputSchema = z
   .object({
-    reason: z.string().optional().describe("Why you decided to analyze requirements"),
+    reason: z.string().min(1).describe("Why you decided to analyze requirements"),
     continuation_artifact_id: StageContinuationArtifactIDField,
   })
   .strict()
 
 const ArchitectInputSchema = z
   .object({
-    reason: z.string().optional().describe("Why you decided to run architect"),
+    reason: z.string().min(1).describe("Why you decided to run architect"),
     continuation_artifact_id: StageContinuationArtifactIDField,
   })
   .strict()
 
 const WorkloadAnalysisInputSchema = z
   .object({
-    reason: z.string().optional().describe("Why you decided to run workload analysis"),
+    reason: z.string().min(1).describe("Why you decided to run workload analysis"),
     continuation_artifact_id: StageContinuationArtifactIDField,
   })
   .strict()
@@ -406,7 +406,7 @@ const AnalyzeIntentInputSchema = z
   .object({
     reason: z
       .string()
-      .optional()
+      .min(1)
       .describe("Why you decided to run intent analysis (first-wake / re-entry / scope change)"),
     continuation_artifact_id: StageContinuationArtifactIDField,
   })
@@ -418,7 +418,7 @@ const ExploreInputSchema = z
       .string()
       .min(1)
       .describe("The focused repository question the explore subagent must answer with file/symbol evidence."),
-    reason: z.string().optional().describe("Why this repository investigation is needed before the next stage."),
+    reason: z.string().min(1).describe("Why this repository investigation is needed before the next stage."),
   })
   .strict()
 
@@ -1742,6 +1742,7 @@ const DeleteGoalInputSchema = z.object({
 
 const FrontendDesignReasonField = z
   .string()
+  .min(1)
   .describe(
     "Why frontend_design is the right visual implementation-template producer for the current task. Name the requested deliverable, the visual reference source, and why the downstream workflow needs a frontend_design public report/evidence manifest instead of only research notes. For live webpage clones with no non-stale Page Skeleton Blueprint, call frontend_research before frontend_design instead of using frontend_design to discover page information architecture.",
   )
@@ -2029,7 +2030,7 @@ function resolveFactCheckTargetScope(input: {
 
 const IntegrityInputSchema = z
   .object({
-    reason: z.string().optional().describe("Why you decided to run integrity review"),
+    reason: z.string().min(1).describe("Why you decided to run integrity review"),
     continuation_artifact_id: StageContinuationArtifactIDField,
   })
   .strict()
@@ -2143,6 +2144,7 @@ const BuildInputSchema = z
       ),
     reason: z
       .string()
+      .min(1)
       .describe(
         "One sentence explaining why this build is valid now: explicit kind=build, per-goal pipeline execution, post-acceptance whole-task rework, or a conscious direct-build decision for this workflow task.",
       ),
