@@ -125,6 +125,41 @@ test("idle timeout retries and eventually succeeds", async () => {
   expect(retry.cls).toBe("idle")
 })
 
+test("retry boundary hook failure stops before retry event and next attempt", async () => {
+  const { events, sink } = record()
+  let calls = 0
+  const boundaryError = new Error("attempt wrote non-discardable message state")
+
+  await expect(
+    withLLMActivity(
+      CTX,
+      fastPolicy({ firstByteMs: 200, idleMs: 50 }),
+      new AbortController().signal,
+      async (run) => {
+        calls++
+        run.bump("text-delta")
+        await new Promise<void>((resolve, reject) => {
+          run.signal.addEventListener("abort", () => reject(run.signal.reason), { once: true })
+        })
+      },
+      sink,
+      {
+        beforeRetry: () => {
+          throw boundaryError
+        },
+      },
+    ),
+  ).rejects.toMatchObject({
+    cause: boundaryError,
+  })
+
+  expect(calls).toBe(1)
+  expect(events.some((e) => e.type === "retry")).toBe(false)
+  const terminal = events.find((e) => e.type === "terminal") as Extract<LLMActivityEvent, { type: "terminal" }>
+  expect(terminal.outcome).toBe("failed")
+  expect(terminal.error?.message).toBe(boundaryError.message)
+})
+
 test("rate_limit retries up to maxRetries then fails with cls=rate_limit", async () => {
   const { events, sink } = record()
   let calls = 0

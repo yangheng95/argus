@@ -249,6 +249,15 @@ export interface LLMActivityRun {
   attempt: number
 }
 
+export interface LLMActivityRetryBoundary {
+  event: Extract<LLMActivityEvent, { type: "retry" }>
+  error: unknown
+}
+
+export interface LLMActivityOptions {
+  beforeRetry?: (input: LLMActivityRetryBoundary) => void | Promise<void>
+}
+
 // ---- Default policy --------------------------------------------------------
 
 function classify(err: unknown, ctx: ClassifyContext): ErrorClass {
@@ -411,6 +420,7 @@ export async function withLLMActivity<T>(
   external: AbortSignal,
   attemptFn: (run: LLMActivityRun) => Promise<T>,
   sink: (event: LLMActivityEvent) => void,
+  options: LLMActivityOptions = {},
 ): Promise<T> {
   // Surface bad numeric config loudly. firstByteMs and idleMs intentionally
   // have no ordering constraint: first-byte runs before the first upstream
@@ -674,7 +684,7 @@ export async function withLLMActivity<T>(
         }
 
         const wait = Math.max(0, Math.min(policy.backoffMs(cls, attempt, remain), remain))
-        sink({
+        const retryEvent: Extract<LLMActivityEvent, { type: "retry" }> = {
           type: "retry",
           id,
           ts: Date.now(),
@@ -682,7 +692,18 @@ export async function withLLMActivity<T>(
           cls,
           backoffMs: wait,
           reason: err instanceof Error ? `${err.name}: ${err.message.slice(0, 200)}` : String(err).slice(0, 200),
-        })
+        }
+
+        if (options.beforeRetry) {
+          try {
+            await options.beforeRetry({ event: retryEvent, error: err })
+          } catch (retryBoundaryError) {
+            emitTerminal("failed", cls, retryBoundaryError)
+            throw new LLMActivityError(cls, attempt, retryBoundaryError)
+          }
+        }
+
+        sink(retryEvent)
 
         await sleepRace(wait, externalProxy.signal, totalCtrl.signal)
 

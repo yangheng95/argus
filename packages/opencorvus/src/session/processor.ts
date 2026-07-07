@@ -38,6 +38,32 @@ export namespace SessionProcessor {
     }
   }
 
+  export class ProcessorUnsafeRetryError extends Error {
+    constructor(
+      public readonly attempt: number,
+      public readonly partIDs: string[],
+    ) {
+      super(
+        `SessionProcessor cannot retry activity attempt ${attempt} inside the same assistant message after tool execution started. Created parts: ${partIDs.join(", ") || "(none)"}`,
+      )
+      this.name = "ProcessorUnsafeRetryError"
+    }
+  }
+
+  type AssistantMessageSnapshot = {
+    cost: number
+    tokens: Message.Assistant["tokens"]
+    finish?: Message.Assistant["finish"]
+    error?: Message.Assistant["error"]
+  }
+
+  type AttemptWriteScope = {
+    createdPartIDs: Set<string>
+    toolCallIDs: Set<string>
+    toolExecutionStarted: boolean
+    messageSnapshot: AssistantMessageSnapshot
+  }
+
   export type Info = Awaited<ReturnType<typeof create>>
   export type Result = Awaited<ReturnType<Info["process"]>>
 
@@ -214,6 +240,74 @@ export namespace SessionProcessor {
             let currentText: Message.TextPart | undefined
             let reasoningMap: Record<string, Message.ReasoningPart> = {}
             let preTerminalInterrupted = false
+            const attemptScopes = new Map<number, AttemptWriteScope>()
+            const cloneTokens = (): Message.Assistant["tokens"] => ({
+              ...input.assistantMessage.tokens,
+              cache: { ...input.assistantMessage.tokens.cache },
+            })
+            const scopeForAttempt = (attempt: number): AttemptWriteScope => {
+              let scope = attemptScopes.get(attempt)
+              if (scope) return scope
+              scope = {
+                createdPartIDs: new Set(),
+                toolCallIDs: new Set(),
+                toolExecutionStarted: false,
+                messageSnapshot: {
+                  cost: input.assistantMessage.cost,
+                  tokens: cloneTokens(),
+                  finish: input.assistantMessage.finish,
+                  error: input.assistantMessage.error,
+                },
+              }
+              attemptScopes.set(attempt, scope)
+              return scope
+            }
+            const trackCreatedPart = (attempt: number, partID: string) => {
+              scopeForAttempt(attempt).createdPartIDs.add(partID)
+            }
+            const trackToolCall = (attempt: number, toolCallID: string) => {
+              scopeForAttempt(attempt).toolCallIDs.add(toolCallID)
+            }
+            const markToolExecutionStarted = (attempt: number) => {
+              scopeForAttempt(attempt).toolExecutionStarted = true
+            }
+            const restoreAssistantMessage = async (snapshot: AssistantMessageSnapshot) => {
+              input.assistantMessage.cost = snapshot.cost
+              input.assistantMessage.tokens = {
+                ...snapshot.tokens,
+                cache: { ...snapshot.tokens.cache },
+              }
+              input.assistantMessage.finish = snapshot.finish
+              input.assistantMessage.error = snapshot.error
+              await Session.updateMessage(input.assistantMessage)
+            }
+            const cleanupAttemptBeforeRetry = async (event: Extract<LLMActivityEvent, { type: "retry" }>) => {
+              const failedAttempt = event.attempt - 1
+              const scope = attemptScopes.get(failedAttempt)
+              if (!scope) return
+              const createdPartIDs = [...scope.createdPartIDs]
+              if (scope.toolExecutionStarted) {
+                throw new ProcessorUnsafeRetryError(failedAttempt, createdPartIDs)
+              }
+              for (const partID of createdPartIDs.reverse()) {
+                await Session.removePart({
+                  sessionID: input.assistantMessage.sessionID,
+                  messageID: input.assistantMessage.id,
+                  partID,
+                })
+                reasoningDeltaBuf.delete(partID)
+              }
+              for (const toolCallID of scope.toolCallIDs) {
+                delete toolcalls[toolCallID]
+              }
+              if (currentText && scope.createdPartIDs.has(currentText.id)) currentText = undefined
+              for (const [reasoningID, part] of Object.entries(reasoningMap)) {
+                if (scope.createdPartIDs.has(part.id)) delete reasoningMap[reasoningID]
+              }
+              await restoreAssistantMessage(scope.messageSnapshot)
+              attemptScopes.delete(failedAttempt)
+              preTerminalInterrupted = false
+            }
             await withLLMActivity(
               {
                 sessionID: input.sessionID,
@@ -251,6 +345,7 @@ export namespace SessionProcessor {
                       }
                       reasoningMap[value.id] = reasoningPart
                       await Session.updatePart(reasoningPart)
+                      trackCreatedPart(run.attempt, reasoningPart.id)
                       break
 
                     case "reasoning-delta":
@@ -345,7 +440,7 @@ export namespace SessionProcessor {
                         await withToolPartLock(toolCallID, async () => {
                           const existing = await priorToolPart(toolCallID)
                           const start = existing ? toolStartTime(existing) : Date.now()
-                          await Session.updatePart({
+                          const part = await Session.updatePart({
                             id: existing?.id ?? Identifier.ascending("part"),
                             messageID: input.assistantMessage.id,
                             sessionID: input.assistantMessage.sessionID,
@@ -361,6 +456,8 @@ export namespace SessionProcessor {
                               time: terminalToolTime(start),
                             },
                           })
+                          if (!existing) trackCreatedPart(run.attempt, (part as Message.ToolPart).id)
+                          trackToolCall(run.attempt, toolCallID)
                         })
                         input.assistantMessage.finish = "tool-calls"
                         preTerminalInterrupted = true
@@ -369,7 +466,7 @@ export namespace SessionProcessor {
                       const part = await withToolPartLock(toolCallID, async () => {
                         const existing = await priorToolPart(toolCallID)
                         const start = existing ? toolStartTime(existing) : Date.now()
-                        return await Session.updatePart({
+                        const part = await Session.updatePart({
                           id: existing?.id ?? Identifier.ascending("part"),
                           messageID: input.assistantMessage.id,
                           sessionID: input.assistantMessage.sessionID,
@@ -383,6 +480,9 @@ export namespace SessionProcessor {
                             time: { start },
                           },
                         })
+                        if (!existing) trackCreatedPart(run.attempt, (part as Message.ToolPart).id)
+                        trackToolCall(run.attempt, toolCallID)
+                        return part
                       })
                       toolcalls[toolCallID] = part as Message.ToolPart
                       break
@@ -420,6 +520,7 @@ export namespace SessionProcessor {
                       break
 
                     case "tool-call": {
+                      markToolExecutionStarted(run.attempt)
                       // Pause the chunk-driven idle monitor while the SDK runs the
                       // tool's `execute`. Long-running tools (build agent ~100-300s,
                       // acceptance, architect) hold the LLM stream open without
@@ -430,7 +531,7 @@ export namespace SessionProcessor {
                       run.pause("tool-call")
                       const part = await withToolPartLock(value.toolCallId, async () => {
                         const match = await priorToolPart(value.toolCallId)
-                        return await Session.updatePart({
+                        const part = await Session.updatePart({
                           ...(match ?? {
                             id: Identifier.ascending("part"),
                             messageID: input.assistantMessage.id,
@@ -449,6 +550,9 @@ export namespace SessionProcessor {
                           },
                           metadata: value.providerMetadata,
                         })
+                        if (!match) trackCreatedPart(run.attempt, (part as Message.ToolPart).id)
+                        trackToolCall(run.attempt, value.toolCallId)
+                        return part
                       })
                       toolcalls[value.toolCallId] = part as Message.ToolPart
 
@@ -483,6 +587,7 @@ export namespace SessionProcessor {
                       break
                     }
                     case "tool-result": {
+                      markToolExecutionStarted(run.attempt)
                       // Pair with `run.pause("tool-call")` from tool-call. resume() is a
                       // no-op if the monitor isn't paused (e.g. tool-result without
                       // matching tool-call after a recovery), so this is safe to
@@ -528,6 +633,7 @@ export namespace SessionProcessor {
                     }
 
                     case "tool-error": {
+                      markToolExecutionStarted(run.attempt)
                       // Pair with `run.pause("tool-call")` from tool-call (errors close the
                       // tool-call window just like results).
                       run.resume("tool-call")
@@ -573,13 +679,16 @@ export namespace SessionProcessor {
 
                     case "start-step":
                       snapshot = await Snapshot.track()
-                      await Session.updatePart({
-                        id: Identifier.ascending("part"),
-                        messageID: input.assistantMessage.id,
-                        sessionID: input.sessionID,
-                        snapshot,
-                        type: "step-start",
-                      })
+                      {
+                        const part = await Session.updatePart({
+                          id: Identifier.ascending("part"),
+                          messageID: input.assistantMessage.id,
+                          sessionID: input.sessionID,
+                          snapshot,
+                          type: "step-start",
+                        })
+                        trackCreatedPart(run.attempt, part.id)
+                      }
                       break
 
                     case "finish-step":
@@ -603,22 +712,25 @@ export namespace SessionProcessor {
                           write: input.assistantMessage.tokens.cache.write + usage.tokens.cache.write,
                         },
                       }
-                      await Session.updatePart({
-                        id: Identifier.ascending("part"),
-                        reason: value.finishReason,
-                        snapshot: await Snapshot.track(),
-                        messageID: input.assistantMessage.id,
-                        sessionID: input.assistantMessage.sessionID,
-                        type: "step-finish",
-                        tokens: usage.tokens,
-                        cost: usage.cost,
-                      })
+                      {
+                        const part = await Session.updatePart({
+                          id: Identifier.ascending("part"),
+                          reason: value.finishReason,
+                          snapshot: await Snapshot.track(),
+                          messageID: input.assistantMessage.id,
+                          sessionID: input.assistantMessage.sessionID,
+                          type: "step-finish",
+                          tokens: usage.tokens,
+                          cost: usage.cost,
+                        })
+                        trackCreatedPart(run.attempt, part.id)
+                      }
                       await Session.updateMessage(input.assistantMessage)
                       if (snapshot) {
                         const patch = await Snapshot.patch(snapshot)
                         Snapshot.assertPatchEvidenceIntegrity(patch)
                         if (patch.files.length) {
-                          await Session.updatePart({
+                          const part = await Session.updatePart({
                             id: Identifier.ascending("part"),
                             messageID: input.assistantMessage.id,
                             sessionID: input.sessionID,
@@ -626,6 +738,7 @@ export namespace SessionProcessor {
                             hash: patch.hash,
                             files: patch.files,
                           })
+                          trackCreatedPart(run.attempt, part.id)
                         }
                         snapshot = undefined
                       }
@@ -657,6 +770,7 @@ export namespace SessionProcessor {
                         metadata: value.providerMetadata,
                       }
                       await Session.updatePart(currentText)
+                      trackCreatedPart(run.attempt, currentText.id)
                       break
 
                     case "text-delta":
@@ -734,6 +848,9 @@ export namespace SessionProcessor {
                     cls: event.cls,
                   })
                 }
+              },
+              {
+                beforeRetry: async ({ event }) => cleanupAttemptBeforeRetry(event),
               },
             )
           } catch (e: any) {
