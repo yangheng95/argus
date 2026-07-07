@@ -338,6 +338,16 @@ describe("TracePanel.tsx — Panel primitive adoption", () => {
     expect(cardCss).not.toMatch(/\.trace-event-head:focus-visible\s*\{/)
   })
 
+  test("llm_request headlines include unified scheduler target and action parameters", () => {
+    expect(tsx).toContain("formatAssistantToolCall")
+    expect(tsx).toContain('key === "dispatchagent"')
+    expect(tsx).toContain("input?.target")
+    expect(tsx).toContain('key === "managetask"')
+    expect(tsx).toContain("input?.action")
+    expect(tsx).toContain("`${name}(${target})`")
+    expect(tsx).toContain("`${name}(${action})`")
+  })
+
   test("uses <Panel> element", () => {
     expect(tsx).toMatch(/<Panel\b/)
   })

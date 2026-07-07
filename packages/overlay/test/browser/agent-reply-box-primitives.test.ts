@@ -117,7 +117,7 @@ test(
     assert.equal(typeof globalThis.Bun, "undefined")
 
     const operatorTargetError =
-      "This target cannot receive operator steer. Use task-level input or a visible redispatch action instead."
+      "This target cannot receive operator steer. Use task-level input or scheduler task controls instead."
     const task = {
       id: TASK_ID,
       orderKey: taskOrderKey(TASK_ID, T0),

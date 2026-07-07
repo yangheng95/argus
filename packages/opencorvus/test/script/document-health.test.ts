@@ -20,6 +20,10 @@ function gitLsFiles(pathspec?: string) {
   return new TextDecoder().decode(result.stdout).split(/\r?\n/).filter(Boolean)
 }
 
+function markdownLinks(text: string): string[] {
+  return [...text.matchAll(/(?<!!)\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)].map((match) => match[1]!)
+}
+
 function gitCheckIgnorePositiveNoIndex(relativePath: string) {
   const result = Bun.spawnSync({
     cmd: ["git", "check-ignore", "-v", "--no-index", relativePath],
@@ -271,7 +275,10 @@ function objectLiterals(source: string): string[] {
 function arrayLiteralItemCount(source: string): number {
   const items = source.trim()
   if (!items) return 0
-  return items.split(",").map((item) => item.trim()).filter(Boolean).length
+  return items
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean).length
 }
 
 function conversationViewTopLevelOffenders(file: string, source: string): string[] {
@@ -555,9 +562,14 @@ describe("document health audit regressions", () => {
     const generatedArtifacts = read("script/generated-artifacts.ts")
 
     expect(generate).toContain("GENERATED_ARTIFACT_PATHS")
+    expect(generate).toContain("generateOpencorvusGeneratedBuildArtifacts")
     expect(generate).toContain("API_MDX_ARTIFACT_PATHS")
+    expect(generate).toContain("OPENCORVUS_BUILD_ARTIFACT_PATHS")
+    expect(generate).toContain("CANONICAL_TEXT_ARTIFACT_PATHS")
     expect(generate).toContain("prettierArtifactPaths")
     expect(generatedArtifacts).toContain("packages/sdk/openapi.json")
+    expect(generatedArtifacts).toContain("packages/opencorvus/src/provider/models-snapshot.ts")
+    expect(generatedArtifacts).toContain("packages/opencorvus/src/expert-squad/payload.ts")
     expect(generatedArtifacts).toContain("packages/web/src/content/docs/zh-cn/reference/api.mdx")
     expect(generate).not.toContain("bun ./script/format.ts")
     expect(generate).not.toContain("--write .")
@@ -1203,6 +1215,16 @@ describe("document health audit regressions", () => {
       "workflow: { id, name, currentStep? }",
       "goalWorkflows[].planSteps",
       "`goalRuns`",
+      "`requirements` tool",
+      "`frontend_design` tool",
+      "`architect` tool",
+      "`build` tool",
+      "`visual_qa` tool",
+      "`integrity` tool",
+      "scheduler-projected `build` tool",
+      "build({ goalID, request })",
+      "`complete_task` / `fail_task` lifecycle decision",
+      "orchestrator 通过 `propose_task`",
     ]
     const offenders = walkTextFiles("specs/current/architecture")
       .filter((file) => file.endsWith(".md"))
@@ -1373,7 +1395,9 @@ describe("document health audit regressions", () => {
     )
 
     expect(read("packages/opencorvus/src/orchestrator/tools.ts")).toContain("goal_run_id")
-    expect(fs.existsSync(path.join(repoRoot, ["packages/opencorvus/src/acceptance/checks/project-", "gate.ts"].join("")))).toBe(false)
+    expect(
+      fs.existsSync(path.join(repoRoot, ["packages/opencorvus/src/acceptance/checks/project-", "gate.ts"].join(""))),
+    ).toBe(false)
     expectFilesNotToContain(
       [
         "packages/opencorvus/src/acceptance/arbiter.ts",
@@ -1783,72 +1807,84 @@ describe("document health audit regressions", () => {
   })
 
   test("overlay fixtures use current skill mounts and conversation hydrate contracts", () => {
-    const offenders = walkTextFiles("packages/overlay/test").flatMap((file) => {
-      const text = read(file)
-      const matches: string[] = []
-      const checks: Array<[string, RegExp]> = [
-        ["retired /skill/mounts grouped payload", /\/skill\/mounts[^\n]*(built_in|managed|source)/],
-        ["retired /skill/mounts empty object", /\/skill\/mounts[^\n]*return (?:send|json)\(\{\}\)/],
-        ["retired /skill/mounts empty array", /\/skill\/mounts[^\n]*return (?:send|json|void ok)\(\[\]\)/],
-        ["retired /skill/mounts installed rows as pool rows", /\/skill\/mounts[\s\S]{0,300}skills:\s*data\.skills/],
-        ["retired board lane goal mutation", /data\.board\.lanes|lane\.cards/],
-        ["retired non-empty board lanes fixture", /\blanes:\s*\[\s*\{/],
-        ["retired non-empty lane cards fixture", /\bcards:\s*\[\s*\{/],
-        ["retired per-run step card id", /step:goal:[^"'`\s]+:run:/],
-        ["retired execute title", /title:\s*"Execute"/],
-        ["retired per-attempt step-card comment", /per-attempt step card scoping/],
-        ["conversation session row uses message-domain order key", /orderKey\("message", now - 19_000, "session-1"\)/],
-        [
-          "retired conversation card-tree view",
-          /(?:view|agentView): \{(?=[\s\S]{0,360}?rootID:\s*"root")(?=[\s\S]{0,360}?cards:\s*\{\})(?=[\s\S]{0,360}?order:\s*\[\])/,
-        ],
-        ["conversation view missing messages/topLevelSessionIDs", /view: \{ (?:sessions|messages): \[\] \}/],
-        ["agent conversation view missing messages/topLevelSessionIDs", /agentView: \{ sessions: \[\] \}/],
-        ["conversation messageWatermark null", /messageWatermark: null/],
-        ["conversation session time fallback", /const firstTime = first\?\.info\.time\.created \?\? 0/],
-        ["conversation session stage fallback", /stage: first\?\.info\.resolvedRole \?\? "assistant"/],
-        ["conversation top-level session parent fallback", /topLevelSessionIDs = viewSessions[\s\S]{0,120}!session\.parentSessionID/],
-        ["conversation view source optional-created zero fallback", /Number\(info\?\.time\?\.created \|\| 0\)/],
-        ["conversation view message zero-time fallback", /Number\(info\.time\?\.created \|\| 0\)/],
-        ["conversation view optional-created zero fallback", /info\.time\?\.created[ \t]*(?:\?\?|\|\|)[ \t]*0/],
-        ["conversation optional-created zero fallback", /info\?\.time\?\.created[ \t]*(?:\?\?|\|\|)[ \t]*0/],
-        ["conversation rail live message default time", /info\?\.time\?\.created\s*\|\|\s*1_779_100_000_000/],
-        ["conversation rail literal default created time", /time:\s*\{\s*created:\s*1_779_100_000_000\s*\},\s*\.\.\.info/],
-        ["conversation message time zero fallback", /message\?\.time[ \t]*(?:\?\?|\|\|)[ \t]*0/],
-        ["conversation observed time zero fallback", /firstObservedAt\s*\?\?\s*firstMessageTime\s*\?\?\s*0/],
-        ["conversation part time T0 fallback", /Number\(part\.time\?\.created \|\| 0\) \|\| T0/],
-        ["tree writer message token message time default", /input\.messageTime\s*\|\|\s*T0/],
-        ["tree writer message token part time parent default", /input\.partTime\s*\|\|\s*messageTime/],
-        ["fixture task time default fallback", /Number\(task\?\.time\?\.created \|\| 1\)/],
-        ["fixture board order uses parent task time", /boardOrderKey\([^\n]*taskCreated/],
-        ["fixture goal time uses task fallback", /goal\?\.time\?\.created \|\| taskCreated/],
-        ["fixture step time uses goal fallback", /step\?\.startedAt \|\| step\?\.completedAt \|\| goalCreated/],
-        ["fixture phase time uses step fallback", /phase\?\.startedAt \|\| phase\?\.completedAt \|\| stepTime/],
-        ["fixture phase time uses started fallback", /phase\?\.startedAt \|\| stepStarted/],
-        ["fixture interaction time uses task fallback", /interaction\?\.time\?\.created \|\| taskCreated/],
-        ["screenshot fixture hard-codes goal-phase top-level session", /topLevelSessionIDs:\s*\[SCREENSHOT_BUILD_SESSION_ID\]/],
-      ]
-      for (const [label, pattern] of checks) {
-        if (pattern.test(text)) matches.push(`${file}: ${label}`)
-      }
-      const goalPhaseSessionIDs = new Set(
-        Array.from(
-          text.matchAll(/sessionID:\s*"([^"]+)"(?:(?!sessionID:)[\s\S]){0,360}placement:\s*"goal_phase"/g),
-          (match) => match[1],
-        ),
-      )
-      for (const sessionID of goalPhaseSessionIDs) {
-        const listedTopLevel = new RegExp(
-          `topLevelSessionIDs:\\s*\\[[^\\]]*"${sessionID.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[^\\]]*\\]`,
+    const offenders = walkTextFiles("packages/overlay/test")
+      .flatMap((file) => {
+        const text = read(file)
+        const matches: string[] = []
+        const checks: Array<[string, RegExp]> = [
+          ["retired /skill/mounts grouped payload", /\/skill\/mounts[^\n]*(built_in|managed|source)/],
+          ["retired /skill/mounts empty object", /\/skill\/mounts[^\n]*return (?:send|json)\(\{\}\)/],
+          ["retired /skill/mounts empty array", /\/skill\/mounts[^\n]*return (?:send|json|void ok)\(\[\]\)/],
+          ["retired /skill/mounts installed rows as pool rows", /\/skill\/mounts[\s\S]{0,300}skills:\s*data\.skills/],
+          ["retired board lane goal mutation", /data\.board\.lanes|lane\.cards/],
+          ["retired non-empty board lanes fixture", /\blanes:\s*\[\s*\{/],
+          ["retired non-empty lane cards fixture", /\bcards:\s*\[\s*\{/],
+          ["retired per-run step card id", /step:goal:[^"'`\s]+:run:/],
+          ["retired execute title", /title:\s*"Execute"/],
+          ["retired per-attempt step-card comment", /per-attempt step card scoping/],
+          [
+            "conversation session row uses message-domain order key",
+            /orderKey\("message", now - 19_000, "session-1"\)/,
+          ],
+          [
+            "retired conversation card-tree view",
+            /(?:view|agentView): \{(?=[\s\S]{0,360}?rootID:\s*"root")(?=[\s\S]{0,360}?cards:\s*\{\})(?=[\s\S]{0,360}?order:\s*\[\])/,
+          ],
+          ["conversation view missing messages/topLevelSessionIDs", /view: \{ (?:sessions|messages): \[\] \}/],
+          ["agent conversation view missing messages/topLevelSessionIDs", /agentView: \{ sessions: \[\] \}/],
+          ["conversation messageWatermark null", /messageWatermark: null/],
+          ["conversation session time fallback", /const firstTime = first\?\.info\.time\.created \?\? 0/],
+          ["conversation session stage fallback", /stage: first\?\.info\.resolvedRole \?\? "assistant"/],
+          [
+            "conversation top-level session parent fallback",
+            /topLevelSessionIDs = viewSessions[\s\S]{0,120}!session\.parentSessionID/,
+          ],
+          ["conversation view source optional-created zero fallback", /Number\(info\?\.time\?\.created \|\| 0\)/],
+          ["conversation view message zero-time fallback", /Number\(info\.time\?\.created \|\| 0\)/],
+          ["conversation view optional-created zero fallback", /info\.time\?\.created[ \t]*(?:\?\?|\|\|)[ \t]*0/],
+          ["conversation optional-created zero fallback", /info\?\.time\?\.created[ \t]*(?:\?\?|\|\|)[ \t]*0/],
+          ["conversation rail live message default time", /info\?\.time\?\.created\s*\|\|\s*1_779_100_000_000/],
+          [
+            "conversation rail literal default created time",
+            /time:\s*\{\s*created:\s*1_779_100_000_000\s*\},\s*\.\.\.info/,
+          ],
+          ["conversation message time zero fallback", /message\?\.time[ \t]*(?:\?\?|\|\|)[ \t]*0/],
+          ["conversation observed time zero fallback", /firstObservedAt\s*\?\?\s*firstMessageTime\s*\?\?\s*0/],
+          ["conversation part time T0 fallback", /Number\(part\.time\?\.created \|\| 0\) \|\| T0/],
+          ["tree writer message token message time default", /input\.messageTime\s*\|\|\s*T0/],
+          ["tree writer message token part time parent default", /input\.partTime\s*\|\|\s*messageTime/],
+          ["fixture task time default fallback", /Number\(task\?\.time\?\.created \|\| 1\)/],
+          ["fixture board order uses parent task time", /boardOrderKey\([^\n]*taskCreated/],
+          ["fixture goal time uses task fallback", /goal\?\.time\?\.created \|\| taskCreated/],
+          ["fixture step time uses goal fallback", /step\?\.startedAt \|\| step\?\.completedAt \|\| goalCreated/],
+          ["fixture phase time uses step fallback", /phase\?\.startedAt \|\| phase\?\.completedAt \|\| stepTime/],
+          ["fixture phase time uses started fallback", /phase\?\.startedAt \|\| stepStarted/],
+          ["fixture interaction time uses task fallback", /interaction\?\.time\?\.created \|\| taskCreated/],
+          [
+            "screenshot fixture hard-codes goal-phase top-level session",
+            /topLevelSessionIDs:\s*\[SCREENSHOT_BUILD_SESSION_ID\]/,
+          ],
+        ]
+        for (const [label, pattern] of checks) {
+          if (pattern.test(text)) matches.push(`${file}: ${label}`)
+        }
+        const goalPhaseSessionIDs = new Set(
+          Array.from(
+            text.matchAll(/sessionID:\s*"([^"]+)"(?:(?!sessionID:)[\s\S]){0,360}placement:\s*"goal_phase"/g),
+            (match) => match[1],
+          ),
         )
-        if (listedTopLevel.test(text)) matches.push(`${file}: goal-phase session listed as top-level ${sessionID}`)
-      }
-      return matches
-    }).concat(
-      walkTextFiles("packages/overlay/test").flatMap((file) =>
-        conversationViewTopLevelOffenders(file, read(file)),
-      ),
-    )
+        for (const sessionID of goalPhaseSessionIDs) {
+          const listedTopLevel = new RegExp(
+            `topLevelSessionIDs:\\s*\\[[^\\]]*"${sessionID.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[^\\]]*\\]`,
+          )
+          if (listedTopLevel.test(text)) matches.push(`${file}: goal-phase session listed as top-level ${sessionID}`)
+        }
+        return matches
+      })
+      .concat(
+        walkTextFiles("packages/overlay/test").flatMap((file) => conversationViewTopLevelOffenders(file, read(file))),
+      )
 
     expect(offenders).toEqual([])
     const controls = read("packages/overlay/test/browser/controls.test.ts")
@@ -1976,9 +2012,7 @@ describe("document health audit regressions", () => {
     expect(panelReactivity).toContain("`integrity:session:<sessionID>`")
     expect(panelReactivity).not.toContain("`synthetic:<messageID>`")
     expect(panelReactivity).not.toContain("`synthetic:*`")
-    expect(panelReactivity).not.toContain(
-      "goal-scope `step:<goalID>:<stepID>` cards in board workflow order",
-    )
+    expect(panelReactivity).not.toContain("goal-scope `step:<goalID>:<stepID>` cards in board workflow order")
     expect(read("specs/current/architecture/07-panel-reactivity.md")).toContain("`step:<goalID>:<stepID>`")
     const treeWriter = read("packages/overlay/src/services/tree-writer.ts")
     expect(treeWriter).toContain("return `step:${goalID}:${stepID}`")
@@ -2052,7 +2086,7 @@ describe("document health audit regressions", () => {
     )
     const overlayBenchmark = read("packages/opencorvus/script/benchmark/overlay-web-benchmark.ts")
     expect(overlayBenchmark).toContain("evaluateQualityChecks")
-    expect(overlayBenchmark).toContain("parseExecutor(flag(\"--executor\"))")
+    expect(overlayBenchmark).toContain('parseExecutor(flag("--executor"))')
     expect(overlayBenchmark).toContain("unsupported executor")
     expect(overlayBenchmark).toContain('requireVisualNumberFlag("--threshold")')
     expect(overlayBenchmark).toContain('requireVisualNumberFlag("--worst-threshold")')
@@ -2092,7 +2126,7 @@ describe("document health audit regressions", () => {
     expect(source).toContain("requirePositiveNumberInput(input.browserLaunchTimeoutMs")
     expect(source).toContain("requirePositiveNumberInput(input.navigationTimeoutMs")
     expect(source).toContain("requirePositiveNumberInput(input.settleMs")
-    expect(source).toContain('throw new Error(`Missing required numeric flag ${name}`)')
+    expect(source).toContain("throw new Error(`Missing required numeric flag ${name}`)")
     expect(source).not.toContain("parseNumberFlag")
     expect(source).not.toContain('parseRequiredNumberFlag("--threshold",')
     expect(source).not.toContain('parseRequiredNumberFlag("--worst-threshold",')
@@ -2155,7 +2189,7 @@ describe("document health audit regressions", () => {
     for (const text of [en, zh]) {
       expect(text).toContain("@gitlab/opencorvus-gitlab-auth")
       expect(text).toContain("package-manager alias")
-      expect(text).not.toContain("import { gitlabAuthPlugin } from \"@gitlab/opencode-gitlab-auth\"")
+      expect(text).not.toContain('import { gitlabAuthPlugin } from "@gitlab/opencode-gitlab-auth"')
     }
     expect(read("packages/opencorvus/package.json")).toContain(
       '"@gitlab/opencorvus-gitlab-auth": "npm:@gitlab/opencode-gitlab-auth@1.3.3"',
@@ -2263,12 +2297,8 @@ describe("document health audit regressions", () => {
     }
 
     const directReplyRepairPlan = read("specs/records/2026-06/bug-hunt-repair-plan-2026-06-17.md")
-    expect(directReplyRepairPlan).toContain(
-      "Superseded for overlay targeted steer on 2026-06-29 by",
-    )
-    expect(directReplyRepairPlan).toContain(
-      "rejects task-message\n> `target` fields before writing a root message",
-    )
+    expect(directReplyRepairPlan).toContain("Superseded for overlay targeted steer on 2026-06-29 by")
+    expect(directReplyRepairPlan).toContain("rejects task-message\n> `target` fields before writing a root message")
 
     expect(read("specs/records/2026-06/2026-06-06-mission-session-agent-identity.md")).not.toContain("| TUI runtime")
     expect(read("specs/records/2026-06/task-row-action-rail-visual-alignment-2026-06-05.md")).not.toContain("TUI host")
@@ -2289,9 +2319,7 @@ describe("document health audit regressions", () => {
   })
 
   test("implemented July expert-squad records mark stale package-layout claims as superseded", () => {
-    const files = gitLsFiles("specs/records/2026-07/*.md").filter((file) =>
-      path.basename(file).startsWith("2026-07-06-"),
-    )
+    const files = ["specs/records/2026-07/README.md", ...gitLsFiles("specs/records/2026-07/*.md")]
     const stalePatterns = [
       /\.opencorvus\/expert-squads\/<id>/,
       /\.opencorvus\/expert-squads\/software-testing/,
@@ -2299,15 +2327,58 @@ describe("document health audit regressions", () => {
     ]
     const offenders = files.filter((file) => {
       const text = read(file)
-      if (!/^Status: (Implemented|Implementation record|Implementation goal|Superseded\b|Superseded by\b)/m.test(text)) {
-        return false
-      }
       if (!/(expert[- ]squad|software-testing|opentest|frontend-automation-debug)/i.test(text)) return false
       if (!stalePatterns.some((pattern) => pattern.test(text))) return false
-      const head = text.split(/\r?\n/).slice(0, 10).join("\n")
-      return !/Supersession note|Superseded/i.test(head)
+      if (path.basename(file) === "README.md") return true
+      const head = text.split(/\r?\n/).slice(0, 12).join("\n")
+      return !/Supersession note:[\s\S]*\.opencorvus\/expert-squads\/(?:<namespace>\/<id>|[a-z0-9-]+\/[a-z0-9-]+)\//i.test(
+        head,
+      )
     })
     expect(offenders).toEqual([])
+  })
+
+  test("monthly record README links target tracked record files", () => {
+    const trackedFiles = new Set(gitLsFiles())
+    const readmes = gitLsFiles("specs/records/*/README.md")
+    const offenders: string[] = []
+
+    for (const readme of readmes) {
+      const directory = path.posix.dirname(readme)
+      const month = directory.match(/^specs\/records\/(20\d{2}-\d{2})$/)?.[1]
+      if (!month) continue
+      for (const link of markdownLinks(read(readme))) {
+        if (/^[a-z][a-z0-9+.-]*:/i.test(link)) continue
+        const target = link.split("#")[0]!
+        if (!target.endsWith(".md")) continue
+        const resolved = path.posix.normalize(path.posix.join(directory, target))
+        if (!resolved.startsWith(`${directory}/`)) continue
+        if (!/^specs\/records\/20\d{2}-\d{2}\/[^/]+\.md$/.test(resolved)) continue
+        if (!trackedFiles.has(resolved)) offenders.push(`${readme} -> ${target}`)
+      }
+    }
+
+    expect(offenders).toEqual([])
+  })
+
+  test("tracked spec records do not cite the untracked July planning draft", () => {
+    const trackedFiles = gitLsFiles(["specs", "**", "*.md"].join("/"))
+    const forbidden = ["specs/records/2026-07/路线规划.md", "路线规划.md"]
+    const offenders = trackedFiles.flatMap((file) => {
+      const text = read(file)
+      return forbidden.filter((token) => text.includes(token)).map((token) => `${file}: ${token}`)
+    })
+
+    expect(offenders).toEqual([])
+  })
+
+  test("active July OpenTest records do not describe repaired payload release as a current failure", () => {
+    const files = ["specs/records/2026-07/README.md", "specs/records/2026-07/2026-07-07-opentest-futures-e2e.md"]
+    expectFilesNotToContain(files, [
+      "current direct-child package-root provisioning failure",
+      "Fails with the same direct-child package-root error before payload release can install `wujiang/opentest`",
+      "release currently calls `discover()` before installing missing payload packages",
+    ])
   })
 
   test("message-card historical records preserve current phase and orderKey calibration", () => {
@@ -2344,21 +2415,17 @@ describe("document health audit regressions", () => {
     )
 
     expect(matrix).toContain(
-      "overlay targeted operator steer 只能通过 `POST /task/:taskID/session/:sessionID/operator-steer` 写入 `origin=\"operator_steer\"` 的 `agent_coordination_request`",
+      'overlay targeted operator steer 只能通过 `POST /task/:taskID/session/:sessionID/operator-steer` 写入 `origin="operator_steer"` 的 `agent_coordination_request`',
     )
     expect(matrix).toContain(
       "不要再把 task-root message、direct reply、hidden note、generic same-kind redispatch 或历史 `steer_subagent` 当成调度协议",
     )
     expect(matrix).toContain(
-      "| Operator -> orchestrator      | `POST /task/:taskID/session/:sessionID/operator-steer` | `agent_coordination_request(origin=\"operator_steer\")`",
+      '| Operator -> orchestrator      | `POST /task/:taskID/session/:sessionID/operator-steer` | `agent_coordination_request(origin="operator_steer")`',
     )
 
-    expect(teardown).toContain(
-      "Targeted sub-agent operator steer is not task-root operator input and is not a",
-    )
-    expect(teardown).toContain(
-      "writes an\n`origin=\"operator_steer\"` durable coordination request",
-    )
+    expect(teardown).toContain("Targeted sub-agent operator steer is not task-root operator input and is not a")
+    expect(teardown).toContain('writes an\n`origin="operator_steer"` durable coordination request')
 
     const currentArchitecture = [
       ["specs/current/architecture/01-agents.md", agents],

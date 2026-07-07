@@ -3,7 +3,8 @@
  *
  * One wake = one orchestrator decision pass. There is no internal loop and no
  * watermark. The orchestrator LLM owns every workflow decision through its own
- * tool calls (build / complete_task / modify_goal / fail_task / question).
+ * tool calls (dispatch_agent target=build / manage_task action=complete_task /
+ * manage_task action=modify_goal / manage_task action=fail_task / question).
  * When it stops after a valid decision, the loop exits. The next wake normally
  * comes from an external trigger (operator message, scheduler tick, ownership
  * recovery) — re-entering this function with a fresh event.
@@ -23,7 +24,7 @@
  *
  * What this does NOT own:
  *   - Deciding what the orchestrator does on wake (LLM reads describe).
- *   - Dispatching goals (the `build` tool body handles that).
+ *   - Dispatching goals (the dispatch_agent target=build body handles that).
  *   - Reacting to acceptance rejection / build settlement / stream error —
  *     those are facts the LLM reads via describe on its next decision turn.
  */

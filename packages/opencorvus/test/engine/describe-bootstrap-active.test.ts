@@ -320,7 +320,7 @@ describe("collaboration closure projection", () => {
         expect(md).toContain("Next dispatchable goals:")
         expect(md).toContain(feature)
         expect(md).toContain("Build `files_changed[]`")
-        expect(md).toContain("`modify_goal`")
+        expect(md).toContain("`manage_task` action=modify_goal")
       },
     })
   })
@@ -381,7 +381,11 @@ describe("collaboration closure projection", () => {
         const md = renderTaskDescription(desc)
         expect(md).toContain("Failed goals requiring same-graph diagnosis:")
         expect(md).toContain("Failed goals stay inside the current collaboration closure")
-        expect(md).toContain("route repair through `build({ goalID, request })`, `modify_goal`, or `architect`")
+        expect(md).toContain("route repair through `dispatch_agent` target=build")
+        expect(md).toContain("`manage_task` action=modify_goal")
+        expect(md).toContain("`dispatch_agent` target=architect")
+        expect(md).not.toContain("build({ goalID, request })")
+        expect(md).not.toContain("`modify_goal`, or `architect`")
         expect(md).toContain("ask the operator only for external, destructive, or out-of-scope blockers")
         expect(md).toContain("Do not restart upstream merely because a Build attempt failed")
       },

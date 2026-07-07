@@ -110,7 +110,7 @@ flowchart TD
   B["build<br/>per-goal or scoped direct rework"]
   V["visual_qa"]
   IT["integrity"]
-  L["complete_task / fail_task / repair decision"]
+  L["manage_task lifecycle action / repair decision"]
 
   U --> O
   O --> H
@@ -147,7 +147,7 @@ flowchart TD
   O --> L
 ```
 
-Solid arrows are orchestrator tool dispatches. Dotted arrows are durable
+Solid arrows are `dispatch_agent target=...` scheduler dispatches. Dotted arrows are durable
 handoff surfaces: `engine_artifact`, `decision_log`, requirement rows,
 contract graphs, build reports, browser preview evidence, and task-runtime
 files. Agents do not secretly message each other.
@@ -157,14 +157,14 @@ files. Agents do not secretly message each other.
 | Caller       | Callee                       | Runtime path                                                                     | Webpage replica role                                                                                                                                                                                               |
 | ------------ | ---------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Orchestrator | host webpage evidence runner | `ensureLiveWebpageEvidence()` before frontend stages when a live URL is provided | Materializes task runtime, extracts rendered page evidence, compiles/analyzes it, captures runtime states, and creates `web-clone-source`. This is infrastructure, not an agent.                                   |
-| Orchestrator | `frontend_research`          | `frontend_research` tool                                                         | Publishes source-backed investigation packets from host-prepared webpage evidence. It does not create the implementation template, requirements, goals, or next-route plan.                                        |
-| Orchestrator | `analyze_intent`             | `analyze_intent` tool                                                            | Optional clarification / complexity analysis, usually after webpage evidence when the scope is ambiguous.                                                                                                          |
-| Orchestrator | `requirements`               | `requirements` tool                                                              | Registers `REQ-N` rows and foundational decisions from user request plus evidence. It does not produce goals.                                                                                                      |
-| Orchestrator | `architect`                  | `architect` tool                                                                 | Decomposes requirements into ordered goals, acceptance specs, traceability, source-reference coverage, and cross-goal contracts.                                                                                   |
-| Orchestrator | `workload_analysis`          | `workload_analysis` tool                                                         | Read-only goal sizing review. It can produce concerns, but it does not modify goals and is not a gate.                                                                                                             |
-| Orchestrator | `build`                      | `build` tool                                                                     | Runs implementation in a managed build session/worktree. For normal pipeline work it is goal-scoped; after review feedback it may be task-level scoped direct rework with active requirements and review feedback. |
-| Orchestrator | `visual_qa`                  | `visual_qa` tool                                                                 | Runs frontend GUI/product review near task completion after blocking builds are terminal. It can repair in-scope defects, but its report is evidence for Orchestrator, not lifecycle authority.                    |
-| Orchestrator | `integrity`                  | `integrity` tool                                                                 | Runs system completeness review after blocking build evidence is available. It returns pass / non-pass report evidence; Orchestrator decides completion, repair, follow-up, question, or failure.                  |
+| Orchestrator | `frontend_research`          | `dispatch_agent target=frontend_research`                                        | Publishes source-backed investigation packets from host-prepared webpage evidence. It does not create the implementation template, requirements, goals, or next-route plan.                                        |
+| Orchestrator | `analyze_intent`             | `dispatch_agent target=analyze_intent`                                           | Optional clarification / complexity analysis, usually after webpage evidence when the scope is ambiguous.                                                                                                          |
+| Orchestrator | `requirements`               | `dispatch_agent target=requirements`                                             | Registers `REQ-N` rows and foundational decisions from user request plus evidence. It does not produce goals.                                                                                                      |
+| Orchestrator | `architect`                  | `dispatch_agent target=architect`                                                | Decomposes requirements into ordered goals, acceptance specs, traceability, source-reference coverage, and cross-goal contracts.                                                                                   |
+| Orchestrator | `workload_analysis`          | `dispatch_agent target=workload_analysis`                                        | Read-only goal sizing review. It can produce concerns, but it does not modify goals and is not a gate.                                                                                                             |
+| Orchestrator | `build`                      | `dispatch_agent target=build`                                                    | Runs implementation in a managed build session/worktree. For normal pipeline work it is goal-scoped; after review feedback it may be task-level scoped direct rework with active requirements and review feedback. |
+| Orchestrator | `visual_qa`                  | `dispatch_agent target=visual_qa`                                                | Runs frontend GUI/product review near task completion after blocking builds are terminal. It can repair in-scope defects, but its report is evidence for Orchestrator, not lifecycle authority.                    |
+| Orchestrator | `integrity`                  | `dispatch_agent target=integrity`                                                | Runs system completeness review after blocking build evidence is available. It returns pass / non-pass report evidence; Orchestrator decides completion, repair, follow-up, question, or failure.                  |
 | Build        | `general` / `explore`        | `task` sub-agent tool                                                            | Optional worker-side help for scoped implementation exploration. This is not the main webpage workflow and must obey task-specific no-subtask constraints when present.                                            |
 
 ## Durable Handoff Surfaces

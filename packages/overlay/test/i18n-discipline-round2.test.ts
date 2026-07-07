@@ -93,6 +93,12 @@ describe("round 2 i18n discipline", () => {
     expect(enKeys).toEqual(zhKeys)
   })
 
+  test("locale catalogs do not expose retired redispatch action wording", () => {
+    for (const localePath of ["src/i18n/en-US.json", "src/i18n/zh-CN.json"]) {
+      expect(read(localePath)).not.toContain("visible redispatch action")
+    }
+  })
+
   test("R2-4 placeholders separate localized input hints from fixed examples", () => {
     const providers = read("src/components/settings/ProvidersPanel.tsx")
     const channels = read("src/components/settings/ChannelsPanel.tsx")

@@ -1447,7 +1447,8 @@ export namespace EngineService {
     // Phase-7: no aggressive startup recovery. Live build attempts and
     // terminal refill facts are durable; orphan runs surface via describe.ts
     // `run_orphan` on the next wake and the orchestrator LLM decides whether
-    // to retry / re-dispatch / fail_task / drop. OS-level cleanup (worktrees,
+    // to dispatch_agent target=build retry / dispatch_agent target=<worker> /
+    // manage_task action=fail_task / drop. OS-level cleanup (worktrees,
     // processes) is owned by the ownership registry, not by a recovery
     // function.
   }
@@ -1553,21 +1554,7 @@ export namespace EngineService {
       attachments: input.attachments,
       label: `Task ${taskID} attachment`,
     })
-    // The task's root session: it holds the user's original request and the
-    // pointer engine_task.session_id. Its children are the orchestrator's
-    // own session and each sub-agent session (planner/executor/...).
     const taskConfigSnapshot = await EffectiveConfig.snapshotCurrent()
-    const session = await Session.create({ kind: "root", title })
-    await Session.mergeMetadata({
-      sessionID: session.id,
-      patch: { [EffectiveConfig.TASK_SNAPSHOT_KEY]: taskConfigSnapshot },
-    })
-    if (input.model) {
-      await Session.mergeConfigOverlay({
-        sessionID: session.id,
-        patch: { model: input.model },
-      })
-    }
     if (input.promptProfile) {
       const modelPreviewConfig = input.model
         ? Config.mergeOverlay(taskConfigSnapshot, { model: input.model })
@@ -1579,10 +1566,6 @@ export namespace EngineService {
         projectDirectory: Instance.directory,
         profileID: input.promptProfile,
         config: profilePreviewConfig,
-      })
-      await Session.mergeConfigOverlay({
-        sessionID: session.id,
-        patch: { prompt_profile: { active: input.promptProfile } },
       })
     }
     const resolvedChecks = await taskChecks(input.checks)
@@ -1617,9 +1600,6 @@ export namespace EngineService {
     // metadata.web_search=true is a per-task override from the chat toggle.
     if ((metadata as any)?.web_search === true) {
       overrides.push({ permission: "websearch", pattern: "*", action: "allow" })
-    }
-    if (overrides.length > 0) {
-      await Session.setPermission({ sessionID: session.id, permission: overrides })
     }
     // Decode any base64 attachments exactly once: persist the bytes under the
     // project's .opencorvus/attachments directory, then carry only references
@@ -1656,6 +1636,11 @@ export namespace EngineService {
       createdAt: now,
     })
 
+    // The task's root session: it holds the user's original request and the
+    // pointer engine_task.session_id. Its children are the orchestrator's
+    // own session and each sub-agent session (planner/executor/...).
+    const session = await Session.create({ kind: "root", title })
+
     // Async pipeline: persist task immediately, run stages in background
     try {
       persistQueuedTask({
@@ -1680,6 +1665,26 @@ export namespace EngineService {
       const existing = requestID ? recoverTaskByRequest(requestID, error) : undefined
       if (existing) return existing
       throw error
+    }
+    await Session.mergeMetadata({
+      sessionID: session.id,
+      patch: { [EffectiveConfig.TASK_SNAPSHOT_KEY]: taskConfigSnapshot },
+    })
+    const sessionConfigPatch: Record<string, unknown> = {}
+    if (input.model) {
+      sessionConfigPatch.model = input.model
+    }
+    if (input.promptProfile) {
+      sessionConfigPatch.prompt_profile = { active: input.promptProfile }
+    }
+    if (Object.keys(sessionConfigPatch).length > 0) {
+      await Session.mergeConfigOverlay({
+        sessionID: session.id,
+        patch: sessionConfigPatch,
+      })
+    }
+    if (overrides.length > 0) {
+      await Session.setPermission({ sessionID: session.id, permission: overrides })
     }
     recordNote({
       taskID,
@@ -2781,9 +2786,12 @@ export namespace EngineService {
       attachments: input.attachments,
       label: `Task ${taskID} operator attachment`,
     })
+    let previousPromptProfileActive: string | undefined
     if (input.promptProfile) {
       const profileDirectory = await EffectiveConfig.directory({ sessionID: rootSession.id })
-      const profilePreviewConfig = Config.mergeOverlay(await EffectiveConfig.effective({ sessionID: rootSession.id }), {
+      const previousConfig = await EffectiveConfig.effective({ sessionID: rootSession.id })
+      previousPromptProfileActive = previousConfig.prompt_profile.active
+      const profilePreviewConfig = Config.mergeOverlay(previousConfig, {
         prompt_profile: { active: input.promptProfile },
       })
       await PromptProfileResolver.assertKnownProfileID({
@@ -2797,45 +2805,55 @@ export namespace EngineService {
       })
     }
 
-    // Decode base64 attachments once, write bytes to AttachmentStore, and carry
-    // references downstream. Mirrors createTask so that follow-up messages and
-    // new-task messages share the same persistence shape. Each ref is also
-    // appended to `task.attachments` so subsequent build / architect / design
-    // dispatches (which read task.attachments, not session history) can see
-    // the new visual reference. Without this, follow-up images persist in
-    // session history but never reach the build agent — the orchestrator wakes
-    // with task.attachments still equal to the create-time snapshot, build
-    // agent's `input.task.attachments` is therefore stale, and a user dropping
-    // a screenshot into a follow-up message gets fidelity 0 even though the
-    // bytes were saved.
-    const attachmentRefs: AttachmentStore.Reference[] = []
-    if (decodedAttachments.length) {
-      const projectID = Instance.project.id
-      for (const { attachment: att, bytes } of decodedAttachments) {
-        const ref = await AttachmentStore.write(projectID, bytes, att.mime, att.filename)
-        const intent = att.mime.startsWith("image/") ? "visual_reference" : "spec_artifact"
-        const annotated = { ...ref, intent, source: "user-upload" }
-        attachmentRefs.push(annotated)
-        await appendTaskAttachment(taskID, annotated)
+    try {
+      // Decode base64 attachments once, write bytes to AttachmentStore, and carry
+      // references downstream. Mirrors createTask so that follow-up messages and
+      // new-task messages share the same persistence shape. Each ref is also
+      // appended to `task.attachments` so subsequent build / architect / design
+      // dispatches (which read task.attachments, not session history) can see
+      // the new visual reference. Without this, follow-up images persist in
+      // session history but never reach the build agent — the orchestrator wakes
+      // with task.attachments still equal to the create-time snapshot, build
+      // agent's `input.task.attachments` is therefore stale, and a user dropping
+      // a screenshot into a follow-up message gets fidelity 0 even though the
+      // bytes were saved.
+      const attachmentRefs: AttachmentStore.Reference[] = []
+      if (decodedAttachments.length) {
+        const projectID = Instance.project.id
+        for (const { attachment: att, bytes } of decodedAttachments) {
+          const ref = await AttachmentStore.write(projectID, bytes, att.mime, att.filename)
+          const intent = att.mime.startsWith("image/") ? "visual_reference" : "spec_artifact"
+          const annotated = { ...ref, intent, source: "user-upload" }
+          attachmentRefs.push(annotated)
+          await appendTaskAttachment(taskID, annotated)
+        }
       }
-    }
 
-    // Natural-language user messages are recorded once as visible task-root
-    // user messages. Workbench notes are a separate note/constraint surface;
-    // duplicating this text there would create a target-less second source.
-    const note = await continueTaskMessage(taskID, input.text, input.source, attachmentRefs)
-    const message =
-      note.wakeStatus === "started"
-        ? "Operator note recorded. Task wake dispatched."
-        : note.wakeStatus === "queued"
-          ? "Operator note recorded. Task wake queued behind active agent ownership."
-          : "Operator note recorded."
-    return {
-      kind: "note" as const,
-      message,
-      wake_status: note.wakeStatus,
-      should_resume: note.resumed,
-      user_message: note.user_message,
+      // Natural-language user messages are recorded once as visible task-root
+      // user messages. Workbench notes are a separate note/constraint surface;
+      // duplicating this text there would create a target-less second source.
+      const note = await continueTaskMessage(taskID, input.text, input.source, attachmentRefs)
+      const message =
+        note.wakeStatus === "started"
+          ? "Operator note recorded. Task wake dispatched."
+          : note.wakeStatus === "queued"
+            ? "Operator note recorded. Task wake queued behind active agent ownership."
+            : "Operator note recorded."
+      return {
+        kind: "note" as const,
+        message,
+        wake_status: note.wakeStatus,
+        should_resume: note.resumed,
+        user_message: note.user_message,
+      }
+    } catch (error) {
+      if (previousPromptProfileActive) {
+        await Session.mergeConfigOverlay({
+          sessionID: rootSession.id,
+          patch: { prompt_profile: { active: previousPromptProfileActive } },
+        })
+      }
+      throw error
     }
   }
 

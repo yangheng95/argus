@@ -364,6 +364,14 @@ export function displayToolDetail(name: string, input: any, state: any, base = "
   const safeInput = record(input) ? input : {}
   const safeState = record(state) ? state : {}
   const n = toolNameKey(name)
+  if (n === "dispatchagent") {
+    const target = firstNonEmptyString((safeInput as any).target)
+    if (target) return `target=${target}`
+  }
+  if (n === "managetask") {
+    const action = firstNonEmptyString((safeInput as any).action)
+    if (action) return `action=${action}`
+  }
   const path =
     (safeInput as any).file_path ||
     (safeInput as any).filePath ||

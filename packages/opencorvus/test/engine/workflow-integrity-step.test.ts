@@ -3,7 +3,12 @@ import path from "node:path"
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { Database } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
-import { EngineArtifactTable, EngineGoalTable, EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import {
+  EngineArtifactTable,
+  EngineGoalTable,
+  EngineSpecSnapshotTable,
+  EngineTaskTable,
+} from "../../src/engine/engine.sql"
 import { FRONTEND_DESIGN_COMPLETION_KEYS } from "../../src/frontend-design/handoff"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { recordIntegrityAttempt } from "../../src/engine/persist"
@@ -16,6 +21,7 @@ import { VisualQaReportSchema } from "../../src/visual-qa/schema"
 import {
   WorkflowRegistry,
   createWorkflowState,
+  type MiniWorkflow,
   projectGoalSteps,
   projectTaskSteps,
   renderWorkflowPrompt,
@@ -187,7 +193,6 @@ describe("pipeline workflow review topology", () => {
     expect(pipeline).toBeDefined()
     const stepIDs = pipeline!.steps.map((step) => step.id)
     expect(stepIDs).toEqual([
-      "frontend_design",
       "frontend_research",
       "deep_research",
       "analyze_intent",
@@ -199,15 +204,13 @@ describe("pipeline workflow review topology", () => {
       "integrity",
       "fact_check",
     ])
-    expect(pipeline!.steps.find((step) => step.id === "frontend_design")?.after).toEqual([])
+    expect(stepIDs).not.toContain("frontend_design")
     expect(pipeline!.steps.find((step) => step.id === "frontend_research")?.after).toEqual([])
     expect(pipeline!.steps.find((step) => step.id === "analyze_intent")?.after).toEqual([
-      "frontend_design",
       "frontend_research",
       "deep_research",
     ])
     expect(pipeline!.steps.find((step) => step.id === "requirements")?.after).toEqual([
-      "frontend_design",
       "frontend_research",
       "deep_research",
     ])
@@ -397,11 +400,22 @@ describe("pipeline workflow review topology", () => {
     expect(text).not.toContain("evaluator as plan/build/evaluate phases")
     expect(text).not.toContain("per-goal[build + architecture_review]")
     expect(text).not.toContain("goal build 完成后自动跑一次 architecture_review")
-    expect(text).toContain("Pipeline 的 review report surface 是 `integrity`")
+    expect(text).toContain("Pipeline 的 review report surface 是 dispatch_agent target=integrity")
     expect(text).toContain("acceptance_specs / traceability / source-reference coverage / cross-goal contracts")
     expect(text).toContain("系统完整性 review report")
     expect(text).toContain("所有 blocking implementation work terminal 后、最终调度决定前的一次性 GUI")
     expect(text).not.toContain("post-integrity 前端 GUI 修复")
+  })
+
+  test("workflow source describes steps as dispatch targets, not visible orchestrator tools", async () => {
+    const source = await fs.readFile(path.join(import.meta.dir, "../../src/engine/workflow.ts"), "utf8")
+
+    expect(source).toContain("scheduler dispatch target")
+    expect(source).toContain("dispatch_agent target=...")
+    expect(source).not.toContain("映射到 Orchestrator 的一个工具")
+    expect(source).not.toContain("对应的 Orchestrator 工具名")
+    expect(source).not.toContain("single-tool-call invocation")
+    expect(source).not.toContain("orchestrator tool call")
   })
 
   test("projects failed analyze_intent abort decisions as failed after reload", () => {
@@ -452,7 +466,7 @@ describe("pipeline workflow review topology", () => {
     expect(taskSteps.analyze_intent?.status).toBe("failed")
   })
 
-  test("projects frontend_design as completed from frontend template decision log without visual rows", () => {
+  test("disconnects frontend_design from built-in pipeline while preserving custom workflow projection", () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `proj_workflow_design_${stamp}`
@@ -498,12 +512,43 @@ describe("pipeline workflow review topology", () => {
 
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!
     const taskSteps = projectTaskSteps(taskID, pipeline)
-    expect(taskSteps.frontend_design?.status).toBe("completed")
+    expect(Object.hasOwn(taskSteps, "frontend_design")).toBe(false)
 
     const prompt = renderWorkflowPrompt(pipeline, createWorkflowState(pipeline), taskID)
-    const designLine = prompt.split("\n").find((line) => line.includes("[task] frontend_design"))
-    expect(designLine).toBeDefined()
-    expect(designLine).toContain("[DONE]")
+    const designLine = prompt.split("\n").find((line) => line.includes("dispatch_agent target=frontend_design"))
+    expect(designLine).toBeUndefined()
+
+    const customFrontendDesignWorkflow = {
+      id: "custom-frontend-design",
+      name: "Custom Frontend Design",
+      description: "Explicit custom workflow that still uses frontend_design.",
+      steps: [
+        {
+          id: "frontend_design",
+          tool: "frontend_design",
+          agentRole: "frontend-design",
+          label: "Design",
+          hint: "Custom workflow frontend_design step.",
+          scope: "task",
+          skippable: true,
+          after: [],
+        },
+      ],
+      goalLoopStepIDs: [],
+    } satisfies MiniWorkflow
+    const customTaskSteps = projectTaskSteps(taskID, customFrontendDesignWorkflow)
+    expect(customTaskSteps.frontend_design?.status).toBe("completed")
+
+    const customPrompt = renderWorkflowPrompt(
+      customFrontendDesignWorkflow,
+      createWorkflowState(customFrontendDesignWorkflow),
+      taskID,
+    )
+    const customDesignLine = customPrompt
+      .split("\n")
+      .find((line) => line.includes("dispatch_agent target=frontend_design"))
+    expect(customDesignLine).toBeDefined()
+    expect(customDesignLine).toContain("[DONE]")
   })
 
   test("does not project visual_qa as completed from summary-only decision log text", () => {
@@ -1246,20 +1291,20 @@ describe("pipeline workflow review topology", () => {
       value: JSON.stringify(
         visualQaDecisionRecord(
           visualQaReport({
-          summary: "A report with blockers must not project as complete.",
-          production_blockers: [
-            {
-              id: "blocker_map",
-              check_ids: [DEFAULT_VISUAL_QA_CHECK_ID],
-              principle_ids: ["component-truth"],
-              region: "dashboard",
-              reason: "The visible map is a placeholder instead of the required production component.",
-              impact: "Users would see a misleading placeholder surface.",
-              required_correction: "Replace the placeholder with the production map component.",
-              source_refs: [DEFAULT_VISUAL_QA_SOURCE_REF],
-              evidence_refs: [DEFAULT_VISUAL_QA_EVIDENCE_REF],
-            },
-          ],
+            summary: "A report with blockers must not project as complete.",
+            production_blockers: [
+              {
+                id: "blocker_map",
+                check_ids: [DEFAULT_VISUAL_QA_CHECK_ID],
+                principle_ids: ["component-truth"],
+                region: "dashboard",
+                reason: "The visible map is a placeholder instead of the required production component.",
+                impact: "Users would see a misleading placeholder surface.",
+                required_correction: "Replace the placeholder with the production map component.",
+                source_refs: [DEFAULT_VISUAL_QA_SOURCE_REF],
+                evidence_refs: [DEFAULT_VISUAL_QA_EVIDENCE_REF],
+              },
+            ],
           }),
         ),
       ),

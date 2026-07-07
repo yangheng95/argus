@@ -29,6 +29,7 @@ const expectedSchedulerRoleBaseToolIDs = [
   "question",
   "read_context",
   "query_failed_goals",
+  "dispatch_agent",
   "manage_task",
   "wait",
   "inject_operator_message",
@@ -196,7 +197,13 @@ describe("orchestrator scheduler capability projection", () => {
       agentSessionID: "ses_unified_surface",
       workflow,
     })
-    const publicTools = tools as Record<string, { execute?: (input: unknown, options?: unknown) => Promise<unknown> }>
+    const publicTools = tools as Record<
+      string,
+      {
+        execute?: (input: unknown, options?: unknown) => Promise<unknown>
+        inputSchema?: { safeParse: (input: unknown) => { success: boolean } }
+      }
+    >
 
     expect(Object.hasOwn(publicTools, "dispatch_agent")).toBe(true)
     expect(Object.hasOwn(publicTools, "manage_task")).toBe(true)
@@ -230,6 +237,23 @@ describe("orchestrator scheduler capability projection", () => {
     const dispatchAgentExecute = publicTools.dispatch_agent.execute
     expect(typeof manageTaskExecute).toBe("function")
     expect(typeof dispatchAgentExecute).toBe("function")
+
+    expect(publicTools.manage_task.inputSchema!.safeParse({ action: "fail_task" }).success).toBe(false)
+    expect(publicTools.manage_task.inputSchema!.safeParse({ action: "fail_task", error: "fatal" }).success).toBe(
+      true,
+    )
+    expect(publicTools.manage_task.inputSchema!.safeParse({ action: "complete_task", error: "fatal" }).success).toBe(
+      false,
+    )
+    expect(
+      publicTools.manage_task.inputSchema!.safeParse({ action: "complete_task", summary: "all evidence passed" })
+        .success,
+    ).toBe(true)
+    expect(publicTools.manage_task.inputSchema!.safeParse({ action: "cancel_task" }).success).toBe(false)
+    expect(
+      publicTools.manage_task.inputSchema!.safeParse({ action: "cancel_task", reason: "operator requested stop" })
+        .success,
+    ).toBe(true)
 
     await expect(manageTaskExecute!({ action: "fail_task" }, toolOptions("manage_task_missing_error"))).rejects.toThrow()
     await expect(
@@ -325,7 +349,7 @@ describe("orchestrator scheduler capability projection", () => {
     }
   })
 
-  test("pipeline dispatch_agent target schema disconnects frontend_design without deleting custom workflow support", () => {
+  test("dispatch_agent target schema only accepts targets declared by the active workflow", () => {
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!
     expect(pipeline.steps.map((step) => step.tool)).not.toContain("frontend_design")
 
@@ -344,10 +368,74 @@ describe("orchestrator scheduler capability projection", () => {
     ).toBe(false)
     expect(
       tools.dispatch_agent.inputSchema!.safeParse({
-        target: "frontend_research",
-        reason: "source page investigation",
+        target: "requirements",
+        reason: "pipeline requirements intake",
       }).success,
     ).toBe(true)
+    expect(
+      tools.dispatch_agent.inputSchema!.safeParse({
+        target: "requirements",
+        reason: "pipeline requirements intake",
+        urls: ["https://example.com"],
+      }).success,
+    ).toBe(false)
+    expect(
+      tools.dispatch_agent.inputSchema!.safeParse({
+        target: "frontend_research",
+        reason: "source page investigation",
+        source_urls: ["https://example.com"],
+      }).success,
+    ).toBe(true)
+    expect(
+      tools.dispatch_agent.inputSchema!.safeParse({
+        target: "build",
+      }).success,
+    ).toBe(false)
+    expect(
+      tools.dispatch_agent.inputSchema!.safeParse({
+        target: "fact_check",
+        reason: "Verify report claims without target references.",
+      }).success,
+    ).toBe(false)
+    expect(
+      tools.dispatch_agent.inputSchema!.safeParse({
+        target: "fact_check",
+        target_session_id: "ses_worker_report",
+        fact_check_items: [
+          {
+            claim: "The implementation changed the unified scheduler dispatch tool contract.",
+            confidence: "high",
+            category: "protocol",
+            source: "test",
+          },
+        ],
+        reason: "Verify the worker terminal report claims before accepting them.",
+      }).success,
+    ).toBe(true)
+    expect(
+      tools.dispatch_agent.inputSchema!.safeParse({
+        target: "unknown_stage",
+        reason: "not a registered dispatch target",
+      }).success,
+    ).toBe(false)
+
+    const directTools = createOrchestratorTools({
+      taskID: "tsk_direct_dispatch_schema",
+      agentSessionID: "ses_direct_dispatch_schema",
+      workflow: WorkflowRegistry.resolveSync("direct")!,
+    }).tools
+    expect(
+      directTools.dispatch_agent.inputSchema!.safeParse({
+        target: "requirements",
+        reason: "direct workflow does not declare requirements",
+      }).success,
+    ).toBe(false)
+    expect(
+      directTools.dispatch_agent.inputSchema!.safeParse({
+        target: "integrity",
+        reason: "direct workflow does not declare integrity",
+      }).success,
+    ).toBe(false)
 
     const customFrontendDesignWorkflow = {
       ...pipeline,

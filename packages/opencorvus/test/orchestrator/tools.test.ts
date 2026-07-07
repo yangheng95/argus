@@ -33,7 +33,11 @@ import {
   type OrchestratorWorkflowToolName,
 } from "../../src/engine/workflow"
 import type { AgentRoleID } from "../../src/agent/role-contract"
-import { createOrchestratorTools, READ_CONTEXT_OUTPUT_CHAR_BUDGET } from "../../src/orchestrator/tools"
+import {
+  awaitOrchestratorBackgroundGoalBuilds,
+  createOrchestratorTools,
+  READ_CONTEXT_OUTPUT_CHAR_BUDGET,
+} from "../../src/orchestrator/tools"
 import * as TaskLoop from "../../src/orchestrator/loop"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { SessionPrompt } from "../../src/session/prompt"
@@ -373,7 +377,7 @@ async function importCurrentProjectSessionWithForeignParent(input: {
         id: foreignProjectID,
         worktree: `${Instance.directory}-foreign-parent-${suffix}`,
         name: `${input.title} foreign project`,
-        sandboxes: "[]",
+        sandboxes: [],
         time_created: now,
         time_updated: now,
       })
@@ -2642,6 +2646,7 @@ describe("orchestrator tools", () => {
 
   afterEach(
     async () => {
+      await awaitOrchestratorBackgroundGoalBuilds()
       buildAgentRunImpl = undefined
       reviewIntegrityImpl = undefined
       computeRequirementStatusSnapshotImpl = undefined
@@ -2688,7 +2693,7 @@ describe("orchestrator tools", () => {
           id: projectID,
           worktree: tmp.path,
           name: "Select expert squad project",
-          sandboxes: "[]",
+          sandboxes: [],
           time_created: now,
           time_updated: now,
         })
@@ -2841,7 +2846,7 @@ describe("orchestrator tools", () => {
           id: projectID,
           worktree: tmp.path,
           name: "Select expert squad foreign lineage project",
-          sandboxes: "[]",
+          sandboxes: [],
           time_created: now,
           time_updated: now,
         })
@@ -2851,7 +2856,7 @@ describe("orchestrator tools", () => {
           id: foreignProjectID,
           worktree: foreign.path,
           name: "Select expert squad foreign parent project",
-          sandboxes: "[]",
+          sandboxes: [],
           time_created: now,
           time_updated: now,
         })
@@ -2985,31 +2990,29 @@ describe("orchestrator tools", () => {
           workflowState: createWorkflowState(pipeline),
         })
 
-        let exploreCalled = false
-        exploreRunImpl = async () => {
-          exploreCalled = true
-          return { sessionID: "ses_explore_should_not_start", finalText: "should not start" }
+        const frontendDesignWorkflow = workflowDeclaringAgentRole("frontend-design", "frontend_design")
+        const { tools: frontendDesignTools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: child.id,
+          signal: new AbortController().signal,
+          workflow: frontendDesignWorkflow,
+          workflowState: createWorkflowState(frontendDesignWorkflow),
+        })
+        let frontendDesignCalled = false
+        designAnalyzeImpl = async () => {
+          frontendDesignCalled = true
+          return minimalFrontendDesignResult({ sessionID: "ses_frontend_design_should_not_start" })
         }
 
         await expect(
-          runDispatchAgentTool(tools, "explore",
-            {
-              question: "Which files are relevant?",
-              reason: "This should fail before model resolution.",
-            },
-            buildToolOptions("explore_foreign_lineage"),
-          ),
-        ).rejects.toThrow("Session not found")
-        expect(exploreCalled).toBe(false)
-
-        await expect(
-          runDispatchAgentTool(tools, "frontend_design",
+          runDispatchAgentTool(frontendDesignTools, "frontend_design",
             {
               reason: "This should fail before frontend design evidence preparation.",
             },
             buildToolOptions("frontend_design_foreign_lineage"),
           ),
         ).rejects.toThrow("Session not found")
+        expect(frontendDesignCalled).toBe(false)
 
         await expect(
           tools.refine.execute(
@@ -3067,7 +3070,7 @@ describe("orchestrator tools", () => {
           id: projectID,
           worktree: tmp.path,
           name: "operator projection project",
-          sandboxes: "[]",
+          sandboxes: [],
           time_created: now,
           time_updated: now,
         })
@@ -3130,7 +3133,7 @@ describe("orchestrator tools", () => {
           id: projectID,
           worktree: tmp.path,
           name: "Fail task project",
-          sandboxes: "[]",
+          sandboxes: [],
           time_created: now,
           time_updated: now,
         })
@@ -3442,7 +3445,7 @@ describe("orchestrator tools", () => {
           buildToolOptions("complete_task_terminal"),
         )
         expect(toolText(terminalResult)).toContain(`Task ${taskID} is terminal (status=completed)`)
-        expect(toolText(terminalResult)).toContain("complete_task was not executed")
+        expect(toolText(terminalResult)).toContain("manage_task was not executed")
       },
     })
   })
@@ -3829,7 +3832,7 @@ describe("orchestrator tools", () => {
               id: projectID,
               worktree: tmp.path,
               name: "Frontend research failure project",
-              sandboxes: "[]",
+              sandboxes: [],
               time_created: now,
               time_updated: now,
             })
@@ -3902,7 +3905,7 @@ describe("orchestrator tools", () => {
               id: projectID,
               worktree: tmp.path,
               name: "Frontend research persisted failure project",
-              sandboxes: "[]",
+              sandboxes: [],
               time_created: now,
               time_updated: now,
             })
@@ -5587,7 +5590,7 @@ describe("orchestrator tools", () => {
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
-          workflow: WorkflowRegistry.resolveSync("pipeline"),
+          workflow: workflowDeclaringAgentRole("frontend-research", "frontend_research"),
           signal: new AbortController().signal,
         })
         const request = await createAgentCoordinationRequest({
@@ -5642,7 +5645,7 @@ describe("orchestrator tools", () => {
           id: projectID,
           worktree: tmp.path,
           name: "agent coordination architect redispatch",
-          sandboxes: "[]",
+          sandboxes: [],
           time_created: now,
           time_updated: now,
         })
@@ -5818,7 +5821,7 @@ describe("orchestrator tools", () => {
           id: projectID,
           worktree: tmp.path,
           name: "agent coordination architect recovery",
-          sandboxes: "[]",
+          sandboxes: [],
           time_created: now,
           time_updated: now,
         })
@@ -6507,7 +6510,7 @@ describe("orchestrator tools", () => {
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
-          workflow: WorkflowRegistry.resolveSync("pipeline"),
+          workflow: workflowDeclaringAgentRole("frontend-research", "frontend_research"),
           signal: new AbortController().signal,
         })
         const request = await createAgentCoordinationRequest({
@@ -6636,7 +6639,7 @@ describe("orchestrator tools", () => {
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
-          workflow: WorkflowRegistry.resolveSync("pipeline"),
+          workflow: workflowDeclaringAgentRole("frontend-design", "frontend_design"),
           signal: new AbortController().signal,
         })
         const request = await createAgentCoordinationRequest({
@@ -6807,7 +6810,7 @@ describe("orchestrator tools", () => {
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
-          workflow: WorkflowRegistry.resolveSync("pipeline"),
+          workflow: workflowDeclaringAgentRole("frontend-design", "frontend_design"),
           signal: new AbortController().signal,
         })
         const request = await createAgentCoordinationRequest({
@@ -11729,7 +11732,9 @@ describe("orchestrator tools", () => {
           await runManageTaskTool(tools, "modify_goal",
             {
               goalID,
-              updates: { objective: "Mutated while live" },
+              updates: {
+                objective: "Mutated while live ownership should still be rejected by the guard.",
+              },
               reason: "should be rejected while live owned",
             },
             buildToolOptions(),
@@ -11852,7 +11857,9 @@ describe("orchestrator tools", () => {
             await runManageTaskTool(tools, "modify_goal",
               {
                 goalID,
-                updates: { objective: "Mutated while session active" },
+                updates: {
+                  objective: "Mutated while the active build session should still block updates.",
+                },
                 reason: "should be rejected while session active",
               },
               buildToolOptions(`modify_goal_${statusKind}`),
@@ -11945,7 +11952,10 @@ describe("orchestrator tools", () => {
           await runManageTaskTool(tools, "modify_goal",
             {
               goalID,
-              updates: { objective: "Mutated while live goal_run exists" },
+              updates: {
+                objective:
+                  "Mutated while the stale goal run exists but no live ownership remains active.",
+              },
               reason: "stale lifecycle row has no live ownership or active session",
             },
             buildToolOptions(),
@@ -11954,7 +11964,9 @@ describe("orchestrator tools", () => {
 
         expect(modifyResult).toContain(`Goal ${goalID} modified`)
         expect(modifyResult).not.toContain("Error: modify_goal refused")
-        expect(findGoal(goalID)?.objective).toBe("Mutated while live goal_run exists")
+        expect(findGoal(goalID)?.objective).toBe(
+          "Mutated while the stale goal run exists but no live ownership remains active.",
+        )
         expect(findGoalRun(goalRunID)?.status).toBe("running")
         expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
       },
@@ -12014,7 +12026,10 @@ describe("orchestrator tools", () => {
           await runManageTaskTool(tools, "modify_goal",
             {
               goalID,
-              updates: { objective: "Clarified completed objective" },
+              updates: {
+                objective:
+                  "Clarified completed objective while preserving the completed workspace pointer.",
+              },
               reason: "record retry intent while preserving worktree reuse context",
             },
             buildToolOptions(),
@@ -13189,7 +13204,7 @@ describe("orchestrator tools", () => {
           id: projectID,
           worktree: process.cwd(),
           name: "Build workflow intent test",
-          sandboxes: "[]",
+          sandboxes: [],
           time_created: now,
           time_updated: now,
         })
@@ -13956,7 +13971,7 @@ describe("orchestrator tools", () => {
           id: projectID,
           worktree: process.cwd(),
           name: "Build workflow inspect test",
-          sandboxes: "[]",
+          sandboxes: [],
           time_created: now,
           time_updated: now,
         })
@@ -13995,20 +14010,17 @@ describe("orchestrator tools", () => {
           workflowState,
         })
 
-        const result = await runDispatchAgentTool(tools, "build",
-          {
-            request: "Explore the component tree without changing files.",
-            reason: "Need repository investigation before implementation.",
-            directBuildIntent: retiredIntent,
-          } as any,
-          buildToolOptions(),
-        )
-
-        expect(toolText(result)).toContain("rejected task-level build")
-        expect(toolText(result)).toContain(`directBuildIntent="${retiredIntent}" is not supported`)
-        expect(toolText(result)).toContain("build is implementation-only")
-        expect(toolText(result)).toContain(
-          "Repository investigation belongs to analyze_intent, requirements, or explore",
+        await expect(
+          runDispatchAgentTool(tools, "build",
+            {
+              request: "Explore the component tree without changing files.",
+              reason: "Need repository investigation before implementation.",
+              directBuildIntent: retiredIntent,
+            } as any,
+            buildToolOptions(),
+          ),
+        ).rejects.toThrow(
+          /directBuildIntent|modify_files/,
         )
         const run = findActiveRunForTask(taskID)
         expect(run).toBeUndefined()
@@ -14029,7 +14041,7 @@ describe("orchestrator tools", () => {
           id: projectID,
           worktree: tmp.path,
           name: "propose task project",
-          sandboxes: "[]",
+          sandboxes: [],
           time_created: now,
           time_updated: now,
         })
@@ -14139,7 +14151,7 @@ describe("orchestrator tools", () => {
           id: projectID,
           worktree: tmp.path,
           name: "propose anchor task project",
-          sandboxes: "[]",
+          sandboxes: [],
           time_created: now,
           time_updated: now,
         })
@@ -14264,7 +14276,7 @@ describe("orchestrator tools", () => {
           id: projectID,
           worktree: tmp.path,
           name: "vague follow-up project",
-          sandboxes: "[]",
+          sandboxes: [],
           time_created: now,
           time_updated: now,
         })
@@ -14307,43 +14319,39 @@ describe("orchestrator tools", () => {
           workflowState: createWorkflowState(pipeline),
         })
 
-        const result = await runManageTaskTool(tools, "propose_task",
-          {
-            title: "Improve project quality",
-            request: "Do another polish pass and improve project quality.",
-            reason: "The project could benefit from general hardening later.",
-            priority: "normal",
-            kind: "workflow",
-          },
-          buildToolOptions(),
-        )
-
-        const text = toolText(result)
-        expect(toolMetadata(result)[ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY]).toBe("none")
-        expect(text).toContain("Follow-up task proposal rejected")
-        expect(text).toContain("concrete evidence anchor")
-        expect(text).toContain("no new task was created")
-
-        const noEvidenceResult = await runManageTaskTool(tools, "propose_task",
-          {
-            title: "Improve docs",
-            request: "Improve the docs page later.",
-            reason: "The docs page could be clearer.",
-            evidence_anchor: {
-              kind: "document",
-              entity: "docs/usage.md",
-              observed_problem: "The page could be clearer.",
-              evidence_refs: [],
+        await expect(
+          runManageTaskTool(tools, "propose_task",
+            {
+              title: "Improve project quality",
+              request: "Do another polish pass and improve project quality.",
+              reason: "The project could benefit from general hardening later.",
+              priority: "normal",
+              kind: "workflow",
             },
-            priority: "normal",
-            kind: "workflow",
-          },
-          buildToolOptions(),
-        )
+            buildToolOptions(),
+          ),
+        ).rejects.toThrow(/evidence_anchor/)
+        expect(createSpy).not.toHaveBeenCalled()
 
-        expect(toolMetadata(noEvidenceResult)[ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY]).toBe("none")
-        expect(toolText(noEvidenceResult)).toContain("Follow-up task proposal rejected")
-        expect(toolText(noEvidenceResult)).toContain("evidence_anchor.kind")
+        await expect(
+          runManageTaskTool(tools, "propose_task",
+            {
+              title: "Improve docs",
+              request: "Improve the docs page later.",
+              reason: "The docs page could be clearer.",
+              evidence_anchor: {
+                kind: "document",
+                entity: "docs/usage.md",
+                observed_problem: "The page could be clearer.",
+                evidence_refs: [],
+              },
+              priority: "normal",
+              kind: "workflow",
+            },
+            buildToolOptions(),
+          ),
+        ).rejects.toThrow(/evidence_refs|Too small/)
+
         expect(createSpy).not.toHaveBeenCalled()
       },
     })
@@ -14363,7 +14371,7 @@ describe("orchestrator tools", () => {
           id: projectID,
           worktree: tmp.path,
           name: "parallel child task project",
-          sandboxes: "[]",
+          sandboxes: [],
           time_created: now,
           time_updated: now,
         })
@@ -14486,7 +14494,7 @@ describe("orchestrator tools", () => {
           id: projectID,
           worktree: tmp.path,
           name: "completed propose task project",
-          sandboxes: "[]",
+          sandboxes: [],
           time_created: now,
           time_updated: now,
         })
@@ -14575,7 +14583,7 @@ describe("orchestrator tools", () => {
           id: projectID,
           worktree: tmp.path,
           name: "decline task project",
-          sandboxes: "[]",
+          sandboxes: [],
           time_created: now,
           time_updated: now,
         })
@@ -14659,8 +14667,8 @@ describe("orchestrator tools", () => {
     const stamp = now.toString(16)
     const taskID = `tsk_figma_mcp_${stamp}`
     const goalID = `gol_figma_mcp_${stamp}`
-    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
-    const workflowState = createWorkflowState(pipeline)
+    const frontendDesignWorkflow = workflowDeclaringAgentRole("frontend-design", "frontend_design")
+    const workflowState = createWorkflowState(frontendDesignWorkflow)
     const figmaUrl = "https://www.figma.com/design/fileKey/Product?node-id=1963-5219&m=dev"
 
     mcpServerToolsImpl = async () => [
@@ -14789,7 +14797,7 @@ describe("orchestrator tools", () => {
           request: `复刻 ${figmaUrl}`,
           goalTitle: "Implement Figma window",
           goalSlug: "implement-figma-window",
-          objective: "Implement the Figma window",
+          objective: "Implement the Figma window from MCP materialized visual evidence.",
           now,
           insertProject: false,
         })
@@ -14797,7 +14805,7 @@ describe("orchestrator tools", () => {
           taskID,
           agentSessionID: parent.id,
           signal: new AbortController().signal,
-          workflow: pipeline,
+          workflow: frontendDesignWorkflow,
           workflowState,
         })
 
@@ -15836,7 +15844,7 @@ describe("orchestrator tools", () => {
           id: projectID,
           worktree: process.cwd(),
           name: "Architect requirements preflight test",
-          sandboxes: "[]",
+          sandboxes: [],
           time_created: now,
           time_updated: now,
         })
@@ -15896,7 +15904,7 @@ describe("orchestrator tools", () => {
           id: projectID,
           worktree: process.cwd(),
           name: "Architect requirement copy test",
-          sandboxes: "[]",
+          sandboxes: [],
           time_created: now,
           time_updated: now,
         })

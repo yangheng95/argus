@@ -13,8 +13,8 @@
  * 以 integrity 做 session-bound review report。旧 host acceptance mechanism 已禁用，不再作为推荐 workflow 的验收步骤。
  *
  * MiniWorkflow 不是状态机，不是固定 pipeline。Orchestrator 仍可基于 agent 推理偏离推荐
- * 路径，每个步骤映射到一个已存在的 Orchestrator 工具，工作流只在 system prompt 中以
- * "推荐路径 + 当前进度" 的形式注入。
+ * 路径，每个步骤映射到一个 `dispatch_agent` scheduler dispatch target，
+ * 工作流只在 system prompt 中以 "推荐路径 + 当前进度" 的形式注入。
  */
 import { createDecisionLog } from "@/decision-log"
 import type { AgentRoleID } from "@/agent/role-contract"
@@ -47,11 +47,11 @@ import {
 // 类型定义
 // ═══════════════════════════════════════════════════════════════════
 
-/** 工作流中的一个步骤 — 映射到 Orchestrator 的一个工具 */
+/** 工作流中的一个步骤 — 映射到 scheduler dispatch target */
 export interface MiniWorkflowStep {
   /** 步骤唯一 ID */
   id: string
-  /** 对应的 Orchestrator 工具名 */
+  /** 对应的 scheduler dispatch target，而不是可见工具名 */
   tool: OrchestratorWorkflowToolName
   /** Scheduler-owned agent role that this workflow tool dispatches, when the
    *  tool is implemented by a task-worker agent. */
@@ -71,10 +71,10 @@ export interface MiniWorkflowStep {
    *  not hard-code a concrete agent such as Build. */
   outcomeCapability?: string
   /** Optional sub-phases within this step — only populated for goal-scope
-   *  steps whose single-tool-call invocation exposes more than one visible
-   *  execution phase. Task-scope steps map 1:1 to an orchestrator tool call
-   *  and have no phases. When present, the overlay renders phase rows inside
-   *  the step card and claims child sessions by phase (not by step). */
+   *  steps whose `dispatch_agent target=...` invocation exposes more than one
+   *  visible execution phase. Task-scope steps map 1:1 to a scheduler dispatch
+   *  target and have no phases. When present, the overlay renders phase rows
+   *  inside the step card and claims child sessions by phase (not by step). */
   phases?: MiniWorkflowPhase[]
 }
 
@@ -308,7 +308,7 @@ const PIPELINE: MiniWorkflow = {
       tool: "build",
       agentRole: "build",
       label: "Executor",
-      hint: "执行器在隔离 worktree 中完成一个 goal。每个 build 收到架构共识输入；build 完成后 architecture_review 的完整反馈会原文返回给 orchestrator，由 orchestrator LLM 自行决定后续动作（manage_task modify_goal / dispatch_agent build / dispatch_agent architect / dispatch_agent integrity / manage_task fail_task）。",
+      hint: "执行器在隔离 worktree 中完成一个 goal。每个 build 收到架构共识输入；build 完成后 architecture_review 的完整反馈会原文返回给 orchestrator，由 orchestrator LLM 自行决定后续动作（manage_task action=modify_goal / dispatch_agent target=build / dispatch_agent target=architect / dispatch_agent target=integrity / manage_task action=fail_task）。",
       scope: "goal",
       skippable: false,
       after: ["workload_analysis"],
@@ -319,7 +319,7 @@ const PIPELINE: MiniWorkflow = {
       tool: "visual_qa",
       agentRole: "visual-qa",
       label: "Visual QA",
-      hint: "所有 blocking implementation work terminal 后、最终调度决定前的一次性 GUI 视觉/功能/产品审查证据。GUI=Graphical User Interface，图形用户界面。它消费 task-scoped upstream evidence 以及可选 prior integrity evidence；优先做截图对比和逐屏截图分析，禁止用一次性整页截图 judge 当结论；先审组件真实性和可见功能，再审布局结构，最后才审样式微调。它是 report-only review，不编辑文件，不是 host gate，不替代 integrity，也不是 integrity 的前置状态机；effective_accepted=false 或 production_blockers>0 时由 orchestrator 基于证据和当前 workflow 声明的 implementation owner 选择 repair lane / question / manage_task propose_task / manage_task fail_task。",
+      hint: "所有 blocking implementation work terminal 后、最终调度决定前的一次性 GUI 视觉/功能/产品审查证据。GUI=Graphical User Interface，图形用户界面。它消费 task-scoped upstream evidence 以及可选 prior integrity evidence；优先做截图对比和逐屏截图分析，禁止用一次性整页截图 judge 当结论；先审组件真实性和可见功能，再审布局结构，最后才审样式微调。它是 report-only review，不编辑文件，不是 host gate，不替代 integrity，也不是 integrity 的前置状态机；effective_accepted=false 或 production_blockers>0 时由 orchestrator 基于证据和当前 workflow 声明的 implementation owner 选择 repair lane / question / manage_task action=propose_task / manage_task action=fail_task。",
       scope: "task",
       skippable: true,
       after: ["build"],
@@ -329,7 +329,7 @@ const PIPELINE: MiniWorkflow = {
       tool: "integrity",
       agentRole: "integrity",
       label: "Review",
-      hint: "系统完整性 review report：在所有 blocking goal build 完成后按证据需要调用。Integrity 在自己的 session 内审查 requirement mining、语义完整性、contract graph 与 delivered system。pass / non-pass 都只返回可操作报告，orchestrator 显式选择 manage_task complete_task / manage_task modify_goal / dispatch_agent build / dispatch_agent architect / manage_task propose_task / question / manage_task fail_task。",
+      hint: "系统完整性 review report：在所有 blocking goal build 完成后按证据需要调用。Integrity 在自己的 session 内审查 requirement mining、语义完整性、contract graph 与 delivered system。pass / non-pass 都只返回可操作报告，orchestrator 显式选择 manage_task action=complete_task / manage_task action=modify_goal / dispatch_agent target=build / dispatch_agent target=architect / manage_task action=propose_task / question / manage_task action=fail_task。",
       scope: "task",
       skippable: false,
       after: ["build"],

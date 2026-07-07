@@ -3409,7 +3409,7 @@ function rebuildGoalStepCards(board: any): void {
 
   // GC policy:
   //   The only step cards we drop are those whose owning GOAL no longer
-  //   exists on the board (goal deleted by modify_goal / plan revision).
+  //   exists on the board (goal deleted by goal contract edit / plan revision).
   //   We do not compare run ids here because step cards are keyed by
   //   goalID + stepID, not by goalRunID.
   const liveGoalIDs = new Set<string>()

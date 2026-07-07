@@ -16,7 +16,6 @@ import {
   setSessionExpertSquadActive,
   type ExpertSquadCatalog,
   type ExpertSquadOption,
-  type ExpertSquadTarget,
 } from "../../services/expert-squad"
 import {
   expertSquadCatalogDirectory,
@@ -38,16 +37,53 @@ function sourceLabel(squad: ExpertSquadOption): string {
   return squad.source.kind === "built_in" ? t("expert_squad.built_in") : t("expert_squad.package")
 }
 
-function overlayCount(squad: ExpertSquadOption | undefined): number {
-  return Object.values(squad?.agents ?? {}).filter((prompt) => prompt.trim().length > 0).length
+function catalogDirectoryLabel(): string {
+  const directory = expertSquadCatalogDirectory().trim()
+  return directory ? directory : t("expert_squad.directory_unavailable")
 }
 
 function projectionCount(values: string[] | undefined): number {
   return values?.length ?? 0
 }
 
-function targetLabelID(targetID: string): string {
-  return `expertSquadTargetLabel-${targetID}`
+function activeAgentMcpRefCount(agent: ExpertSquadCatalog["active_agent_projection"]["agents"][number]): number {
+  return (
+    projectionCount(agent.default_mcp_server_refs) +
+    projectionCount(agent.package_mcp_server_refs) +
+    projectionCount(agent.default_mcp_tool_refs) +
+    projectionCount(agent.package_mcp_tool_refs) +
+    projectionCount(agent.default_mcp_prompt_refs) +
+    projectionCount(agent.package_mcp_prompt_refs) +
+    projectionCount(agent.default_mcp_resource_refs) +
+    projectionCount(agent.package_mcp_resource_refs)
+  )
+}
+
+function activeAgentSkillRefCount(agent: ExpertSquadCatalog["active_agent_projection"]["agents"][number]): number {
+  return projectionCount(agent.default_skill_refs) + projectionCount(agent.package_skill_refs)
+}
+
+function activeAgentToolRefCount(agent: ExpertSquadCatalog["active_agent_projection"]["agents"][number]): number {
+  return (
+    projectionCount(agent.built_in_tool_ids) +
+    projectionCount(agent.default_tool_refs) +
+    projectionCount(agent.package_tool_refs)
+  )
+}
+
+function catalogScopeIdentity(scope = expertSquadCatalogScope()): string {
+  if (scope.kind === "project") return `project:${scope.directory}`
+  if (scope.kind === "session") return `session:${scope.directory}:${scope.sessionID}`
+  return scope.kind
+}
+
+type WritableCatalogScope = Extract<ReturnType<typeof expertSquadCatalogScope>, { kind: "project" | "session" }>
+type BusyAction = { key: string; scopeIdentity: string }
+
+function captureCatalogActionScope(): { scope: WritableCatalogScope; identity: string } | null {
+  const scope = expertSquadCatalogScope()
+  if (scope.kind !== "project" && scope.kind !== "session") return null
+  return { scope, identity: catalogScopeIdentity(scope) }
 }
 
 async function fileToBase64(file: Blob): Promise<string> {
@@ -84,7 +120,7 @@ export default function ExpertSquadPanel() {
   const [catalog, setCatalog] = createSignal<ExpertSquadCatalog | null>(null)
   const [notice, setNotice] = createSignal("")
   const [noticeTone, setNoticeTone] = createSignal("")
-  const [busy, setBusy] = createSignal("")
+  const [busy, setBusy] = createSignal<BusyAction | null>(null)
   const [loading, setLoading] = createSignal(false)
   const [replaceExisting, setReplaceExisting] = createSignal(false)
   const [catalogError, setCatalogError] = createSignal("")
@@ -94,9 +130,19 @@ export default function ExpertSquadPanel() {
   let loadSequence = 0
   let archiveInput: HTMLInputElement | undefined
 
+  const currentScope = createMemo(() => expertSquadCatalogScope())
+  const currentScopeIdentity = createMemo(() => catalogScopeIdentity(currentScope()))
+  const writableScopeAvailable = createMemo(() => {
+    const scope = currentScope()
+    return scope.kind === "project" || scope.kind === "session"
+  })
+  const activeBusy = createMemo(() => {
+    const action = busy()
+    return action?.scopeIdentity === currentScopeIdentity() ? action.key : ""
+  })
   const requestKey = createMemo(() => expertSquadCatalogRequestKey())
   const currentScopeSessionID = createMemo(() => {
-    const scope = expertSquadCatalogScope()
+    const scope = currentScope()
     return scope.kind === "session" ? scope.sessionID : ""
   })
   const squads = createMemo(() => catalog()?.squads ?? [])
@@ -109,58 +155,84 @@ export default function ExpertSquadPanel() {
     const list = squads()
     return list.find((squad) => squad.id === selectedSquadID()) ?? list[0]
   })
-  const squadTargets = createMemo(() => {
-    const current = currentSquad()
-    const currentCatalog = catalog()
-    if (!current || !currentCatalog) return [] as ExpertSquadTarget[]
-    return currentCatalog.targets.filter((target) => {
-      const prompt = current.agents?.[target.id]
-      return typeof prompt === "string" && prompt.trim().length > 0
-    })
+  const squadNameByID = (id: string): string =>
+    id ? (squads().find((item) => item.id === id)?.display_label ?? id) : "-"
+  const selectedSquadLabel = createMemo(() => {
+    const selectedID = selectedSquadID()
+    return selectedID ? squadNameByID(selectedID) : "-"
   })
-  const selectedTargetCount = createMemo(() => squadTargets().length)
-  const squadNameByID = (id: string): string => squads().find((item) => item.id === id)?.display_label ?? id
-  const scopeLabel = createMemo(() =>
-    expertSquadCatalogScope().kind === "session" ? t("expert_squad.scope_session") : t("expert_squad.scope_project"),
-  )
+  const scopeLabel = createMemo(() => {
+    const scope = currentScope()
+    if (scope.kind === "session") return t("expert_squad.scope_session")
+    if (scope.kind === "project") return t("expert_squad.scope_project")
+    if (scope.kind === "pending") return t("expert_squad.scope_pending")
+    return t("expert_squad.scope_unavailable")
+  })
+  const scopeStatus = createMemo(() => {
+    const scope = currentScope()
+    if (scope.kind === "pending") {
+      return {
+        status: "pending",
+        title: t("expert_squad.scope_pending_title"),
+        body: t("expert_squad.scope_pending_body"),
+      }
+    }
+    if (scope.kind === "unavailable") {
+      return {
+        status: "unavailable",
+        title: t("expert_squad.scope_unavailable_title"),
+        body: t("expert_squad.scope_unavailable_body"),
+      }
+    }
+    return null
+  })
 
-  async function refreshCatalog(nextSelectedID?: string): Promise<void> {
-    const scope = expertSquadCatalogScope()
+  async function refreshCatalog(
+    nextSelectedID?: string,
+    scope = expertSquadCatalogScope(),
+    expectedScopeIdentity = catalogScopeIdentity(scope),
+  ): Promise<void> {
     if (scope.kind === "unavailable" || scope.kind === "pending") {
+      loadSequence++
       setCatalog(null)
       setCatalogError("")
+      setLoading(false)
       return
     }
     setLoading(true)
     const sequence = ++loadSequence
     try {
       const next = await loadExpertSquadCatalog(scope)
-      if (sequence !== loadSequence) return
+      if (sequence !== loadSequence || currentScopeIdentity() !== expectedScopeIdentity) return
       setCatalog(next)
       setCatalogError("")
       setSelectedSquadID((current) =>
         next.squads.some((squad) => squad.id === (nextSelectedID || current))
           ? nextSelectedID || current
-          : (next.active.effective || next.squads[0]?.id || ""),
+          : next.active.effective || next.squads[0]?.id || "",
       )
     } catch (error) {
-      if (sequence === loadSequence) {
+      if (sequence === loadSequence && currentScopeIdentity() === expectedScopeIdentity) {
         setCatalog(null)
         setCatalogError(error instanceof Error ? error.message : String(error))
       }
       throw error
     } finally {
-      if (sequence === loadSequence) setLoading(false)
+      if (sequence === loadSequence && currentScopeIdentity() === expectedScopeIdentity) setLoading(false)
     }
   }
 
   createEffect<string>((previousKey) => {
     const key = requestKey()
     if (key === previousKey) return previousKey
-    const scope = expertSquadCatalogScope()
+    setActionError("")
+    clearNotice()
+    const scope = currentScope()
     if (scope.kind === "unavailable" || scope.kind === "pending") {
+      loadSequence++
       setCatalog(null)
       setCatalogError("")
+      setLoading(false)
       return key
     }
     void refreshCatalog().catch(() => undefined)
@@ -177,108 +249,166 @@ export default function ExpertSquadPanel() {
     setSelectedSquadID(effectiveActiveID() || list[0]!.id)
   })
 
-  function showNotice(message: string, tone = "") {
+  function clearNotice() {
     if (noticeTimer) clearTimeout(noticeTimer)
+    noticeTimer = undefined
+    setNotice("")
+    setNoticeTone("")
+  }
+
+  function showNotice(message: string, tone = "") {
+    clearNotice()
     setNotice(message)
     setNoticeTone(tone)
     if (message) noticeTimer = setTimeout(() => setNotice(""), 3200)
   }
 
-  async function runBusy(key: string, fn: () => Promise<void>) {
-    if (busy()) return
-    setBusy(key)
+  async function runBusy(key: string, fn: () => Promise<void>, expectedScopeIdentity = currentScopeIdentity()) {
+    if (activeBusy()) return
+    setBusy({ key, scopeIdentity: expectedScopeIdentity })
     setActionError("")
     try {
       await fn()
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      setActionError(message)
+      if (currentScopeIdentity() === expectedScopeIdentity) setActionError(message)
     } finally {
-      setBusy("")
+      setBusy((current) => (current?.key === key && current.scopeIdentity === expectedScopeIdentity ? null : current))
     }
   }
 
   async function activateProject() {
     const squad = currentSquad()
-    const directory = expertSquadCatalogDirectory()
+    const captured = captureCatalogActionScope()
+    if (!captured) return
+    const actionScope = captured.scope
+    const actionScopeIdentity = captured.identity
+    const directory = actionScope.directory
     if (!squad || !directory || projectActiveID() === squad.id) return
-    await runBusy("activate-project", async () => {
-      await setProjectExpertSquadActive(squad.id, directory)
-      await refreshCatalog(squad.id)
-      showNotice(t("expert_squad.activated_project"), "active")
-    })
+    await runBusy(
+      "activate-project",
+      async () => {
+        await setProjectExpertSquadActive(squad.id, directory, {
+          isCurrentDirectory: () => currentScopeIdentity() === actionScopeIdentity,
+        })
+        if (currentScopeIdentity() !== actionScopeIdentity) return
+        await refreshCatalog(squad.id, actionScope, actionScopeIdentity)
+        showNotice(t("expert_squad.activated_project"), "active")
+      },
+      actionScopeIdentity,
+    )
   }
 
   async function activateSession() {
     const squad = currentSquad()
-    const sessionID = currentScopeSessionID()
-    const directory = expertSquadCatalogDirectory()
+    const captured = captureCatalogActionScope()
+    if (!captured) return
+    const actionScope = captured.scope
+    const actionScopeIdentity = captured.identity
+    const sessionID = actionScope.kind === "session" ? actionScope.sessionID : ""
+    const directory = actionScope.directory
     if (!squad || !sessionID || !directory || sessionOverrideID() === squad.id) return
-    await runBusy("activate-session", async () => {
-      await setSessionExpertSquadActive(sessionID, squad.id, directory)
-      await refreshCatalog(squad.id)
-      showNotice(t("expert_squad.activated_session"), "active")
-    })
+    await runBusy(
+      "activate-session",
+      async () => {
+        await setSessionExpertSquadActive(sessionID, squad.id, directory)
+        if (currentScopeIdentity() !== actionScopeIdentity) return
+        await refreshCatalog(squad.id, actionScope, actionScopeIdentity)
+        showNotice(t("expert_squad.activated_session"), "active")
+      },
+      actionScopeIdentity,
+    )
   }
 
   async function clearSessionOverride() {
-    const sessionID = currentScopeSessionID()
-    const directory = expertSquadCatalogDirectory()
+    const captured = captureCatalogActionScope()
+    if (!captured) return
+    const actionScope = captured.scope
+    const actionScopeIdentity = captured.identity
+    const sessionID = actionScope.kind === "session" ? actionScope.sessionID : ""
+    const directory = actionScope.directory
     if (!sessionID || !directory || !sessionOverrideID()) return
-    await runBusy("clear-session-override", async () => {
-      await clearSessionExpertSquadOverride(sessionID, directory)
-      await refreshCatalog(projectActiveID())
-      showNotice(t("expert_squad.cleared_session_override"), "active")
-    })
+    await runBusy(
+      "clear-session-override",
+      async () => {
+        await clearSessionExpertSquadOverride(sessionID, directory)
+        if (currentScopeIdentity() !== actionScopeIdentity) return
+        await refreshCatalog(projectActiveID(), actionScope, actionScopeIdentity)
+        showNotice(t("expert_squad.cleared_session_override"), "active")
+      },
+      actionScopeIdentity,
+    )
   }
 
   async function importFolder() {
-    const directory = expertSquadCatalogDirectory()
-    if (!directory) return
-    await runBusy("import-folder", async () => {
-      const sourceDirectory = await pickDirectory(directory)
-      if (!sourceDirectory.trim()) return
-      const result = await importExpertSquadFolder({
-        directory,
-        sourceDirectory,
-        replace: replaceExisting(),
-      })
-      await refreshCatalog(result.id)
-      showNotice(
-        result.replaced ? t("expert_squad.import_replaced", { id: result.id }) : t("expert_squad.imported", { id: result.id }),
-        "active",
-      )
-    })
+    const captured = captureCatalogActionScope()
+    if (!captured) return
+    await runBusy(
+      "import-folder",
+      async () => {
+        const sourceDirectory = await pickDirectory(captured.scope.directory)
+        if (!sourceDirectory.trim()) return
+        if (currentScopeIdentity() !== captured.identity) return
+        const result = await importExpertSquadFolder({
+          directory: captured.scope.directory,
+          sourceDirectory,
+          replace: replaceExisting(),
+        })
+        if (currentScopeIdentity() !== captured.identity) return
+        await refreshCatalog(result.id, captured.scope, captured.identity)
+        showNotice(
+          result.replaced
+            ? t("expert_squad.import_replaced", { id: result.id })
+            : t("expert_squad.imported", { id: result.id }),
+          "active",
+        )
+      },
+      captured.identity,
+    )
   }
 
   async function importArchive(file: File | undefined) {
-    const directory = expertSquadCatalogDirectory()
-    if (!directory || !file) return
-    await runBusy("import-archive", async () => {
-      const result = await importExpertSquadArchive({
-        directory,
-        archiveBase64: await fileToBase64(file),
-        filename: file.name,
-        replace: replaceExisting(),
-      })
-      await refreshCatalog(result.id)
-      showNotice(
-        result.replaced ? t("expert_squad.import_replaced", { id: result.id }) : t("expert_squad.imported", { id: result.id }),
-        "active",
-      )
-    })
+    const captured = captureCatalogActionScope()
+    if (!captured || !file) return
+    await runBusy(
+      "import-archive",
+      async () => {
+        const archiveBase64 = await fileToBase64(file)
+        if (currentScopeIdentity() !== captured.identity) return
+        const result = await importExpertSquadArchive({
+          directory: captured.scope.directory,
+          archiveBase64,
+          filename: file.name,
+          replace: replaceExisting(),
+        })
+        if (currentScopeIdentity() !== captured.identity) return
+        await refreshCatalog(result.id, captured.scope, captured.identity)
+        showNotice(
+          result.replaced
+            ? t("expert_squad.import_replaced", { id: result.id })
+            : t("expert_squad.imported", { id: result.id }),
+          "active",
+        )
+      },
+      captured.identity,
+    )
     if (archiveInput) archiveInput.value = ""
   }
 
   async function exportCurrent() {
     const squad = currentSquad()
-    const directory = expertSquadCatalogDirectory()
-    if (!squad || !directory || squad.built_in) return
-    await runBusy("export", async () => {
-      const result = await exportExpertSquadArchive(directory, squad.id)
-      saveBase64Archive(result.filename, result.archiveBase64)
-      showNotice(t("expert_squad.exported", { id: result.id, count: result.fileCount }), "active")
-    })
+    const captured = captureCatalogActionScope()
+    if (!squad || !captured || squad.built_in) return
+    await runBusy(
+      "export",
+      async () => {
+        const result = await exportExpertSquadArchive(captured.scope.directory, squad.id)
+        if (currentScopeIdentity() !== captured.identity) return
+        saveBase64Archive(result.filename, result.archiveBase64)
+        showNotice(t("expert_squad.exported", { id: result.id, count: result.fileCount }), "active")
+      },
+      captured.identity,
+    )
   }
 
   return (
@@ -298,6 +428,7 @@ export default function ExpertSquadPanel() {
                 <input
                   type="checkbox"
                   checked={replaceExisting()}
+                  disabled={!writableScopeAvailable() || !!activeBusy()}
                   onChange={(event) => setReplaceExisting(event.currentTarget.checked)}
                 />
                 <span>{t("expert_squad.replace_existing")}</span>
@@ -308,7 +439,7 @@ export default function ExpertSquadPanel() {
                 size="sm"
                 tone="neutral"
                 data-ui="expert-squad-import-folder"
-                disabled={!!busy()}
+                disabled={!writableScopeAvailable() || !!activeBusy()}
                 onClick={importFolder}
               >
                 <Icon name="folder-open" size={13} />
@@ -320,7 +451,7 @@ export default function ExpertSquadPanel() {
                 size="sm"
                 tone="neutral"
                 data-ui="expert-squad-import-archive"
-                disabled={!!busy()}
+                disabled={!writableScopeAvailable() || !!activeBusy()}
                 onClick={() => archiveInput?.click()}
               >
                 <Icon name="upload" size={13} />
@@ -346,7 +477,7 @@ export default function ExpertSquadPanel() {
             <div class="config-status-box" data-status="error" data-ui="expert-squad-catalog-error">
               <span class="config-status-box__text">
                 {t("expert_squad.catalog_failed", {
-                  directory: expertSquadCatalogDirectory() || "-",
+                  directory: catalogDirectoryLabel(),
                   error: catalogError(),
                 })}
               </span>
@@ -356,58 +487,81 @@ export default function ExpertSquadPanel() {
             <div class="config-status-box" data-status="error" data-ui="expert-squad-action-error">
               <span class="config-status-box__text">
                 {t("expert_squad.action_failed", {
-                  directory: expertSquadCatalogDirectory() || "-",
+                  directory: catalogDirectoryLabel(),
                   error: actionError(),
                 })}
               </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                tone="neutral"
-                onClick={() => setActionError("")}
-              >
+              <Button type="button" variant="ghost" size="sm" tone="neutral" onClick={() => setActionError("")}>
                 {t("common.dismiss")}
               </Button>
             </div>
           </Show>
 
-          <Show when={!loading()} fallback={<div class="loading-hint">{t("expert_squad.loading")}</div>}>
-            <Show when={squads().length > 0} fallback={<div class="empty-hint">{t("expert_squad.none")}</div>}>
-              <div class="expert-squad-overview" data-ui="expert-squad-overview">
-                <div class="expert-squad-overview-item" data-kind="scope">
-                  <span>{t("expert_squad.scope")}</span>
-                  <strong>{scopeLabel()}</strong>
-                </div>
-                <div class="expert-squad-overview-item" data-kind="project-active">
-                  <span>{t("expert_squad.project_active")}</span>
-                  <strong>{squadNameByID(projectActiveID())}</strong>
-                </div>
-                <Show when={currentScopeSessionID()}>
-                  <div class="expert-squad-overview-item" data-kind="session-override">
-                    <span>{t("expert_squad.session_override")}</span>
-                    <strong>{sessionOverrideID() ? squadNameByID(sessionOverrideID()) : t("expert_squad.inherits_project")}</strong>
-                  </div>
-                </Show>
-                <div class="expert-squad-overview-item" data-kind="effective-active">
-                  <span>{t("expert_squad.effective_active")}</span>
-                  <strong>{squadNameByID(effectiveActiveID())}</strong>
-                </div>
-                <Show when={activeProjection()}>
-                  {(projection) => (
-                    <div class="expert-squad-overview-item" data-kind="projection">
-                      <span>{t("expert_squad.active_projection")}</span>
-                      <strong>{projection().active_squad_id}</strong>
-                      <small>
-                        {t("expert_squad.agent_count", { count: projection().projected_agent_ids.length })} ·{" "}
-                        {t("expert_squad.skill_count", { count: projection().projected_skill_names.length })} ·{" "}
-                        {t("expert_squad.tool_count", { count: projection().projected_tool_ids.length })}
-                      </small>
-                    </div>
-                  )}
-                </Show>
+          <div class="expert-squad-overview" data-ui="expert-squad-overview">
+            <div class="expert-squad-overview-item" data-kind="directory">
+              <span>{t("expert_squad.directory")}</span>
+              <strong>{catalogDirectoryLabel()}</strong>
+            </div>
+            <div class="expert-squad-overview-item" data-kind="scope">
+              <span>{t("expert_squad.scope")}</span>
+              <strong>{scopeLabel()}</strong>
+            </div>
+            <div class="expert-squad-overview-item" data-kind="project-active">
+              <span>{t("expert_squad.project_active")}</span>
+              <strong>{squadNameByID(projectActiveID())}</strong>
+            </div>
+            <Show when={currentScopeSessionID()}>
+              <div class="expert-squad-overview-item" data-kind="session-override">
+                <span>{t("expert_squad.session_override")}</span>
+                <strong>
+                  {sessionOverrideID() ? squadNameByID(sessionOverrideID()) : t("expert_squad.inherits_project")}
+                </strong>
               </div>
+            </Show>
+            <div class="expert-squad-overview-item" data-kind="effective-active">
+              <span>{t("expert_squad.effective_active")}</span>
+              <strong>{squadNameByID(effectiveActiveID())}</strong>
+            </div>
+            <div class="expert-squad-overview-item" data-kind="selected">
+              <span>{t("expert_squad.selected")}</span>
+              <strong>{selectedSquadLabel()}</strong>
+            </div>
+            <Show when={activeProjection()}>
+              {(projection) => (
+                <div class="expert-squad-overview-item" data-kind="projection">
+                  <span>{t("expert_squad.active_projection")}</span>
+                  <strong>{projection().active_squad_id}</strong>
+                  <small>
+                    {t("expert_squad.agent_count", { count: projection().projected_agent_ids.length })} ·{" "}
+                    {t("expert_squad.skill_count", { count: projection().projected_skill_names.length })} ·{" "}
+                    {t("expert_squad.tool_count", { count: projection().projected_tool_ids.length })}
+                  </small>
+                </div>
+              )}
+            </Show>
+          </div>
 
+          <Show when={!loading()} fallback={<div class="loading-hint">{t("expert_squad.loading")}</div>}>
+            <Show when={scopeStatus()}>
+              {(status) => (
+                <div class="expert-squad-recovery" data-ui="expert-squad-scope-state" data-status={status().status}>
+                  <Icon name="info-circle" size={16} />
+                  <strong>{status().title}</strong>
+                  <span>{status().body}</span>
+                </div>
+              )}
+            </Show>
+            <Show when={!scopeStatus() && catalogError()}>
+              <div class="expert-squad-recovery" data-ui="expert-squad-catalog-recovery" data-status="failed">
+                <Icon name="folder-open" size={16} />
+                <strong>{t("expert_squad.catalog_recovery_title")}</strong>
+                <span>{t("expert_squad.catalog_recovery_body")}</span>
+              </div>
+            </Show>
+            <Show when={!scopeStatus() && !catalogError() && squads().length === 0}>
+              <div class="empty-hint">{t("expert_squad.none")}</div>
+            </Show>
+            <Show when={!scopeStatus() && !catalogError() && squads().length > 0}>
               <div class="expert-squad-layout" data-ui="expert-squad-panel">
                 <div class="expert-squad-list" data-ui="expert-squad-list">
                   <For each={squads()}>
@@ -472,10 +626,12 @@ export default function ExpertSquadPanel() {
                           size="sm"
                           tone={projectActiveID() === squad.id ? "neutral" : "accent"}
                           data-ui="expert-squad-activate-project"
-                          disabled={!!busy() || projectActiveID() === squad.id}
+                          disabled={!writableScopeAvailable() || !!activeBusy() || projectActiveID() === squad.id}
                           onClick={activateProject}
                         >
-                          {projectActiveID() === squad.id ? t("expert_squad.project_active") : t("expert_squad.activate_project")}
+                          {projectActiveID() === squad.id
+                            ? t("expert_squad.project_active")
+                            : t("expert_squad.activate_project")}
                         </Button>
                         <Show when={currentScopeSessionID()}>
                           <>
@@ -485,7 +641,7 @@ export default function ExpertSquadPanel() {
                               size="sm"
                               tone={sessionOverrideID() === squad.id ? "neutral" : "accent"}
                               data-ui="expert-squad-activate-session"
-                              disabled={!!busy() || sessionOverrideID() === squad.id}
+                              disabled={!writableScopeAvailable() || !!activeBusy() || sessionOverrideID() === squad.id}
                               onClick={activateSession}
                             >
                               {sessionOverrideID() === squad.id
@@ -498,7 +654,7 @@ export default function ExpertSquadPanel() {
                               size="sm"
                               tone="neutral"
                               data-ui="expert-squad-clear-session-override"
-                              disabled={!!busy() || !sessionOverrideID()}
+                              disabled={!writableScopeAvailable() || !!activeBusy() || !sessionOverrideID()}
                               onClick={clearSessionOverride}
                             >
                               <Icon name="rewind" size={13} />
@@ -512,7 +668,7 @@ export default function ExpertSquadPanel() {
                           size="sm"
                           tone="neutral"
                           data-ui="expert-squad-export"
-                          disabled={!!busy() || squad.built_in}
+                          disabled={!writableScopeAvailable() || !!activeBusy() || squad.built_in}
                           onClick={exportCurrent}
                         >
                           <Icon name="download" size={13} />
@@ -534,8 +690,8 @@ export default function ExpertSquadPanel() {
                           <strong>{squad.projected_agents.join(", ") || "-"}</strong>
                         </div>
                         <div>
-                          <span>{t("expert_squad.overlay_count", { count: overlayCount(squad) })}</span>
-                          <strong>{t("expert_squad.target_count", { count: selectedTargetCount() })}</strong>
+                          <span>{t("expert_squad.virtual_agents")}</span>
+                          <strong>{t("expert_squad.agent_count", { count: squad.virtual_agents.length })}</strong>
                         </div>
                       </div>
 
@@ -576,8 +732,9 @@ export default function ExpertSquadPanel() {
                                     <strong>{agent.label}</strong>
                                     <small>
                                       {agent.virtual_agent_id} ·{" "}
-                                      {t("expert_squad.skill_count", { count: agent.package_skill_refs.length })} ·{" "}
-                                      {t("expert_squad.tool_count", { count: agent.package_tool_refs.length })}
+                                      {t("expert_squad.skill_count", { count: activeAgentSkillRefCount(agent) })} ·{" "}
+                                      {t("expert_squad.tool_count", { count: activeAgentToolRefCount(agent) })} ·{" "}
+                                      {t("expert_squad.mcp_ref_count", { count: activeAgentMcpRefCount(agent) })}
                                     </small>
                                   </div>
                                 )}
@@ -606,7 +763,10 @@ export default function ExpertSquadPanel() {
                               <strong>{selector().summary}</strong>
                               <span>{selector().selection_guidance}</span>
                             </div>
-                            <div class="expert-squad-markdown md-content" innerHTML={markdownHtml(selector().instructions)} />
+                            <div
+                              class="expert-squad-markdown md-content"
+                              innerHTML={markdownHtml(selector().instructions)}
+                            />
                           </div>
                         )}
                       </Show>
@@ -619,21 +779,49 @@ export default function ExpertSquadPanel() {
                               count:
                                 projectionCount(squad.capability_projection.scheduler.built_in_tool_ids) +
                                 projectionCount(squad.capability_projection.scheduler.default_tool_refs) +
-                                projectionCount(squad.capability_projection.scheduler.package_tool_refs),
+                                projectionCount(squad.capability_projection.scheduler.package_tool_refs) +
+                                projectionCount(squad.capability_projection.scheduler.default_mcp_tool_refs) +
+                                projectionCount(squad.capability_projection.scheduler.package_mcp_tool_refs),
                             })}
                           </SettingsPill>
                         </div>
                         <div class="expert-squad-projection-grid">
                           <For
-                            each={[
-                              ["built_in_tool_ids", squad.capability_projection.scheduler.built_in_tool_ids],
-                              ["default_skill_refs", squad.capability_projection.scheduler.default_skill_refs],
-                              ["package_skill_refs", squad.capability_projection.scheduler.package_skill_refs],
-                              ["default_tool_refs", squad.capability_projection.scheduler.default_tool_refs],
-                              ["package_tool_refs", squad.capability_projection.scheduler.package_tool_refs],
-                              ["default_mcp_tool_refs", squad.capability_projection.scheduler.default_mcp_tool_refs],
-                              ["package_mcp_tool_refs", squad.capability_projection.scheduler.package_mcp_tool_refs],
-                            ] as const}
+                            each={
+                              [
+                                ["built_in_tool_ids", squad.capability_projection.scheduler.built_in_tool_ids],
+                                ["default_skill_refs", squad.capability_projection.scheduler.default_skill_refs],
+                                ["package_skill_refs", squad.capability_projection.scheduler.package_skill_refs],
+                                ["default_tool_refs", squad.capability_projection.scheduler.default_tool_refs],
+                                ["package_tool_refs", squad.capability_projection.scheduler.package_tool_refs],
+                                [
+                                  "default_mcp_server_refs",
+                                  squad.capability_projection.scheduler.default_mcp_server_refs,
+                                ],
+                                [
+                                  "package_mcp_server_refs",
+                                  squad.capability_projection.scheduler.package_mcp_server_refs,
+                                ],
+                                ["default_mcp_tool_refs", squad.capability_projection.scheduler.default_mcp_tool_refs],
+                                ["package_mcp_tool_refs", squad.capability_projection.scheduler.package_mcp_tool_refs],
+                                [
+                                  "default_mcp_prompt_refs",
+                                  squad.capability_projection.scheduler.default_mcp_prompt_refs,
+                                ],
+                                [
+                                  "package_mcp_prompt_refs",
+                                  squad.capability_projection.scheduler.package_mcp_prompt_refs,
+                                ],
+                                [
+                                  "default_mcp_resource_refs",
+                                  squad.capability_projection.scheduler.default_mcp_resource_refs,
+                                ],
+                                [
+                                  "package_mcp_resource_refs",
+                                  squad.capability_projection.scheduler.package_mcp_resource_refs,
+                                ],
+                              ] as const
+                            }
                           >
                             {([key, values]) => (
                               <div class="expert-squad-projection-row">
@@ -643,44 +831,6 @@ export default function ExpertSquadPanel() {
                             )}
                           </For>
                         </div>
-                      </div>
-
-                      <div class="expert-squad-section">
-                        <div class="expert-squad-section-head">
-                          <strong>{t("expert_squad.agent_overlays")}</strong>
-                          <SettingsPill tone="muted">
-                            {t("expert_squad.target_count", { count: selectedTargetCount() })}
-                          </SettingsPill>
-                        </div>
-                        <For each={squadTargets()}>
-                          {(target) => {
-                            const labelID = targetLabelID(target.id)
-                            const value = () => squad.agents?.[target.id] ?? ""
-                            return (
-                              <div class="expert-squad-target" data-has-overlay={value().trim().length > 0 ? "true" : "false"}>
-                                <div class="expert-squad-target-head">
-                                  <div class="expert-squad-target-copy">
-                                    <strong id={labelID}>{target.label}</strong>
-                                    <span>{target.id}</span>
-                                  </div>
-                                  <div class="expert-squad-target-state">
-                                    <SettingsPill tone="muted">{t("expert_squad.readonly")}</SettingsPill>
-                                    <SettingsPill tone="accent">{t("expert_squad.overlay_configured")}</SettingsPill>
-                                    <Show when={target.built_in_only}>
-                                      <SettingsPill tone="muted">{t("expert_squad.built_in_only")}</SettingsPill>
-                                    </Show>
-                                  </div>
-                                </div>
-                                <Show when={target.description}>
-                                  <small class="expert-squad-target-description">{target.description}</small>
-                                </Show>
-                                <div class="expert-squad-prompt-card">
-                                  <div class="md-content expert-squad-prompt-body" innerHTML={markdownHtml(value())} />
-                                </div>
-                              </div>
-                            )
-                          }}
-                        </For>
                       </div>
                     </div>
                   )}

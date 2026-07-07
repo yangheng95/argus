@@ -1084,7 +1084,7 @@ export function renderCollaborationClosure(desc: CollaborationClosureDesc | unde
       "The active goal graph has entered execution. Treat it as the shared collaboration contract, not a scratchpad to re-plan for ordinary shared-file edits.",
     )
     lines.push(
-      "Ordinary collaboration drift belongs in Build `files_changed[]` reports and, when the written contract needs a point correction, `modify_goal`. Architect re-entry is structural re-planning and needs acceptance/reference-coverage evidence or an explicit upstream restart.",
+      "Ordinary collaboration drift belongs in Build `files_changed[]` reports and, when the written contract needs a point correction, `manage_task` action=modify_goal. Architect re-entry through `dispatch_agent` target=architect is structural re-planning and needs acceptance/reference-coverage evidence or an explicit upstream restart.",
     )
   } else {
     lines.push("Execution has not started yet; this is still the planning window.")
@@ -1102,7 +1102,7 @@ export function renderCollaborationClosure(desc: CollaborationClosureDesc | unde
       lines.push(`- ${goalID}: ${titleByID.get(goalID) ?? "untitled"}`)
     }
     lines.push(
-      "Failed goals stay inside the current collaboration closure. Read `query_failed_goals`, then route repair through `build({ goalID, request })`, `modify_goal`, or `architect` according to the proven owner; ask the operator only for external, destructive, or out-of-scope blockers. Do not restart upstream merely because a Build attempt failed or a failed worktree contains partial files.",
+      "Failed goals stay inside the current collaboration closure. Read `query_failed_goals`, then route repair through `dispatch_agent` target=build with goalID/request, `manage_task` action=modify_goal, or `dispatch_agent` target=architect according to the proven owner; ask the operator only for external, destructive, or out-of-scope blockers. Do not restart upstream merely because a Build attempt failed or a failed worktree contains partial files.",
     )
   }
 
@@ -1148,8 +1148,9 @@ export function renderTaskDescription(desc: TaskDesc): string {
     if (desc.run_orphan) {
       lines.push(
         `Note: this run has no live executor — the owner process was restarted. ` +
-          `The next decision should treat it as abandoned (retry, re-dispatch, ` +
-          `fail_task, or drop) rather than assuming it is still progressing.`,
+          `The next decision should treat it as abandoned (` +
+          `manage_task action=retry_task, re-dispatch, manage_task action=fail_task, or drop) ` +
+          `rather than assuming it is still progressing.`,
       )
     }
   }
@@ -1162,7 +1163,7 @@ export function renderTaskDescription(desc: TaskDesc): string {
       `agent_parallelism=${desc.budget.max_executor_groups}.`,
   )
   lines.push(
-    "No numeric run/fix budget is enforced by the host. Decide whether to continue, change strategy, ask the operator, or fail_task from the evidence above and below.",
+    "No numeric run/fix budget is enforced by the host. Decide whether to continue, change strategy, ask the operator, or use `manage_task` action=fail_task from the evidence above and below.",
   )
 
   const closureLines = renderCollaborationClosure(desc.collaboration_closure, desc.goals)
@@ -1243,10 +1244,10 @@ export function renderTaskDescription(desc: TaskDesc): string {
       lines.push(`- ${ts} ${tag}${truncate(f.reason, 240)}`)
     }
     lines.push(
-      `These entries are upstream LLM-call failures that aborted a wake before any decision ` +
-        `was made. Use those entries to decide: \`retry_task\` (transient network/idle blip), ` +
-        `\`question\` (operator-owned config/provider/key choice), or \`fail_task\` ` +
-        `(permanent — quota exhausted, key revoked, model gone).`,
+        `These entries are upstream LLM-call failures that aborted a wake before any decision ` +
+        `was made. Use those entries to decide: \`manage_task\` action=retry_task ` +
+        `(transient network/idle blip), \`question\` (operator-owned config/provider/key choice), ` +
+        `or \`manage_task\` action=fail_task (permanent — quota exhausted, key revoked, model gone).`,
     )
   }
 
@@ -1299,7 +1300,7 @@ export function renderTaskDescription(desc: TaskDesc): string {
     lines.push(
       `Each entry is a persisted assistant tool call in this task's session tree with no terminal tool result ` +
         `and no current-process session owner. Treat it as execution evidence from a previous interrupted wake; ` +
-        `decide whether to retry_task, re-dispatch the relevant tool/work, propose_task, fail_task, or ask ` +
+        `decide whether to use \`manage_task\` action=retry_task, re-dispatch the relevant work with \`dispatch_agent\`, use \`manage_task\` action=propose_task / action=fail_task, or ask ` +
         `the operator from the full task context.`,
     )
   }
@@ -1315,7 +1316,7 @@ export function renderTaskDescription(desc: TaskDesc): string {
     lines.push(
       `These entries are failed agent/tool sessions made visible to this prompt. ` +
         `Treat quota/network/provider failures as failed attempts of the current task or goal; ` +
-        `retry the same work, change provider, or fail_task from this evidence. ` +
+        `retry the same work, change provider, or use \`manage_task\` action=fail_task from this evidence. ` +
         `Do not infer a fresh task start merely because the latest user wake repeats the original request.`,
     )
   }
@@ -1330,7 +1331,7 @@ export function renderTaskDescription(desc: TaskDesc): string {
     }
     lines.push(
       `These entries are persisted tool-call failures with the original ToolFailureCause. ` +
-        `Use them as audit evidence for retry_task, propose_task, or fail_task decisions.`,
+        `Use them as audit evidence for \`manage_task\` action=retry_task, action=propose_task, or action=fail_task decisions.`,
     )
   }
 

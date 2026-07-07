@@ -689,12 +689,6 @@ export namespace PromptProfileResolver {
       for (const [workflowTool, role] of declared) {
         if (Object.hasOwn(agentProjection, role)) result.set(workflowTool, role)
       }
-      return result
-    }
-    for (const toolID of toolIDs) {
-      if (!WorkflowRegistry.isWorkflowToolName(toolID)) continue
-      const role = declared.get(toolID as OrchestratorWorkflowToolName)
-      if (role) result.set(toolID as OrchestratorWorkflowToolName, role)
     }
     return result
   }

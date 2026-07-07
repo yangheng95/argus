@@ -12,18 +12,18 @@ This chapter describes the communication paths that exist in the current runtime
 | ----------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | External channel        | `ChannelIngress.message()` | Replies to a pending interaction when one matches; otherwise calls `ControlMessage.handle()`.                                             |
 | Overlay / local control | `ControlMessage.handle()`  | Emits a panel capability action that reaches `EngineService.createTask`, `taskMessage`, `replyInteraction`, or another task API boundary. |
-| Existing task           | `runTaskLoop()`            | Wakes the task orchestrator and exposes orchestrator workflow tools.                                                                      |
+| Existing task           | `runTaskLoop()`            | Wakes the task orchestrator and exposes `dispatch_agent` / `manage_task` plus supporting scheduler tools.                                 |
 
 If a message has not reached an engine task, debug the channel/control boundary before debugging agent-to-agent paths.
 
 ## Current Calibration
 
-- 当前运行时仍不是 [11-agent-oop-protocol.md](11-agent-oop-protocol.md) 里的对象协议；外部入口与普通 tool 调用仍是 `ChannelIngress / ControlMessage / EngineService / Orchestrator tools / build tool / task subagent` 的混合路径。
+- 当前运行时仍不是 [11-agent-oop-protocol.md](11-agent-oop-protocol.md) 里的对象协议；外部入口与普通 tool 调用仍是 `ChannelIngress / ControlMessage / EngineService / dispatch_agent / manage_task / task subagent` 的混合路径。
 - **worker/operator-to-orchestrator scheduling 的当前真源已切到 durable coordination mailbox**：worker 只能通过 `request_orchestrator_decision` 写入 `agent_coordination_request`，且 `requested_decision` 只能描述待判断的调度问题，不能填 `redispatch` / `redispatch_worker` action literal；overlay targeted operator steer 只能通过 `POST /task/:taskID/session/:sessionID/operator-steer` 写入 `origin="operator_steer"` 的 `agent_coordination_request`；orchestrator 只能通过 `respond_agent_coordination` 原子写入 `agent_coordination_response` / `agent_coordination_action` 并执行 visible action。不要再把 task-root message、direct reply、hidden note、generic same-kind redispatch 或历史 `steer_subagent` 当成调度协议。
 - `POST /task/:taskID/message` 是 task-root operator input。它不接受 `target` session/build 字段；targeted sub-agent steer 必须走 operator-steer route 和 coordination artifacts。
 - **A2A 当前实现合同**见 [2026-06-26-enterprise-a2a-protocol-root-repair.md](../../records/2026-06/2026-06-26-enterprise-a2a-protocol-root-repair.md)。本文件的 direct/indirect 矩阵描述的是非 A2A 普通 agent 调用和历史预期对照，不是 worker scheduling mailbox 的替代真源。
 - **Planning tool role 已删除**：the removed planning package 整目录、旧目标池模块、`planGoal()` 全部移除。Orchestrator 没有 `planner` tool；goal-scoped build 路径里 "per-goal 实现步骤" 现由 build agent 直接基于 architect contract + decision-log 推进。`src/tool/planner.ts` 是 session 级 working-memory 工具（task tree / scratchpad），**不是** planning tool role 的替代。
-- **`intent-analysis` 已接线**：orchestrator 通过 `analyze_intent` tool 调 `IntentAnalysisAgent.analyze`，落 `intent-analysis` SessionKind。13 号文档此前的"not wired yet"已过期。
+- **`intent-analysis` 已接线**：orchestrator 通过 `dispatch_agent target=analyze_intent` 调 `IntentAnalysisAgent.analyze`，落 `intent-analysis` SessionKind。13 号文档此前的"not wired yet"已过期。
 - **`integrity` 是 review report tool，不是 lifecycle authority**：对应 Integrity reviewer team（动态 reviewer 计划、replay-aware context、severity discipline、build feedback），输出 pass / non-pass 报告供 Orchestrator 决策；最终完成 / 失败只能由 Orchestrator 的 `complete_task` / `fail_task` 写入。`prosecute` / `prosecutor` 已删除。
 - `build -> general/explore`、`general -> explore` 是当前真实存在的 direct 子代理路径；acceptance direct 子代理路径已删除；`general -> general` 自递归被权限拒绝。
 - `orchestrator -> EngineService.createTask` 只通过 `propose_task` 间接发生：默认按 `experimental.auto_confirm_proposed_tasks=true` 自动创建"完善上一个 request 的新任务"候选，只有该配置显式为 `false` 时才先询问用户；这不是 `panel` control-plane action，也不是 generic `task` subagent dispatch。
@@ -61,21 +61,21 @@ The implementation contract for the current A2A repair is recorded in [2026-06-2
 
 ## Direct Runtime Calls
 
-Legend: `tool` means an orchestrator workflow tool dispatch; `result` means the tool result returns to the calling session; `task` means the generic subagent task tool.
+Legend: `dispatch_agent target=...` means the scheduler's unified worker-dispatch tool invocation; `result` means the tool result returns to the calling session; `task` means the generic subagent task tool.
 
 | From         | To   | Path                                                               |
 | ------------ | ---- | ------------------------------------------------------------------ |
-| `O`          | `R`  | `requirements` tool                                                |
-| `O`          | `X`  | `frontend_design` tool                                             |
-| `O`          | `A`  | `architect` tool                                                   |
-| `O`          | `B`  | `build` tool -> `build/agent.ts` -> `executor/registry.ts`          |
-| `O`          | `V`  | `visual_qa` tool                                                   |
-| `O`          | `IT` | `integrity` tool                                                   |
-| `O`          | `I`  | `analyze_intent` tool                                              |
-| `O`          | `FR` | `frontend_research` tool                                           |
-| `O`          | `DR` | `deep_research` tool                                               |
-| `O`          | `FC` | `fact_check` tool                                                  |
-| `O`          | `W`  | `workload_analysis` tool                                           |
+| `O`          | `R`  | `dispatch_agent target=requirements`                               |
+| `O`          | `X`  | `dispatch_agent target=frontend_design`                            |
+| `O`          | `A`  | `dispatch_agent target=architect`                                  |
+| `O`          | `B`  | `dispatch_agent target=build` -> `build/agent.ts` -> `executor/registry.ts` |
+| `O`          | `V`  | `dispatch_agent target=visual_qa`                                  |
+| `O`          | `IT` | `dispatch_agent target=integrity`                                  |
+| `O`          | `I`  | `dispatch_agent target=analyze_intent`                             |
+| `O`          | `FR` | `dispatch_agent target=frontend_research`                          |
+| `O`          | `DR` | `dispatch_agent target=deep_research`                              |
+| `O`          | `FC` | `dispatch_agent target=fact_check`                                 |
+| `O`          | `W`  | `dispatch_agent target=workload_analysis`                          |
 | `B`          | `G`  | `task` tool                                                        |
 | `B`          | `E`  | `task` tool                                                        |
 | `G`          | `E`  | `task` tool                                                        |

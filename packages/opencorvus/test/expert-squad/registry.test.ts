@@ -41,7 +41,7 @@ function manifest(overrides: Record<string, unknown> = {}) {
     capability_projection: {
       scheduler: {
         role_base: true,
-        built_in_tool_ids: ["select_expert_squad", "skill", "build"],
+        built_in_tool_ids: ["select_expert_squad", "skill", "dispatch_agent", "manage_task"],
         default_skill_refs: ["default/skill/workspace-guidance"],
         default_tool_refs: ["default/tool/project-index"],
         package_tool_refs: ["frontend-replica/orchestrator/source-evidence"],
@@ -268,9 +268,10 @@ describe("ExpertSquadRegistry", () => {
     for (const entry of await ExpertSquadRegistry.discover(repositoryRoot)) {
       if (entry.namespace !== "builtin") continue
       const loaded = await ExpertSquadRegistry.loadPackage(entry.root)
-      const schedulerTools = loaded.manifest.capability_projection.scheduler.built_in_tool_ids
       const workflowTargetRoles = new Set(
-        schedulerTools.map((tool) => workflowRoleByTool.get(tool)).filter((role): role is string => typeof role === "string"),
+        loaded.explicitSchedulerWorkflowTools
+          .map((tool) => workflowRoleByTool.get(tool))
+          .filter((role): role is string => typeof role === "string"),
       )
 
       for (const [role, projection] of Object.entries(loaded.manifest.capability_projection.agents)) {
@@ -303,6 +304,8 @@ describe("ExpertSquadRegistry", () => {
     expect(loaded.selector?.ref).toBe("selector/opentest")
     expect(loaded.selector?.label).toBe("OpenTest")
     expect(loaded.packageSkillRefs.has("opentest/orchestrator/workflow")).toBe(true)
+    expect(loaded.packageSkillRefs.has("opentest/requirements/test-requirements")).toBe(true)
+    expect(loaded.packageSkillRefs.has("opentest/architect/test-architecture")).toBe(true)
     expect(loaded.packageSkillRefs.has("opentest/build/test-implementation")).toBe(true)
     expect(loaded.packageSkillRefs.has("opentest/integrity/test-review")).toBe(true)
     expect(loaded.packageToolRefs.has("opentest/shared/test-artifact-inventory")).toBe(false)
@@ -310,17 +313,41 @@ describe("ExpertSquadRegistry", () => {
     expect(loaded.manifest.capability_projection.scheduler.package_tool_refs).toEqual([
       "opentest/shared/opentest-protocol-engine",
     ])
-    expect(loaded.explicitSchedulerWorkflowTools).toEqual(["build", "integrity"])
-    expect(Object.keys(loaded.manifest.capability_projection.agents).sort()).toEqual(["build", "integrity"])
+    expect(loaded.explicitSchedulerWorkflowTools).toEqual(["build", "requirements", "architect", "integrity"])
+    expect(Object.keys(loaded.manifest.capability_projection.agents).sort()).toEqual([
+      "architect",
+      "build",
+      "integrity",
+      "requirements",
+    ])
+    for (const customRole of ["tester", "script-writer", "failure-handler"]) {
+      expect(loaded.explicitSchedulerWorkflowTools).not.toContain(customRole)
+      expect(Object.keys(loaded.manifest.capability_projection.agents)).not.toContain(customRole)
+      expect(Object.keys(loaded.manifest.virtual_agents)).not.toContain(customRole)
+    }
     expect(Object.keys(loaded.manifest.agents)).toEqual(["orchestrator"])
     expect(agentRoleDirectories).toEqual(["orchestrator"])
+    expect(loaded.promptProfile.virtualAgents.requirements?.id).toBe("opentest-requirements-analyst")
+    expect(loaded.promptProfile.virtualAgents.architect?.id).toBe("opentest-test-architect")
     expect(loaded.promptProfile.virtualAgents.build?.id).toBe("opentest-implementer")
     expect(loaded.promptProfile.virtualAgents.integrity?.id).toBe("opentest-reviewer")
+    expect(loaded.promptProfile.virtualAgents.requirements?.promptContent).toContain(
+      ".opencorvus/expert-squads/wujiang/opentest/protocol-engine/opentest-contract.json",
+    )
+    expect(loaded.promptProfile.virtualAgents.architect?.promptContent).toContain(
+      ".opencorvus/expert-squads/wujiang/opentest/protocol-engine/opentest-contract.json",
+    )
     expect(loaded.promptProfile.virtualAgents.build?.promptContent).toContain(
       ".opencorvus/expert-squads/wujiang/opentest/protocol-engine/opentest-contract.json",
     )
     expect(loaded.promptProfile.virtualAgents.integrity?.promptContent).toContain(
       ".opencorvus/expert-squads/wujiang/opentest/protocol-engine/opentest-contract.json",
+    )
+    expect(loaded.promptProfile.virtualAgents.requirements?.promptContent).not.toContain(
+      ".opencorvus/expert-squads/opentest/",
+    )
+    expect(loaded.promptProfile.virtualAgents.architect?.promptContent).not.toContain(
+      ".opencorvus/expert-squads/opentest/",
     )
     expect(loaded.promptProfile.virtualAgents.build?.promptContent).not.toContain(
       ".opencorvus/expert-squads/opentest/",
@@ -1157,7 +1184,22 @@ describe("ExpertSquadRegistry", () => {
     await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/unknown built-in tool/)
   })
 
-  test("requires worker projections for workflow dispatch tools", async () => {
+  test("rejects retired workflow target names as scheduler built-in tools", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, {
+      capability_projection: {
+        ...manifest().capability_projection,
+        scheduler: {
+          ...manifest().capability_projection.scheduler,
+          built_in_tool_ids: ["select_expert_squad", "build"],
+        },
+      },
+    })
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/unknown built-in tool "build"/)
+  })
+
+  test("derives workflow dispatch targets from dispatch_agent and worker projections", async () => {
     await using tmp = await tmpdir()
     const packageRoot = await writeValidPackage(tmp.path, {
       capability_projection: {
@@ -1166,12 +1208,12 @@ describe("ExpertSquadRegistry", () => {
       },
     })
 
-    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(
-      /requires capability_projection\.agents\.build/,
-    )
+    const loaded = await ExpertSquadRegistry.loadPackage(packageRoot)
+    expect(loaded.manifest.capability_projection.scheduler.built_in_tool_ids).toContain("dispatch_agent")
+    expect(loaded.explicitSchedulerWorkflowTools).toEqual([])
   })
 
-  test("validates workflow dispatch tool owners from the active scheduler workflow list", async () => {
+  test("derives workflow dispatch owners from the active scheduler workflow list", async () => {
     await using tmp = await tmpdir()
     const packageRoot = await writeValidPackage(tmp.path)
     const workflowBindings = WorkflowRegistry.schedulerAgentWorkflowBindingsForEngineConfig(
@@ -1199,9 +1241,8 @@ describe("ExpertSquadRegistry", () => {
       }),
     )
 
-    await expect(ExpertSquadRegistry.loadPackage(packageRoot, { workflowBindings })).rejects.toThrow(
-      /requires capability_projection\.agents\.integrity/,
-    )
+    const loaded = await ExpertSquadRegistry.loadPackage(packageRoot, { workflowBindings })
+    expect(loaded.explicitSchedulerWorkflowTools).toEqual([])
   })
 
   test("rejects package refs that are not declared in package files", async () => {

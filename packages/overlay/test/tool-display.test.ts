@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test"
 
 import { describeToolCall, describeToolPart, normalizeToolStatus, normalizeToolPartRecord } from "../src/utils/tool"
+import { installRealOverlayI18n } from "./fixtures/i18n"
+
+installRealOverlayI18n()
 
 describe("tool display helpers", () => {
   test("describes read_file calls with relative path detail", () => {
@@ -143,5 +146,32 @@ describe("tool display helpers", () => {
         },
       })?.detail,
     ).toBe(payload)
+  })
+
+  test("shows unified scheduler dispatch target before generic fields", () => {
+    const display = describeToolCall(
+      "dispatch_agent",
+      {
+        target: "build",
+        goalID: "gol_unified_tool",
+        reason: "Per-goal implementation dispatch.",
+      },
+      { status: "running" },
+    )
+
+    expect(display.detail).toBe("target=build")
+  })
+
+  test("shows unified task-management action before generic fields", () => {
+    const display = describeToolCall(
+      "manage_task",
+      {
+        action: "complete_task",
+        summary: "Integrity passed.",
+      },
+      { status: "completed" },
+    )
+
+    expect(display.detail).toBe("action=complete_task")
   })
 })

@@ -1173,7 +1173,8 @@ export function createGoalRun(input: {
 // failed / verification outcome" projection that was read by the dispatch
 // branch. Both the cache column and the dispatch branch are gone. Dep-failure
 // handling is the LLM's call (it reads each goal's depends_on + describe
-// layer flags and chooses build({ goalID }) / modify_goal / fail_task).
+// layer flags and chooses dispatch_agent(target=build) /
+// manage_task(action=modify_goal) / manage_task(action=fail_task)).
 // Verification-goal outcome is recorded on the goal's goal_run chain.
 
 /**
@@ -1376,8 +1377,9 @@ function appendGoalRunArtifact(input: {
 
 /**
  * Open a new attempt for a goal — single entry-point for "this goal must
- * re-dispatch under a fresh attempt." Replaces the four ad-hoc paths
- * (build_retry / modify_goal / acceptance_rework)
+ * re-dispatch under a fresh attempt." Replaces the ad-hoc paths
+ * (dispatch_agent target=build retry / manage_task action=modify_goal /
+ * acceptance_rework)
  * that all expanded to the same supersede + sync sequence and drifted apart
  * over time.
  *

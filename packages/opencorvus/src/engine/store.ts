@@ -1065,7 +1065,8 @@ export function findLatestAcceptanceVerdictArtifactForAcceptance(acceptanceID: s
  * make any decision. `recordOrchestratorStreamError` (engine/persist.ts)
  * is the single writer; `describe.ts` is the single reader, surfacing
  * the rows into the orchestrator prompt so the LLM can decide
- * retry_task / re-dispatch / propose_task / fail_task on its next wake.
+ * manage_task action=retry_task / dispatch_agent target=<worker> /
+ * manage_task action=propose_task / manage_task action=fail_task on its next wake.
  *
  * Filtered by `time_created >= sinceMs` so a long-running task's old
  * incidents don't follow it forever; the bench / orchestrator pass

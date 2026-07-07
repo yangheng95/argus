@@ -41,21 +41,21 @@ Frontend Innovate applies a task-first design philosophy:
 
 ## Dispatch Discipline
 
-- Use `frontend_research` for source-page investigation when a live page needs functional, content, interaction, or information-architecture evidence.
-- Use `deep_research` or explicit task materials for competitor/industry/design-reference webpages when the redesign depends on external competitor comparison.
-- Use `frontend_design` as the task-scope design handoff owner. It must inspect the design-resource manifest, source-page evidence, and evidence-backed competitor/reference webpages; register each competitor/reference URL and screenshot in `competitor_reference_evidence`; produce multiple named design directions; identify rejected generic draft traits; and submit one source-editable HTML design draft under `visual-html-skeleton`.
+- Use `dispatch_agent` with `target: "frontend_research"` for source-page investigation when a live page needs functional, content, interaction, or information-architecture evidence.
+- Use `dispatch_agent` with `target: "deep_research"` or explicit task materials for competitor/industry/design-reference webpages when the redesign depends on external competitor comparison.
+- Use `dispatch_agent` with `target: "frontend_design"` for the task-scope design handoff owner. It must inspect the design-resource manifest, source-page evidence, and evidence-backed competitor/reference webpages; register each competitor/reference URL and screenshot in `competitor_reference_evidence`; produce multiple named design directions; identify rejected generic draft traits; and submit one source-editable HTML design draft under `visual-html-skeleton`.
 - When the operator asks for multiple Build brainstorm drafts, start independent Build child tasks only for bounded named directions. Each draft is evidence for one direction, not a competing source of final truth; Frontend Design must still record the selected direction before implementation proceeds.
-- Use Requirements and Architect to turn the selected direction into observable product, component, data, styling, interaction, and verification contracts.
-- Use Build to implement the selected HTML design draft. Build must not invent a separate product structure when Frontend Design already selected and rendered a resource-backed direction.
-- Use Visual QA and Integrity after implementation to review the rendered product against the HTML design draft screenshot evidence and selected-direction contract, not the original source page pixels or design prose alone.
+- Use `dispatch_agent` with `target: "requirements"` and `target: "architect"` to turn the selected direction into observable product, component, data, styling, interaction, and verification contracts.
+- Use `dispatch_agent` with `target: "build"` to implement the selected HTML design draft. Build must not invent a separate product structure when Frontend Design already selected and rendered a resource-backed direction.
+- Use `dispatch_agent` with `target: "visual_qa"` and `target: "integrity"` after implementation to review the rendered product against the HTML design draft screenshot evidence and selected-direction contract, not the original source page pixels or design prose alone.
 
 ## Existing URL Redesign Flow
 
 For a request like "redesign this existing website from aesthetic, professional, and convenient perspectives":
 
-1. Use `frontend_research` for the source URL so source information architecture, content priority, interaction states, visible friction, and evidence gaps are durable.
-2. Use evidence-backed competitor/design references from user input, frontend_research, or deep_research. If the task requires competitor comparison and no competitor evidence exists, expose the blocker instead of asking frontend_design to guess URLs.
-3. Use `frontend_design` with the design-resource manifest, source-page evidence, and competitor/reference evidence to produce at least two named redesign directions. Every selected-direction competitor claim must have a `competitor_reference_evidence` row containing the webpage URL, screenshot artifact, viewport, SHA-256 digest, inspected elements, and influence on the selected direction.
+1. Use `dispatch_agent` with `target: "frontend_research"` for the source URL so source information architecture, content priority, interaction states, visible friction, and evidence gaps are durable.
+2. Use evidence-backed competitor/design references from user input, `dispatch_agent target="frontend_research"`, or `dispatch_agent target="deep_research"`. If the task requires competitor comparison and no competitor evidence exists, expose the blocker instead of asking frontend_design to guess URLs.
+3. Use `dispatch_agent` with `target: "frontend_design"` and the design-resource manifest, source-page evidence, and competitor/reference evidence to produce at least two named redesign directions. Every selected-direction competitor claim must have a `competitor_reference_evidence` row containing the webpage URL, screenshot artifact, viewport, SHA-256 digest, inspected elements, and influence on the selected direction.
 4. Require each direction to compare user task fit, information architecture, visual hierarchy, subject-grounded visual signature, component reuse, data/state needs, accessibility, copy, and primary-path convenience.
 5. Select one direction, record why discarded directions or generic traits fail the actual page job, and materialize the selected direction as `visual-html-skeleton`.
 6. Render the HTML design draft through real browser/static-file evidence and register structured `visual_validation_evidence`; the rendered HTML design draft becomes the downstream visual ground truth.

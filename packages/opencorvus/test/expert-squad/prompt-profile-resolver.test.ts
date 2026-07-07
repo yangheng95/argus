@@ -24,6 +24,7 @@ const expectedSchedulerRoleBaseToolIDs = [
   "question",
   "read_context",
   "query_failed_goals",
+  "dispatch_agent",
   "manage_task",
   "wait",
   "inject_operator_message",
@@ -449,7 +450,8 @@ describe("PromptProfileResolver", () => {
     expect(capability.promptProfileID).toBe("general")
     expect(capability.builtIn).toBe(true)
     expect(capability.builtInToolIDs).toEqual([...expectedSchedulerRoleBaseToolIDs])
-    expect(capability.projectedWorkflowTools).toEqual([])
+    expect(capability.projectedWorkflowTools).toEqual(expect.arrayContaining(pipelineWorkflow.steps.map((step) => step.tool)))
+    expect(capability.projectedWorkflowTools).not.toContain("unknown_stage")
     expect(capability.includeMcpTools).toBe(false)
     expect(capability.projectionHash).toMatch(/^[a-f0-9]{64}$/)
 

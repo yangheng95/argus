@@ -77,6 +77,45 @@ function summariseCollector(collector: unknown): string {
   return parts.join(" / ")
 }
 
+function traceRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined
+}
+
+function traceToolNameKey(name: string): string {
+  return name.toLowerCase().replace(/[\s_-]+/g, "")
+}
+
+function parseTraceToolCallInput(value: unknown): Record<string, unknown> | undefined {
+  const recordValue = traceRecord(value)
+  if (recordValue) return recordValue
+  if (typeof value !== "string") return undefined
+  const text = value.trim()
+  if (!text.startsWith("{") || !text.endsWith("}")) return undefined
+  try {
+    return traceRecord(JSON.parse(text))
+  } catch {
+    return undefined
+  }
+}
+
+function formatAssistantToolCall(part: unknown): string | undefined {
+  const p = traceRecord(part)
+  if (!p || p.type !== "tool-call") return undefined
+  const name = typeof p.toolName === "string" ? p.toolName.trim() : ""
+  if (!name) return undefined
+  const input = parseTraceToolCallInput(p.input ?? p.arguments ?? p.args)
+  const key = traceToolNameKey(name)
+  if (key === "dispatchagent") {
+    const target = typeof input?.target === "string" ? input.target.trim() : ""
+    if (target) return `${name}(${target})`
+  }
+  if (key === "managetask") {
+    const action = typeof input?.action === "string" ? input.action.trim() : ""
+    if (action) return `${name}(${action})`
+  }
+  return name
+}
+
 function lastAssistantToolCalls(messages: unknown[]): string[] {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i] as { role?: string; content?: unknown } | undefined
@@ -85,10 +124,8 @@ function lastAssistantToolCalls(messages: unknown[]): string[] {
     if (!Array.isArray(content)) return []
     const calls: string[] = []
     for (const p of content) {
-      if (p && typeof p === "object" && (p as any).type === "tool-call") {
-        const name = (p as any).toolName
-        if (typeof name === "string") calls.push(name)
-      }
+      const call = formatAssistantToolCall(p)
+      if (call) calls.push(call)
     }
     return calls
   }

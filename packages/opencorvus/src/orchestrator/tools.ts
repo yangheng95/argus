@@ -1404,7 +1404,9 @@ type IntegrityReviewOutcome =
        *  return, renderIntegrityOutcome, recordIntegrityAttempt persistence,
        *  read_context, acceptance upstream context) renders the same complete
        *  text instead of a count summary. The orchestrator LLM reads this
-       *  markdown and decides modify_goal / build / architect / fail_task
+       *  markdown and decides manage_task action=modify_goal /
+       *  dispatch_agent target=build / dispatch_agent target=architect /
+       *  manage_task action=fail_task
        *  itself; nothing in code routes/supersedes from the outcome. */
       markdown: string
       findings: IntegrityFinding[]
@@ -2110,38 +2112,23 @@ const ManageTaskActionInputSchemas = {
   modify_goal: ModifyGoalInputSchema,
   complete_goal: CompleteGoalInputSchema,
   delete_goal: DeleteGoalInputSchema,
-} satisfies Record<string, z.ZodTypeAny>
+} satisfies Record<string, z.ZodObject<any>>
 
 const MANAGE_TASK_ACTION_NAMES = Object.keys(ManageTaskActionInputSchemas) as [
   keyof typeof ManageTaskActionInputSchemas,
   ...(keyof typeof ManageTaskActionInputSchemas)[],
 ]
 
-const ManageTaskInputSchema = z
-  .object({
-    action: z
-      .enum(MANAGE_TASK_ACTION_NAMES)
-      .describe("Task or goal lifecycle action to execute through the single scheduler task-management tool."),
-    title: z.string().min(1).optional(),
-    request: z.string().min(1).optional(),
-    reason: z.string().min(1).optional(),
-    error: z.string().optional(),
-    summary: z.string().min(1).optional(),
-    evidence_anchor: ProposedTaskEvidenceAnchorSchema.optional(),
-    priority: z.enum(["critical", "high", "normal", "low"]).optional(),
-    queue: z.boolean().optional(),
-    kind: z.enum(["workflow", "build"]).optional(),
-    goal: GoalContractFieldsSchema.omit({ id: true }).optional(),
-    goalID: z.string().min(1).optional(),
-    updates: GoalContractUpdateSchema.optional(),
-  })
-  .strict()
-
-const ManageTaskActionInputSchema = z
-  .object({
-    action: z.enum(MANAGE_TASK_ACTION_NAMES),
-  })
-  .passthrough()
+const ManageTaskInputSchema = z.discriminatedUnion(
+  "action",
+  MANAGE_TASK_ACTION_NAMES.map((action) =>
+    ManageTaskActionInputSchemas[action].safeExtend({
+      action: z
+        .literal(action)
+        .describe("Task or goal lifecycle action to execute through the single scheduler task-management tool."),
+    }),
+  ) as any,
+)
 
 const BuildInputSchema = z
   .object({
@@ -2196,13 +2183,12 @@ const SchedulerDispatchTargetInputSchemas = {
   build: BuildInputSchema,
   explore: ExploreInputSchema,
   integrity: IntegrityInputSchema,
-} satisfies Record<OrchestratorWorkflowToolName, z.ZodTypeAny>
+} satisfies Record<OrchestratorWorkflowToolName, z.ZodObject<any>>
 
 function dispatchAgentTargetNamesForWorkflow(
   workflow: MiniWorkflow | undefined,
 ): [OrchestratorWorkflowToolName, ...OrchestratorWorkflowToolName[]] {
-  void workflow
-  const source = ORCHESTRATOR_WORKFLOW_TOOL_NAMES
+  const source = workflow?.steps.map((step) => step.tool) ?? ORCHESTRATOR_WORKFLOW_TOOL_NAMES
   const targets: OrchestratorWorkflowToolName[] = []
   for (const toolName of source) {
     if (!Object.hasOwn(SchedulerDispatchTargetInputSchemas, toolName)) continue
@@ -2215,41 +2201,19 @@ function dispatchAgentTargetNamesForWorkflow(
 }
 
 function dispatchAgentInputSchemaForWorkflow(workflow: MiniWorkflow | undefined) {
-  return z
-    .object({
-      target: z
-        .enum(dispatchAgentTargetNamesForWorkflow(workflow))
-        .describe("Workflow target to dispatch through the single scheduler agent-dispatch tool."),
-      reason: z.string().optional(),
-      continuation_artifact_id: StageContinuationArtifactIDField,
-      urls: FrontendDesignUrlsField,
-      figma_url: FrontendDesignFigmaUrlField,
-      materials: FrontendDesignMaterialsField,
-      source_urls: z.array(z.string().min(1)).optional(),
-      focus: z.string().optional(),
-      target_deliverable: z.enum(["prd", "spec", "research_report", "implementation_input", "mixed"]).optional(),
-      app_url: z.string().optional(),
-      preview_command: z.string().optional(),
-      target_session_id: z.string().min(1).optional(),
-      target_agent: z.string().min(1).optional(),
-      fact_check_items: FactCheckItemListSchema.optional(),
-      question: z.string().min(1).optional(),
-      request: z.string().optional(),
-      goalID: z.string().optional(),
-      directBuildIntent: z.literal("modify_files").optional(),
-      worktreeUsage: z.enum(["managed_worktree", "current_project"]).optional(),
-      userConfirmedStaleIntegrityData: z.boolean().optional(),
-    })
-    .strict()
+  return z.discriminatedUnion(
+    "target",
+    dispatchAgentTargetNamesForWorkflow(workflow).map((target) =>
+      SchedulerDispatchTargetInputSchemas[target].safeExtend({
+        target: z
+          .literal(target)
+          .describe("Workflow target to dispatch through the single scheduler agent-dispatch tool."),
+      }),
+    ) as any,
+  )
 }
 
 type DispatchAgentToolInput = z.infer<ReturnType<typeof dispatchAgentInputSchemaForWorkflow>>
-
-const DispatchAgentTargetInputSchema = z
-  .object({
-    target: z.enum(dispatchAgentTargetNamesForWorkflow(undefined)),
-  })
-  .passthrough()
 
 const backgroundGoalBuilds = new Set<Promise<unknown>>()
 
@@ -7047,7 +7011,8 @@ export function createOrchestratorTools(input: {
     // engine_artifact for one-shot fidelity; this row is the cumulative
     // signal the orchestrator LLM needs to spot recurring issues across
     // multiple post-build reviews — same issues reappearing means the
-    // current goal graph cannot absorb them and architect re-run / fail_task
+    // current goal graph cannot absorb them and dispatch_agent target=architect /
+    // manage_task action=fail_task
     // becomes the cheaper repair (per orchestrator-core.txt's repair ladder).
     if (!artifactMissing) {
       try {
@@ -7163,8 +7128,9 @@ export function createOrchestratorTools(input: {
   // auto-startNewAttempt + dependent-cascade chain that violated
   // CLAUDE.md rule 13 (no state-machine flow control). The orchestrator LLM
   // now reads the full review markdown returned in the build tool result
-  // and chooses modify_goal / build({goalID}) / architect / fail_task /
-  // integrity itself.
+  // and chooses manage_task(action=modify_goal) / dispatch_agent(target=build)
+  // / dispatch_agent(target=architect) / manage_task(action=fail_task) /
+  // dispatch_agent(target=integrity) itself.
 
   // Agents that need to ask the user a question do so directly via
   // `Question.ask`. Workflow steps never pause for input here.
@@ -9169,12 +9135,14 @@ export function createOrchestratorTools(input: {
             reason:
               "Frontend Innovate design alternatives considered before selecting the HTML design draft ground truth.",
           })
-          decisionLog.append({
-            phase: "frontend_design",
-            key: "selected_design_direction",
-            value: analysis.selectedDesignDirectionID,
-            reason: "Selected frontend-design direction for downstream implementation.",
-          })
+          if (analysis.selectedDesignDirectionID?.trim()) {
+            decisionLog.append({
+              phase: "frontend_design",
+              key: "selected_design_direction",
+              value: analysis.selectedDesignDirectionID,
+              reason: "Selected frontend-design direction for downstream implementation.",
+            })
+          }
           decisionLog.append({
             phase: "frontend_design",
             key: "anti_slop_review",
@@ -9228,11 +9196,11 @@ export function createOrchestratorTools(input: {
             value: analysis.visualConsistencyContract,
             reason: "Primary visual-fidelity contract for downstream implementation and acceptance review.",
           })
-          if (analysis.visualRegionBindings.length > 0) {
+          if ((analysis.visualRegionBindings ?? []).length > 0) {
             decisionLog.append({
               phase: "frontend_design",
               key: "visual_region_bindings",
-              value: JSON.stringify(analysis.visualRegionBindings, null, 2),
+              value: JSON.stringify(analysis.visualRegionBindings ?? [], null, 2),
               reason:
                 "Structured Frontend Design crop manifest rows from create_visual_region_binding_package for Architect reference_coverage.reference_regions.",
             })
@@ -9710,8 +9678,8 @@ export function createOrchestratorTools(input: {
         "- verdict=clean → proceed.\n" +
         "- verdict=minor_corrections → quote corrections in your next user-facing " +
         "message, proceed.\n" +
-        "- verdict=needs_orchestrator_action → invoke manage_task action=modify_goal / action=propose_task / " +
-        "action=fail_task per the corrected[i].recommended_action.\n" +
+        "- verdict=needs_orchestrator_action → invoke manage_task action=modify_goal / manage_task action=propose_task / " +
+        "manage_task action=fail_task per the corrected[i].recommended_action.\n" +
         "- verdict=inconclusive → retry fact_check or proceed with a caveat note.",
       inputSchema: FactCheckInputSchema,
       execute: async (args) => {
@@ -10726,7 +10694,8 @@ export function createOrchestratorTools(input: {
           // requirements / intent decisions out of the latest-N window.
           // Surface the latest 5 review summaries — enough to spot a
           // recurring issue across consecutive reviews (the cumulative
-          // signal that drives architect re-run / fail_task per
+          // signal that drives dispatch_agent target=architect /
+          // manage_task action=fail_task per
           // orchestrator-core.txt's repair ladder).
           const reviewSection = log.phasePromptSection("review", "Architecture review history", { limit: 5 })
           if (reviewSection)
@@ -13656,7 +13625,7 @@ export function createOrchestratorTools(input: {
         "creating directly by default and asking the user first only when auto-confirm is disabled. Do not call generic `task` or control-plane `panel`. " +
         "Independent child tasks may run in parallel when their scopes do not depend on each other's output, artifact state, decisions, or owned files. Dependent follow-up work must queue or wait for its prerequisite instead of starting in parallel. Use it when execution evidence, artifact state, integrity history, visual QA evidence, or operator scope change proves separate inheriting work is required. " +
         "A proposed task must solve a very specific evidence-anchored problem: submit `evidence_anchor` with one concrete entity, the observed problem, an anchor kind such as code_module/document/artifact/expert_squad/benchmark/toolchain, and current-task evidence refs proving it. Refuse generic follow-up work that has no structured evidence anchor; it cannot be solved by creating a child task. " +
-        "Workflow tasks do not rewind earlier stages in place: when the active workflow contract is fundamentally wrong and cannot be repaired by modify_goal, architect, or targeted build inside the current task, create a new inheriting workflow task instead of rerunning requirements/plan/executor. " +
+        "Workflow tasks do not rewind earlier stages in place: when the active workflow contract is fundamentally wrong and cannot be repaired by manage_task action=modify_goal, dispatch_agent target=architect, or dispatch_agent target=build inside the current task, create a new inheriting workflow task instead of rerunning requirements/plan/executor. " +
         "Use it when failed visual_qa evidence reports unresolved_code_module_problems for unrepairable production blockers and the scheduler decides the problem belongs in separate inheriting work. " +
         "It is also the right path when reviewers keep demanding a capability the original user request never authorised, and adding it inside the current task would expand scope beyond what the user agreed to.",
       inputSchema: ProposeTaskInputSchema,
@@ -13769,7 +13738,7 @@ export function createOrchestratorTools(input: {
     build: tool({
       description:
         "Implementation dispatcher. Runs the build agent (read / write / edit / bash) in-process to apply " +
-        "one scoped change. Two valid shapes exist. `build({ goalID })` is the normal workflow " +
+        "one scoped change. Two valid dispatch_agent target=build shapes exist. `dispatch_agent({ target: \"build\", goalID })` is the normal workflow " +
         "shape after architect has registered goals. On retry/rework, omit `request` when persisted " +
         "failure facts already exist; the build retry message is composed from those facts only. " +
         "Retry context recovery is selected from durable prior-session evidence when worktreeUsage is " +
@@ -13777,7 +13746,7 @@ export function createOrchestratorTools(input: {
         "a fresh child session on the same recorded goal worktree. Do not express this through `reason`, " +
         "`request`, or a `freshContext` field. " +
         "Use `request` for a per-goal retry only when you have one exact new operator/error fact that " +
-        "is not already in persisted build, acceptance, or integrity evidence. `build({ request, directBuildIntent })` without goalID is a task-level " +
+        "is not already in persisted build, acceptance, or integrity evidence. `dispatch_agent({ target: \"build\", request, directBuildIntent })` without goalID is a task-level " +
         "direct implementation build. It is supported for explicit `kind=build` tasks, whole-task rework after " +
         "acceptance rejection, and rare operator/orchestrator decisions to bypass goal decomposition for a scoped " +
         "workflow implementation task. It also owns same-task stuck-state repairs that require file edits: " +
@@ -13788,8 +13757,8 @@ export function createOrchestratorTools(input: {
         "when the request needs durable requirements, goal contracts, or decomposition. Fresh workflow direct " +
         "builds must declare directBuildIntent='modify_files' for scoped implementation. Repository investigation " +
         "belongs to analyze_intent, requirements, or the registered explore subagent surface; do not route that work " +
-        "through build. " +
-        "For `build({ goalID })`, the tool returns after the child build session and goal_run have started; terminal completion arrives later as goal_run/acceptance/decision-log evidence and a terminal refill wake. " +
+        "through dispatch_agent target=build. " +
+        "For `dispatch_agent({ target: \"build\", goalID })`, the tool returns after the child build session and goal_run have started; terminal completion arrives later as goal_run/acceptance/decision-log evidence and a terminal refill wake. " +
         "For task-level direct builds, the tool returns the terminal build report. Build does NOT auto-complete " +
         "workflow tasks. Integrity is an optional final review surface after all blocking implementation work " +
         "are terminal. A post-build pass returns evidence for the Orchestrator completion decision; non-pass integrity returns session-bound review evidence to this same reasoning turn; " +
@@ -13847,12 +13816,6 @@ export function createOrchestratorTools(input: {
         if (isTaskLevelBuild) {
           if (requestText.length === 0) {
             return `build: rejected task-level build. request is required when build is not scoped to a goal.`
-          }
-          if (declaredDirectBuildIntent && declaredDirectBuildIntent !== "modify_files") {
-            return (
-              `build: rejected task-level build. directBuildIntent="${declaredDirectBuildIntent}" is not supported; ` +
-              `build is implementation-only. Repository investigation belongs to analyze_intent, requirements, or explore.`
-            )
           }
           if (task.kind === "workflow") {
             if (!declaredDirectBuildIntent) {
@@ -14725,7 +14688,8 @@ export function createOrchestratorTools(input: {
                 // Collect host-side worktree facts on the failure path so the
                 // orchestrator LLM sees what the build session actually
                 // produced (file changes, HEAD) before deciding next step
-                // (build retry / modify_goal / fail_task).
+                // (dispatch_agent target=build retry / manage_task action=modify_goal /
+                // manage_task action=fail_task).
                 // Without these facts the build tool result's "Worktree facts"
                 // block renders all-undefined, leaving the LLM blind to whether
                 // the missing-terminal failure happened with substantial work
@@ -15233,6 +15197,7 @@ export function createOrchestratorTools(input: {
 
           if (attachedGoalID) {
             const terminalBuild = runBuildToTerminal()
+            backgroundGoalBuilds.add(terminalBuild)
             void terminalBuild
               .then(() => {
                 if (!buildStartedSettled) {
@@ -15248,6 +15213,9 @@ export function createOrchestratorTools(input: {
                   goalID: attachedGoalID,
                   error: error instanceof Error ? error.message : String(error),
                 })
+              })
+              .finally(() => {
+                backgroundGoalBuilds.delete(terminalBuild)
               })
 
             const started = await buildStarted
@@ -15275,7 +15243,8 @@ export function createOrchestratorTools(input: {
           if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
           // Build itself failed (LLM error, tool guard fault, worktree
           // creation failed, etc.) — distinct from integrity non-pass evidence.
-          // Surface the error so the orchestrator decides (retry / fail_task).
+          // Surface the error so the orchestrator decides
+          // (dispatch_agent target=build retry / manage_task action=fail_task).
           // Card terminal flows through session.status from the build
           // agent's actor close path.
           throw err
@@ -15874,7 +15843,7 @@ export function createOrchestratorTools(input: {
       "This replaces separate visible worker-stage tools such as requirements, architect, build, visual_qa, integrity, fact_check, research, workload, intent analysis, and explore.",
     inputSchema: dispatchAgentInputSchema,
     execute: async (toolInput, options) => {
-      const { target, ...targetInput } = DispatchAgentTargetInputSchema.parse(toolInput) as DispatchAgentToolInput
+      const { target, ...targetInput } = dispatchAgentInputSchema.parse(toolInput) as DispatchAgentToolInput
       const targetTool = (tools as Record<string, { execute?: (args: unknown, options: unknown) => Promise<unknown> }>)[
         target
       ]
@@ -15891,9 +15860,7 @@ export function createOrchestratorTools(input: {
       "This replaces separate visible lifecycle tools such as propose_task, complete_task, fail_task, cancel_task, retry_task, add_goal, modify_goal, complete_goal, and delete_goal.",
     inputSchema: ManageTaskInputSchema,
     execute: async (toolInput, options) => {
-      const { action, ...rawActionInput } = ManageTaskInputSchema.parse(toolInput)
-      const actionSchema = ManageTaskActionInputSchemas[action]
-      const actionInput = actionSchema.parse(rawActionInput)
+      const { action, ...actionInput } = ManageTaskInputSchema.parse(toolInput)
       const actionTool = (tools as Record<string, { execute?: (args: unknown, options: unknown) => Promise<unknown> }>)[
         action
       ]
