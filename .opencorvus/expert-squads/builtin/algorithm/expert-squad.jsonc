@@ -3,8 +3,13 @@
   "id": "algorithm",
   "label": "Algorithm",
   "description": "Correctness, complexity, benchmark, and adversarial-case focused expert squad.",
-  "version": "2026.07.03",
+  "version": "2026.07.08",
   "readme": "README.md",
+  "selector": {
+    "summary": "Use for algorithm correctness, complexity, benchmark, invariant, oracle, and adversarial-case work.",
+    "selection_guidance": "Use select_expert_squad with profile_id algorithm when the task's acceptance depends on algorithmic correctness, complexity, numerical semantics, or benchmark proof.",
+    "instructions": "selector.md"
+  },
   "capability_projection": {
     "scheduler": {
       "role_base": true,

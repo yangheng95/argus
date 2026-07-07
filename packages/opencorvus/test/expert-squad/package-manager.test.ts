@@ -265,11 +265,24 @@ describe("ExpertSquadPackageManager", () => {
     )
   })
 
+  test("payload packages expose selector-visible expert contracts", () => {
+    for (const source of payloadPackageSources) {
+      const loaded = ExpertSquadRegistry.loadEmbeddedPackage(source)
+      expect(loaded.id).toBe(source.id)
+      expect(loaded.selector?.ref).toBe(`selector/${source.id}`)
+      expect(source.files["selector.md"], `${source.id} selector.md`).toContain("## Expert")
+      expect(source.files["selector.md"], `${source.id} selector.md`).toContain("Contract")
+      expect(source.files["selector.md"], `${source.id} selector.md`).toContain("select_expert_squad")
+      expect(source.files["selector.md"], `${source.id} selector.md`).toContain(source.id)
+    }
+  })
+
   test("payload packages carry formal expert contracts", () => {
     const expected = [
       {
         id: "algorithm",
         readme: ["## Expert Contract", "Claim boundary", "Invariant model", "Acceptance proof"],
+        selector: ["## Expert Contract", "falsifiable correctness model", "Do not accept an algorithm result"],
         overlays: [
           ["agents/orchestrator/system.md", "algorithm Expert Contract"],
           ["agents/build/system.md", "oracle, adversarial cases, and benchmark/proof obligations"],
@@ -278,6 +291,7 @@ describe("ExpertSquadPackageManager", () => {
       {
         id: "backend",
         readme: ["## Expert Contract", "Contract boundary", "State transition model", "Verification proof"],
+        selector: ["## Expert Contract", "real runtime contract", "Do not accept backend work"],
         overlays: [
           ["agents/orchestrator/system.md", "backend Expert Contract"],
           ["agents/build/system.md", "runtime path, state effects, and failure behavior"],

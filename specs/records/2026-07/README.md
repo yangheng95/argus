@@ -1,5 +1,6 @@
 # July 2026 Records
 
+- [2026-07-08-expert-squad-selector-contract-completion.md](2026-07-08-expert-squad-selector-contract-completion.md) records the audit and repair plan for completing selector-visible contracts on payload-distributed expert squads so non-general packages participate in the visible `skill` then `select_expert_squad` protocol.
 - [2026-07-08-dispatch-agent-null-schema-pollution.md](2026-07-08-dispatch-agent-null-schema-pollution.md) records the scheduler schema repair for `dispatch_agent target=build` looping on provider strict-schema null placeholders because optional literal fields were mistaken for discriminators.
 - [2026-07-07-opentest-intent-analysis-and-visual-qa-projection.md](2026-07-07-opentest-intent-analysis-and-visual-qa-projection.md) records the OpenTest projection update that adds a real `intent-analysis` virtual agent for scheduler `analyze_intent`, keeps `visual-qa` projected, and explicitly replaces the stale futures project OpenTest package.
 - [2026-07-07-portable-expert-squad-template.md](2026-07-07-portable-expert-squad-template.md) records the portable expert-squad template boundary: real packages must not be automatically widened with every supported role, while the template sample is generated from supported base-role projection and keeps human tutorial content outside runtime package README prompt content.

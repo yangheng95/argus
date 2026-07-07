@@ -15,6 +15,7 @@ import payload_algorithm_agents_orchestrator_system_md from "../../../../.openco
 import payload_algorithm_agents_requirements_system_md from "../../../../.opencorvus/expert-squads/builtin/algorithm/agents/requirements/system.md" with { type: "text" }
 import payload_algorithm_expert_squad_jsonc from "../../../../.opencorvus/expert-squads/builtin/algorithm/expert-squad.jsonc" with { type: "text" }
 import payload_algorithm_README_md from "../../../../.opencorvus/expert-squads/builtin/algorithm/README.md" with { type: "text" }
+import payload_algorithm_selector_md from "../../../../.opencorvus/expert-squads/builtin/algorithm/selector.md" with { type: "text" }
 import payload_backend_agents_architect_system_md from "../../../../.opencorvus/expert-squads/builtin/backend/agents/architect/system.md" with { type: "text" }
 import payload_backend_agents_build_system_md from "../../../../.opencorvus/expert-squads/builtin/backend/agents/build/system.md" with { type: "text" }
 import payload_backend_agents_coding_assistant_system_md from "../../../../.opencorvus/expert-squads/builtin/backend/agents/coding-assistant/system.md" with { type: "text" }
@@ -30,6 +31,7 @@ import payload_backend_agents_orchestrator_system_md from "../../../../.opencorv
 import payload_backend_agents_requirements_system_md from "../../../../.opencorvus/expert-squads/builtin/backend/agents/requirements/system.md" with { type: "text" }
 import payload_backend_expert_squad_jsonc from "../../../../.opencorvus/expert-squads/builtin/backend/expert-squad.jsonc" with { type: "text" }
 import payload_backend_README_md from "../../../../.opencorvus/expert-squads/builtin/backend/README.md" with { type: "text" }
+import payload_backend_selector_md from "../../../../.opencorvus/expert-squads/builtin/backend/selector.md" with { type: "text" }
 import payload_frontend_automation_debug_agents_architect_system_md from "../../../../.opencorvus/expert-squads/builtin/frontend-automation-debug/agents/architect/system.md" with { type: "text" }
 import payload_frontend_automation_debug_agents_build_system_md from "../../../../.opencorvus/expert-squads/builtin/frontend-automation-debug/agents/build/system.md" with { type: "text" }
 import payload_frontend_automation_debug_agents_coding_assistant_system_md from "../../../../.opencorvus/expert-squads/builtin/frontend-automation-debug/agents/coding-assistant/system.md" with { type: "text" }
@@ -132,6 +134,7 @@ export const payloadPackageSources: readonly ExpertSquadRegistry.EmbeddedPackage
       "agents/requirements/system.md": textPayload(payload_algorithm_agents_requirements_system_md),
       "expert-squad.jsonc": textPayload(payload_algorithm_expert_squad_jsonc),
       "README.md": textPayload(payload_algorithm_README_md),
+      "selector.md": textPayload(payload_algorithm_selector_md),
     },
   },
   {
@@ -154,6 +157,7 @@ export const payloadPackageSources: readonly ExpertSquadRegistry.EmbeddedPackage
       "agents/requirements/system.md": textPayload(payload_backend_agents_requirements_system_md),
       "expert-squad.jsonc": textPayload(payload_backend_expert_squad_jsonc),
       "README.md": textPayload(payload_backend_README_md),
+      "selector.md": textPayload(payload_backend_selector_md),
     },
   },
   {
