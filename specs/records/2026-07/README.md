@@ -1,5 +1,6 @@
 # July 2026 Records
 
+- [2026-07-07-packaged-expert-squad-plugin-runtime.md](2026-07-07-packaged-expert-squad-plugin-runtime.md) records the sidecar packaging repair for OpenTest tasks pausing before goal creation because packaged expert-squad package tools could not resolve `@opencorvus-ai/plugin` from the embedded runtime `package.json`.
 - [2026-07-07-windows-wmic-process-cleanup-retirement.md](2026-07-07-windows-wmic-process-cleanup-retirement.md) records the repair that removes the remaining `wmic.exe` dependency from shared Windows process cleanup by moving parent-PID tree termination into the existing native process supervisor helper.
 - [2026-07-07-dependency-contract-single-source-repair.md](2026-07-07-dependency-contract-single-source-repair.md) records the root repair for Orchestrator goal dependency edits creating a split between executable `engine_goal.depends_on` and the persisted Architect contract graph dependency contracts.
 - [2026-07-07-frontend-tool-portability-boundary.md](2026-07-07-frontend-tool-portability-boundary.md) records the agent-reviewed plan to keep base agents generic while migrating frontend webpage, web-clone, visual-region, and reference-parity tools into host pipelines or portable expert-squad package tools projected by `PromptProfileResolver`.

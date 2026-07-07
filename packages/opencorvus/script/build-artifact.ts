@@ -95,6 +95,9 @@ export function artifactRuntimeNodeModules(target: ArtifactNodeRuntimeTarget): A
     { name: "playwright-core" },
     { name: "chromium-bidi" },
     { name: "@aws-sdk/credential-providers" },
+    // Expert-squad package tools compile at runtime and need the plugin
+    // Application Programming Interface package as a real filesystem module.
+    { name: "@opencorvus-ai/plugin" },
     { name: "@lydell/node-pty", runtimeDependencies: [nodePtyNativePackageName(target)] },
     { name: "sharp", runtimeDependencies: sharpNativePackageNames(target) },
     { name: "@parcel/watcher", runtimeDependencies: [parcelWatcherNativePackageName(target)] },

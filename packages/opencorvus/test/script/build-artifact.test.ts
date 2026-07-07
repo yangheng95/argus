@@ -2,8 +2,10 @@ import { describe, expect, test } from "bun:test"
 import { existsSync } from "node:fs"
 import { readFileSync } from "node:fs"
 import { mkdtemp, rm, writeFile } from "node:fs/promises"
+import { createRequire } from "node:module"
 import { resolve } from "node:path"
 import { tmpdir } from "node:os"
+import { pathToFileURL } from "node:url"
 import {
   artifactBrowserMcpNodeExternalModules,
   artifactBrowserMcpNodeExecutableName,
@@ -345,6 +347,10 @@ describe("build-artifact", () => {
     expect(vendorSource).toContain('await import("@aws-sdk/credential-providers")')
   })
 
+  test("packaged runtime ships expert-squad package tool plugin runtime", () => {
+    expect(artifactRuntimeNodeModuleNames(currentRuntimeTarget())).toContain("@opencorvus-ai/plugin")
+  })
+
   test("packaged runtime keeps native Node packages as packaged node modules", () => {
     expect(artifactExternalModules()).toContain("sharp")
     expect(artifactExternalModules()).toContain("@parcel/watcher")
@@ -474,6 +480,74 @@ describe("build-artifact", () => {
           resolve(outdir, "node_modules/@aws-sdk/credential-providers/node_modules/@smithy/property-provider"),
         ),
       ).toBe(false)
+    } finally {
+      await rm(outdir, { recursive: true, force: true })
+    }
+  }, 60000)
+
+  test("runtime node module copy lets expert-squad package tools resolve the plugin runtime", async () => {
+    const outdir = await mkdtemp(resolve(tmpdir(), "opencorvus-plugin-runtime-"))
+    try {
+      const target = currentRuntimeTarget()
+      const pluginRuntimeModule = artifactRuntimeNodeModules(target).find(
+        (item) => item.name === "@opencorvus-ai/plugin",
+      )
+      expect(pluginRuntimeModule).toBeDefined()
+
+      await writeFile(resolve(outdir, "package.json"), JSON.stringify({ type: "module" }))
+      await copyRuntimeNodeModules(target, outdir, resolve(import.meta.dir, "../../"), [pluginRuntimeModule!])
+
+      const packageJson = resolve(outdir, "package.json")
+      const runtimeRequire = createRequire(packageJson)
+      const runtimePluginPath = runtimeRequire.resolve("@opencorvus-ai/plugin")
+      expect(existsSync(resolve(outdir, "node_modules", "@opencorvus-ai", "plugin", "package.json"))).toBe(true)
+      expect(existsSync(resolve(outdir, "node_modules", "@opencorvus-ai", "sdk", "package.json"))).toBe(true)
+      expect(runtimePluginPath).toContain(resolve(outdir, "node_modules", "@opencorvus-ai", "plugin"))
+
+      const sourcePath = resolve(outdir, "package-tool.ts")
+      await writeFile(
+        sourcePath,
+        [
+          'import { tool } from "@opencorvus-ai/plugin"',
+          "",
+          "export default tool({",
+          '  description: "packaged plugin runtime probe",',
+          "  args: {",
+          "    value: tool.schema.string(),",
+          "  },",
+          "  async execute(args) {",
+          "    return args.value",
+          "  },",
+          "})",
+          "",
+        ].join("\n"),
+      )
+
+      const result = await Bun.build({
+        entrypoints: [sourcePath],
+        outdir,
+        naming: "package-tool.mjs",
+        target: "bun",
+        format: "esm",
+        packages: "bundle",
+        plugins: [
+          {
+            name: "opencorvus-test-package-tool-runtime",
+            setup(build) {
+              build.onResolve({ filter: /^@opencorvus-ai\/plugin$/ }, () => ({ path: runtimePluginPath }))
+            },
+          },
+        ],
+      })
+
+      expect(result.success).toBe(true)
+      const output = result.outputs.at(0)
+      expect(output?.path).toBeDefined()
+      const imported = (await import(pathToFileURL(output!.path).href)) as { default?: unknown }
+      expect(imported.default).toMatchObject({
+        description: "packaged plugin runtime probe",
+      })
+      expect(typeof (imported.default as { execute?: unknown }).execute).toBe("function")
     } finally {
       await rm(outdir, { recursive: true, force: true })
     }
