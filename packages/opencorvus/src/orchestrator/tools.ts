@@ -2102,6 +2102,8 @@ const RetryTaskInputSchema = z
   })
   .strict()
 
+const QueryFailedGoalsInputSchema = z.object({}).strict()
+
 const ManageTaskActionInputSchemas = {
   propose_task: ProposeTaskInputSchema,
   complete_task: CompleteTaskInputSchema,
@@ -2112,6 +2114,7 @@ const ManageTaskActionInputSchemas = {
   modify_goal: ModifyGoalInputSchema,
   complete_goal: CompleteGoalInputSchema,
   delete_goal: DeleteGoalInputSchema,
+  query_failed_goals: QueryFailedGoalsInputSchema,
 } satisfies Record<string, z.ZodObject<any>>
 
 const MANAGE_TASK_ACTION_NAMES = Object.keys(ManageTaskActionInputSchemas) as [
@@ -4983,6 +4986,16 @@ export function computeContractFieldChanges(
     setValues[f] = incoming
   }
   return setValues
+}
+
+function dependencyGraphMutationError(input: { taskID: string; action: "add_goal" | "modify_goal" }): string | undefined {
+  const graphArtifact = findLatestArchitectContractGraphArtifact(input.taskID)
+  if (!graphArtifact) return undefined
+  return (
+    `Error: ${input.action} refused because depends_on is owned by Architect Contract Graph artifact ` +
+    `${graphArtifact.id}. Dependency edges must be registered through Architect register_dependency_contract ` +
+    "and finalized by submit_architect so engine_goal.depends_on and architect_contract_graph.dependency_contracts stay aligned; database unchanged."
+  )
 }
 
 export function validatePersistedArchitectFidelity(input: {
@@ -10294,6 +10307,10 @@ export function createOrchestratorTools(input: {
             `Use durable engine_goal.id values from the current task snapshot.`
           )
         }
+        if ((goal.depends_on ?? []).length > 0) {
+          const graphMutationError = dependencyGraphMutationError({ taskID, action: "add_goal" })
+          if (graphMutationError) return graphMutationError
+        }
 
         const now = Date.now()
         const durableGoalID = Identifier.ascending("goal")
@@ -10397,6 +10414,10 @@ export function createOrchestratorTools(input: {
 
         const changed = Object.keys(setValues)
         const contractChanged = changed.length > 0
+        if (Object.prototype.hasOwnProperty.call(setValues, "depends_on")) {
+          const graphMutationError = dependencyGraphMutationError({ taskID, action: "modify_goal" })
+          if (graphMutationError) return graphMutationError
+        }
         const statusReset =
           contractChanged && (goalStatusByID(goal.id) === "passed" || goalStatusByID(goal.id) === "failed")
 
@@ -10549,7 +10570,7 @@ export function createOrchestratorTools(input: {
       execute: async () => {
         const dbGoals = listGoals(taskID)
         const failed = dbGoals.filter((g) => goalStatusByID(g.id) === "failed")
-        if (failed.length === 0) return "No failed goals."
+        if (failed.length === 0) return withExplicitDecisionEffectMetadata("No failed goals.", "observation")
         const { listGoalRunsForTask, findAcceptanceByGoalRun } = await import("@/engine/store")
         const goalRuns = listGoalRunsForTask(taskID)
         const sections: string[] = [`## Failed Goals (${failed.length})`]
@@ -10602,7 +10623,7 @@ export function createOrchestratorTools(input: {
         }
         const result = sections.join("\n")
         SubAgentProtocol.report(result, "tool:query_failed_goals")
-        return result
+        return withExplicitDecisionEffectMetadata(result, "observation")
       },
     }),
 
@@ -15856,8 +15877,8 @@ export function createOrchestratorTools(input: {
 
   const manageTaskTool = tool({
     description:
-      "Single scheduler task-management tool. Use action to select task or goal lifecycle behavior, then provide action-specific fields. " +
-      "This replaces separate visible lifecycle tools such as propose_task, complete_task, fail_task, cancel_task, retry_task, add_goal, modify_goal, complete_goal, and delete_goal.",
+      "Single scheduler task-management tool. Use action to select task lifecycle, goal lifecycle, or failed-goal diagnostic behavior, then provide action-specific fields. " +
+      "This replaces separate visible lifecycle and goal-diagnostic tools such as propose_task, complete_task, fail_task, cancel_task, retry_task, add_goal, modify_goal, complete_goal, delete_goal, and query_failed_goals.",
     inputSchema: ManageTaskInputSchema,
     execute: async (toolInput, options) => {
       const { action, ...actionInput } = ManageTaskInputSchema.parse(toolInput)

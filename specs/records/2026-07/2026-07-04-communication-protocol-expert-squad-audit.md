@@ -1,5 +1,7 @@
 # 2026-07-04 Communication Protocol And Expert Squad Audit
 
+Supersession note: Package-layout statements in this record that use `.opencorvus/expert-squads/<id>` are superseded by `2026-07-06-expert-squad-namespaced-source-layout.md`; current project and repository package roots are `.opencorvus/expert-squads/<namespace>/<id>/`.
+
 ## Recall
 
 User request: find several independent agents to review whether recent communication-protocol changes and expert-squad changes broke normal functionality. After each review round, write a report, then continue reviewing until no new issues are found.

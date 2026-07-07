@@ -808,8 +808,12 @@ setInterval(() => {
     const cutoff = Date.now() - SESSION_TIMEOUT_MS
     for (const [id, session] of sessions) {
       if (session.lastActive < cutoff) {
-        await destroySession(id).catch(() => {})
-        log(`session expired  ${id}  idle=${Math.round(SESSION_TIMEOUT_MS / 60000)}min`)
+        try {
+          await destroySession(id)
+          log(`session expired  ${id}  idle=${Math.round(SESSION_TIMEOUT_MS / 60000)}min`)
+        } catch (error) {
+          log(`session expiration cleanup failed  ${id}  ${error instanceof Error ? error.message : String(error)}`)
+        }
       }
     }
     for (const [id, profile] of profiles) {

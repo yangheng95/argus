@@ -1102,7 +1102,7 @@ export function renderCollaborationClosure(desc: CollaborationClosureDesc | unde
       lines.push(`- ${goalID}: ${titleByID.get(goalID) ?? "untitled"}`)
     }
     lines.push(
-      "Failed goals stay inside the current collaboration closure. Read `query_failed_goals`, then route repair through `dispatch_agent` target=build with goalID/request, `manage_task` action=modify_goal, or `dispatch_agent` target=architect according to the proven owner; ask the operator only for external, destructive, or out-of-scope blockers. Do not restart upstream merely because a Build attempt failed or a failed worktree contains partial files.",
+      "Failed goals stay inside the current collaboration closure. Use `manage_task` action=query_failed_goals, then route repair through `dispatch_agent` target=build with goalID/request, `manage_task` action=modify_goal, or `dispatch_agent` target=architect according to the proven owner; ask the operator only for external, destructive, or out-of-scope blockers. Do not restart upstream merely because a Build attempt failed or a failed worktree contains partial files.",
     )
   }
 

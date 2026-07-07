@@ -44,6 +44,7 @@ export function projectionHash(input: {
   projection: ExpertSquadRegistry.Projection
   toolIDs: string[]
   dynamicAttributes: ExpertSquadRegistry.Manifest["dynamic_attributes"]
+  defaultMcpServers?: unknown
   resourceFingerprint?: unknown
 }) {
   return createHash("sha256").update(stable(input)).digest("hex")
@@ -97,6 +98,11 @@ export function workerBuiltInToolIDsFromProjection(
 function catalogProjectionEntryWithBuiltInTools(
   projection: ExpertSquadRegistry.Projection,
   builtInToolIDs: readonly string[],
+  expandedPackageMcpRefs: {
+    packageMcpToolRefs?: readonly string[]
+    packageMcpPromptRefs?: readonly string[]
+    packageMcpResourceRefs?: readonly string[]
+  } = {},
 ) {
   return {
     built_in_tool_ids: [...builtInToolIDs],
@@ -107,11 +113,13 @@ function catalogProjectionEntryWithBuiltInTools(
     default_mcp_server_refs: [...projection.default_mcp_server_refs],
     package_mcp_server_refs: [...projection.package_mcp_server_refs],
     default_mcp_tool_refs: [...projection.default_mcp_tool_refs],
-    package_mcp_tool_refs: [...projection.package_mcp_tool_refs],
+    package_mcp_tool_refs: [...(expandedPackageMcpRefs.packageMcpToolRefs ?? projection.package_mcp_tool_refs)],
     default_mcp_prompt_refs: [...projection.default_mcp_prompt_refs],
-    package_mcp_prompt_refs: [...projection.package_mcp_prompt_refs],
+    package_mcp_prompt_refs: [...(expandedPackageMcpRefs.packageMcpPromptRefs ?? projection.package_mcp_prompt_refs)],
     default_mcp_resource_refs: [...projection.default_mcp_resource_refs],
-    package_mcp_resource_refs: [...projection.package_mcp_resource_refs],
+    package_mcp_resource_refs: [
+      ...(expandedPackageMcpRefs.packageMcpResourceRefs ?? projection.package_mcp_resource_refs),
+    ],
   }
 }
 
@@ -149,6 +157,11 @@ export function defaultToolNameFromRef(ref: string): string {
   return name
 }
 
+export function defaultToolProviderName(ref: string): string {
+  defaultToolNameFromRef(ref)
+  return packageProviderName("default_tool", ref)
+}
+
 export function defaultMcpToolProviderName(ref: string): string {
   return packageProviderName("default_mcp_tool", ref)
 }
@@ -170,13 +183,26 @@ export function catalogProfileFromPackage(input: {
   pkg: ExpertSquadCatalogPackage
   builtIn: boolean
   builtInToolIDs?: readonly string[]
+  defaultMcpServers?: unknown
+  packageMcpToolRefs?: readonly string[]
+  packageMcpPromptRefs?: readonly string[]
+  packageMcpResourceRefs?: readonly string[]
+  agentPackageMcpRefs?: Record<
+    string,
+    {
+      packageMcpToolRefs?: readonly string[]
+      packageMcpPromptRefs?: readonly string[]
+      packageMcpResourceRefs?: readonly string[]
+    }
+  >
+  resourceFingerprint?: unknown
 }): PromptProfileCatalogProfile {
   const scheduler = input.pkg.manifest.capability_projection.scheduler
   const schedulerBuiltInToolIDs = input.builtInToolIDs ?? schedulerBuiltInToolIDsFromProjection(scheduler)
-  const defaultToolProviderNames = scheduler.default_tool_refs.map(defaultToolNameFromRef)
+  const defaultToolProviderNames = scheduler.default_tool_refs.map(defaultToolProviderName)
   const packageToolRefs = input.builtIn ? [] : scheduler.package_tool_refs
   const defaultMcpToolProviderNames = scheduler.default_mcp_tool_refs.map(defaultMcpToolProviderName)
-  const packageMcpToolRefs = input.builtIn ? [] : scheduler.package_mcp_tool_refs
+  const packageMcpToolRefs = input.builtIn ? [] : (input.packageMcpToolRefs ?? scheduler.package_mcp_tool_refs)
   const projection = input.pkg.manifest.capability_projection
   return {
     id: input.id,
@@ -184,7 +210,7 @@ export function catalogProfileFromPackage(input: {
     description: input.pkg.promptProfile.description,
     built_in: input.builtIn,
     editable: false,
-    agents: { ...(input.pkg.promptProfile.agents ?? {}) },
+    agents: {},
     capability_profile_id: input.pkg.id,
     projection_hash: projectionHash({
       profileID: input.id,
@@ -197,11 +223,17 @@ export function catalogProfileFromPackage(input: {
         ...packageMcpToolRefs.map(packageMcpToolProviderName),
       ],
       dynamicAttributes: input.pkg.manifest.dynamic_attributes,
+      defaultMcpServers: input.defaultMcpServers,
+      resourceFingerprint: input.resourceFingerprint,
     }),
     projected_agents: Object.keys(projection.agents).sort(),
     virtual_agents: virtualAgentSummaries(input.pkg),
     capability_projection: {
-      scheduler: catalogProjectionEntryWithBuiltInTools(projection.scheduler, schedulerBuiltInToolIDs),
+      scheduler: catalogProjectionEntryWithBuiltInTools(projection.scheduler, schedulerBuiltInToolIDs, {
+        packageMcpToolRefs: input.builtIn ? [] : input.packageMcpToolRefs,
+        packageMcpPromptRefs: input.builtIn ? [] : input.packageMcpPromptRefs,
+        packageMcpResourceRefs: input.builtIn ? [] : input.packageMcpResourceRefs,
+      }),
       agents: Object.fromEntries(
         Object.entries(projection.agents)
           .sort(([left], [right]) => left.localeCompare(right))
@@ -214,6 +246,7 @@ export function catalogProfileFromPackage(input: {
               catalogProjectionEntryWithBuiltInTools(
                 agentProjection,
                 workerBuiltInToolIDsFromProjection(agentID, agentProjection),
+                input.builtIn ? {} : input.agentPackageMcpRefs?.[agentID],
               ),
             ]
           }),
@@ -227,6 +260,19 @@ export function catalogSummaryFromPackage(input: {
   pkg: ExpertSquadCatalogPackage
   builtIn: boolean
   builtInToolIDs?: readonly string[]
+  defaultMcpServers?: unknown
+  packageMcpToolRefs?: readonly string[]
+  packageMcpPromptRefs?: readonly string[]
+  packageMcpResourceRefs?: readonly string[]
+  agentPackageMcpRefs?: Record<
+    string,
+    {
+      packageMcpToolRefs?: readonly string[]
+      packageMcpPromptRefs?: readonly string[]
+      packageMcpResourceRefs?: readonly string[]
+    }
+  >
+  resourceFingerprint?: unknown
 }): ExpertSquadCatalogSummary {
   const profile = catalogProfileFromPackage(input)
   const selector = input.pkg.selector

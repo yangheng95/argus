@@ -4,6 +4,7 @@ import path from "node:path"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { findTask } from "../../src/engine/store"
 import { deriveTaskStatus } from "../../src/engine/task-status"
+import { IntentBundle } from "../../src/intent/bundle"
 import * as TaskLoop from "../../src/orchestrator/loop"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
@@ -17,6 +18,16 @@ import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
 
+function taskRouteTmpdir(options?: Parameters<typeof tmpdir>[0]) {
+  return tmpdir({
+    ...options,
+    dispose: async (dir) => {
+      await options?.dispose?.(dir)
+      await resetDatabase()
+    },
+  })
+}
+
 describe("task creation route", () => {
   afterEach(async () => {
     mock.restore()
@@ -24,7 +35,7 @@ describe("task creation route", () => {
   })
 
   test("POST /task accepts omitted queue and starts immediately", async () => {
-    await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
+    await using tmp = await taskRouteTmpdir({ git: true, config: { model: "test/model" } })
 
     const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
     const app = Server.App()
@@ -56,7 +67,7 @@ describe("task creation route", () => {
   }, 15_000)
 
   test("POST /task rejects caller-supplied child task lineage", async () => {
-    await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
+    await using tmp = await taskRouteTmpdir({ git: true, config: { model: "test/model" } })
 
     const app = Server.App()
     const response = await app.request("/task", {
@@ -82,7 +93,7 @@ describe("task creation route", () => {
   }, 15_000)
 
   test("POST /task defaults init-git to true for missing directories", async () => {
-    await using root = await tmpdir()
+    await using root = await taskRouteTmpdir()
     const directory = path.join(root.path, "created-from-task-route")
 
     const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
@@ -115,7 +126,7 @@ describe("task creation route", () => {
   }, 15_000)
 
   test("POST /task defaults init-git to true for existing non-git directories", async () => {
-    await using tmp = await tmpdir()
+    await using tmp = await taskRouteTmpdir()
 
     spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
     const app = Server.App()
@@ -141,7 +152,7 @@ describe("task creation route", () => {
   }, 15_000)
 
   test("POST /task with init-git=false rejects missing directories without creating .git", async () => {
-    await using root = await tmpdir()
+    await using root = await taskRouteTmpdir()
     const directory = path.join(root.path, "missing-with-init-git-false")
 
     spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
@@ -167,7 +178,7 @@ describe("task creation route", () => {
   }, 15_000)
 
   test("POST /task with init-git=false rejects existing non-git directories without creating .git", async () => {
-    await using tmp = await tmpdir()
+    await using tmp = await taskRouteTmpdir()
 
     spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
     const app = Server.App()
@@ -193,7 +204,7 @@ describe("task creation route", () => {
   }, 15_000)
 
   test("POST /task rejects invalid init-git values", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await taskRouteTmpdir({ git: true })
 
     spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
     const app = Server.App()
@@ -217,7 +228,7 @@ describe("task creation route", () => {
   }, 15_000)
 
   test("POST /task writes selected prompt profile to the root session overlay", async () => {
-    await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
+    await using tmp = await taskRouteTmpdir({ git: true, config: { model: "test/model" } })
     await writeProjectExpertSquadPackage(tmp.path)
 
     spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
@@ -247,8 +258,52 @@ describe("task creation route", () => {
     })
   }, 15_000)
 
+  test("POST /task does not write prompt profile overlay when task materialization fails", async () => {
+    await using tmp = await taskRouteTmpdir({ git: true, config: { model: "test/model" } })
+    await writeProjectExpertSquadPackage(tmp.path)
+
+    spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+    spyOn(IntentBundle, "write").mockRejectedValue(new Error("synthetic intent bundle failure"))
+    const app = Server.App()
+    const response = await app.request("/task", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-opencorvus-directory": tmp.path,
+      },
+      body: JSON.stringify({
+        title: "intent bundle failure profile orphan",
+        request: "create with profile but fail before task row",
+        executor: "opencorvus",
+        requestID: "route-create-profile-intent-failure",
+        source: "panel",
+        promptProfile: PROJECT_EXPERT_SQUAD_ID,
+      }),
+    })
+
+    expect(response.status).not.toBe(202)
+    const persistedTasks = Database.use((db) =>
+      db
+        .select()
+        .from(EngineTaskTable)
+        .all()
+        .filter((task) => task.request_id === "route-create-profile-intent-failure"),
+    )
+    expect(persistedTasks).toHaveLength(0)
+    const sessions = Database.use((db) =>
+      db
+        .select()
+        .from(SessionTable)
+        .all()
+        .filter((session) => session.title === "intent bundle failure profile orphan"),
+    )
+    expect(sessions.every((session) => (session.metadata as any)?.configOverlay?.prompt_profile === undefined)).toBe(
+      true,
+    )
+  }, 15_000)
+
   test("POST /task rejects malformed attachment base64 before writing task attachments", async () => {
-    await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
+    await using tmp = await taskRouteTmpdir({ git: true, config: { model: "test/model" } })
 
     const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
     const writeAttachment = spyOn(AttachmentStore, "write")
@@ -294,7 +349,7 @@ describe("task creation route", () => {
   }, 15_000)
 
   test("POST /task rejects malformed attachments before initializing a missing project directory", async () => {
-    await using tmp = await tmpdir()
+    await using tmp = await taskRouteTmpdir()
     const missingProject = path.join(tmp.path, "missing-project")
 
     const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
@@ -319,6 +374,11 @@ describe("task creation route", () => {
     expect(response.status).toBe(400)
     expect(writeAttachment).not.toHaveBeenCalled()
     expect(runTaskLoop).not.toHaveBeenCalled()
-    expect(await fs.stat(missingProject).then(() => true, () => false)).toBe(false)
+    expect(
+      await fs.stat(missingProject).then(
+        () => true,
+        () => false,
+      ),
+    ).toBe(false)
   }, 15_000)
 })

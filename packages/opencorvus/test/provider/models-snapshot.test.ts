@@ -59,12 +59,16 @@ test("snapshot generator injects local hexin provider into registry data", () =>
   })
 })
 
-test("build scripts can reuse the checked-in snapshot without registry fetch", async () => {
+test("build scripts reuse the shared generated build artifact entrypoint", async () => {
   for (const script of ["build.ts", "build.local.ts"]) {
     const text = await Filesystem.readText(path.join(packageRoot, "script", script))
-    expect(text).toContain("resolveModelsSnapshotData")
-    expect(text).toContain("modelsSnapshotPath")
+    expect(text).toContain("generateOpencorvusGeneratedBuildArtifacts")
+    expect(text).not.toContain("resolveModelsSnapshotData")
   }
+
+  const buildArtifacts = await Filesystem.readText(path.join(packageRoot, "script", "generate-build-artifacts.ts"))
+  expect(buildArtifacts).toContain("resolveModelsSnapshotData")
+  expect(buildArtifacts).toContain("modelsSnapshotPath")
 
   const helper = await Filesystem.readText(path.join(packageRoot, "script", "models-snapshot.ts"))
   expect(helper).toContain("OPENCORVUS_DISABLE_MODELS_FETCH")

@@ -137,16 +137,18 @@ describe("tool.browser_preview", () => {
           const visualQaIDs = visualQaTools.map((tool) => tool.id)
           expect(visualQaIDs).not.toContain("browser_preview_bind_local_module")
           expect(visualQaIDs).not.toContain("browser_preview_compare_regions")
-          expect(visualQaIDs).toContain("browser_preview_reference_regions")
-          expect(visualQaIDs).toContain("browser_preview_compare_scroll_slices")
+          expect(visualQaIDs).not.toContain("browser_preview_reference_regions")
+          expect(visualQaIDs).not.toContain("browser_preview_compare_scroll_slices")
+          expect(visualQaIDs).not.toContain("browser_preview_layout_geometry")
 
           const build = await Agent.get("build")
           const buildTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, build)
           const buildIDs = buildTools.map((tool) => tool.id)
           expect(buildIDs).not.toContain("browser_preview_bind_local_module")
           expect(buildIDs).not.toContain("browser_preview_compare_regions")
-          expect(buildIDs).toContain("browser_preview_reference_regions")
+          expect(buildIDs).not.toContain("browser_preview_reference_regions")
           expect(buildIDs).not.toContain("browser_preview_compare_scroll_slices")
+          expect(buildIDs).not.toContain("browser_preview_layout_geometry")
         },
       })
     },

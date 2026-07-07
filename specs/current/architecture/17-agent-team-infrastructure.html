@@ -1099,10 +1099,10 @@
           html: `<p>唯一任务级调度者。看完整上下文推理下一步动作；自身不写代码，executor 的 filesystem / search / write 工具被排除在其可见池外。</p>
             <h4>显式 tool surface</h4>
             <ul>
-              <li><b>Stage / evidence</b>：requirements · frontend_design · frontend_research · deep_research · architect · workload_analysis · build。</li>
-              <li><b>审查 / 复核</b>：visual_qa · integrity · fact_check · analyze_intent · explore。</li>
-              <li><b>Goal 维护</b>：add_goal · modify_goal · query_failed_goals · goal_report。</li>
-              <li><b>任务级控制</b>：complete_task · fail_task · cancel_task · retry_task · cancel_subagent · refine。</li>
+              <li><b>Stage / evidence</b>：<code>dispatch_agent target=requirements/frontend_design/frontend_research/deep_research/architect/workload_analysis/build</code>。</li>
+              <li><b>审查 / 复核</b>：<code>dispatch_agent target=visual_qa/integrity/fact_check/analyze_intent/explore</code>。</li>
+              <li><b>Goal 维护 / 诊断</b>：<code>manage_task action=add_goal/modify_goal/complete_goal/delete_goal/query_failed_goals</code>；<code>goal_report</code> 是 executor 终态 evidence，不是 Orchestrator scheduler tool。</li>
+              <li><b>任务级控制</b>：<code>manage_task action=propose_task/complete_task/fail_task/cancel_task/retry_task</code> · <code>cancel_subagent</code>。</li>
               <li><b>A2A 响应</b>：respond_agent_coordination（唯一调度响应入口）。</li>
             </ul>
             <p><code>deliver</code> / <code>publish_acceptance</code> / <code>steer_subagent</code> 已删除。</p>`
@@ -1129,7 +1129,7 @@
             <ul>
               <li><b>Worker → Orchestrator</b>：<code>request_orchestrator_decision</code> → 写 <code>agent_coordination_request</code> + <code>agent.coordination.requested</code>，唤醒 task orchestrator；<code>requested_decision</code> 只能描述调度问题，不能填 <code>redispatch</code> / <code>redispatch_worker</code> action literal。</li>
               <li><b>Operator → Orchestrator</b>：<code>POST …/operator-steer</code> → <code>agent_coordination_request(origin="operator_steer")</code>。</li>
-              <li><b>Orchestrator → worker / action</b>：<code>respond_agent_coordination</code> 认领 pending request，写 response / action，再执行 continue / cancel_worker / ask_user / fail_task / redispatch；普通 scheduler lifecycle 统一走 <code>manage_task action=...</code>，worker 派发统一走 <code>dispatch_agent target=...</code>。</li>
+              <li><b>Orchestrator → worker / action</b>：<code>respond_agent_coordination</code> 认领 pending request，写 response / action，再执行 continue / cancel_worker / ask_user / <code>respond_agent_coordination action=fail_task</code> / redispatch；普通 scheduler lifecycle 统一走 <code>manage_task action=...</code>，worker 派发统一走 <code>dispatch_agent target=...</code>。</li>
             </ul>
             <h4>可观察投影</h4>
             <p>request / response / action / continuation / terminal 经一条可见投影（conversation · events · SSE）重建为 <code>protocol_event</code>、message part 与 session status。</p>`
@@ -1405,7 +1405,7 @@
           kicker: "架构红线", title: "无固定 pipeline",
           src: "99-principles.md · §4 / anti-patterns",
           html: `<p>禁止硬编码状态机（<code>if status==evaluating → …</code>）与机械 RetryPolicy（<code>bug → re-execute</code>）。</p>
-            <p>失败由 agent 读 evidence 决定，不是查表；Orchestrator 随时 <code>add_goal</code> / <code>modify_goal</code>。</p>`
+            <p>失败由 agent 读 evidence 决定，不是查表；Orchestrator 随时通过 <code>manage_task action=add_goal</code> / <code>manage_task action=modify_goal</code> 动态调整。</p>`
         },
         "rl-no-fallback": {
           kicker: "架构红线", title: "无 fallback",

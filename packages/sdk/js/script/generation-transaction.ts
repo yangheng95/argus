@@ -47,6 +47,14 @@ async function copyFileWithRetry(source: string, target: string) {
   }
 }
 
+async function copyEntryWithRetry(source: string, target: string, kind: "directory" | "file") {
+  if (kind === "directory") {
+    await copyDirectoryWithRetry(source, target)
+    return
+  }
+  await copyFileWithRetry(source, target)
+}
+
 async function pathExists(target: string) {
   try {
     await fs.stat(target)
@@ -131,4 +139,62 @@ export async function replaceDirectoryAfterSuccessfulBuild(input: {
   }
   await removeWithRetry(stagingDir)
   await removeWithRetry(backupDir)
+}
+
+export async function replaceGeneratedArtifactsAfterSuccessfulBuild(input: {
+  packageRoot: string
+  stagingRelative: string
+  artifacts: {
+    stagingRelative: string
+    targetRelative: string
+    kind: "directory" | "file"
+  }[]
+  build: (stagingRoot: string) => Promise<void>
+}) {
+  const stagingRoot = resolveWithinPackage(input.packageRoot, input.stagingRelative)
+  const backupRoot = resolveWithinPackage(input.packageRoot, `${input.stagingRelative}-backup`)
+  if (input.artifacts.length === 0) throw new Error("generated artifact transaction requires at least one target")
+
+  const artifacts = input.artifacts.map((artifact) => ({
+    ...artifact,
+    stagingPath: resolveWithinPackage(input.packageRoot, path.join(input.stagingRelative, artifact.stagingRelative)),
+    targetPath: resolveWithinPackage(input.packageRoot, artifact.targetRelative),
+    backupPath: resolveWithinPackage(input.packageRoot, path.join(`${input.stagingRelative}-backup`, artifact.targetRelative)),
+  }))
+
+  await removeWithRetry(stagingRoot)
+  await removeWithRetry(backupRoot)
+  try {
+    await input.build(stagingRoot)
+  } catch (error) {
+    await removeWithRetry(stagingRoot).catch(() => undefined)
+    throw error
+  }
+
+  const existingTargets = new Map<string, boolean>()
+  for (const artifact of artifacts) {
+    const exists = await pathExists(artifact.targetPath)
+    existingTargets.set(artifact.targetRelative, exists)
+    if (exists) await copyEntryWithRetry(artifact.targetPath, artifact.backupPath, artifact.kind)
+  }
+
+  try {
+    for (const artifact of artifacts) {
+      if (artifact.kind === "directory") {
+        await mirrorDirectory(artifact.stagingPath, artifact.targetPath)
+      } else {
+        await copyFileWithRetry(artifact.stagingPath, artifact.targetPath)
+      }
+    }
+  } catch (error) {
+    for (const artifact of artifacts) {
+      await removeWithRetry(artifact.targetPath).catch(() => undefined)
+      if (existingTargets.get(artifact.targetRelative)) {
+        await copyEntryWithRetry(artifact.backupPath, artifact.targetPath, artifact.kind)
+      }
+    }
+    throw error
+  }
+  await removeWithRetry(stagingRoot)
+  await removeWithRetry(backupRoot)
 }

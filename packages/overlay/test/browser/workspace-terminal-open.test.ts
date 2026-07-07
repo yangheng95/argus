@@ -34,7 +34,7 @@ function expertSquadCatalog() {
   return expertSquadCatalogFixture({
     active: "frontend-replica",
     projectActive: "frontend-replica",
-    profiles: [
+    squads: [
       {
         id: "general",
         label: "General",

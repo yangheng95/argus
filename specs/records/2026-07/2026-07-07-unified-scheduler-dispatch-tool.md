@@ -274,3 +274,92 @@ Four read-only audit agents checked independent surfaces:
 ### Final Review Result
 
 No new high-confidence issue class remained after the second implementation review, focused test reruns, static scan, typecheck, and diff whitespace check. Low-confidence residual risk is limited to broader repository dirty state outside this task; those files were not used as evidence of this change unless named above.
+
+## Architect Goal Tool Consolidation Recall
+
+### User Request
+
+Follow-up on 2026-07-07: "把goal工具也收束".
+
+Interpretation:
+
+- The previous scheduler consolidation already moved Orchestrator task/goal lifecycle actions into `manage_task`.
+- The remaining visible goal-specific tool cluster is Architect's stage-owned goal graph mutation surface: `register_goal`, `modify_goal`, `remove_goal`, and `register_visual_feedback_acceptance`.
+- The scheduler also still exposes `query_failed_goals` as a standalone goal diagnostic tool. That goal diagnostic should be expressed through the same unified scheduler action surface instead of a separate visible tool.
+
+### Acceptance Criteria
+
+- Architect no longer exposes separate visible goal mutation tools named `register_goal`, `modify_goal`, `remove_goal`, or `register_visual_feedback_acceptance`.
+- Architect exposes one goal mutation tool named `manage_goal` with an exact discriminated `action` schema.
+- `manage_goal` preserves the existing action-specific validation and collector mutations for registering, modifying, removing, and attaching final visual feedback acceptance to goals.
+- Architect terminal finalization remains `submit_architect`; contract graph, traceability, coverage, and assembly-owner tools are not collapsed in this phase because they are not goal mutation tools.
+- Orchestrator scheduler no longer exposes `query_failed_goals` as a standalone visible built-in; failed-goal diagnostics are available through `manage_task action=query_failed_goals`.
+- Expert-squad scheduler role base and package manifests no longer list `query_failed_goals` directly.
+- No compatibility aliases, hidden router, UI filter, broad catch-all parser, or second projection source is added.
+
+### Hard Constraints
+
+- Preserve the dirty worktree and unrelated staged changes.
+- Do not create a worktree.
+- Do not restart, refresh, kill, or otherwise affect OpenCorvus / overlay runtime processes.
+- Keep `PromptProfileResolver` as the only expert-squad runtime projection surface.
+- Keep stage-owned terminal/output contracts visible only in their owning agent session.
+
+### Sources Read
+
+- `AGENTS.md`
+- `C:/Users/chuan/.codex/skills/opencorvus-expert-squad-creator/SKILL.md`
+- `C:/Users/chuan/.codex/skills/opencorvus-expert-squad-creator/references/open-corvus-expert-squad-checklist.md`
+- `specs/README.md`
+- `specs/records/2026-07/README.md`
+- This record's earlier Recall and Broad Compatibility Audit sections.
+- `specs/records/2026-07/2026-07-07-frontend-tool-portability-boundary.md`
+- `packages/opencorvus/src/architect/output-tools.ts`
+- `packages/opencorvus/src/architect/agent.ts`
+- `packages/opencorvus/src/prompt/core/architect-core.txt`
+- `packages/opencorvus/src/orchestrator/tools.ts`
+- `packages/opencorvus/src/agent/tool-pool-contract.ts`
+- Existing focused tests under `packages/opencorvus/test/architect`, `packages/opencorvus/test/orchestrator`, and `packages/opencorvus/test/expert-squad`.
+
+### Repository Search Evidence
+
+- `rg -n "\b(goal|Goal)\b|add_goal|modify_goal|complete_goal|delete_goal|query_failed_goals|merge_back|goal_run|goal workspace|GoalTool|goal tool|goal_tool" packages/opencorvus/src packages/opencorvus/test packages/overlay/src packages/overlay/test specs/current specs/records/2026-07 .opencorvus -g "*.ts" -g "*.tsx" -g "*.md" -g "*.txt" -g "*.jsonc"`
+  - Finding: scheduler lifecycle goal actions already route through `manage_task`, while `query_failed_goals` remains a visible scheduler built-in and Architect has separate goal graph mutation tools.
+- `rg -n "register_goal|modify_goal|remove_goal|submit_architect|register_dependency_contract|register_visual_feedback_acceptance|createArchitect|Architect.*tool|tools\s*=|tool\(" packages/opencorvus/src/architect packages/opencorvus/test/architect packages/opencorvus/src/prompt/core/architect-core.txt -g "*.ts" -g "*.txt"`
+  - Finding: Architect exposes `register_goal`, `modify_goal`, `remove_goal`, and `register_visual_feedback_acceptance` as separate visible stage-owned tools. `submit_architect` is the terminal finalizer, while traceability/coverage/contract tools are separate non-goal protocol surfaces.
+- `rg -n "query_failed_goals\s*[:=]|query_failed_goals: tool|query_failed_goals" packages/opencorvus/src/orchestrator/tools.ts packages/opencorvus/src/agent/tool-pool-contract.ts packages/opencorvus/src/prompt/core/orchestrator-core.txt packages/opencorvus/test/orchestrator packages/opencorvus/test/expert-squad packages/opencorvus/test/server .opencorvus/expert-squads specs/current -g "*.ts" -g "*.txt" -g "*.md" -g "*.jsonc"`
+  - Finding: `query_failed_goals` appears in scheduler role base, Orchestrator core prompt, scheduler projection tests, expert-squad resolver tests, OpenTest manifest, and current architecture docs.
+- `rg -n "register_goal|remove_goal|modify_goal|goal_tools|goal tool|Goal tool" packages/opencorvus/src packages/opencorvus/test .opencorvus specs/current specs/records/2026-07 -g "*.ts" -g "*.tsx" -g "*.md" -g "*.txt" -g "*.jsonc"`
+  - Finding: old Architect goal tool names appear in Architect prompt/tests and historical records. Current source/tests must move to `manage_goal`; historical records can remain as dated evidence.
+
+### Independent Agent Feedback
+
+No sub-agent was used for this short follow-up because the user did not ask for parallel agent work in this turn. The change is bounded by direct repository evidence above.
+
+### Design
+
+Introduce one Architect-visible goal mutation tool:
+
+```text
+manage_goal({ action, ...action-specific fields })
+```
+
+Action IDs preserve the existing semantic names:
+
+- `register_goal`
+- `modify_goal`
+- `remove_goal`
+- `register_visual_feedback_acceptance`
+
+This is not a compatibility alias: the old visible tool entries are removed from the Architect tool map, and their implementation bodies become internal action handlers. Existing validation remains action-specific through a discriminated union.
+
+Extend scheduler `manage_task` with read-only `action=query_failed_goals`. The action is still not a workflow decision, but it no longer occupies a standalone goal tool slot.
+
+### Validation Plan
+
+- `bun test packages/opencorvus/test/architect/goal-tool-schema-visible.test.ts packages/opencorvus/test/architect/output-tools.test.ts packages/opencorvus/test/architect/output-tools-overlap.test.ts --timeout 180000`
+- `bun test packages/opencorvus/test/orchestrator/scheduler-capability-projection.test.ts packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts --timeout 180000`
+- `bun test packages/opencorvus/test/orchestrator/orchestrator-core-prompt.test.ts packages/opencorvus/test/agent/core-prompt-hygiene.test.ts --timeout 180000`
+- `bun test packages/opencorvus/test/script/document-health.test.ts --timeout 180000`
+- `bun run typecheck`
+- `git diff --check`

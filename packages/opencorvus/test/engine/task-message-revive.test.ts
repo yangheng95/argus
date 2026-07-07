@@ -12,6 +12,8 @@ import {
 import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
+import { EffectiveConfig } from "../../src/config/effective"
+import * as EngineQueue from "../../src/engine/queue"
 import * as TaskLoop from "../../src/orchestrator/loop"
 import { findActivePlanForTask, findActiveRunForTask, findRun, findTask } from "../../src/engine/store"
 import { EngineRuntime } from "../../src/engine/runtime"
@@ -21,6 +23,7 @@ import { EngineService } from "../../src/task-api"
 import { ProtocolStore } from "../../src/protocol/store"
 import { Session } from "../../src/session"
 import { resetDatabase } from "../fixture/db"
+import { PROJECT_EXPERT_SQUAD_ID, writeProjectExpertSquadPackage } from "../fixture/expert-squad"
 import { tmpdir } from "../fixture/fixture"
 import { afterEach } from "bun:test"
 
@@ -756,6 +759,62 @@ describe("EngineService.handleTaskMessage — active blocked run wake", () => {
             },
           },
         })
+      },
+    })
+  })
+
+  test("service-level message prompt profile rolls back when wake dispatch fails", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "test-provider/test-model" } })
+    await writeProjectExpertSquadPackage(tmp.path)
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const dispatchTaskLoop = spyOn(EngineQueue, "dispatchTaskLoop").mockRejectedValue(
+          new Error("synthetic operator wake dispatch failure"),
+        )
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "message prompt profile rollback" })
+        await Session.mergeConfigOverlay({
+          sessionID: root.id,
+          patch: { prompt_profile: { active: "general" } },
+        })
+        await seedRootSession(root.id)
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "test",
+              title: "Message prompt profile rollback task",
+              request: "continue",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            } as any)
+            .run()
+        })
+
+        await expect(
+          EngineService.handleTaskMessage(taskID, {
+            text: "Continue using OpenTest guidance.",
+            source: "panel",
+            promptProfile: PROJECT_EXPERT_SQUAD_ID,
+          }),
+        ).rejects.toThrow("synthetic operator wake dispatch failure")
+
+        expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
+        expect((await EffectiveConfig.effective({ sessionID: root.id })).prompt_profile.active).toBe("general")
+        const messages = await Session.messages({ sessionID: root.id })
+        expect(
+          messages.some((message) =>
+            message.parts.some(
+              (part) => part.type === "text" && part.text.includes("Continue using OpenTest guidance."),
+            ),
+          ),
+        ).toBe(true)
       },
     })
   })

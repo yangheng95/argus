@@ -1,5 +1,7 @@
 # Overlay Expert Squad Settings Redesign
 
+Supersession note: Package-layout statements in this record that use `.opencorvus/expert-squads/<id>` are superseded by `2026-07-06-expert-squad-namespaced-source-layout.md`; current import/export and project package roots are `.opencorvus/expert-squads/<namespace>/<id>/`.
+
 ## Recall
 
 User request:

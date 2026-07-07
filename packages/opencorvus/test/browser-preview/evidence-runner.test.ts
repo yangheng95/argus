@@ -124,6 +124,27 @@ describe("browser preview evidence runner contract", () => {
     })
   })
 
+  test("manifest completion requires captures for every requested viewport", async () => {
+    await using tmp = await tmpdir()
+    const desktopPath = path.join(tmp.path, "desktop.png")
+
+    const manifest = await writeBrowserEvidenceManifest({
+      outDir: tmp.path,
+      jobID: "art_preview_incomplete_job",
+      taskID: "tsk_preview",
+      targetID: "art_preview_target",
+      url: "http://127.0.0.1:5173/",
+      viewportIDs: ["desktop", "mobile"],
+      artifactPaths: [desktopPath],
+      captures: {
+        desktop: passedCapture("desktop", desktopPath),
+      },
+      diagnostics: ["desktop passed"],
+    })
+
+    expect(manifest.operations[0]?.status).toBe("failed")
+  })
+
   test("manifest writing rejects missing target identity before evidence files are created", async () => {
     await using tmp = await tmpdir()
 

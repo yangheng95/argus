@@ -535,7 +535,7 @@ test(
       targets: [
         { id: "build", label: "Build", description: "Build agent prompt.", editable: true, built_in_only: false },
       ],
-      profiles: [
+      squads: [
         {
           id: "general",
           label: "General",

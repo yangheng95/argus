@@ -43,3 +43,9 @@ test("ensureGitignore does NOT silently revert to plain `git add` for the baseli
   // intentional, the function must use exactly the --force variant.
   expect(src).not.toMatch(/\["add",\s*"--",\s*"\.gitignore"\]/)
 })
+
+test("ensureGitignore seed commit disables detached git maintenance", () => {
+  const seedCommit = src.slice(src.indexOf("InternalGitCommitSubject.seedGitignore") - 400)
+  expect(seedCommit).toContain('"gc.auto=0"')
+  expect(seedCommit).toContain('"maintenance.auto=false"')
+})

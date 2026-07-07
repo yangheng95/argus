@@ -18,6 +18,7 @@ import {
 import { FRONTEND_DESIGN_STATIC_TOOL_IDS } from "../../src/frontend-design/static-tools"
 import { VISUAL_QA_STATIC_TOOL_IDS } from "../../src/visual-qa/static-tools"
 import { INTEGRITY_DECLARED_TOOL_IDS, INTEGRITY_PREVIEW_TOOL_IDS } from "../../src/integrity/static-tools"
+import { NON_BASE_FRONTEND_TOOL_IDS } from "../../src/tool/non-base-tool-ids"
 import BUILD_CORE from "../../src/prompt/core/build-core.txt"
 import VISUAL_QA_CORE from "../../src/prompt/core/visual-qa-core.txt"
 import PROMPT_CODING from "../../src/agent/prompt/coding.txt"
@@ -36,6 +37,22 @@ function evalPerm(agent: Agent.Info | undefined, permission: string): Permission
 function visibleToolIDs(agent: Agent.Info | undefined): Set<string> {
   return AgentToolPool.visibleToolIDs(agent?.tools)
 }
+
+function expectConfigRejected(input: unknown, expectedMessage: string) {
+  const parsed = Config.Info.safeParse(input)
+  expect(parsed.success).toBe(false)
+  if (!parsed.success) expect(JSON.stringify(parsed.error.issues)).toContain(expectedMessage)
+}
+
+test("non-base frontend specialist tools do not leak through role assignments or canonical tool IDs", () => {
+  const canonical = AgentToolPool.canonicalToolIDs()
+  for (const toolID of NON_BASE_FRONTEND_TOOL_IDS) {
+    expect(canonical.has(toolID)).toBe(false)
+    for (const role of AgentRoleContract.ids) {
+      expect(AgentToolPool.visibleToolIDs(AgentToolPool.assignment(role)).has(toolID)).toBe(false)
+    }
+  }
+})
 
 test("skill-mountable role contracts expose the canonical skill tool", async () => {
   await using tmp = await tmpdir()
@@ -107,7 +124,7 @@ test("build agent has correct default properties", async () => {
       expect(visible.has("request_orchestrator_decision")).toBe(true)
       expect(visible.has("web_clone_prepare_context")).toBe(false)
       expect(visible.has("web_clone_generate_source_project")).toBe(false)
-      expect(visible.has("browser_preview_reference_regions")).toBe(true)
+      expect(visible.has("browser_preview_reference_regions")).toBe(false)
       expect(visible.has("browser_preview_compare_scroll_slices")).toBe(false)
       expect(visible.has("browser_preview_layout_geometry")).toBe(false)
 
@@ -118,7 +135,7 @@ test("build agent has correct default properties", async () => {
       expect(ids.has("web_clone_generate_source_project")).toBe(false)
       expect(ids.has("browser_preview_bind_local_module")).toBe(false)
       expect(ids.has("browser_preview_compare_regions")).toBe(false)
-      expect(ids.has("browser_preview_reference_regions")).toBe(true)
+      expect(ids.has("browser_preview_reference_regions")).toBe(false)
       expect(ids.has("browser_preview_compare_scroll_slices")).toBe(false)
       expect(ids.has("browser_preview_layout_geometry")).toBe(false)
     },
@@ -150,9 +167,9 @@ test("visual-qa agent is full-function build-grade with visual acceptance tools"
       expect([...visible].sort()).toEqual([...VISUAL_QA_STATIC_TOOL_IDS].sort())
       expect(visible.has("webpage_extract")).toBe(false)
       expect(visible.has("browser_preview")).toBe(true)
-      expect(visible.has("browser_preview_reference_regions")).toBe(true)
-      expect(visible.has("browser_preview_compare_scroll_slices")).toBe(true)
-      expect(visible.has("browser_preview_layout_geometry")).toBe(true)
+      expect(visible.has("browser_preview_reference_regions")).toBe(false)
+      expect(visible.has("browser_preview_compare_scroll_slices")).toBe(false)
+      expect(visible.has("browser_preview_layout_geometry")).toBe(false)
       expect(visible.has("webpage_render")).toBe(false)
       expect(visible.has("webpage_evaluate")).toBe(false)
       expect(visible.has("webpage_vision_judge")).toBe(false)
@@ -167,9 +184,9 @@ test("visual-qa agent is full-function build-grade with visual acceptance tools"
       expect(ids.has("webpage_vision_judge")).toBe(false)
       expect(ids.has("browser_preview_bind_local_module")).toBe(false)
       expect(ids.has("browser_preview_compare_regions")).toBe(false)
-      expect(ids.has("browser_preview_reference_regions")).toBe(true)
-      expect(ids.has("browser_preview_compare_scroll_slices")).toBe(true)
-      expect(ids.has("browser_preview_layout_geometry")).toBe(true)
+      expect(ids.has("browser_preview_reference_regions")).toBe(false)
+      expect(ids.has("browser_preview_compare_scroll_slices")).toBe(false)
+      expect(ids.has("browser_preview_layout_geometry")).toBe(false)
     },
   })
 }, 30_000)
@@ -279,27 +296,20 @@ test("custom default tool pool excludes scoped orchestration tools", () => {
 })
 
 test("custom agent config rejects scoped orchestration tools", async () => {
-  await using tmp = await tmpdir({
-    config: {
-      agent: {
-        custom_panel_agent: {
-          description: "Invalid custom control agent",
-          tools: {
-            global: ["panel"],
-          },
+  const config = Config.Info.parse({
+    agent: {
+      custom_panel_agent: {
+        description: "Invalid custom control agent",
+        tools: {
+          global: ["panel"],
         },
       },
     },
   })
 
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      await expect(Agent.get("custom_panel_agent")).rejects.toThrow(
-        'Custom agents cannot use scoped orchestration tool "panel"',
-      )
-    },
-  })
+  await expect(Agent.get("custom_panel_agent", { config })).rejects.toThrow(
+    'Custom agents cannot use scoped orchestration tool "panel"',
+  )
 })
 
 test("all live task-owned worker roles expose the A2A request tool", () => {
@@ -414,8 +424,8 @@ test("orchestrator does not receive the control-plane panel tool", async () => {
       const visible = visibleToolIDs(orchestrator)
       expect(visible.has(["steer", "subagent"].join("_"))).toBe(false)
       expect(visible.has("cancel_subagent")).toBe(true)
-      expect(visible.has("propose_task")).toBe(true)
-      expect(visible.has("add_goal")).toBe(true)
+      expect(visible.has("dispatch_agent")).toBe(true)
+      expect(visible.has("manage_task")).toBe(true)
       expect(visible.has("select_expert_squad")).toBe(true)
       expect(visible.has("browser_preview")).toBe(true)
       expect(visible.has("wait")).toBe(true)
@@ -595,7 +605,7 @@ test("orchestrator does not inherit the generic task-tool prompt policy", async 
       expect(orchestrator?.prompt).toBeDefined()
       expect(orchestrator?.prompt).toContain("The generic `task` tool is not an orchestrator tool")
       expect(orchestrator?.prompt).toContain("only agent-side owner of engine task lifecycle decisions")
-      expect(orchestrator?.prompt).toContain("use `propose_task`")
+      expect(orchestrator?.prompt).toContain("use `manage_task` with action=`propose_task`")
       expect(orchestrator?.prompt).not.toContain("Use the Task tool")
       expect(orchestrator?.prompt).not.toContain("Proactively use the Task tool")
     },
@@ -628,6 +638,8 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
         "webfetch",
         "deliver",
         "build",
+        "dispatch_agent",
+        "manage_task",
         "propose_task",
       ]
 
@@ -680,9 +692,9 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
       expect(visualVisible.has("skill")).toBe(true)
       expect(visualVisible.has("request_orchestrator_decision")).toBe(true)
       expect(visualVisible.has("browser_preview")).toBe(true)
-      expect(visualVisible.has("browser_preview_reference_regions")).toBe(true)
-      expect(visualVisible.has("browser_preview_compare_scroll_slices")).toBe(true)
-      expect(visualVisible.has("browser_preview_layout_geometry")).toBe(true)
+      expect(visualVisible.has("browser_preview_reference_regions")).toBe(false)
+      expect(visualVisible.has("browser_preview_compare_scroll_slices")).toBe(false)
+      expect(visualVisible.has("browser_preview_layout_geometry")).toBe(false)
       expect(visualVisible.has("webpage_render")).toBe(false)
       expect(visualVisible.has("webpage_evaluate")).toBe(false)
       expect(visualVisible.has("webpage_vision_judge")).toBe(false)
@@ -719,6 +731,8 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
         "panel",
         "deliver",
         "build",
+        "dispatch_agent",
+        "manage_task",
         "propose_task",
       ]) {
         expect(deepVisible.has(tool)).toBe(false)
@@ -746,70 +760,48 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
 })
 
 test("deep-research agent tool config cannot reopen executor surfaces", async () => {
-  await using tmp = await tmpdir({
-    config: {
+  expectConfigRejected(
+    {
       agent: {
         "deep-research": {
           tools: { global: ["bash"] },
         },
       },
     },
-  })
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      await expect(Agent.get("deep-research")).rejects.toThrow("config.agent.deep-research.tools is not supported")
-    },
-  })
+    "config.agent.deep-research.tools is not supported",
+  )
 })
 
 test("fixed evidence agents cannot be disabled or tool-overridden", async () => {
-  await using deepResearchTmp = await tmpdir({
-    config: {
-      agent: {
-        "deep-research": { disable: true },
-      },
+  const disableConfig = Config.Info.parse({
+    agent: {
+      "deep-research": { disable: true },
     },
   })
-  await Instance.provide({
-    directory: deepResearchTmp.path,
-    fn: async () => {
-      await expect(Agent.get("deep-research")).rejects.toThrow("config.agent.deep-research.disable is not supported")
-    },
-  })
+  await expect(Agent.get("deep-research", { config: disableConfig })).rejects.toThrow(
+    "config.agent.deep-research.disable is not supported",
+  )
 
-  await using factCheckTmp = await tmpdir({
-    config: {
+  expectConfigRejected(
+    {
       agent: {
         "fact-check": { tools: { global: ["bash"] } },
       },
     },
-  })
-  await Instance.provide({
-    directory: factCheckTmp.path,
-    fn: async () => {
-      await expect(Agent.get("fact-check")).rejects.toThrow("config.agent.fact-check.tools is not supported")
-    },
-  })
+    "config.agent.fact-check.tools is not supported",
+  )
 
-  await using frontendResearchTmp = await tmpdir({
-    config: {
+  expectConfigRejected(
+    {
       agent: {
         "frontend-research": { tools: { global: ["bash"] } },
       },
     },
-  })
-  await Instance.provide({
-    directory: frontendResearchTmp.path,
-    fn: async () => {
-      await expect(Agent.get("frontend-research")).rejects.toThrow(
-        "config.agent.frontend-research.tools is not supported",
-      )
-    },
-  })
+    "config.agent.frontend-research.tools is not supported",
+  )
 })
 
-test("orchestrator registry exposes lifecycle tools it teaches in prompt", async () => {
+test("orchestrator registry exposes unified scheduler tools it teaches in prompt", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
@@ -818,16 +810,10 @@ test("orchestrator registry exposes lifecycle tools it teaches in prompt", async
       expect(orchestrator).toBeDefined()
       const visible = visibleToolIDs(orchestrator)
       for (const tool of [
-        "propose_task",
-        "complete_task",
-        "fail_task",
-        "cancel_task",
-        "retry_task",
+        "dispatch_agent",
+        "manage_task",
         "inject_operator_message",
         "cancel_subagent",
-        "add_goal",
-        "complete_goal",
-        "delete_goal",
         "select_expert_squad",
         "wait",
         "skill",
@@ -836,34 +822,54 @@ test("orchestrator registry exposes lifecycle tools it teaches in prompt", async
       }
       expect(visible.has(["restart", "from", "stage"].join("_"))).toBe(false)
       expect(visible.has(["steer", "subagent"].join("_"))).toBe(false)
-      expect(visible.has("integrity")).toBe(true)
+      for (const hidden of [
+        "requirements",
+        "architect",
+        "build",
+        "integrity",
+        "deep_research",
+        "frontend_research",
+        "propose_task",
+        "complete_task",
+        "fail_task",
+        "cancel_task",
+        "retry_task",
+        "add_goal",
+        "modify_goal",
+        "complete_goal",
+        "delete_goal",
+        "query_failed_goals",
+      ]) {
+        expect(visible.has(hidden), `${hidden} must be hidden behind unified scheduler tools`).toBe(false)
+      }
       expect(visible.has("browser_preview")).toBe(true)
-      expect(visible.has("deep_research")).toBe(true)
       expect(visible.has("research")).toBe(false)
-      expect(visible.has("frontend_research")).toBe(true)
       expect(visible.has("deliver")).toBe(false)
       expect(visible.has("publish_acceptance")).toBe(false)
-      expect(orchestrator?.prompt).toContain("propose_task")
+      expect(orchestrator?.prompt).toContain("manage_task")
     },
   })
 })
 
-test("task lifecycle tools are exposed only to the orchestrator scheduler", () => {
-  const taskLifecycleTools = [
+test("unified task management tool is exposed only to the orchestrator scheduler", () => {
+  const oldTaskLifecycleTools = [
     "propose_task",
     "complete_task",
     "fail_task",
     "cancel_task",
     "retry_task",
-    "inject_operator_message",
+    "add_goal",
+    "modify_goal",
     "complete_goal",
     "delete_goal",
+    "query_failed_goals",
   ]
 
   for (const [role, assignment] of Object.entries(AgentToolPool.roleAssignments)) {
     const visible = AgentToolPool.visibleToolIDs(assignment)
-    for (const tool of taskLifecycleTools) {
-      expect(visible.has(tool), `${role} visibility for ${tool}`).toBe(role === "orchestrator")
+    expect(visible.has("manage_task"), `${role} visibility for manage_task`).toBe(role === "orchestrator")
+    for (const tool of oldTaskLifecycleTools) {
+      expect(visible.has(tool), `${role} visibility for retired ${tool}`).toBe(false)
     }
   }
 })
@@ -1130,21 +1136,14 @@ test("agent mode can be overridden", async () => {
 })
 
 test("agent name override is rejected because the config key is the identity", async () => {
-  await using tmp = await tmpdir({
-    config: {
+  expectConfigRejected(
+    {
       agent: {
         build: { name: "Builder" },
       },
     },
-  })
-  await expect(
-    Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        await Agent.get("build")
-      },
-    }),
-  ).rejects.toThrow("config.agent.build.name cannot rename the agent identity")
+    "config.agent.build.name cannot rename the agent identity",
+  )
 })
 
 test("coding prompt can be overridden from config", async () => {
@@ -1183,21 +1182,14 @@ test("workflow build prompt is code-owned and only accepts prompt_append", async
 })
 
 test("workflow build prompt rejects prompt override instead of ignoring it", async () => {
-  await using tmp = await tmpdir({
-    config: {
+  expectConfigRejected(
+    {
       agent: {
         build: { prompt: "Invalid replacement" },
       },
     },
-  })
-  await expect(
-    Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        await Agent.get("build")
-      },
-    }),
-  ).rejects.toThrow("config.agent.build.prompt is invalid for append-mode agents")
+    "config.agent.build.prompt is invalid for append-mode agents",
+  )
 })
 
 test("unknown agent properties are placed into options", async () => {
@@ -1306,7 +1298,7 @@ test("webfetch is allowed by default", async () => {
   })
 })
 
-test("frontend-design advertises webpage evidence tools and omits retired URL screenshot/webfetch", async () => {
+test("frontend-design keeps specialist webpage tools out of base visibility", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
@@ -1318,10 +1310,11 @@ test("frontend-design advertises webpage evidence tools and omits retired URL sc
       expect(visible.has("edit")).toBe(true)
       expect(visible.has("write")).toBe(true)
       expect(visible.has("apply_patch")).toBe(true)
-      expect(visible.has("create_frontend_skeleton_project")).toBe(true)
-      expect(visible.has("record_frontend_region_selection")).toBe(true)
-      expect(visible.has("record_frontend_replacement_result")).toBe(true)
+      expect(visible.has("create_frontend_skeleton_project")).toBe(false)
+      expect(visible.has("record_frontend_region_selection")).toBe(false)
+      expect(visible.has("record_frontend_replacement_result")).toBe(false)
       expect(visible.has("web_clone_source_audit")).toBe(false)
+      for (const id of WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS) expect(visible.has(id)).toBe(false)
       expect(visible.has("webpage_render")).toBe(false)
       expect(visible.has("webpage_evaluate")).toBe(false)
       expect(visible.has("webpage_vision_judge")).toBe(false)
@@ -1332,7 +1325,7 @@ test("frontend-design advertises webpage evidence tools and omits retired URL sc
   })
 })
 
-test("frontend-design statically declares webpage evidence and source refinement tools", async () => {
+test("frontend-design static base declaration omits host-prepared webpage and source refinement tools", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
@@ -1342,59 +1335,47 @@ test("frontend-design statically declares webpage evidence and source refinement
       const designToolIds = visibleToolIDs(frontendDesign)
       expect([...designToolIds].sort()).toEqual([...FRONTEND_DESIGN_STATIC_TOOL_IDS].sort())
       for (const id of WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS) {
-        expect(designToolIds.has(id)).toBe(true)
+        expect(designToolIds.has(id)).toBe(false)
       }
       for (const id of WEBPAGE_EVIDENCE_ACCEPTANCE_TOOL_IDS) {
-        expect(designToolIds.has(id)).toBe(true)
+        expect(designToolIds.has(id)).toBe(false)
       }
       expect(designToolIds.has("bash")).toBe(true)
       expect(designToolIds.has("edit")).toBe(true)
       expect(designToolIds.has("write")).toBe(true)
       expect(designToolIds.has("apply_patch")).toBe(true)
-      expect(designToolIds.has("create_frontend_skeleton_project")).toBe(true)
-      expect(designToolIds.has("record_frontend_region_selection")).toBe(true)
-      expect(designToolIds.has("record_frontend_replacement_result")).toBe(true)
+      expect(designToolIds.has("create_frontend_skeleton_project")).toBe(false)
+      expect(designToolIds.has("record_frontend_region_selection")).toBe(false)
+      expect(designToolIds.has("record_frontend_replacement_result")).toBe(false)
       expect(designToolIds.has("web_clone_source_audit")).toBe(false)
     },
   })
 })
 
 test("frontend-design rejects config-defined dynamic tool surface", async () => {
-  await using tmp = await tmpdir({
-    config: {
+  expectConfigRejected(
+    {
       agent: {
         "frontend-design": {
           tools: { global: ["read"] },
         },
       },
     },
-  })
-
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      await expect(Agent.get("frontend-design")).rejects.toThrow("config.agent.frontend-design.tools is not supported")
-    },
-  })
+    "config.agent.frontend-design.tools is not supported",
+  )
 })
 
 test("visual-qa rejects config-defined dynamic tool surface", async () => {
-  await using tmp = await tmpdir({
-    config: {
+  expectConfigRejected(
+    {
       agent: {
         "visual-qa": {
           tools: { global: ["read"] },
         },
       },
     },
-  })
-
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      await expect(Agent.get("visual-qa")).rejects.toThrow("config.agent.visual-qa.tools is not supported")
-    },
-  })
+    "config.agent.visual-qa.tools is not supported",
+  )
 })
 
 test("unknown permission defaults to allow", async () => {

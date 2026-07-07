@@ -70,18 +70,8 @@ export namespace LSPServer {
 
   async function terminateSpawnedStdio(proc: ChildProcessWithoutNullStreams) {
     if (proc.exitCode !== null || proc.signalCode !== null) return
-    if (process.platform !== "win32" && proc.pid) {
-      try {
-        process.kill(-proc.pid, "SIGTERM")
-      } catch {
-        proc.kill("SIGTERM")
-      }
-      if (await waitForExit(proc, 1_000)) return
-      try {
-        process.kill(-proc.pid, "SIGKILL")
-      } catch {
-        proc.kill("SIGKILL")
-      }
+    if (proc.pid) {
+      await ProcessSupervisor.terminateProcessTree(proc.pid, `LSP stdio process tree ${proc.pid}`)
       await waitForExit(proc, 1_000)
       return
     }
@@ -95,7 +85,7 @@ export namespace LSPServer {
     opencorvusDispose?: () => Promise<void>
   }
 
-  function spawnStdio(
+  export function spawnStdio(
     command: string,
     argsOrOptions?: string[] | SpawnOptionsWithoutStdio,
     maybeOptions?: SpawnOptionsWithoutStdio,
@@ -241,6 +231,21 @@ export namespace LSPServer {
     global?: boolean
     root: RootFunction
     spawn(root: string): Promise<Handle | undefined>
+  }
+
+  function isServerInfo(value: unknown): value is Info {
+    return (
+      typeof value === "object" &&
+      value !== null &&
+      typeof (value as { id?: unknown }).id === "string" &&
+      Array.isArray((value as { extensions?: unknown }).extensions) &&
+      typeof (value as { root?: unknown }).root === "function" &&
+      typeof (value as { spawn?: unknown }).spawn === "function"
+    )
+  }
+
+  export function builtInServers(): Info[] {
+    return Object.values(LSPServer).filter(isServerInfo)
   }
 
   export const Deno: Info = {

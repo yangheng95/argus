@@ -15,6 +15,7 @@ import { Config } from "../../config/config"
 import { Database } from "../../storage/db"
 import { ActiveExecutorSessionsResponse, badRequestBody, errors } from "../error"
 import { canRestartServer, startServerRestart } from "../restart"
+import { PromptProfileResolver } from "@/expert-squad/prompt-profile-resolver"
 import {
   MysqlTransferFullExport,
   MysqlTransferImportResult,
@@ -219,6 +220,14 @@ export const GlobalRoutes = lazy(() =>
       validator("json", Config.Info),
       async (c) => {
         const config = c.req.valid("json")
+        try {
+          await PromptProfileResolver.assertKnownProfileID({
+            profileID: config.prompt_profile.active,
+            config,
+          })
+        } catch (error) {
+          return c.json(badRequestBody(error instanceof Error ? error.message : String(error)), 400)
+        }
         const next = await Config.updateGlobal(config)
         return c.json(next)
       },
@@ -347,8 +356,13 @@ export const GlobalRoutes = lazy(() =>
         const ok = targets.every((t) => t.ok)
         log.warn("db reset via /global/db/reset", { database, targets, restarting: ok })
         if (!ok) return c.json({ ok: false, restarting: false, targets }, 500)
-        startServerRestart("server.restart")
-        return c.json({ ok: true, restarting: true, targets })
+        try {
+          await startServerRestart("server.restart")
+          return c.json({ ok: true, restarting: true, targets })
+        } catch (error) {
+          log.error("db reset restart child failed before shutdown handoff", { error })
+          return c.json({ ok: false, restarting: false, targets, error: String(error) }, 503)
+        }
       },
     )
     .get(

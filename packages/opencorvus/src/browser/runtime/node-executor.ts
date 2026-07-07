@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process"
 
+import { ProcessSupervisor } from "@/shell/process-supervisor"
 import { type BrowserNodeSidecarRuntime, resolveBrowserNodeSidecarRuntime } from "./node-sidecar"
 
 export interface BrowserNodeSidecarRunResult<TResult> {
@@ -24,37 +25,42 @@ export class BrowserNodeSidecarError extends Error {
   }
 }
 
-async function waitForProcessExit(child: ChildProcess): Promise<void> {
-  if (child.exitCode !== null || child.signalCode !== null) return
-  await new Promise<void>((resolve) => {
-    child.once("exit", () => resolve())
+const CHILD_CLEANUP_TIMEOUT_MS = 5_000
+
+async function waitForProcessExit(child: ChildProcess, timeoutMs: number): Promise<boolean> {
+  if (child.exitCode !== null || child.signalCode !== null) return true
+  return await new Promise<boolean>((resolve) => {
+    let done = false
+    const timer = setTimeout(() => {
+      if (done) return
+      done = true
+      child.off("exit", onExit)
+      resolve(false)
+    }, timeoutMs)
+    if (typeof timer.unref === "function") timer.unref()
+    const onExit = () => {
+      if (done) return
+      done = true
+      clearTimeout(timer)
+      resolve(true)
+    }
+    child.once("exit", onExit)
   })
 }
 
-async function terminateChildTree(child: ChildProcess): Promise<void> {
+async function terminateChildTree(child: ChildProcess, timeoutMs = CHILD_CLEANUP_TIMEOUT_MS): Promise<boolean> {
   const pid = child.pid
-  if (!pid) return
+  if (!pid) return true
   if (process.platform === "win32") {
-    await new Promise<void>((resolve) => {
-      const killer = spawn("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
-        stdio: "ignore",
-        windowsHide: true,
-      })
-      killer.once("exit", () => resolve())
-      killer.once("error", () => {
-        child.kill()
-        resolve()
-      })
-    })
-    await waitForProcessExit(child)
-    return
+    await ProcessSupervisor.terminateProcessTree(pid, `browser node sidecar process tree ${pid}`).catch(() => false)
+    return await waitForProcessExit(child, timeoutMs)
   }
   try {
     process.kill(-pid, "SIGKILL")
   } catch {
-    child.kill("SIGKILL")
+    return false
   }
-  await waitForProcessExit(child)
+  return await waitForProcessExit(child, timeoutMs)
 }
 
 export async function runBrowserNodeSidecar<TResult>(input: {
@@ -90,6 +96,7 @@ export async function runBrowserNodeSidecar<TResult>(input: {
   let stdout = ""
   let stderr = ""
   let lastActivity = "start"
+  let rejectRun: ((error: unknown) => void) | undefined
   child.stdout.setEncoding("utf8")
   child.stderr.setEncoding("utf8")
   child.stdout.on("data", (chunk) => {
@@ -102,9 +109,23 @@ export async function runBrowserNodeSidecar<TResult>(input: {
   })
 
   let aborted = false
+  let abortError: BrowserNodeSidecarError | undefined
   const abortHandler = () => {
     aborted = true
-    void terminateChildTree(child)
+    abortError = new BrowserNodeSidecarError(
+      "aborted",
+      input.signal?.reason instanceof Error ? input.signal.reason.message : `${input.label} aborted`,
+      { stderr, stdout },
+    )
+    void terminateChildTree(child).then((terminated) => {
+      if (terminated) return
+      abortError = new BrowserNodeSidecarError(
+        "aborted",
+        `${abortError?.message ?? `${input.label} aborted`}; child process did not exit within ${CHILD_CLEANUP_TIMEOUT_MS}ms after cleanup signal.`,
+        { stderr, stdout },
+      )
+      rejectRun?.(abortError)
+    })
   }
   input.signal?.addEventListener("abort", abortHandler, { once: true })
   let timeoutError: BrowserNodeSidecarError | undefined
@@ -118,15 +139,27 @@ export async function runBrowserNodeSidecar<TResult>(input: {
     lastActivity = source
     clearInactivityTimer()
     timer = setTimeout(() => {
-      timeoutError = new BrowserNodeSidecarError(
+      const baseTimeoutError = new BrowserNodeSidecarError(
         "timeout",
         `${input.label} inactive for ${input.inactivityTimeoutMs}ms after ${lastActivity}. stderr=${stderr.slice(-2000)}`,
         { stderr, stdout },
       )
-      void terminateChildTree(child)
+      timeoutError = baseTimeoutError
+      void terminateChildTree(child).then((terminated) => {
+        if (!terminated) {
+          timeoutError = new BrowserNodeSidecarError(
+            "timeout",
+            `${baseTimeoutError.message}; child process did not exit within ${CHILD_CLEANUP_TIMEOUT_MS}ms after cleanup signal.`,
+            { stderr, stdout },
+            { cause: baseTimeoutError },
+          )
+        }
+        rejectRun?.(timeoutError)
+      })
     }, input.inactivityTimeoutMs)
   }
   const exit = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
+    rejectRun = reject
     resetInactivityTimer("start")
     child.once("error", (error) => {
       clearInactivityTimer()
@@ -143,6 +176,7 @@ export async function runBrowserNodeSidecar<TResult>(input: {
       error,
     }))
     .finally(() => {
+      rejectRun = undefined
       input.signal?.removeEventListener("abort", abortHandler)
       clearInactivityTimer()
     })
@@ -158,11 +192,7 @@ export async function runBrowserNodeSidecar<TResult>(input: {
     )
   }
   if (aborted) {
-    throw new BrowserNodeSidecarError(
-      "aborted",
-      input.signal?.reason instanceof Error ? input.signal.reason.message : `${input.label} aborted`,
-      { stderr },
-    )
+    throw abortError ?? new BrowserNodeSidecarError("aborted", `${input.label} aborted`, { stderr, stdout })
   }
   if (timeoutError) throw timeoutError
 

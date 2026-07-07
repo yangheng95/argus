@@ -254,6 +254,8 @@ export const Instance: InstanceApi = {
 
     disposal.all = iife(async () => {
       Log.Default.info("disposing all instances")
+      const { Scheduler } = await import("@/scheduler")
+      await Scheduler.disposeGlobal()
       const entries = [...cache.entries()]
       for (const [key, value] of entries) {
         if (cache.get(key) !== value) continue

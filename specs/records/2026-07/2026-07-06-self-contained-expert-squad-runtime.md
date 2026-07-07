@@ -55,7 +55,7 @@ The user requested a goal and implementation for the expert-squad runtime refact
 - `specs/current/architecture/04-extensions.md`
 - `specs/current/architecture/99-principles.md`
 - `specs/records/2026-07/README.md`
-- `specs/records/2026-07/路线规划.md`
+- An untracked July planning draft was observed as background user notes only and is not a committed source for this record.
 - `specs/records/2026-07/2026-07-06-dynamic-expert-agent-instance-review-plan.md`
 - `C:/Users/chuan/Downloads/opencorvus-test-agent-migration.md`
 

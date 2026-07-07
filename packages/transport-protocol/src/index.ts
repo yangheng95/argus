@@ -178,7 +178,7 @@ export type BrowserPreviewNativeNavigationAction = (typeof BROWSER_PREVIEW_NATIV
 export type NativeCommand =
   | { kind: "open-url"; url: string }
   | { kind: "open-path"; path: string }
-  | { kind: "browserPreview.sync"; url: string; bounds: BrowserPreviewNativeBounds }
+  | { kind: "browserPreview.sync"; scopeKey: string; url: string; bounds: BrowserPreviewNativeBounds }
   | { kind: "browserPreview.navigate"; action: BrowserPreviewNativeNavigationAction }
   | { kind: "browserPreview.close" }
   | { kind: "settings.load" }
@@ -417,7 +417,11 @@ export function isNativeCommand(value: unknown): value is NativeCommand {
     case "open-path":
       return typeof obj["path"] === "string"
     case "browserPreview.sync":
-      return typeof obj["url"] === "string" && isBrowserPreviewNativeBounds(obj["bounds"])
+      return (
+        typeof obj["scopeKey"] === "string" &&
+        typeof obj["url"] === "string" &&
+        isBrowserPreviewNativeBounds(obj["bounds"])
+      )
     case "browserPreview.navigate":
       return (BROWSER_PREVIEW_NATIVE_NAVIGATION_ACTIONS as readonly string[]).includes(obj["action"] as string)
     case "browserPreview.close":

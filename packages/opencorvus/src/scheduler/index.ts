@@ -15,12 +15,14 @@ export namespace Scheduler {
   type Entry = {
     tasks: Map<string, Task>
     timers: Map<string, Timer>
+    active: Set<Promise<void>>
   }
 
   const create = (): Entry => {
     const tasks = new Map<string, Task>()
     const timers = new Map<string, Timer>()
-    return { tasks, timers }
+    const active = new Set<Promise<void>>()
+    return { tasks, timers, active }
   }
 
   const shared = create()
@@ -28,11 +30,7 @@ export namespace Scheduler {
   const state = lazyInstanceState(
     () => create(),
     async (entry) => {
-      for (const timer of entry.timers.values()) {
-        clearInterval(timer)
-      }
-      entry.tasks.clear()
-      entry.timers.clear()
+      await disposeEntry(entry)
     },
   )
 
@@ -44,12 +42,35 @@ export namespace Scheduler {
     if (current) clearInterval(current)
 
     entry.tasks.set(task.id, task)
-    void run(task)
+    start(entry, task)
     const timer = setInterval(() => {
-      void run(task)
+      start(entry, task)
     }, task.interval)
     timer.unref()
     entry.timers.set(task.id, timer)
+  }
+
+  export async function disposeGlobal() {
+    await disposeEntry(shared)
+  }
+
+  function start(entry: Entry, task: Task) {
+    let active!: Promise<void>
+    active = run(task).finally(() => {
+      entry.active.delete(active)
+    })
+    entry.active.add(active)
+  }
+
+  async function disposeEntry(entry: Entry) {
+    for (const timer of entry.timers.values()) {
+      clearInterval(timer)
+    }
+    entry.timers.clear()
+    const active = [...entry.active]
+    if (active.length > 0) await Promise.allSettled(active)
+    entry.active.clear()
+    entry.tasks.clear()
   }
 
   async function run(task: Task) {

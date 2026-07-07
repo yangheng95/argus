@@ -8,6 +8,7 @@ import { pathToFileURL } from "node:url"
 import { Instance } from "../../src/project/instance"
 import { MCP } from "../../src/mcp"
 import { MCPServe } from "../../src/mcp/serve"
+import { PromptProfileResolver } from "../../src/expert-squad/prompt-profile-resolver"
 import { BrowserMCPBuiltin } from "../../src/mcp/browser/builtin"
 import { tmpdir } from "../fixture/fixture"
 
@@ -150,7 +151,7 @@ describe("mcp.serve", () => {
   })
 
   test("loads proxied external MCP tools from project config into executor definitions", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, dispose: async () => Instance.disposeAll() })
     const marker = `serve-proxy-${Date.now().toString(36)}`
     await writeFixtureMcpServer(tmp.path, marker)
 
@@ -195,7 +196,9 @@ describe("mcp.serve", () => {
         const result = await client.callTool({ name: "fixture_magic_lookup", arguments: {} })
         expect(JSON.stringify(result)).toContain(marker)
       } catch (error) {
-        throw new Error(`executor stdio MCP failed: ${error instanceof Error ? error.message : String(error)}\n${stderr}`)
+        throw new Error(
+          `executor stdio MCP failed: ${error instanceof Error ? error.message : String(error)}\n${stderr}`,
+        )
       } finally {
         await client.close().catch(() => undefined)
       }
@@ -205,6 +208,9 @@ describe("mcp.serve", () => {
 
   test("filters webpage clone and webpage evidence tools from executor proxied definitions", async () => {
     await using tmp = await tmpdir({ git: true })
+    const referenceRegionProviderName = PromptProfileResolver.defaultToolProviderName(
+      "default/tool/browser_preview_reference_regions",
+    )
     const proxiedTools = [
       {
         key: "docs_lookup",
@@ -234,6 +240,27 @@ describe("mcp.serve", () => {
         description: "Generate clone source project",
         inputSchema: { type: "object", properties: {} },
       },
+      {
+        key: "opencorvus_browser_preview_reference_regions",
+        client: "opencorvus",
+        name: "browser_preview_reference_regions",
+        description: "Reference regions",
+        inputSchema: { type: "object", properties: {} },
+      },
+      {
+        key: "opencorvus_create_visual_region_coordinate_atlas",
+        client: "opencorvus",
+        name: "create_visual_region_coordinate_atlas",
+        description: "Visual atlas",
+        inputSchema: { type: "object", properties: {} },
+      },
+      {
+        key: referenceRegionProviderName,
+        client: "opencorvus",
+        name: referenceRegionProviderName,
+        description: "Scoped default provider",
+        inputSchema: { type: "object", properties: {} },
+      },
     ]
 
     await Instance.provide({
@@ -242,9 +269,12 @@ describe("mcp.serve", () => {
         const defs = await MCPServe.toolDefinitions("executor", { includeRuntime: false, proxiedTools })
         const names = defs.map((item) => item.name)
         expect(names).toContain("docs_lookup")
+        expect(names).toContain(referenceRegionProviderName)
         expect(names).not.toContain("opencorvus_webpage_extract")
         expect(names).not.toContain("opencorvus_web_clone_prepare_context")
         expect(names).not.toContain("opencorvus_web_clone_generate_source_project")
+        expect(names).not.toContain("opencorvus_browser_preview_reference_regions")
+        expect(names).not.toContain("opencorvus_create_visual_region_coordinate_atlas")
       },
     })
   })

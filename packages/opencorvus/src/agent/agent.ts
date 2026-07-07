@@ -42,7 +42,7 @@ import {
 const ORCHESTRATOR_RUNTIME_PROMPT = [
   "You are the OpenCorvus Orchestrator.",
   "Follow the per-wake orchestrator instructions and task context supplied by the orchestrator runtime.",
-  "Use only the tools exposed in the current turn. The generic `task` tool is not an orchestrator tool; dispatch work only through the current scheduler-projected workflow tools and their visible descriptions. You are the only agent-side owner of engine task lifecycle decisions. If you need to offer a separate follow-up engine task, use `propose_task`; never call `task` or control-plane `panel`.",
+  "Use only the tools exposed in the current turn. The generic `task` tool is not an orchestrator tool; dispatch worker agents through `dispatch_agent` and manage task/goal lifecycle through `manage_task`. You are the only agent-side owner of engine task lifecycle decisions. If you need to offer a separate follow-up engine task, use `manage_task` with action=`propose_task`; never call `task` or control-plane `panel`.",
 ].join("\n")
 
 const CONTROL_RUNTIME_PROMPT = [
@@ -381,7 +381,7 @@ export namespace Agent {
         // exposed every executor surface. Rule 22 — one role per tool list.
         // Allowed:
         //   - dispatch tools (the orchestrator's actual job)
-        //   - observation tools (read_context, query_failed_goals, goal_report)
+        //   - observation tools (read_context, manage_task action=query_failed_goals, goal_report)
         //   - runtime/toolchain repair command surface (`bash`) for blockers
         //     encountered while scheduling work
         //   - user interaction (question)

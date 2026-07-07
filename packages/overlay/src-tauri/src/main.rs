@@ -40,6 +40,7 @@ const TRAY_ID: &str = "main-tray";
 const TRAY_TOOLTIP_DEFAULT: &str = "OpenCorvus";
 const TRAY_TOOLTIP_ALERT: &str = "OpenCorvus - Action required";
 const BROWSER_PREVIEW_WEBVIEW_LABEL: &str = "browser-preview-live-webview";
+static BROWSER_PREVIEW_SCOPE_KEY: OnceLock<Mutex<Option<String>>> = OnceLock::new();
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 const OVERLAY_WINDOW_WIDTH_FRACTION: f64 = 0.80;
@@ -683,24 +684,33 @@ fn browser_preview_size(bounds: BrowserPreviewBounds) -> tauri::LogicalSize<f64>
 #[tauri::command]
 async fn overlay_browser_preview_sync<R: Runtime>(
     app: AppHandle<R>,
+    scope_key: String,
     url: String,
     bounds: BrowserPreviewBounds,
 ) -> Result<bool, String> {
+    let scope_key = scope_key.trim();
+    if scope_key.is_empty() {
+        return Err("browser preview scope key is required".to_string());
+    }
     let bounds = validate_browser_preview_bounds(bounds)?;
     let target_url = tauri::Url::parse(url.trim()).map_err(|err| err.to_string())?;
     let position = browser_preview_position(bounds);
     let size = browser_preview_size(bounds);
+    let scope = BROWSER_PREVIEW_SCOPE_KEY.get_or_init(|| Mutex::new(None));
 
     if let Some(webview) = app.get_webview(BROWSER_PREVIEW_WEBVIEW_LABEL) {
         webview
             .set_position(position)
             .map_err(|err| err.to_string())?;
         webview.set_size(size).map_err(|err| err.to_string())?;
-        if webview.url().map_err(|err| err.to_string())? != target_url {
+        let mut last_scope = scope.lock().map_err(|err| err.to_string())?;
+        let scope_changed = last_scope.as_deref() != Some(scope_key);
+        if scope_changed || webview.url().map_err(|err| err.to_string())? != target_url {
             webview
                 .navigate(target_url)
                 .map_err(|err| err.to_string())?;
         }
+        *last_scope = Some(scope_key.to_string());
         webview.show().map_err(|err| err.to_string())?;
         return Ok(true);
     }
@@ -719,6 +729,7 @@ async fn overlay_browser_preview_sync<R: Runtime>(
     webview
         .set_auto_resize(false)
         .map_err(|err| err.to_string())?;
+    *scope.lock().map_err(|err| err.to_string())? = Some(scope_key.to_string());
     Ok(true)
 }
 
@@ -750,6 +761,9 @@ fn overlay_browser_preview_navigate<R: Runtime>(
 
 #[tauri::command]
 fn overlay_browser_preview_close<R: Runtime>(app: AppHandle<R>) -> Result<bool, String> {
+    if let Some(scope) = BROWSER_PREVIEW_SCOPE_KEY.get() {
+        *scope.lock().map_err(|err| err.to_string())? = None;
+    }
     if let Some(webview) = app.get_webview(BROWSER_PREVIEW_WEBVIEW_LABEL) {
         // Reuse the single preview child webview across scope changes. Tauri's
         // `close()` removes the manager entry before native teardown finishes,

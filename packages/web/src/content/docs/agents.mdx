@@ -16,7 +16,7 @@ The registry currently ships with the agents below. `mode` controls how the agen
 | `visual-qa`    | primary (hidden) | Visual QA stage agent with a fixed visual evidence tool surface.                                                                                                                                                                                 |
 | `general`      | subagent         | General-purpose multi-step research / parallel-work agent. Dispatched via the `task` tool.                                                                                                                                                       |
 | `explore`      | subagent         | Codebase exploration — fast file / code search, read-only by default.                                                                                                                                                                            |
-| `orchestrator` | primary (hidden) | Orchestrator agent. Owns task lifecycle decisions and dispatches explicit workflow tools such as `frontend_design`, `frontend_research`, `analyze_intent`, `requirements`, `architect`, `build`, `integrity`, `modify_goal`, and `propose_task`. |
+| `orchestrator` | primary (hidden) | Orchestrator agent. Owns task lifecycle decisions, dispatches workers through `dispatch_agent target=...`, and mutates task / goal lifecycle through `manage_task action=...` such as `action=modify_goal` and `action=propose_task`. |
 | `requirements` | primary (hidden) | Requirements stage. Extracts user requirements and foundational technical decisions.                                                                                                                                                             |
 
 Other registered agents (`architect`, `frontend-design`, `frontend-research`, `intent-analysis`, `integrity`, `fact-check`, `deep-research`, `goal-workload-analyst`, `summary`, `title`, `compaction`, `mission`, `control`) are stage / utility slots invoked internally by the orchestrator, mission runtime, or session loop. They surface in config (model + prompt overrides) but are not user-selectable unless a dedicated runtime exposes them.
@@ -25,7 +25,7 @@ See `packages/opencorvus/src/agent/agent.ts` for the canonical definitions.
 
 ## Sub-agent dispatch
 
-Sub-agents are dispatched via the **`task`** tool from ordinary sessions, or via typed orchestrator tools such as `requirements`, `architect`, `build`, `integrity`, `frontend_design`, and `frontend_research`. Each dispatch creates its own worker session.
+Sub-agents are dispatched via the **`task`** tool from ordinary sessions, or by the orchestrator through `dispatch_agent target=...` for workers such as `requirements`, `architect`, `build`, `integrity`, `frontend_design`, and `frontend_research`. Each dispatch creates its own worker session.
 
 When the orchestrator runs the `pipeline` workflow, the Architect creates goals, each blocking goal is built in an isolated worktree, and `integrity` performs the final task-level review.
 

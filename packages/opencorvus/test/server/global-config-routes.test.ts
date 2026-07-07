@@ -49,6 +49,7 @@ describe("global config route runtime refresh", () => {
     process.env.OPENCORVUS_GLOBAL_CONFIG_DIR = globalDir.path
     Config.global.reset()
 
+    try {
     const initialResponse = await patchGlobalConfig({
       username: "bh098-before",
       provider: {
@@ -126,6 +127,29 @@ describe("global config route runtime refresh", () => {
         expect(build.description).toBe("BH098 new build agent")
       },
     })
+    } finally {
+      await Instance.disposeAll()
+    }
+  })
+
+  test("PATCH /global/config rejects unknown and project-package-only expert squad active IDs", async () => {
+    await using globalDir = await tmpdir()
+    process.env.OPENCORVUS_GLOBAL_CONFIG_DIR = globalDir.path
+    Config.global.reset()
+
+    const unknownResponse = await patchGlobalConfig({
+      prompt_profile: { active: "missing-profile" },
+    })
+    expect(unknownResponse.status).toBe(400)
+    expect(await errorMessages(unknownResponse)).toContain('Unknown prompt profile "missing-profile"')
+    expect(Config.Info.parse(await Config.getGlobal()).prompt_profile.active).toBe("general")
+
+    const projectPackageResponse = await patchGlobalConfig({
+      prompt_profile: { active: "frontend-replica" },
+    })
+    expect(projectPackageResponse.status).toBe(400)
+    expect(await errorMessages(projectPackageResponse)).toContain('Unknown prompt profile "frontend-replica"')
+    expect(Config.Info.parse(await Config.getGlobal()).prompt_profile.active).toBe("general")
   })
 
   test("global config update owns active runtime invalidation", async () => {
@@ -145,3 +169,8 @@ describe("global config route runtime refresh", () => {
     expect(globalRouteSource).not.toContain("Agent.resetAll()")
   })
 })
+
+async function errorMessages(response: Response): Promise<string> {
+  const body = (await response.json()) as { error?: Array<{ message?: string }> }
+  return (body.error ?? []).map((item) => item.message ?? "").join("\n")
+}

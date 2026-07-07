@@ -106,7 +106,7 @@ export function projectExpertSquadManifest(id = PROJECT_EXPERT_SQUAD_ID, options
     capability_projection: {
       scheduler: {
         role_base: true,
-        built_in_tool_ids: ["select_expert_squad", "skill", "build"],
+        built_in_tool_ids: ["select_expert_squad", "skill", "dispatch_agent", "manage_task"],
         ...(options.schedulerDefaultSkillRefs?.length
           ? { default_skill_refs: options.schedulerDefaultSkillRefs }
           : {}),

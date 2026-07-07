@@ -4,566 +4,78 @@ export type ClientOptions = {
   baseUrl: `${string}://${string}` | (string & {})
 }
 
-export type Project = {
-  id: string
-  worktree: string
-  name?: string
-  icon?: {
-    url?: string
-    override?: string
-    color?: string
-  }
-  commands?: {
-    /**
-     * Startup script to run when creating a new workspace (worktree)
-     */
-    start?: string
-  }
-  time: {
-    created: number
-    updated: number
-    initialized?: number
-  }
-  sandboxes: Array<string>
-}
-
-export type ProjectDeleteResult = {
-  ok: boolean
-  projectID: string
-  directory: string
-  deletedTaskCount: number
-}
-
-export type BadRequestError = {
-  data: unknown
-  error: Array<{
-    [key: string]: unknown
-  }>
-  success: false
-}
-
-export type ProjectInitGitResult = {
-  created: boolean
-  project: Project
-}
-
-export type ProjectWorktree = {
-  name: string
-  branch?: string
-  directory: string
-  goalID?: string
-  status: "primary" | "active" | "expired"
-  removable: boolean
-}
-
-export type WorktreeRemoveInput = {
-  directory: string
-}
-
-export type TerminalProfile = {
-  id: string
-  label: string
-  icon: "terminal" | "powershell" | "command-prompt" | "bash"
-}
-
-export type TerminalProfileList = {
-  defaultProfileID: string
-  profiles: Array<TerminalProfile>
-}
-
-export type SystemTerminalOpenResponse = {
-  ok: boolean
-}
-
-/**
- * Log level
- */
-export type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR"
-
-/**
- * Server configuration for opencorvus serve
- */
-export type ServerConfig = {
-  /**
-   * Port to listen on
-   */
-  port?: number
-  /**
-   * Hostname to listen on
-   */
-  hostname?: string
-  /**
-   * Public base URL used for externally visible attachment links
-   */
-  publicUrl?: string
-  /**
-   * Enable mDNS service discovery
-   */
-  mdns?: boolean
-  /**
-   * Custom domain name for mDNS service
-   */
-  mdnsDomain?: string
-  /**
-   * Additional domains to allow for CORS
-   */
-  cors?: Array<string>
-}
-
-/**
- * HTTP proxy configuration for provider and web research traffic
- */
-export type NetworkProxyConfig = {
-  /**
-   * Route LLM provider HTTP requests through the configured HTTP(S) proxy
-   */
-  llmProvider?: boolean
-  /**
-   * Route websearch and webfetch HTTP requests through the configured HTTP(S) proxy
-   */
-  webResearch?: boolean
-  /**
-   * HTTP(S) proxy URL, e.g. http://127.0.0.1:7890
-   */
-  url?: string
-  /**
-   * Proxy authentication username
-   */
-  username?: string
-  /**
-   * Proxy authentication password
-   */
-  password?: string
-}
-
-/**
- * Network transport configuration
- */
-export type NetworkConfig = {
-  proxy?: NetworkProxyConfig
-}
-
-export type SlackChannelConfig = {
-  /**
-   * Enable Slack channel integration
-   */
-  enabled?: boolean
-  /**
-   * Slack bot token
-   */
-  botToken?: string
-  /**
-   * Slack app token for Socket Mode
-   */
-  appToken?: string
-  /**
-   * Slack signing secret
-   */
-  signingSecret?: string
-}
-
-export type TelegramChannelConfig = {
-  /**
-   * Enable Telegram channel integration
-   */
-  enabled?: boolean
-  /**
-   * Telegram bot token
-   */
-  token?: string
-}
-
-export type DiscordChannelConfig = {
-  /**
-   * Enable Discord channel integration
-   */
-  enabled?: boolean
-  /**
-   * Discord bot token
-   */
-  token?: string
-}
-
-export type FeishuChannelConfig = {
-  /**
-   * Enable Feishu or Lark channel integration
-   */
-  enabled?: boolean
-  /**
-   * Feishu or Lark app ID
-   */
-  appId?: string
-  /**
-   * Feishu or Lark app secret
-   */
-  appSecret?: string
-  /**
-   * Optional Feishu or Lark webhook verification token
-   */
-  verificationToken?: string
-  /**
-   * Optional Feishu or Lark webhook host
-   */
-  webhookHost?: string
-  /**
-   * Optional Feishu or Lark webhook port
-   */
-  webhookPort?: string
-  /**
-   * Optional Feishu or Lark webhook path
-   */
-  webhookPath?: string
-}
-
-export type WhatsappChannelConfig = {
-  /**
-   * Enable WhatsApp channel integration
-   */
-  enabled?: boolean
-  /**
-   * WhatsApp Cloud API access token
-   */
-  token?: string
-  /**
-   * WhatsApp Cloud API phone number ID
-   */
-  numberId?: string
-  /**
-   * WhatsApp Meta app secret used to verify webhook signatures
-   */
-  appSecret?: string
-  /**
-   * WhatsApp webhook verification token
-   */
-  verifyToken?: string
-  /**
-   * Optional WhatsApp webhook host
-   */
-  webhookHost?: string
-  /**
-   * Optional WhatsApp webhook port
-   */
-  webhookPort?: string
-  /**
-   * Optional WhatsApp webhook path
-   */
-  webhookPath?: string
-}
-
-export type GoogleChatChannelConfig = {
-  /**
-   * Enable Google Chat integration
-   */
-  enabled?: boolean
-  /**
-   * Google Chat service account JSON or path
-   */
-  serviceAccount?: string
-  /**
-   * Google Chat request token audience, usually the HTTPS endpoint URL
-   */
-  authAudience?: string
-  /**
-   * Optional Google Chat webhook host
-   */
-  webhookHost?: string
-  /**
-   * Optional Google Chat webhook port
-   */
-  webhookPort?: string
-  /**
-   * Optional Google Chat webhook path
-   */
-  webhookPath?: string
-}
-
-export type MsTeamsChannelConfig = {
-  /**
-   * Enable Microsoft Teams integration
-   */
-  enabled?: boolean
-  /**
-   * Microsoft Teams bot app ID
-   */
-  appId?: string
-  /**
-   * Microsoft Teams bot app secret
-   */
-  appSecret?: string
-  /**
-   * Optional Microsoft Teams webhook host
-   */
-  webhookHost?: string
-  /**
-   * Optional Microsoft Teams webhook port
-   */
-  webhookPort?: string
-  /**
-   * Optional Microsoft Teams webhook path
-   */
-  webhookPath?: string
-}
-
-export type LineChannelConfig = {
-  /**
-   * Enable LINE integration
-   */
-  enabled?: boolean
-  /**
-   * LINE channel access token
-   */
-  token?: string
-  /**
-   * LINE channel secret for webhook verification
-   */
-  secret?: string
-  /**
-   * Optional LINE webhook host
-   */
-  webhookHost?: string
-  /**
-   * Optional LINE webhook port
-   */
-  webhookPort?: string
-  /**
-   * Optional LINE webhook path
-   */
-  webhookPath?: string
-}
-
-export type MatrixChannelConfig = {
-  /**
-   * Enable Matrix integration
-   */
-  enabled?: boolean
-  /**
-   * Matrix homeserver URL
-   */
-  homeserver?: string
-  /**
-   * Matrix access token
-   */
-  token?: string
-  /**
-   * Optional Matrix sync token
-   */
-  since?: string
-}
-
-export type MattermostChannelConfig = {
-  /**
-   * Enable Mattermost integration
-   */
-  enabled?: boolean
-  /**
-   * Mattermost server URL
-   */
-  url?: string
-  /**
-   * Mattermost bot token
-   */
-  token?: string
-  /**
-   * Mattermost outgoing webhook token used to verify inbound requests
-   */
-  webhookToken?: string
-  /**
-   * Optional Mattermost webhook host
-   */
-  webhookHost?: string
-  /**
-   * Optional Mattermost webhook port
-   */
-  webhookPort?: string
-  /**
-   * Optional Mattermost webhook path
-   */
-  webhookPath?: string
-}
-
-export type SignalChannelConfig = {
-  /**
-   * Enable Signal integration
-   */
-  enabled?: boolean
-  /**
-   * Signal service URL
-   */
-  service?: string
-  /**
-   * Signal sender account or number
-   */
-  account?: string
-}
-
-export type WeComChannelConfig = {
-  /**
-   * Enable WeCom integration
-   */
-  enabled?: boolean
-  /**
-   * WeCom corp ID
-   */
-  corpId?: string
-  /**
-   * WeCom app secret
-   */
-  secret?: string
-  /**
-   * WeCom agent ID
-   */
-  agentId?: string
-  /**
-   * WeCom receive-message callback token
-   */
-  token?: string
-  /**
-   * WeCom receive-message callback EncodingAESKey
-   */
-  encodingAesKey?: string
-  /**
-   * Optional WeCom webhook host
-   */
-  webhookHost?: string
-  /**
-   * Optional WeCom webhook port
-   */
-  webhookPort?: string
-  /**
-   * Optional WeCom webhook path
-   */
-  webhookPath?: string
-}
-
-export type DingTalkChannelConfig = {
-  /**
-   * Enable DingTalk integration
-   */
-  enabled?: boolean
-  /**
-   * DingTalk app key
-   */
-  appKey?: string
-  /**
-   * DingTalk app secret
-   */
-  appSecret?: string
-  /**
-   * DingTalk callback token
-   */
-  callbackToken?: string
-  /**
-   * DingTalk callback EncodingAESKey
-   */
-  encodingAesKey?: string
-  /**
-   * Optional DingTalk default session webhook
-   */
-  defaultWebhook?: string
-  /**
-   * Optional DingTalk webhook host
-   */
-  webhookHost?: string
-  /**
-   * Optional DingTalk webhook port
-   */
-  webhookPort?: string
-  /**
-   * Optional DingTalk webhook path
-   */
-  webhookPath?: string
-}
-
-export type QqChannelConfig = {
-  /**
-   * Enable QQ Bot channel integration
-   */
-  enabled?: boolean
-  /**
-   * QQ Bot app ID from q.qq.com
-   */
-  appId?: string
-  /**
-   * QQ Bot app secret used for access token and webhook signatures
-   */
-  appSecret?: string
-  /**
-   * Optional sandbox flag, set to 1 or true to use sandbox.api.sgroup.qq.com
-   */
-  sandbox?: string
-  /**
-   * Optional QQ Bot webhook host
-   */
-  webhookHost?: string
-  /**
-   * Optional QQ Bot webhook port
-   */
-  webhookPort?: string
-  /**
-   * Optional QQ Bot webhook path
-   */
-  webhookPath?: string
-}
-
-/**
- * Channel integration configuration
- */
-export type ChannelConfig = {
-  slack?: SlackChannelConfig
-  telegram?: TelegramChannelConfig
-  discord?: DiscordChannelConfig
-  feishu?: FeishuChannelConfig
-  whatsapp?: WhatsappChannelConfig
-  googlechat?: GoogleChatChannelConfig
-  msteams?: MsTeamsChannelConfig
-  line?: LineChannelConfig
-  matrix?: MatrixChannelConfig
-  mattermost?: MattermostChannelConfig
-  signal?: SignalChannelConfig
-  wecom?: WeComChannelConfig
-  dingtalk?: DingTalkChannelConfig
-  qq?: QqChannelConfig
-}
-
-export type PermissionActionConfig = "ask" | "allow" | "deny"
-
-export type PermissionObjectConfig = {
-  [key: string]: PermissionActionConfig
-}
-
-export type PermissionRuleConfig = PermissionActionConfig | PermissionObjectConfig
-
-export type PermissionConfig =
-  | {
-      read?: PermissionRuleConfig
-      edit?: PermissionRuleConfig
-      glob?: PermissionRuleConfig
-      search_code?: PermissionRuleConfig
-      list?: PermissionRuleConfig
-      bash?: PermissionRuleConfig
-      task?: PermissionRuleConfig
-      external_directory?: PermissionRuleConfig
-      todowrite?: PermissionActionConfig
-      todoread?: PermissionActionConfig
-      question?: PermissionActionConfig
-      webfetch?: PermissionActionConfig
-      websearch?: PermissionActionConfig
-      external_code_search?: PermissionActionConfig
-      lsp?: PermissionRuleConfig
-      doom_loop?: PermissionActionConfig
-      skill?: PermissionRuleConfig
-      [key: string]: PermissionRuleConfig | PermissionActionConfig | undefined
+export type ApiError = {
+  data: {
+    isRetryable: boolean
+    message: string
+    metadata?: {
+      [key: string]: string
     }
-  | PermissionActionConfig
+    responseBody?: string
+    responseHeaders?: {
+      [key: string]: string
+    }
+    statusCode?: number
+  }
+  name: "APIError"
+}
+
+export type AcceptanceDiffSummary = {
+  additions?: number
+  deletions?: number
+  file: string
+  status?: "added" | "deleted" | "modified"
+}
+
+export type Agent = {
+  archetype?: "host" | "worker"
+  color?: string
+  description?: string
+  hidden?: boolean
+  mode: "subagent" | "primary" | "all"
+  model?: {
+    modelID: string
+    providerID: string
+  }
+  name: string
+  native?: boolean
+  options: {
+    [key: string]: unknown
+  }
+  permission?: PermissionRuleset
+  prompt?: string
+  promptAppend?: string
+  skill_mountable?: boolean
+  steps?: number
+  temperature?: number
+  tools?: {
+    global?: Array<string>
+    private?: Array<string>
+  }
+  topP?: number
+  variant?: string
+}
 
 export type AgentConfig = {
-  model?: string
   /**
-   * Default model variant for this agent (applies only when using the agent's configured model).
+   * Hex color code (e.g., #FF5733) or theme color (e.g., primary)
    */
-  variant?: string
-  temperature?: number
-  top_p?: number
+  color?: string | "primary" | "secondary" | "accent" | "success" | "warning" | "error" | "info"
+  /**
+   * Description of when to use the agent
+   */
+  description?: string
+  disable?: boolean
+  /**
+   * Hide this subagent from the @ autocomplete menu (only applies to mode: subagent)
+   */
+  hidden?: boolean
+  mode?: "subagent" | "primary" | "all"
+  model?: string
+  options?: {
+    [key: string]: unknown
+  }
+  permission?: PermissionConfig
   prompt?: string
   /**
    * Additional instructions appended after a code-owned stage-agent core prompt.
@@ -573,45 +85,24 @@ export type AgentConfig = {
    * Whether this agent may receive operator-managed skill mounts. Custom agents default false; built-in agents must match their canonical role contract.
    */
   skill_mountable?: boolean
-  disable?: boolean
-  /**
-   * Description of when to use the agent
-   */
-  description?: string
-  mode?: "subagent" | "primary" | "all"
-  /**
-   * Hide this subagent from the @ autocomplete menu (only applies to mode: subagent)
-   */
-  hidden?: boolean
-  options?: {
-    [key: string]: unknown
-  }
-  /**
-   * Hex color code (e.g., #FF5733) or theme color (e.g., primary)
-   */
-  color?: string | "primary" | "secondary" | "accent" | "success" | "warning" | "error" | "info"
   /**
    * Maximum number of agentic iterations before forcing text-only response
    */
   steps?: number
-  permission?: PermissionConfig
+  temperature?: number
   /**
    * Global registry tool selection for custom agents. Agent-private tools are defined only by native role/runtime contracts.
    */
   tools?: {
     global?: Array<string>
   }
+  top_p?: number
+  /**
+   * Default model variant for this agent (applies only when using the agent's configured model).
+   */
+  variant?: string
   [key: string]:
     | unknown
-    | string
-    | number
-    | boolean
-    | "subagent"
-    | "primary"
-    | "all"
-    | {
-        [key: string]: unknown
-      }
     | string
     | "primary"
     | "secondary"
@@ -620,211 +111,120 @@ export type AgentConfig = {
     | "warning"
     | "error"
     | "info"
-    | number
+    | string
+    | boolean
+    | "subagent"
+    | "primary"
+    | "all"
+    | {
+        [key: string]: unknown
+      }
     | PermissionConfig
+    | number
+    | number
     | {
         global?: Array<string>
       }
     | undefined
 }
 
-export type ProviderConfig = {
-  api?: string
-  name?: string
-  env?: Array<string>
+export type AgentPart = {
+  id: string
+  messageID: string
+  name: string
+  orderKey?: string
+  sessionID: string
+  source?: {
+    end: number
+    start: number
+    value: string
+  }
+  type: "agent"
+}
+
+export type AgentPartInput = {
   id?: string
-  npm?: string
-  models?: {
-    [key: string]: {
-      id?: string
-      name?: string
-      family?: string
-      release_date?: string
-      attachment?: boolean
-      reasoning?: boolean
-      temperature?: boolean
-      tool_call?: boolean
-      interleaved?:
-        | true
-        | {
-            field: "reasoning_content" | "reasoning_details"
-          }
-      cost?: {
-        input: number
-        output: number
-        cache_read?: number
-        cache_write?: number
-        context_over_200k?: {
-          input: number
-          output: number
-          cache_read?: number
-          cache_write?: number
-        }
-      }
-      limit?: {
-        context: number
-        input?: number
-        output: number
-      }
-      modalities?: {
-        input: Array<"text" | "audio" | "image" | "video" | "pdf">
-        output: Array<"text" | "audio" | "image" | "video" | "pdf">
-      }
-      experimental?: boolean
-      status?: "alpha" | "beta"
-      options?: {
-        [key: string]: unknown
-      }
-      headers?: {
-        [key: string]: string
-      }
-      provider?: {
-        npm?: string
-        api?: string
-      }
-      /**
-       * Variant-specific configuration
-       */
-      variants?: {
-        [key: string]: {
-          /**
-           * Disable this variant for the model
-           */
-          disabled?: boolean
-          [key: string]: unknown | boolean | undefined
-        }
-      }
-    }
+  name: string
+  orderKey?: string
+  source?: {
+    end: number
+    start: number
+    value: string
   }
-  whitelist?: Array<string>
-  blacklist?: Array<string>
-  options?: {
-    apiKey?: string
-    baseURL?: string
-    /**
-     * Enable promptCacheKey for this provider (default false)
-     */
-    setCacheKey?: boolean
-    /**
-     * Timeout in milliseconds for requests to this provider. Default is 300000 (5 minutes). Set to false to disable timeout.
-     */
-    timeout?: number | false
-    [key: string]: unknown | string | boolean | number | false | undefined
-  }
+  type: "agent"
 }
 
-export type McpLocalConfig = {
-  /**
-   * Type of MCP server connection
-   */
-  type: "local"
-  /**
-   * Command and arguments to run the MCP server
-   */
-  command: Array<string>
-  /**
-   * Environment variables to set when running the MCP server
-   */
-  environment?: {
-    [key: string]: string
-  }
-  /**
-   * Enable or disable the MCP server on startup
-   */
-  enabled?: boolean
-  /**
-   * Timeout in ms for MCP server requests. Defaults to 30000 (30 seconds) if not specified.
-   */
-  timeout?: number
+export type ApiAuth = {
+  key: string
+  type: "api"
 }
 
-export type McpOAuthConfig = {
-  /**
-   * OAuth client ID. If not provided, dynamic client registration (RFC 7591) will be attempted.
-   */
-  clientId?: string
-  /**
-   * OAuth client secret (if required by the authorization server)
-   */
-  clientSecret?: string
-  /**
-   * OAuth scopes to request during authorization
-   */
-  scope?: string
-}
+export type Auth = OAuth | ApiAuth | WellKnownAuth
 
-export type McpRemoteConfig = {
-  /**
-   * Type of MCP server connection
-   */
-  type: "remote"
-  /**
-   * URL of the remote MCP server
-   */
-  url: string
-  /**
-   * Remote MCP transport. Use streamable-http for standard remote MCP endpoints or sse for SSE-only servers.
-   */
-  transport: "streamable-http" | "sse"
-  /**
-   * Enable or disable the MCP server on startup
-   */
-  enabled?: boolean
-  /**
-   * Headers to send with the request
-   */
-  headers?: {
-    [key: string]: string
-  }
-  /**
-   * OAuth authentication configuration for the MCP server. Set to false to disable OAuth auto-detection.
-   */
-  oauth?: McpOAuthConfig | false
-  /**
-   * Timeout in ms for MCP server requests. Defaults to 30000 (30 seconds) if not specified.
-   */
-  timeout?: number
-}
-
-export type TerminalProfileConfig = {
-  /**
-   * Human-readable terminal profile label
-   */
-  label: string
-  /**
-   * Executable path or command resolved by the configured environment
-   */
-  command: string
-  /**
-   * Executable arguments, not shell-split from a string
-   */
-  args?: Array<string>
-  /**
-   * Profile-owned terminal environment variables
-   */
-  env?: {
-    [key: string]: string
-  }
-  /**
-   * Terminal profile icon hint surfaced by Overlay launch controls
-   */
-  icon?: "terminal" | "powershell" | "command-prompt" | "bash"
+export type BadRequestError = {
+  data: unknown
+  error: Array<{
+    [key: string]: unknown
+  }>
+  success: false
 }
 
 /**
- * Server-owned Overlay terminal configuration.
+ * Channel integration configuration
  */
-export type TerminalConfig = {
-  /**
-   * Default terminal profile id used by Overlay
-   */
-  default_profile_id?: string
-  /**
-   * Server-owned terminal profiles
-   */
-  profiles?: {
-    [key: string]: TerminalProfileConfig
-  }
+export type ChannelConfig = {
+  dingtalk?: DingTalkChannelConfig
+  discord?: DiscordChannelConfig
+  feishu?: FeishuChannelConfig
+  googlechat?: GoogleChatChannelConfig
+  line?: LineChannelConfig
+  matrix?: MatrixChannelConfig
+  mattermost?: MattermostChannelConfig
+  msteams?: MsTeamsChannelConfig
+  qq?: QqChannelConfig
+  signal?: SignalChannelConfig
+  slack?: SlackChannelConfig
+  telegram?: TelegramChannelConfig
+  wecom?: WeComChannelConfig
+  whatsapp?: WhatsappChannelConfig
+}
+
+export type CodingCliOpenResponse = {
+  ok: boolean
+}
+
+export type CodingCliProfile = {
+  icon: "claude-code" | "codex" | "gemini" | "copilot" | "glm"
+  id: string
+  label: string
+}
+
+export type CodingCliProfileList = {
+  profiles: Array<CodingCliProfile>
+}
+
+export type Command = {
+  agent?: string
+  description?: string
+  hints: Array<string>
+  model?: string
+  name: string
+  source?: "command" | "mcp" | "skill"
+  subtask?: boolean
+  template: string
+}
+
+export type CompactionPart = {
+  anchor_id?: string
+  auto: boolean
+  focus?: string
+  id: string
+  messageID: string
+  orderKey?: string
+  overflow?: boolean
+  sessionID: string
+  tail_start_id?: string
+  type: "compaction"
 }
 
 export type Config = {
@@ -832,207 +232,73 @@ export type Config = {
    * JSON schema reference for configuration validation
    */
   $schema?: string
-  logLevel?: LogLevel
-  server?: ServerConfig
-  network?: NetworkConfig
-  channel?: ChannelConfig
-  /**
-   * Command configuration, see https://opencorvus.ai/docs/commands
-   */
-  command?: {
-    [key: string]: {
-      template: string
-      description?: string
-      agent?: string
-      model?: string
-      subtask?: boolean
-    }
-  }
-  /**
-   * Additional skill folder paths
-   */
-  skills?: {
-    /**
-     * Additional paths to skill folders
-     */
-    paths?: Array<string>
-    /**
-     * URLs to fetch skills from (e.g., https://example.com/.well-known/skills/)
-     */
-    urls?: Array<string>
-  }
-  watcher?: {
-    ignore?: Array<string>
-  }
-  plugin?: Array<string>
-  /**
-   * Enable file snapshot capture for /undo and patch evidence. Default false.
-   */
-  snapshot?: boolean
-  /**
-   * Control sharing behavior:'manual' allows manual sharing via commands, 'auto' enables automatic sharing, 'disabled' disables all sharing
-   */
-  share?: "manual" | "auto" | "disabled"
-  /**
-   * Automatically update to the latest version. Set to true to auto-update, false to disable, or 'notify' to show update notifications
-   */
-  autoupdate?: boolean | "notify"
-  /**
-   * Disable providers that are loaded automatically
-   */
-  disabled_providers?: Array<string>
-  /**
-   * When set, ONLY these providers will be enabled. All other providers will be ignored
-   */
-  enabled_providers?: Array<string>
-  /**
-   * Model to use in the format of provider/model, eg openai/gpt-5.5
-   */
-  model?: string
-  /**
-   * Small model to use for tasks like title generation in the format of provider/model
-   */
-  small_model?: string
-  /**
-   * Default agent to use when none is specified. Must be a primary agent. When omitted, the built-in default is 'coding'; an invalid configured agent is an error.
-   */
-  default_agent?: string
-  /**
-   * Custom username to display in conversations instead of system username
-   */
-  username?: string
-  /**
-   * Operator-selected system language used for assistant replies and Overlay localization.
-   */
-  locale?: "en-US" | "zh-CN"
   /**
    * Agent configuration, see https://opencorvus.ai/docs/agents
    */
   agent?: {
-    coding?: AgentConfig
     build?: AgentConfig
-    general?: AgentConfig
-    explore?: AgentConfig
-    title?: AgentConfig
-    summary?: AgentConfig
+    coding?: AgentConfig
     compaction?: AgentConfig
+    explore?: AgentConfig
+    general?: AgentConfig
+    summary?: AgentConfig
+    title?: AgentConfig
     [key: string]: AgentConfig | undefined
-  }
-  /**
-   * Custom provider configurations and model overrides
-   */
-  provider?: {
-    [key: string]: ProviderConfig
-  }
-  /**
-   * MCP (Model Context Protocol) server configurations
-   */
-  mcp?: {
-    [key: string]:
-      | McpLocalConfig
-      | McpRemoteConfig
-      | {
-          enabled: false
-        }
-  }
-  formatter?:
-    | false
-    | {
-        [key: string]: {
-          disabled?: boolean
-          command?: Array<string>
-          environment?: {
-            [key: string]: string
-          }
-          extensions?: Array<string>
-        }
-      }
-  lsp?:
-    | false
-    | {
-        [key: string]:
-          | {
-              disabled: true
-            }
-          | {
-              command: Array<string>
-              extensions?: Array<string>
-              disabled?: boolean
-              env?: {
-                [key: string]: string
-              }
-              initialization?: {
-                [key: string]: unknown
-              }
-            }
-      }
-  /**
-   * System-scope prompt overrides keyed by prompt identifier (e.g. core_header)
-   */
-  prompt?: {
-    [key: string]: string
-  }
-  /**
-   * Active package-backed expert-squad prompt profile selection.
-   */
-  prompt_profile?: {
-    active?: string
-  }
-  /**
-   * Additional instruction files or patterns to include
-   */
-  instructions?: Array<string>
-  permission?: PermissionConfig
-  /**
-   * Default tool permission actions for new tasks. When not set, defaults to 'allow'. Set a tool to 'ask' for confirmation, or 'deny' to block it entirely.
-   */
-  tool_permissions?: {
-    websearch?: PermissionActionConfig
-    webfetch?: PermissionActionConfig
-    skill?: PermissionActionConfig
-    external_directory?: PermissionActionConfig
-    task?: PermissionActionConfig
-    schedule?: PermissionActionConfig
-  }
-  terminal?: TerminalConfig
-  compaction?: {
-    /**
-     * Enable automatic compaction when context is full
-     */
-    auto?: boolean
-    /**
-     * Enable pruning of old tool outputs
-     */
-    prune?: boolean
-    /**
-     * Token buffer for compaction. Leaves enough window to avoid overflow during compaction.
-     */
-    reserved?: number
-    /**
-     * Fraction of usable context (after reserved buffer) that must be consumed before auto-compaction triggers. Defaults to 0.9 — compact late enough to use more of the available prompt window while still preserving reserved reply headroom.
-     */
-    threshold?: number
-    /**
-     * Number of most recent real user turns to preserve verbatim after compaction. Defaults to 2.
-     */
-    tail_turns?: number
-    /**
-     * Token budget for the verbatim recent-tail retained after compaction.
-     */
-    preserve_recent_tokens?: number
   }
   /**
    * Assistant agent configuration — controls orchestration policy, requirements, architect, build, frontend-design, intent-analysis, and integrity review behavior
    */
   assistant?: {
     /**
-     * Requirements agent configuration — analyzes input, extracts requirements, decomposes into goal contracts
+     * P0-B visual numeric evidence thresholds.
      */
-    requirements?: {
+    acceptance_visual?: {
       /**
-       * Maximum agentic steps for requirements agent
+       * P0-B visual metric: chart-region non-white density ratio lower bound (anti empty-skeleton)
        */
-      max_steps?: number
+      chart_region_density_min_ratio?: number
+      /**
+       * P0-B visual metric: pHash Hamming distance upper bound (structure)
+       */
+      phash_hamming_max?: number
+      /**
+       * Composite score weights; four values must sum to 1 (runtime-enforced)
+       */
+      score_weights?: {
+        density?: number
+        phash?: number
+        ssim?: number
+        text_hit?: number
+      }
+      /**
+       * P0-B visual metric: mean SSIM lower bound (texture/detail)
+       */
+      ssim_min?: number
+      /**
+       * P0-B visual metric: reference_strings hit ratio lower bound (anti placeholder copy)
+       */
+      text_hit_ratio_min?: number
+      /**
+       * P0-B visual metric: unique-color ratio lower bound (anti monochrome placeholder)
+       */
+      unique_color_ratio_min?: number
+    }
+    /**
+     * Chunk-driven inactivity thresholds. Single source of truth for streaming layers (session LLM, executor events, task queue).
+     */
+    activity?: {
+      /**
+       * Max idle window for the executor event queue, ms
+       */
+      executor_events_idle_ms?: number
+      /**
+       * Max idle (no stream chunk) window for session LLM streams, ms
+       */
+      session_llm_idle_ms?: number
+      /**
+       * Max idle window without queue task progress, ms
+       */
+      task_queue_run_timeout_ms?: number
     }
     /**
      * Architect agent configuration — cross-goal coordination, interface contracts. Model is configured via agent.architect.model.
@@ -1044,39 +310,18 @@ export type Config = {
       max_steps?: number
     }
     /**
-     * P0-B visual numeric evidence thresholds.
+     * Build agent configuration — per-goal build session. Model is configured via agent."build".model.
      */
-    acceptance_visual?: {
+    build?: {
       /**
-       * P0-B visual metric: pHash Hamming distance upper bound (structure)
+       * Maximum agentic steps for build agent
        */
-      phash_hamming_max?: number
-      /**
-       * P0-B visual metric: mean SSIM lower bound (texture/detail)
-       */
-      ssim_min?: number
-      /**
-       * P0-B visual metric: chart-region non-white density ratio lower bound (anti empty-skeleton)
-       */
-      chart_region_density_min_ratio?: number
-      /**
-       * P0-B visual metric: unique-color ratio lower bound (anti monochrome placeholder)
-       */
-      unique_color_ratio_min?: number
-      /**
-       * P0-B visual metric: reference_strings hit ratio lower bound (anti placeholder copy)
-       */
-      text_hit_ratio_min?: number
-      /**
-       * Composite score weights; four values must sum to 1 (runtime-enforced)
-       */
-      score_weights?: {
-        phash?: number
-        ssim?: number
-        density?: number
-        text_hit?: number
-      }
+      max_steps?: number
     }
+    /**
+     * Default workflow for new tasks: 'direct' (build), 'pipeline' (frontend_design → requirements → architect → per-goal build → integrity), or custom ID
+     */
+    default_workflow?: string
     /**
      * Frontend design/replica agent configuration - analyzes visual references (images, URLs) into a frontend template, fillable modules, component/material inventories, and visual/data contracts. Model is configured via agent."frontend-design".model.
      */
@@ -1096,43 +341,30 @@ export type Config = {
       max_steps?: number
     }
     /**
-     * Build agent configuration — per-goal build session. Model is configured via agent."build".model.
-     */
-    build?: {
-      /**
-       * Maximum agentic steps for build agent
-       */
-      max_steps?: number
-    }
-    /**
-     * Chunk-driven inactivity thresholds. Single source of truth for streaming layers (session LLM, executor events, task queue).
-     */
-    activity?: {
-      /**
-       * Max idle (no stream chunk) window for session LLM streams, ms
-       */
-      session_llm_idle_ms?: number
-      /**
-       * Max idle window for the executor event queue, ms
-       */
-      executor_events_idle_ms?: number
-      /**
-       * Max idle window without queue task progress, ms
-       */
-      task_queue_run_timeout_ms?: number
-    }
-    /**
      * Maximum parallel agent sessions in fan-out phases such as goal builds and integrity reviewers
      */
     max_executor_groups?: number
     /**
-     * Default workflow for new tasks: 'direct' (build), 'pipeline' (frontend_design → requirements → architect → per-goal build → integrity), or custom ID
+     * Requirements agent configuration — analyzes input, extracts requirements, decomposes into goal contracts
      */
-    default_workflow?: string
+    requirements?: {
+      /**
+       * Maximum agentic steps for requirements agent
+       */
+      max_steps?: number
+    }
     /**
      * Custom workflow definitions. Override built-in workflows by matching ID.
      */
     workflows?: Array<{
+      /**
+       * One-line description
+       */
+      description?: string
+      /**
+       * Step IDs forming the per-goal loop (for UI grouping)
+       */
+      goalLoopStepIDs?: Array<string>
       /**
        * Workflow unique ID
        */
@@ -1141,31 +373,31 @@ export type Config = {
        * Display name
        */
       name: string
-      /**
-       * One-line description
-       */
-      description?: string
       steps: Array<{
         /**
-         * Step unique ID within workflow
+         * Prerequisite step IDs
          */
-        id: string
-        /**
-         * Orchestrator tool name this step maps to
-         */
-        tool: string
+        after?: Array<string>
         /**
          * Scheduler-owned agent role dispatched by this tool
          */
         agentRole?: string
         /**
+         * Brief guidance injected into system prompt
+         */
+        hint?: string
+        /**
+         * Step unique ID within workflow
+         */
+        id: string
+        /**
          * UI display label
          */
         label: string
         /**
-         * Brief guidance injected into system prompt
+         * Task-level agent outcome capability that marks this step complete
          */
-        hint?: string
+        outcomeCapability?: string
         /**
          * task = once per task, goal = once per goal
          */
@@ -1175,26 +407,106 @@ export type Config = {
          */
         skippable?: boolean
         /**
-         * Prerequisite step IDs
+         * Orchestrator tool name this step maps to
          */
-        after?: Array<string>
-        /**
-         * Task-level agent outcome capability that marks this step complete
-         */
-        outcomeCapability?: string
+        tool: string
       }>
-      /**
-       * Step IDs forming the per-goal loop (for UI grouping)
-       */
-      goalLoopStepIDs?: Array<string>
     }>
   }
+  /**
+   * Automatically update to the latest version. Set to true to auto-update, false to disable, or 'notify' to show update notifications
+   */
+  autoupdate?: boolean | "notify"
+  channel?: ChannelConfig
+  /**
+   * Command configuration, see https://opencorvus.ai/docs/commands
+   */
+  command?: {
+    [key: string]: {
+      agent?: string
+      description?: string
+      model?: string
+      subtask?: boolean
+      template: string
+    }
+  }
+  compaction?: {
+    /**
+     * Enable automatic compaction when context is full
+     */
+    auto?: boolean
+    /**
+     * Token budget for the verbatim recent-tail retained after compaction.
+     */
+    preserve_recent_tokens?: number
+    /**
+     * Enable pruning of old tool outputs
+     */
+    prune?: boolean
+    /**
+     * Token buffer for compaction. Leaves enough window to avoid overflow during compaction.
+     */
+    reserved?: number
+    /**
+     * Number of most recent real user turns to preserve verbatim after compaction. Defaults to 2.
+     */
+    tail_turns?: number
+    /**
+     * Fraction of usable context (after reserved buffer) that must be consumed before auto-compaction triggers. Defaults to 0.9 — compact late enough to use more of the available prompt window while still preserving reserved reply headroom.
+     */
+    threshold?: number
+  }
+  /**
+   * Default agent to use when none is specified. Must be a primary agent. When omitted, the built-in default is 'coding'; an invalid configured agent is an error.
+   */
+  default_agent?: string
+  /**
+   * Disable providers that are loaded automatically
+   */
+  disabled_providers?: Array<string>
+  /**
+   * When set, ONLY these providers will be enabled. All other providers will be ignored
+   */
+  enabled_providers?: Array<string>
   experimental?: {
-    disable_paste_summary?: boolean
+    /**
+     * Automatically create orchestrator-proposed follow-up tasks. Default true creates directly; false asks the operator first.
+     */
+    auto_confirm_proposed_tasks?: boolean
+    /**
+     * Auto-reject unanswered question interactions after the five-minute stale timeout. Independent fine-grained switch. When false, questions wait indefinitely for a user reply.
+     */
+    auto_question?: boolean
     /**
      * Enable the batch tool
      */
     batch_tool?: boolean
+    /**
+     * Continue the agent loop when a tool call is denied
+     */
+    continue_loop_on_deny?: boolean
+    disable_paste_summary?: boolean
+    /**
+     * Timeout in milliseconds for model context protocol (MCP) requests. Defaults to 30000 (30 seconds).
+     */
+    mcp_timeout?: number
+    /**
+     * Persistent memory configuration
+     */
+    memory?: {
+      /**
+       * Auto-inject relevant memories into system prompt
+       */
+      auto_inject?: boolean
+      /**
+       * Enable persistent memory store
+       */
+      enabled?: boolean
+      /**
+       * Max tokens for auto-injected memory context
+       */
+      token_budget?: number
+    }
     /**
      * Enable OpenTelemetry spans for AI SDK calls (using the 'experimental_telemetry' flag)
      */
@@ -1203,129 +515,1990 @@ export type Config = {
      * Tools that should only be available to primary agents.
      */
     primary_tools?: Array<string>
+  }
+  formatter?:
+    | false
+    | {
+        [key: string]: {
+          command?: Array<string>
+          disabled?: boolean
+          environment?: {
+            [key: string]: string
+          }
+          extensions?: Array<string>
+        }
+      }
+  /**
+   * Additional instruction files or patterns to include
+   */
+  instructions?: Array<string>
+  /**
+   * Operator-selected system language used for assistant replies and Overlay localization.
+   */
+  locale?: "en-US" | "zh-CN"
+  logLevel?: LogLevel
+  lsp?:
+    | false
+    | {
+        [key: string]:
+          | {
+              disabled: true
+            }
+          | {
+              command: Array<string>
+              disabled?: boolean
+              env?: {
+                [key: string]: string
+              }
+              extensions?: Array<string>
+              initialization?: {
+                [key: string]: unknown
+              }
+            }
+      }
+  /**
+   * MCP (Model Context Protocol) server configurations
+   */
+  mcp?: {
+    [key: string]:
+      | McpLocalConfig
+      | McpRemoteConfig
+      | {
+          enabled: false
+        }
+  }
+  /**
+   * Model to use in the format of provider/model, eg openai/gpt-5.5
+   */
+  model?: string
+  network?: NetworkConfig
+  permission?: PermissionConfig
+  plugin?: Array<string>
+  /**
+   * System-scope prompt overrides keyed by prompt identifier (e.g. core_header)
+   */
+  prompt?: {
+    [key: string]: string
+  }
+  /**
+   * Active package-backed expert-squad prompt profile selection.
+   */
+  prompt_profile?: {
+    active?: string
+  }
+  /**
+   * Custom provider configurations and model overrides
+   */
+  provider?: {
+    [key: string]: ProviderConfig
+  }
+  server?: ServerConfig
+  /**
+   * Control sharing behavior:'manual' allows manual sharing via commands, 'auto' enables automatic sharing, 'disabled' disables all sharing
+   */
+  share?: "manual" | "auto" | "disabled"
+  /**
+   * Additional skill folder paths
+   */
+  skills?: {
     /**
-     * Continue the agent loop when a tool call is denied
+     * Additional paths to skill folders
      */
-    continue_loop_on_deny?: boolean
+    paths?: Array<string>
     /**
-     * Auto-reject unanswered question interactions after the five-minute stale timeout. Independent fine-grained switch. When false, questions wait indefinitely for a user reply.
+     * URLs to fetch skills from (e.g., https://example.com/.well-known/skills/)
      */
-    auto_question?: boolean
-    /**
-     * Automatically create orchestrator-proposed follow-up tasks. Default true creates directly; false asks the operator first.
-     */
-    auto_confirm_proposed_tasks?: boolean
-    /**
-     * Timeout in milliseconds for model context protocol (MCP) requests
-     */
-    mcp_timeout?: number
-    /**
-     * Persistent memory configuration
-     */
-    memory?: {
-      /**
-       * Enable persistent memory store
-       */
-      enabled?: boolean
-      /**
-       * Auto-inject relevant memories into system prompt
-       */
-      auto_inject?: boolean
-      /**
-       * Max tokens for auto-injected memory context
-       */
-      token_budget?: number
-    }
+    urls?: Array<string>
+  }
+  /**
+   * Small model to use for tasks like title generation in the format of provider/model
+   */
+  small_model?: string
+  /**
+   * Enable file snapshot capture for /undo and patch evidence. Default false.
+   */
+  snapshot?: boolean
+  terminal?: TerminalConfig
+  /**
+   * Default tool permission actions for new tasks. When not set, defaults to 'allow'. Set a tool to 'ask' for confirmation, or 'deny' to block it entirely.
+   */
+  tool_permissions?: {
+    external_directory?: PermissionActionConfig
+    schedule?: PermissionActionConfig
+    skill?: PermissionActionConfig
+    task?: PermissionActionConfig
+    webfetch?: PermissionActionConfig
+    websearch?: PermissionActionConfig
+  }
+  /**
+   * Custom username to display in conversations instead of system username
+   */
+  username?: string
+  watcher?: {
+    ignore?: Array<string>
   }
 }
 
-export type NetworkProxyTestResponse = {
-  ok: boolean
-  status: "connected" | "error"
-  targetUrl: string
-  statusCode?: number
-  durationMs: number
-  message: string
+export type ContextOverflowError = {
+  data: {
+    message: string
+    responseBody?: string
+  }
+  name: "ContextOverflowError"
 }
 
-export type NetworkProxyTestRequest = {
-  proxy: NetworkProxyConfig
+export type CreateQuickNoteRequest = {
+  content: string
+}
+
+export type CreateQuickNoteResponse = {
+  code: 200
+  data: {
+    note_id: string
+    summary: string
+  }
+}
+
+export type DingTalkChannelConfig = {
+  /**
+   * DingTalk app key
+   */
+  appKey?: string
+  /**
+   * DingTalk app secret
+   */
+  appSecret?: string
+  /**
+   * DingTalk callback token
+   */
+  callbackToken?: string
+  /**
+   * Optional DingTalk default session webhook
+   */
+  defaultWebhook?: string
+  /**
+   * Enable DingTalk integration
+   */
+  enabled?: boolean
+  /**
+   * DingTalk callback EncodingAESKey
+   */
+  encodingAesKey?: string
+  /**
+   * Optional DingTalk webhook host
+   */
+  webhookHost?: string
+  /**
+   * Optional DingTalk webhook path
+   */
+  webhookPath?: string
+  /**
+   * Optional DingTalk webhook port
+   */
+  webhookPort?: string
+}
+
+export type DiscordChannelConfig = {
+  /**
+   * Enable Discord channel integration
+   */
+  enabled?: boolean
+  /**
+   * Discord bot token
+   */
+  token?: string
+}
+
+export type DiscoveredProject = {
+  directory: string
+  marker: string
+  name: string
+}
+
+export type Event =
+  | EventAcceptanceEvidenceUpdated
+  | EventAcceptanceReady
+  | EventAgentCoordinationAction
+  | EventAgentCoordinationCancelled
+  | EventAgentCoordinationRequested
+  | EventAgentCoordinationResponded
+  | EventCommandExecuted
+  | EventConfigChanged
+  | EventEvaluationCompleted
+  | EventFileEdited
+  | EventFileWatcherUpdated
+  | EventGlobalDisposed
+  | EventGoalRunUpdated
+  | EventGoalFailed
+  | EventGoalPassed
+  | EventGoalProgress
+  | EventGoalReport
+  | EventGoalWorkflowProgress
+  | EventInstallationUpdateAvailable
+  | EventInstallationUpdated
+  | EventIntegrityReviewCompleted
+  | EventInteractionRequested
+  | EventInteractionResolved
+  | EventLspClientDiagnostics
+  | EventLspUpdated
+  | EventMcpAuthRequired
+  | EventMcpBrowserOpenFailed
+  | EventMcpPromptsChanged
+  | EventMcpResourcesChanged
+  | EventMcpToolsChanged
+  | EventMessageCreated
+  | EventMessageInjected
+  | EventMessagePartDelta
+  | EventMessagePartRemoved
+  | EventMessagePartUpdated
+  | EventMessageRemoved
+  | EventMessageUpdated
+  | EventMilestoneActivated
+  | EventMilestoneFailed
+  | EventMilestonePassed
+  | EventPermissionAsked
+  | EventPermissionReplied
+  | EventPlanActivated
+  | EventPlanCreated
+  | EventProjectUpdated
+  | EventPtyCreated
+  | EventPtyDeleted
+  | EventPtyExited
+  | EventPtyUpdated
+  | EventQuestionAsked
+  | EventQuestionRejected
+  | EventQuestionReplied
+  | EventReviewStreamChunk
+  | EventReviewStreamProgress
+  | EventReviewStreamStarted
+  | EventRunCreated
+  | EventRunOutput
+  | EventRunProgress
+  | EventRunUpdated
+  | EventServerConnected
+  | EventServerHeartbeat
+  | EventServerInstanceDisposed
+  | EventSessionCompacted
+  | EventSessionCreated
+  | EventSessionDeleted
+  | EventSessionDiff
+  | EventSessionError
+  | EventSessionIdle
+  | EventSessionStatus
+  | EventSessionUpdated
+  | EventSpecApproved
+  | EventSpecCreated
+  | EventSpecUpdated
+  | EventTaskPlanUpdated
+  | EventTaskQueueCompleted
+  | EventTaskCancelled
+  | EventTaskCompleted
+  | EventTaskCreated
+  | EventTaskFailed
+  | EventTaskLifecycle
+  | EventTaskMessage
+  | EventTaskReport
+  | EventTaskRewound
+  | EventTaskUpdated
+  | EventTodoUpdated
+  | EventVcsBranchUpdated
+  | EventWorkflowSelected
+  | EventWorkflowStepUpdated
+  | EventWorkspaceFailed
+  | EventWorkspaceReady
+  | EventWorktreeFailed
+  | EventWorktreeReady
+
+export type EventAcceptanceEvidenceUpdated = {
+  properties: {
+    acceptanceID: string
+    failedCheckCount: number
+    failedReviewCount: number
+    failureDetails: Array<{
+      command?: string
+      evidence: string
+      exitCode?: number
+      id: string
+      kind: "readiness" | "check" | "coverage" | "review"
+      name: string
+      status?: string
+    }>
+    iteration: number
+    manifestID: string
+    runID?: string
+    status: "passed" | "failed"
+    summary: string
+    taskID: string
+  }
+  type: "acceptance.evidence.updated"
+}
+
+export type EventAcceptanceReady = {
+  properties: {
+    acceptanceID: string
+    runID: string
+    summary: string
+    taskID: string
+  }
+  type: "acceptance.ready"
+}
+
+export type EventAgentCoordinationAction = {
+  properties: {
+    action: "continue_worker" | "cancel_worker" | "redispatch_worker" | "fail_task" | "ask_user"
+    actionID: string
+    requestID: string
+    responseID: string
+    sessionID: string
+    status: "pending" | "completed" | "failed"
+    summary: string
+    taskID: string
+  }
+  type: "agent.coordination.action"
+}
+
+export type EventAgentCoordinationCancelled = {
+  properties: {
+    requestID: string
+    sessionID: string
+    summary: string
+    taskID: string
+  }
+  type: "agent.coordination.cancelled"
+}
+
+export type EventAgentCoordinationRequested = {
+  properties: {
+    agent: string
+    blocking: boolean
+    requestID: string
+    sessionID: string
+    severity: "info" | "blocked" | "failure"
+    summary: string
+    taskID: string
+  }
+  type: "agent.coordination.requested"
+}
+
+export type EventAgentCoordinationResponded = {
+  properties: {
+    actionID: string
+    decision: "continue" | "cancel_worker" | "redispatch" | "fail_task" | "ask_user"
+    requestID: string
+    responseID: string
+    sessionID: string
+    summary: string
+    taskID: string
+  }
+  type: "agent.coordination.responded"
+}
+
+export type EventCommandExecuted = {
+  properties: {
+    arguments: string
+    messageID: string
+    name: string
+    sessionID: string
+  }
+  type: "command.executed"
+}
+
+export type EventConfigChanged = {
+  properties: {
+    sessionID: string
+  }
+  type: "config.changed"
+}
+
+export type EventEvaluationCompleted = {
+  properties: {
+    evaluationID: string
+    runID: string
+    status: "pending" | "passed" | "failed" | "inconclusive"
+    summary: string
+    taskID: string
+    verdict: "accepted" | "rejected" | "inconclusive"
+  }
+  type: "evaluation.completed"
+}
+
+export type EventFileEdited = {
+  properties: {
+    file: string
+  }
+  type: "file.edited"
+}
+
+export type EventFileWatcherUpdated = {
+  properties: {
+    event: "add" | "change" | "unlink"
+    file: string
+  }
+  type: "file.watcher.updated"
+}
+
+export type EventGlobalDisposed = {
+  properties: {
+    [key: string]: unknown
+  }
+  type: "global.disposed"
+}
+
+export type EventGoalFailed = {
+  properties: {
+    goalID: string
+    summary: string
+    taskID: string
+  }
+  type: "goal.failed"
+}
+
+export type EventGoalPassed = {
+  properties: {
+    goalID: string
+    summary: string
+    taskID: string
+  }
+  type: "goal.passed"
+}
+
+export type EventGoalProgress = {
+  properties: {
+    goalRunID: string
+    summary: string
+    taskID: string
+  }
+  type: "goal.progress"
+}
+
+export type EventGoalReport = {
+  properties: {
+    report: {
+      /**
+       * Hard blockers hit during execution. Empty when none. A filled array signals the goal did not fully complete.
+       */
+      blockers?: Array<string>
+      /**
+       * Commands executed to verify the goal (build / test / lint / verify). Empty array is allowed only for goals whose acceptance is entirely rubric/semantic.
+       */
+      checks_run?: Array<{
+        command: string
+        exit_code: number
+        name: string
+        /**
+         * Last relevant lines of stdout/stderr (≤ 2000 chars). Omit when trivially green.
+         */
+        output_excerpt?: string
+      }>
+      /**
+       * Key decisions and why. Each entry names the alternatives considered and the reason the chosen one won. Empty array means the goal required no non-trivial decision.
+       */
+      design_decisions?: Array<{
+        /**
+         * Alternatives that were considered and rejected. Empty array if none were weighed.
+         */
+        alternatives?: Array<string>
+        /**
+         * The decision made, stated as a concrete claim.
+         */
+        choice: string
+        /**
+         * Why this choice won over the alternatives. Must be a real reason, not a restatement of the choice.
+         */
+        reason: string
+      }>
+      /**
+       * Every file touched in this goal. May be empty if the goal's acceptance was met by reusing a prior attempt's worktree without further edits — the orchestrator cross-checks against the host's actual_changed_files ground truth.
+       */
+      files_changed: Array<{
+        path: string
+        /**
+         * What changed in this file and why. One or two sentences, concrete — not 'updated foo'.
+         */
+        summary: string
+      }>
+      /**
+       * Explicit warning for subsequent agents about hidden or remaining work surface, evidence they must read deeper, and whether goal workload analysis or Architect re-sizing should be revisited.
+       */
+      followup_workload_guidance?: string
+      /**
+       * The actual implementation plan: what scheme you used, core structure, key APIs, and data flow. Must describe the approach concretely so an evaluator can cross-check the diff against it.
+       */
+      implementation_approach: string
+    }
+    sessionID: string
+  }
+  type: "goal.report"
+}
+
+export type EventGoalWorkflowProgress = {
+  properties: {
+    completedSteps: number
+    currentStep?: string
+    goalID: string
+    summary: string
+    taskID: string
+    totalSteps: number
+  }
+  type: "goal.workflow.progress"
+}
+
+export type EventGoalRunUpdated = {
+  properties: {
+    goalID: string
+    goalRunID: string
+    previousStatus: string
+    status: string
+    summary: string
+    taskID: string
+  }
+  type: "goal_run.updated"
+}
+
+export type EventInstallationUpdateAvailable = {
+  properties: {
+    version: string
+  }
+  type: "installation.update-available"
+}
+
+export type EventInstallationUpdated = {
+  properties: {
+    version: string
+  }
+  type: "installation.updated"
+}
+
+export type EventIntegrityReviewCompleted = {
+  properties: {
+    attempts: number
+    checkItems: Array<{
+      /**
+       * Review category such as requirement, acceptance-spec, visual-evidence, runtime, code, or integration.
+       */
+      category: string
+      evidence: Array<string>
+      expected: string
+      id: string
+      observed: string
+      /**
+       * Concrete falsification question inspected for this check.
+       */
+      question: string
+      requirementIDs?: Array<string>
+      reviewerID?: string
+      specIDs?: Array<string>
+      status: "passed" | "failed" | "inconclusive"
+      /**
+       * Concrete requirement, acceptance spec, goal, file, route, command, or evidence surface checked.
+       */
+      target: string
+      targetIDs?: Array<string>
+      userRequestQuotes?: Array<string>
+    }>
+    coverageAudit?: Array<{
+      /**
+       * Registered Integrity check item IDs that support this coverage audit row.
+       */
+      checkIDs: Array<string>
+      notes: string
+      promise: string
+      reviewerIDs?: Array<string>
+      /**
+       * Coverage status only. Do not use verdict values such as pass, concerns, or needs_correction here.
+       */
+      status: "covered" | "missing" | "inconclusive"
+    }>
+    /**
+     * Every factual claim (API behaviour, library version, third-party protocol, number, path, history) the integrity team has NOT verified via tool calls in this session. Empty when only review judgments or in-session-verified statements.
+     */
+    fact_check_items?: Array<FactCheckItem>
+    findings?: Array<{
+      affectedSymbols?: Array<string>
+      canonicalSymptom?: string
+      /**
+       * Registered Integrity check item IDs that exposed this finding.
+       */
+      checkIDs: Array<string>
+      consensus?: "agreed" | "disputed" | "unresolved"
+      description: string
+      evidence: Array<string>
+      filePaths?: Array<string>
+      fingerprint?: string
+      id: string
+      priorAttemptRefs?: Array<string>
+      repair: string
+      requirementIDs?: Array<string>
+      reviewers?: Array<string>
+      severity: "blocking" | "advisory"
+      sourceFindingIDs?: Array<string>
+      specIDs?: Array<string>
+      targetIDs?: Array<string>
+      title: string
+      userRequestQuotes?: Array<string>
+      verdictImpact: "pass" | "concerns" | "needs_correction"
+      verify?: Array<string>
+    }>
+    requiredRepairs?: Array<{
+      affectedSymbols?: Array<string>
+      canonicalSymptom?: string
+      /**
+       * Registered Integrity check item IDs that require this repair.
+       */
+      checkIDs: Array<string>
+      description: string
+      evidence: Array<string>
+      filePaths?: Array<string>
+      fingerprint?: string
+      id: string
+      priorAttemptRefs?: Array<string>
+      repair?: string
+      requirementIDs?: Array<string>
+      severity?: "blocking" | "advisory"
+      sourceFindingIDs?: Array<string>
+      specIDs?: Array<string>
+      targetIDs?: Array<string>
+      title?: string
+      verify?: Array<string>
+    }>
+    reviewers: Array<{
+      /**
+       * Registered Integrity check item IDs this reviewer report summarizes.
+       */
+      checkIDs: Array<string>
+      coverage?: Array<{
+        /**
+         * Registered Integrity check item IDs that support this review row.
+         */
+        checkIDs: Array<string>
+        evidence: string
+        /**
+         * Singular coverage anchor such as REQ-1. Do not use requirementIDs here.
+         */
+        requirementID?: string
+        /**
+         * Singular coverage anchor for one acceptance spec id. Do not use specIDs here.
+         */
+        specID?: string
+        /**
+         * Coverage status only. Do not use verdict values such as pass, concerns, or needs_correction here.
+         */
+        status: "covered" | "missing" | "inconclusive"
+        /**
+         * Singular literal user-request quote. Do not use userRequestQuotes here.
+         */
+        userRequestQuote?: string
+      }>
+      drilldowns?: Array<{
+        /**
+         * Registered Integrity check item IDs that support this review row.
+         */
+        checkIDs: Array<string>
+        /**
+         * Evidence tool or inspection category.
+         */
+        kind: string
+        /**
+         * Why this evidence was inspected for the reviewer scope.
+         */
+        purpose: string
+        /**
+         * What the inspection showed. Do not add finding fields such as affectedSymbols here.
+         */
+        result: string
+        /**
+         * Concrete file, directory, command, evidence section, or artifact inspected.
+         */
+        target: string
+      }>
+      evidence?: Array<{
+        /**
+         * Registered Integrity check item IDs that support this review row.
+         */
+        checkIDs: Array<string>
+        note: string
+      }>
+      /**
+       * Required falsification plan for this reviewer report.
+       */
+      investigationPlan: {
+        /**
+         * Evidence this reviewer planned to inspect before passing or filing a finding.
+         */
+        evidencePlan: Array<string>
+        /**
+         * Concrete way the scoped promise could fail.
+         */
+        hypothesis: string
+        /**
+         * Concrete evidence threshold for pass versus finding.
+         */
+        passCriteria: Array<string>
+        /**
+         * Concrete original user, REQ, or acceptance-spec promise this reviewer is falsifying.
+         */
+        requestPromise: string
+      }
+      openQuestions?: Array<string>
+      reviewerID: string
+      scope: string
+      summary: string
+      verdict: "pass" | "concerns" | "needs_correction"
+    }>
+    rounds?: Array<{
+      outcome: string
+      prompt: string
+      reviewerIDs: Array<string>
+      roundID: string
+    }>
+    sessionID: string
+    summary: string
+    taskID: string
+    teamReportMarkdown: string
+    uninspectedRisks?: Array<{
+      action: "block" | "re-review" | "advisory"
+      /**
+       * Registered Integrity check item IDs that left this risk uninspected.
+       */
+      checkIDs: Array<string>
+      reason: string
+      risk: string
+    }>
+    unresolvedDisagreements?: Array<{
+      /**
+       * Registered Integrity check item IDs involved in this disagreement.
+       */
+      checkIDs: Array<string>
+      consequence: string
+      description: string
+      id: string
+      reviewerIDs: Array<string>
+    }>
+    verdict: "pass" | "concerns" | "needs_correction"
+  }
+  type: "integrity.review.completed"
+}
+
+export type EventInteractionRequested = {
+  properties: {
+    interactionID: string
+    requestType: "permission" | "question"
+    runID?: string
+    summary: string
+    taskID: string
+  }
+  type: "interaction.requested"
+}
+
+export type EventInteractionResolved = {
+  properties: {
+    interactionID: string
+    runID?: string
+    status: "pending" | "answered" | "rejected" | "expired"
+    summary: string
+    taskID: string
+  }
+  type: "interaction.resolved"
+}
+
+export type EventLspClientDiagnostics = {
+  properties: {
+    path: string
+    serverID: string
+  }
+  type: "lsp.client.diagnostics"
+}
+
+export type EventLspUpdated = {
+  properties: {
+    [key: string]: unknown
+  }
+  type: "lsp.updated"
+}
+
+export type EventMcpAuthRequired = {
+  properties: {
+    message: string
+    name: string
+    reason: "needs_auth" | "needs_client_registration"
+  }
+  type: "mcp.auth.required"
+}
+
+export type EventMcpBrowserOpenFailed = {
+  properties: {
+    mcpName: string
+    url: string
+  }
+  type: "mcp.browser.open.failed"
+}
+
+export type EventMcpPromptsChanged = {
+  properties: {
+    server?: string
+  }
+  type: "mcp.prompts.changed"
+}
+
+export type EventMcpResourcesChanged = {
+  properties: {
+    server?: string
+  }
+  type: "mcp.resources.changed"
+}
+
+export type EventMcpToolsChanged = {
+  properties: {
+    server: string
+  }
+  type: "mcp.tools.changed"
+}
+
+export type EventMessageCreated = {
+  properties: {
+    info: VisibleMessage
+  }
+  type: "message.created"
+}
+
+export type EventMessageInjected = {
+  properties: {
+    runID: string
+    summary: string
+    taskID: string
+    text: string
+  }
+  type: "message.injected"
+}
+
+export type EventMessagePartDelta = {
+  properties: {
+    delta: string
+    field: string
+    messageID: string
+    partID: string
+    sessionID: string
+  }
+  type: "message.part.delta"
+}
+
+export type EventMessagePartRemoved = {
+  properties: {
+    messageID: string
+    partID: string
+    sessionID: string
+  }
+  type: "message.part.removed"
+}
+
+export type EventMessagePartUpdated = {
+  properties: {
+    orderKey: string
+    part: VisibleMessagePart
+  }
+  type: "message.part.updated"
+}
+
+export type EventMessageRemoved = {
+  properties: {
+    messageID: string
+    sessionID: string
+  }
+  type: "message.removed"
+}
+
+export type EventMessageUpdated = {
+  properties: {
+    info: VisibleMessage
+  }
+  type: "message.updated"
+}
+
+export type EventMilestoneActivated = {
+  properties: {
+    milestoneID: string
+    summary: string
+    taskID: string
+  }
+  type: "milestone.activated"
+}
+
+export type EventMilestoneFailed = {
+  properties: {
+    milestoneID: string
+    summary: string
+    taskID: string
+  }
+  type: "milestone.failed"
+}
+
+export type EventMilestonePassed = {
+  properties: {
+    milestoneID: string
+    summary: string
+    taskID: string
+  }
+  type: "milestone.passed"
+}
+
+export type EventPermissionAsked = {
+  properties: PermissionRequest
+  type: "permission.asked"
+}
+
+export type EventPermissionReplied = {
+  properties: {
+    autoReply: boolean
+    reply: "once" | "always" | "reject"
+    requestID: string
+    sessionID: string
+  }
+  type: "permission.replied"
+}
+
+export type EventPlanActivated = {
+  properties: {
+    planID: string
+    summary: string
+    taskID: string
+  }
+  type: "plan.activated"
+}
+
+export type EventPlanCreated = {
+  properties: {
+    planID: string
+    summary: string
+    taskID: string
+  }
+  type: "plan.created"
+}
+
+export type EventProjectUpdated = {
+  properties: Project
+  type: "project.updated"
+}
+
+export type EventPtyCreated = {
+  properties: {
+    info: Pty
+  }
+  type: "pty.created"
+}
+
+export type EventPtyDeleted = {
+  properties: {
+    id: string
+  }
+  type: "pty.deleted"
+}
+
+export type EventPtyExited = {
+  properties: {
+    exitCode: number | null
+    id: string
+  }
+  type: "pty.exited"
+}
+
+export type EventPtyUpdated = {
+  properties: {
+    info: Pty
+  }
+  type: "pty.updated"
+}
+
+export type EventQuestionAsked = {
+  properties: QuestionRequest
+  type: "question.asked"
+}
+
+export type EventQuestionRejected = {
+  properties: {
+    requestID: string
+    sessionID: string
+  }
+  type: "question.rejected"
+}
+
+export type EventQuestionReplied = {
+  properties: {
+    answers: Array<QuestionAnswer>
+    requestID: string
+    sessionID: string
+  }
+  type: "question.replied"
+}
+
+export type EventReviewStreamChunk = {
+  properties: {
+    attempt: number
+    delta: string
+    kind: "reasoning"
+    phase: "integrity"
+    reviewID: string
+    taskID: string
+  }
+  type: "review.stream.chunk"
+}
+
+export type EventReviewStreamProgress = {
+  properties: {
+    activity?: string
+    attempt: number
+    currentStep?: "manifest" | "runtime" | "visual" | "specialist" | "agent" | "post_repair"
+    elapsedMs: number
+    phase: "integrity"
+    reviewID: string
+    reviewerID?: string
+    roundID?: string
+    summary?: string
+    taskID: string
+  }
+  type: "review.stream.progress"
+}
+
+export type EventReviewStreamStarted = {
+  properties: {
+    phase: "integrity"
+    reviewID: string
+    sessionID?: string
+    taskID: string
+  }
+  type: "review.stream.started"
+}
+
+export type EventRunCreated = {
+  properties: {
+    runID: string
+    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+    summary: string
+    taskID: string
+  }
+  type: "run.created"
+}
+
+export type EventRunOutput = {
+  properties: {
+    runID: string
+    taskID: string
+    text: string
+    type: string
+  }
+  type: "run.output"
+}
+
+export type EventRunProgress = {
+  properties: {
+    payload?: {
+      [key: string]: unknown
+    }
+    runID: string
+    summary: string
+    taskID: string
+    type: string
+  }
+  type: "run.progress"
+}
+
+export type EventRunUpdated = {
+  properties: {
+    runID: string
+    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+    summary: string
+    taskID: string
+  }
+  type: "run.updated"
+}
+
+export type EventServerConnected = {
+  properties: {
+    [key: string]: unknown
+  }
+  type: "server.connected"
+}
+
+export type EventServerHeartbeat = {
+  properties: {
+    [key: string]: unknown
+  }
+  type: "server.heartbeat"
+}
+
+export type EventServerInstanceDisposed = {
+  properties: {
+    directory: string
+  }
+  type: "server.instance.disposed"
+}
+
+export type EventSessionCompacted = {
+  properties: {
+    sessionID: string
+  }
+  type: "session.compacted"
+}
+
+export type EventSessionCreated = {
+  properties: {
+    info: Session
+  }
+  type: "session.created"
+}
+
+export type EventSessionDeleted = {
+  properties: {
+    info: Session
+  }
+  type: "session.deleted"
+}
+
+export type EventSessionDiff = {
+  properties: {
+    diff: Array<FileDiff>
+    sessionID: string
+  }
+  type: "session.diff"
+}
+
+export type EventSessionError = {
+  properties: {
+    channel?: string
+    error:
+      | ProviderAuthError
+      | UnknownError
+      | MessageOutputLengthError
+      | MessageAbortedError
+      | StructuredOutputError
+      | StructuredOutputPayloadError
+      | TerminalToolMissingError
+      | SnapshotIntegrityError
+      | SnapshotEmptyTreeError
+      | ContextOverflowError
+      | PromptBudgetOverflowError
+      | ToolSchemaBudgetError
+      | ModelImageInputTooLargeError
+      | ApiError
+    goalID?: string
+    orderKey: string
+    parentSessionID?: string
+    resolvedRole?: string
+    sessionID: string
+    summary?: string
+  }
+  type: "session.error"
+}
+
+export type EventSessionIdle = {
+  properties: {
+    orderKey: string
+    sessionID: string
+  }
+  type: "session.idle"
+}
+
+export type EventSessionStatus = {
+  properties: {
+    orderKey: string
+    sessionID: string
+    status: SessionStatus
+  }
+  type: "session.status"
+}
+
+export type EventSessionUpdated = {
+  properties: {
+    info: Session
+  }
+  type: "session.updated"
+}
+
+export type EventSpecApproved = {
+  properties: {
+    specID: string
+    summary: string
+    taskID: string
+  }
+  type: "spec.approved"
+}
+
+export type EventSpecCreated = {
+  properties: {
+    specID: string
+    summary: string
+    taskID: string
+  }
+  type: "spec.created"
+}
+
+export type EventSpecUpdated = {
+  properties: {
+    specID: string
+    status: string
+    summary: string
+    taskID: string
+  }
+  type: "spec.updated"
+}
+
+export type EventTaskQueueCompleted = {
+  properties: {
+    queueTaskID: string
+    sessionID: string
+  }
+  type: "task-queue.completed"
+}
+
+export type EventTaskCancelled = {
+  properties: {
+    status: "queued" | "active" | "completed" | "failed" | "cancelled"
+    summary: string
+    taskID: string
+  }
+  type: "task.cancelled"
+}
+
+export type EventTaskCompleted = {
+  properties: {
+    status: "queued" | "active" | "completed" | "failed" | "cancelled"
+    summary: string
+    taskID: string
+  }
+  type: "task.completed"
+}
+
+export type EventTaskCreated = {
+  properties: {
+    status: "queued" | "active" | "completed" | "failed" | "cancelled"
+    summary: string
+    taskID: string
+  }
+  type: "task.created"
+}
+
+export type EventTaskFailed = {
+  properties: {
+    error?: string
+    status: "queued" | "active" | "completed" | "failed" | "cancelled"
+    summary: string
+    taskID: string
+  }
+  type: "task.failed"
+}
+
+export type EventTaskLifecycle = {
+  properties: {
+    fact: "server_restart_active_task_recovered" | "terminal_goal_refill_dispatched"
+    orphaned?: boolean
+    status?: "queued" | "active" | "completed" | "failed" | "cancelled"
+    summary: string
+    taskID: string
+  }
+  type: "task.lifecycle"
+}
+
+export type EventTaskMessage = {
+  properties: {
+    kind: "goal" | "plan" | "note"
+    messageID?: string
+    source: string
+    summary: string
+    taskID: string
+    text: string
+  }
+  type: "task.message"
+}
+
+export type EventTaskReport = {
+  properties: {
+    artifacts?: Array<string>
+    error?: string
+    next_plan?: string
+    question?: string
+    sessionID: string
+    status: "progress" | "need_input" | "done" | "failed"
+    summary: string
+    taskID?: string
+  }
+  type: "task.report"
+}
+
+export type EventTaskRewound = {
+  properties: {
+    anchorEventID?: string
+    anchorKind: "cursorTime" | "message"
+    cursorTime: number
+    reason?: string
+    resetWorktree: boolean
+    rewindCount: number
+    taskID: string
+  }
+  type: "task.rewound"
+}
+
+export type EventTaskUpdated = {
+  properties: {
+    status: "queued" | "active" | "completed" | "failed" | "cancelled"
+    summary: string
+    taskID: string
+  }
+  type: "task.updated"
+}
+
+export type EventTaskPlanUpdated = {
+  properties: {
+    task: {
+      goal: string
+      id: string
+      sessionID: string
+      status: string
+    }
+  }
+  type: "task_plan.updated"
+}
+
+export type EventTodoUpdated = {
+  properties: {
+    sessionID: string
+    todos: Array<Todo>
+  }
+  type: "todo.updated"
+}
+
+export type EventVcsBranchUpdated = {
+  properties: {
+    branch?: string
+  }
+  type: "vcs.branch.updated"
+}
+
+export type EventWorkflowSelected = {
+  properties: {
+    summary: string
+    taskID: string
+    workflow?: {
+      description: string
+      goalLoopStepIDs: Array<string>
+      id: string
+      name: string
+      steps: Array<{
+        after: Array<string>
+        agentRole?: string
+        hint: string
+        id: string
+        label: string
+        outcomeCapability?: string
+        phases?: Array<{
+          id: string
+          label: string
+          sessionKind: string
+        }>
+        scope: "task" | "goal"
+        skippable: boolean
+        tool: string
+      }>
+    }
+    workflowID: string
+    workflowName: string
+  }
+  type: "workflow.selected"
+}
+
+export type EventWorkflowStepUpdated = {
+  properties: {
+    goalID?: string
+    status: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
+    stepID: string
+    summary: string
+    taskID: string
+  }
+  type: "workflow.step.updated"
+}
+
+export type EventWorkspaceFailed = {
+  properties: {
+    message: string
+  }
+  type: "workspace.failed"
+}
+
+export type EventWorkspaceReady = {
+  properties: {
+    name: string
+  }
+  type: "workspace.ready"
+}
+
+export type EventWorktreeFailed = {
+  properties: {
+    message: string
+  }
+  type: "worktree.failed"
+}
+
+export type EventWorktreeReady = {
+  properties: {
+    branch: string
+    name: string
+  }
+  type: "worktree.ready"
+}
+
+export type FactCheckItem = {
+  category: "api" | "library" | "number" | "history" | "path" | "protocol" | "other"
+  claim: string
+  confidence: "low" | "medium" | "high"
+  source: string
+}
+
+export type FeishuChannelConfig = {
+  /**
+   * Feishu or Lark app ID
+   */
+  appId?: string
+  /**
+   * Feishu or Lark app secret
+   */
+  appSecret?: string
+  /**
+   * Enable Feishu or Lark channel integration
+   */
+  enabled?: boolean
+  /**
+   * Optional Feishu or Lark webhook verification token
+   */
+  verificationToken?: string
+  /**
+   * Optional Feishu or Lark webhook host
+   */
+  webhookHost?: string
+  /**
+   * Optional Feishu or Lark webhook path
+   */
+  webhookPath?: string
+  /**
+   * Optional Feishu or Lark webhook port
+   */
+  webhookPort?: string
+}
+
+export type File = {
+  added: number
+  path: string
+  removed: number
+  status: "added" | "deleted" | "modified"
+}
+
+export type FileContent = {
+  content: string
+  diff?: string
+  encoding?: "base64"
+  mimeType?: string
+  patch?: {
+    hunks: Array<{
+      lines: Array<string>
+      newLines: number
+      newStart: number
+      oldLines: number
+      oldStart: number
+    }>
+    index?: string
+    newFileName: string
+    newHeader?: string
+    oldFileName: string
+    oldHeader?: string
+  }
+  type: "text" | "binary"
+}
+
+export type FileDiff = {
+  additions: number
+  after: string
+  before: string
+  deletions: number
+  file: string
+  status?: "added" | "deleted" | "modified"
+}
+
+export type FileNode = {
+  absolute: string
+  ignored: boolean
+  name: string
+  path: string
+  type: "file" | "directory"
+}
+
+export type FilePart = {
+  filename?: string
+  id: string
+  messageID: string
+  mime: string
+  orderKey?: string
+  sessionID: string
+  source?: FilePartSource
+  type: "file"
+  url: string
+}
+
+export type FilePartInput = {
+  filename?: string
+  id?: string
+  mime: string
+  orderKey?: string
+  source?: FilePartSource
+  type: "file"
+  url: string
+}
+
+export type FilePartSource = FileSource | SymbolSource | ResourceSource
+
+export type FilePartSourceText = {
+  end: number
+  start: number
+  value: string
+}
+
+export type FileSource = {
+  path: string
+  text: FilePartSourceText
+  type: "file"
+}
+
+export type FormatterStatus = {
+  enabled: boolean
+  extensions: Array<string>
+  name: string
+}
+
+export type GlobalEvent = {
+  directory: string
+  payload: Event
+}
+
+export type GlobalSession = {
+  directory: string
+  goalID?: string
+  id: string
+  kind:
+    | "root"
+    | "orchestrator"
+    | "assistant"
+    | "mission"
+    | "intent-analysis"
+    | "requirements"
+    | "frontend-design"
+    | "goal"
+    | "architect"
+    | "goal-workload-analyst"
+    | "integrity"
+    | "fact-check"
+    | "acceptance"
+    | "executor"
+    | "build"
+    | "explore"
+    | "deep-research"
+    | "frontend-research"
+    | "visual-qa"
+    | "evaluator"
+    | "system"
+  metadata?: {
+    [key: string]: unknown
+  }
+  parentID?: string
+  permission?: PermissionRuleset
+  project: ProjectSummary | null
+  projectID: string
+  share?: {
+    url: string
+  }
+  slug: string
+  summary?: {
+    additions: number
+    deletions: number
+    files: number
+  }
+  time: {
+    archived?: number
+    compacting?: number
+    created: number
+    updated: number
+  }
+  title: string
+  version: string
+}
+
+export type GoogleChatChannelConfig = {
+  /**
+   * Google Chat request token audience, usually the HTTPS endpoint URL
+   */
+  authAudience?: string
+  /**
+   * Enable Google Chat integration
+   */
+  enabled?: boolean
+  /**
+   * Google Chat service account JSON or path
+   */
+  serviceAccount?: string
+  /**
+   * Optional Google Chat webhook host
+   */
+  webhookHost?: string
+  /**
+   * Optional Google Chat webhook path
+   */
+  webhookPath?: string
+  /**
+   * Optional Google Chat webhook port
+   */
+  webhookPort?: string
+}
+
+export type HexinBudget = {
+  maxBudget: number
+  overBudget: boolean
+  remaining: number
+  spend: number
+}
+
+export type HexinBudgetResponse =
+  | {
+      budget: HexinBudget
+      ok: true
+    }
+  | {
+      error: string
+      ok: false
+    }
+
+export type JsonSchema = {
+  [key: string]: unknown
+}
+
+export type LspStatus = {
+  id: string
+  name: string
+  root: string
+  status: "connected" | "error"
+}
+
+export type LineChannelConfig = {
+  /**
+   * Enable LINE integration
+   */
+  enabled?: boolean
+  /**
+   * LINE channel secret for webhook verification
+   */
+  secret?: string
+  /**
+   * LINE channel access token
+   */
+  token?: string
+  /**
+   * Optional LINE webhook host
+   */
+  webhookHost?: string
+  /**
+   * Optional LINE webhook path
+   */
+  webhookPath?: string
+  /**
+   * Optional LINE webhook port
+   */
+  webhookPort?: string
+}
+
+/**
+ * Log level
+ */
+export type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR"
+
+export type McpStatus =
+  | McpStatusConnected
+  | McpStatusDisabled
+  | McpStatusDisconnected
+  | McpStatusConnecting
+  | McpStatusFailed
+  | McpStatusNeedsAuth
+  | McpStatusNeedsClientRegistration
+
+export type McpStatusConnected = {
+  status: "connected"
+}
+
+export type McpStatusConnecting = {
+  status: "connecting"
+}
+
+export type McpStatusDisabled = {
+  status: "disabled"
+}
+
+export type McpStatusDisconnected = {
+  status: "disconnected"
+}
+
+export type McpStatusFailed = {
+  error: string
+  status: "failed"
+}
+
+export type McpStatusNeedsAuth = {
+  status: "needs_auth"
+}
+
+export type McpStatusNeedsClientRegistration = {
+  error: string
+  status: "needs_client_registration"
+}
+
+export type MsTeamsChannelConfig = {
+  /**
+   * Microsoft Teams bot app ID
+   */
+  appId?: string
+  /**
+   * Microsoft Teams bot app secret
+   */
+  appSecret?: string
+  /**
+   * Enable Microsoft Teams integration
+   */
+  enabled?: boolean
+  /**
+   * Optional Microsoft Teams webhook host
+   */
+  webhookHost?: string
+  /**
+   * Optional Microsoft Teams webhook path
+   */
+  webhookPath?: string
+  /**
+   * Optional Microsoft Teams webhook port
+   */
+  webhookPort?: string
+}
+
+export type MatrixChannelConfig = {
+  /**
+   * Enable Matrix integration
+   */
+  enabled?: boolean
+  /**
+   * Matrix homeserver URL
+   */
+  homeserver?: string
+  /**
+   * Optional Matrix sync token
+   */
+  since?: string
+  /**
+   * Matrix access token
+   */
+  token?: string
+}
+
+export type MattermostChannelConfig = {
+  /**
+   * Enable Mattermost integration
+   */
+  enabled?: boolean
+  /**
+   * Mattermost bot token
+   */
+  token?: string
+  /**
+   * Mattermost server URL
+   */
+  url?: string
+  /**
+   * Optional Mattermost webhook host
+   */
+  webhookHost?: string
+  /**
+   * Optional Mattermost webhook path
+   */
+  webhookPath?: string
+  /**
+   * Optional Mattermost webhook port
+   */
+  webhookPort?: string
+  /**
+   * Mattermost outgoing webhook token used to verify inbound requests
+   */
+  webhookToken?: string
+}
+
+export type McpLocalConfig = {
+  /**
+   * Command and arguments to run the MCP server
+   */
+  command: Array<string>
+  /**
+   * Enable or disable the MCP server on startup
+   */
+  enabled?: boolean
+  /**
+   * Environment variables to set when running the MCP server
+   */
+  environment?: {
+    [key: string]: string
+  }
+  /**
+   * Timeout in ms for MCP server requests. Defaults to 30000 (30 seconds) if not specified.
+   */
+  timeout?: number
+  /**
+   * Type of MCP server connection
+   */
+  type: "local"
+}
+
+export type McpOAuthConfig = {
+  /**
+   * OAuth client ID. If not provided, dynamic client registration (RFC 7591) will be attempted.
+   */
+  clientId?: string
+  /**
+   * OAuth client secret (if required by the authorization server)
+   */
+  clientSecret?: string
+  /**
+   * OAuth scopes to request during authorization
+   */
+  scope?: string
+}
+
+export type McpRemoteConfig = {
+  /**
+   * Enable or disable the MCP server on startup
+   */
+  enabled?: boolean
+  /**
+   * Headers to send with the request
+   */
+  headers?: {
+    [key: string]: string
+  }
+  /**
+   * OAuth authentication configuration for the MCP server. Set to false to disable OAuth auto-detection.
+   */
+  oauth?: McpOAuthConfig | false
+  /**
+   * Timeout in ms for MCP server requests. Defaults to 30000 (30 seconds) if not specified.
+   */
+  timeout?: number
+  /**
+   * Remote MCP transport. Use streamable-http for standard remote MCP endpoints or sse for SSE-only servers.
+   */
+  transport: "streamable-http" | "sse"
+  /**
+   * Type of MCP server connection
+   */
+  type: "remote"
+  /**
+   * URL of the remote MCP server
+   */
+  url: string
+}
+
+export type McpResource = {
+  client: string
+  description?: string
+  mimeType?: string
+  name: string
+  uri: string
+}
+
+export type MessageAbortedError = {
+  data: {
+    message: string
+  }
+  name: "MessageAbortedError"
+}
+
+export type MessageOutputLengthError = {
+  data: {
+    [key: string]: unknown
+  }
+  name: "MessageOutputLengthError"
 }
 
 export type Model = {
-  id: string
-  providerID: string
   api: {
     id: string
-    url: string
     npm: string
+    url: string
   }
-  name: string
-  family?: string
   capabilities: {
-    temperature: boolean
-    reasoning: boolean
     attachment: boolean
-    toolcall: boolean
     input: {
-      text: boolean
       audio: boolean
       image: boolean
-      video: boolean
       pdf: boolean
-    }
-    output: {
       text: boolean
-      audio: boolean
-      image: boolean
       video: boolean
-      pdf: boolean
     }
     interleaved:
       | boolean
       | {
           field: "reasoning_content" | "reasoning_details"
         }
-  }
-  transform?: {
-    sampling?: {
-      temperature?: number
-      topP?: number
-      topK?: number
+    output: {
+      audio: boolean
+      image: boolean
+      pdf: boolean
+      text: boolean
+      video: boolean
     }
-    options?: {
-      [key: string]: unknown
-    }
+    reasoning: boolean
+    temperature: boolean
+    toolcall: boolean
   }
   cost: {
-    input: number
-    output: number
     cache: {
       read: number
       write: number
     }
     experimentalOver200K?: {
-      input: number
-      output: number
       cache: {
         read: number
         write: number
       }
+      input: number
+      output: number
     }
+    input: number
+    output: number
   }
+  family?: string
+  headers: {
+    [key: string]: string
+  }
+  id: string
   limit: {
     context: number
     input?: number
     output: number
   }
-  status: "alpha" | "beta" | "active"
+  name: string
   options: {
     [key: string]: unknown
   }
-  headers: {
-    [key: string]: string
-  }
+  providerID: string
   release_date: string
+  status: "alpha" | "beta" | "active"
+  transform?: {
+    options?: {
+      [key: string]: unknown
+    }
+    sampling?: {
+      temperature?: number
+      topK?: number
+      topP?: number
+    }
+  }
   variants?: {
     [key: string]: {
       [key: string]: unknown
@@ -1333,936 +2506,94 @@ export type Model = {
   }
 }
 
-export type Provider = {
-  id: string
-  name: string
-  source: "env" | "config" | "custom" | "api"
-  env: Array<string>
-  key?: string
-  options: {
-    [key: string]: unknown
+export type ModelImageInputTooLargeError = {
+  data: {
+    blankMarginCrop?: {
+      height: number
+      originalHeight: number
+      originalWidth: number
+      trimOffsetLeft?: number
+      trimOffsetTop?: number
+      width: number
+    }
+    height: number
+    maxDimension: number
+    maxPixels?: number
+    message: string
+    mime: string
+    originalHeight?: number
+    originalWidth?: number
+    pixels?: number
+    source: string
+    width: number
   }
-  models: {
-    [key: string]: Model
-  }
+  name: "ModelImageInputTooLargeError"
 }
 
-export type ToolIds = Array<string>
-
-export type ToolListItem = {
-  id: string
-  description: string
-  parameters: unknown
+/**
+ * Network transport configuration
+ */
+export type NetworkConfig = {
+  proxy?: NetworkProxyConfig
 }
 
-export type ToolList = Array<ToolListItem>
-
-export type Worktree = {
-  name: string
-  branch: string
-  directory: string
-}
-
-export type WorktreeCreateInput = {
-  name?: string
+/**
+ * HTTP proxy configuration for provider and web research traffic
+ */
+export type NetworkProxyConfig = {
   /**
-   * Additional startup script to run after the project's start command
+   * Route LLM provider HTTP requests through the configured HTTP(S) proxy
    */
-  startCommand?: string
+  llmProvider?: boolean
   /**
-   * When true and `name` is supplied, return the existing worktree only when `isValid()` confirms its `.git` linkage and `git worktree list` registration. Explicit retry flows use this to continue in a verified previous attempt directory. Invalid existing trees continue through the standard reclaim path, so corrupt state is not preserved.
+   * Proxy authentication password
    */
-  reuseIfValid?: boolean
-  taskID?: string
-  goalID?: string
-  runID?: string
-  sessionID?: string
-}
-
-export type Workspace = {
-  id: string
-  branch: string | null
-  projectID: string
-  config: {
-    directory: string
-    type: "worktree"
-  }
-}
-
-export type WorktreeResetInput = {
-  directory: string
-  baseRef?: string
-}
-
-export type McpResource = {
-  name: string
-  uri: string
-  description?: string
-  mimeType?: string
-  client: string
-}
-
-export type PermissionAction = "allow" | "deny" | "ask"
-
-export type PermissionRule = {
-  permission: string
-  pattern: string
-  action: PermissionAction
-}
-
-export type PermissionRuleset = Array<PermissionRule>
-
-export type Session = {
-  id: string
-  slug: string
-  projectID: string
-  directory: string
-  parentID?: string
-  summary?: {
-    additions: number
-    deletions: number
-    files: number
-  }
-  share?: {
-    url: string
-  }
-  title: string
-  version: string
-  kind:
-    | "root"
-    | "orchestrator"
-    | "assistant"
-    | "mission"
-    | "intent-analysis"
-    | "requirements"
-    | "frontend-design"
-    | "goal"
-    | "architect"
-    | "goal-workload-analyst"
-    | "integrity"
-    | "fact-check"
-    | "acceptance"
-    | "executor"
-    | "build"
-    | "explore"
-    | "deep-research"
-    | "frontend-research"
-    | "visual-qa"
-    | "evaluator"
-    | "system"
-  goalID?: string
-  metadata?: {
-    [key: string]: unknown
-  }
-  time: {
-    created: number
-    updated: number
-    compacting?: number
-    archived?: number
-  }
-  permission?: PermissionRuleset
-}
-
-export type ProjectSummary = {
-  id: string
-  name?: string
-  worktree: string
-}
-
-export type GlobalSession = {
-  id: string
-  slug: string
-  projectID: string
-  directory: string
-  parentID?: string
-  summary?: {
-    additions: number
-    deletions: number
-    files: number
-  }
-  share?: {
-    url: string
-  }
-  title: string
-  version: string
-  kind:
-    | "root"
-    | "orchestrator"
-    | "assistant"
-    | "mission"
-    | "intent-analysis"
-    | "requirements"
-    | "frontend-design"
-    | "goal"
-    | "architect"
-    | "goal-workload-analyst"
-    | "integrity"
-    | "fact-check"
-    | "acceptance"
-    | "executor"
-    | "build"
-    | "explore"
-    | "deep-research"
-    | "frontend-research"
-    | "visual-qa"
-    | "evaluator"
-    | "system"
-  goalID?: string
-  metadata?: {
-    [key: string]: unknown
-  }
-  time: {
-    created: number
-    updated: number
-    compacting?: number
-    archived?: number
-  }
-  permission?: PermissionRuleset
-  project: ProjectSummary | null
-}
-
-export type SessionStatus =
-  | {
-      type: "idle"
-    }
-  | {
-      type: "retry"
-      attempt: number
-      message: string
-      next: number
-    }
-  | {
-      type: "streaming"
-    }
-  | {
-      type: "terminal"
-      reason: "completed" | "error" | "aborted" | "artifact_missing"
-      error?: string
-    }
-
-export type SessionConfig = {
-  config: Config
+  password?: string
   /**
-   * Per-key origin tree. Leaf values are 'project' or 'session'.
+   * HTTP(S) proxy URL, e.g. http://127.0.0.1:7890
    */
-  origin: {
-    [key: string]: unknown
-  }
+  url?: string
+  /**
+   * Proxy authentication username
+   */
+  username?: string
+  /**
+   * Route websearch and webfetch HTTP requests through the configured HTTP(S) proxy
+   */
+  webResearch?: boolean
 }
 
-export type OutputFormatText = {
-  type: "text"
+export type NetworkProxyTestRequest = {
+  proxy: NetworkProxyConfig
 }
 
-export type JsonSchema = {
-  [key: string]: unknown
+export type NetworkProxyTestResponse = {
+  durationMs: number
+  message: string
+  ok: boolean
+  status: "connected" | "error"
+  statusCode?: number
+  targetUrl: string
 }
 
-export type OutputFormatJsonSchema = {
-  type: "json_schema"
-  schema: JsonSchema
-  retryCount?: number
+export type OAuth = {
+  access: string
+  accountId?: string
+  expires: number
+  refresh: string
+  type: "oauth"
 }
 
 export type OutputFormat = OutputFormatText | OutputFormatJsonSchema
 
-export type ProviderAuthError = {
-  name: "ProviderAuthError"
-  data: {
-    providerID: string
-    message: string
-  }
+export type OutputFormatJsonSchema = {
+  retryCount?: number
+  schema: JsonSchema
+  type: "json_schema"
 }
 
-export type UnknownError = {
-  name: "UnknownError"
-  data: {
-    message: string
-  }
-}
-
-export type MessageOutputLengthError = {
-  name: "MessageOutputLengthError"
-  data: {
-    [key: string]: unknown
-  }
-}
-
-export type MessageAbortedError = {
-  name: "MessageAbortedError"
-  data: {
-    message: string
-  }
-}
-
-export type StructuredOutputError = {
-  name: "StructuredOutputError"
-  data: {
-    message: string
-    retries: number
-  }
-}
-
-export type StructuredOutputPayloadError = {
-  name: "StructuredOutputPayloadError"
-  data: {
-    message: string
-    reason: string
-  }
-}
-
-export type TerminalToolMissingError = {
-  name: "TerminalToolMissingError"
-  data: {
-    message: string
-    toolName: string
-    retries: number
-  }
-}
-
-export type SnapshotIntegrityError = {
-  name: "SnapshotIntegrityError"
-  data: {
-    message: string
-    operation: string
-    cwd: string
-    worktree: string
-    gitDir: string
-    exitCode?: number
-    stderr?: string
-    stdout?: string
-  }
-}
-
-export type SnapshotEmptyTreeError = {
-  name: "SnapshotEmptyTreeError"
-  data: {
-    message: string
-    operation: string
-    cwd: string
-    worktree: string
-    gitDir: string
-    fileCount?: number
-  }
-}
-
-export type ContextOverflowError = {
-  name: "ContextOverflowError"
-  data: {
-    message: string
-    responseBody?: string
-  }
-}
-
-export type PromptBudgetOverflowError = {
-  name: "PromptBudgetOverflowError"
-  data: {
-    message: string
-    systemTokensEst: number
-    messagePayloadChars: number
-    toolSchemaChars: number
-    compressibleMessageChars: number
-    nonCompressiblePromptChars: number
-    usableBudget: number
-    limit: number
-    toolNames: string
-  }
-}
-
-export type ToolSchemaBudgetError = {
-  name: "ToolSchemaBudgetError"
-  data: {
-    message: string
-    toolSchemaChars: number
-    usableBudget: number
-    ratio: number
-    toolNames: string
-  }
-}
-
-export type ModelImageInputTooLargeError = {
-  name: "ModelImageInputTooLargeError"
-  data: {
-    message: string
-    mime: string
-    source: string
-    width: number
-    height: number
-    pixels?: number
-    maxDimension: number
-    maxPixels?: number
-    originalWidth?: number
-    originalHeight?: number
-    blankMarginCrop?: {
-      originalWidth: number
-      originalHeight: number
-      width: number
-      height: number
-      trimOffsetLeft?: number
-      trimOffsetTop?: number
-    }
-  }
-}
-
-export type ApiError = {
-  name: "APIError"
-  data: {
-    message: string
-    statusCode?: number
-    isRetryable: boolean
-    responseHeaders?: {
-      [key: string]: string
-    }
-    responseBody?: string
-    metadata?: {
-      [key: string]: string
-    }
-  }
-}
-
-export type TokenUsage = {
-  total: number
-  input: number
-  output: number
-  reasoning: number
-  cache: {
-    read: number
-    write: number
-  }
-}
-
-export type VisibleMessage =
-  | {
-      id: string
-      sessionID: string
-      orderKey: string
-      role: "user"
-      time: {
-        created: number
-      }
-      format?: OutputFormat
-      summary?: {
-        title?: string
-        body?: string
-      }
-      agent: string
-      model: {
-        providerID: string
-        modelID: string
-      }
-      system?: string
-      systemMode?: "append_to_agent" | "complete"
-      tools?: {
-        [key: string]: boolean
-      }
-      variant?: string
-      extra?: {
-        [key: string]: unknown
-      }
-    }
-  | {
-      id: string
-      sessionID: string
-      orderKey: string
-      role: "assistant"
-      time: {
-        created: number
-        completed?: number
-      }
-      error?:
-        | ProviderAuthError
-        | UnknownError
-        | MessageOutputLengthError
-        | MessageAbortedError
-        | StructuredOutputError
-        | StructuredOutputPayloadError
-        | TerminalToolMissingError
-        | SnapshotIntegrityError
-        | SnapshotEmptyTreeError
-        | ContextOverflowError
-        | PromptBudgetOverflowError
-        | ToolSchemaBudgetError
-        | ModelImageInputTooLargeError
-        | ApiError
-      parentID: string
-      modelID: string
-      providerID: string
-      agent: string
-      path: {
-        cwd: string
-        root: string
-      }
-      summary?: boolean
-      cost: number
-      tokens: TokenUsage
-      structured?: unknown
-      variant?: string
-      finish?: string
-    }
-
-export type PartErrorIssue = {
-  path: string
-  message: string
-}
-
-export type FilePartSourceText = {
-  value: string
-  start: number
-  end: number
-}
-
-export type FileSource = {
-  text: FilePartSourceText
-  type: "file"
-  path: string
-}
-
-export type Range = {
-  start: {
-    line: number
-    character: number
-  }
-  end: {
-    line: number
-    character: number
-  }
-}
-
-export type SymbolSource = {
-  text: FilePartSourceText
-  type: "symbol"
-  path: string
-  range: Range
-  name: string
-  kind: number
-}
-
-export type ResourceSource = {
-  text: FilePartSourceText
-  type: "resource"
-  clientName: string
-  uri: string
-}
-
-export type FilePartSource = FileSource | SymbolSource | ResourceSource
-
-export type ToolStatePending = {
-  status: "pending"
-  input: unknown
-  raw: string
-  time: {
-    start: number
-  }
-}
-
-export type ToolStateRunning = {
-  status: "running"
-  input: unknown
-  title?: string
-  metadata?: {
-    [key: string]: unknown
-  }
-  time: {
-    start: number
-  }
-}
-
-export type FilePart = {
-  id: string
-  sessionID: string
-  messageID: string
-  orderKey?: string
-  type: "file"
-  mime: string
-  filename?: string
-  url: string
-  source?: FilePartSource
-}
-
-export type ToolStateCompleted = {
-  status: "completed"
-  input: unknown
-  output: string
-  title: string
-  metadata: {
-    [key: string]: unknown
-  }
-  time: {
-    start: number
-    end: number
-    compacted?: number
-  }
-  attachments?: Array<FilePart>
-}
-
-export type ToolFailureCause = {
-  kind: string
-  name: string
-  message: string
-  originSite: string
-  classification: "tool-input-invalid" | "tool-execution" | "llm-activity" | "processor-contract"
-  data?: {
-    [key: string]: unknown
-  }
-}
-
-export type ToolStateError = {
-  status: "error"
-  input: unknown
-  failure: ToolFailureCause
-  metadata?: {
-    [key: string]: unknown
-  }
-  time: {
-    start: number
-    end: number
-  }
-}
-
-export type ToolState = ToolStatePending | ToolStateRunning | ToolStateCompleted | ToolStateError
-
-export type VisibleMessagePart =
-  | {
-      id: string
-      sessionID: string
-      messageID: string
-      orderKey: string
-      type: "text"
-      text: string
-      kind?: "user_content" | "control" | "context"
-      source?: "user" | "system" | "evaluator" | "goal_evidence" | "task_tool"
-      time?: {
-        start: number
-        end?: number
-      }
-      metadata?: {
-        [key: string]: unknown
-      }
-    }
-  | {
-      id: string
-      sessionID: string
-      messageID: string
-      orderKey: string
-      type: "part-error"
-      title: string
-      message: string
-      issues: Array<PartErrorIssue>
-      originalType?: string
-      originalTool?: string
-    }
-  | {
-      id: string
-      sessionID: string
-      messageID: string
-      orderKey: string
-      type: "subtask"
-      prompt: string
-      description: string
-      agent: string
-      model?: {
-        providerID: string
-        modelID: string
-      }
-      command?: string
-    }
-  | {
-      id: string
-      sessionID: string
-      messageID: string
-      orderKey: string
-      type: "reasoning"
-      text: string
-      metadata?: {
-        [key: string]: unknown
-      }
-      time: {
-        start: number
-        end?: number
-      }
-    }
-  | {
-      id: string
-      sessionID: string
-      messageID: string
-      orderKey: string
-      type: "file"
-      mime: string
-      filename?: string
-      url: string
-      source?: FilePartSource
-    }
-  | {
-      id: string
-      sessionID: string
-      messageID: string
-      orderKey: string
-      type: "tool"
-      callID: string
-      tool: string
-      state: ToolState
-      metadata?: {
-        [key: string]: unknown
-      }
-    }
-  | {
-      id: string
-      sessionID: string
-      messageID: string
-      orderKey: string
-      type: "step-start"
-      snapshot?: string
-    }
-  | {
-      id: string
-      sessionID: string
-      messageID: string
-      orderKey: string
-      type: "step-finish"
-      reason: string
-      snapshot?: string
-      cost: number
-      tokens: TokenUsage
-    }
-  | {
-      id: string
-      sessionID: string
-      messageID: string
-      orderKey: string
-      type: "snapshot"
-      snapshot: string
-    }
-  | {
-      id: string
-      sessionID: string
-      messageID: string
-      orderKey: string
-      type: "patch"
-      hash: string
-      files: Array<string>
-    }
-  | {
-      id: string
-      sessionID: string
-      messageID: string
-      orderKey: string
-      type: "agent"
-      name: string
-      source?: {
-        value: string
-        start: number
-        end: number
-      }
-    }
-  | {
-      id: string
-      sessionID: string
-      messageID: string
-      orderKey: string
-      type: "retry"
-      attempt: number
-      error: ApiError
-      time: {
-        created: number
-      }
-    }
-  | {
-      id: string
-      sessionID: string
-      messageID: string
-      orderKey: string
-      type: "compaction"
-      auto: boolean
-      overflow?: boolean
-      tail_start_id?: string
-      anchor_id?: string
-      focus?: string
-    }
-
-export type VisibleMessageWithParts = {
-  info: VisibleMessage
-  parts: Array<VisibleMessagePart>
-}
-
-export type Todo = {
-  /**
-   * Brief description of the task
-   */
-  content: string
-  /**
-   * Current status of the task: pending, in_progress, completed, cancelled
-   */
-  status: string
-  /**
-   * Priority level of the task: high, medium, low
-   */
-  priority: string
-}
-
-export type FileDiff = {
-  file: string
-  before: string
-  after: string
-  additions: number
-  deletions: number
-  status?: "added" | "deleted" | "modified"
-}
-
-export type TextPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  orderKey?: string
+export type OutputFormatText = {
   type: "text"
-  text: string
-  kind?: "user_content" | "control" | "context"
-  source?: "user" | "system" | "evaluator" | "goal_evidence" | "task_tool"
-  time?: {
-    start: number
-    end?: number
-  }
-  metadata?: {
-    [key: string]: unknown
-  }
-}
-
-export type PartErrorPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  orderKey?: string
-  type: "part-error"
-  title: string
-  message: string
-  issues: Array<PartErrorIssue>
-  originalType?: string
-  originalTool?: string
-}
-
-export type SubtaskPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  orderKey?: string
-  type: "subtask"
-  prompt: string
-  description: string
-  agent: string
-  model?: {
-    providerID: string
-    modelID: string
-  }
-  command?: string
-}
-
-export type ReasoningPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  orderKey?: string
-  type: "reasoning"
-  text: string
-  metadata?: {
-    [key: string]: unknown
-  }
-  time: {
-    start: number
-    end?: number
-  }
-}
-
-export type ToolPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  orderKey?: string
-  type: "tool"
-  callID: string
-  tool: string
-  state: ToolState
-  metadata?: {
-    [key: string]: unknown
-  }
-}
-
-export type StepStartPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  orderKey?: string
-  type: "step-start"
-  snapshot?: string
-}
-
-export type StepFinishPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  orderKey?: string
-  type: "step-finish"
-  reason: string
-  snapshot?: string
-  cost: number
-  tokens: TokenUsage
-}
-
-export type SnapshotPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  orderKey?: string
-  type: "snapshot"
-  snapshot: string
-}
-
-export type PatchPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  orderKey?: string
-  type: "patch"
-  hash: string
-  files: Array<string>
-}
-
-export type AgentPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  orderKey?: string
-  type: "agent"
-  name: string
-  source?: {
-    value: string
-    start: number
-    end: number
-  }
-}
-
-export type RetryPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  orderKey?: string
-  type: "retry"
-  attempt: number
-  error: ApiError
-  time: {
-    created: number
-  }
-}
-
-export type CompactionPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  orderKey?: string
-  type: "compaction"
-  auto: boolean
-  overflow?: boolean
-  tail_start_id?: string
-  anchor_id?: string
-  focus?: string
 }
 
 export type Part =
@@ -2280,1717 +2611,1365 @@ export type Part =
   | RetryPart
   | CompactionPart
 
-export type TextPartInput = {
-  id?: string
-  orderKey?: string
-  type: "text"
-  text: string
-  kind?: "user_content" | "control" | "context"
-  source?: "user" | "system" | "evaluator" | "goal_evidence" | "task_tool"
-  time?: {
-    start: number
-    end?: number
-  }
-  metadata?: {
-    [key: string]: unknown
-  }
+export type PartErrorIssue = {
+  message: string
+  path: string
 }
 
-export type FilePartInput = {
-  id?: string
+export type PartErrorPart = {
+  id: string
+  issues: Array<PartErrorIssue>
+  message: string
+  messageID: string
   orderKey?: string
-  type: "file"
-  mime: string
-  filename?: string
-  url: string
-  source?: FilePartSource
+  originalTool?: string
+  originalType?: string
+  sessionID: string
+  title: string
+  type: "part-error"
 }
 
-export type AgentPartInput = {
-  id?: string
+export type PatchPart = {
+  files: Array<string>
+  hash: string
+  id: string
+  messageID: string
   orderKey?: string
-  type: "agent"
-  name: string
-  source?: {
-    value: string
-    start: number
-    end: number
-  }
+  sessionID: string
+  type: "patch"
 }
 
-export type SubtaskPartInput = {
-  id?: string
-  orderKey?: string
-  type: "subtask"
-  prompt: string
-  description: string
-  agent: string
-  model?: {
-    providerID: string
-    modelID: string
-  }
-  command?: string
+export type Path = {
+  config: string
+  directory: string
+  home: string
+  state: string
+  worktree: string
+}
+
+export type PermissionAction = "allow" | "deny" | "ask"
+
+export type PermissionActionConfig = "ask" | "allow" | "deny"
+
+export type PermissionConfig =
+  | {
+      bash?: PermissionRuleConfig
+      doom_loop?: PermissionActionConfig
+      edit?: PermissionRuleConfig
+      external_code_search?: PermissionActionConfig
+      external_directory?: PermissionRuleConfig
+      glob?: PermissionRuleConfig
+      list?: PermissionRuleConfig
+      lsp?: PermissionRuleConfig
+      question?: PermissionActionConfig
+      read?: PermissionRuleConfig
+      search_code?: PermissionRuleConfig
+      skill?: PermissionRuleConfig
+      task?: PermissionRuleConfig
+      todoread?: PermissionActionConfig
+      todowrite?: PermissionActionConfig
+      webfetch?: PermissionActionConfig
+      websearch?: PermissionActionConfig
+      [key: string]: PermissionRuleConfig | PermissionActionConfig | undefined
+    }
+  | PermissionActionConfig
+
+export type PermissionObjectConfig = {
+  [key: string]: PermissionActionConfig
 }
 
 export type PermissionRequest = {
+  always: Array<string>
   id: string
-  sessionID: string
-  permission: string
-  patterns: Array<string>
   metadata: {
     [key: string]: unknown
   }
-  always: Array<string>
+  patterns: Array<string>
+  permission: string
+  sessionID: string
   tool?: {
-    messageID: string
     callID: string
+    messageID: string
   }
 }
 
-export type QuestionOption = {
-  /**
-   * Display text (1-5 words, concise)
-   */
-  label: string
-  /**
-   * Explanation of choice
-   */
-  description: string
+export type PermissionRule = {
+  action: PermissionAction
+  pattern: string
+  permission: string
 }
+
+export type PermissionRuleConfig = PermissionActionConfig | PermissionObjectConfig
+
+export type PermissionRuleset = Array<PermissionRule>
+
+export type Project = {
+  commands?: {
+    /**
+     * Startup script to run when creating a new workspace (worktree)
+     */
+    start?: string
+  }
+  icon?: {
+    color?: string
+    override?: string
+    url?: string
+  }
+  id: string
+  name?: string
+  sandboxes: Array<string>
+  time: {
+    created: number
+    initialized?: number
+    updated: number
+  }
+  worktree: string
+}
+
+export type ProjectDeleteResult = {
+  deletedTaskCount: number
+  directory: string
+  ok: boolean
+  projectID: string
+}
+
+export type ProjectDiscovery = {
+  defaultDirectory: string
+  projects: Array<DiscoveredProject>
+  root: string
+}
+
+export type ProjectInitGitResult = {
+  created: boolean
+  project: Project
+}
+
+export type ProjectSummary = {
+  id: string
+  name?: string
+  worktree: string
+}
+
+export type ProjectWorktree = {
+  branch?: string
+  directory: string
+  goalID?: string
+  name: string
+  removable: boolean
+  status: "primary" | "active" | "expired"
+}
+
+export type PromptBudgetOverflowError = {
+  data: {
+    compressibleMessageChars: number
+    limit: number
+    message: string
+    messagePayloadChars: number
+    nonCompressiblePromptChars: number
+    systemTokensEst: number
+    toolNames: string
+    toolSchemaChars: number
+    usableBudget: number
+  }
+  name: "PromptBudgetOverflowError"
+}
+
+export type Provider = {
+  env: Array<string>
+  id: string
+  key?: string
+  models: {
+    [key: string]: Model
+  }
+  name: string
+  options: {
+    [key: string]: unknown
+  }
+  source: "env" | "config" | "custom" | "api"
+}
+
+export type ProviderAuthAuthorization = {
+  instructions: string
+  method: "auto" | "code"
+  url: string
+}
+
+export type ProviderAuthError = {
+  data: {
+    message: string
+    providerID: string
+  }
+  name: "ProviderAuthError"
+}
+
+export type ProviderAuthMethod = {
+  label: string
+  preferred?: boolean
+  type: "oauth" | "api"
+}
+
+export type ProviderAuthPrompt =
+  | {
+      key: string
+      message: string
+      placeholder?: string
+      type: "text"
+    }
+  | {
+      key: string
+      message: string
+      options: Array<{
+        hint?: string
+        label: string
+        value: string
+      }>
+      selectValue: string
+      type: "select"
+    }
+
+export type ProviderConfig = {
+  api?: string
+  blacklist?: Array<string>
+  env?: Array<string>
+  id?: string
+  models?: {
+    [key: string]: {
+      attachment?: boolean
+      cost?: {
+        cache_read?: number
+        cache_write?: number
+        context_over_200k?: {
+          cache_read?: number
+          cache_write?: number
+          input: number
+          output: number
+        }
+        input: number
+        output: number
+      }
+      experimental?: boolean
+      family?: string
+      headers?: {
+        [key: string]: string
+      }
+      id?: string
+      interleaved?:
+        | true
+        | {
+            field: "reasoning_content" | "reasoning_details"
+          }
+      limit?: {
+        context: number
+        input?: number
+        output: number
+      }
+      modalities?: {
+        input: Array<"text" | "audio" | "image" | "video" | "pdf">
+        output: Array<"text" | "audio" | "image" | "video" | "pdf">
+      }
+      name?: string
+      options?: {
+        [key: string]: unknown
+      }
+      provider?: {
+        api?: string
+        npm?: string
+      }
+      reasoning?: boolean
+      release_date?: string
+      status?: "alpha" | "beta"
+      temperature?: boolean
+      tool_call?: boolean
+      /**
+       * Variant-specific configuration
+       */
+      variants?: {
+        [key: string]: {
+          /**
+           * Disable this variant for the model
+           */
+          disabled?: boolean
+          [key: string]: unknown | boolean | undefined
+        }
+      }
+    }
+  }
+  name?: string
+  npm?: string
+  options?: {
+    apiKey?: string
+    baseURL?: string
+    /**
+     * Enable promptCacheKey for this provider (default false)
+     */
+    setCacheKey?: boolean
+    /**
+     * Timeout in milliseconds for requests to this provider. Default is 300000 (5 minutes). Set to false to disable timeout.
+     */
+    timeout?: number | false
+    [key: string]: unknown | string | boolean | number | false | undefined
+  }
+  whitelist?: Array<string>
+}
+
+export type Pty = {
+  args: Array<string>
+  command: string
+  cwd: string
+  id: string
+  pid: number
+  status: "running" | "exited"
+  title: string
+}
+
+export type QqChannelConfig = {
+  /**
+   * QQ Bot app ID from q.qq.com
+   */
+  appId?: string
+  /**
+   * QQ Bot app secret used for access token and webhook signatures
+   */
+  appSecret?: string
+  /**
+   * Enable QQ Bot channel integration
+   */
+  enabled?: boolean
+  /**
+   * Optional sandbox flag, set to 1 or true to use sandbox.api.sgroup.qq.com
+   */
+  sandbox?: string
+  /**
+   * Optional QQ Bot webhook host
+   */
+  webhookHost?: string
+  /**
+   * Optional QQ Bot webhook path
+   */
+  webhookPath?: string
+  /**
+   * Optional QQ Bot webhook port
+   */
+  webhookPort?: string
+}
+
+export type QuestionAnswer = Array<string>
 
 export type QuestionInfo = {
   /**
-   * Complete question
+   * Allow typing a custom answer
    */
-  question: string
+  custom?: boolean
   /**
    * Very short label (max 30 chars)
    */
   header: string
   /**
-   * Available choices
-   */
-  options: Array<QuestionOption>
-  /**
    * Allow selecting multiple choices
    */
   multiple?: boolean
   /**
-   * Allow typing a custom answer
+   * Available choices
    */
-  custom?: boolean
+  options: Array<QuestionOption>
+  /**
+   * Complete question
+   */
+  question: string
+}
+
+export type QuestionOption = {
+  /**
+   * Explanation of choice
+   */
+  description: string
+  /**
+   * Display text (1-5 words, concise)
+   */
+  label: string
 }
 
 export type QuestionRequest = {
   id: string
-  sessionID: string
   /**
    * Questions to ask
    */
   questions: Array<QuestionInfo>
-  tool?: {
-    messageID: string
-    callID: string
-  }
-}
-
-export type QuestionAnswer = Array<string>
-
-export type ProviderAuthMethod = {
-  type: "oauth" | "api"
-  label: string
-  preferred?: boolean
-}
-
-export type HexinBudget = {
-  maxBudget: number
-  spend: number
-  remaining: number
-  overBudget: boolean
-}
-
-export type HexinBudgetResponse =
-  | {
-      ok: true
-      budget: HexinBudget
-    }
-  | {
-      ok: false
-      error: string
-    }
-
-export type ProviderAuthPrompt =
-  | {
-      type: "text"
-      key: string
-      message: string
-      placeholder?: string
-    }
-  | {
-      type: "select"
-      key: string
-      message: string
-      selectValue: string
-      options: Array<{
-        label: string
-        value: string
-        hint?: string
-      }>
-    }
-
-export type ProviderAuthAuthorization = {
-  url: string
-  method: "auto" | "code"
-  instructions: string
-}
-
-export type CodingCliProfile = {
-  id: string
-  label: string
-  icon: "claude-code" | "codex" | "gemini" | "copilot" | "glm"
-}
-
-export type CodingCliProfileList = {
-  profiles: Array<CodingCliProfile>
-}
-
-export type CodingCliOpenResponse = {
-  ok: boolean
-}
-
-export type CreateQuickNoteResponse = {
-  code: 200
-  data: {
-    note_id: string
-    summary: string
-  }
-}
-
-export type CreateQuickNoteRequest = {
-  content: string
-}
-
-export type AcceptanceDiffSummary = {
-  file: string
-  additions?: number
-  deletions?: number
-  status?: "added" | "deleted" | "modified"
-}
-
-export type TaskMessageUserInfo = {
-  id: string
   sessionID: string
-  orderKey: string
-  role: "user"
+  tool?: {
+    callID: string
+    messageID: string
+  }
+}
+
+export type Range = {
+  end: {
+    character: number
+    line: number
+  }
+  start: {
+    character: number
+    line: number
+  }
+}
+
+export type ReasoningPart = {
+  id: string
+  messageID: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  orderKey?: string
+  sessionID: string
+  text: string
+  time: {
+    end?: number
+    start: number
+  }
+  type: "reasoning"
+}
+
+export type ResourceSource = {
+  clientName: string
+  text: FilePartSourceText
+  type: "resource"
+  uri: string
+}
+
+export type RetryPart = {
+  attempt: number
+  error: ApiError
+  id: string
+  messageID: string
+  orderKey?: string
+  sessionID: string
   time: {
     created: number
   }
-  format?: OutputFormat
-  summary?: {
-    title?: string
-    body?: string
+  type: "retry"
+}
+
+/**
+ * Server configuration for opencorvus serve
+ */
+export type ServerConfig = {
+  /**
+   * Additional domains to allow for CORS
+   */
+  cors?: Array<string>
+  /**
+   * Hostname to listen on
+   */
+  hostname?: string
+  /**
+   * Enable mDNS service discovery
+   */
+  mdns?: boolean
+  /**
+   * Custom domain name for mDNS service
+   */
+  mdnsDomain?: string
+  /**
+   * Port to listen on
+   */
+  port?: number
+  /**
+   * Public base URL used for externally visible attachment links
+   */
+  publicUrl?: string
+}
+
+export type Session = {
+  directory: string
+  goalID?: string
+  id: string
+  kind:
+    | "root"
+    | "orchestrator"
+    | "assistant"
+    | "mission"
+    | "intent-analysis"
+    | "requirements"
+    | "frontend-design"
+    | "goal"
+    | "architect"
+    | "goal-workload-analyst"
+    | "integrity"
+    | "fact-check"
+    | "acceptance"
+    | "executor"
+    | "build"
+    | "explore"
+    | "deep-research"
+    | "frontend-research"
+    | "visual-qa"
+    | "evaluator"
+    | "system"
+  metadata?: {
+    [key: string]: unknown
   }
+  parentID?: string
+  permission?: PermissionRuleset
+  projectID: string
+  share?: {
+    url: string
+  }
+  slug: string
+  summary?: {
+    additions: number
+    deletions: number
+    files: number
+  }
+  time: {
+    archived?: number
+    compacting?: number
+    created: number
+    updated: number
+  }
+  title: string
+  version: string
+}
+
+export type SessionConfig = {
+  config: Config
+  /**
+   * Per-key origin tree. Leaf values are 'project' or 'session'.
+   */
+  origin: {
+    [key: string]: unknown
+  }
+}
+
+export type SessionRuntimeContractMissingError = {
+  data: {
+    [key: string]: unknown
+  }
+  name: "SessionRuntimeContractMissingError"
+}
+
+export type SessionStatus =
+  | {
+      type: "idle"
+    }
+  | {
+      attempt: number
+      message: string
+      next: number
+      type: "retry"
+    }
+  | {
+      type: "streaming"
+    }
+  | {
+      error?: string
+      reason: "completed" | "error" | "aborted" | "artifact_missing"
+      type: "terminal"
+    }
+
+export type SignalChannelConfig = {
+  /**
+   * Signal sender account or number
+   */
+  account?: string
+  /**
+   * Enable Signal integration
+   */
+  enabled?: boolean
+  /**
+   * Signal service URL
+   */
+  service?: string
+}
+
+export type SlackChannelConfig = {
+  /**
+   * Slack app token for Socket Mode
+   */
+  appToken?: string
+  /**
+   * Slack bot token
+   */
+  botToken?: string
+  /**
+   * Enable Slack channel integration
+   */
+  enabled?: boolean
+  /**
+   * Slack signing secret
+   */
+  signingSecret?: string
+}
+
+export type SnapshotEmptyTreeError = {
+  data: {
+    cwd: string
+    fileCount?: number
+    gitDir: string
+    message: string
+    operation: string
+    worktree: string
+  }
+  name: "SnapshotEmptyTreeError"
+}
+
+export type SnapshotIntegrityError = {
+  data: {
+    cwd: string
+    exitCode?: number
+    gitDir: string
+    message: string
+    operation: string
+    stderr?: string
+    stdout?: string
+    worktree: string
+  }
+  name: "SnapshotIntegrityError"
+}
+
+export type SnapshotPart = {
+  id: string
+  messageID: string
+  orderKey?: string
+  sessionID: string
+  snapshot: string
+  type: "snapshot"
+}
+
+export type StepFinishPart = {
+  cost: number
+  id: string
+  messageID: string
+  orderKey?: string
+  reason: string
+  sessionID: string
+  snapshot?: string
+  tokens: TokenUsage
+  type: "step-finish"
+}
+
+export type StepStartPart = {
+  id: string
+  messageID: string
+  orderKey?: string
+  sessionID: string
+  snapshot?: string
+  type: "step-start"
+}
+
+export type StructuredOutputError = {
+  data: {
+    message: string
+    retries: number
+  }
+  name: "StructuredOutputError"
+}
+
+export type StructuredOutputPayloadError = {
+  data: {
+    message: string
+    reason: string
+  }
+  name: "StructuredOutputPayloadError"
+}
+
+export type SubtaskPart = {
   agent: string
-  model: {
-    providerID: string
+  command?: string
+  description: string
+  id: string
+  messageID: string
+  model?: {
     modelID: string
+    providerID: string
+  }
+  orderKey?: string
+  prompt: string
+  sessionID: string
+  type: "subtask"
+}
+
+export type SubtaskPartInput = {
+  agent: string
+  command?: string
+  description: string
+  id?: string
+  model?: {
+    modelID: string
+    providerID: string
+  }
+  orderKey?: string
+  prompt: string
+  type: "subtask"
+}
+
+export type Symbol = {
+  kind: number
+  location: {
+    range: Range
+    uri: string
+  }
+  name: string
+}
+
+export type SymbolSource = {
+  kind: number
+  name: string
+  path: string
+  range: Range
+  text: FilePartSourceText
+  type: "symbol"
+}
+
+export type SystemTerminalOpenResponse = {
+  ok: boolean
+}
+
+export type TaskMessageUserInfo = {
+  agent: string
+  extra?: {
+    [key: string]: unknown
+  }
+  format?: OutputFormat
+  id: string
+  model: {
+    modelID: string
+    providerID: string
+  }
+  orderKey: string
+  role: "user"
+  sessionID: string
+  summary?: {
+    body?: string
+    title?: string
   }
   system?: string
   systemMode?: "append_to_agent" | "complete"
+  time: {
+    created: number
+  }
   tools?: {
     [key: string]: boolean
   }
   variant?: string
-  extra?: {
-    [key: string]: unknown
-  }
 }
 
 export type TaskMessageUserPart = Part & {
   orderKey: string
 }
 
-export type SessionRuntimeContractMissingError = {
-  name: "SessionRuntimeContractMissingError"
+export type TelegramChannelConfig = {
+  /**
+   * Enable Telegram channel integration
+   */
+  enabled?: boolean
+  /**
+   * Telegram bot token
+   */
+  token?: string
+}
+
+/**
+ * Server-owned Overlay terminal configuration.
+ */
+export type TerminalConfig = {
+  /**
+   * Default terminal profile id used by Overlay
+   */
+  default_profile_id?: string
+  /**
+   * Server-owned terminal profiles
+   */
+  profiles?: {
+    [key: string]: TerminalProfileConfig
+  }
+}
+
+export type TerminalProfile = {
+  icon: "terminal" | "powershell" | "command-prompt" | "bash"
+  id: string
+  label: string
+}
+
+export type TerminalProfileConfig = {
+  /**
+   * Executable arguments, not shell-split from a string
+   */
+  args?: Array<string>
+  /**
+   * Executable path or command resolved by the configured environment
+   */
+  command: string
+  /**
+   * Profile-owned terminal environment variables
+   */
+  env?: {
+    [key: string]: string
+  }
+  /**
+   * Terminal profile icon hint surfaced by Overlay launch controls
+   */
+  icon?: "terminal" | "powershell" | "command-prompt" | "bash"
+  /**
+   * Human-readable terminal profile label
+   */
+  label: string
+}
+
+export type TerminalProfileList = {
+  defaultProfileID: string
+  profiles: Array<TerminalProfile>
+}
+
+export type TerminalToolMissingError = {
   data: {
+    message: string
+    retries: number
+    toolName: string
+  }
+  name: "TerminalToolMissingError"
+}
+
+export type TextPart = {
+  id: string
+  kind?: "user_content" | "control" | "context"
+  messageID: string
+  metadata?: {
     [key: string]: unknown
   }
-}
-
-export type Symbol = {
-  name: string
-  kind: number
-  location: {
-    uri: string
-    range: Range
+  orderKey?: string
+  sessionID: string
+  source?: "user" | "system" | "evaluator" | "goal_evidence" | "task_tool"
+  text: string
+  time?: {
+    end?: number
+    start: number
   }
+  type: "text"
 }
 
-export type FileNode = {
-  name: string
-  path: string
-  absolute: string
-  type: "file" | "directory"
-  ignored: boolean
+export type TextPartInput = {
+  id?: string
+  kind?: "user_content" | "control" | "context"
+  metadata?: {
+    [key: string]: unknown
+  }
+  orderKey?: string
+  source?: "user" | "system" | "evaluator" | "goal_evidence" | "task_tool"
+  text: string
+  time?: {
+    end?: number
+    start: number
+  }
+  type: "text"
 }
 
-export type FileContent = {
-  type: "text" | "binary"
+export type Todo = {
+  /**
+   * Brief description of the task
+   */
   content: string
-  diff?: string
-  patch?: {
-    oldFileName: string
-    newFileName: string
-    oldHeader?: string
-    newHeader?: string
-    hunks: Array<{
-      oldStart: number
-      oldLines: number
-      newStart: number
-      newLines: number
-      lines: Array<string>
-    }>
-    index?: string
+  /**
+   * Priority level of the task: high, medium, low
+   */
+  priority: string
+  /**
+   * Current status of the task: pending, in_progress, completed, cancelled
+   */
+  status: string
+}
+
+export type TokenUsage = {
+  cache: {
+    read: number
+    write: number
   }
-  encoding?: "base64"
-  mimeType?: string
+  input: number
+  output: number
+  reasoning: number
+  total: number
 }
 
-export type File = {
-  path: string
-  added: number
-  removed: number
-  status: "added" | "deleted" | "modified"
+export type ToolFailureCause = {
+  classification: "tool-input-invalid" | "tool-execution" | "llm-activity" | "processor-contract"
+  data?: {
+    [key: string]: unknown
+  }
+  kind: string
+  message: string
+  name: string
+  originSite: string
 }
 
-export type McpStatusConnected = {
-  status: "connected"
-}
+export type ToolIds = Array<string>
 
-export type McpStatusDisabled = {
-  status: "disabled"
-}
+export type ToolList = Array<ToolListItem>
 
-export type McpStatusDisconnected = {
-  status: "disconnected"
-}
-
-export type McpStatusConnecting = {
-  status: "connecting"
-}
-
-export type McpStatusFailed = {
-  status: "failed"
-  error: string
-}
-
-export type McpStatusNeedsAuth = {
-  status: "needs_auth"
-}
-
-export type McpStatusNeedsClientRegistration = {
-  status: "needs_client_registration"
-  error: string
-}
-
-export type McpStatus =
-  | McpStatusConnected
-  | McpStatusDisabled
-  | McpStatusDisconnected
-  | McpStatusConnecting
-  | McpStatusFailed
-  | McpStatusNeedsAuth
-  | McpStatusNeedsClientRegistration
-
-export type Pty = {
+export type ToolListItem = {
+  description: string
   id: string
+  parameters: unknown
+}
+
+export type ToolPart = {
+  callID: string
+  id: string
+  messageID: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  orderKey?: string
+  sessionID: string
+  state: ToolState
+  tool: string
+  type: "tool"
+}
+
+export type ToolSchemaBudgetError = {
+  data: {
+    message: string
+    ratio: number
+    toolNames: string
+    toolSchemaChars: number
+    usableBudget: number
+  }
+  name: "ToolSchemaBudgetError"
+}
+
+export type ToolState = ToolStatePending | ToolStateRunning | ToolStateCompleted | ToolStateError
+
+export type ToolStateCompleted = {
+  attachments?: Array<FilePart>
+  input: unknown
+  metadata: {
+    [key: string]: unknown
+  }
+  output: string
+  status: "completed"
+  time: {
+    compacted?: number
+    end: number
+    start: number
+  }
   title: string
-  command: string
-  args: Array<string>
-  cwd: string
-  status: "running" | "exited"
-  pid: number
 }
 
-export type Path = {
-  home: string
-  state: string
-  config: string
-  worktree: string
-  directory: string
+export type ToolStateError = {
+  failure: ToolFailureCause
+  input: unknown
+  metadata?: {
+    [key: string]: unknown
+  }
+  status: "error"
+  time: {
+    end: number
+    start: number
+  }
 }
 
-export type VcsInfo = {
-  initialized: boolean
-  branch?: string
-  commit?: string
-  clean: boolean
-  dirty: boolean
-  staged: number
-  modified: number
-  untracked: number
-  conflicts: number
-  ahead: number
-  behind: number
+export type ToolStatePending = {
+  input: unknown
+  raw: string
+  status: "pending"
+  time: {
+    start: number
+  }
+}
+
+export type ToolStateRunning = {
+  input: unknown
+  metadata?: {
+    [key: string]: unknown
+  }
+  status: "running"
+  time: {
+    start: number
+  }
+  title?: string
+}
+
+export type UnknownError = {
+  data: {
+    message: string
+  }
+  name: "UnknownError"
 }
 
 export type VcsFileDiff = {
-  file: string
-  patch?: string
   additions: number
   deletions: number
+  file: string
+  patch?: string
   status?: "added" | "deleted" | "modified"
 }
 
-export type Command = {
-  name: string
-  description?: string
-  agent?: string
-  model?: string
-  source?: "command" | "mcp" | "skill"
-  template: string
-  subtask?: boolean
-  hints: Array<string>
-}
-
-export type Agent = {
-  name: string
-  description?: string
-  mode: "subagent" | "primary" | "all"
-  native?: boolean
-  hidden?: boolean
-  topP?: number
-  temperature?: number
-  color?: string
-  archetype?: "host" | "worker"
-  skill_mountable?: boolean
-  permission?: PermissionRuleset
-  model?: {
-    modelID: string
-    providerID: string
-  }
-  variant?: string
-  prompt?: string
-  promptAppend?: string
-  options: {
-    [key: string]: unknown
-  }
-  steps?: number
-  tools?: {
-    global?: Array<string>
-    private?: Array<string>
-  }
-}
-
-export type LspStatus = {
-  id: string
-  name: string
-  root: string
-  status: "connected" | "error"
-}
-
-export type FormatterStatus = {
-  name: string
-  extensions: Array<string>
-  enabled: boolean
-}
-
-export type EventInstallationUpdated = {
-  type: "installation.updated"
-  properties: {
-    version: string
-  }
-}
-
-export type EventInstallationUpdateAvailable = {
-  type: "installation.update-available"
-  properties: {
-    version: string
-  }
-}
-
-export type EventProjectUpdated = {
-  type: "project.updated"
-  properties: Project
-}
-
-export type EventServerConnected = {
-  type: "server.connected"
-  properties: {
-    [key: string]: unknown
-  }
-}
-
-export type EventServerHeartbeat = {
-  type: "server.heartbeat"
-  properties: {
-    [key: string]: unknown
-  }
-}
-
-export type EventGlobalDisposed = {
-  type: "global.disposed"
-  properties: {
-    [key: string]: unknown
-  }
-}
-
-export type EventServerInstanceDisposed = {
-  type: "server.instance.disposed"
-  properties: {
-    directory: string
-  }
-}
-
-export type EventSessionStatus = {
-  type: "session.status"
-  properties: {
-    sessionID: string
-    orderKey: string
-    status: SessionStatus
-  }
-}
-
-export type EventSessionIdle = {
-  type: "session.idle"
-  properties: {
-    sessionID: string
-    orderKey: string
-  }
-}
-
-export type EventLspClientDiagnostics = {
-  type: "lsp.client.diagnostics"
-  properties: {
-    serverID: string
-    path: string
-  }
-}
-
-export type EventLspUpdated = {
-  type: "lsp.updated"
-  properties: {
-    [key: string]: unknown
-  }
-}
-
-export type EventTodoUpdated = {
-  type: "todo.updated"
-  properties: {
-    sessionID: string
-    todos: Array<Todo>
-  }
-}
-
-export type EventMessageCreated = {
-  type: "message.created"
-  properties: {
-    info: VisibleMessage
-  }
-}
-
-export type EventMessageUpdated = {
-  type: "message.updated"
-  properties: {
-    info: VisibleMessage
-  }
-}
-
-export type EventMessageRemoved = {
-  type: "message.removed"
-  properties: {
-    sessionID: string
-    messageID: string
-  }
-}
-
-export type EventMessagePartUpdated = {
-  type: "message.part.updated"
-  properties: {
-    orderKey: string
-    part: VisibleMessagePart
-  }
-}
-
-export type EventMessagePartDelta = {
-  type: "message.part.delta"
-  properties: {
-    sessionID: string
-    messageID: string
-    partID: string
-    field: string
-    delta: string
-  }
-}
-
-export type EventMessagePartRemoved = {
-  type: "message.part.removed"
-  properties: {
-    sessionID: string
-    messageID: string
-    partID: string
-  }
-}
-
-export type EventTaskCreated = {
-  type: "task.created"
-  properties: {
-    taskID: string
-    status: "queued" | "active" | "completed" | "failed" | "cancelled"
-    summary: string
-  }
-}
-
-export type EventTaskUpdated = {
-  type: "task.updated"
-  properties: {
-    taskID: string
-    status: "queued" | "active" | "completed" | "failed" | "cancelled"
-    summary: string
-  }
-}
-
-export type EventTaskCompleted = {
-  type: "task.completed"
-  properties: {
-    taskID: string
-    status: "queued" | "active" | "completed" | "failed" | "cancelled"
-    summary: string
-  }
-}
-
-export type EventTaskFailed = {
-  type: "task.failed"
-  properties: {
-    taskID: string
-    status: "queued" | "active" | "completed" | "failed" | "cancelled"
-    summary: string
-    error?: string
-  }
-}
-
-export type EventTaskCancelled = {
-  type: "task.cancelled"
-  properties: {
-    taskID: string
-    status: "queued" | "active" | "completed" | "failed" | "cancelled"
-    summary: string
-  }
-}
-
-export type EventSpecCreated = {
-  type: "spec.created"
-  properties: {
-    taskID: string
-    specID: string
-    summary: string
-  }
-}
-
-export type EventSpecUpdated = {
-  type: "spec.updated"
-  properties: {
-    taskID: string
-    specID: string
-    status: string
-    summary: string
-  }
-}
-
-export type EventSpecApproved = {
-  type: "spec.approved"
-  properties: {
-    taskID: string
-    specID: string
-    summary: string
-  }
-}
-
-export type EventPlanCreated = {
-  type: "plan.created"
-  properties: {
-    taskID: string
-    planID: string
-    summary: string
-  }
-}
-
-export type EventPlanActivated = {
-  type: "plan.activated"
-  properties: {
-    taskID: string
-    planID: string
-    summary: string
-  }
-}
-
-export type EventGoalProgress = {
-  type: "goal.progress"
-  properties: {
-    taskID: string
-    goalRunID: string
-    summary: string
-  }
-}
-
-export type EventGoalRunUpdated = {
-  type: "goal_run.updated"
-  properties: {
-    taskID: string
-    goalRunID: string
-    goalID: string
-    status: string
-    previousStatus: string
-    summary: string
-  }
-}
-
-export type EventGoalPassed = {
-  type: "goal.passed"
-  properties: {
-    taskID: string
-    goalID: string
-    summary: string
-  }
-}
-
-export type EventGoalFailed = {
-  type: "goal.failed"
-  properties: {
-    taskID: string
-    goalID: string
-    summary: string
-  }
-}
-
-export type EventTaskRewound = {
-  type: "task.rewound"
-  properties: {
-    taskID: string
-    cursorTime: number
-    anchorEventID?: string
-    reason?: string
-    rewindCount: number
-    resetWorktree: boolean
-    anchorKind: "cursorTime" | "message"
-  }
-}
-
-export type EventMilestoneActivated = {
-  type: "milestone.activated"
-  properties: {
-    taskID: string
-    milestoneID: string
-    summary: string
-  }
-}
-
-export type EventMilestonePassed = {
-  type: "milestone.passed"
-  properties: {
-    taskID: string
-    milestoneID: string
-    summary: string
-  }
-}
-
-export type EventMilestoneFailed = {
-  type: "milestone.failed"
-  properties: {
-    taskID: string
-    milestoneID: string
-    summary: string
-  }
-}
-
-export type EventRunCreated = {
-  type: "run.created"
-  properties: {
-    taskID: string
-    runID: string
-    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-    summary: string
-  }
-}
-
-export type EventRunUpdated = {
-  type: "run.updated"
-  properties: {
-    taskID: string
-    runID: string
-    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-    summary: string
-  }
-}
-
-export type EventInteractionRequested = {
-  type: "interaction.requested"
-  properties: {
-    taskID: string
-    runID?: string
-    interactionID: string
-    requestType: "permission" | "question"
-    summary: string
-  }
-}
-
-export type EventInteractionResolved = {
-  type: "interaction.resolved"
-  properties: {
-    taskID: string
-    runID?: string
-    interactionID: string
-    status: "pending" | "answered" | "rejected" | "expired"
-    summary: string
-  }
-}
-
-export type EventAcceptanceReady = {
-  type: "acceptance.ready"
-  properties: {
-    taskID: string
-    runID: string
-    acceptanceID: string
-    summary: string
-  }
-}
-
-export type EventEvaluationCompleted = {
-  type: "evaluation.completed"
-  properties: {
-    taskID: string
-    runID: string
-    evaluationID: string
-    status: "pending" | "passed" | "failed" | "inconclusive"
-    verdict: "accepted" | "rejected" | "inconclusive"
-    summary: string
-  }
-}
-
-export type EventTaskMessage = {
-  type: "task.message"
-  properties: {
-    taskID: string
-    kind: "goal" | "plan" | "note"
-    source: string
-    text: string
-    summary: string
-    messageID?: string
-  }
-}
-
-export type EventTaskLifecycle = {
-  type: "task.lifecycle"
-  properties: {
-    taskID: string
-    fact: "server_restart_active_task_recovered" | "terminal_goal_refill_dispatched"
-    status?: "queued" | "active" | "completed" | "failed" | "cancelled"
-    orphaned?: boolean
-    summary: string
-  }
-}
-
-export type EventRunProgress = {
-  type: "run.progress"
-  properties: {
-    taskID: string
-    runID: string
-    type: string
-    summary: string
-    payload?: {
-      [key: string]: unknown
-    }
-  }
-}
-
-export type EventRunOutput = {
-  type: "run.output"
-  properties: {
-    taskID: string
-    runID: string
-    type: string
-    text: string
-  }
-}
-
-export type EventMessageInjected = {
-  type: "message.injected"
-  properties: {
-    taskID: string
-    runID: string
-    text: string
-    summary: string
-  }
-}
-
-export type EventTaskReport = {
-  type: "task.report"
-  properties: {
-    taskID?: string
-    sessionID: string
-    status: "progress" | "need_input" | "done" | "failed"
-    summary: string
-    question?: string
-    next_plan?: string
-    artifacts?: Array<string>
-    error?: string
-  }
-}
-
-export type EventAgentCoordinationRequested = {
-  type: "agent.coordination.requested"
-  properties: {
-    taskID: string
-    requestID: string
-    sessionID: string
-    agent: string
-    blocking: boolean
-    severity: "info" | "blocked" | "failure"
-    summary: string
-  }
-}
-
-export type EventAgentCoordinationResponded = {
-  type: "agent.coordination.responded"
-  properties: {
-    taskID: string
-    requestID: string
-    responseID: string
-    actionID: string
-    sessionID: string
-    decision: "continue" | "cancel_worker" | "redispatch" | "fail_task" | "ask_user"
-    summary: string
-  }
-}
-
-export type EventAgentCoordinationAction = {
-  type: "agent.coordination.action"
-  properties: {
-    taskID: string
-    requestID: string
-    responseID: string
-    actionID: string
-    sessionID: string
-    action: "continue_worker" | "cancel_worker" | "redispatch_worker" | "fail_task" | "ask_user"
-    status: "pending" | "completed" | "failed"
-    summary: string
-  }
-}
-
-export type EventAgentCoordinationCancelled = {
-  type: "agent.coordination.cancelled"
-  properties: {
-    taskID: string
-    requestID: string
-    sessionID: string
-    summary: string
-  }
-}
-
-export type EventWorkflowSelected = {
-  type: "workflow.selected"
-  properties: {
-    taskID: string
-    workflowID: string
-    workflowName: string
-    workflow?: {
-      id: string
-      name: string
-      description: string
-      steps: Array<{
-        id: string
-        tool: string
-        agentRole?: string
-        label: string
-        hint: string
-        scope: "task" | "goal"
-        skippable: boolean
-        after: Array<string>
-        outcomeCapability?: string
-        phases?: Array<{
-          id: string
-          label: string
-          sessionKind: string
-        }>
-      }>
-      goalLoopStepIDs: Array<string>
-    }
-    summary: string
-  }
-}
-
-export type EventWorkflowStepUpdated = {
-  type: "workflow.step.updated"
-  properties: {
-    taskID: string
-    stepID: string
-    goalID?: string
-    status: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
-    summary: string
-  }
-}
-
-export type EventGoalWorkflowProgress = {
-  type: "goal.workflow.progress"
-  properties: {
-    taskID: string
-    goalID: string
-    completedSteps: number
-    totalSteps: number
-    currentStep?: string
-    summary: string
-  }
-}
-
-export type EventReviewStreamStarted = {
-  type: "review.stream.started"
-  properties: {
-    taskID: string
-    reviewID: string
-    phase: "integrity"
-    sessionID?: string
-  }
-}
-
-export type EventReviewStreamProgress = {
-  type: "review.stream.progress"
-  properties: {
-    taskID: string
-    reviewID: string
-    phase: "integrity"
-    currentStep?: "manifest" | "runtime" | "visual" | "specialist" | "agent" | "post_repair"
-    activity?: string
-    reviewerID?: string
-    roundID?: string
-    attempt: number
-    elapsedMs: number
-    summary?: string
-  }
-}
-
-export type EventReviewStreamChunk = {
-  type: "review.stream.chunk"
-  properties: {
-    taskID: string
-    reviewID: string
-    phase: "integrity"
-    kind: "reasoning"
-    delta: string
-    attempt: number
-  }
-}
-
-export type EventAcceptanceEvidenceUpdated = {
-  type: "acceptance.evidence.updated"
-  properties: {
-    taskID: string
-    runID?: string
-    acceptanceID: string
-    manifestID: string
-    iteration: number
-    status: "passed" | "failed"
-    summary: string
-    failedCheckCount: number
-    failedReviewCount: number
-    failureDetails: Array<{
-      kind: "readiness" | "check" | "coverage" | "review"
-      id: string
-      name: string
-      status?: string
-      command?: string
-      exitCode?: number
-      evidence: string
-    }>
-  }
-}
-
-export type FactCheckItem = {
-  claim: string
-  confidence: "low" | "medium" | "high"
-  category: "api" | "library" | "number" | "history" | "path" | "protocol" | "other"
-  source: string
-}
-
-export type EventIntegrityReviewCompleted = {
-  type: "integrity.review.completed"
-  properties: {
-    verdict: "pass" | "concerns" | "needs_correction"
-    summary: string
-    teamReportMarkdown: string
-    checkItems: Array<{
-      id: string
-      reviewerID?: string
-      /**
-       * Review category such as requirement, acceptance-spec, visual-evidence, runtime, code, or integration.
-       */
-      category: string
-      /**
-       * Concrete requirement, acceptance spec, goal, file, route, command, or evidence surface checked.
-       */
-      target: string
-      /**
-       * Concrete falsification question inspected for this check.
-       */
-      question: string
-      status: "passed" | "failed" | "inconclusive"
-      expected: string
-      observed: string
-      evidence: Array<string>
-      requirementIDs?: Array<string>
-      specIDs?: Array<string>
-      targetIDs?: Array<string>
-      userRequestQuotes?: Array<string>
-    }>
-    reviewers: Array<{
-      reviewerID: string
-      /**
-       * Registered Integrity check item IDs this reviewer report summarizes.
-       */
-      checkIDs: Array<string>
-      scope: string
-      verdict: "pass" | "concerns" | "needs_correction"
-      summary: string
-      /**
-       * Required falsification plan for this reviewer report.
-       */
-      investigationPlan: {
-        /**
-         * Concrete original user, REQ, or acceptance-spec promise this reviewer is falsifying.
-         */
-        requestPromise: string
-        /**
-         * Concrete way the scoped promise could fail.
-         */
-        hypothesis: string
-        /**
-         * Evidence this reviewer planned to inspect before passing or filing a finding.
-         */
-        evidencePlan: Array<string>
-        /**
-         * Concrete evidence threshold for pass versus finding.
-         */
-        passCriteria: Array<string>
+export type VcsInfo = {
+  ahead: number
+  behind: number
+  branch?: string
+  clean: boolean
+  commit?: string
+  conflicts: number
+  dirty: boolean
+  initialized: boolean
+  modified: number
+  staged: number
+  untracked: number
+}
+
+export type VisibleMessage =
+  | {
+      agent: string
+      extra?: {
+        [key: string]: unknown
       }
-      drilldowns?: Array<{
-        /**
-         * Registered Integrity check item IDs that support this review row.
-         */
-        checkIDs: Array<string>
-        /**
-         * Evidence tool or inspection category.
-         */
-        kind: string
-        /**
-         * Concrete file, directory, command, evidence section, or artifact inspected.
-         */
-        target: string
-        /**
-         * Why this evidence was inspected for the reviewer scope.
-         */
-        purpose: string
-        /**
-         * What the inspection showed. Do not add finding fields such as affectedSymbols here.
-         */
-        result: string
-      }>
-      coverage?: Array<{
-        /**
-         * Registered Integrity check item IDs that support this review row.
-         */
-        checkIDs: Array<string>
-        /**
-         * Singular coverage anchor such as REQ-1. Do not use requirementIDs here.
-         */
-        requirementID?: string
-        /**
-         * Singular coverage anchor for one acceptance spec id. Do not use specIDs here.
-         */
-        specID?: string
-        /**
-         * Singular literal user-request quote. Do not use userRequestQuotes here.
-         */
-        userRequestQuote?: string
-        /**
-         * Coverage status only. Do not use verdict values such as pass, concerns, or needs_correction here.
-         */
-        status: "covered" | "missing" | "inconclusive"
-        evidence: string
-      }>
-      evidence?: Array<{
-        /**
-         * Registered Integrity check item IDs that support this review row.
-         */
-        checkIDs: Array<string>
-        note: string
-      }>
-      openQuestions?: Array<string>
-    }>
-    coverageAudit?: Array<{
-      /**
-       * Registered Integrity check item IDs that support this coverage audit row.
-       */
-      checkIDs: Array<string>
-      promise: string
-      reviewerIDs?: Array<string>
-      /**
-       * Coverage status only. Do not use verdict values such as pass, concerns, or needs_correction here.
-       */
-      status: "covered" | "missing" | "inconclusive"
-      notes: string
-    }>
-    uninspectedRisks?: Array<{
-      /**
-       * Registered Integrity check item IDs that left this risk uninspected.
-       */
-      checkIDs: Array<string>
-      risk: string
-      reason: string
-      action: "block" | "re-review" | "advisory"
-    }>
-    findings?: Array<{
+      format?: OutputFormat
       id: string
-      /**
-       * Registered Integrity check item IDs that exposed this finding.
-       */
-      checkIDs: Array<string>
-      severity: "blocking" | "advisory"
-      verdictImpact: "pass" | "concerns" | "needs_correction"
-      fingerprint?: string
-      canonicalSymptom?: string
-      title: string
-      description: string
-      evidence: Array<string>
-      targetIDs?: Array<string>
-      requirementIDs?: Array<string>
-      specIDs?: Array<string>
-      userRequestQuotes?: Array<string>
-      filePaths?: Array<string>
-      affectedSymbols?: Array<string>
-      repair: string
-      verify?: Array<string>
-      sourceFindingIDs?: Array<string>
-      priorAttemptRefs?: Array<string>
-      reviewers?: Array<string>
-      consensus?: "agreed" | "disputed" | "unresolved"
-    }>
-    rounds?: Array<{
-      roundID: string
-      prompt: string
-      reviewerIDs: Array<string>
-      outcome: string
-    }>
-    requiredRepairs?: Array<{
-      id: string
-      /**
-       * Registered Integrity check item IDs that require this repair.
-       */
-      checkIDs: Array<string>
-      fingerprint?: string
-      severity?: "blocking" | "advisory"
-      title?: string
-      canonicalSymptom?: string
-      description: string
-      evidence: Array<string>
-      targetIDs?: Array<string>
-      requirementIDs?: Array<string>
-      specIDs?: Array<string>
-      filePaths?: Array<string>
-      affectedSymbols?: Array<string>
-      repair?: string
-      verify?: Array<string>
-      sourceFindingIDs?: Array<string>
-      priorAttemptRefs?: Array<string>
-    }>
-    unresolvedDisagreements?: Array<{
-      id: string
-      /**
-       * Registered Integrity check item IDs involved in this disagreement.
-       */
-      checkIDs: Array<string>
-      description: string
-      reviewerIDs: Array<string>
-      consequence: string
-    }>
-    /**
-     * Every factual claim (API behaviour, library version, third-party protocol, number, path, history) the integrity team has NOT verified via tool calls in this session. Empty when only review judgments or in-session-verified statements.
-     */
-    fact_check_items?: Array<FactCheckItem>
-    taskID: string
-    sessionID: string
-    attempts: number
-  }
-}
-
-export type EventFileEdited = {
-  type: "file.edited"
-  properties: {
-    file: string
-  }
-}
-
-export type EventFileWatcherUpdated = {
-  type: "file.watcher.updated"
-  properties: {
-    file: string
-    event: "add" | "change" | "unlink"
-  }
-}
-
-export type EventMcpToolsChanged = {
-  type: "mcp.tools.changed"
-  properties: {
-    server: string
-  }
-}
-
-export type EventMcpBrowserOpenFailed = {
-  type: "mcp.browser.open.failed"
-  properties: {
-    mcpName: string
-    url: string
-  }
-}
-
-export type EventMcpAuthRequired = {
-  type: "mcp.auth.required"
-  properties: {
-    name: string
-    message: string
-    reason: "needs_auth" | "needs_client_registration"
-  }
-}
-
-export type EventMcpPromptsChanged = {
-  type: "mcp.prompts.changed"
-  properties: {
-    server?: string
-  }
-}
-
-export type EventMcpResourcesChanged = {
-  type: "mcp.resources.changed"
-  properties: {
-    server?: string
-  }
-}
-
-export type EventCommandExecuted = {
-  type: "command.executed"
-  properties: {
-    name: string
-    sessionID: string
-    arguments: string
-    messageID: string
-  }
-}
-
-export type EventVcsBranchUpdated = {
-  type: "vcs.branch.updated"
-  properties: {
-    branch?: string
-  }
-}
-
-export type EventWorktreeReady = {
-  type: "worktree.ready"
-  properties: {
-    name: string
-    branch: string
-  }
-}
-
-export type EventWorktreeFailed = {
-  type: "worktree.failed"
-  properties: {
-    message: string
-  }
-}
-
-export type EventPermissionAsked = {
-  type: "permission.asked"
-  properties: PermissionRequest
-}
-
-export type EventPermissionReplied = {
-  type: "permission.replied"
-  properties: {
-    sessionID: string
-    requestID: string
-    reply: "once" | "always" | "reject"
-    autoReply: boolean
-  }
-}
-
-export type EventSessionError = {
-  type: "session.error"
-  properties: {
-    sessionID: string
-    orderKey: string
-    channel?: string
-    resolvedRole?: string
-    goalID?: string
-    parentSessionID?: string
-    error:
-      | ProviderAuthError
-      | UnknownError
-      | MessageOutputLengthError
-      | MessageAbortedError
-      | StructuredOutputError
-      | StructuredOutputPayloadError
-      | TerminalToolMissingError
-      | SnapshotIntegrityError
-      | SnapshotEmptyTreeError
-      | ContextOverflowError
-      | PromptBudgetOverflowError
-      | ToolSchemaBudgetError
-      | ModelImageInputTooLargeError
-      | ApiError
-    summary?: string
-  }
-}
-
-export type EventTaskQueueCompleted = {
-  type: "task-queue.completed"
-  properties: {
-    queueTaskID: string
-    sessionID: string
-  }
-}
-
-export type EventQuestionAsked = {
-  type: "question.asked"
-  properties: QuestionRequest
-}
-
-export type EventQuestionReplied = {
-  type: "question.replied"
-  properties: {
-    sessionID: string
-    requestID: string
-    answers: Array<QuestionAnswer>
-  }
-}
-
-export type EventQuestionRejected = {
-  type: "question.rejected"
-  properties: {
-    sessionID: string
-    requestID: string
-  }
-}
-
-export type EventTaskPlanUpdated = {
-  type: "task_plan.updated"
-  properties: {
-    task: {
-      id: string
+      model: {
+        modelID: string
+        providerID: string
+      }
+      orderKey: string
+      role: "user"
       sessionID: string
-      goal: string
-      status: string
+      summary?: {
+        body?: string
+        title?: string
+      }
+      system?: string
+      systemMode?: "append_to_agent" | "complete"
+      time: {
+        created: number
+      }
+      tools?: {
+        [key: string]: boolean
+      }
+      variant?: string
     }
-  }
-}
-
-export type EventSessionCompacted = {
-  type: "session.compacted"
-  properties: {
-    sessionID: string
-  }
-}
-
-export type EventSessionCreated = {
-  type: "session.created"
-  properties: {
-    info: Session
-  }
-}
-
-export type EventSessionUpdated = {
-  type: "session.updated"
-  properties: {
-    info: Session
-  }
-}
-
-export type EventSessionDeleted = {
-  type: "session.deleted"
-  properties: {
-    info: Session
-  }
-}
-
-export type EventSessionDiff = {
-  type: "session.diff"
-  properties: {
-    sessionID: string
-    diff: Array<FileDiff>
-  }
-}
-
-export type EventConfigChanged = {
-  type: "config.changed"
-  properties: {
-    sessionID: string
-  }
-}
-
-export type EventGoalReport = {
-  type: "goal.report"
-  properties: {
-    sessionID: string
-    report: {
-      /**
-       * Every file touched in this goal. May be empty if the goal's acceptance was met by reusing a prior attempt's worktree without further edits — the orchestrator cross-checks against the host's actual_changed_files ground truth.
-       */
-      files_changed: Array<{
-        path: string
-        /**
-         * What changed in this file and why. One or two sentences, concrete — not 'updated foo'.
-         */
-        summary: string
-      }>
-      /**
-       * Commands executed to verify the goal (build / test / lint / verify). Empty array is allowed only for goals whose acceptance is entirely rubric/semantic.
-       */
-      checks_run?: Array<{
-        name: string
-        command: string
-        exit_code: number
-        /**
-         * Last relevant lines of stdout/stderr (≤ 2000 chars). Omit when trivially green.
-         */
-        output_excerpt?: string
-      }>
-      /**
-       * The actual implementation plan: what scheme you used, core structure, key APIs, and data flow. Must describe the approach concretely so an evaluator can cross-check the diff against it.
-       */
-      implementation_approach: string
-      /**
-       * Key decisions and why. Each entry names the alternatives considered and the reason the chosen one won. Empty array means the goal required no non-trivial decision.
-       */
-      design_decisions?: Array<{
-        /**
-         * The decision made, stated as a concrete claim.
-         */
-        choice: string
-        /**
-         * Alternatives that were considered and rejected. Empty array if none were weighed.
-         */
-        alternatives?: Array<string>
-        /**
-         * Why this choice won over the alternatives. Must be a real reason, not a restatement of the choice.
-         */
-        reason: string
-      }>
-      /**
-       * Hard blockers hit during execution. Empty when none. A filled array signals the goal did not fully complete.
-       */
-      blockers?: Array<string>
-      /**
-       * Explicit warning for subsequent agents about hidden or remaining work surface, evidence they must read deeper, and whether goal workload analysis or Architect re-sizing should be revisited.
-       */
-      followup_workload_guidance?: string
+  | {
+      agent: string
+      cost: number
+      error?:
+        | ProviderAuthError
+        | UnknownError
+        | MessageOutputLengthError
+        | MessageAbortedError
+        | StructuredOutputError
+        | StructuredOutputPayloadError
+        | TerminalToolMissingError
+        | SnapshotIntegrityError
+        | SnapshotEmptyTreeError
+        | ContextOverflowError
+        | PromptBudgetOverflowError
+        | ToolSchemaBudgetError
+        | ModelImageInputTooLargeError
+        | ApiError
+      finish?: string
+      id: string
+      modelID: string
+      orderKey: string
+      parentID: string
+      path: {
+        cwd: string
+        root: string
+      }
+      providerID: string
+      role: "assistant"
+      sessionID: string
+      structured?: unknown
+      summary?: boolean
+      time: {
+        completed?: number
+        created: number
+      }
+      tokens: TokenUsage
+      variant?: string
     }
-  }
+
+export type VisibleMessagePart =
+  | {
+      id: string
+      kind?: "user_content" | "control" | "context"
+      messageID: string
+      metadata?: {
+        [key: string]: unknown
+      }
+      orderKey: string
+      sessionID: string
+      source?: "user" | "system" | "evaluator" | "goal_evidence" | "task_tool"
+      text: string
+      time?: {
+        end?: number
+        start: number
+      }
+      type: "text"
+    }
+  | {
+      id: string
+      issues: Array<PartErrorIssue>
+      message: string
+      messageID: string
+      orderKey: string
+      originalTool?: string
+      originalType?: string
+      sessionID: string
+      title: string
+      type: "part-error"
+    }
+  | {
+      agent: string
+      command?: string
+      description: string
+      id: string
+      messageID: string
+      model?: {
+        modelID: string
+        providerID: string
+      }
+      orderKey: string
+      prompt: string
+      sessionID: string
+      type: "subtask"
+    }
+  | {
+      id: string
+      messageID: string
+      metadata?: {
+        [key: string]: unknown
+      }
+      orderKey: string
+      sessionID: string
+      text: string
+      time: {
+        end?: number
+        start: number
+      }
+      type: "reasoning"
+    }
+  | {
+      filename?: string
+      id: string
+      messageID: string
+      mime: string
+      orderKey: string
+      sessionID: string
+      source?: FilePartSource
+      type: "file"
+      url: string
+    }
+  | {
+      callID: string
+      id: string
+      messageID: string
+      metadata?: {
+        [key: string]: unknown
+      }
+      orderKey: string
+      sessionID: string
+      state: ToolState
+      tool: string
+      type: "tool"
+    }
+  | {
+      id: string
+      messageID: string
+      orderKey: string
+      sessionID: string
+      snapshot?: string
+      type: "step-start"
+    }
+  | {
+      cost: number
+      id: string
+      messageID: string
+      orderKey: string
+      reason: string
+      sessionID: string
+      snapshot?: string
+      tokens: TokenUsage
+      type: "step-finish"
+    }
+  | {
+      id: string
+      messageID: string
+      orderKey: string
+      sessionID: string
+      snapshot: string
+      type: "snapshot"
+    }
+  | {
+      files: Array<string>
+      hash: string
+      id: string
+      messageID: string
+      orderKey: string
+      sessionID: string
+      type: "patch"
+    }
+  | {
+      id: string
+      messageID: string
+      name: string
+      orderKey: string
+      sessionID: string
+      source?: {
+        end: number
+        start: number
+        value: string
+      }
+      type: "agent"
+    }
+  | {
+      attempt: number
+      error: ApiError
+      id: string
+      messageID: string
+      orderKey: string
+      sessionID: string
+      time: {
+        created: number
+      }
+      type: "retry"
+    }
+  | {
+      anchor_id?: string
+      auto: boolean
+      focus?: string
+      id: string
+      messageID: string
+      orderKey: string
+      overflow?: boolean
+      sessionID: string
+      tail_start_id?: string
+      type: "compaction"
+    }
+
+export type VisibleMessageWithParts = {
+  info: VisibleMessage
+  parts: Array<VisibleMessagePart>
 }
 
-export type EventWorkspaceReady = {
-  type: "workspace.ready"
-  properties: {
-    name: string
-  }
-}
-
-export type EventWorkspaceFailed = {
-  type: "workspace.failed"
-  properties: {
-    message: string
-  }
-}
-
-export type EventPtyCreated = {
-  type: "pty.created"
-  properties: {
-    info: Pty
-  }
-}
-
-export type EventPtyUpdated = {
-  type: "pty.updated"
-  properties: {
-    info: Pty
-  }
-}
-
-export type EventPtyExited = {
-  type: "pty.exited"
-  properties: {
-    id: string
-    exitCode: number | null
-  }
-}
-
-export type EventPtyDeleted = {
-  type: "pty.deleted"
-  properties: {
-    id: string
-  }
-}
-
-export type Event =
-  | EventInstallationUpdated
-  | EventInstallationUpdateAvailable
-  | EventProjectUpdated
-  | EventServerConnected
-  | EventServerHeartbeat
-  | EventGlobalDisposed
-  | EventServerInstanceDisposed
-  | EventSessionStatus
-  | EventSessionIdle
-  | EventLspClientDiagnostics
-  | EventLspUpdated
-  | EventTodoUpdated
-  | EventMessageCreated
-  | EventMessageUpdated
-  | EventMessageRemoved
-  | EventMessagePartUpdated
-  | EventMessagePartDelta
-  | EventMessagePartRemoved
-  | EventTaskCreated
-  | EventTaskUpdated
-  | EventTaskCompleted
-  | EventTaskFailed
-  | EventTaskCancelled
-  | EventSpecCreated
-  | EventSpecUpdated
-  | EventSpecApproved
-  | EventPlanCreated
-  | EventPlanActivated
-  | EventGoalProgress
-  | EventGoalRunUpdated
-  | EventGoalPassed
-  | EventGoalFailed
-  | EventTaskRewound
-  | EventMilestoneActivated
-  | EventMilestonePassed
-  | EventMilestoneFailed
-  | EventRunCreated
-  | EventRunUpdated
-  | EventInteractionRequested
-  | EventInteractionResolved
-  | EventAcceptanceReady
-  | EventEvaluationCompleted
-  | EventTaskMessage
-  | EventTaskLifecycle
-  | EventRunProgress
-  | EventRunOutput
-  | EventMessageInjected
-  | EventTaskReport
-  | EventAgentCoordinationRequested
-  | EventAgentCoordinationResponded
-  | EventAgentCoordinationAction
-  | EventAgentCoordinationCancelled
-  | EventWorkflowSelected
-  | EventWorkflowStepUpdated
-  | EventGoalWorkflowProgress
-  | EventReviewStreamStarted
-  | EventReviewStreamProgress
-  | EventReviewStreamChunk
-  | EventAcceptanceEvidenceUpdated
-  | EventIntegrityReviewCompleted
-  | EventFileEdited
-  | EventFileWatcherUpdated
-  | EventMcpToolsChanged
-  | EventMcpBrowserOpenFailed
-  | EventMcpAuthRequired
-  | EventMcpPromptsChanged
-  | EventMcpResourcesChanged
-  | EventCommandExecuted
-  | EventVcsBranchUpdated
-  | EventWorktreeReady
-  | EventWorktreeFailed
-  | EventPermissionAsked
-  | EventPermissionReplied
-  | EventSessionError
-  | EventTaskQueueCompleted
-  | EventQuestionAsked
-  | EventQuestionReplied
-  | EventQuestionRejected
-  | EventTaskPlanUpdated
-  | EventSessionCompacted
-  | EventSessionCreated
-  | EventSessionUpdated
-  | EventSessionDeleted
-  | EventSessionDiff
-  | EventConfigChanged
-  | EventGoalReport
-  | EventWorkspaceReady
-  | EventWorkspaceFailed
-  | EventPtyCreated
-  | EventPtyUpdated
-  | EventPtyExited
-  | EventPtyDeleted
-
-export type DiscoveredProject = {
-  directory: string
-  name: string
-  marker: string
-}
-
-export type ProjectDiscovery = {
-  root: string
-  defaultDirectory: string
-  projects: Array<DiscoveredProject>
-}
-
-export type GlobalEvent = {
-  directory: string
-  payload: Event
-}
-
-export type OAuth = {
-  type: "oauth"
-  refresh: string
-  access: string
-  expires: number
-  accountId?: string
-}
-
-export type ApiAuth = {
-  type: "api"
-  key: string
+export type WeComChannelConfig = {
+  /**
+   * WeCom agent ID
+   */
+  agentId?: string
+  /**
+   * WeCom corp ID
+   */
+  corpId?: string
+  /**
+   * Enable WeCom integration
+   */
+  enabled?: boolean
+  /**
+   * WeCom receive-message callback EncodingAESKey
+   */
+  encodingAesKey?: string
+  /**
+   * WeCom app secret
+   */
+  secret?: string
+  /**
+   * WeCom receive-message callback token
+   */
+  token?: string
+  /**
+   * Optional WeCom webhook host
+   */
+  webhookHost?: string
+  /**
+   * Optional WeCom webhook path
+   */
+  webhookPath?: string
+  /**
+   * Optional WeCom webhook port
+   */
+  webhookPort?: string
 }
 
 export type WellKnownAuth = {
-  type: "wellknown"
   key: string
   token: string
+  type: "wellknown"
 }
 
-export type Auth = OAuth | ApiAuth | WellKnownAuth
-
-export type ProjectListData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/project"
-}
-
-export type ProjectListResponses = {
+export type WhatsappChannelConfig = {
   /**
-   * List of projects
+   * WhatsApp Meta app secret used to verify webhook signatures
    */
-  200: Array<Project>
+  appSecret?: string
+  /**
+   * Enable WhatsApp channel integration
+   */
+  enabled?: boolean
+  /**
+   * WhatsApp Cloud API phone number ID
+   */
+  numberId?: string
+  /**
+   * WhatsApp Cloud API access token
+   */
+  token?: string
+  /**
+   * WhatsApp webhook verification token
+   */
+  verifyToken?: string
+  /**
+   * Optional WhatsApp webhook host
+   */
+  webhookHost?: string
+  /**
+   * Optional WhatsApp webhook path
+   */
+  webhookPath?: string
+  /**
+   * Optional WhatsApp webhook port
+   */
+  webhookPort?: string
 }
 
-export type ProjectListResponse = ProjectListResponses[keyof ProjectListResponses]
+export type Workspace = {
+  branch: string | null
+  config: {
+    directory: string
+    type: "worktree"
+  }
+  id: string
+  projectID: string
+}
 
-export type ProjectCurrentDeleteData = {
+export type Worktree = {
+  branch: string
+  directory: string
+  name: string
+}
+
+export type WorktreeCreateInput = {
+  goalID?: string
+  name?: string
+  /**
+   * When true and `name` is supplied, return the existing worktree only when `isValid()` confirms its `.git` linkage and `git worktree list` registration. Explicit retry flows use this to continue in a verified previous attempt directory. Invalid existing trees continue through the standard reclaim path, so corrupt state is not preserved.
+   */
+  reuseIfValid?: boolean
+  runID?: string
+  sessionID?: string
+  /**
+   * Additional startup script to run after the project's start command
+   */
+  startCommand?: string
+  taskID?: string
+}
+
+export type WorktreeRemoveInput = {
+  directory: string
+}
+
+export type WorktreeResetInput = {
+  baseRef?: string
+  directory: string
+}
+
+export type AppAgentsData = {
   body?: never
   path?: never
   query?: {
@@ -3999,377 +3978,676 @@ export type ProjectCurrentDeleteData = {
      */
     directory?: string
   }
-  url: "/project/current"
+  url: "/agent"
 }
 
-export type ProjectCurrentDeleteErrors = {
+export type AppAgentsResponses = {
+  /**
+   * List of agents
+   */
+  200: Array<Agent>
+}
+
+export type AppAgentsResponse = AppAgentsResponses[keyof AppAgentsResponses]
+
+export type QuicknoteCreateData = {
+  body?: CreateQuickNoteRequest
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/api/v1/notes"
+}
+
+export type QuicknoteCreateErrors = {
   /**
    * Bad request
    */
   400: BadRequestError
+}
+
+export type QuicknoteCreateError = QuicknoteCreateErrors[keyof QuicknoteCreateErrors]
+
+export type QuicknoteCreateResponses = {
+  /**
+   * QuickNote created successfully
+   */
+  200: CreateQuickNoteResponse
+}
+
+export type QuicknoteCreateResponse = QuicknoteCreateResponses[keyof QuicknoteCreateResponses]
+
+export type AttachmentGetData = {
+  body?: never
+  path: {
+    projectID: string
+    name: string
+  }
+  query?: never
+  url: "/attachment/{projectID}/{name}"
+}
+
+export type AttachmentGetErrors = {
+  /**
+   * Not found
+   */
+  404: unknown
+}
+
+export type AttachmentGetResponses = {
+  /**
+   * Attachment bytes
+   */
+  200: unknown
+}
+
+export type AuthRemoveData = {
+  body?: never
+  path: {
+    providerID: string
+  }
+  query?: never
+  url: "/auth/{providerID}"
+}
+
+export type AuthRemoveErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type AuthRemoveError = AuthRemoveErrors[keyof AuthRemoveErrors]
+
+export type AuthRemoveResponses = {
+  /**
+   * Successfully removed authentication credentials
+   */
+  200: boolean
+}
+
+export type AuthRemoveResponse = AuthRemoveResponses[keyof AuthRemoveResponses]
+
+export type AuthSetData = {
+  body?: Auth
+  path: {
+    providerID: string
+  }
+  query?: never
+  url: "/auth/{providerID}"
+}
+
+export type AuthSetErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type AuthSetError = AuthSetErrors[keyof AuthSetErrors]
+
+export type AuthSetResponses = {
+  /**
+   * Successfully set authentication credentials
+   */
+  200: boolean
+}
+
+export type AuthSetResponse = AuthSetResponses[keyof AuthSetResponses]
+
+export type ChannelListData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/channel"
+}
+
+export type ChannelListResponses = {
+  /**
+   * List of channels
+   */
+  200: Array<{
+    fields: Array<{
+      key: string
+      label: string
+      placeholder?: string
+      type: "boolean" | "text" | "secret"
+    }>
+    id: string
+    name: string
+    runtime_detail: string
+    runtime_status: "disabled" | "unavailable" | "starting" | "running" | "stopped" | "error"
+    status: "disabled" | "configured" | "partial" | "missing"
+    summary: string
+  }>
+}
+
+export type ChannelListResponse = ChannelListResponses[keyof ChannelListResponses]
+
+export type ChannelAttachmentCreateData = {
+  body: {
+    data: string
+    filename: string
+    mime: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/channel/attachment"
+}
+
+export type ChannelAttachmentCreateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ChannelAttachmentCreateError = ChannelAttachmentCreateErrors[keyof ChannelAttachmentCreateErrors]
+
+export type ChannelAttachmentCreateResponses = {
+  /**
+   * Attachment created
+   */
+  200: {
+    expires_at: number
+    filename: string
+    id: string
+    mime: string
+    url: string
+  }
+}
+
+export type ChannelAttachmentCreateResponse = ChannelAttachmentCreateResponses[keyof ChannelAttachmentCreateResponses]
+
+export type ChannelAttachmentGetData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: never
+  url: "/channel/attachment/{id}"
+}
+
+export type ChannelAttachmentGetErrors = {
   /**
    * Not found
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type ChannelAttachmentGetError = ChannelAttachmentGetErrors[keyof ChannelAttachmentGetErrors]
+
+export type ChannelAttachmentGetResponses = {
+  /**
+   * Attachment content
+   */
+  200: Blob | File
+}
+
+export type ChannelAttachmentGetResponse = ChannelAttachmentGetResponses[keyof ChannelAttachmentGetResponses]
+
+export type ChannelMessageData = {
+  body: {
+    allow_create?: boolean
+    allow_session_mutation?: boolean
+    attachments?: Array<{
+      data?: string
+      filename: string
+      mime: string
+      url?: string
+    }>
+    bind?: boolean
+    channel: string
+    executor?: "opencorvus" | "codex" | "claude-code"
+    metadata?: {
+      [key: string]: unknown
+    }
+    model?: string
+    platform:
+      | "slack"
+      | "telegram"
+      | "discord"
+      | "feishu"
+      | "whatsapp"
+      | "googlechat"
+      | "msteams"
+      | "line"
+      | "matrix"
+      | "mattermost"
+      | "signal"
+      | "wecom"
+      | "dingtalk"
+      | "qq"
+    request_id?: string
+    source?: string
+    task_id?: string
+    text: string
+    thread: string
+    user_id?: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/channel/message"
+}
+
+export type ChannelMessageResponses = {
+  /**
+   * Message handled
+   */
+  200: {
+    attachments?: Array<{
+      filename?: string
+      mime: string
+      url: string
+    }>
+    interaction_id?: string
+    kind: "panel_response" | "created" | "message" | "interaction" | "progress" | "task_list" | "cancelled"
+    local_action?:
+      | {
+          executor: "opencorvus" | "codex" | "claude-code"
+          type: "set_executor"
+        }
+      | {
+          taskID: string
+          type: "select_task"
+        }
+      | {
+          sessionID: string
+          type: "select_session"
+        }
+      | {
+          sessionID: string
+          type: "invalidate_session"
+        }
+    message: string
+    session_id?: string
+    task_id?: string
+  }
+}
+
+export type ChannelMessageResponse = ChannelMessageResponses[keyof ChannelMessageResponses]
+
+export type ChannelRuntimeData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/channel/runtime"
+}
+
+export type ChannelRuntimeResponses = {
+  /**
+   * Channel runtime status
+   */
+  200: {
+    channels: Array<string>
+    detail: string
+    logs: Array<string>
+    running: "disabled" | "unavailable" | "starting" | "running" | "stopped" | "error"
+    status: "disabled" | "unavailable" | "starting" | "running" | "stopped" | "error"
+  }
+}
+
+export type ChannelRuntimeResponse = ChannelRuntimeResponses[keyof ChannelRuntimeResponses]
+
+export type ChannelRuntimeRestartData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/channel/runtime/restart"
+}
+
+export type ChannelRuntimeRestartResponses = {
+  /**
+   * Restarted channel runtime
+   */
+  200: {
+    channels: Array<string>
+    detail: string
+    logs: Array<string>
+    running: "disabled" | "unavailable" | "starting" | "running" | "stopped" | "error"
+    status: "disabled" | "unavailable" | "starting" | "running" | "stopped" | "error"
+  }
+}
+
+export type ChannelRuntimeRestartResponse = ChannelRuntimeRestartResponses[keyof ChannelRuntimeRestartResponses]
+
+export type CodingCliOpenData = {
+  body: {
+    cliID: string
+    cwd: string
+    terminalProfileID: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/coding/cli/open"
+}
+
+export type CodingCliOpenErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type CodingCliOpenError = CodingCliOpenErrors[keyof CodingCliOpenErrors]
+
+export type CodingCliOpenResponses = {
+  /**
+   * Coding CLI launch result
+   */
+  200: CodingCliOpenResponse
+}
+
+export type CodingCliOpenResponse2 = CodingCliOpenResponses[keyof CodingCliOpenResponses]
+
+export type CodingCliProfilesData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/coding/cli/profiles"
+}
+
+export type CodingCliProfilesErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type CodingCliProfilesError = CodingCliProfilesErrors[keyof CodingCliProfilesErrors]
+
+export type CodingCliProfilesResponses = {
+  /**
+   * Coding CLI profile list
+   */
+  200: CodingCliProfileList
+}
+
+export type CodingCliProfilesResponse = CodingCliProfilesResponses[keyof CodingCliProfilesResponses]
+
+export type CodingSessionCreateData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/coding/session"
+}
+
+export type CodingSessionCreateResponses = {
+  /**
+   * Coding assistant session
+   */
+  201: {
+    session: Session
+  }
+}
+
+export type CodingSessionCreateResponse = CodingSessionCreateResponses[keyof CodingSessionCreateResponses]
+
+export type CodingSessionDeleteData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/coding/session/{sessionID}"
+}
+
+export type CodingSessionDeleteErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type CodingSessionDeleteError = CodingSessionDeleteErrors[keyof CodingSessionDeleteErrors]
+
+export type CodingSessionDeleteResponses = {
+  /**
+   * Deleted coding assistant session
+   */
+  200: boolean
+}
+
+export type CodingSessionDeleteResponse = CodingSessionDeleteResponses[keyof CodingSessionDeleteResponses]
+
+export type CodingSessionGetData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/coding/session/{sessionID}"
+}
+
+export type CodingSessionGetErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type CodingSessionGetError = CodingSessionGetErrors[keyof CodingSessionGetErrors]
+
+export type CodingSessionGetResponses = {
+  /**
+   * Coding assistant session
+   */
+  200: {
+    session: Session
+  }
+}
+
+export type CodingSessionGetResponse = CodingSessionGetResponses[keyof CodingSessionGetResponses]
+
+export type CodingSessionUpdateData = {
+  body?: {
+    title?: string
+  }
+  path: {
+    sessionID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/coding/session/{sessionID}"
+}
+
+export type CodingSessionUpdateErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type CodingSessionUpdateError = CodingSessionUpdateErrors[keyof CodingSessionUpdateErrors]
+
+export type CodingSessionUpdateResponses = {
+  /**
+   * Updated coding assistant session
+   */
+  200: {
+    session: Session
+  }
+}
+
+export type CodingSessionUpdateResponse = CodingSessionUpdateResponses[keyof CodingSessionUpdateResponses]
+
+export type CodingSessionAbortData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/coding/session/{sessionID}/abort"
+}
+
+export type CodingSessionAbortErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
       }
   /**
    * Conflict
    */
   409:
     | {
+        data: {
+          [key: string]: unknown
+        }
         name: "ReplyTargetEnvelopeMissingError"
+      }
+    | {
         data: {
           [key: string]: unknown
         }
-      }
-    | {
         name: "AgentSessionPendingCoordinationError"
+      }
+    | {
         data: {
           [key: string]: unknown
         }
-      }
-    | {
         name: "TaskCancellationIncompleteError"
-        data: {
-          [key: string]: unknown
-        }
       }
 }
 
-export type ProjectCurrentDeleteError = ProjectCurrentDeleteErrors[keyof ProjectCurrentDeleteErrors]
+export type CodingSessionAbortError = CodingSessionAbortErrors[keyof CodingSessionAbortErrors]
 
-export type ProjectCurrentDeleteResponses = {
+export type CodingSessionAbortResponses = {
   /**
-   * Project deleted
+   * Aborted coding assistant session
    */
-  200: ProjectDeleteResult
+  200: boolean
 }
 
-export type ProjectCurrentDeleteResponse = ProjectCurrentDeleteResponses[keyof ProjectCurrentDeleteResponses]
+export type CodingSessionAbortResponse = CodingSessionAbortResponses[keyof CodingSessionAbortResponses]
 
-export type ProjectCurrentData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/project/current"
-}
-
-export type ProjectCurrentResponses = {
-  /**
-   * Current project information
-   */
-  200: Project
-}
-
-export type ProjectCurrentResponse = ProjectCurrentResponses[keyof ProjectCurrentResponses]
-
-export type ProjectCurrentUpdateData = {
+export type CodingSessionSelectionUpdateData = {
   body: {
-    name: string
-  }
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/project/current"
-}
-
-export type ProjectCurrentUpdateErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type ProjectCurrentUpdateError = ProjectCurrentUpdateErrors[keyof ProjectCurrentUpdateErrors]
-
-export type ProjectCurrentUpdateResponses = {
-  /**
-   * Updated current project information
-   */
-  200: Project
-}
-
-export type ProjectCurrentUpdateResponse = ProjectCurrentUpdateResponses[keyof ProjectCurrentUpdateResponses]
-
-export type ProjectCurrentInitGitData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/project/current/init-git"
-}
-
-export type ProjectCurrentInitGitErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type ProjectCurrentInitGitError = ProjectCurrentInitGitErrors[keyof ProjectCurrentInitGitErrors]
-
-export type ProjectCurrentInitGitResponses = {
-  /**
-   * Git initialized
-   */
-  200: ProjectInitGitResult
-}
-
-export type ProjectCurrentInitGitResponse = ProjectCurrentInitGitResponses[keyof ProjectCurrentInitGitResponses]
-
-export type ProjectCurrentWorktreesDeleteData = {
-  body?: WorktreeRemoveInput
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/project/current/worktrees"
-}
-
-export type ProjectCurrentWorktreesDeleteErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type ProjectCurrentWorktreesDeleteError =
-  ProjectCurrentWorktreesDeleteErrors[keyof ProjectCurrentWorktreesDeleteErrors]
-
-export type ProjectCurrentWorktreesDeleteResponses = {
-  /**
-   * Worktree removed
-   */
-  200: {
-    ok: boolean
-  }
-}
-
-export type ProjectCurrentWorktreesDeleteResponse =
-  ProjectCurrentWorktreesDeleteResponses[keyof ProjectCurrentWorktreesDeleteResponses]
-
-export type ProjectCurrentWorktreesData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/project/current/worktrees"
-}
-
-export type ProjectCurrentWorktreesErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type ProjectCurrentWorktreesError = ProjectCurrentWorktreesErrors[keyof ProjectCurrentWorktreesErrors]
-
-export type ProjectCurrentWorktreesResponses = {
-  /**
-   * Project worktrees
-   */
-  200: Array<ProjectWorktree>
-}
-
-export type ProjectCurrentWorktreesResponse = ProjectCurrentWorktreesResponses[keyof ProjectCurrentWorktreesResponses]
-
-export type ProjectCurrentCleanupCandidatesData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/project/current/cleanup-candidates"
-}
-
-export type ProjectCurrentCleanupCandidatesErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type ProjectCurrentCleanupCandidatesError =
-  ProjectCurrentCleanupCandidatesErrors[keyof ProjectCurrentCleanupCandidatesErrors]
-
-export type ProjectCurrentCleanupCandidatesResponses = {
-  /**
-   * Cleanup candidates
-   */
-  200: {
-    worktreeOrphans: Array<{
-      marker: {
-        taskID: string
-        sessionID: string
-        cwd: string
-        ownerPid: number
-        goalID?: string
-        runID?: string
-        createdAt: number
-        kind: "worktree" | "process"
-      }
-      markerPath: string
-      reason: string
-      worktreeDir?: string
-    }>
-    processOrphans: Array<{
-      marker: {
-        taskID: string
-        sessionID: string
-        cwd: string
-        ownerPid: number
-        goalID?: string
-        runID?: string
-        createdAt: number
-        kind: "worktree" | "process"
-      }
-      markerPath: string
-      reason: string
-      worktreeDir?: string
-    }>
-    worktreeGCCandidates: Array<{
-      projectID: string
-      primaryDir: string
-      directory: string
-    }>
-  }
-}
-
-export type ProjectCurrentCleanupCandidatesResponse =
-  ProjectCurrentCleanupCandidatesResponses[keyof ProjectCurrentCleanupCandidatesResponses]
-
-export type ProjectUpdateData = {
-  body?: {
-    name?: string
-    icon?: {
-      url?: string
-      override?: string
-      color?: string
-    }
-    commands?: {
-      /**
-       * Startup script to run when creating a new workspace (worktree)
-       */
-      start?: string
-    }
+    taskID: string | null
   }
   path: {
-    projectID: string
+    sessionID: string
   }
   query?: {
     /**
@@ -4377,44 +4655,84 @@ export type ProjectUpdateData = {
      */
     directory?: string
   }
-  url: "/project/{projectID}"
+  url: "/coding/session/{sessionID}/selection"
 }
 
-export type ProjectUpdateErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
+export type CodingSessionSelectionUpdateErrors = {
   /**
    * Not found
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
 }
 
-export type ProjectUpdateError = ProjectUpdateErrors[keyof ProjectUpdateErrors]
+export type CodingSessionSelectionUpdateError =
+  CodingSessionSelectionUpdateErrors[keyof CodingSessionSelectionUpdateErrors]
 
-export type ProjectUpdateResponses = {
+export type CodingSessionSelectionUpdateResponses = {
   /**
-   * Updated project information
+   * Coding assistant session with updated selection
    */
-  200: Project
+  200: {
+    session: Session
+  }
 }
 
-export type ProjectUpdateResponse = ProjectUpdateResponses[keyof ProjectUpdateResponses]
+export type CodingSessionSelectionUpdateResponse =
+  CodingSessionSelectionUpdateResponses[keyof CodingSessionSelectionUpdateResponses]
 
-export type TerminalProfilesData = {
+export type CodingSessionsListData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+    limit?: number
+    cursorUpdated?: number
+    cursorSessionID?: string
+    search?: string
+  }
+  url: "/coding/sessions"
+}
+
+export type CodingSessionsListErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type CodingSessionsListError = CodingSessionsListErrors[keyof CodingSessionsListErrors]
+
+export type CodingSessionsListResponses = {
+  /**
+   * Coding assistant sessions
+   */
+  200: {
+    nextCursor?: {
+      sessionID: string
+      updated: number
+    }
+    sessions: Array<Session>
+  }
+}
+
+export type CodingSessionsListResponse = CodingSessionsListResponses[keyof CodingSessionsListResponses]
+
+export type CommandListData = {
   body?: never
   path?: never
   query?: {
@@ -4423,59 +4741,31 @@ export type TerminalProfilesData = {
      */
     directory?: string
   }
-  url: "/terminal/profiles"
+  url: "/command"
 }
 
-export type TerminalProfilesErrors = {
+export type CommandListErrors = {
   /**
-   * Bad request
+   * Command list failed
    */
-  400: BadRequestError
-}
-
-export type TerminalProfilesError = TerminalProfilesErrors[keyof TerminalProfilesErrors]
-
-export type TerminalProfilesResponses = {
-  /**
-   * Terminal profile list
-   */
-  200: TerminalProfileList
-}
-
-export type TerminalProfilesResponse = TerminalProfilesResponses[keyof TerminalProfilesResponses]
-
-export type TerminalOpenData = {
-  body: {
-    cwd: string
-    profileID?: string
+  500: {
+    data: {
+      [key: string]: unknown
+    }
+    name: "UnknownError"
   }
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/terminal/open"
 }
 
-export type TerminalOpenErrors = {
+export type CommandListError = CommandListErrors[keyof CommandListErrors]
+
+export type CommandListResponses = {
   /**
-   * Bad request
+   * List of commands
    */
-  400: BadRequestError
+  200: Array<Command>
 }
 
-export type TerminalOpenError = TerminalOpenErrors[keyof TerminalOpenErrors]
-
-export type TerminalOpenResponses = {
-  /**
-   * Terminal launch result
-   */
-  200: SystemTerminalOpenResponse
-}
-
-export type TerminalOpenResponse = TerminalOpenResponses[keyof TerminalOpenResponses]
+export type CommandListResponse = CommandListResponses[keyof CommandListResponses]
 
 export type ConfigGetData = {
   body?: never
@@ -4530,36 +4820,6 @@ export type ConfigUpdateResponses = {
 
 export type ConfigUpdateResponse = ConfigUpdateResponses[keyof ConfigUpdateResponses]
 
-export type ConfigProxyTestData = {
-  body?: NetworkProxyTestRequest
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/config/proxy/test"
-}
-
-export type ConfigProxyTestErrors = {
-  /**
-   * Proxy test result for an invalid proxy draft
-   */
-  400: NetworkProxyTestResponse
-}
-
-export type ConfigProxyTestError = ConfigProxyTestErrors[keyof ConfigProxyTestErrors]
-
-export type ConfigProxyTestResponses = {
-  /**
-   * Proxy test result
-   */
-  200: NetworkProxyTestResponse
-}
-
-export type ConfigProxyTestResponse = ConfigProxyTestResponses[keyof ConfigProxyTestResponses]
-
 export type ConfigPromptData = {
   body?: never
   path?: never
@@ -4602,17 +4862,17 @@ export type ConfigProvidersResponses = {
    * List of providers
    */
   200: {
-    providers: Array<Provider>
     default: {
       [key: string]: string
     }
+    providers: Array<Provider>
   }
 }
 
 export type ConfigProvidersResponse = ConfigProvidersResponses[keyof ConfigProvidersResponses]
 
-export type ChannelListData = {
-  body?: never
+export type ConfigProxyTestData = {
+  body?: NetworkProxyTestRequest
   path?: never
   query?: {
     /**
@@ -4620,113 +4880,40 @@ export type ChannelListData = {
      */
     directory?: string
   }
-  url: "/channel"
+  url: "/config/proxy/test"
 }
 
-export type ChannelListResponses = {
+export type ConfigProxyTestErrors = {
   /**
-   * List of channels
+   * Proxy test result for an invalid proxy draft
    */
-  200: Array<{
-    id: string
-    name: string
-    status: "disabled" | "configured" | "partial" | "missing"
-    summary: string
-    runtime_status: "disabled" | "unavailable" | "starting" | "running" | "stopped" | "error"
-    runtime_detail: string
-    fields: Array<{
-      key: string
-      label: string
-      type: "boolean" | "text" | "secret"
-      placeholder?: string
-    }>
-  }>
+  400: NetworkProxyTestResponse
 }
 
-export type ChannelListResponse = ChannelListResponses[keyof ChannelListResponses]
+export type ConfigProxyTestError = ConfigProxyTestErrors[keyof ConfigProxyTestErrors]
 
-export type ChannelAttachmentCreateData = {
-  body: {
-    filename: string
-    mime: string
-    data: string
-  }
+export type ConfigProxyTestResponses = {
+  /**
+   * Proxy test result
+   */
+  200: NetworkProxyTestResponse
+}
+
+export type ConfigProxyTestResponse = ConfigProxyTestResponses[keyof ConfigProxyTestResponses]
+
+export type ControlTimelineData = {
+  body?: never
   path?: never
   query?: {
     /**
      * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
      */
     directory?: string
-  }
-  url: "/channel/attachment"
-}
-
-export type ChannelAttachmentCreateErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type ChannelAttachmentCreateError = ChannelAttachmentCreateErrors[keyof ChannelAttachmentCreateErrors]
-
-export type ChannelAttachmentCreateResponses = {
-  /**
-   * Attachment created
-   */
-  200: {
-    id: string
-    url: string
-    mime: string
-    filename: string
-    expires_at: number
-  }
-}
-
-export type ChannelAttachmentCreateResponse = ChannelAttachmentCreateResponses[keyof ChannelAttachmentCreateResponses]
-
-export type ChannelAttachmentGetData = {
-  body?: never
-  path: {
-    id: string
-  }
-  query?: never
-  url: "/channel/attachment/{id}"
-}
-
-export type ChannelAttachmentGetErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type ChannelAttachmentGetError = ChannelAttachmentGetErrors[keyof ChannelAttachmentGetErrors]
-
-export type ChannelAttachmentGetResponses = {
-  /**
-   * Attachment content
-   */
-  200: Blob | File
-}
-
-export type ChannelAttachmentGetResponse = ChannelAttachmentGetResponses[keyof ChannelAttachmentGetResponses]
-
-export type ChannelMessageData = {
-  body: {
-    platform:
+    taskID?: string
+    sessionID?: string
+    surface?:
+      | "panel"
+      | "gateway"
       | "slack"
       | "telegram"
       | "discord"
@@ -4741,76 +4928,48 @@ export type ChannelMessageData = {
       | "wecom"
       | "dingtalk"
       | "qq"
-    channel: string
-    thread: string
-    text: string
-    task_id?: string
-    user_id?: string
-    request_id?: string
-    source?: string
-    executor?: "opencorvus" | "codex" | "claude-code"
-    model?: string
-    allow_create?: boolean
-    allow_session_mutation?: boolean
-    bind?: boolean
-    attachments?: Array<{
-      filename: string
-      mime: string
-      url?: string
-      data?: string
-    }>
-    metadata?: {
-      [key: string]: unknown
+  }
+  url: "/control/timeline"
+}
+
+export type ControlTimelineResponses = {
+  /**
+   * Control timeline
+   */
+  200: Array<{
+    info: {
+      id: string
+      orderKey: string
+      role: "user" | "assistant" | "system"
+      sessionID?: string
+      source?: string
+      surface: string
+      taskID?: string
+      time: {
+        created: number
+        updated: number
+      }
     }
-  }
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/channel/message"
+    parts: Array<
+      | {
+          id: string
+          text: string
+          type: "text"
+        }
+      | {
+          filename?: string
+          id: string
+          mime: string
+          type: "file"
+          url: string
+        }
+    >
+  }>
 }
 
-export type ChannelMessageResponses = {
-  /**
-   * Message handled
-   */
-  200: {
-    kind: "panel_response" | "created" | "message" | "interaction" | "progress" | "task_list" | "cancelled"
-    message: string
-    task_id?: string
-    interaction_id?: string
-    session_id?: string
-    local_action?:
-      | {
-          type: "set_executor"
-          executor: "opencorvus" | "codex" | "claude-code"
-        }
-      | {
-          type: "select_task"
-          taskID: string
-        }
-      | {
-          type: "select_session"
-          sessionID: string
-        }
-      | {
-          type: "invalidate_session"
-          sessionID: string
-        }
-    attachments?: Array<{
-      mime: string
-      url: string
-      filename?: string
-    }>
-  }
-}
+export type ControlTimelineResponse = ControlTimelineResponses[keyof ControlTimelineResponses]
 
-export type ChannelMessageResponse = ChannelMessageResponses[keyof ChannelMessageResponses]
-
-export type ChannelRuntimeData = {
+export type EventSubscribeData = {
   body?: never
   path?: never
   query?: {
@@ -4819,50 +4978,17 @@ export type ChannelRuntimeData = {
      */
     directory?: string
   }
-  url: "/channel/runtime"
+  url: "/event"
 }
 
-export type ChannelRuntimeResponses = {
+export type EventSubscribeResponses = {
   /**
-   * Channel runtime status
+   * Event stream
    */
-  200: {
-    status: "disabled" | "unavailable" | "starting" | "running" | "stopped" | "error"
-    detail: string
-    channels: Array<string>
-    logs: Array<string>
-    running: "disabled" | "unavailable" | "starting" | "running" | "stopped" | "error"
-  }
+  200: Event
 }
 
-export type ChannelRuntimeResponse = ChannelRuntimeResponses[keyof ChannelRuntimeResponses]
-
-export type ChannelRuntimeRestartData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/channel/runtime/restart"
-}
-
-export type ChannelRuntimeRestartResponses = {
-  /**
-   * Restarted channel runtime
-   */
-  200: {
-    status: "disabled" | "unavailable" | "starting" | "running" | "stopped" | "error"
-    detail: string
-    channels: Array<string>
-    logs: Array<string>
-    running: "disabled" | "unavailable" | "starting" | "running" | "stopped" | "error"
-  }
-}
-
-export type ChannelRuntimeRestartResponse = ChannelRuntimeRestartResponses[keyof ChannelRuntimeRestartResponses]
+export type EventSubscribeResponse = EventSubscribeResponses[keyof EventSubscribeResponses]
 
 export type ExecutorListData = {
   body?: never
@@ -4881,19 +5007,19 @@ export type ExecutorListResponses = {
    * Executor status
    */
   200: Array<{
-    id: "opencorvus" | "codex" | "claude-code"
-    label: string
-    registered: boolean
+    detail: string
     discovered: boolean
-    selectable: boolean
-    protocol: string
-    protocolVersion: string
-    transport: "inproc" | "stdio" | "ws" | "http"
     features: {
       [key: string]: unknown
     }
+    id: "opencorvus" | "codex" | "claude-code"
+    label: string
+    model?: string
+    protocol: string
+    protocolVersion: string
+    registered: boolean
+    selectable: boolean
     tools: Array<{
-      name: string
       description: string
       inputSchema?: {
         [key: string]: unknown
@@ -4901,10 +5027,10 @@ export type ExecutorListResponses = {
       metadata?: {
         [key: string]: unknown
       }
+      name: string
     }>
-    detail: string
+    transport: "inproc" | "stdio" | "ws" | "http"
     version?: string
-    model?: string
   }>
 }
 
@@ -4964,16 +5090,16 @@ export type ExecutorSetModelErrors = {
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
 }
 
@@ -4990,7 +5116,160 @@ export type ExecutorSetModelResponses = {
 
 export type ExecutorSetModelResponse = ExecutorSetModelResponses[keyof ExecutorSetModelResponses]
 
-export type ToolIdsData = {
+export type ExperimentalEventscheduleListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/experimental/event-schedule"
+}
+
+export type ExperimentalEventscheduleListErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalEventscheduleListError =
+  ExperimentalEventscheduleListErrors[keyof ExperimentalEventscheduleListErrors]
+
+export type ExperimentalEventscheduleListResponses = {
+  /**
+   * Event-triggered tasks
+   */
+  200: Array<{
+    cooldownMs: number
+    enabled: boolean
+    eventType: string
+    id: string
+    lastEvent: string | null
+    lastRun: number | null
+    match: {
+      [key: string]: string | number | boolean
+    }
+    name: string
+    oneShot: boolean
+    prompt: string
+  }>
+}
+
+export type ExperimentalEventscheduleListResponse =
+  ExperimentalEventscheduleListResponses[keyof ExperimentalEventscheduleListResponses]
+
+export type ExperimentalEventscheduleCreateData = {
+  body: {
+    cooldownMs?: number
+    eventType: string
+    match?: {
+      [key: string]: string | number | boolean
+    }
+    name: string
+    oneShot?: boolean
+    prompt: string
+    sessionId?: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/experimental/event-schedule"
+}
+
+export type ExperimentalEventscheduleCreateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type ExperimentalEventscheduleCreateError =
+  ExperimentalEventscheduleCreateErrors[keyof ExperimentalEventscheduleCreateErrors]
+
+export type ExperimentalEventscheduleCreateResponses = {
+  /**
+   * Created event task
+   */
+  200: {
+    eventType: string
+    id: string
+    name: string
+  }
+}
+
+export type ExperimentalEventscheduleCreateResponse =
+  ExperimentalEventscheduleCreateResponses[keyof ExperimentalEventscheduleCreateResponses]
+
+export type ExperimentalEventscheduleDeleteData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/experimental/event-schedule/{id}"
+}
+
+export type ExperimentalEventscheduleDeleteErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type ExperimentalEventscheduleDeleteError =
+  ExperimentalEventscheduleDeleteErrors[keyof ExperimentalEventscheduleDeleteErrors]
+
+export type ExperimentalEventscheduleDeleteResponses = {
+  /**
+   * Cancelled
+   */
+  200: {
+    ok: boolean
+  }
+}
+
+export type ExperimentalEventscheduleDeleteResponse =
+  ExperimentalEventscheduleDeleteResponses[keyof ExperimentalEventscheduleDeleteResponses]
+
+export type ExperimentalResourceListData = {
   body?: never
   path?: never
   query?: {
@@ -4999,26 +5278,274 @@ export type ToolIdsData = {
      */
     directory?: string
   }
-  url: "/experimental/tool/ids"
+  url: "/experimental/resource"
 }
 
-export type ToolIdsErrors = {
+export type ExperimentalResourceListErrors = {
+  /**
+   * MCP resources failed
+   */
+  500: {
+    data: {
+      [key: string]: unknown
+    }
+    name: "UnknownError"
+  }
+}
+
+export type ExperimentalResourceListError = ExperimentalResourceListErrors[keyof ExperimentalResourceListErrors]
+
+export type ExperimentalResourceListResponses = {
+  /**
+   * MCP resources
+   */
+  200: {
+    [key: string]: McpResource
+  }
+}
+
+export type ExperimentalResourceListResponse =
+  ExperimentalResourceListResponses[keyof ExperimentalResourceListResponses]
+
+export type ExperimentalScheduleListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/experimental/schedule"
+}
+
+export type ExperimentalScheduleListErrors = {
   /**
    * Bad request
    */
   400: BadRequestError
 }
 
-export type ToolIdsError = ToolIdsErrors[keyof ToolIdsErrors]
+export type ExperimentalScheduleListError = ExperimentalScheduleListErrors[keyof ExperimentalScheduleListErrors]
 
-export type ToolIdsResponses = {
+export type ExperimentalScheduleListResponses = {
   /**
-   * Tool IDs
+   * Scheduled tasks
    */
-  200: ToolIds
+  200: Array<{
+    enabled: boolean
+    expression: string
+    failureCount: number
+    id: string
+    lastError: string | null
+    lastRun: number | null
+    name: string
+    nextRun: number
+    oneShot: boolean
+    prompt: string
+  }>
 }
 
-export type ToolIdsResponse = ToolIdsResponses[keyof ToolIdsResponses]
+export type ExperimentalScheduleListResponse =
+  ExperimentalScheduleListResponses[keyof ExperimentalScheduleListResponses]
+
+export type ExperimentalScheduleCreateData = {
+  body: {
+    expression: string
+    name: string
+    oneShot?: boolean
+    prompt: string
+    sessionId?: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/experimental/schedule"
+}
+
+export type ExperimentalScheduleCreateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type ExperimentalScheduleCreateError = ExperimentalScheduleCreateErrors[keyof ExperimentalScheduleCreateErrors]
+
+export type ExperimentalScheduleCreateResponses = {
+  /**
+   * Created task
+   */
+  200: {
+    id: string
+    name: string
+    nextRun: number
+  }
+}
+
+export type ExperimentalScheduleCreateResponse =
+  ExperimentalScheduleCreateResponses[keyof ExperimentalScheduleCreateResponses]
+
+export type ExperimentalScheduleDeleteData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/experimental/schedule/{id}"
+}
+
+export type ExperimentalScheduleDeleteErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type ExperimentalScheduleDeleteError = ExperimentalScheduleDeleteErrors[keyof ExperimentalScheduleDeleteErrors]
+
+export type ExperimentalScheduleDeleteResponses = {
+  /**
+   * Cancelled
+   */
+  200: {
+    ok: boolean
+  }
+}
+
+export type ExperimentalScheduleDeleteResponse =
+  ExperimentalScheduleDeleteResponses[keyof ExperimentalScheduleDeleteResponses]
+
+export type ExperimentalScratchpadGetData = {
+  body?: never
+  path?: never
+  query: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+    sessionId: string
+  }
+  url: "/experimental/scratchpad"
+}
+
+export type ExperimentalScratchpadGetErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type ExperimentalScratchpadGetError = ExperimentalScratchpadGetErrors[keyof ExperimentalScratchpadGetErrors]
+
+export type ExperimentalScratchpadGetResponses = {
+  /**
+   * Scratchpad
+   */
+  200: {
+    content: string
+  }
+}
+
+export type ExperimentalScratchpadGetResponse =
+  ExperimentalScratchpadGetResponses[keyof ExperimentalScratchpadGetResponses]
+
+export type ExperimentalTaskplanListData = {
+  body?: never
+  path?: never
+  query: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+    sessionId: string
+  }
+  url: "/experimental/task-plan"
+}
+
+export type ExperimentalTaskplanListErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type ExperimentalTaskplanListError = ExperimentalTaskplanListErrors[keyof ExperimentalTaskplanListErrors]
+
+export type ExperimentalTaskplanListResponses = {
+  /**
+   * Tasks
+   */
+  200: Array<{
+    goal: string
+    id: string
+    parentID: string | null
+    progressPct: number
+    status: string
+  }>
+}
+
+export type ExperimentalTaskplanListResponse =
+  ExperimentalTaskplanListResponses[keyof ExperimentalTaskplanListResponses]
 
 export type ToolListData = {
   body?: never
@@ -5052,6 +5579,148 @@ export type ToolListResponses = {
 
 export type ToolListResponse = ToolListResponses[keyof ToolListResponses]
 
+export type ToolIdsData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/experimental/tool/ids"
+}
+
+export type ToolIdsErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ToolIdsError = ToolIdsErrors[keyof ToolIdsErrors]
+
+export type ToolIdsResponses = {
+  /**
+   * Tool IDs
+   */
+  200: ToolIds
+}
+
+export type ToolIdsResponse = ToolIdsResponses[keyof ToolIdsResponses]
+
+export type ExperimentalWorkspaceListData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/experimental/workspace"
+}
+
+export type ExperimentalWorkspaceListResponses = {
+  /**
+   * Workspaces
+   */
+  200: Array<Workspace>
+}
+
+export type ExperimentalWorkspaceListResponse =
+  ExperimentalWorkspaceListResponses[keyof ExperimentalWorkspaceListResponses]
+
+export type ExperimentalWorkspaceRemoveData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/experimental/workspace/{id}"
+}
+
+export type ExperimentalWorkspaceRemoveErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type ExperimentalWorkspaceRemoveError =
+  ExperimentalWorkspaceRemoveErrors[keyof ExperimentalWorkspaceRemoveErrors]
+
+export type ExperimentalWorkspaceRemoveResponses = {
+  /**
+   * Workspace removed
+   */
+  200: Workspace
+}
+
+export type ExperimentalWorkspaceRemoveResponse =
+  ExperimentalWorkspaceRemoveResponses[keyof ExperimentalWorkspaceRemoveResponses]
+
+export type ExperimentalWorkspaceCreateData = {
+  body: {
+    branch: string | null
+    config: {
+      directory: string
+      type: "worktree"
+    }
+  }
+  path: {
+    id: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/experimental/workspace/{id}"
+}
+
+export type ExperimentalWorkspaceCreateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalWorkspaceCreateError =
+  ExperimentalWorkspaceCreateErrors[keyof ExperimentalWorkspaceCreateErrors]
+
+export type ExperimentalWorkspaceCreateResponses = {
+  /**
+   * Workspace created
+   */
+  200: Workspace
+}
+
+export type ExperimentalWorkspaceCreateResponse =
+  ExperimentalWorkspaceCreateResponses[keyof ExperimentalWorkspaceCreateResponses]
+
 export type WorktreeRemoveData = {
   body?: WorktreeRemoveInput
   path?: never
@@ -5074,16 +5743,16 @@ export type WorktreeRemoveErrors = {
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
 }
 
@@ -5149,118 +5818,6 @@ export type WorktreeCreateResponses = {
 
 export type WorktreeCreateResponse = WorktreeCreateResponses[keyof WorktreeCreateResponses]
 
-export type ExperimentalWorkspaceRemoveData = {
-  body?: never
-  path: {
-    id: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/experimental/workspace/{id}"
-}
-
-export type ExperimentalWorkspaceRemoveErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type ExperimentalWorkspaceRemoveError =
-  ExperimentalWorkspaceRemoveErrors[keyof ExperimentalWorkspaceRemoveErrors]
-
-export type ExperimentalWorkspaceRemoveResponses = {
-  /**
-   * Workspace removed
-   */
-  200: Workspace
-}
-
-export type ExperimentalWorkspaceRemoveResponse =
-  ExperimentalWorkspaceRemoveResponses[keyof ExperimentalWorkspaceRemoveResponses]
-
-export type ExperimentalWorkspaceCreateData = {
-  body: {
-    branch: string | null
-    config: {
-      directory: string
-      type: "worktree"
-    }
-  }
-  path: {
-    id: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/experimental/workspace/{id}"
-}
-
-export type ExperimentalWorkspaceCreateErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type ExperimentalWorkspaceCreateError =
-  ExperimentalWorkspaceCreateErrors[keyof ExperimentalWorkspaceCreateErrors]
-
-export type ExperimentalWorkspaceCreateResponses = {
-  /**
-   * Workspace created
-   */
-  200: Workspace
-}
-
-export type ExperimentalWorkspaceCreateResponse =
-  ExperimentalWorkspaceCreateResponses[keyof ExperimentalWorkspaceCreateResponses]
-
-export type ExperimentalWorkspaceListData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/experimental/workspace"
-}
-
-export type ExperimentalWorkspaceListResponses = {
-  /**
-   * Workspaces
-   */
-  200: Array<Workspace>
-}
-
-export type ExperimentalWorkspaceListResponse =
-  ExperimentalWorkspaceListResponses[keyof ExperimentalWorkspaceListResponses]
-
 export type WorktreeResetData = {
   body?: WorktreeResetInput
   path?: never
@@ -5283,16 +5840,16 @@ export type WorktreeResetErrors = {
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
 }
 
@@ -5307,64 +5864,23 @@ export type WorktreeResetResponses = {
 
 export type WorktreeResetResponse = WorktreeResetResponses[keyof WorktreeResetResponses]
 
-export type ExperimentalScheduleListData = {
+export type ExpertSquadCatalogData = {
   body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/experimental/schedule"
-}
-
-export type ExperimentalScheduleListErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type ExperimentalScheduleListError = ExperimentalScheduleListErrors[keyof ExperimentalScheduleListErrors]
-
-export type ExperimentalScheduleListResponses = {
-  /**
-   * Scheduled tasks
-   */
-  200: Array<{
-    id: string
-    name: string
-    expression: string
-    prompt: string
-    enabled: boolean
-    oneShot: boolean
-    lastRun: number | null
-    nextRun: number
-    failureCount: number
-    lastError: string | null
-  }>
-}
-
-export type ExperimentalScheduleListResponse =
-  ExperimentalScheduleListResponses[keyof ExperimentalScheduleListResponses]
-
-export type ExperimentalScheduleCreateData = {
-  body: {
-    name: string
-    expression: string
-    prompt: string
-    sessionId?: string
-    oneShot?: boolean
-  }
   path?: never
   query?: {
     /**
      * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
      */
     directory?: string
+    /**
+     * Optional root or child session id for session-effective expert-squad catalog view
+     */
+    sessionID?: string
   }
-  url: "/experimental/schedule"
+  url: "/expert-squad/catalog"
 }
 
-export type ExperimentalScheduleCreateErrors = {
+export type ExpertSquadCatalogErrors = {
   /**
    * Bad request
    */
@@ -5374,136 +5890,190 @@ export type ExperimentalScheduleCreateErrors = {
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
+  /**
+   * Internal server error
+   */
+  500: UnknownError
 }
 
-export type ExperimentalScheduleCreateError = ExperimentalScheduleCreateErrors[keyof ExperimentalScheduleCreateErrors]
+export type ExpertSquadCatalogError = ExpertSquadCatalogErrors[keyof ExpertSquadCatalogErrors]
 
-export type ExperimentalScheduleCreateResponses = {
+export type ExpertSquadCatalogResponses = {
   /**
-   * Created task
+   * Expert squad catalog
    */
   200: {
-    id: string
-    name: string
-    nextRun: number
-  }
-}
-
-export type ExperimentalScheduleCreateResponse =
-  ExperimentalScheduleCreateResponses[keyof ExperimentalScheduleCreateResponses]
-
-export type ExperimentalScheduleDeleteData = {
-  body?: never
-  path: {
-    id: string
-  }
-  query?: {
-    directory?: string
-  }
-  url: "/experimental/schedule/{id}"
-}
-
-export type ExperimentalScheduleDeleteErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type ExperimentalScheduleDeleteError = ExperimentalScheduleDeleteErrors[keyof ExperimentalScheduleDeleteErrors]
-
-export type ExperimentalScheduleDeleteResponses = {
-  /**
-   * Cancelled
-   */
-  200: {
-    ok: boolean
-  }
-}
-
-export type ExperimentalScheduleDeleteResponse =
-  ExperimentalScheduleDeleteResponses[keyof ExperimentalScheduleDeleteResponses]
-
-export type ExperimentalEventscheduleListData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/experimental/event-schedule"
-}
-
-export type ExperimentalEventscheduleListErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type ExperimentalEventscheduleListError =
-  ExperimentalEventscheduleListErrors[keyof ExperimentalEventscheduleListErrors]
-
-export type ExperimentalEventscheduleListResponses = {
-  /**
-   * Event-triggered tasks
-   */
-  200: Array<{
-    id: string
-    name: string
-    eventType: string
-    match: {
-      [key: string]: string | number | boolean
+    active: {
+      effective: string
+      project: string
+      session_override: string | null
     }
-    prompt: string
-    enabled: boolean
-    oneShot: boolean
-    cooldownMs: number
-    lastRun: number | null
-    lastEvent: string | null
-  }>
-}
-
-export type ExperimentalEventscheduleListResponse =
-  ExperimentalEventscheduleListResponses[keyof ExperimentalEventscheduleListResponses]
-
-export type ExperimentalEventscheduleCreateData = {
-  body: {
-    name: string
-    eventType: string
-    match?: {
-      [key: string]: string | number | boolean
+    active_agent_projection: {
+      agents: Array<{
+        base_role: string
+        built_in_tool_ids: Array<string>
+        default_mcp_prompt_refs: Array<string>
+        default_mcp_resource_refs: Array<string>
+        default_mcp_server_refs: Array<string>
+        default_mcp_tool_refs: Array<string>
+        default_skill_refs: Array<string>
+        default_tool_refs: Array<string>
+        description?: string
+        label: string
+        package_mcp_prompt_refs: Array<string>
+        package_mcp_resource_refs: Array<string>
+        package_mcp_server_refs: Array<string>
+        package_mcp_tool_refs: Array<string>
+        package_skill_refs: Array<string>
+        package_tool_refs: Array<string>
+        projection_hash: string
+        virtual_agent_id: string
+      }>
+      projection_hash: string
+      prompt_profile_active: string
+      source_expert_squad_id: string
     }
-    prompt: string
-    sessionId?: string
-    oneShot?: boolean
-    cooldownMs?: number
+    active_skill_projection: {
+      active_squad_id: string
+      built_in: boolean
+      capability_profile_id: string
+      production_skill_names: Array<string>
+      projected_agent_ids: Array<string>
+      projected_skill_names: Array<string>
+      projected_tool_ids: Array<string>
+      projection_hash: string
+      selector_skill_names: Array<string>
+      skills: Array<{
+        builtin: boolean
+        description: string
+        location: string
+        mounted_agents: Array<string>
+        name: string
+        required_tools: Array<string>
+      }>
+    }
+    default: string
+    scope:
+      | {
+          directory: string
+          kind: "project"
+        }
+      | {
+          directory: string
+          kind: "session"
+          sessionID: string
+        }
+    squads: Array<{
+      agents: {
+        [key: string]: string
+      }
+      built_in: boolean
+      capability_profile_id: string
+      capability_projection: {
+        agents: {
+          [key: string]: {
+            built_in_tool_ids: Array<string>
+            default_mcp_prompt_refs: Array<string>
+            default_mcp_resource_refs: Array<string>
+            default_mcp_server_refs: Array<string>
+            default_mcp_tool_refs: Array<string>
+            default_skill_refs: Array<string>
+            default_tool_refs: Array<string>
+            package_mcp_prompt_refs: Array<string>
+            package_mcp_resource_refs: Array<string>
+            package_mcp_server_refs: Array<string>
+            package_mcp_tool_refs: Array<string>
+            package_skill_refs: Array<string>
+            package_tool_refs: Array<string>
+          }
+        }
+        scheduler: {
+          built_in_tool_ids: Array<string>
+          default_mcp_prompt_refs: Array<string>
+          default_mcp_resource_refs: Array<string>
+          default_mcp_server_refs: Array<string>
+          default_mcp_tool_refs: Array<string>
+          default_skill_refs: Array<string>
+          default_tool_refs: Array<string>
+          package_mcp_prompt_refs: Array<string>
+          package_mcp_resource_refs: Array<string>
+          package_mcp_server_refs: Array<string>
+          package_mcp_tool_refs: Array<string>
+          package_skill_refs: Array<string>
+          package_tool_refs: Array<string>
+        }
+      }
+      description?: string
+      display_label: string
+      display_prefix?: string
+      dynamic_attributes: {
+        [key: string]: unknown
+      }
+      editable: boolean
+      id: string
+      label: string
+      projected_agents: Array<string>
+      projection_hash: string
+      readme: {
+        append_target: "orchestrator"
+        content: string
+        path: "README.md"
+      }
+      selector?: {
+        description?: string
+        id: string
+        instructions: string
+        instructions_path: "selector.md"
+        label: string
+        ref: string
+        selection_guidance: string
+        summary: string
+      }
+      source:
+        | {
+            kind: "built_in"
+          }
+        | {
+            kind: "project_package"
+            manifest_path: string
+            namespace: string
+            readme_path: string
+            root: string
+          }
+      version?: string
+      virtual_agents: Array<{
+        base_role: string
+        description?: string
+        label: string
+        virtual_agent_id: string
+      }>
+    }>
+    targets: Array<{
+      built_in_only: boolean
+      description?: string
+      editable: boolean
+      id: string
+      label: string
+    }>
+  }
+}
+
+export type ExpertSquadCatalogResponse = ExpertSquadCatalogResponses[keyof ExpertSquadCatalogResponses]
+
+export type ExpertSquadExportData = {
+  body: {
+    id: string
   }
   path?: never
   query?: {
@@ -5512,231 +6082,6124 @@ export type ExperimentalEventscheduleCreateData = {
      */
     directory?: string
   }
-  url: "/experimental/event-schedule"
+  url: "/expert-squad/export"
 }
 
-export type ExperimentalEventscheduleCreateErrors = {
+export type ExpertSquadExportErrors = {
   /**
-   * Bad request
+   * Expert squad package export rejected
    */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type ExperimentalEventscheduleCreateError =
-  ExperimentalEventscheduleCreateErrors[keyof ExperimentalEventscheduleCreateErrors]
-
-export type ExperimentalEventscheduleCreateResponses = {
-  /**
-   * Created event task
-   */
-  200: {
-    id: string
-    name: string
-    eventType: string
-  }
-}
-
-export type ExperimentalEventscheduleCreateResponse =
-  ExperimentalEventscheduleCreateResponses[keyof ExperimentalEventscheduleCreateResponses]
-
-export type ExperimentalEventscheduleDeleteData = {
-  body?: never
-  path: {
-    id: string
-  }
-  query?: {
-    directory?: string
-  }
-  url: "/experimental/event-schedule/{id}"
-}
-
-export type ExperimentalEventscheduleDeleteErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type ExperimentalEventscheduleDeleteError =
-  ExperimentalEventscheduleDeleteErrors[keyof ExperimentalEventscheduleDeleteErrors]
-
-export type ExperimentalEventscheduleDeleteResponses = {
-  /**
-   * Cancelled
-   */
-  200: {
-    ok: boolean
-  }
-}
-
-export type ExperimentalEventscheduleDeleteResponse =
-  ExperimentalEventscheduleDeleteResponses[keyof ExperimentalEventscheduleDeleteResponses]
-
-export type ExperimentalTaskplanListData = {
-  body?: never
-  path?: never
-  query: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-    sessionId: string
-  }
-  url: "/experimental/task-plan"
-}
-
-export type ExperimentalTaskplanListErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type ExperimentalTaskplanListError = ExperimentalTaskplanListErrors[keyof ExperimentalTaskplanListErrors]
-
-export type ExperimentalTaskplanListResponses = {
-  /**
-   * Tasks
-   */
-  200: Array<{
-    id: string
-    goal: string
-    status: string
-    parentID: string | null
-    progressPct: number
-  }>
-}
-
-export type ExperimentalTaskplanListResponse =
-  ExperimentalTaskplanListResponses[keyof ExperimentalTaskplanListResponses]
-
-export type ExperimentalScratchpadGetData = {
-  body?: never
-  path?: never
-  query: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-    sessionId: string
-  }
-  url: "/experimental/scratchpad"
-}
-
-export type ExperimentalScratchpadGetErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type ExperimentalScratchpadGetError = ExperimentalScratchpadGetErrors[keyof ExperimentalScratchpadGetErrors]
-
-export type ExperimentalScratchpadGetResponses = {
-  /**
-   * Scratchpad
-   */
-  200: {
-    content: string
-  }
-}
-
-export type ExperimentalScratchpadGetResponse =
-  ExperimentalScratchpadGetResponses[keyof ExperimentalScratchpadGetResponses]
-
-export type ExperimentalResourceListData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/experimental/resource"
-}
-
-export type ExperimentalResourceListErrors = {
-  /**
-   * MCP resources failed
-   */
-  500: {
-    name: "UnknownError"
+  400: {
     data: {
       [key: string]: unknown
     }
+    name: "ExpertSquadPackageError"
   }
 }
 
-export type ExperimentalResourceListError = ExperimentalResourceListErrors[keyof ExperimentalResourceListErrors]
+export type ExpertSquadExportError = ExpertSquadExportErrors[keyof ExpertSquadExportErrors]
 
-export type ExperimentalResourceListResponses = {
+export type ExpertSquadExportResponses = {
   /**
-   * MCP resources
+   * Exported expert squad archive
    */
   200: {
-    [key: string]: McpResource
+    archiveBase64: string
+    fileCount: number
+    filename: string
+    id: string
   }
 }
 
-export type ExperimentalResourceListResponse =
-  ExperimentalResourceListResponses[keyof ExperimentalResourceListResponses]
+export type ExpertSquadExportResponse = ExpertSquadExportResponses[keyof ExpertSquadExportResponses]
+
+export type ExpertSquadImportFileData = {
+  body: {
+    archiveBase64: string
+    filename?: string
+    replace?: boolean
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/expert-squad/import-file"
+}
+
+export type ExpertSquadImportFileErrors = {
+  /**
+   * Expert squad package import rejected
+   */
+  400: {
+    data: {
+      [key: string]: unknown
+    }
+    name: "ExpertSquadPackageError"
+  }
+}
+
+export type ExpertSquadImportFileError = ExpertSquadImportFileErrors[keyof ExpertSquadImportFileErrors]
+
+export type ExpertSquadImportFileResponses = {
+  /**
+   * Imported expert squad package
+   */
+  200: {
+    id: string
+    namespace: string
+    replaced: boolean
+    targetRoot: string
+  }
+}
+
+export type ExpertSquadImportFileResponse = ExpertSquadImportFileResponses[keyof ExpertSquadImportFileResponses]
+
+export type ExpertSquadImportFolderData = {
+  body: {
+    replace?: boolean
+    sourceDirectory: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/expert-squad/import-folder"
+}
+
+export type ExpertSquadImportFolderErrors = {
+  /**
+   * Expert squad package import rejected
+   */
+  400: {
+    data: {
+      [key: string]: unknown
+    }
+    name: "ExpertSquadPackageError"
+  }
+}
+
+export type ExpertSquadImportFolderError = ExpertSquadImportFolderErrors[keyof ExpertSquadImportFolderErrors]
+
+export type ExpertSquadImportFolderResponses = {
+  /**
+   * Imported expert squad package
+   */
+  200: {
+    id: string
+    namespace: string
+    replaced: boolean
+    targetRoot: string
+  }
+}
+
+export type ExpertSquadImportFolderResponse = ExpertSquadImportFolderResponses[keyof ExpertSquadImportFolderResponses]
+
+export type ExpertSquadReleasePayloadData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/expert-squad/release-payload"
+}
+
+export type ExpertSquadReleasePayloadErrors = {
+  /**
+   * Expert squad package release rejected
+   */
+  400: {
+    data: {
+      [key: string]: unknown
+    }
+    name: "ExpertSquadPackageError"
+  }
+}
+
+export type ExpertSquadReleasePayloadError = ExpertSquadReleasePayloadErrors[keyof ExpertSquadReleasePayloadErrors]
+
+export type ExpertSquadReleasePayloadResponses = {
+  /**
+   * Bundled expert-squad package release result
+   */
+  200: {
+    installed: Array<{
+      id: string
+      namespace: string
+      replaced: boolean
+      targetRoot: string
+    }>
+    skipped: Array<{
+      id: string
+      namespace: string
+      replaced: boolean
+      targetRoot: string
+    }>
+  }
+}
+
+export type ExpertSquadReleasePayloadResponse =
+  ExpertSquadReleasePayloadResponses[keyof ExpertSquadReleasePayloadResponses]
+
+export type ExportSessionData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/export/session/{sessionID}"
+}
+
+export type ExportSessionErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type ExportSessionError = ExportSessionErrors[keyof ExportSessionErrors]
+
+export type ExportSessionResponses = {
+  /**
+   * Session metadata and messages
+   */
+  200: {
+    messages: Array<unknown>
+    session: unknown
+  }
+}
+
+export type ExportSessionResponse = ExportSessionResponses[keyof ExportSessionResponses]
+
+export type FileListData = {
+  body?: never
+  path?: never
+  query: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+    path: string
+  }
+  url: "/file"
+}
+
+export type FileListResponses = {
+  /**
+   * Files and directories
+   */
+  200: Array<FileNode>
+}
+
+export type FileListResponse = FileListResponses[keyof FileListResponses]
+
+export type FileReadData = {
+  body?: never
+  path?: never
+  query: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+    path: string
+  }
+  url: "/file/content"
+}
+
+export type FileReadErrors = {
+  /**
+   * File not found
+   */
+  404: {
+    data: {
+      [key: string]: unknown
+    }
+    name: "FileNotFoundError"
+  }
+  /**
+   * File read failed
+   */
+  500: {
+    data: {
+      [key: string]: unknown
+    }
+    name: "UnknownError"
+  }
+}
+
+export type FileReadError = FileReadErrors[keyof FileReadErrors]
+
+export type FileReadResponses = {
+  /**
+   * File content
+   */
+  200: FileContent
+}
+
+export type FileReadResponse = FileReadResponses[keyof FileReadResponses]
+
+export type FileWriteData = {
+  body: {
+    content: string
+    path: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/file/content"
+}
+
+export type FileWriteErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+  /**
+   * Internal server error
+   */
+  500: UnknownError
+}
+
+export type FileWriteError = FileWriteErrors[keyof FileWriteErrors]
+
+export type FileWriteResponses = {
+  /**
+   * Updated file content
+   */
+  200: FileContent
+}
+
+export type FileWriteResponse = FileWriteResponses[keyof FileWriteResponses]
+
+export type FileDeleteData = {
+  body?: never
+  path?: never
+  query: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+    path: string
+  }
+  url: "/file/item"
+}
+
+export type FileDeleteErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type FileDeleteError = FileDeleteErrors[keyof FileDeleteErrors]
+
+export type FileDeleteResponses = {
+  /**
+   * Deleted file path
+   */
+  200: {
+    path: string
+  }
+}
+
+export type FileDeleteResponse = FileDeleteResponses[keyof FileDeleteResponses]
+
+export type FileMoveData = {
+  body: {
+    newPath: string
+    path: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/file/item"
+}
+
+export type FileMoveErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+  /**
+   * Conflict
+   */
+  409:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "ReplyTargetEnvelopeMissingError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "AgentSessionPendingCoordinationError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "TaskCancellationIncompleteError"
+      }
+}
+
+export type FileMoveError = FileMoveErrors[keyof FileMoveErrors]
+
+export type FileMoveResponses = {
+  /**
+   * Moved file node
+   */
+  200: {
+    node: FileNode
+    path: string
+    previousPath: string
+  }
+}
+
+export type FileMoveResponse = FileMoveResponses[keyof FileMoveResponses]
+
+export type FileCreateData = {
+  body: {
+    content?: string
+    path: string
+    type: "file" | "directory"
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/file/item"
+}
+
+export type FileCreateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+  /**
+   * Conflict
+   */
+  409:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "ReplyTargetEnvelopeMissingError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "AgentSessionPendingCoordinationError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "TaskCancellationIncompleteError"
+      }
+}
+
+export type FileCreateError = FileCreateErrors[keyof FileCreateErrors]
+
+export type FileCreateResponses = {
+  /**
+   * Created file node
+   */
+  200: FileNode
+}
+
+export type FileCreateResponse = FileCreateResponses[keyof FileCreateResponses]
+
+export type FileCopyData = {
+  body: {
+    newPath: string
+    path: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/file/item/copy"
+}
+
+export type FileCopyErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+  /**
+   * Conflict
+   */
+  409:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "ReplyTargetEnvelopeMissingError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "AgentSessionPendingCoordinationError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "TaskCancellationIncompleteError"
+      }
+}
+
+export type FileCopyError = FileCopyErrors[keyof FileCopyErrors]
+
+export type FileCopyResponses = {
+  /**
+   * Copied file node
+   */
+  200: {
+    node: FileNode
+    path: string
+    sourcePath: string
+  }
+}
+
+export type FileCopyResponse = FileCopyResponses[keyof FileCopyResponses]
+
+export type FileStatusData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/file/status"
+}
+
+export type FileStatusResponses = {
+  /**
+   * File status
+   */
+  200: Array<File>
+}
+
+export type FileStatusResponse = FileStatusResponses[keyof FileStatusResponses]
+
+export type FileUploadData = {
+  body: {
+    files: Array<{
+      contentBase64: string
+      mimeType?: string
+      name: string
+    }>
+    targetDir: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/file/upload"
+}
+
+export type FileUploadErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Conflict
+   */
+  409:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "ReplyTargetEnvelopeMissingError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "AgentSessionPendingCoordinationError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "TaskCancellationIncompleteError"
+      }
+}
+
+export type FileUploadError = FileUploadErrors[keyof FileUploadErrors]
+
+export type FileUploadResponses = {
+  /**
+   * Uploaded files
+   */
+  200: Array<{
+    bytes: number
+    name: string
+    path: string
+  }>
+}
+
+export type FileUploadResponse = FileUploadResponses[keyof FileUploadResponses]
+
+export type FindTextData = {
+  body?: never
+  path?: never
+  query: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+    pattern: string
+  }
+  url: "/find"
+}
+
+export type FindTextErrors = {
+  /**
+   * Internal server error
+   */
+  500: UnknownError
+}
+
+export type FindTextError = FindTextErrors[keyof FindTextErrors]
+
+export type FindTextResponses = {
+  /**
+   * Matches
+   */
+  200: Array<{
+    absolute_offset: number
+    line_number: number
+    lines: {
+      text: string
+    }
+    path: {
+      text: string
+    }
+    submatches: Array<{
+      end: number
+      match: {
+        text: string
+      }
+      start: number
+    }>
+  }>
+}
+
+export type FindTextResponse = FindTextResponses[keyof FindTextResponses]
+
+export type FindFilesData = {
+  body?: never
+  path?: never
+  query: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+    query: string
+    dirs?: "true" | "false"
+    type?: "file" | "directory"
+    limit?: number
+  }
+  url: "/find/file"
+}
+
+export type FindFilesErrors = {
+  /**
+   * Internal server error
+   */
+  500: UnknownError
+}
+
+export type FindFilesError = FindFilesErrors[keyof FindFilesErrors]
+
+export type FindFilesResponses = {
+  /**
+   * File paths
+   */
+  200: Array<string>
+}
+
+export type FindFilesResponse = FindFilesResponses[keyof FindFilesResponses]
+
+export type FindSymbolsData = {
+  body?: never
+  path?: never
+  query: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+    query: string
+  }
+  url: "/find/symbol"
+}
+
+export type FindSymbolsResponses = {
+  /**
+   * Symbols
+   */
+  200: Array<Symbol>
+}
+
+export type FindSymbolsResponse = FindSymbolsResponses[keyof FindSymbolsResponses]
+
+export type FormatterStatusData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/formatter"
+}
+
+export type FormatterStatusResponses = {
+  /**
+   * Formatter status
+   */
+  200: Array<FormatterStatus>
+}
+
+export type FormatterStatusResponse = FormatterStatusResponses[keyof FormatterStatusResponses]
+
+export type GatewayCapabilitiesData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/gateway/capabilities"
+}
+
+export type GatewayCapabilitiesResponses = {
+  /**
+   * Gateway capabilities
+   */
+  200: {
+    actions: Array<{
+      action: string
+      description: string
+      kind: "query" | "mutation"
+      local_action_surfaces?: Array<
+        | "panel"
+        | "gateway"
+        | "slack"
+        | "telegram"
+        | "discord"
+        | "feishu"
+        | "whatsapp"
+        | "googlechat"
+        | "msteams"
+        | "line"
+        | "matrix"
+        | "mattermost"
+        | "signal"
+        | "wecom"
+        | "dingtalk"
+        | "qq"
+        | "right-sidebar"
+      >
+      local_action_types?: Array<"set_executor" | "select_task" | "select_session" | "invalidate_session">
+      local_only: boolean
+      schema: {
+        [key: string]: unknown
+      }
+      surfaces: Array<
+        | "panel"
+        | "gateway"
+        | "slack"
+        | "telegram"
+        | "discord"
+        | "feishu"
+        | "whatsapp"
+        | "googlechat"
+        | "msteams"
+        | "line"
+        | "matrix"
+        | "mattermost"
+        | "signal"
+        | "wecom"
+        | "dingtalk"
+        | "qq"
+        | "right-sidebar"
+      >
+    }>
+    surface:
+      | "panel"
+      | "gateway"
+      | "slack"
+      | "telegram"
+      | "discord"
+      | "feishu"
+      | "whatsapp"
+      | "googlechat"
+      | "msteams"
+      | "line"
+      | "matrix"
+      | "mattermost"
+      | "signal"
+      | "wecom"
+      | "dingtalk"
+      | "qq"
+      | "right-sidebar"
+  }
+}
+
+export type GatewayCapabilitiesResponse = GatewayCapabilitiesResponses[keyof GatewayCapabilitiesResponses]
+
+export type GatewayChannelMessageData = {
+  body: {
+    allow_create?: boolean
+    allow_session_mutation?: boolean
+    attachments?: Array<{
+      data?: string
+      filename: string
+      mime: string
+      url?: string
+    }>
+    bind?: boolean
+    channel: string
+    executor?: "opencorvus" | "codex" | "claude-code"
+    metadata?: {
+      [key: string]: unknown
+    }
+    model?: string
+    platform?:
+      | "slack"
+      | "telegram"
+      | "discord"
+      | "feishu"
+      | "whatsapp"
+      | "googlechat"
+      | "msteams"
+      | "line"
+      | "matrix"
+      | "mattermost"
+      | "signal"
+      | "wecom"
+      | "dingtalk"
+      | "qq"
+    request_id?: string
+    source?: string
+    task_id?: string
+    text: string
+    thread: string
+    user_id?: string
+  }
+  path: {
+    platform: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/gateway/channel/{platform}/message"
+}
+
+export type GatewayChannelMessageResponses = {
+  /**
+   * Channel message handled
+   */
+  200: {
+    attachments?: Array<{
+      filename?: string
+      mime: string
+      url: string
+    }>
+    interaction_id?: string
+    kind: "panel_response" | "created" | "message" | "interaction" | "progress" | "task_list" | "cancelled"
+    local_action?:
+      | {
+          executor: "opencorvus" | "codex" | "claude-code"
+          type: "set_executor"
+        }
+      | {
+          taskID: string
+          type: "select_task"
+        }
+      | {
+          sessionID: string
+          type: "select_session"
+        }
+      | {
+          sessionID: string
+          type: "invalidate_session"
+        }
+    message: string
+    session_id?: string
+    task_id?: string
+  }
+}
+
+export type GatewayChannelMessageResponse = GatewayChannelMessageResponses[keyof GatewayChannelMessageResponses]
+
+export type GatewayControlActionData = {
+  body?:
+    | {
+        action: "view_plan"
+        /**
+         * Task ID whose plan should be inspected.
+         */
+        taskID: string
+      }
+    | {
+        action: "view_board"
+        /**
+         * Task ID whose board should be inspected; omit to list recent tasks.
+         */
+        taskID?: string
+      }
+    | {
+        action: "view_tasks"
+      }
+    | {
+        action: "query_task"
+        /**
+         * Include direct child task summaries for each requested task.
+         */
+        includeChildren?: boolean
+        /**
+         * Include pending interaction counts for each requested task.
+         */
+        includeInteractions?: boolean
+        /**
+         * Task IDs to query in one request.
+         */
+        taskIDs: Array<string>
+      }
+    | {
+        action: "create_task"
+        /**
+         * Set false to return without creating a task.
+         */
+        allow_create?: boolean
+        /**
+         * External channel identifier to bind to the new task.
+         */
+        channel?: string
+        /**
+         * Evaluation check configuration for the new task.
+         */
+        checks?: {
+          artifact?: {
+            min_changed_files?: number
+            mode?: "soft" | "strict"
+            require_changed_files?: boolean
+            require_diff?: boolean
+            require_summary?: boolean
+          }
+          build?: Array<string> | false
+          code_quality?: {
+            enabled?: boolean
+            max_diffs?: number
+            mode?: "soft" | "strict"
+            prompt?: string
+          }
+          code_review?: {
+            enabled?: boolean
+            max_diffs?: number
+            mode?: "soft" | "strict"
+            prompt?: string
+          }
+          custom?: {
+            [key: string]: {
+              [key: string]: unknown
+            }
+          }
+          dead_code_review?: {
+            enabled?: boolean
+            max_diffs?: number
+            mode?: "soft" | "strict"
+            prompt?: string
+          }
+          judge?: {
+            enabled?: boolean
+            mode?: "soft" | "strict"
+            prompt?: string
+          }
+          lint?: Array<string> | false
+          named?: {
+            [key: string]: {
+              commands: Array<string>
+              cwd?: string
+              enabled?: boolean
+              family?: "build" | "test" | "lint" | "verify_cmd"
+              label?: string
+            }
+          }
+          playwright?: {
+            browser?: "chrome" | "edge" | "chromium"
+            executable_path?: string
+            full_page?: boolean
+            mode?: "soft" | "strict"
+            require_text?: Array<string>
+            require_title?: string
+            target: "web"
+            timeout_ms?: number
+            url: string
+            viewport?: {
+              height?: number
+              width?: number
+            }
+            wait_for_selector?: string
+            wait_for_text?: string
+          }
+          spec_check?: {
+            enabled?: boolean
+            mode?: "soft" | "strict"
+            prompt?: string
+          }
+          startup?: {
+            command: string
+            mode?: "soft" | "strict"
+            ready_text?: string
+            ready_url?: string
+            require_exit_zero?: boolean
+            timeout_ms?: number
+            warmup_ms?: number
+          }
+          test?: Array<string> | false
+          timeout_ms?: number
+          ui_review?: {
+            focus?: Array<"layout" | "hierarchy" | "clarity" | "navigation" | "feedback" | "accessibility">
+            mode?: "soft" | "strict"
+            prompt?: string
+            target: "web"
+            timeout_ms?: number
+            url?: string
+          }
+          verify_cmd?: Array<string> | false
+          visual?: {
+            mode?: "soft" | "strict"
+            require_text?: Array<string>
+            require_title?: string
+            target: "web"
+            timeout_ms?: number
+            url: string
+          }
+        }
+        /**
+         * Executor backend to use for the new task.
+         */
+        executor?: "opencorvus" | "codex" | "claude-code"
+        /**
+         * Structured metadata to attach to the new task.
+         */
+        metadata?: {
+          [key: string]: unknown
+        }
+        /**
+         * Model reference in provider/model format for the new task.
+         */
+        model?: string
+        /**
+         * Channel platform for an external task binding.
+         */
+        platform?:
+          | "slack"
+          | "telegram"
+          | "discord"
+          | "feishu"
+          | "whatsapp"
+          | "googlechat"
+          | "msteams"
+          | "line"
+          | "matrix"
+          | "mattermost"
+          | "signal"
+          | "wecom"
+          | "dingtalk"
+          | "qq"
+        /**
+         * Whether to queue this task behind other work in the same directory.
+         */
+        queue?: boolean
+        /**
+         * Full user request to execute in the new task.
+         */
+        request: string
+        /**
+         * External request ID used for idempotent task creation.
+         */
+        request_id?: string
+        /**
+         * Stage routing overrides for the new task.
+         */
+        routing?: {
+          evaluation?: "opencorvus" | "hybrid"
+          plan?: "opencorvus" | "executor"
+          spec?: "opencorvus" | "executor"
+        }
+        /**
+         * Business source label for the new task.
+         */
+        source?: string
+        /**
+         * External thread identifier to bind to the new task.
+         */
+        thread?: string
+        /**
+         * Short task title shown in the project board.
+         */
+        title?: string
+      }
+    | {
+        action: "send_task_message"
+        /**
+         * Business source label for the follow-up message.
+         */
+        source: string
+        /**
+         * Task ID that should receive the follow-up message.
+         */
+        taskID: string
+        /**
+         * Follow-up message text to append to the task.
+         */
+        text: string
+        /**
+         * External user ID associated with the follow-up message.
+         */
+        user_id?: string
+      }
+    | {
+        action: "reply_interaction"
+        /**
+         * Pending interaction ID to answer.
+         */
+        interactionID: string
+        /**
+         * Custom answer text for the pending interaction.
+         */
+        message?: string
+        /**
+         * Preset reply behavior for the interaction.
+         */
+        reply?: "once" | "always"
+      }
+    | {
+        action: "reject_interaction"
+        /**
+         * Pending interaction ID to reject.
+         */
+        interactionID: string
+        /**
+         * Reason shown when rejecting the pending interaction.
+         */
+        message?: string
+      }
+    | {
+        action: "retry_task"
+        /**
+         * Task ID to queue for retry.
+         */
+        taskID: string
+      }
+    | {
+        action: "replan_task"
+        /**
+         * Task ID to queue for replanning.
+         */
+        taskID: string
+      }
+    | {
+        action: "cancel_task"
+        /**
+         * Task ID to cancel.
+         */
+        taskID: string
+      }
+    | {
+        action: "update_checks"
+        /**
+         * Complete replacement evaluation check configuration.
+         */
+        checks?: {
+          artifact?: {
+            min_changed_files?: number
+            mode?: "soft" | "strict"
+            require_changed_files?: boolean
+            require_diff?: boolean
+            require_summary?: boolean
+          }
+          build?: Array<string> | false
+          code_quality?: {
+            enabled?: boolean
+            max_diffs?: number
+            mode?: "soft" | "strict"
+            prompt?: string
+          }
+          code_review?: {
+            enabled?: boolean
+            max_diffs?: number
+            mode?: "soft" | "strict"
+            prompt?: string
+          }
+          custom?: {
+            [key: string]: {
+              [key: string]: unknown
+            }
+          }
+          dead_code_review?: {
+            enabled?: boolean
+            max_diffs?: number
+            mode?: "soft" | "strict"
+            prompt?: string
+          }
+          judge?: {
+            enabled?: boolean
+            mode?: "soft" | "strict"
+            prompt?: string
+          }
+          lint?: Array<string> | false
+          named?: {
+            [key: string]: {
+              commands: Array<string>
+              cwd?: string
+              enabled?: boolean
+              family?: "build" | "test" | "lint" | "verify_cmd"
+              label?: string
+            }
+          }
+          playwright?: {
+            browser?: "chrome" | "edge" | "chromium"
+            executable_path?: string
+            full_page?: boolean
+            mode?: "soft" | "strict"
+            require_text?: Array<string>
+            require_title?: string
+            target: "web"
+            timeout_ms?: number
+            url: string
+            viewport?: {
+              height?: number
+              width?: number
+            }
+            wait_for_selector?: string
+            wait_for_text?: string
+          }
+          spec_check?: {
+            enabled?: boolean
+            mode?: "soft" | "strict"
+            prompt?: string
+          }
+          startup?: {
+            command: string
+            mode?: "soft" | "strict"
+            ready_text?: string
+            ready_url?: string
+            require_exit_zero?: boolean
+            timeout_ms?: number
+            warmup_ms?: number
+          }
+          test?: Array<string> | false
+          timeout_ms?: number
+          ui_review?: {
+            focus?: Array<"layout" | "hierarchy" | "clarity" | "navigation" | "feedback" | "accessibility">
+            mode?: "soft" | "strict"
+            prompt?: string
+            target: "web"
+            timeout_ms?: number
+            url?: string
+          }
+          verify_cmd?: Array<string> | false
+          visual?: {
+            mode?: "soft" | "strict"
+            require_text?: Array<string>
+            require_title?: string
+            target: "web"
+            timeout_ms?: number
+            url: string
+          }
+        }
+        /**
+         * Named check selection updates to apply.
+         */
+        selection?: {
+          [key: string]: boolean
+        }
+        /**
+         * Task ID whose verification checks should change.
+         */
+        taskID: string
+      }
+    | {
+        action: "capture_overlay_screenshot"
+        /**
+         * Optional window title or process match hint for the screenshot.
+         */
+        match?: string
+      }
+    | {
+        action: "set_executor"
+        /**
+         * Executor backend to select locally.
+         */
+        executor: "opencorvus" | "codex" | "claude-code"
+      }
+    | {
+        action: "select_task"
+        /**
+         * Task ID to focus in the local project assistant surface.
+         */
+        taskID: string
+      }
+    | {
+        action: "select_session"
+        /**
+         * Session ID to focus in the local project assistant surface.
+         */
+        sessionID: string
+      }
+    | {
+        action: "create_session"
+      }
+    | {
+        action: "fork_session"
+        /**
+         * Session ID to fork.
+         */
+        sessionID: string
+      }
+    | {
+        action: "delete_session"
+        /**
+         * Session ID to delete.
+         */
+        sessionID: string
+      }
+    | {
+        /**
+         * Complete replacement acceptance specs for the goal.
+         */
+        acceptance_specs: Array<{
+          /**
+           * Goal ID this spec belongs to. Specs are goal-local; multiple specs may share a goal.
+           */
+          goal_id: string
+          /**
+           * Stable spec ID, e.g. 'acc-login-3s'.
+           */
+          id: string
+          /**
+           * Gherkin Given/When/Then scenario. Optional — omit for pure code checks.
+           */
+          scenario?: {
+            given: Array<string>
+            then: Array<string>
+            when: Array<string>
+          }
+          /**
+           * At least one scorer — a spec without a scorer is untestable.
+           */
+          scorers: Array<
+            | {
+                expect?: {
+                  exit_code?: number
+                }
+                name: string
+                spec:
+                  | {
+                      /**
+                       * Shell command. Exit 0 = pass unless expect.exit_code set.
+                       */
+                      cmd: string
+                      cwd?: string
+                      /**
+                       * shell — run an inline command. Requires: cmd; optional cwd.
+                       */
+                      kind: "shell"
+                    }
+                  | {
+                      args?: Array<string>
+                      /**
+                       * script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.
+                       */
+                      kind: "script_ref"
+                      /**
+                       * Repo-relative script path that already exists at registration time.
+                       */
+                      path: string
+                    }
+                /**
+                 * heuristic — deterministic shell/script check, pass/fail by exit code. Requires: name, spec{kind}.
+                 */
+                type: "heuristic"
+              }
+            | {
+                /**
+                 * Single-criterion evaluation question in natural language.
+                 */
+                criteria: string
+                /**
+                 * Which parts of the acceptance to feed the judge. Default: acceptance_summary. LLM judges cannot consume visual feedback; final rendered reference parity uses prebuilt visual-feedback-verification.
+                 */
+                inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
+                name: string
+                /**
+                 * Ordinal anchors, 2-5 levels. Omit for binary MET/UNMET.
+                 */
+                rubric?: Array<{
+                  /**
+                   * Behavioral description: what earns this score.
+                   */
+                  anchor: string
+                  /**
+                   * Short level label, e.g. 'fully met'.
+                   */
+                  label: string
+                  /**
+                   * Does this level count as pass for binary verdict?
+                   */
+                  passes: boolean
+                  /**
+                   * Integer score for this level.
+                   */
+                  score: number
+                }>
+                /**
+                 * llm_judge — natural-language rubric evaluation. Requires: name, criteria; optional rubric, inputs.
+                 */
+                type: "llm_judge"
+              }
+            | {
+                config?: {
+                  [key: string]: unknown
+                }
+                /**
+                 * For name=visual-feedback-verification, requires a passing current visual feedback verification.
+                 */
+                expect?: {
+                  status: "passed"
+                }
+                name:
+                  | "factuality"
+                  | "relevance"
+                  | "contains"
+                  | "exact_match"
+                  | "length_within"
+                  | "json_schema"
+                  | "visual-feedback-verification"
+                /**
+                 * For name=visual-feedback-verification, identifies the required visual feedback verification shape.
+                 */
+                spec?: {
+                  kind: "visual_feedback_verification"
+                  viewport?: string
+                }
+                /**
+                 * prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.
+                 */
+                type: "prebuilt"
+              }
+            | {
+                expect: {
+                  status: "passed"
+                }
+                name: string
+                spec: {
+                  contract_ids: Array<string>
+                  kind: "contract_graph"
+                }
+                /**
+                 * contract_audit — static audit of typed-contract field literals and graph artifact path materialization against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
+                 */
+                type: "contract_audit"
+              }
+          >
+          severity: "essential" | "important" | "optional" | "pitfall"
+          /**
+           * Requirement ID this spec was derived from (REQ-N).
+           */
+          source_requirement_id: string
+          title: string
+          /**
+           * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity.
+           */
+          trigger?: "on_goal" | "on_integrity"
+        }>
+        action: "update_goal"
+        /**
+         * Replacement goal description.
+         */
+        description: string
+        /**
+         * Goal ID to update.
+         */
+        goalID: string
+      }
+    | {
+        action: "delete_goal"
+        /**
+         * Goal ID to delete.
+         */
+        goalID: string
+      }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/gateway/control/action"
+}
+
+export type GatewayControlActionResponses = {
+  /**
+   * Action result
+   */
+  200: {
+    metadata: {
+      [key: string]: unknown
+    }
+    output: string
+    title: string
+  }
+}
+
+export type GatewayControlActionResponse = GatewayControlActionResponses[keyof GatewayControlActionResponses]
+
+export type GatewayControlMessageData = {
+  body: {
+    allow_create?: boolean
+    attachments?: Array<{
+      filename?: string
+      mime: string
+      url: string
+    }>
+    channel?: string
+    executor?: "opencorvus" | "codex" | "claude-code"
+    metadata?: {
+      [key: string]: unknown
+    }
+    model?: string
+    request_id?: string
+    sessionID?: string
+    source?: string
+    surface?: "gateway"
+    taskID?: string
+    text: string
+    thread?: string
+    user_id?: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/gateway/control/message"
+}
+
+export type GatewayControlMessageResponses = {
+  /**
+   * Control message handled
+   */
+  200: {
+    attachments?: Array<{
+      filename?: string
+      mime: string
+      url: string
+    }>
+    interaction_id?: string
+    kind: "panel_response" | "created" | "message" | "interaction" | "progress" | "task_list" | "cancelled"
+    local_action?:
+      | {
+          executor: "opencorvus" | "codex" | "claude-code"
+          type: "set_executor"
+        }
+      | {
+          taskID: string
+          type: "select_task"
+        }
+      | {
+          sessionID: string
+          type: "select_session"
+        }
+      | {
+          sessionID: string
+          type: "invalidate_session"
+        }
+    message: string
+    session_id?: string
+    task_id?: string
+  }
+}
+
+export type GatewayControlMessageResponse = GatewayControlMessageResponses[keyof GatewayControlMessageResponses]
+
+export type GatewayStatsData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    limit?: number
+  }
+  url: "/gateway/stats"
+}
+
+export type GatewayStatsResponses = {
+  /**
+   * Gateway stats
+   */
+  200: {
+    capabilities: {
+      mutations: number
+      queries: number
+      total: number
+    }
+    channelRuntime: {
+      channels: Array<string>
+      detail?: string
+      running: boolean
+      status: string
+    }
+    generatedAt: number
+    project: {
+      directory: string
+      id: string
+      name?: string
+      worktree: string
+    }
+    tasks: {
+      recent: Array<{
+        directory?: string
+        id: string
+        priority?: string
+        status: string
+        title: string
+        updated?: number
+      }>
+      status: {
+        [key: string]: number
+      }
+      summary: unknown
+      total: number
+    }
+  }
+}
+
+export type GatewayStatsResponse = GatewayStatsResponses[keyof GatewayStatsResponses]
+
+export type GlobalConfigGetData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/global/config"
+}
+
+export type GlobalConfigGetResponses = {
+  /**
+   * Get global config info
+   */
+  200: Config
+}
+
+export type GlobalConfigGetResponse = GlobalConfigGetResponses[keyof GlobalConfigGetResponses]
+
+export type GlobalConfigUpdateData = {
+  body?: Config
+  path?: never
+  query?: never
+  url: "/global/config"
+}
+
+export type GlobalConfigUpdateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type GlobalConfigUpdateError = GlobalConfigUpdateErrors[keyof GlobalConfigUpdateErrors]
+
+export type GlobalConfigUpdateResponses = {
+  /**
+   * Successfully updated global config
+   */
+  200: Config
+}
+
+export type GlobalConfigUpdateResponse = GlobalConfigUpdateResponses[keyof GlobalConfigUpdateResponses]
+
+export type GlobalDbMysqlExportData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/global/db/mysql/export"
+}
+
+export type GlobalDbMysqlExportResponses = {
+  /**
+   * MySQL transfer package
+   */
+  200: {
+    schema: {
+      derivedTables: Array<string>
+      format: "opencorvus.mysql-transfer.v1"
+      mysqlDDL: string
+      schemaFingerprint: string
+      skippedIndexes: Array<{
+        index: string
+        reason: string
+        table: string
+      }>
+      tables: Array<{
+        columns: Array<string>
+        name: string
+      }>
+    }
+    snapshot: {
+      format: "opencorvus.mysql-transfer.v1"
+      schemaFingerprint: string
+      tables: Array<{
+        columns: Array<string>
+        name: string
+        rows: Array<{
+          [key: string]: unknown
+        }>
+      }>
+    }
+  }
+}
+
+export type GlobalDbMysqlExportResponse = GlobalDbMysqlExportResponses[keyof GlobalDbMysqlExportResponses]
+
+export type GlobalDbMysqlImportData = {
+  body: {
+    snapshot: {
+      format: "opencorvus.mysql-transfer.v1"
+      schemaFingerprint: string
+      tables: Array<{
+        columns: Array<string>
+        name: string
+        rows: Array<{
+          [key: string]: unknown
+        }>
+      }>
+    }
+  }
+  path?: never
+  query?: never
+  url: "/global/db/mysql/import"
+}
+
+export type GlobalDbMysqlImportErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Active executor sessions prevent this operation
+   */
+  409: {
+    data: {
+      [key: string]: unknown
+    }
+    name: "ActiveExecutorSessionsError"
+  }
+}
+
+export type GlobalDbMysqlImportError = GlobalDbMysqlImportErrors[keyof GlobalDbMysqlImportErrors]
+
+export type GlobalDbMysqlImportResponses = {
+  /**
+   * Import result
+   */
+  200: {
+    ok: boolean
+    schemaFingerprint: string
+    tables: Array<{
+      name: string
+      rows: number
+    }>
+  }
+}
+
+export type GlobalDbMysqlImportResponse = GlobalDbMysqlImportResponses[keyof GlobalDbMysqlImportResponses]
+
+export type GlobalDbMysqlSchemaData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/global/db/mysql/schema"
+}
+
+export type GlobalDbMysqlSchemaResponses = {
+  /**
+   * MySQL transfer schema
+   */
+  200: {
+    derivedTables: Array<string>
+    format: "opencorvus.mysql-transfer.v1"
+    mysqlDDL: string
+    schemaFingerprint: string
+    skippedIndexes: Array<{
+      index: string
+      reason: string
+      table: string
+    }>
+    tables: Array<{
+      columns: Array<string>
+      name: string
+    }>
+  }
+}
+
+export type GlobalDbMysqlSchemaResponse = GlobalDbMysqlSchemaResponses[keyof GlobalDbMysqlSchemaResponses]
+
+export type GlobalDbResetData = {
+  body: {
+    database: string
+  }
+  path?: never
+  query?: never
+  url: "/global/db/reset"
+}
+
+export type GlobalDbResetErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Active executor sessions prevent this operation
+   */
+  409: {
+    data: {
+      [key: string]: unknown
+    }
+    name: "ActiveExecutorSessionsError"
+  }
+  /**
+   * Database file deletion failed
+   */
+  500: {
+    ok: false
+    restarting: false
+    targets: Array<{
+      error?: string
+      label: string
+      ok: boolean
+      path: string
+    }>
+  }
+  /**
+   * Server restart handler is not registered
+   */
+  503: {
+    error: string
+    ok: false
+  }
+}
+
+export type GlobalDbResetError = GlobalDbResetErrors[keyof GlobalDbResetErrors]
+
+export type GlobalDbResetResponses = {
+  /**
+   * Reset results
+   */
+  200: {
+    ok: boolean
+    restarting: boolean
+    targets: Array<{
+      error?: string
+      label: string
+      ok: boolean
+      path: string
+    }>
+  }
+}
+
+export type GlobalDbResetResponse = GlobalDbResetResponses[keyof GlobalDbResetResponses]
+
+export type GlobalDisposeData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/global/dispose"
+}
+
+export type GlobalDisposeErrors = {
+  /**
+   * Active executor sessions prevent this operation
+   */
+  409: {
+    data: {
+      [key: string]: unknown
+    }
+    name: "ActiveExecutorSessionsError"
+  }
+}
+
+export type GlobalDisposeError = GlobalDisposeErrors[keyof GlobalDisposeErrors]
+
+export type GlobalDisposeResponses = {
+  /**
+   * Global disposed
+   */
+  200: boolean
+}
+
+export type GlobalDisposeResponse = GlobalDisposeResponses[keyof GlobalDisposeResponses]
+
+export type GlobalEventData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/global/event"
+}
+
+export type GlobalEventResponses = {
+  /**
+   * Event stream
+   */
+  200: GlobalEvent
+}
+
+export type GlobalEventResponse = GlobalEventResponses[keyof GlobalEventResponses]
+
+export type GlobalHealthData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/global/health"
+}
+
+export type GlobalHealthResponses = {
+  /**
+   * Health information
+   */
+  200: {
+    healthy: true
+    paths: {
+      data: string
+      database: string
+      home: string
+    }
+    version: string
+  }
+}
+
+export type GlobalHealthResponse = GlobalHealthResponses[keyof GlobalHealthResponses]
+
+export type GlobalProjectsDiscoverData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/global/projects/discover"
+}
+
+export type GlobalProjectsDiscoverErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type GlobalProjectsDiscoverError = GlobalProjectsDiscoverErrors[keyof GlobalProjectsDiscoverErrors]
+
+export type GlobalProjectsDiscoverResponses = {
+  /**
+   * Discovered projects
+   */
+  200: ProjectDiscovery
+}
+
+export type GlobalProjectsDiscoverResponse = GlobalProjectsDiscoverResponses[keyof GlobalProjectsDiscoverResponses]
+
+export type TaskGlobalListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    q?: string
+    status?: string
+    limit?: number
+    cursor?: number
+    cursorTaskID?: string
+  }
+  url: "/global/tasks"
+}
+
+export type TaskGlobalListResponses = {
+  /**
+   * Global task board
+   */
+  200: {
+    summary: {
+      blocked_tasks: number
+      cancelled_tasks: number
+      completed_tasks: number
+      failed_tasks: number
+      median_completion_ms?: number
+      open_tasks: number
+      running_tasks: number
+      total_tasks: number
+    }
+    tasks: Array<{
+      active_sessions: Array<{
+        goalID: string | null
+        kind: string
+        lastActivityMs: number
+        sessionID: string
+      }>
+      evaluation?: {
+        acceptanceID?: string | null
+        checks: Array<{
+          evidence?: string
+          family?: string
+          label?: string
+          name: string
+          status: "passed" | "failed" | "skipped" | "inconclusive"
+        }>
+        id: string
+        runID: string
+        status: "pending" | "passed" | "failed" | "inconclusive"
+        summary: string
+        taskID: string
+        time: {
+          completed?: number
+          created: number
+          updated: number
+        }
+        verdict: "accepted" | "rejected" | "inconclusive"
+      }
+      pending_interaction_items: Array<{
+        body: string
+        externalID: string
+        id: string
+        orderKey: string
+        payload?: {
+          [key: string]: unknown
+        }
+        response?: {
+          [key: string]: unknown
+        }
+        runID: string | null
+        sessionID?: string | null
+        status: "pending" | "answered" | "rejected" | "expired"
+        taskID: string
+        time: {
+          created: number
+          resolved?: number
+          updated: number
+        }
+        title: string
+        type: "permission" | "question"
+      }>
+      pending_interactions: number
+      plan?: {
+        id: string
+        metadata?: {
+          [key: string]: unknown
+        }
+        prompt: string
+        status: "active" | "superseded"
+        summary: string
+        taskID: string
+        time: {
+          created: number
+          updated: number
+        }
+        version: number
+      }
+      project?: {
+        id: string
+        name?: string
+        worktree: string
+      } | null
+      run?: {
+        blockingReason?: string
+        error?: string
+        executor: "opencorvus" | "codex" | "claude-code"
+        executorRef?: {
+          queueTaskID?: string
+          sessionID?: string
+        }
+        id: string
+        metadata?: {
+          [key: string]: unknown
+        }
+        phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
+        planVersionID?: string | null
+        retryCount: number
+        sessionID?: string | null
+        status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+        taskID: string
+        time: {
+          completed?: number
+          created: number
+          started?: number
+          updated: number
+        }
+      }
+      task: {
+        activePlanVersionID?: string | null
+        activeRunID?: string | null
+        attachments?: Array<{
+          filename?: string
+          intent?: string
+          mime: string
+          sha: string
+          size: number
+          source?: string
+          url: string
+        }>
+        blockingReason?: string
+        budget?: {
+          maxExecutorGroups?: number
+        }
+        directory?: string
+        error?: string
+        id: string
+        kind?: "workflow" | "build"
+        metadata?: {
+          [key: string]: unknown
+        }
+        orderKey: string
+        parentTaskID?: string | null
+        priority: "critical" | "high" | "normal" | "low"
+        projectID: string
+        queue?: {
+          order: number
+          revision?: string
+        }
+        request: string
+        requestID?: string
+        sessionID?: string | null
+        source: string
+        status: "queued" | "active" | "completed" | "failed" | "cancelled"
+        terminalReason?: "completed" | "failed" | "cancelled" | "interrupted"
+        time: {
+          completed?: number
+          created: number
+          started?: number
+          updated: number
+        }
+        title: string
+      }
+      updated_at: number
+    }>
+  }
+}
+
+export type TaskGlobalListResponse = TaskGlobalListResponses[keyof TaskGlobalListResponses]
+
+export type GoalRunAcceptanceData = {
+  body?: never
+  path: {
+    goalRunID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/goal-run/{goalRunID}/acceptance"
+}
+
+export type GoalRunAcceptanceErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type GoalRunAcceptanceError = GoalRunAcceptanceErrors[keyof GoalRunAcceptanceErrors]
+
+export type GoalRunAcceptanceResponses = {
+  /**
+   * Goal-run acceptance, or null when the goal_run exists but has not produced a acceptance yet (in-flight build).
+   */
+  200: {
+    id: string
+    result: {
+      artifacts?: Array<{
+        kind: string
+        label: string
+        payload?: {
+          [key: string]: unknown
+        }
+      }>
+      changedFiles: Array<string>
+      diffs: Array<AcceptanceDiffSummary>
+      publish?: {
+        [key: string]: unknown
+      }
+      summary: string
+    }
+    runID: string
+    status: "candidate" | "publishing" | "delivered" | "failed"
+    summary: string
+    taskID: string
+    time: {
+      created: number
+      updated: number
+    }
+  } | null
+}
+
+export type GoalRunAcceptanceResponse = GoalRunAcceptanceResponses[keyof GoalRunAcceptanceResponses]
+
+export type GoalRunDiffData = {
+  body?: never
+  path: {
+    goalRunID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/goal-run/{goalRunID}/diff"
+}
+
+export type GoalRunDiffErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type GoalRunDiffError = GoalRunDiffErrors[keyof GoalRunDiffErrors]
+
+export type GoalRunDiffResponses = {
+  /**
+   * Goal-run workspace diff preview bodies
+   */
+  200: Array<FileDiff>
+}
+
+export type GoalRunDiffResponse = GoalRunDiffResponses[keyof GoalRunDiffResponses]
+
+export type GoalDeleteData = {
+  body?: never
+  path: {
+    goalID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/goal/{goalID}"
+}
+
+export type GoalDeleteErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type GoalDeleteError = GoalDeleteErrors[keyof GoalDeleteErrors]
+
+export type GoalDeleteResponses = {
+  /**
+   * Goal deleted
+   */
+  200: boolean
+}
+
+export type GoalDeleteResponse = GoalDeleteResponses[keyof GoalDeleteResponses]
+
+export type GoalUpdateData = {
+  body: {
+    acceptance_specs: Array<{
+      /**
+       * Goal ID this spec belongs to. Specs are goal-local; multiple specs may share a goal.
+       */
+      goal_id: string
+      /**
+       * Stable spec ID, e.g. 'acc-login-3s'.
+       */
+      id: string
+      /**
+       * Gherkin Given/When/Then scenario. Optional — omit for pure code checks.
+       */
+      scenario?: {
+        given: Array<string>
+        then: Array<string>
+        when: Array<string>
+      }
+      /**
+       * At least one scorer — a spec without a scorer is untestable.
+       */
+      scorers: Array<
+        | {
+            expect?: {
+              exit_code?: number
+            }
+            name: string
+            spec:
+              | {
+                  /**
+                   * Shell command. Exit 0 = pass unless expect.exit_code set.
+                   */
+                  cmd: string
+                  cwd?: string
+                  /**
+                   * shell — run an inline command. Requires: cmd; optional cwd.
+                   */
+                  kind: "shell"
+                }
+              | {
+                  args?: Array<string>
+                  /**
+                   * script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.
+                   */
+                  kind: "script_ref"
+                  /**
+                   * Repo-relative script path that already exists at registration time.
+                   */
+                  path: string
+                }
+            /**
+             * heuristic — deterministic shell/script check, pass/fail by exit code. Requires: name, spec{kind}.
+             */
+            type: "heuristic"
+          }
+        | {
+            /**
+             * Single-criterion evaluation question in natural language.
+             */
+            criteria: string
+            /**
+             * Which parts of the acceptance to feed the judge. Default: acceptance_summary. LLM judges cannot consume visual feedback; final rendered reference parity uses prebuilt visual-feedback-verification.
+             */
+            inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
+            name: string
+            /**
+             * Ordinal anchors, 2-5 levels. Omit for binary MET/UNMET.
+             */
+            rubric?: Array<{
+              /**
+               * Behavioral description: what earns this score.
+               */
+              anchor: string
+              /**
+               * Short level label, e.g. 'fully met'.
+               */
+              label: string
+              /**
+               * Does this level count as pass for binary verdict?
+               */
+              passes: boolean
+              /**
+               * Integer score for this level.
+               */
+              score: number
+            }>
+            /**
+             * llm_judge — natural-language rubric evaluation. Requires: name, criteria; optional rubric, inputs.
+             */
+            type: "llm_judge"
+          }
+        | {
+            config?: {
+              [key: string]: unknown
+            }
+            /**
+             * For name=visual-feedback-verification, requires a passing current visual feedback verification.
+             */
+            expect?: {
+              status: "passed"
+            }
+            name:
+              | "factuality"
+              | "relevance"
+              | "contains"
+              | "exact_match"
+              | "length_within"
+              | "json_schema"
+              | "visual-feedback-verification"
+            /**
+             * For name=visual-feedback-verification, identifies the required visual feedback verification shape.
+             */
+            spec?: {
+              kind: "visual_feedback_verification"
+              viewport?: string
+            }
+            /**
+             * prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.
+             */
+            type: "prebuilt"
+          }
+        | {
+            expect: {
+              status: "passed"
+            }
+            name: string
+            spec: {
+              contract_ids: Array<string>
+              kind: "contract_graph"
+            }
+            /**
+             * contract_audit — static audit of typed-contract field literals and graph artifact path materialization against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
+             */
+            type: "contract_audit"
+          }
+      >
+      severity: "essential" | "important" | "optional" | "pitfall"
+      /**
+       * Requirement ID this spec was derived from (REQ-N).
+       */
+      source_requirement_id: string
+      title: string
+      /**
+       * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity.
+       */
+      trigger?: "on_goal" | "on_integrity"
+    }>
+    description: string
+  }
+  path: {
+    goalID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/goal/{goalID}"
+}
+
+export type GoalUpdateErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type GoalUpdateError = GoalUpdateErrors[keyof GoalUpdateErrors]
+
+export type GoalUpdateResponses = {
+  /**
+   * Goal updated
+   */
+  200: boolean
+}
+
+export type GoalUpdateResponse = GoalUpdateResponses[keyof GoalUpdateResponses]
+
+export type InstanceDisposeData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/instance/dispose"
+}
+
+export type InstanceDisposeErrors = {
+  /**
+   * Active executor sessions prevent this operation
+   */
+  409: {
+    data: {
+      [key: string]: unknown
+    }
+    name: "ActiveExecutorSessionsError"
+  }
+}
+
+export type InstanceDisposeError = InstanceDisposeErrors[keyof InstanceDisposeErrors]
+
+export type InstanceDisposeResponses = {
+  /**
+   * Instance disposed
+   */
+  200: boolean
+}
+
+export type InstanceDisposeResponse = InstanceDisposeResponses[keyof InstanceDisposeResponses]
+
+export type InteractionRejectData = {
+  body: {
+    autoReply: boolean
+    message?: string
+  }
+  path: {
+    interactionID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/interaction/{interactionID}/reject"
+}
+
+export type InteractionRejectErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type InteractionRejectError = InteractionRejectErrors[keyof InteractionRejectErrors]
+
+export type InteractionRejectResponses = {
+  /**
+   * Interaction rejected
+   */
+  200: {
+    body: string
+    externalID: string
+    id: string
+    orderKey: string
+    payload?: {
+      [key: string]: unknown
+    }
+    response?: {
+      [key: string]: unknown
+    }
+    runID: string | null
+    sessionID?: string | null
+    status: "pending" | "answered" | "rejected" | "expired"
+    taskID: string
+    time: {
+      created: number
+      resolved?: number
+      updated: number
+    }
+    title: string
+    type: "permission" | "question"
+  }
+}
+
+export type InteractionRejectResponse = InteractionRejectResponses[keyof InteractionRejectResponses]
+
+export type InteractionReplyData = {
+  body: {
+    answers?: Array<QuestionAnswer>
+    autoReply: boolean
+    message?: string
+    reply?: "once" | "always" | "reject"
+  }
+  path: {
+    interactionID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/interaction/{interactionID}/reply"
+}
+
+export type InteractionReplyErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type InteractionReplyError = InteractionReplyErrors[keyof InteractionReplyErrors]
+
+export type InteractionReplyResponses = {
+  /**
+   * Interaction resolved
+   */
+  200: {
+    body: string
+    externalID: string
+    id: string
+    orderKey: string
+    payload?: {
+      [key: string]: unknown
+    }
+    response?: {
+      [key: string]: unknown
+    }
+    runID: string | null
+    sessionID?: string | null
+    status: "pending" | "answered" | "rejected" | "expired"
+    taskID: string
+    time: {
+      created: number
+      resolved?: number
+      updated: number
+    }
+    title: string
+    type: "permission" | "question"
+  }
+}
+
+export type InteractionReplyResponse = InteractionReplyResponses[keyof InteractionReplyResponses]
+
+export type LogReadData = {
+  body?: never
+  path?: never
+  query?: {
+    file?: string
+    n?: number
+  }
+  url: "/log"
+}
+
+export type LogReadErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type LogReadError = LogReadErrors[keyof LogReadErrors]
+
+export type LogReadResponses = {
+  /**
+   * Log lines
+   */
+  200: {
+    directory: string
+    file: string
+    lines: Array<string>
+    path: string
+  }
+}
+
+export type LogReadResponse = LogReadResponses[keyof LogReadResponses]
+
+export type AppLogData = {
+  body: {
+    /**
+     * Additional metadata for the log entry
+     */
+    extra?: {
+      [key: string]: unknown
+    }
+    /**
+     * Log level
+     */
+    level: "debug" | "info" | "error" | "warn"
+    /**
+     * Log message
+     */
+    message: string
+    /**
+     * Service name for the log entry
+     */
+    service: string
+  }
+  path?: never
+  query?: never
+  url: "/log"
+}
+
+export type AppLogErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type AppLogError = AppLogErrors[keyof AppLogErrors]
+
+export type AppLogResponses = {
+  /**
+   * Log entry written successfully
+   */
+  200: boolean
+}
+
+export type AppLogResponse = AppLogResponses[keyof AppLogResponses]
+
+export type LogFilesData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/log/files"
+}
+
+export type LogFilesResponses = {
+  /**
+   * Log files
+   */
+  200: {
+    current: string
+    directory: string
+    files: Array<{
+      current: boolean
+      modified: string
+      name: string
+      path: string
+      size: number
+    }>
+  }
+}
+
+export type LogFilesResponse = LogFilesResponses[keyof LogFilesResponses]
+
+export type LogTailData = {
+  body?: never
+  path?: never
+  query?: {
+    n?: number
+  }
+  url: "/log/tail"
+}
+
+export type LogTailErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type LogTailError = LogTailErrors[keyof LogTailErrors]
+
+export type LogTailResponses = {
+  /**
+   * Log lines
+   */
+  200: {
+    directory: string
+    file: string
+    lines: Array<string>
+    path: string
+  }
+}
+
+export type LogTailResponse = LogTailResponses[keyof LogTailResponses]
+
+export type LspStatusData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/lsp"
+}
+
+export type LspStatusResponses = {
+  /**
+   * LSP server status
+   */
+  200: Array<LspStatus>
+}
+
+export type LspStatusResponse = LspStatusResponses[keyof LspStatusResponses]
+
+export type McpStatusData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/mcp"
+}
+
+export type McpStatusResponses = {
+  /**
+   * MCP server status
+   */
+  200: {
+    [key: string]: McpStatus
+  }
+}
+
+export type McpStatusResponse = McpStatusResponses[keyof McpStatusResponses]
+
+export type McpAddData = {
+  body: {
+    config: McpLocalConfig | McpRemoteConfig
+    name: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/mcp"
+}
+
+export type McpAddErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type McpAddError = McpAddErrors[keyof McpAddErrors]
+
+export type McpAddResponses = {
+  /**
+   * MCP server added successfully
+   */
+  200: {
+    [key: string]: McpStatus
+  }
+}
+
+export type McpAddResponse = McpAddResponses[keyof McpAddResponses]
+
+export type McpAuthRemoveData = {
+  body?: never
+  path: {
+    name: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/mcp/{name}/auth"
+}
+
+export type McpAuthRemoveErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+  /**
+   * Internal server error
+   */
+  500: UnknownError
+}
+
+export type McpAuthRemoveError = McpAuthRemoveErrors[keyof McpAuthRemoveErrors]
+
+export type McpAuthRemoveResponses = {
+  /**
+   * OAuth credentials removed
+   */
+  200: {
+    success: true
+  }
+}
+
+export type McpAuthRemoveResponse = McpAuthRemoveResponses[keyof McpAuthRemoveResponses]
+
+export type McpAuthStartData = {
+  body?: never
+  path: {
+    name: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/mcp/{name}/auth"
+}
+
+export type McpAuthStartErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+  /**
+   * MCP OAuth start failed
+   */
+  500: {
+    data: {
+      [key: string]: unknown
+    }
+    name: "UnknownError"
+  }
+}
+
+export type McpAuthStartError = McpAuthStartErrors[keyof McpAuthStartErrors]
+
+export type McpAuthStartResponses = {
+  /**
+   * OAuth flow started
+   */
+  200: {
+    /**
+     * URL to open in browser for authorization
+     */
+    authorizationUrl: string
+  }
+}
+
+export type McpAuthStartResponse = McpAuthStartResponses[keyof McpAuthStartResponses]
+
+export type McpAuthAuthenticateData = {
+  body?: never
+  path: {
+    name: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/mcp/{name}/auth/authenticate"
+}
+
+export type McpAuthAuthenticateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+  /**
+   * MCP OAuth completion failed
+   */
+  500: {
+    data: {
+      [key: string]: unknown
+    }
+    name: "UnknownError"
+  }
+}
+
+export type McpAuthAuthenticateError = McpAuthAuthenticateErrors[keyof McpAuthAuthenticateErrors]
+
+export type McpAuthAuthenticateResponses = {
+  /**
+   * OAuth authentication completed
+   */
+  200: McpStatus
+}
+
+export type McpAuthAuthenticateResponse = McpAuthAuthenticateResponses[keyof McpAuthAuthenticateResponses]
+
+export type McpAuthCallbackData = {
+  body: {
+    /**
+     * Authorization code from OAuth callback
+     */
+    code: string
+    /**
+     * OAuth state parameter from OAuth callback
+     */
+    state: string
+  }
+  path: {
+    name: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/mcp/{name}/auth/callback"
+}
+
+export type McpAuthCallbackErrors = {
+  /**
+   * Invalid MCP OAuth callback request
+   */
+  400:
+    | BadRequestError
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "MCPOAuthStateError"
+      }
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+  /**
+   * MCP OAuth completion failed
+   */
+  500: {
+    data: {
+      [key: string]: unknown
+    }
+    name: "UnknownError"
+  }
+}
+
+export type McpAuthCallbackError = McpAuthCallbackErrors[keyof McpAuthCallbackErrors]
+
+export type McpAuthCallbackResponses = {
+  /**
+   * OAuth authentication completed
+   */
+  200: McpStatus
+}
+
+export type McpAuthCallbackResponse = McpAuthCallbackResponses[keyof McpAuthCallbackResponses]
+
+export type McpConnectData = {
+  body?: never
+  path: {
+    name: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/mcp/{name}/connect"
+}
+
+export type McpConnectErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+  /**
+   * MCP connection failed
+   */
+  500: {
+    data: {
+      [key: string]: unknown
+    }
+    name: "UnknownError"
+  }
+}
+
+export type McpConnectError = McpConnectErrors[keyof McpConnectErrors]
+
+export type McpConnectResponses = {
+  /**
+   * MCP server connected successfully
+   */
+  200: boolean
+}
+
+export type McpConnectResponse = McpConnectResponses[keyof McpConnectResponses]
+
+export type McpDisconnectData = {
+  body?: never
+  path: {
+    name: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/mcp/{name}/disconnect"
+}
+
+export type McpDisconnectErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type McpDisconnectError = McpDisconnectErrors[keyof McpDisconnectErrors]
+
+export type McpDisconnectResponses = {
+  /**
+   * MCP server disconnected successfully
+   */
+  200: boolean
+}
+
+export type McpDisconnectResponse = McpDisconnectResponses[keyof McpDisconnectResponses]
+
+export type MissionListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    search?: string
+    limit?: number
+    cursorUpdated?: number
+    cursorSessionID?: string
+    archived?: boolean
+  }
+  url: "/mission"
+}
+
+export type MissionListResponses = {
+  /**
+   * Mission records
+   */
+  200: Array<{
+    archived?: number
+    created: number
+    directory: string
+    interruptible: boolean
+    missionID: string
+    sessionID: string
+    taskStats: {
+      active: number
+      cancelled: number
+      completed: number
+      failed: number
+      queued: number
+      total: number
+    }
+    tasks: Array<{
+      completed?: number
+      created: number
+      directory: string
+      executionStatus: "success" | "failed" | "running"
+      id: string
+      priority: "critical" | "high" | "normal" | "low"
+      source: string
+      started?: number
+      status: "queued" | "active" | "completed" | "failed" | "cancelled"
+      title: string
+      updated: number
+    }>
+    title: string
+    updated: number
+  }>
+}
+
+export type MissionListResponse = MissionListResponses[keyof MissionListResponses]
+
+export type MissionWakeData = {
+  body: {
+    missionID?: string
+    model?: string
+    promptProfile?: string
+    text: string
+    title?: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/mission/wake"
+}
+
+export type MissionWakeErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type MissionWakeError = MissionWakeErrors[keyof MissionWakeErrors]
+
+export type MissionWakeResponses = {
+  /**
+   * Mission wake accepted
+   */
+  200: {
+    created: boolean
+    missionID: string
+    sessionID: string
+  }
+}
+
+export type MissionWakeResponse = MissionWakeResponses[keyof MissionWakeResponses]
+
+export type MissionDeleteData = {
+  body?: never
+  path: {
+    missionID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/mission/{missionID}"
+}
+
+export type MissionDeleteErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type MissionDeleteError = MissionDeleteErrors[keyof MissionDeleteErrors]
+
+export type MissionDeleteResponses = {
+  /**
+   * Mission deleted
+   */
+  200: boolean
+}
+
+export type MissionDeleteResponse = MissionDeleteResponses[keyof MissionDeleteResponses]
+
+export type MissionAbortData = {
+  body?: never
+  path: {
+    missionID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/mission/{missionID}/abort"
+}
+
+export type MissionAbortErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+  /**
+   * Conflict
+   */
+  409:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "ReplyTargetEnvelopeMissingError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "AgentSessionPendingCoordinationError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "TaskCancellationIncompleteError"
+      }
+}
+
+export type MissionAbortError = MissionAbortErrors[keyof MissionAbortErrors]
+
+export type MissionAbortResponses = {
+  /**
+   * Mission abort accepted
+   */
+  200: boolean
+}
+
+export type MissionAbortResponse = MissionAbortResponses[keyof MissionAbortResponses]
+
+export type MissionProjectArchiveData = {
+  body?: never
+  path: {
+    missionID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/mission/{missionID}/project-archive"
+}
+
+export type MissionProjectArchiveErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+  /**
+   * Mission project is not a Git worktree
+   */
+  422: {
+    message: string
+  }
+}
+
+export type MissionProjectArchiveError = MissionProjectArchiveErrors[keyof MissionProjectArchiveErrors]
+
+export type MissionProjectArchiveResponses = {
+  /**
+   * ZIP archive
+   */
+  200: Blob | File
+}
+
+export type MissionProjectArchiveResponse = MissionProjectArchiveResponses[keyof MissionProjectArchiveResponses]
+
+export type MissionStatusData = {
+  body?: never
+  path: {
+    missionID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/mission/{missionID}/status"
+}
+
+export type MissionStatusErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type MissionStatusError = MissionStatusErrors[keyof MissionStatusErrors]
+
+export type MissionStatusResponses = {
+  /**
+   * Mission status snapshot
+   */
+  200: {
+    directory: string
+    generatedAt: number
+    missionID: string
+    progress: {
+      completed: number
+      failed: number
+      pending: number
+      percent: number
+      running: number
+      total: number
+    }
+    sessionID: string
+    status: "success" | "failed" | "running"
+    taskCounts: {
+      failed: number
+      running: number
+      success: number
+      total: number
+    }
+    tasks: Array<{
+      agentInvocationDAG: {
+        edges: Array<{
+          fromSessionID: string
+          relation: "agent_call"
+          toSessionID: string
+          viaSessionIDs?: Array<string>
+        }>
+        nodes: Array<{
+          agent: string
+          goalID?: string
+          kind:
+            | "root"
+            | "orchestrator"
+            | "assistant"
+            | "mission"
+            | "intent-analysis"
+            | "requirements"
+            | "frontend-design"
+            | "goal"
+            | "architect"
+            | "goal-workload-analyst"
+            | "integrity"
+            | "fact-check"
+            | "acceptance"
+            | "executor"
+            | "build"
+            | "explore"
+            | "deep-research"
+            | "frontend-research"
+            | "visual-qa"
+            | "evaluator"
+            | "system"
+          orderKey: string
+          parentAgentSessionID?: string
+          parentSessionID?: string
+          sessionID: string
+          status?: {
+            emittedAt: number
+            error?: string
+            reason?: string
+            type: string
+          }
+          time: {
+            created: number
+            updated: number
+          }
+          title?: string
+        }>
+        rootSessionID?: string
+        taskID: string
+        topLevelSessionIDs: Array<string>
+      }
+      directory?: string
+      error?: string
+      goals: Array<{
+        goalID: string
+        objective?: string
+        orderIndex: number
+        priority: "blocking" | "advisory"
+        progress: {
+          completed: number
+          failed: number
+          pending: number
+          percent: number
+          running: number
+          total: number
+        }
+        rawStatus: string
+        status: "success" | "failed" | "running"
+        steps: Array<{
+          completedAt?: number
+          label: string
+          phases?: Array<{
+            completedAt?: number
+            phaseID: string
+            rawStatus: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
+            startedAt?: number
+            status: "success" | "failed" | "running"
+          }>
+          rawStatus: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
+          startedAt?: number
+          status: "success" | "failed" | "running"
+          stepID: string
+          summary?: string
+        }>
+        title: string
+      }>
+      lifecycleStatus: "queued" | "active" | "completed" | "failed" | "cancelled"
+      priority: "critical" | "high" | "normal" | "low"
+      progress: {
+        completed: number
+        failed: number
+        pending: number
+        percent: number
+        running: number
+        total: number
+      }
+      source: string
+      status: "success" | "failed" | "running"
+      taskAgentOutcomes?: Array<{
+        artifactKind: string
+        capabilities?: Array<string>
+        error?: string
+        id: string
+        provider: string
+        result?: string
+        runID?: string
+        scope: "task" | "goal"
+        sessionID?: string
+        status: string
+        summary?: string
+        time: {
+          created: number
+          updated: number
+        }
+      }>
+      taskID: string
+      time: {
+        completed?: number
+        created: number
+        started?: number
+        updated: number
+      }
+      title: string
+      workflow?: {
+        id: string
+        name: string
+        steps: Array<{
+          id: string
+          label: string
+          rawStatus: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
+          scope: "task" | "goal"
+          status: "success" | "failed" | "running"
+          tool: string
+        }>
+      }
+    }>
+    title: string
+  }
+}
+
+export type MissionStatusResponse = MissionStatusResponses[keyof MissionStatusResponses]
+
+export type MissionRenameData = {
+  body: {
+    title: string
+  }
+  path: {
+    missionID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/mission/{missionID}/title"
+}
+
+export type MissionRenameErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type MissionRenameError = MissionRenameErrors[keyof MissionRenameErrors]
+
+export type MissionRenameResponses = {
+  /**
+   * Renamed Mission record
+   */
+  200: {
+    archived?: number
+    created: number
+    directory: string
+    interruptible: boolean
+    missionID: string
+    sessionID: string
+    taskStats: {
+      active: number
+      cancelled: number
+      completed: number
+      failed: number
+      queued: number
+      total: number
+    }
+    tasks: Array<{
+      completed?: number
+      created: number
+      directory: string
+      executionStatus: "success" | "failed" | "running"
+      id: string
+      priority: "critical" | "high" | "normal" | "low"
+      source: string
+      started?: number
+      status: "queued" | "active" | "completed" | "failed" | "cancelled"
+      title: string
+      updated: number
+    }>
+    title: string
+    updated: number
+  }
+}
+
+export type MissionRenameResponse = MissionRenameResponses[keyof MissionRenameResponses]
+
+export type PanelCapabilitiesData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+    surface?:
+      | "panel"
+      | "gateway"
+      | "slack"
+      | "telegram"
+      | "discord"
+      | "feishu"
+      | "whatsapp"
+      | "googlechat"
+      | "msteams"
+      | "line"
+      | "matrix"
+      | "mattermost"
+      | "signal"
+      | "wecom"
+      | "dingtalk"
+      | "qq"
+      | "right-sidebar"
+  }
+  url: "/panel/capabilities"
+}
+
+export type PanelCapabilitiesResponses = {
+  /**
+   * Panel capabilities
+   */
+  200: {
+    actions: Array<{
+      action: string
+      description: string
+      kind: "query" | "mutation"
+      local_action_surfaces?: Array<
+        | "panel"
+        | "gateway"
+        | "slack"
+        | "telegram"
+        | "discord"
+        | "feishu"
+        | "whatsapp"
+        | "googlechat"
+        | "msteams"
+        | "line"
+        | "matrix"
+        | "mattermost"
+        | "signal"
+        | "wecom"
+        | "dingtalk"
+        | "qq"
+        | "right-sidebar"
+      >
+      local_action_types?: Array<"set_executor" | "select_task" | "select_session" | "invalidate_session">
+      local_only: boolean
+      schema: {
+        [key: string]: unknown
+      }
+      surfaces: Array<
+        | "panel"
+        | "gateway"
+        | "slack"
+        | "telegram"
+        | "discord"
+        | "feishu"
+        | "whatsapp"
+        | "googlechat"
+        | "msteams"
+        | "line"
+        | "matrix"
+        | "mattermost"
+        | "signal"
+        | "wecom"
+        | "dingtalk"
+        | "qq"
+        | "right-sidebar"
+      >
+    }>
+    surface:
+      | "panel"
+      | "gateway"
+      | "slack"
+      | "telegram"
+      | "discord"
+      | "feishu"
+      | "whatsapp"
+      | "googlechat"
+      | "msteams"
+      | "line"
+      | "matrix"
+      | "mattermost"
+      | "signal"
+      | "wecom"
+      | "dingtalk"
+      | "qq"
+      | "right-sidebar"
+  }
+}
+
+export type PanelCapabilitiesResponse = PanelCapabilitiesResponses[keyof PanelCapabilitiesResponses]
+
+export type PanelKnowledgeMemoryListData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+    sessionID?: string
+    taskID?: string
+  }
+  url: "/panel/knowledge/memory"
+}
+
+export type PanelKnowledgeMemoryListResponses = {
+  /**
+   * Memory file list
+   */
+  200: Array<{
+    confidence: number
+    id: string
+    importance: number
+    key?: string
+    kind: string
+    scope: string
+    source: string
+    timeCreated: number
+    timeUpdated: number
+    title: string
+  }>
+}
+
+export type PanelKnowledgeMemoryListResponse =
+  PanelKnowledgeMemoryListResponses[keyof PanelKnowledgeMemoryListResponses]
+
+export type PanelKnowledgeMemorySearchData = {
+  body: {
+    limit?: number
+    query: string
+    sessionID?: string
+    taskID?: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/panel/knowledge/memory/search"
+}
+
+export type PanelKnowledgeMemorySearchResponses = {
+  /**
+   * Search results
+   */
+  200: Array<{
+    chunkId: string
+    confidence: number
+    content: string
+    fileId: string
+    fileTitle: string
+    importance: number
+    key?: string
+    kind: string
+    scope: string
+    score: number
+    source: string
+  }>
+}
+
+export type PanelKnowledgeMemorySearchResponse =
+  PanelKnowledgeMemorySearchResponses[keyof PanelKnowledgeMemorySearchResponses]
+
+export type PanelKnowledgeMemoryDeleteData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/panel/knowledge/memory/{id}"
+}
+
+export type PanelKnowledgeMemoryDeleteErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type PanelKnowledgeMemoryDeleteError = PanelKnowledgeMemoryDeleteErrors[keyof PanelKnowledgeMemoryDeleteErrors]
+
+export type PanelKnowledgeMemoryDeleteResponses = {
+  /**
+   * Deleted
+   */
+  200: {
+    ok: boolean
+  }
+}
+
+export type PanelKnowledgeMemoryDeleteResponse =
+  PanelKnowledgeMemoryDeleteResponses[keyof PanelKnowledgeMemoryDeleteResponses]
+
+export type PanelKnowledgeMemoryGetData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/panel/knowledge/memory/{id}"
+}
+
+export type PanelKnowledgeMemoryGetErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type PanelKnowledgeMemoryGetError = PanelKnowledgeMemoryGetErrors[keyof PanelKnowledgeMemoryGetErrors]
+
+export type PanelKnowledgeMemoryGetResponses = {
+  /**
+   * Memory file with chunks
+   */
+  200: {
+    content: string
+    file: {
+      confidence: number
+      id: string
+      importance: number
+      key?: string
+      kind: string
+      scope: string
+      source: string
+      timeCreated: number
+      timeUpdated: number
+      title: string
+    }
+  }
+}
+
+export type PanelKnowledgeMemoryGetResponse = PanelKnowledgeMemoryGetResponses[keyof PanelKnowledgeMemoryGetResponses]
+
+export type PanelMessageData = {
+  body: {
+    allow_create?: boolean
+    attachments?: Array<{
+      filename?: string
+      mime: string
+      url: string
+    }>
+    channel?: string
+    executor?: "opencorvus" | "codex" | "claude-code"
+    metadata?: {
+      [key: string]: unknown
+    }
+    model?: string
+    request_id?: string
+    sessionID?: string
+    source?: string
+    surface:
+      | "panel"
+      | "gateway"
+      | "slack"
+      | "telegram"
+      | "discord"
+      | "feishu"
+      | "whatsapp"
+      | "googlechat"
+      | "msteams"
+      | "line"
+      | "matrix"
+      | "mattermost"
+      | "signal"
+      | "wecom"
+      | "dingtalk"
+      | "qq"
+    taskID?: string
+    text: string
+    thread?: string
+    user_id?: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/panel/message"
+}
+
+export type PanelMessageResponses = {
+  /**
+   * Panel message handled
+   */
+  200: {
+    attachments?: Array<{
+      filename?: string
+      mime: string
+      url: string
+    }>
+    interaction_id?: string
+    kind: "panel_response" | "created" | "message" | "interaction" | "progress" | "task_list" | "cancelled"
+    local_action?:
+      | {
+          executor: "opencorvus" | "codex" | "claude-code"
+          type: "set_executor"
+        }
+      | {
+          taskID: string
+          type: "select_task"
+        }
+      | {
+          sessionID: string
+          type: "select_session"
+        }
+      | {
+          sessionID: string
+          type: "invalidate_session"
+        }
+    message: string
+    session_id?: string
+    task_id?: string
+  }
+}
+
+export type PanelMessageResponse = PanelMessageResponses[keyof PanelMessageResponses]
+
+export type PanelMessageStreamData = {
+  body: {
+    allow_create?: boolean
+    attachments?: Array<{
+      filename?: string
+      mime: string
+      url: string
+    }>
+    channel?: string
+    executor?: "opencorvus" | "codex" | "claude-code"
+    metadata?: {
+      [key: string]: unknown
+    }
+    model?: string
+    request_id?: string
+    sessionID?: string
+    source?: string
+    surface:
+      | "panel"
+      | "gateway"
+      | "slack"
+      | "telegram"
+      | "discord"
+      | "feishu"
+      | "whatsapp"
+      | "googlechat"
+      | "msteams"
+      | "line"
+      | "matrix"
+      | "mattermost"
+      | "signal"
+      | "wecom"
+      | "dingtalk"
+      | "qq"
+    taskID?: string
+    text: string
+    thread?: string
+    user_id?: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/panel/message/stream"
+}
+
+export type PanelMessageStreamResponses = {
+  /**
+   * Streaming panel message events
+   */
+  200: {
+    attachments?: Array<{
+      filename?: string
+      mime: string
+      url: string
+    }>
+    interaction_id?: string
+    kind: "panel_response" | "created" | "message" | "interaction" | "progress" | "task_list" | "cancelled"
+    local_action?:
+      | {
+          executor: "opencorvus" | "codex" | "claude-code"
+          type: "set_executor"
+        }
+      | {
+          taskID: string
+          type: "select_task"
+        }
+      | {
+          sessionID: string
+          type: "select_session"
+        }
+      | {
+          sessionID: string
+          type: "invalidate_session"
+        }
+    message: string
+    session_id?: string
+    task_id?: string
+  }
+}
+
+export type PanelMessageStreamResponse = PanelMessageStreamResponses[keyof PanelMessageStreamResponses]
+
+export type PathGetData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/path"
+}
+
+export type PathGetResponses = {
+  /**
+   * Path
+   */
+  200: Path
+}
+
+export type PathGetResponse = PathGetResponses[keyof PathGetResponses]
+
+export type PermissionListData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/permission"
+}
+
+export type PermissionListResponses = {
+  /**
+   * List of pending permissions
+   */
+  200: Array<PermissionRequest>
+}
+
+export type PermissionListResponse = PermissionListResponses[keyof PermissionListResponses]
+
+export type PermissionReplyData = {
+  body: {
+    autoReply: boolean
+    message?: string
+    reply: "once" | "always" | "reject"
+  }
+  path: {
+    requestID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/permission/{requestID}/reply"
+}
+
+export type PermissionReplyErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type PermissionReplyError = PermissionReplyErrors[keyof PermissionReplyErrors]
+
+export type PermissionReplyResponses = {
+  /**
+   * Permission processed successfully
+   */
+  200: boolean
+}
+
+export type PermissionReplyResponse = PermissionReplyResponses[keyof PermissionReplyResponses]
+
+export type ProjectListData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/project"
+}
+
+export type ProjectListResponses = {
+  /**
+   * List of projects
+   */
+  200: Array<Project>
+}
+
+export type ProjectListResponse = ProjectListResponses[keyof ProjectListResponses]
+
+export type ProjectCurrentDeleteData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/project/current"
+}
+
+export type ProjectCurrentDeleteErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+  /**
+   * Conflict
+   */
+  409:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "ReplyTargetEnvelopeMissingError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "AgentSessionPendingCoordinationError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "TaskCancellationIncompleteError"
+      }
+}
+
+export type ProjectCurrentDeleteError = ProjectCurrentDeleteErrors[keyof ProjectCurrentDeleteErrors]
+
+export type ProjectCurrentDeleteResponses = {
+  /**
+   * Project deleted
+   */
+  200: ProjectDeleteResult
+}
+
+export type ProjectCurrentDeleteResponse = ProjectCurrentDeleteResponses[keyof ProjectCurrentDeleteResponses]
+
+export type ProjectCurrentData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/project/current"
+}
+
+export type ProjectCurrentResponses = {
+  /**
+   * Current project information
+   */
+  200: Project
+}
+
+export type ProjectCurrentResponse = ProjectCurrentResponses[keyof ProjectCurrentResponses]
+
+export type ProjectCurrentUpdateData = {
+  body: {
+    name: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/project/current"
+}
+
+export type ProjectCurrentUpdateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type ProjectCurrentUpdateError = ProjectCurrentUpdateErrors[keyof ProjectCurrentUpdateErrors]
+
+export type ProjectCurrentUpdateResponses = {
+  /**
+   * Updated current project information
+   */
+  200: Project
+}
+
+export type ProjectCurrentUpdateResponse = ProjectCurrentUpdateResponses[keyof ProjectCurrentUpdateResponses]
+
+export type ProjectCurrentCleanupCandidatesData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/project/current/cleanup-candidates"
+}
+
+export type ProjectCurrentCleanupCandidatesErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type ProjectCurrentCleanupCandidatesError =
+  ProjectCurrentCleanupCandidatesErrors[keyof ProjectCurrentCleanupCandidatesErrors]
+
+export type ProjectCurrentCleanupCandidatesResponses = {
+  /**
+   * Cleanup candidates
+   */
+  200: {
+    processOrphans: Array<{
+      marker: {
+        createdAt: number
+        cwd: string
+        goalID?: string
+        kind: "worktree" | "process"
+        ownerPid: number
+        runID?: string
+        sessionID: string
+        taskID: string
+      }
+      markerPath: string
+      reason: string
+      worktreeDir?: string
+    }>
+    worktreeGCCandidates: Array<{
+      directory: string
+      primaryDir: string
+      projectID: string
+    }>
+    worktreeOrphans: Array<{
+      marker: {
+        createdAt: number
+        cwd: string
+        goalID?: string
+        kind: "worktree" | "process"
+        ownerPid: number
+        runID?: string
+        sessionID: string
+        taskID: string
+      }
+      markerPath: string
+      reason: string
+      worktreeDir?: string
+    }>
+  }
+}
+
+export type ProjectCurrentCleanupCandidatesResponse =
+  ProjectCurrentCleanupCandidatesResponses[keyof ProjectCurrentCleanupCandidatesResponses]
+
+export type ProjectCurrentInitGitData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/project/current/init-git"
+}
+
+export type ProjectCurrentInitGitErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type ProjectCurrentInitGitError = ProjectCurrentInitGitErrors[keyof ProjectCurrentInitGitErrors]
+
+export type ProjectCurrentInitGitResponses = {
+  /**
+   * Git initialized
+   */
+  200: ProjectInitGitResult
+}
+
+export type ProjectCurrentInitGitResponse = ProjectCurrentInitGitResponses[keyof ProjectCurrentInitGitResponses]
+
+export type ProjectCurrentWorktreesDeleteData = {
+  body?: WorktreeRemoveInput
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/project/current/worktrees"
+}
+
+export type ProjectCurrentWorktreesDeleteErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type ProjectCurrentWorktreesDeleteError =
+  ProjectCurrentWorktreesDeleteErrors[keyof ProjectCurrentWorktreesDeleteErrors]
+
+export type ProjectCurrentWorktreesDeleteResponses = {
+  /**
+   * Worktree removed
+   */
+  200: {
+    ok: boolean
+  }
+}
+
+export type ProjectCurrentWorktreesDeleteResponse =
+  ProjectCurrentWorktreesDeleteResponses[keyof ProjectCurrentWorktreesDeleteResponses]
+
+export type ProjectCurrentWorktreesData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/project/current/worktrees"
+}
+
+export type ProjectCurrentWorktreesErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type ProjectCurrentWorktreesError = ProjectCurrentWorktreesErrors[keyof ProjectCurrentWorktreesErrors]
+
+export type ProjectCurrentWorktreesResponses = {
+  /**
+   * Project worktrees
+   */
+  200: Array<ProjectWorktree>
+}
+
+export type ProjectCurrentWorktreesResponse = ProjectCurrentWorktreesResponses[keyof ProjectCurrentWorktreesResponses]
+
+export type ProjectUpdateData = {
+  body?: {
+    commands?: {
+      /**
+       * Startup script to run when creating a new workspace (worktree)
+       */
+      start?: string
+    }
+    icon?: {
+      color?: string
+      override?: string
+      url?: string
+    }
+    name?: string
+  }
+  path: {
+    projectID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/project/{projectID}"
+}
+
+export type ProjectUpdateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type ProjectUpdateError = ProjectUpdateErrors[keyof ProjectUpdateErrors]
+
+export type ProjectUpdateResponses = {
+  /**
+   * Updated project information
+   */
+  200: Project
+}
+
+export type ProjectUpdateResponse = ProjectUpdateResponses[keyof ProjectUpdateResponses]
+
+export type ProviderListData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/provider"
+}
+
+export type ProviderListResponses = {
+  /**
+   * List of providers
+   */
+  200: {
+    all: Array<Provider>
+    connected: Array<string>
+    default: {
+      [key: string]: string
+    }
+  }
+}
+
+export type ProviderListResponse = ProviderListResponses[keyof ProviderListResponses]
+
+export type ProviderAuthData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/provider/auth"
+}
+
+export type ProviderAuthResponses = {
+  /**
+   * Provider auth methods
+   */
+  200: {
+    [key: string]: Array<ProviderAuthMethod>
+  }
+}
+
+export type ProviderAuthResponse = ProviderAuthResponses[keyof ProviderAuthResponses]
+
+export type ProviderDiscoverModelsData = {
+  body: {
+    /**
+     * OpenAI-compatible base URL, usually ending in /v1
+     */
+    api: string
+    /**
+     * Optional API key used as a Bearer token
+     */
+    apiKey?: string
+    /**
+     * Optional provider ID whose saved auth key may be used
+     */
+    providerID?: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/provider/discover-models"
+}
+
+export type ProviderDiscoverModelsErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ProviderDiscoverModelsError = ProviderDiscoverModelsErrors[keyof ProviderDiscoverModelsErrors]
+
+export type ProviderDiscoverModelsResponses = {
+  /**
+   * Discovered model IDs
+   */
+  200: {
+    count: number
+    error?: string
+    models: Array<string>
+    ok: boolean
+  }
+}
+
+export type ProviderDiscoverModelsResponse = ProviderDiscoverModelsResponses[keyof ProviderDiscoverModelsResponses]
+
+export type ProviderHexinBudgetData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/provider/hexin/budget"
+}
+
+export type ProviderHexinBudgetResponses = {
+  /**
+   * Hexin budget lookup result
+   */
+  200: HexinBudgetResponse
+}
+
+export type ProviderHexinBudgetResponse = ProviderHexinBudgetResponses[keyof ProviderHexinBudgetResponses]
+
+export type ProviderHexinRefreshData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/provider/hexin/refresh"
+}
+
+export type ProviderHexinRefreshResponses = {
+  /**
+   * Refresh result
+   */
+  200: {
+    count: number
+    error?: string
+    ids: Array<string>
+    ok: boolean
+  }
+}
+
+export type ProviderHexinRefreshResponse = ProviderHexinRefreshResponses[keyof ProviderHexinRefreshResponses]
+
+export type ProviderRefreshData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/provider/refresh"
+}
+
+export type ProviderRefreshResponses = {
+  /**
+   * Refresh outcome
+   */
+  200: {
+    error?: string
+    fetchedAt?: number
+    hexin?: {
+      count: number
+      ids: Array<string>
+    }
+    ok: boolean
+  }
+}
+
+export type ProviderRefreshResponse = ProviderRefreshResponses[keyof ProviderRefreshResponses]
+
+export type ProviderAuthExecuteData = {
+  body: {
+    /**
+     * Collected inputs
+     */
+    inputs?: {
+      [key: string]: string
+    }
+    /**
+     * Auth method index
+     */
+    method: number
+  }
+  path: {
+    /**
+     * Provider ID
+     */
+    providerID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/provider/{providerID}/auth/execute"
+}
+
+export type ProviderAuthExecuteErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ProviderAuthExecuteError = ProviderAuthExecuteErrors[keyof ProviderAuthExecuteErrors]
+
+export type ProviderAuthExecuteResponses = {
+  /**
+   * Auth executed successfully
+   */
+  200: boolean
+}
+
+export type ProviderAuthExecuteResponse = ProviderAuthExecuteResponses[keyof ProviderAuthExecuteResponses]
+
+export type ProviderAuthPromptsData = {
+  body: {
+    /**
+     * Already collected inputs
+     */
+    inputs?: {
+      [key: string]: string
+    }
+    /**
+     * Auth method index
+     */
+    method: number
+  }
+  path: {
+    /**
+     * Provider ID
+     */
+    providerID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/provider/{providerID}/auth/prompts"
+}
+
+export type ProviderAuthPromptsErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ProviderAuthPromptsError = ProviderAuthPromptsErrors[keyof ProviderAuthPromptsErrors]
+
+export type ProviderAuthPromptsResponses = {
+  /**
+   * Auth prompts
+   */
+  200: Array<ProviderAuthPrompt>
+}
+
+export type ProviderAuthPromptsResponse = ProviderAuthPromptsResponses[keyof ProviderAuthPromptsResponses]
+
+export type ProviderOauthAuthorizeData = {
+  body: {
+    /**
+     * Collected inputs
+     */
+    inputs?: {
+      [key: string]: string
+    }
+    /**
+     * Auth method index
+     */
+    method: number
+  }
+  path: {
+    /**
+     * Provider ID
+     */
+    providerID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/provider/{providerID}/oauth/authorize"
+}
+
+export type ProviderOauthAuthorizeErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ProviderOauthAuthorizeError = ProviderOauthAuthorizeErrors[keyof ProviderOauthAuthorizeErrors]
+
+export type ProviderOauthAuthorizeResponses = {
+  /**
+   * Authorization URL and method
+   */
+  200: ProviderAuthAuthorization
+}
+
+export type ProviderOauthAuthorizeResponse = ProviderOauthAuthorizeResponses[keyof ProviderOauthAuthorizeResponses]
+
+export type ProviderOauthCallbackData = {
+  body: {
+    /**
+     * OAuth authorization code
+     */
+    code?: string
+    /**
+     * Auth method index
+     */
+    method: number
+  }
+  path: {
+    /**
+     * Provider ID
+     */
+    providerID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/provider/{providerID}/oauth/callback"
+}
+
+export type ProviderOauthCallbackErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ProviderOauthCallbackError = ProviderOauthCallbackErrors[keyof ProviderOauthCallbackErrors]
+
+export type ProviderOauthCallbackResponses = {
+  /**
+   * OAuth callback processed successfully
+   */
+  200: boolean
+}
+
+export type ProviderOauthCallbackResponse = ProviderOauthCallbackResponses[keyof ProviderOauthCallbackResponses]
+
+export type ProviderTestData = {
+  body?: {
+    modelID?: string
+  }
+  path: {
+    /**
+     * Provider ID
+     */
+    providerID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/provider/{providerID}/test"
+}
+
+export type ProviderTestErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ProviderTestError = ProviderTestErrors[keyof ProviderTestErrors]
+
+export type ProviderTestResponses = {
+  /**
+   * Provider test result
+   */
+  200: {
+    message: string
+    modelID: string
+    ok: boolean
+    providerID: string
+    status: "connected" | "error"
+  }
+}
+
+export type ProviderTestResponse = ProviderTestResponses[keyof ProviderTestResponses]
+
+export type PtyListData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/pty"
+}
+
+export type PtyListResponses = {
+  /**
+   * List of sessions
+   */
+  200: Array<Pty>
+}
+
+export type PtyListResponse = PtyListResponses[keyof PtyListResponses]
+
+export type PtyCreateData = {
+  body: {
+    args?: Array<string>
+    command: string
+    cwd?: string
+    env?: {
+      [key: string]: string
+    }
+    title?: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/pty"
+}
+
+export type PtyCreateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type PtyCreateError = PtyCreateErrors[keyof PtyCreateErrors]
+
+export type PtyCreateResponses = {
+  /**
+   * Created session
+   */
+  200: Pty
+}
+
+export type PtyCreateResponse = PtyCreateResponses[keyof PtyCreateResponses]
+
+export type PtyRemoveData = {
+  body?: never
+  path: {
+    ptyID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/pty/{ptyID}"
+}
+
+export type PtyRemoveErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type PtyRemoveError = PtyRemoveErrors[keyof PtyRemoveErrors]
+
+export type PtyRemoveResponses = {
+  /**
+   * Session removed
+   */
+  200: boolean
+}
+
+export type PtyRemoveResponse = PtyRemoveResponses[keyof PtyRemoveResponses]
+
+export type PtyGetData = {
+  body?: never
+  path: {
+    ptyID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/pty/{ptyID}"
+}
+
+export type PtyGetErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type PtyGetError = PtyGetErrors[keyof PtyGetErrors]
+
+export type PtyGetResponses = {
+  /**
+   * Session info
+   */
+  200: Pty
+}
+
+export type PtyGetResponse = PtyGetResponses[keyof PtyGetResponses]
+
+export type PtyUpdateData = {
+  body?: {
+    size?: {
+      cols: number
+      rows: number
+    }
+    title?: string
+  }
+  path: {
+    ptyID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/pty/{ptyID}"
+}
+
+export type PtyUpdateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type PtyUpdateError = PtyUpdateErrors[keyof PtyUpdateErrors]
+
+export type PtyUpdateResponses = {
+  /**
+   * Updated session
+   */
+  200: Pty
+}
+
+export type PtyUpdateResponse = PtyUpdateResponses[keyof PtyUpdateResponses]
+
+export type PtyConnectData = {
+  body?: never
+  path: {
+    ptyID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/pty/{ptyID}/connect"
+}
+
+export type PtyConnectErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type PtyConnectError = PtyConnectErrors[keyof PtyConnectErrors]
+
+export type PtyConnectResponses = {
+  /**
+   * Connected session
+   */
+  200: boolean
+}
+
+export type PtyConnectResponse = PtyConnectResponses[keyof PtyConnectResponses]
+
+export type QuestionListData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/question"
+}
+
+export type QuestionListResponses = {
+  /**
+   * List of pending questions
+   */
+  200: Array<QuestionRequest>
+}
+
+export type QuestionListResponse = QuestionListResponses[keyof QuestionListResponses]
+
+export type QuestionRejectData = {
+  body?: never
+  path: {
+    requestID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/question/{requestID}/reject"
+}
+
+export type QuestionRejectErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type QuestionRejectError = QuestionRejectErrors[keyof QuestionRejectErrors]
+
+export type QuestionRejectResponses = {
+  /**
+   * Question rejected successfully
+   */
+  200: boolean
+}
+
+export type QuestionRejectResponse = QuestionRejectResponses[keyof QuestionRejectResponses]
+
+export type QuestionReplyData = {
+  body: {
+    /**
+     * User answers in order of questions (each answer is an array of selected labels)
+     */
+    answers: Array<QuestionAnswer>
+  }
+  path: {
+    requestID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/question/{requestID}/reply"
+}
+
+export type QuestionReplyErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type QuestionReplyError = QuestionReplyErrors[keyof QuestionReplyErrors]
+
+export type QuestionReplyResponses = {
+  /**
+   * Question answered successfully
+   */
+  200: boolean
+}
+
+export type QuestionReplyResponse = QuestionReplyResponses[keyof QuestionReplyResponses]
+
+export type ServerRestartData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/restart"
+}
+
+export type ServerRestartErrors = {
+  /**
+   * Shutdown handler unavailable
+   */
+  503: {
+    ok: boolean
+  }
+}
+
+export type ServerRestartError = ServerRestartErrors[keyof ServerRestartErrors]
+
+export type ServerRestartResponses = {
+  /**
+   * Restart initiated
+   */
+  200: {
+    ok: boolean
+  }
+}
+
+export type ServerRestartResponse = ServerRestartResponses[keyof ServerRestartResponses]
+
+export type RunGetData = {
+  body?: never
+  path: {
+    runID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/run/{runID}"
+}
+
+export type RunGetErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type RunGetError = RunGetErrors[keyof RunGetErrors]
+
+export type RunGetResponses = {
+  /**
+   * Run
+   */
+  200: {
+    blockingReason?: string
+    error?: string
+    executor: "opencorvus" | "codex" | "claude-code"
+    executorRef?: {
+      queueTaskID?: string
+      sessionID?: string
+    }
+    id: string
+    metadata?: {
+      [key: string]: unknown
+    }
+    phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
+    planVersionID?: string | null
+    retryCount: number
+    sessionID?: string | null
+    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+    taskID: string
+    time: {
+      completed?: number
+      created: number
+      started?: number
+      updated: number
+    }
+  }
+}
+
+export type RunGetResponse = RunGetResponses[keyof RunGetResponses]
+
+export type RunAbortData = {
+  body?: never
+  path: {
+    runID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/run/{runID}/abort"
+}
+
+export type RunAbortErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+  /**
+   * Conflict
+   */
+  409:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "ReplyTargetEnvelopeMissingError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "AgentSessionPendingCoordinationError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "TaskCancellationIncompleteError"
+      }
+}
+
+export type RunAbortError = RunAbortErrors[keyof RunAbortErrors]
+
+export type RunAbortResponses = {
+  /**
+   * Run aborted
+   */
+  200: boolean
+}
+
+export type RunAbortResponse = RunAbortResponses[keyof RunAbortResponses]
+
+export type RunAcceptanceData = {
+  body?: never
+  path: {
+    runID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/run/{runID}/acceptance"
+}
+
+export type RunAcceptanceErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type RunAcceptanceError = RunAcceptanceErrors[keyof RunAcceptanceErrors]
+
+export type RunAcceptanceResponses = {
+  /**
+   * Run acceptance
+   */
+  200: {
+    id: string
+    result: {
+      artifacts?: Array<{
+        kind: string
+        label: string
+        payload?: {
+          [key: string]: unknown
+        }
+      }>
+      changedFiles: Array<string>
+      diffs: Array<AcceptanceDiffSummary>
+      publish?: {
+        [key: string]: unknown
+      }
+      summary: string
+    }
+    runID: string
+    status: "candidate" | "publishing" | "delivered" | "failed"
+    summary: string
+    taskID: string
+    time: {
+      created: number
+      updated: number
+    }
+  }
+}
+
+export type RunAcceptanceResponse = RunAcceptanceResponses[keyof RunAcceptanceResponses]
+
+export type RunArtifactsData = {
+  body?: never
+  path: {
+    runID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/run/{runID}/artifacts"
+}
+
+export type RunArtifactsErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type RunArtifactsError = RunArtifactsErrors[keyof RunArtifactsErrors]
+
+export type RunArtifactsResponses = {
+  /**
+   * Run artifacts
+   */
+  200: Array<{
+    acceptanceID?: string | null
+    id: string
+    kind: "patch" | "changed_file" | "log" | "report" | "image" | "diff" | "link" | "git_ref" | "pr"
+    label: string
+    payload?: {
+      [key: string]: unknown
+    }
+    runID: string
+    taskID: string
+    time: {
+      created: number
+      updated: number
+    }
+  }>
+}
+
+export type RunArtifactsResponse = RunArtifactsResponses[keyof RunArtifactsResponses]
+
+export type RunBriefData = {
+  body?: never
+  path: {
+    runID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/run/{runID}/brief"
+}
+
+export type RunBriefErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type RunBriefError = RunBriefErrors[keyof RunBriefErrors]
+
+export type RunBriefResponses = {
+  /**
+   * Run brief
+   */
+  200: {
+    content: string
+    goals: Array<{
+      criteria: string
+      description: string
+    }>
+    notes: Array<{
+      content: string
+      kind: string
+    }>
+  }
+}
+
+export type RunBriefResponse = RunBriefResponses[keyof RunBriefResponses]
+
+export type RunDiffData = {
+  body?: never
+  path: {
+    runID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/run/{runID}/diff"
+}
+
+export type RunDiffErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type RunDiffError = RunDiffErrors[keyof RunDiffErrors]
+
+export type RunDiffResponses = {
+  /**
+   * Run workspace diff preview bodies
+   */
+  200: Array<FileDiff>
+}
+
+export type RunDiffResponse = RunDiffResponses[keyof RunDiffResponses]
+
+export type RunEvaluationsData = {
+  body?: never
+  path: {
+    runID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/run/{runID}/evaluations"
+}
+
+export type RunEvaluationsErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type RunEvaluationsError = RunEvaluationsErrors[keyof RunEvaluationsErrors]
+
+export type RunEvaluationsResponses = {
+  /**
+   * Run evaluations
+   */
+  200: Array<{
+    acceptanceID?: string | null
+    checks: Array<{
+      evidence?: string
+      family?: string
+      label?: string
+      name: string
+      status: "passed" | "failed" | "skipped" | "inconclusive"
+    }>
+    id: string
+    runID: string
+    status: "pending" | "passed" | "failed" | "inconclusive"
+    summary: string
+    taskID: string
+    time: {
+      completed?: number
+      created: number
+      updated: number
+    }
+    verdict: "accepted" | "rejected" | "inconclusive"
+  }>
+}
+
+export type RunEvaluationsResponse = RunEvaluationsResponses[keyof RunEvaluationsResponses]
 
 export type SessionListData = {
   body?: never
@@ -5777,6 +12240,7 @@ export type SessionListResponse = SessionListResponses[keyof SessionListResponse
 
 export type SessionCreateData = {
   body: {
+    goalID?: string
     kind:
       | "root"
       | "orchestrator"
@@ -5799,13 +12263,12 @@ export type SessionCreateData = {
       | "visual-qa"
       | "evaluator"
       | "system"
-    goalID?: string
-    parentID?: string
-    title?: string
-    permission?: PermissionRuleset
     metadata?: {
       [key: string]: unknown
     }
+    parentID?: string
+    permission?: PermissionRuleset
+    title?: string
   }
   path?: never
   query?: {
@@ -5925,349 +12388,6 @@ export type SessionStatusResponses = {
 
 export type SessionStatusResponse = SessionStatusResponses[keyof SessionStatusResponses]
 
-export type SessionConfigGetData = {
-  body?: never
-  path: {
-    /**
-     * Session ID
-     */
-    sessionID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/session/{sessionID}/config"
-}
-
-export type SessionConfigGetErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type SessionConfigGetError = SessionConfigGetErrors[keyof SessionConfigGetErrors]
-
-export type SessionConfigGetResponses = {
-  /**
-   * Effective session configuration
-   */
-  200: SessionConfig
-}
-
-export type SessionConfigGetResponse = SessionConfigGetResponses[keyof SessionConfigGetResponses]
-
-export type SessionConfigUpdateData = {
-  body?: {
-    model?: string | null
-    prompt?: {
-      [key: string]: string | null
-    } | null
-    prompt_profile?: {
-      active?: string | null
-    } | null
-    agent?: {
-      [key: string]: {
-        model?: string | null
-        variant?: string | null
-        temperature?: number | null
-        top_p?: number | null
-        prompt?: string | null
-        prompt_append?: string | null
-      } | null
-    } | null
-  }
-  path: {
-    /**
-     * Session ID
-     */
-    sessionID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/session/{sessionID}/config"
-}
-
-export type SessionConfigUpdateErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type SessionConfigUpdateError = SessionConfigUpdateErrors[keyof SessionConfigUpdateErrors]
-
-export type SessionConfigUpdateResponses = {
-  /**
-   * Effective session configuration after update
-   */
-  200: SessionConfig
-}
-
-export type SessionConfigUpdateResponse = SessionConfigUpdateResponses[keyof SessionConfigUpdateResponses]
-
-export type SessionConversationData = {
-  body?: never
-  path: {
-    /**
-     * Session ID
-     */
-    sessionID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/session/{sessionID}/conversation"
-}
-
-export type SessionConversationErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type SessionConversationError = SessionConversationErrors[keyof SessionConversationErrors]
-
-export type SessionConversationResponses = {
-  /**
-   * Session conversation hydrate payload
-   */
-  200: {
-    board: {
-      kind: "session"
-      sessionID: string
-      status: string
-      title?: string | null
-      directory?: string | null
-    }
-    transcript: Array<VisibleMessageWithParts>
-    timeline: Array<{
-      info: {
-        id: string
-        orderKey: string
-        role: "user" | "assistant" | "system"
-        source?: string
-        surface: string
-        taskID?: string
-        sessionID?: string
-        time: {
-          created: number
-          updated: number
-        }
-      }
-      parts: Array<
-        | {
-            id: string
-            type: "text"
-            text: string
-          }
-        | {
-            id: string
-            type: "file"
-            mime: string
-            url: string
-            filename?: string
-          }
-      >
-    }>
-    events: Array<{
-      event_id: string
-      session_id: string
-      orderKey: string
-      type: string
-      emittedAt: number
-      timestamp: number
-      sequence?: number
-      summary: string
-      payload: {
-        [key: string]: unknown
-      }
-      notify?: {
-        tier: 1 | 2 | 3
-        badge?: boolean
-      }
-    }>
-    history: {
-      oldestTimestamp: number | null
-      oldestOrderKey: string | null
-      oldestMessageID?: string | null
-      hasMore: boolean
-      limit: number
-    }
-    agentView: {
-      topLevelSessionIDs: Array<string>
-      sessions: Array<{
-        sessionID: string
-        orderKey: string
-        stage: string
-        parentSessionID?: string
-        goalID?: string
-        messageIDs: Array<string>
-        lastDisplayMessageID?: string
-        firstMessageTime: number
-        lastMessageTime: number
-        firstObservedAt?: number
-        lastObservedAt?: number
-        status?: "pending" | "running" | "idle" | "completed" | "error" | "skipped"
-        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
-        phase?: {
-          stepID: string
-          phaseID: string
-        }
-      }>
-      messages: Array<{
-        messageID: string
-        orderKey: string
-        sessionID: string
-        stage: string
-        parentSessionID?: string
-        goalID?: string
-        time: number
-        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
-        phase?: {
-          stepID: string
-          phaseID: string
-        }
-      }>
-    }
-    view: {
-      topLevelSessionIDs: Array<string>
-      sessions: Array<{
-        sessionID: string
-        orderKey: string
-        stage: string
-        parentSessionID?: string
-        goalID?: string
-        messageIDs: Array<string>
-        lastDisplayMessageID?: string
-        firstMessageTime: number
-        lastMessageTime: number
-        firstObservedAt?: number
-        lastObservedAt?: number
-        status?: "pending" | "running" | "idle" | "completed" | "error" | "skipped"
-        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
-        phase?: {
-          stepID: string
-          phaseID: string
-        }
-      }>
-      messages: Array<{
-        messageID: string
-        orderKey: string
-        sessionID: string
-        stage: string
-        parentSessionID?: string
-        goalID?: string
-        time: number
-        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
-        phase?: {
-          stepID: string
-          phaseID: string
-        }
-      }>
-    }
-  }
-}
-
-export type SessionConversationResponse = SessionConversationResponses[keyof SessionConversationResponses]
-
-export type SessionEventsData = {
-  body?: never
-  path: {
-    /**
-     * Session ID
-     */
-    sessionID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/session/{sessionID}/events"
-}
-
-export type SessionEventsResponses = {
-  /**
-   * Session event stream
-   */
-  200: {
-    event_id: string
-    session_id: string
-    orderKey: string
-    type: string
-    emittedAt: number
-    timestamp: number
-    sequence?: number
-    summary: string
-    payload: {
-      [key: string]: unknown
-    }
-    notify?: {
-      tier: 1 | 2 | 3
-      badge?: boolean
-    }
-  }
-}
-
-export type SessionEventsResponse = SessionEventsResponses[keyof SessionEventsResponses]
-
 export type SessionDeleteData = {
   body?: never
   path: {
@@ -6293,16 +12413,16 @@ export type SessionDeleteErrors = {
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
 }
 
@@ -6341,16 +12461,16 @@ export type SessionGetErrors = {
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
 }
 
@@ -6367,10 +12487,10 @@ export type SessionGetResponse = SessionGetResponses[keyof SessionGetResponses]
 
 export type SessionUpdateData = {
   body?: {
-    title?: string
     time?: {
       archived?: number
     }
+    title?: string
   }
   path: {
     sessionID: string
@@ -6394,16 +12514,16 @@ export type SessionUpdateErrors = {
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
 }
 
@@ -6417,6 +12537,76 @@ export type SessionUpdateResponses = {
 }
 
 export type SessionUpdateResponse = SessionUpdateResponses[keyof SessionUpdateResponses]
+
+export type SessionAbortData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/session/{sessionID}/abort"
+}
+
+export type SessionAbortErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+  /**
+   * Conflict
+   */
+  409:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "ReplyTargetEnvelopeMissingError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "AgentSessionPendingCoordinationError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "TaskCancellationIncompleteError"
+      }
+}
+
+export type SessionAbortError = SessionAbortErrors[keyof SessionAbortErrors]
+
+export type SessionAbortResponses = {
+  /**
+   * Aborted session
+   */
+  200: boolean
+}
+
+export type SessionAbortResponse = SessionAbortResponses[keyof SessionAbortResponses]
 
 export type SessionChildrenData = {
   body?: never
@@ -6442,16 +12632,16 @@ export type SessionChildrenErrors = {
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
 }
 
@@ -6466,7 +12656,115 @@ export type SessionChildrenResponses = {
 
 export type SessionChildrenResponse = SessionChildrenResponses[keyof SessionChildrenResponses]
 
-export type SessionTodoData = {
+export type SessionCommandData = {
+  body: {
+    agent?: string
+    arguments: string
+    command: string
+    messageID?: string
+    model?: string
+    parts?: Array<{
+      filename?: string
+      id?: string
+      mime: string
+      orderKey?: string
+      source?: FilePartSource
+      type: "file"
+      url: string
+    }>
+    variant?: string
+  }
+  path: {
+    /**
+     * Session ID
+     */
+    sessionID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/session/{sessionID}/command"
+}
+
+export type SessionCommandErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type SessionCommandError = SessionCommandErrors[keyof SessionCommandErrors]
+
+export type SessionCommandResponses = {
+  /**
+   * Created message
+   */
+  200: {
+    info: {
+      agent: string
+      cost: number
+      error?:
+        | ProviderAuthError
+        | UnknownError
+        | MessageOutputLengthError
+        | MessageAbortedError
+        | StructuredOutputError
+        | StructuredOutputPayloadError
+        | TerminalToolMissingError
+        | SnapshotIntegrityError
+        | SnapshotEmptyTreeError
+        | ContextOverflowError
+        | PromptBudgetOverflowError
+        | ToolSchemaBudgetError
+        | ModelImageInputTooLargeError
+        | ApiError
+      finish?: string
+      id: string
+      modelID: string
+      orderKey: string
+      parentID: string
+      path: {
+        cwd: string
+        root: string
+      }
+      providerID: string
+      role: "assistant"
+      sessionID: string
+      structured?: unknown
+      summary?: boolean
+      time: {
+        completed?: number
+        created: number
+      }
+      tokens: TokenUsage
+      variant?: string
+    }
+    parts: Array<VisibleMessagePart>
+  }
+}
+
+export type SessionCommandResponse = SessionCommandResponses[keyof SessionCommandResponses]
+
+export type SessionConfigGetData = {
   body?: never
   path: {
     /**
@@ -6480,10 +12778,10 @@ export type SessionTodoData = {
      */
     directory?: string
   }
-  url: "/session/{sessionID}/todo"
+  url: "/session/{sessionID}/config"
 }
 
-export type SessionTodoErrors = {
+export type SessionConfigGetErrors = {
   /**
    * Bad request
    */
@@ -6493,35 +12791,49 @@ export type SessionTodoErrors = {
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
 }
 
-export type SessionTodoError = SessionTodoErrors[keyof SessionTodoErrors]
+export type SessionConfigGetError = SessionConfigGetErrors[keyof SessionConfigGetErrors]
 
-export type SessionTodoResponses = {
+export type SessionConfigGetResponses = {
   /**
-   * Todo list
+   * Effective session configuration
    */
-  200: Array<Todo>
+  200: SessionConfig
 }
 
-export type SessionTodoResponse = SessionTodoResponses[keyof SessionTodoResponses]
+export type SessionConfigGetResponse = SessionConfigGetResponses[keyof SessionConfigGetResponses]
 
-export type SessionInitData = {
-  body: {
-    modelID: string
-    providerID: string
-    messageID: string
+export type SessionConfigUpdateData = {
+  body?: {
+    agent?: {
+      [key: string]: {
+        model?: string | null
+        prompt?: string | null
+        prompt_append?: string | null
+        temperature?: number | null
+        top_p?: number | null
+        variant?: string | null
+      } | null
+    } | null
+    model?: string | null
+    prompt?: {
+      [key: string]: string | null
+    } | null
+    prompt_profile?: {
+      active?: string | null
+    } | null
   }
   path: {
     /**
@@ -6535,10 +12847,10 @@ export type SessionInitData = {
      */
     directory?: string
   }
-  url: "/session/{sessionID}/init"
+  url: "/session/{sessionID}/config"
 }
 
-export type SessionInitErrors = {
+export type SessionConfigUpdateErrors = {
   /**
    * Bad request
    */
@@ -6548,29 +12860,276 @@ export type SessionInitErrors = {
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
 }
 
-export type SessionInitError = SessionInitErrors[keyof SessionInitErrors]
+export type SessionConfigUpdateError = SessionConfigUpdateErrors[keyof SessionConfigUpdateErrors]
 
-export type SessionInitResponses = {
+export type SessionConfigUpdateResponses = {
   /**
-   * 200
+   * Effective session configuration after update
    */
-  200: boolean
+  200: SessionConfig
 }
 
-export type SessionInitResponse = SessionInitResponses[keyof SessionInitResponses]
+export type SessionConfigUpdateResponse = SessionConfigUpdateResponses[keyof SessionConfigUpdateResponses]
+
+export type SessionConversationData = {
+  body?: never
+  path: {
+    /**
+     * Session ID
+     */
+    sessionID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/session/{sessionID}/conversation"
+}
+
+export type SessionConversationErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type SessionConversationError = SessionConversationErrors[keyof SessionConversationErrors]
+
+export type SessionConversationResponses = {
+  /**
+   * Session conversation hydrate payload
+   */
+  200: {
+    agentView: {
+      messages: Array<{
+        goalID?: string
+        messageID: string
+        orderKey: string
+        parentSessionID?: string
+        phase?: {
+          phaseID: string
+          stepID: string
+        }
+        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
+        sessionID: string
+        stage: string
+        time: number
+      }>
+      sessions: Array<{
+        firstMessageTime: number
+        firstObservedAt?: number
+        goalID?: string
+        lastDisplayMessageID?: string
+        lastMessageTime: number
+        lastObservedAt?: number
+        messageIDs: Array<string>
+        orderKey: string
+        parentSessionID?: string
+        phase?: {
+          phaseID: string
+          stepID: string
+        }
+        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
+        sessionID: string
+        stage: string
+        status?: "pending" | "running" | "idle" | "completed" | "error" | "skipped"
+      }>
+      topLevelSessionIDs: Array<string>
+    }
+    board: {
+      directory?: string | null
+      kind: "session"
+      sessionID: string
+      status: string
+      title?: string | null
+    }
+    events: Array<{
+      emittedAt: number
+      event_id: string
+      notify?: {
+        badge?: boolean
+        tier: 1 | 2 | 3
+      }
+      orderKey: string
+      payload: {
+        [key: string]: unknown
+      }
+      sequence?: number
+      session_id: string
+      summary: string
+      timestamp: number
+      type: string
+    }>
+    history: {
+      hasMore: boolean
+      limit: number
+      oldestMessageID?: string | null
+      oldestOrderKey: string | null
+      oldestTimestamp: number | null
+    }
+    timeline: Array<{
+      info: {
+        id: string
+        orderKey: string
+        role: "user" | "assistant" | "system"
+        sessionID?: string
+        source?: string
+        surface: string
+        taskID?: string
+        time: {
+          created: number
+          updated: number
+        }
+      }
+      parts: Array<
+        | {
+            id: string
+            text: string
+            type: "text"
+          }
+        | {
+            filename?: string
+            id: string
+            mime: string
+            type: "file"
+            url: string
+          }
+      >
+    }>
+    transcript: Array<VisibleMessageWithParts>
+    view: {
+      messages: Array<{
+        goalID?: string
+        messageID: string
+        orderKey: string
+        parentSessionID?: string
+        phase?: {
+          phaseID: string
+          stepID: string
+        }
+        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
+        sessionID: string
+        stage: string
+        time: number
+      }>
+      sessions: Array<{
+        firstMessageTime: number
+        firstObservedAt?: number
+        goalID?: string
+        lastDisplayMessageID?: string
+        lastMessageTime: number
+        lastObservedAt?: number
+        messageIDs: Array<string>
+        orderKey: string
+        parentSessionID?: string
+        phase?: {
+          phaseID: string
+          stepID: string
+        }
+        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
+        sessionID: string
+        stage: string
+        status?: "pending" | "running" | "idle" | "completed" | "error" | "skipped"
+      }>
+      topLevelSessionIDs: Array<string>
+    }
+  }
+}
+
+export type SessionConversationResponse = SessionConversationResponses[keyof SessionConversationResponses]
+
+export type SessionDiffData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+    messageID?: string
+  }
+  url: "/session/{sessionID}/diff"
+}
+
+export type SessionDiffResponses = {
+  /**
+   * Successfully retrieved diff
+   */
+  200: Array<FileDiff>
+}
+
+export type SessionDiffResponse = SessionDiffResponses[keyof SessionDiffResponses]
+
+export type SessionEventsData = {
+  body?: never
+  path: {
+    /**
+     * Session ID
+     */
+    sessionID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/session/{sessionID}/events"
+}
+
+export type SessionEventsResponses = {
+  /**
+   * Session event stream
+   */
+  200: {
+    emittedAt: number
+    event_id: string
+    notify?: {
+      badge?: boolean
+      tier: 1 | 2 | 3
+    }
+    orderKey: string
+    payload: {
+      [key: string]: unknown
+    }
+    sequence?: number
+    session_id: string
+    summary: string
+    timestamp: number
+    type: string
+  }
+}
+
+export type SessionEventsResponse = SessionEventsResponses[keyof SessionEventsResponses]
 
 export type SessionForkData = {
   body?: {
@@ -6597,106 +13156,11 @@ export type SessionForkResponses = {
 
 export type SessionForkResponse = SessionForkResponses[keyof SessionForkResponses]
 
-export type SessionAbortData = {
-  body?: never
-  path: {
-    sessionID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/session/{sessionID}/abort"
-}
-
-export type SessionAbortErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-  /**
-   * Conflict
-   */
-  409:
-    | {
-        name: "ReplyTargetEnvelopeMissingError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "AgentSessionPendingCoordinationError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "TaskCancellationIncompleteError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type SessionAbortError = SessionAbortErrors[keyof SessionAbortErrors]
-
-export type SessionAbortResponses = {
-  /**
-   * Aborted session
-   */
-  200: boolean
-}
-
-export type SessionAbortResponse = SessionAbortResponses[keyof SessionAbortResponses]
-
-export type SessionDiffData = {
-  body?: never
-  path: {
-    sessionID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-    messageID?: string
-  }
-  url: "/session/{sessionID}/diff"
-}
-
-export type SessionDiffResponses = {
-  /**
-   * Successfully retrieved diff
-   */
-  200: Array<FileDiff>
-}
-
-export type SessionDiffResponse = SessionDiffResponses[keyof SessionDiffResponses]
-
-export type SessionSummarizeData = {
+export type SessionInitData = {
   body: {
-    providerID: string
+    messageID: string
     modelID: string
-    auto?: boolean
-    focus?: string
+    providerID: string
   }
   path: {
     /**
@@ -6710,10 +13174,10 @@ export type SessionSummarizeData = {
      */
     directory?: string
   }
-  url: "/session/{sessionID}/summarize"
+  url: "/session/{sessionID}/init"
 }
 
-export type SessionSummarizeErrors = {
+export type SessionInitErrors = {
   /**
    * Bad request
    */
@@ -6723,29 +13187,29 @@ export type SessionSummarizeErrors = {
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
 }
 
-export type SessionSummarizeError = SessionSummarizeErrors[keyof SessionSummarizeErrors]
+export type SessionInitError = SessionInitErrors[keyof SessionInitErrors]
 
-export type SessionSummarizeResponses = {
+export type SessionInitResponses = {
   /**
-   * Summarized session
+   * 200
    */
   200: boolean
 }
 
-export type SessionSummarizeResponse = SessionSummarizeResponses[keyof SessionSummarizeResponses]
+export type SessionInitResponse = SessionInitResponses[keyof SessionInitResponses]
 
 export type SessionMessagesData = {
   body?: never
@@ -6775,16 +13239,16 @@ export type SessionMessagesErrors = {
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
 }
 
@@ -6801,25 +13265,25 @@ export type SessionMessagesResponse = SessionMessagesResponses[keyof SessionMess
 
 export type SessionPromptData = {
   body: {
-    messageID?: string
-    model?: {
-      providerID: string
-      modelID: string
-    }
     agent?: string
-    noReply?: boolean
-    tools?: {
-      [key: string]: boolean
-    }
-    format?: OutputFormat
-    system?: string
-    systemMode?: "append_to_agent" | "complete"
-    variant?: string
+    byteMaterializationProjectID?: string
     extra?: {
       [key: string]: unknown
     }
-    byteMaterializationProjectID?: string
+    format?: OutputFormat
+    messageID?: string
+    model?: {
+      modelID: string
+      providerID: string
+    }
+    noReply?: boolean
     parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
+    system?: string
+    systemMode?: "append_to_agent" | "complete"
+    tools?: {
+      [key: string]: boolean
+    }
+    variant?: string
   }
   path: {
     /**
@@ -6846,16 +13310,16 @@ export type SessionPromptErrors = {
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
 }
 
@@ -6867,14 +13331,8 @@ export type SessionPromptResponses = {
    */
   200: {
     info: {
-      id: string
-      sessionID: string
-      orderKey: string
-      role: "assistant"
-      time: {
-        created: number
-        completed?: number
-      }
+      agent: string
+      cost: number
       error?:
         | ProviderAuthError
         | UnknownError
@@ -6890,20 +13348,26 @@ export type SessionPromptResponses = {
         | ToolSchemaBudgetError
         | ModelImageInputTooLargeError
         | ApiError
-      parentID: string
+      finish?: string
+      id: string
       modelID: string
-      providerID: string
-      agent: string
+      orderKey: string
+      parentID: string
       path: {
         cwd: string
         root: string
       }
-      summary?: boolean
-      cost: number
-      tokens: TokenUsage
+      providerID: string
+      role: "assistant"
+      sessionID: string
       structured?: unknown
+      summary?: boolean
+      time: {
+        completed?: number
+        created: number
+      }
+      tokens: TokenUsage
       variant?: string
-      finish?: string
     }
     parts: Array<VisibleMessagePart>
   }
@@ -6942,16 +13406,16 @@ export type SessionDeleteMessageErrors = {
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
 }
 
@@ -6997,16 +13461,16 @@ export type SessionMessageErrors = {
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
 }
 
@@ -7056,16 +13520,16 @@ export type PartDeleteErrors = {
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
 }
 
@@ -7115,16 +13579,16 @@ export type PartUpdateErrors = {
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
 }
 
@@ -7141,25 +13605,25 @@ export type PartUpdateResponse = PartUpdateResponses[keyof PartUpdateResponses]
 
 export type SessionPromptAsyncData = {
   body: {
-    messageID?: string
-    model?: {
-      providerID: string
-      modelID: string
-    }
     agent?: string
-    noReply?: boolean
-    tools?: {
-      [key: string]: boolean
-    }
-    format?: OutputFormat
-    system?: string
-    systemMode?: "append_to_agent" | "complete"
-    variant?: string
+    byteMaterializationProjectID?: string
     extra?: {
       [key: string]: unknown
     }
-    byteMaterializationProjectID?: string
+    format?: OutputFormat
+    messageID?: string
+    model?: {
+      modelID: string
+      providerID: string
+    }
+    noReply?: boolean
     parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
+    system?: string
+    systemMode?: "append_to_agent" | "complete"
+    tools?: {
+      [key: string]: boolean
+    }
+    variant?: string
   }
   path: {
     /**
@@ -7186,16 +13650,16 @@ export type SessionPromptAsyncErrors = {
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
 }
 
@@ -7244,16 +13708,16 @@ export type SessionPromptAsyncStatusErrors = {
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
 }
 
@@ -7264,14 +13728,14 @@ export type SessionPromptAsyncStatusResponses = {
    * Task status
    */
   200: {
-    taskID: string
-    sessionID: string
-    status: "queued" | "running" | "completed" | "failed"
-    source: string
-    prompt: string
-    error: string | null
-    startedAt: number | null
     completedAt: number | null
+    error: string | null
+    prompt: string
+    sessionID: string
+    source: string
+    startedAt: number | null
+    status: "queued" | "running" | "completed" | "failed"
+    taskID: string
     updatedAt: number
   }
 }
@@ -7279,122 +13743,14 @@ export type SessionPromptAsyncStatusResponses = {
 export type SessionPromptAsyncStatusResponse =
   SessionPromptAsyncStatusResponses[keyof SessionPromptAsyncStatusResponses]
 
-export type SessionCommandData = {
-  body: {
-    messageID?: string
-    agent?: string
-    model?: string
-    arguments: string
-    command: string
-    variant?: string
-    parts?: Array<{
-      id?: string
-      orderKey?: string
-      type: "file"
-      mime: string
-      filename?: string
-      url: string
-      source?: FilePartSource
-    }>
-  }
-  path: {
-    /**
-     * Session ID
-     */
-    sessionID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/session/{sessionID}/command"
-}
-
-export type SessionCommandErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type SessionCommandError = SessionCommandErrors[keyof SessionCommandErrors]
-
-export type SessionCommandResponses = {
-  /**
-   * Created message
-   */
-  200: {
-    info: {
-      id: string
-      sessionID: string
-      orderKey: string
-      role: "assistant"
-      time: {
-        created: number
-        completed?: number
-      }
-      error?:
-        | ProviderAuthError
-        | UnknownError
-        | MessageOutputLengthError
-        | MessageAbortedError
-        | StructuredOutputError
-        | StructuredOutputPayloadError
-        | TerminalToolMissingError
-        | SnapshotIntegrityError
-        | SnapshotEmptyTreeError
-        | ContextOverflowError
-        | PromptBudgetOverflowError
-        | ToolSchemaBudgetError
-        | ModelImageInputTooLargeError
-        | ApiError
-      parentID: string
-      modelID: string
-      providerID: string
-      agent: string
-      path: {
-        cwd: string
-        root: string
-      }
-      summary?: boolean
-      cost: number
-      tokens: TokenUsage
-      structured?: unknown
-      variant?: string
-      finish?: string
-    }
-    parts: Array<VisibleMessagePart>
-  }
-}
-
-export type SessionCommandResponse = SessionCommandResponses[keyof SessionCommandResponses]
-
 export type SessionShellData = {
   body: {
     agent: string
-    model?: {
-      providerID: string
-      modelID: string
-    }
     command: string
+    model?: {
+      modelID: string
+      providerID: string
+    }
   }
   path: {
     /**
@@ -7421,16 +13777,16 @@ export type SessionShellErrors = {
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
 }
 
@@ -7441,14 +13797,8 @@ export type SessionShellResponses = {
    * Created message
    */
   200: {
-    id: string
-    sessionID: string
-    orderKey: string
-    role: "assistant"
-    time: {
-      created: number
-      completed?: number
-    }
+    agent: string
+    cost: number
     error?:
       | ProviderAuthError
       | UnknownError
@@ -7464,455 +13814,43 @@ export type SessionShellResponses = {
       | ToolSchemaBudgetError
       | ModelImageInputTooLargeError
       | ApiError
-    parentID: string
+    finish?: string
+    id: string
     modelID: string
-    providerID: string
-    agent: string
+    orderKey: string
+    parentID: string
     path: {
       cwd: string
       root: string
     }
-    summary?: boolean
-    cost: number
-    tokens: TokenUsage
+    providerID: string
+    role: "assistant"
+    sessionID: string
     structured?: unknown
+    summary?: boolean
+    time: {
+      completed?: number
+      created: number
+    }
+    tokens: TokenUsage
     variant?: string
-    finish?: string
   }
 }
 
 export type SessionShellResponse = SessionShellResponses[keyof SessionShellResponses]
 
-export type PermissionReplyData = {
+export type SessionSummarizeData = {
   body: {
-    reply: "once" | "always" | "reject"
-    autoReply: boolean
-    message?: string
-  }
-  path: {
-    requestID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/permission/{requestID}/reply"
-}
-
-export type PermissionReplyErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type PermissionReplyError = PermissionReplyErrors[keyof PermissionReplyErrors]
-
-export type PermissionReplyResponses = {
-  /**
-   * Permission processed successfully
-   */
-  200: boolean
-}
-
-export type PermissionReplyResponse = PermissionReplyResponses[keyof PermissionReplyResponses]
-
-export type PermissionListData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/permission"
-}
-
-export type PermissionListResponses = {
-  /**
-   * List of pending permissions
-   */
-  200: Array<PermissionRequest>
-}
-
-export type PermissionListResponse = PermissionListResponses[keyof PermissionListResponses]
-
-export type QuestionListData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/question"
-}
-
-export type QuestionListResponses = {
-  /**
-   * List of pending questions
-   */
-  200: Array<QuestionRequest>
-}
-
-export type QuestionListResponse = QuestionListResponses[keyof QuestionListResponses]
-
-export type QuestionReplyData = {
-  body: {
-    /**
-     * User answers in order of questions (each answer is an array of selected labels)
-     */
-    answers: Array<QuestionAnswer>
-  }
-  path: {
-    requestID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/question/{requestID}/reply"
-}
-
-export type QuestionReplyErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type QuestionReplyError = QuestionReplyErrors[keyof QuestionReplyErrors]
-
-export type QuestionReplyResponses = {
-  /**
-   * Question answered successfully
-   */
-  200: boolean
-}
-
-export type QuestionReplyResponse = QuestionReplyResponses[keyof QuestionReplyResponses]
-
-export type QuestionRejectData = {
-  body?: never
-  path: {
-    requestID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/question/{requestID}/reject"
-}
-
-export type QuestionRejectErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type QuestionRejectError = QuestionRejectErrors[keyof QuestionRejectErrors]
-
-export type QuestionRejectResponses = {
-  /**
-   * Question rejected successfully
-   */
-  200: boolean
-}
-
-export type QuestionRejectResponse = QuestionRejectResponses[keyof QuestionRejectResponses]
-
-export type ProviderListData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/provider"
-}
-
-export type ProviderListResponses = {
-  /**
-   * List of providers
-   */
-  200: {
-    all: Array<Provider>
-    default: {
-      [key: string]: string
-    }
-    connected: Array<string>
-  }
-}
-
-export type ProviderListResponse = ProviderListResponses[keyof ProviderListResponses]
-
-export type ProviderAuthData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/provider/auth"
-}
-
-export type ProviderAuthResponses = {
-  /**
-   * Provider auth methods
-   */
-  200: {
-    [key: string]: Array<ProviderAuthMethod>
-  }
-}
-
-export type ProviderAuthResponse = ProviderAuthResponses[keyof ProviderAuthResponses]
-
-export type ProviderRefreshData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/provider/refresh"
-}
-
-export type ProviderRefreshResponses = {
-  /**
-   * Refresh outcome
-   */
-  200: {
-    ok: boolean
-    fetchedAt?: number
-    hexin?: {
-      count: number
-      ids: Array<string>
-    }
-    error?: string
-  }
-}
-
-export type ProviderRefreshResponse = ProviderRefreshResponses[keyof ProviderRefreshResponses]
-
-export type ProviderHexinRefreshData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/provider/hexin/refresh"
-}
-
-export type ProviderHexinRefreshResponses = {
-  /**
-   * Refresh result
-   */
-  200: {
-    ok: boolean
-    count: number
-    ids: Array<string>
-    error?: string
-  }
-}
-
-export type ProviderHexinRefreshResponse = ProviderHexinRefreshResponses[keyof ProviderHexinRefreshResponses]
-
-export type ProviderHexinBudgetData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/provider/hexin/budget"
-}
-
-export type ProviderHexinBudgetResponses = {
-  /**
-   * Hexin budget lookup result
-   */
-  200: HexinBudgetResponse
-}
-
-export type ProviderHexinBudgetResponse = ProviderHexinBudgetResponses[keyof ProviderHexinBudgetResponses]
-
-export type ProviderDiscoverModelsData = {
-  body: {
-    /**
-     * OpenAI-compatible base URL, usually ending in /v1
-     */
-    api: string
-    /**
-     * Optional API key used as a Bearer token
-     */
-    apiKey?: string
-    /**
-     * Optional provider ID whose saved auth key may be used
-     */
-    providerID?: string
-  }
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/provider/discover-models"
-}
-
-export type ProviderDiscoverModelsErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type ProviderDiscoverModelsError = ProviderDiscoverModelsErrors[keyof ProviderDiscoverModelsErrors]
-
-export type ProviderDiscoverModelsResponses = {
-  /**
-   * Discovered model IDs
-   */
-  200: {
-    ok: boolean
-    models: Array<string>
-    count: number
-    error?: string
-  }
-}
-
-export type ProviderDiscoverModelsResponse = ProviderDiscoverModelsResponses[keyof ProviderDiscoverModelsResponses]
-
-export type ProviderTestData = {
-  body?: {
-    modelID?: string
-  }
-  path: {
-    /**
-     * Provider ID
-     */
-    providerID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/provider/{providerID}/test"
-}
-
-export type ProviderTestErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type ProviderTestError = ProviderTestErrors[keyof ProviderTestErrors]
-
-export type ProviderTestResponses = {
-  /**
-   * Provider test result
-   */
-  200: {
-    ok: boolean
-    status: "connected" | "error"
-    providerID: string
+    auto?: boolean
+    focus?: string
     modelID: string
-    message: string
-  }
-}
-
-export type ProviderTestResponse = ProviderTestResponses[keyof ProviderTestResponses]
-
-export type ProviderAuthPromptsData = {
-  body: {
-    /**
-     * Auth method index
-     */
-    method: number
-    /**
-     * Already collected inputs
-     */
-    inputs?: {
-      [key: string]: string
-    }
+    providerID: string
   }
   path: {
     /**
-     * Provider ID
+     * Session ID
      */
-    providerID: string
+    sessionID: string
   }
   query?: {
     /**
@@ -7920,933 +13858,10 @@ export type ProviderAuthPromptsData = {
      */
     directory?: string
   }
-  url: "/provider/{providerID}/auth/prompts"
+  url: "/session/{sessionID}/summarize"
 }
 
-export type ProviderAuthPromptsErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type ProviderAuthPromptsError = ProviderAuthPromptsErrors[keyof ProviderAuthPromptsErrors]
-
-export type ProviderAuthPromptsResponses = {
-  /**
-   * Auth prompts
-   */
-  200: Array<ProviderAuthPrompt>
-}
-
-export type ProviderAuthPromptsResponse = ProviderAuthPromptsResponses[keyof ProviderAuthPromptsResponses]
-
-export type ProviderAuthExecuteData = {
-  body: {
-    /**
-     * Auth method index
-     */
-    method: number
-    /**
-     * Collected inputs
-     */
-    inputs?: {
-      [key: string]: string
-    }
-  }
-  path: {
-    /**
-     * Provider ID
-     */
-    providerID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/provider/{providerID}/auth/execute"
-}
-
-export type ProviderAuthExecuteErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type ProviderAuthExecuteError = ProviderAuthExecuteErrors[keyof ProviderAuthExecuteErrors]
-
-export type ProviderAuthExecuteResponses = {
-  /**
-   * Auth executed successfully
-   */
-  200: boolean
-}
-
-export type ProviderAuthExecuteResponse = ProviderAuthExecuteResponses[keyof ProviderAuthExecuteResponses]
-
-export type ProviderOauthAuthorizeData = {
-  body: {
-    /**
-     * Auth method index
-     */
-    method: number
-    /**
-     * Collected inputs
-     */
-    inputs?: {
-      [key: string]: string
-    }
-  }
-  path: {
-    /**
-     * Provider ID
-     */
-    providerID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/provider/{providerID}/oauth/authorize"
-}
-
-export type ProviderOauthAuthorizeErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type ProviderOauthAuthorizeError = ProviderOauthAuthorizeErrors[keyof ProviderOauthAuthorizeErrors]
-
-export type ProviderOauthAuthorizeResponses = {
-  /**
-   * Authorization URL and method
-   */
-  200: ProviderAuthAuthorization
-}
-
-export type ProviderOauthAuthorizeResponse = ProviderOauthAuthorizeResponses[keyof ProviderOauthAuthorizeResponses]
-
-export type ProviderOauthCallbackData = {
-  body: {
-    /**
-     * Auth method index
-     */
-    method: number
-    /**
-     * OAuth authorization code
-     */
-    code?: string
-  }
-  path: {
-    /**
-     * Provider ID
-     */
-    providerID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/provider/{providerID}/oauth/callback"
-}
-
-export type ProviderOauthCallbackErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type ProviderOauthCallbackError = ProviderOauthCallbackErrors[keyof ProviderOauthCallbackErrors]
-
-export type ProviderOauthCallbackResponses = {
-  /**
-   * OAuth callback processed successfully
-   */
-  200: boolean
-}
-
-export type ProviderOauthCallbackResponse = ProviderOauthCallbackResponses[keyof ProviderOauthCallbackResponses]
-
-export type AppSkillsData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/skill"
-}
-
-export type AppSkillsResponses = {
-  /**
-   * List of skills
-   */
-  200: Array<{
-    name: string
-    description: string
-    platforms?: Array<"win32" | "darwin" | "linux">
-    builtin?: boolean
-    location: string
-    content: string
-    auto_detect?: {
-      files?: Array<string>
-      deps?: Array<string>
-      task_signals?: {
-        /**
-         * True when the task carries a reference image attachment.
-         */
-        has_attachment_image?: boolean
-        /**
-         * True when the task request text contains an http(s) URL — explicitly EXCLUDING figma.com URLs (those drive `request_contains_figma_url`).
-         */
-        request_contains_url?: boolean
-        /**
-         * True when the task request text contains a figma.com URL (file / design / proto / board path). Mutually exclusive with `request_contains_url` by construction in deriveUrlSignals.
-         */
-        request_contains_figma_url?: boolean
-        /**
-         * Any of the listed npm/bun scripts exists in the project's package.json.
-         */
-        package_has_script?: Array<string>
-        /**
-         * Any listed case-insensitive substring must appear in the task request text.
-         */
-        request_text_any?: Array<string>
-      }
-    }
-    priority?: number
-    required_tools?: Array<string>
-    agents?: Array<string>
-    mounted_agents?: Array<string>
-    expires_at?: string
-    duplicate_locations?: Array<string>
-  }>
-}
-
-export type AppSkillsResponse = AppSkillsResponses[keyof AppSkillsResponses]
-
-export type SkillMountsData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-    sessionID?: string
-    refresh?: "true"
-  }
-  url: "/skill/mounts"
-}
-
-export type SkillMountsResponses = {
-  /**
-   * Agent skill mount matrix
-   */
-  200: {
-    scope: "project" | "session"
-    active_profile: string
-    capability_profile_id: string
-    projection_hash: string
-    projected_tool_ids: Array<string>
-    projected_agents: Array<string>
-    selector_skill_names: Array<string>
-    production_skill_names: Array<string>
-    projected_skill_names: Array<string>
-    skills: Array<{
-      name: string
-      description: string
-      platforms?: Array<"win32" | "darwin" | "linux">
-      builtin?: boolean
-      location: string
-      content: string
-      auto_detect?: {
-        files?: Array<string>
-        deps?: Array<string>
-        task_signals?: {
-          has_attachment_image?: boolean
-          request_contains_url?: boolean
-          request_contains_figma_url?: boolean
-          package_has_script?: Array<string>
-          request_text_any?: Array<string>
-        }
-      }
-      priority?: number
-      required_tools?: Array<string>
-      agents?: Array<string>
-      mounted_agents: Array<string>
-      expires_at?: string
-      duplicate_locations?: Array<string>
-      dir?: string
-      source_type: "builtin" | "managed_git" | "config_path" | "config_url" | "external" | "unknown"
-      source?: string
-      trust: "builtin" | "official" | "curated" | "community" | "local" | "external" | "unknown"
-      risk: {
-        level: "low" | "medium" | "high"
-        has_scripts: boolean
-        has_agents: boolean
-        has_references: boolean
-        has_templates: boolean
-      }
-      recommended_policy: PermissionAction
-      policy: PermissionAction
-      managed: boolean
-      writable: boolean
-      unmounted: boolean
-      warning?: "unmounted"
-    }>
-    agents: Array<{
-      name: string
-      description?: string
-      mode: "subagent" | "primary" | "all"
-      native?: boolean
-      hidden?: boolean
-      skill_mountable: boolean
-      skill_tool_available: boolean
-      virtual_agent?: {
-        id: string
-        label: string
-        description?: string
-        projection_hash: string
-      }
-    }>
-    matrix: Array<{
-      agent: string
-      mounted: Array<{
-        name: string
-        description: string
-        location: string
-        enabled: boolean
-        reason?:
-          | "skill_tool_unavailable"
-          | "permission_denied"
-          | "platform_incompatible"
-          | "agent_incompatible"
-          | "missing_required_tool"
-      }>
-    }>
-    project_mounts: {
-      agents?: {
-        [key: string]: Array<string>
-      }
-    }
-    unmounted_count: number
-  }
-}
-
-export type SkillMountsResponse = SkillMountsResponses[keyof SkillMountsResponses]
-
-export type SkillMountData = {
-  body: {
-    agent: string
-    skill: string
-    sessionID?: string
-  }
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/skill/mount"
-}
-
-export type SkillMountResponses = {
-  /**
-   * Updated agent skill mount matrix
-   */
-  200: {
-    scope: "project" | "session"
-    active_profile: string
-    capability_profile_id: string
-    projection_hash: string
-    projected_tool_ids: Array<string>
-    projected_agents: Array<string>
-    selector_skill_names: Array<string>
-    production_skill_names: Array<string>
-    projected_skill_names: Array<string>
-    skills: Array<{
-      name: string
-      description: string
-      platforms?: Array<"win32" | "darwin" | "linux">
-      builtin?: boolean
-      location: string
-      content: string
-      auto_detect?: {
-        files?: Array<string>
-        deps?: Array<string>
-        task_signals?: {
-          has_attachment_image?: boolean
-          request_contains_url?: boolean
-          request_contains_figma_url?: boolean
-          package_has_script?: Array<string>
-          request_text_any?: Array<string>
-        }
-      }
-      priority?: number
-      required_tools?: Array<string>
-      agents?: Array<string>
-      mounted_agents: Array<string>
-      expires_at?: string
-      duplicate_locations?: Array<string>
-      dir?: string
-      source_type: "builtin" | "managed_git" | "config_path" | "config_url" | "external" | "unknown"
-      source?: string
-      trust: "builtin" | "official" | "curated" | "community" | "local" | "external" | "unknown"
-      risk: {
-        level: "low" | "medium" | "high"
-        has_scripts: boolean
-        has_agents: boolean
-        has_references: boolean
-        has_templates: boolean
-      }
-      recommended_policy: PermissionAction
-      policy: PermissionAction
-      managed: boolean
-      writable: boolean
-      unmounted: boolean
-      warning?: "unmounted"
-    }>
-    agents: Array<{
-      name: string
-      description?: string
-      mode: "subagent" | "primary" | "all"
-      native?: boolean
-      hidden?: boolean
-      skill_mountable: boolean
-      skill_tool_available: boolean
-      virtual_agent?: {
-        id: string
-        label: string
-        description?: string
-        projection_hash: string
-      }
-    }>
-    matrix: Array<{
-      agent: string
-      mounted: Array<{
-        name: string
-        description: string
-        location: string
-        enabled: boolean
-        reason?:
-          | "skill_tool_unavailable"
-          | "permission_denied"
-          | "platform_incompatible"
-          | "agent_incompatible"
-          | "missing_required_tool"
-      }>
-    }>
-    project_mounts: {
-      agents?: {
-        [key: string]: Array<string>
-      }
-    }
-    unmounted_count: number
-  }
-}
-
-export type SkillMountResponse = SkillMountResponses[keyof SkillMountResponses]
-
-export type SkillUnmountData = {
-  body: {
-    agent: string
-    skill: string
-    sessionID?: string
-  }
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/skill/unmount"
-}
-
-export type SkillUnmountResponses = {
-  /**
-   * Updated agent skill mount matrix
-   */
-  200: {
-    scope: "project" | "session"
-    active_profile: string
-    capability_profile_id: string
-    projection_hash: string
-    projected_tool_ids: Array<string>
-    projected_agents: Array<string>
-    selector_skill_names: Array<string>
-    production_skill_names: Array<string>
-    projected_skill_names: Array<string>
-    skills: Array<{
-      name: string
-      description: string
-      platforms?: Array<"win32" | "darwin" | "linux">
-      builtin?: boolean
-      location: string
-      content: string
-      auto_detect?: {
-        files?: Array<string>
-        deps?: Array<string>
-        task_signals?: {
-          has_attachment_image?: boolean
-          request_contains_url?: boolean
-          request_contains_figma_url?: boolean
-          package_has_script?: Array<string>
-          request_text_any?: Array<string>
-        }
-      }
-      priority?: number
-      required_tools?: Array<string>
-      agents?: Array<string>
-      mounted_agents: Array<string>
-      expires_at?: string
-      duplicate_locations?: Array<string>
-      dir?: string
-      source_type: "builtin" | "managed_git" | "config_path" | "config_url" | "external" | "unknown"
-      source?: string
-      trust: "builtin" | "official" | "curated" | "community" | "local" | "external" | "unknown"
-      risk: {
-        level: "low" | "medium" | "high"
-        has_scripts: boolean
-        has_agents: boolean
-        has_references: boolean
-        has_templates: boolean
-      }
-      recommended_policy: PermissionAction
-      policy: PermissionAction
-      managed: boolean
-      writable: boolean
-      unmounted: boolean
-      warning?: "unmounted"
-    }>
-    agents: Array<{
-      name: string
-      description?: string
-      mode: "subagent" | "primary" | "all"
-      native?: boolean
-      hidden?: boolean
-      skill_mountable: boolean
-      skill_tool_available: boolean
-      virtual_agent?: {
-        id: string
-        label: string
-        description?: string
-        projection_hash: string
-      }
-    }>
-    matrix: Array<{
-      agent: string
-      mounted: Array<{
-        name: string
-        description: string
-        location: string
-        enabled: boolean
-        reason?:
-          | "skill_tool_unavailable"
-          | "permission_denied"
-          | "platform_incompatible"
-          | "agent_incompatible"
-          | "missing_required_tool"
-      }>
-    }>
-    project_mounts: {
-      agents?: {
-        [key: string]: Array<string>
-      }
-    }
-    unmounted_count: number
-  }
-}
-
-export type SkillUnmountResponse = SkillUnmountResponses[keyof SkillUnmountResponses]
-
-export type SkillImportAndMountData = {
-  body: {
-    agent: string
-    sessionID?: string
-    import: {
-      filename?: string
-      content?: string
-      sourceName?: string
-      files?: Array<{
-        path: string
-        content?: string
-        contentBase64?: string
-      }>
-      archiveBase64?: string
-      policy?: PermissionAction
-    }
-  }
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/skill/import-and-mount"
-}
-
-export type SkillImportAndMountResponses = {
-  /**
-   * Updated agent skill mount matrix
-   */
-  200: {
-    scope: "project" | "session"
-    active_profile: string
-    capability_profile_id: string
-    projection_hash: string
-    projected_tool_ids: Array<string>
-    projected_agents: Array<string>
-    selector_skill_names: Array<string>
-    production_skill_names: Array<string>
-    projected_skill_names: Array<string>
-    skills: Array<{
-      name: string
-      description: string
-      platforms?: Array<"win32" | "darwin" | "linux">
-      builtin?: boolean
-      location: string
-      content: string
-      auto_detect?: {
-        files?: Array<string>
-        deps?: Array<string>
-        task_signals?: {
-          has_attachment_image?: boolean
-          request_contains_url?: boolean
-          request_contains_figma_url?: boolean
-          package_has_script?: Array<string>
-          request_text_any?: Array<string>
-        }
-      }
-      priority?: number
-      required_tools?: Array<string>
-      agents?: Array<string>
-      mounted_agents: Array<string>
-      expires_at?: string
-      duplicate_locations?: Array<string>
-      dir?: string
-      source_type: "builtin" | "managed_git" | "config_path" | "config_url" | "external" | "unknown"
-      source?: string
-      trust: "builtin" | "official" | "curated" | "community" | "local" | "external" | "unknown"
-      risk: {
-        level: "low" | "medium" | "high"
-        has_scripts: boolean
-        has_agents: boolean
-        has_references: boolean
-        has_templates: boolean
-      }
-      recommended_policy: PermissionAction
-      policy: PermissionAction
-      managed: boolean
-      writable: boolean
-      unmounted: boolean
-      warning?: "unmounted"
-    }>
-    agents: Array<{
-      name: string
-      description?: string
-      mode: "subagent" | "primary" | "all"
-      native?: boolean
-      hidden?: boolean
-      skill_mountable: boolean
-      skill_tool_available: boolean
-      virtual_agent?: {
-        id: string
-        label: string
-        description?: string
-        projection_hash: string
-      }
-    }>
-    matrix: Array<{
-      agent: string
-      mounted: Array<{
-        name: string
-        description: string
-        location: string
-        enabled: boolean
-        reason?:
-          | "skill_tool_unavailable"
-          | "permission_denied"
-          | "platform_incompatible"
-          | "agent_incompatible"
-          | "missing_required_tool"
-      }>
-    }>
-    project_mounts: {
-      agents?: {
-        [key: string]: Array<string>
-      }
-    }
-    unmounted_count: number
-  }
-}
-
-export type SkillImportAndMountResponse = SkillImportAndMountResponses[keyof SkillImportAndMountResponses]
-
-export type SkillInstalledData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/skill/installed"
-}
-
-export type SkillInstalledResponses = {
-  /**
-   * Installed skills
-   */
-  200: Array<{
-    name: string
-    description: string
-    platforms?: Array<"win32" | "darwin" | "linux">
-    builtin?: boolean
-    location: string
-    content: string
-    auto_detect?: {
-      files?: Array<string>
-      deps?: Array<string>
-      task_signals?: {
-        has_attachment_image?: boolean
-        request_contains_url?: boolean
-        request_contains_figma_url?: boolean
-        package_has_script?: Array<string>
-        request_text_any?: Array<string>
-      }
-    }
-    priority?: number
-    required_tools?: Array<string>
-    agents?: Array<string>
-    mounted_agents?: Array<string>
-    expires_at?: string
-    duplicate_locations?: Array<string>
-    dir?: string
-    source_type: "builtin" | "managed_git" | "config_path" | "config_url" | "external" | "unknown"
-    source?: string
-    trust: "builtin" | "official" | "curated" | "community" | "local" | "external" | "unknown"
-    risk: {
-      level: "low" | "medium" | "high"
-      has_scripts: boolean
-      has_agents: boolean
-      has_references: boolean
-      has_templates: boolean
-    }
-    recommended_policy: PermissionAction
-    policy: PermissionAction
-    managed: boolean
-    writable: boolean
-  }>
-}
-
-export type SkillInstalledResponse = SkillInstalledResponses[keyof SkillInstalledResponses]
-
-export type SkillMarketData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/skill/market"
-}
-
-export type SkillMarketResponses = {
-  /**
-   * Skill market entries
-   */
-  200: Array<{
-    id: string
-    name: string
-    provider: string
-    description: string
-    homepage: string
-    source?: string
-    install_kind: "git" | "url" | "manual"
-    trust: "official" | "curated" | "community"
-    recommended_policy: PermissionAction
-    notes?: string
-  }>
-}
-
-export type SkillMarketResponse = SkillMarketResponses[keyof SkillMarketResponses]
-
-export type SkillDirectoriesData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/skill/directories"
-}
-
-export type SkillDirectoriesResponses = {
-  /**
-   * Skill directories
-   */
-  200: {
-    global_config: string
-    managed_skills: string
-    remote_cache: string
-  }
-}
-
-export type SkillDirectoriesResponse = SkillDirectoriesResponses[keyof SkillDirectoriesResponses]
-
-export type SkillInstallData = {
-  body: {
-    kind: "path" | "url" | "git"
-    value: string
-    policy?: PermissionAction
-  }
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/skill/install"
-}
-
-export type SkillInstallResponses = {
-  /**
-   * Installed skill source
-   */
-  200: {
-    source: string
-    path?: string
-    kind: "path" | "url" | "git"
-  }
-}
-
-export type SkillInstallResponse = SkillInstallResponses[keyof SkillInstallResponses]
-
-export type SkillImportFileData = {
-  body?: {
-    filename?: string
-    content?: string
-    sourceName?: string
-    files?: Array<{
-      path: string
-      content?: string
-      contentBase64?: string
-    }>
-    archiveBase64?: string
-    policy?: PermissionAction
-  }
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/skill/import-file"
-}
-
-export type SkillImportFileResponses = {
-  /**
-   * Imported project skill file
-   */
-  200: {
-    name: string
-    source: string
-    kind: "path"
-    names?: Array<string>
-    sources?: Array<string>
-  }
-}
-
-export type SkillImportFileResponse = SkillImportFileResponses[keyof SkillImportFileResponses]
-
-export type SkillRemoveData = {
-  body: {
-    source: string
-    kind?: "path" | "url" | "git"
-  }
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/skill/remove"
-}
-
-export type SkillRemoveResponses = {
-  /**
-   * Removed skill source
-   */
-  200: boolean
-}
-
-export type SkillRemoveResponse = SkillRemoveResponses[keyof SkillRemoveResponses]
-
-export type SkillPolicyData = {
-  body: {
-    name: string
-    action: PermissionAction
-  }
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/skill/policy"
-}
-
-export type SkillPolicyResponses = {
-  /**
-   * Updated skill policy
-   */
-  200: boolean
-}
-
-export type SkillPolicyResponse = SkillPolicyResponses[keyof SkillPolicyResponses]
-
-export type ExpertSquadCatalogData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-    /**
-     * Optional root or child session id for session-effective expert-squad catalog view
-     */
-    sessionID?: string
-  }
-  url: "/expert-squad/catalog"
-}
-
-export type ExpertSquadCatalogErrors = {
+export type SessionSummarizeErrors = {
   /**
    * Bad request
    */
@@ -8856,667 +13871,37 @@ export type ExpertSquadCatalogErrors = {
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
+}
+
+export type SessionSummarizeError = SessionSummarizeErrors[keyof SessionSummarizeErrors]
+
+export type SessionSummarizeResponses = {
   /**
-   * Internal server error
+   * Summarized session
    */
-  500: UnknownError
+  200: boolean
 }
 
-export type ExpertSquadCatalogError = ExpertSquadCatalogErrors[keyof ExpertSquadCatalogErrors]
+export type SessionSummarizeResponse = SessionSummarizeResponses[keyof SessionSummarizeResponses]
 
-export type ExpertSquadCatalogResponses = {
-  /**
-   * Expert squad catalog
-   */
-  200: {
-    active: {
-      effective: string
-      project: string
-      session_override: string | null
-    }
-    default: string
-    scope: {
-      kind: "project" | "session"
-      directory: string
-      sessionID?: string
-    }
-    targets: Array<{
-      id: string
-      label: string
-      description?: string
-      editable: boolean
-      built_in_only: boolean
-    }>
-    squads: Array<{
-      id: string
-      label: string
-      description?: string
-      built_in: boolean
-      editable: boolean
-      agents: {
-        [key: string]: string
-      }
-      capability_profile_id: string
-      projection_hash: string
-      projected_agents: Array<string>
-      virtual_agents: Array<{
-        base_role: string
-        virtual_agent_id: string
-        label: string
-        description?: string
-      }>
-      capability_projection: {
-        scheduler: {
-          built_in_tool_ids: Array<string>
-          default_skill_refs: Array<string>
-          package_skill_refs: Array<string>
-          default_tool_refs: Array<string>
-          package_tool_refs: Array<string>
-          default_mcp_server_refs: Array<string>
-          package_mcp_server_refs: Array<string>
-          default_mcp_tool_refs: Array<string>
-          package_mcp_tool_refs: Array<string>
-          default_mcp_prompt_refs: Array<string>
-          package_mcp_prompt_refs: Array<string>
-          default_mcp_resource_refs: Array<string>
-          package_mcp_resource_refs: Array<string>
-        }
-        agents: {
-          [key: string]: {
-            built_in_tool_ids: Array<string>
-            default_skill_refs: Array<string>
-            package_skill_refs: Array<string>
-            default_tool_refs: Array<string>
-            package_tool_refs: Array<string>
-            default_mcp_server_refs: Array<string>
-            package_mcp_server_refs: Array<string>
-            default_mcp_tool_refs: Array<string>
-            package_mcp_tool_refs: Array<string>
-            default_mcp_prompt_refs: Array<string>
-            package_mcp_prompt_refs: Array<string>
-            default_mcp_resource_refs: Array<string>
-            package_mcp_resource_refs: Array<string>
-          }
-        }
-      }
-      version?: string
-      display_prefix?: string
-      display_label: string
-      source:
-        | {
-            kind: "built_in"
-          }
-        | {
-            kind: "project_package"
-            namespace: string
-            root: string
-            manifest_path: string
-            readme_path: string
-          }
-      readme: {
-        path: "README.md"
-        append_target: "orchestrator"
-        content: string
-      }
-      selector?: {
-        ref: string
-        id: string
-        label: string
-        description?: string
-        summary: string
-        selection_guidance: string
-        instructions_path: "selector.md"
-        instructions: string
-      }
-      dynamic_attributes: {
-        [key: string]: unknown
-      }
-    }>
-    active_agent_projection: {
-      source_expert_squad_id: string
-      prompt_profile_active: string
-      projection_hash: string
-      agents: Array<{
-        base_role: string
-        virtual_agent_id: string
-        label: string
-        description?: string
-        projection_hash: string
-        package_skill_refs: Array<string>
-        package_tool_refs: Array<string>
-        package_mcp_server_refs: Array<string>
-      }>
-    }
-    active_skill_projection: {
-      active_squad_id: string
-      capability_profile_id: string
-      built_in: boolean
-      projection_hash: string
-      projected_tool_ids: Array<string>
-      projected_agent_ids: Array<string>
-      selector_skill_names: Array<string>
-      production_skill_names: Array<string>
-      projected_skill_names: Array<string>
-      skills: Array<{
-        name: string
-        description: string
-        builtin: boolean
-        location: string
-        required_tools: Array<string>
-        mounted_agents: Array<string>
-      }>
-    }
-  }
-}
-
-export type ExpertSquadCatalogResponse = ExpertSquadCatalogResponses[keyof ExpertSquadCatalogResponses]
-
-export type ExpertSquadReleasePayloadData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/expert-squad/release-payload"
-}
-
-export type ExpertSquadReleasePayloadErrors = {
-  /**
-   * Expert squad package release rejected
-   */
-  400: {
-    name: "ExpertSquadPackageError"
-    data: {
-      [key: string]: unknown
-    }
-  }
-}
-
-export type ExpertSquadReleasePayloadError = ExpertSquadReleasePayloadErrors[keyof ExpertSquadReleasePayloadErrors]
-
-export type ExpertSquadReleasePayloadResponses = {
-  /**
-   * Bundled expert-squad package release result
-   */
-  200: {
-    installed: Array<{
-      namespace: string
-      id: string
-      targetRoot: string
-      replaced: boolean
-    }>
-    skipped: Array<{
-      namespace: string
-      id: string
-      targetRoot: string
-      replaced: boolean
-    }>
-  }
-}
-
-export type ExpertSquadReleasePayloadResponse =
-  ExpertSquadReleasePayloadResponses[keyof ExpertSquadReleasePayloadResponses]
-
-export type ExpertSquadImportFolderData = {
-  body: {
-    sourceDirectory: string
-    replace?: boolean
-  }
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/expert-squad/import-folder"
-}
-
-export type ExpertSquadImportFolderErrors = {
-  /**
-   * Expert squad package import rejected
-   */
-  400: {
-    name: "ExpertSquadPackageError"
-    data: {
-      [key: string]: unknown
-    }
-  }
-}
-
-export type ExpertSquadImportFolderError = ExpertSquadImportFolderErrors[keyof ExpertSquadImportFolderErrors]
-
-export type ExpertSquadImportFolderResponses = {
-  /**
-   * Imported expert squad package
-   */
-  200: {
-    namespace: string
-    id: string
-    targetRoot: string
-    replaced: boolean
-  }
-}
-
-export type ExpertSquadImportFolderResponse = ExpertSquadImportFolderResponses[keyof ExpertSquadImportFolderResponses]
-
-export type ExpertSquadImportFileData = {
-  body: {
-    archiveBase64: string
-    filename?: string
-    replace?: boolean
-  }
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/expert-squad/import-file"
-}
-
-export type ExpertSquadImportFileErrors = {
-  /**
-   * Expert squad package import rejected
-   */
-  400: {
-    name: "ExpertSquadPackageError"
-    data: {
-      [key: string]: unknown
-    }
-  }
-}
-
-export type ExpertSquadImportFileError = ExpertSquadImportFileErrors[keyof ExpertSquadImportFileErrors]
-
-export type ExpertSquadImportFileResponses = {
-  /**
-   * Imported expert squad package
-   */
-  200: {
-    namespace: string
-    id: string
-    targetRoot: string
-    replaced: boolean
-  }
-}
-
-export type ExpertSquadImportFileResponse = ExpertSquadImportFileResponses[keyof ExpertSquadImportFileResponses]
-
-export type ExpertSquadExportData = {
-  body: {
-    id: string
-  }
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/expert-squad/export"
-}
-
-export type ExpertSquadExportErrors = {
-  /**
-   * Expert squad package export rejected
-   */
-  400: {
-    name: "ExpertSquadPackageError"
-    data: {
-      [key: string]: unknown
-    }
-  }
-}
-
-export type ExpertSquadExportError = ExpertSquadExportErrors[keyof ExpertSquadExportErrors]
-
-export type ExpertSquadExportResponses = {
-  /**
-   * Exported expert squad archive
-   */
-  200: {
-    id: string
-    filename: string
-    archiveBase64: string
-    fileCount: number
-  }
-}
-
-export type ExpertSquadExportResponse = ExpertSquadExportResponses[keyof ExpertSquadExportResponses]
-
-export type PanelCapabilitiesData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-    surface?:
-      | "panel"
-      | "gateway"
-      | "slack"
-      | "telegram"
-      | "discord"
-      | "feishu"
-      | "whatsapp"
-      | "googlechat"
-      | "msteams"
-      | "line"
-      | "matrix"
-      | "mattermost"
-      | "signal"
-      | "wecom"
-      | "dingtalk"
-      | "qq"
-      | "right-sidebar"
-  }
-  url: "/panel/capabilities"
-}
-
-export type PanelCapabilitiesResponses = {
-  /**
-   * Panel capabilities
-   */
-  200: {
-    surface:
-      | "panel"
-      | "gateway"
-      | "slack"
-      | "telegram"
-      | "discord"
-      | "feishu"
-      | "whatsapp"
-      | "googlechat"
-      | "msteams"
-      | "line"
-      | "matrix"
-      | "mattermost"
-      | "signal"
-      | "wecom"
-      | "dingtalk"
-      | "qq"
-      | "right-sidebar"
-    actions: Array<{
-      action: string
-      description: string
-      kind: "query" | "mutation"
-      surfaces: Array<
-        | "panel"
-        | "gateway"
-        | "slack"
-        | "telegram"
-        | "discord"
-        | "feishu"
-        | "whatsapp"
-        | "googlechat"
-        | "msteams"
-        | "line"
-        | "matrix"
-        | "mattermost"
-        | "signal"
-        | "wecom"
-        | "dingtalk"
-        | "qq"
-        | "right-sidebar"
-      >
-      local_only: boolean
-      local_action_types?: Array<"set_executor" | "select_task" | "select_session" | "invalidate_session">
-      local_action_surfaces?: Array<
-        | "panel"
-        | "gateway"
-        | "slack"
-        | "telegram"
-        | "discord"
-        | "feishu"
-        | "whatsapp"
-        | "googlechat"
-        | "msteams"
-        | "line"
-        | "matrix"
-        | "mattermost"
-        | "signal"
-        | "wecom"
-        | "dingtalk"
-        | "qq"
-        | "right-sidebar"
-      >
-      schema: {
-        [key: string]: unknown
-      }
-    }>
-  }
-}
-
-export type PanelCapabilitiesResponse = PanelCapabilitiesResponses[keyof PanelCapabilitiesResponses]
-
-export type PanelMessageData = {
-  body: {
-    surface:
-      | "panel"
-      | "gateway"
-      | "slack"
-      | "telegram"
-      | "discord"
-      | "feishu"
-      | "whatsapp"
-      | "googlechat"
-      | "msteams"
-      | "line"
-      | "matrix"
-      | "mattermost"
-      | "signal"
-      | "wecom"
-      | "dingtalk"
-      | "qq"
-    text: string
-    taskID?: string
-    sessionID?: string
-    executor?: "opencorvus" | "codex" | "claude-code"
-    model?: string
-    channel?: string
-    thread?: string
-    user_id?: string
-    request_id?: string
-    source?: string
-    allow_create?: boolean
-    metadata?: {
-      [key: string]: unknown
-    }
-    attachments?: Array<{
-      mime: string
-      url: string
-      filename?: string
-    }>
-  }
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/panel/message"
-}
-
-export type PanelMessageResponses = {
-  /**
-   * Panel message handled
-   */
-  200: {
-    kind: "panel_response" | "created" | "message" | "interaction" | "progress" | "task_list" | "cancelled"
-    message: string
-    task_id?: string
-    interaction_id?: string
-    session_id?: string
-    local_action?:
-      | {
-          type: "set_executor"
-          executor: "opencorvus" | "codex" | "claude-code"
-        }
-      | {
-          type: "select_task"
-          taskID: string
-        }
-      | {
-          type: "select_session"
-          sessionID: string
-        }
-      | {
-          type: "invalidate_session"
-          sessionID: string
-        }
-    attachments?: Array<{
-      mime: string
-      url: string
-      filename?: string
-    }>
-  }
-}
-
-export type PanelMessageResponse = PanelMessageResponses[keyof PanelMessageResponses]
-
-export type PanelMessageStreamData = {
-  body: {
-    surface:
-      | "panel"
-      | "gateway"
-      | "slack"
-      | "telegram"
-      | "discord"
-      | "feishu"
-      | "whatsapp"
-      | "googlechat"
-      | "msteams"
-      | "line"
-      | "matrix"
-      | "mattermost"
-      | "signal"
-      | "wecom"
-      | "dingtalk"
-      | "qq"
-    text: string
-    taskID?: string
-    sessionID?: string
-    executor?: "opencorvus" | "codex" | "claude-code"
-    model?: string
-    channel?: string
-    thread?: string
-    user_id?: string
-    request_id?: string
-    source?: string
-    allow_create?: boolean
-    metadata?: {
-      [key: string]: unknown
-    }
-    attachments?: Array<{
-      mime: string
-      url: string
-      filename?: string
-    }>
-  }
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/panel/message/stream"
-}
-
-export type PanelMessageStreamResponses = {
-  /**
-   * Streaming panel message events
-   */
-  200: {
-    kind: "panel_response" | "created" | "message" | "interaction" | "progress" | "task_list" | "cancelled"
-    message: string
-    task_id?: string
-    interaction_id?: string
-    session_id?: string
-    local_action?:
-      | {
-          type: "set_executor"
-          executor: "opencorvus" | "codex" | "claude-code"
-        }
-      | {
-          type: "select_task"
-          taskID: string
-        }
-      | {
-          type: "select_session"
-          sessionID: string
-        }
-      | {
-          type: "invalidate_session"
-          sessionID: string
-        }
-    attachments?: Array<{
-      mime: string
-      url: string
-      filename?: string
-    }>
-  }
-}
-
-export type PanelMessageStreamResponse = PanelMessageStreamResponses[keyof PanelMessageStreamResponses]
-
-export type PanelKnowledgeMemoryListData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-    sessionID?: string
-    taskID?: string
-  }
-  url: "/panel/knowledge/memory"
-}
-
-export type PanelKnowledgeMemoryListResponses = {
-  /**
-   * Memory file list
-   */
-  200: Array<{
-    id: string
-    title: string
-    scope: string
-    source: string
-    kind: string
-    key?: string
-    importance: number
-    confidence: number
-    timeCreated: number
-    timeUpdated: number
-  }>
-}
-
-export type PanelKnowledgeMemoryListResponse =
-  PanelKnowledgeMemoryListResponses[keyof PanelKnowledgeMemoryListResponses]
-
-export type PanelKnowledgeMemoryDeleteData = {
+export type SessionTodoData = {
   body?: never
   path: {
-    id: string
+    /**
+     * Session ID
+     */
+    sessionID: string
   }
   query?: {
     /**
@@ -9524,46 +13909,47 @@ export type PanelKnowledgeMemoryDeleteData = {
      */
     directory?: string
   }
-  url: "/panel/knowledge/memory/{id}"
+  url: "/session/{sessionID}/todo"
 }
 
-export type PanelKnowledgeMemoryDeleteErrors = {
+export type SessionTodoErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
   /**
    * Not found
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
 }
 
-export type PanelKnowledgeMemoryDeleteError = PanelKnowledgeMemoryDeleteErrors[keyof PanelKnowledgeMemoryDeleteErrors]
+export type SessionTodoError = SessionTodoErrors[keyof SessionTodoErrors]
 
-export type PanelKnowledgeMemoryDeleteResponses = {
+export type SessionTodoResponses = {
   /**
-   * Deleted
+   * Todo list
    */
-  200: {
-    ok: boolean
-  }
+  200: Array<Todo>
 }
 
-export type PanelKnowledgeMemoryDeleteResponse =
-  PanelKnowledgeMemoryDeleteResponses[keyof PanelKnowledgeMemoryDeleteResponses]
+export type SessionTodoResponse = SessionTodoResponses[keyof SessionTodoResponses]
 
-export type PanelKnowledgeMemoryGetData = {
+export type SessionTraceData = {
   body?: never
   path: {
-    id: string
+    sessionID: string
   }
   query?: {
     /**
@@ -9571,2727 +13957,33 @@ export type PanelKnowledgeMemoryGetData = {
      */
     directory?: string
   }
-  url: "/panel/knowledge/memory/{id}"
+  url: "/session/{sessionID}/trace"
 }
 
-export type PanelKnowledgeMemoryGetErrors = {
+export type SessionTraceResponses = {
   /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type PanelKnowledgeMemoryGetError = PanelKnowledgeMemoryGetErrors[keyof PanelKnowledgeMemoryGetErrors]
-
-export type PanelKnowledgeMemoryGetResponses = {
-  /**
-   * Memory file with chunks
+   * Session AgentTrace events
    */
   200: {
-    file: {
-      id: string
-      title: string
-      scope: string
-      source: string
+    enabled: boolean
+    events: Array<{
+      agentMode?: string
+      agentName?: string
       kind: string
-      key?: string
-      importance: number
-      confidence: number
-      timeCreated: number
-      timeUpdated: number
-    }
-    content: string
-  }
-}
-
-export type PanelKnowledgeMemoryGetResponse = PanelKnowledgeMemoryGetResponses[keyof PanelKnowledgeMemoryGetResponses]
-
-export type PanelKnowledgeMemorySearchData = {
-  body: {
-    query: string
-    sessionID?: string
-    taskID?: string
-    limit?: number
-  }
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/panel/knowledge/memory/search"
-}
-
-export type PanelKnowledgeMemorySearchResponses = {
-  /**
-   * Search results
-   */
-  200: Array<{
-    chunkId: string
-    fileId: string
-    fileTitle: string
-    content: string
-    scope: string
-    source: string
-    kind: string
-    key?: string
-    importance: number
-    confidence: number
-    score: number
-  }>
-}
-
-export type PanelKnowledgeMemorySearchResponse =
-  PanelKnowledgeMemorySearchResponses[keyof PanelKnowledgeMemorySearchResponses]
-
-export type ControlTimelineData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-    taskID?: string
-    sessionID?: string
-    surface?:
-      | "panel"
-      | "gateway"
-      | "slack"
-      | "telegram"
-      | "discord"
-      | "feishu"
-      | "whatsapp"
-      | "googlechat"
-      | "msteams"
-      | "line"
-      | "matrix"
-      | "mattermost"
-      | "signal"
-      | "wecom"
-      | "dingtalk"
-      | "qq"
-  }
-  url: "/control/timeline"
-}
-
-export type ControlTimelineResponses = {
-  /**
-   * Control timeline
-   */
-  200: Array<{
-    info: {
-      id: string
-      orderKey: string
-      role: "user" | "assistant" | "system"
-      source?: string
-      surface: string
-      taskID?: string
-      sessionID?: string
-      time: {
-        created: number
-        updated: number
-      }
-    }
-    parts: Array<
-      | {
-          id: string
-          type: "text"
-          text: string
-        }
-      | {
-          id: string
-          type: "file"
-          mime: string
-          url: string
-          filename?: string
-        }
-    >
-  }>
-}
-
-export type ControlTimelineResponse = ControlTimelineResponses[keyof ControlTimelineResponses]
-
-export type CodingCliProfilesData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/coding/cli/profiles"
-}
-
-export type CodingCliProfilesErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type CodingCliProfilesError = CodingCliProfilesErrors[keyof CodingCliProfilesErrors]
-
-export type CodingCliProfilesResponses = {
-  /**
-   * Coding CLI profile list
-   */
-  200: CodingCliProfileList
-}
-
-export type CodingCliProfilesResponse = CodingCliProfilesResponses[keyof CodingCliProfilesResponses]
-
-export type CodingCliOpenData = {
-  body: {
-    cliID: string
-    terminalProfileID: string
-    cwd: string
-  }
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/coding/cli/open"
-}
-
-export type CodingCliOpenErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type CodingCliOpenError = CodingCliOpenErrors[keyof CodingCliOpenErrors]
-
-export type CodingCliOpenResponses = {
-  /**
-   * Coding CLI launch result
-   */
-  200: CodingCliOpenResponse
-}
-
-export type CodingCliOpenResponse2 = CodingCliOpenResponses[keyof CodingCliOpenResponses]
-
-export type CodingSessionCreateData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/coding/session"
-}
-
-export type CodingSessionCreateResponses = {
-  /**
-   * Coding assistant session
-   */
-  201: {
-    session: Session
-  }
-}
-
-export type CodingSessionCreateResponse = CodingSessionCreateResponses[keyof CodingSessionCreateResponses]
-
-export type CodingSessionsListData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-    limit?: number
-    cursorUpdated?: number
-    cursorSessionID?: string
-    search?: string
-  }
-  url: "/coding/sessions"
-}
-
-export type CodingSessionsListErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type CodingSessionsListError = CodingSessionsListErrors[keyof CodingSessionsListErrors]
-
-export type CodingSessionsListResponses = {
-  /**
-   * Coding assistant sessions
-   */
-  200: {
-    sessions: Array<Session>
-    nextCursor?: {
-      updated: number
-      sessionID: string
-    }
-  }
-}
-
-export type CodingSessionsListResponse = CodingSessionsListResponses[keyof CodingSessionsListResponses]
-
-export type CodingSessionDeleteData = {
-  body?: never
-  path: {
-    sessionID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/coding/session/{sessionID}"
-}
-
-export type CodingSessionDeleteErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type CodingSessionDeleteError = CodingSessionDeleteErrors[keyof CodingSessionDeleteErrors]
-
-export type CodingSessionDeleteResponses = {
-  /**
-   * Deleted coding assistant session
-   */
-  200: boolean
-}
-
-export type CodingSessionDeleteResponse = CodingSessionDeleteResponses[keyof CodingSessionDeleteResponses]
-
-export type CodingSessionGetData = {
-  body?: never
-  path: {
-    sessionID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/coding/session/{sessionID}"
-}
-
-export type CodingSessionGetErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type CodingSessionGetError = CodingSessionGetErrors[keyof CodingSessionGetErrors]
-
-export type CodingSessionGetResponses = {
-  /**
-   * Coding assistant session
-   */
-  200: {
-    session: Session
-  }
-}
-
-export type CodingSessionGetResponse = CodingSessionGetResponses[keyof CodingSessionGetResponses]
-
-export type CodingSessionUpdateData = {
-  body?: {
-    title?: string
-  }
-  path: {
-    sessionID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/coding/session/{sessionID}"
-}
-
-export type CodingSessionUpdateErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type CodingSessionUpdateError = CodingSessionUpdateErrors[keyof CodingSessionUpdateErrors]
-
-export type CodingSessionUpdateResponses = {
-  /**
-   * Updated coding assistant session
-   */
-  200: {
-    session: Session
-  }
-}
-
-export type CodingSessionUpdateResponse = CodingSessionUpdateResponses[keyof CodingSessionUpdateResponses]
-
-export type CodingSessionAbortData = {
-  body?: never
-  path: {
-    sessionID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/coding/session/{sessionID}/abort"
-}
-
-export type CodingSessionAbortErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-  /**
-   * Conflict
-   */
-  409:
-    | {
-        name: "ReplyTargetEnvelopeMissingError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "AgentSessionPendingCoordinationError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "TaskCancellationIncompleteError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type CodingSessionAbortError = CodingSessionAbortErrors[keyof CodingSessionAbortErrors]
-
-export type CodingSessionAbortResponses = {
-  /**
-   * Aborted coding assistant session
-   */
-  200: boolean
-}
-
-export type CodingSessionAbortResponse = CodingSessionAbortResponses[keyof CodingSessionAbortResponses]
-
-export type CodingSessionSelectionUpdateData = {
-  body: {
-    taskID: string | null
-  }
-  path: {
-    sessionID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/coding/session/{sessionID}/selection"
-}
-
-export type CodingSessionSelectionUpdateErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type CodingSessionSelectionUpdateError =
-  CodingSessionSelectionUpdateErrors[keyof CodingSessionSelectionUpdateErrors]
-
-export type CodingSessionSelectionUpdateResponses = {
-  /**
-   * Coding assistant session with updated selection
-   */
-  200: {
-    session: Session
-  }
-}
-
-export type CodingSessionSelectionUpdateResponse =
-  CodingSessionSelectionUpdateResponses[keyof CodingSessionSelectionUpdateResponses]
-
-export type GatewayCapabilitiesData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/gateway/capabilities"
-}
-
-export type GatewayCapabilitiesResponses = {
-  /**
-   * Gateway capabilities
-   */
-  200: {
-    surface:
-      | "panel"
-      | "gateway"
-      | "slack"
-      | "telegram"
-      | "discord"
-      | "feishu"
-      | "whatsapp"
-      | "googlechat"
-      | "msteams"
-      | "line"
-      | "matrix"
-      | "mattermost"
-      | "signal"
-      | "wecom"
-      | "dingtalk"
-      | "qq"
-      | "right-sidebar"
-    actions: Array<{
-      action: string
-      description: string
-      kind: "query" | "mutation"
-      surfaces: Array<
-        | "panel"
-        | "gateway"
-        | "slack"
-        | "telegram"
-        | "discord"
-        | "feishu"
-        | "whatsapp"
-        | "googlechat"
-        | "msteams"
-        | "line"
-        | "matrix"
-        | "mattermost"
-        | "signal"
-        | "wecom"
-        | "dingtalk"
-        | "qq"
-        | "right-sidebar"
-      >
-      local_only: boolean
-      local_action_types?: Array<"set_executor" | "select_task" | "select_session" | "invalidate_session">
-      local_action_surfaces?: Array<
-        | "panel"
-        | "gateway"
-        | "slack"
-        | "telegram"
-        | "discord"
-        | "feishu"
-        | "whatsapp"
-        | "googlechat"
-        | "msteams"
-        | "line"
-        | "matrix"
-        | "mattermost"
-        | "signal"
-        | "wecom"
-        | "dingtalk"
-        | "qq"
-        | "right-sidebar"
-      >
-      schema: {
+      parentSessionID?: string
+      payload?: {
         [key: string]: unknown
       }
-    }>
-  }
-}
-
-export type GatewayCapabilitiesResponse = GatewayCapabilitiesResponses[keyof GatewayCapabilitiesResponses]
-
-export type GatewayStatsData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-    limit?: number
-  }
-  url: "/gateway/stats"
-}
-
-export type GatewayStatsResponses = {
-  /**
-   * Gateway stats
-   */
-  200: {
-    generatedAt: number
-    project: {
-      id: string
-      name?: string
-      worktree: string
-      directory: string
-    }
-    tasks: {
-      total: number
-      status: {
-        [key: string]: number
-      }
-      summary: unknown
-      recent: Array<{
-        id: string
-        title: string
-        status: string
-        priority?: string
-        directory?: string
-        updated?: number
-      }>
-    }
-    capabilities: {
-      total: number
-      queries: number
-      mutations: number
-    }
-    channelRuntime: {
-      running: boolean
-      status: string
-      channels: Array<string>
-      detail?: string
-    }
-  }
-}
-
-export type GatewayStatsResponse = GatewayStatsResponses[keyof GatewayStatsResponses]
-
-export type GatewayControlMessageData = {
-  body: {
-    text: string
-    taskID?: string
-    sessionID?: string
-    executor?: "opencorvus" | "codex" | "claude-code"
-    model?: string
-    channel?: string
-    thread?: string
-    user_id?: string
-    request_id?: string
-    source?: string
-    allow_create?: boolean
-    metadata?: {
-      [key: string]: unknown
-    }
-    attachments?: Array<{
-      mime: string
-      url: string
-      filename?: string
-    }>
-    surface?: "gateway"
-  }
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/gateway/control/message"
-}
-
-export type GatewayControlMessageResponses = {
-  /**
-   * Control message handled
-   */
-  200: {
-    kind: "panel_response" | "created" | "message" | "interaction" | "progress" | "task_list" | "cancelled"
-    message: string
-    task_id?: string
-    interaction_id?: string
-    session_id?: string
-    local_action?:
-      | {
-          type: "set_executor"
-          executor: "opencorvus" | "codex" | "claude-code"
-        }
-      | {
-          type: "select_task"
-          taskID: string
-        }
-      | {
-          type: "select_session"
-          sessionID: string
-        }
-      | {
-          type: "invalidate_session"
-          sessionID: string
-        }
-    attachments?: Array<{
-      mime: string
-      url: string
-      filename?: string
-    }>
-  }
-}
-
-export type GatewayControlMessageResponse = GatewayControlMessageResponses[keyof GatewayControlMessageResponses]
-
-export type GatewayControlActionData = {
-  body?:
-    | {
-        action: "view_plan"
-        /**
-         * Task ID whose plan should be inspected.
-         */
-        taskID: string
-      }
-    | {
-        action: "view_board"
-        /**
-         * Task ID whose board should be inspected; omit to list recent tasks.
-         */
-        taskID?: string
-      }
-    | {
-        action: "view_tasks"
-      }
-    | {
-        action: "query_task"
-        /**
-         * Task IDs to query in one request.
-         */
-        taskIDs: Array<string>
-        /**
-         * Include direct child task summaries for each requested task.
-         */
-        includeChildren?: boolean
-        /**
-         * Include pending interaction counts for each requested task.
-         */
-        includeInteractions?: boolean
-      }
-    | {
-        action: "create_task"
-        /**
-         * Short task title shown in the project board.
-         */
-        title?: string
-        /**
-         * Full user request to execute in the new task.
-         */
-        request: string
-        /**
-         * External request ID used for idempotent task creation.
-         */
-        request_id?: string
-        /**
-         * Executor backend to use for the new task.
-         */
-        executor?: "opencorvus" | "codex" | "claude-code"
-        /**
-         * Model reference in provider/model format for the new task.
-         */
-        model?: string
-        /**
-         * Whether to queue this task behind other work in the same directory.
-         */
-        queue?: boolean
-        /**
-         * Evaluation check configuration for the new task.
-         */
-        checks?: {
-          build?: Array<string> | false
-          test?: Array<string> | false
-          lint?: Array<string> | false
-          verify_cmd?: Array<string> | false
-          named?: {
-            [key: string]: {
-              label?: string
-              family?: "build" | "test" | "lint" | "verify_cmd"
-              commands: Array<string>
-              enabled?: boolean
-              cwd?: string
-            }
-          }
-          startup?: {
-            command: string
-            ready_url?: string
-            ready_text?: string
-            timeout_ms?: number
-            warmup_ms?: number
-            require_exit_zero?: boolean
-            mode?: "soft" | "strict"
-          }
-          artifact?: {
-            require_changed_files?: boolean
-            min_changed_files?: number
-            require_diff?: boolean
-            require_summary?: boolean
-            mode?: "soft" | "strict"
-          }
-          visual?: {
-            target: "web"
-            url: string
-            require_text?: Array<string>
-            require_title?: string
-            timeout_ms?: number
-            mode?: "soft" | "strict"
-          }
-          playwright?: {
-            target: "web"
-            url: string
-            browser?: "chrome" | "edge" | "chromium"
-            executable_path?: string
-            wait_for_selector?: string
-            wait_for_text?: string
-            require_text?: Array<string>
-            require_title?: string
-            full_page?: boolean
-            viewport?: {
-              width?: number
-              height?: number
-            }
-            timeout_ms?: number
-            mode?: "soft" | "strict"
-          }
-          ui_review?: {
-            target: "web"
-            url?: string
-            prompt?: string
-            focus?: Array<"layout" | "hierarchy" | "clarity" | "navigation" | "feedback" | "accessibility">
-            timeout_ms?: number
-            mode?: "soft" | "strict"
-          }
-          code_quality?: {
-            enabled?: boolean
-            prompt?: string
-            max_diffs?: number
-            mode?: "soft" | "strict"
-          }
-          code_review?: {
-            enabled?: boolean
-            prompt?: string
-            max_diffs?: number
-            mode?: "soft" | "strict"
-          }
-          dead_code_review?: {
-            enabled?: boolean
-            prompt?: string
-            max_diffs?: number
-            mode?: "soft" | "strict"
-          }
-          judge?: {
-            enabled?: boolean
-            prompt?: string
-            mode?: "soft" | "strict"
-          }
-          spec_check?: {
-            enabled?: boolean
-            prompt?: string
-            mode?: "soft" | "strict"
-          }
-          custom?: {
-            [key: string]: {
-              [key: string]: unknown
-            }
-          }
-          timeout_ms?: number
-        }
-        /**
-         * Stage routing overrides for the new task.
-         */
-        routing?: {
-          spec?: "opencorvus" | "executor"
-          plan?: "opencorvus" | "executor"
-          evaluation?: "opencorvus" | "hybrid"
-        }
-        /**
-         * External channel identifier to bind to the new task.
-         */
-        channel?: string
-        /**
-         * External thread identifier to bind to the new task.
-         */
-        thread?: string
-        /**
-         * Channel platform for an external task binding.
-         */
-        platform?:
-          | "slack"
-          | "telegram"
-          | "discord"
-          | "feishu"
-          | "whatsapp"
-          | "googlechat"
-          | "msteams"
-          | "line"
-          | "matrix"
-          | "mattermost"
-          | "signal"
-          | "wecom"
-          | "dingtalk"
-          | "qq"
-        /**
-         * Structured metadata to attach to the new task.
-         */
-        metadata?: {
-          [key: string]: unknown
-        }
-        /**
-         * Business source label for the new task.
-         */
-        source?: string
-        /**
-         * Set false to return without creating a task.
-         */
-        allow_create?: boolean
-      }
-    | {
-        action: "send_task_message"
-        /**
-         * Task ID that should receive the follow-up message.
-         */
-        taskID: string
-        /**
-         * Follow-up message text to append to the task.
-         */
-        text: string
-        /**
-         * Business source label for the follow-up message.
-         */
-        source: string
-        /**
-         * External user ID associated with the follow-up message.
-         */
-        user_id?: string
-      }
-    | {
-        action: "reply_interaction"
-        /**
-         * Pending interaction ID to answer.
-         */
-        interactionID: string
-        /**
-         * Preset reply behavior for the interaction.
-         */
-        reply?: "once" | "always"
-        /**
-         * Custom answer text for the pending interaction.
-         */
-        message?: string
-      }
-    | {
-        action: "reject_interaction"
-        /**
-         * Pending interaction ID to reject.
-         */
-        interactionID: string
-        /**
-         * Reason shown when rejecting the pending interaction.
-         */
-        message?: string
-      }
-    | {
-        action: "retry_task"
-        /**
-         * Task ID to queue for retry.
-         */
-        taskID: string
-      }
-    | {
-        action: "replan_task"
-        /**
-         * Task ID to queue for replanning.
-         */
-        taskID: string
-      }
-    | {
-        action: "cancel_task"
-        /**
-         * Task ID to cancel.
-         */
-        taskID: string
-      }
-    | {
-        action: "update_checks"
-        /**
-         * Task ID whose verification checks should change.
-         */
-        taskID: string
-        /**
-         * Named check selection updates to apply.
-         */
-        selection?: {
-          [key: string]: boolean
-        }
-        /**
-         * Complete replacement evaluation check configuration.
-         */
-        checks?: {
-          build?: Array<string> | false
-          test?: Array<string> | false
-          lint?: Array<string> | false
-          verify_cmd?: Array<string> | false
-          named?: {
-            [key: string]: {
-              label?: string
-              family?: "build" | "test" | "lint" | "verify_cmd"
-              commands: Array<string>
-              enabled?: boolean
-              cwd?: string
-            }
-          }
-          startup?: {
-            command: string
-            ready_url?: string
-            ready_text?: string
-            timeout_ms?: number
-            warmup_ms?: number
-            require_exit_zero?: boolean
-            mode?: "soft" | "strict"
-          }
-          artifact?: {
-            require_changed_files?: boolean
-            min_changed_files?: number
-            require_diff?: boolean
-            require_summary?: boolean
-            mode?: "soft" | "strict"
-          }
-          visual?: {
-            target: "web"
-            url: string
-            require_text?: Array<string>
-            require_title?: string
-            timeout_ms?: number
-            mode?: "soft" | "strict"
-          }
-          playwright?: {
-            target: "web"
-            url: string
-            browser?: "chrome" | "edge" | "chromium"
-            executable_path?: string
-            wait_for_selector?: string
-            wait_for_text?: string
-            require_text?: Array<string>
-            require_title?: string
-            full_page?: boolean
-            viewport?: {
-              width?: number
-              height?: number
-            }
-            timeout_ms?: number
-            mode?: "soft" | "strict"
-          }
-          ui_review?: {
-            target: "web"
-            url?: string
-            prompt?: string
-            focus?: Array<"layout" | "hierarchy" | "clarity" | "navigation" | "feedback" | "accessibility">
-            timeout_ms?: number
-            mode?: "soft" | "strict"
-          }
-          code_quality?: {
-            enabled?: boolean
-            prompt?: string
-            max_diffs?: number
-            mode?: "soft" | "strict"
-          }
-          code_review?: {
-            enabled?: boolean
-            prompt?: string
-            max_diffs?: number
-            mode?: "soft" | "strict"
-          }
-          dead_code_review?: {
-            enabled?: boolean
-            prompt?: string
-            max_diffs?: number
-            mode?: "soft" | "strict"
-          }
-          judge?: {
-            enabled?: boolean
-            prompt?: string
-            mode?: "soft" | "strict"
-          }
-          spec_check?: {
-            enabled?: boolean
-            prompt?: string
-            mode?: "soft" | "strict"
-          }
-          custom?: {
-            [key: string]: {
-              [key: string]: unknown
-            }
-          }
-          timeout_ms?: number
-        }
-      }
-    | {
-        action: "capture_overlay_screenshot"
-        /**
-         * Optional window title or process match hint for the screenshot.
-         */
-        match?: string
-      }
-    | {
-        action: "set_executor"
-        /**
-         * Executor backend to select locally.
-         */
-        executor: "opencorvus" | "codex" | "claude-code"
-      }
-    | {
-        action: "select_task"
-        /**
-         * Task ID to focus in the local project assistant surface.
-         */
-        taskID: string
-      }
-    | {
-        action: "select_session"
-        /**
-         * Session ID to focus in the local project assistant surface.
-         */
-        sessionID: string
-      }
-    | {
-        action: "create_session"
-      }
-    | {
-        action: "fork_session"
-        /**
-         * Session ID to fork.
-         */
-        sessionID: string
-      }
-    | {
-        action: "delete_session"
-        /**
-         * Session ID to delete.
-         */
-        sessionID: string
-      }
-    | {
-        action: "update_goal"
-        /**
-         * Goal ID to update.
-         */
-        goalID: string
-        /**
-         * Replacement goal description.
-         */
-        description: string
-        /**
-         * Complete replacement acceptance specs for the goal.
-         */
-        acceptance_specs: Array<{
-          /**
-           * Stable spec ID, e.g. 'acc-login-3s'.
-           */
-          id: string
-          /**
-           * Requirement ID this spec was derived from (REQ-N).
-           */
-          source_requirement_id: string
-          /**
-           * Goal ID this spec belongs to. Specs are goal-local; multiple specs may share a goal.
-           */
-          goal_id: string
-          title: string
-          /**
-           * Gherkin Given/When/Then scenario. Optional — omit for pure code checks.
-           */
-          scenario?: {
-            given: Array<string>
-            when: Array<string>
-            then: Array<string>
-          }
-          /**
-           * At least one scorer — a spec without a scorer is untestable.
-           */
-          scorers: Array<
-            | {
-                /**
-                 * heuristic — deterministic shell/script check, pass/fail by exit code. Requires: name, spec{kind}.
-                 */
-                type: "heuristic"
-                name: string
-                spec:
-                  | {
-                      /**
-                       * shell — run an inline command. Requires: cmd; optional cwd.
-                       */
-                      kind: "shell"
-                      /**
-                       * Shell command. Exit 0 = pass unless expect.exit_code set.
-                       */
-                      cmd: string
-                      cwd?: string
-                    }
-                  | {
-                      /**
-                       * script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.
-                       */
-                      kind: "script_ref"
-                      /**
-                       * Repo-relative script path that already exists at registration time.
-                       */
-                      path: string
-                      args?: Array<string>
-                    }
-                expect?: {
-                  exit_code?: number
-                }
-              }
-            | {
-                /**
-                 * llm_judge — natural-language rubric evaluation. Requires: name, criteria; optional rubric, inputs.
-                 */
-                type: "llm_judge"
-                name: string
-                /**
-                 * Single-criterion evaluation question in natural language.
-                 */
-                criteria: string
-                /**
-                 * Ordinal anchors, 2-5 levels. Omit for binary MET/UNMET.
-                 */
-                rubric?: Array<{
-                  /**
-                   * Integer score for this level.
-                   */
-                  score: number
-                  /**
-                   * Short level label, e.g. 'fully met'.
-                   */
-                  label: string
-                  /**
-                   * Behavioral description: what earns this score.
-                   */
-                  anchor: string
-                  /**
-                   * Does this level count as pass for binary verdict?
-                   */
-                  passes: boolean
-                }>
-                /**
-                 * Which parts of the acceptance to feed the judge. Default: acceptance_summary. LLM judges cannot consume visual feedback; final rendered reference parity uses prebuilt visual-feedback-verification.
-                 */
-                inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
-              }
-            | {
-                /**
-                 * prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.
-                 */
-                type: "prebuilt"
-                name:
-                  | "factuality"
-                  | "relevance"
-                  | "contains"
-                  | "exact_match"
-                  | "length_within"
-                  | "json_schema"
-                  | "visual-feedback-verification"
-                config?: {
-                  [key: string]: unknown
-                }
-                /**
-                 * For name=visual-feedback-verification, identifies the required visual feedback verification shape.
-                 */
-                spec?: {
-                  kind: "visual_feedback_verification"
-                  viewport?: string
-                }
-                /**
-                 * For name=visual-feedback-verification, requires a passing current visual feedback verification.
-                 */
-                expect?: {
-                  status: "passed"
-                }
-              }
-            | {
-                /**
-                 * contract_audit — static audit of typed-contract field literals and graph artifact path materialization against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
-                 */
-                type: "contract_audit"
-                name: string
-                spec: {
-                  kind: "contract_graph"
-                  contract_ids: Array<string>
-                }
-                expect: {
-                  status: "passed"
-                }
-              }
-          >
-          severity: "essential" | "important" | "optional" | "pitfall"
-          /**
-           * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity.
-           */
-          trigger?: "on_goal" | "on_integrity"
-        }>
-      }
-    | {
-        action: "delete_goal"
-        /**
-         * Goal ID to delete.
-         */
-        goalID: string
-      }
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/gateway/control/action"
-}
-
-export type GatewayControlActionResponses = {
-  /**
-   * Action result
-   */
-  200: {
-    title: string
-    output: string
-    metadata: {
-      [key: string]: unknown
-    }
-  }
-}
-
-export type GatewayControlActionResponse = GatewayControlActionResponses[keyof GatewayControlActionResponses]
-
-export type GatewayChannelMessageData = {
-  body: {
-    channel: string
-    thread: string
-    text: string
-    task_id?: string
-    user_id?: string
-    request_id?: string
-    source?: string
-    executor?: "opencorvus" | "codex" | "claude-code"
-    model?: string
-    allow_create?: boolean
-    allow_session_mutation?: boolean
-    bind?: boolean
-    attachments?: Array<{
-      filename: string
-      mime: string
-      url?: string
-      data?: string
-    }>
-    metadata?: {
-      [key: string]: unknown
-    }
-    platform?:
-      | "slack"
-      | "telegram"
-      | "discord"
-      | "feishu"
-      | "whatsapp"
-      | "googlechat"
-      | "msteams"
-      | "line"
-      | "matrix"
-      | "mattermost"
-      | "signal"
-      | "wecom"
-      | "dingtalk"
-      | "qq"
-  }
-  path: {
-    platform: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/gateway/channel/{platform}/message"
-}
-
-export type GatewayChannelMessageResponses = {
-  /**
-   * Channel message handled
-   */
-  200: {
-    kind: "panel_response" | "created" | "message" | "interaction" | "progress" | "task_list" | "cancelled"
-    message: string
-    task_id?: string
-    interaction_id?: string
-    session_id?: string
-    local_action?:
-      | {
-          type: "set_executor"
-          executor: "opencorvus" | "codex" | "claude-code"
-        }
-      | {
-          type: "select_task"
-          taskID: string
-        }
-      | {
-          type: "select_session"
-          sessionID: string
-        }
-      | {
-          type: "invalidate_session"
-          sessionID: string
-        }
-    attachments?: Array<{
-      mime: string
-      url: string
-      filename?: string
-    }>
-  }
-}
-
-export type GatewayChannelMessageResponse = GatewayChannelMessageResponses[keyof GatewayChannelMessageResponses]
-
-export type MissionListData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-    search?: string
-    limit?: number
-    cursorUpdated?: number
-    cursorSessionID?: string
-    archived?: boolean
-  }
-  url: "/mission"
-}
-
-export type MissionListResponses = {
-  /**
-   * Mission records
-   */
-  200: Array<{
-    missionID: string
-    sessionID: string
-    title: string
-    directory: string
-    created: number
-    updated: number
-    archived?: number
-    interruptible: boolean
-    tasks: Array<{
-      id: string
-      title: string
-      status: "queued" | "active" | "completed" | "failed" | "cancelled"
-      executionStatus: "success" | "failed" | "running"
-      priority: "critical" | "high" | "normal" | "low"
-      source: string
-      directory: string
-      created: number
-      updated: number
-      started?: number
-      completed?: number
-    }>
-    taskStats: {
-      total: number
-      queued: number
-      active: number
-      completed: number
-      failed: number
-      cancelled: number
-    }
-  }>
-}
-
-export type MissionListResponse = MissionListResponses[keyof MissionListResponses]
-
-export type MissionStatusData = {
-  body?: never
-  path: {
-    missionID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/mission/{missionID}/status"
-}
-
-export type MissionStatusErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type MissionStatusError = MissionStatusErrors[keyof MissionStatusErrors]
-
-export type MissionStatusResponses = {
-  /**
-   * Mission status snapshot
-   */
-  200: {
-    missionID: string
-    sessionID: string
-    title: string
-    directory: string
-    status: "success" | "failed" | "running"
-    taskCounts: {
-      total: number
-      success: number
-      failed: number
-      running: number
-    }
-    progress: {
-      total: number
-      completed: number
-      failed: number
-      running: number
-      pending: number
-      percent: number
-    }
-    tasks: Array<{
-      taskID: string
-      title: string
-      status: "success" | "failed" | "running"
-      lifecycleStatus: "queued" | "active" | "completed" | "failed" | "cancelled"
-      source: string
-      priority: "critical" | "high" | "normal" | "low"
-      directory?: string
-      error?: string
-      progress: {
-        total: number
-        completed: number
-        failed: number
-        running: number
-        pending: number
-        percent: number
-      }
-      agentInvocationDAG: {
-        taskID: string
-        rootSessionID?: string
-        nodes: Array<{
-          sessionID: string
-          orderKey: string
-          agent: string
-          kind:
-            | "root"
-            | "orchestrator"
-            | "assistant"
-            | "mission"
-            | "intent-analysis"
-            | "requirements"
-            | "frontend-design"
-            | "goal"
-            | "architect"
-            | "goal-workload-analyst"
-            | "integrity"
-            | "fact-check"
-            | "acceptance"
-            | "executor"
-            | "build"
-            | "explore"
-            | "deep-research"
-            | "frontend-research"
-            | "visual-qa"
-            | "evaluator"
-            | "system"
-          title?: string
-          parentSessionID?: string
-          parentAgentSessionID?: string
-          goalID?: string
-          status?: {
-            type: string
-            reason?: string
-            error?: string
-            emittedAt: number
-          }
-          time: {
-            created: number
-            updated: number
-          }
-        }>
-        edges: Array<{
-          fromSessionID: string
-          toSessionID: string
-          relation: "agent_call"
-          viaSessionIDs?: Array<string>
-        }>
-        topLevelSessionIDs: Array<string>
-      }
-      workflow?: {
-        id: string
-        name: string
-        steps: Array<{
-          id: string
-          label: string
-          scope: "task" | "goal"
-          tool: string
-          status: "success" | "failed" | "running"
-          rawStatus: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
-        }>
-      }
-      goals: Array<{
-        goalID: string
-        title: string
-        objective?: string
-        status: "success" | "failed" | "running"
-        rawStatus: string
-        orderIndex: number
-        priority: "blocking" | "advisory"
-        progress: {
-          total: number
-          completed: number
-          failed: number
-          running: number
-          pending: number
-          percent: number
-        }
-        steps: Array<{
-          stepID: string
-          label: string
-          status: "success" | "failed" | "running"
-          rawStatus: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
-          startedAt?: number
-          completedAt?: number
-          summary?: string
-          phases?: Array<{
-            phaseID: string
-            status: "success" | "failed" | "running"
-            rawStatus: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
-            startedAt?: number
-            completedAt?: number
-          }>
-        }>
-      }>
-      taskAgentOutcomes?: Array<{
-        id: string
-        provider: string
-        artifactKind: string
-        scope: "task" | "goal"
-        capabilities?: Array<string>
-        runID?: string
-        sessionID?: string
-        status: string
-        result?: string
-        summary?: string
-        error?: string
-        time: {
-          created: number
-          updated: number
-        }
-      }>
-      time: {
-        created: number
-        updated: number
-        started?: number
-        completed?: number
-      }
-    }>
-    generatedAt: number
-  }
-}
-
-export type MissionStatusResponse = MissionStatusResponses[keyof MissionStatusResponses]
-
-export type MissionProjectArchiveData = {
-  body?: never
-  path: {
-    missionID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/mission/{missionID}/project-archive"
-}
-
-export type MissionProjectArchiveErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-  /**
-   * Mission project is not a Git worktree
-   */
-  422: {
-    message: string
-  }
-}
-
-export type MissionProjectArchiveError = MissionProjectArchiveErrors[keyof MissionProjectArchiveErrors]
-
-export type MissionProjectArchiveResponses = {
-  /**
-   * ZIP archive
-   */
-  200: Blob | File
-}
-
-export type MissionProjectArchiveResponse = MissionProjectArchiveResponses[keyof MissionProjectArchiveResponses]
-
-export type MissionRenameData = {
-  body: {
-    title: string
-  }
-  path: {
-    missionID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/mission/{missionID}/title"
-}
-
-export type MissionRenameErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type MissionRenameError = MissionRenameErrors[keyof MissionRenameErrors]
-
-export type MissionRenameResponses = {
-  /**
-   * Renamed Mission record
-   */
-  200: {
-    missionID: string
-    sessionID: string
-    title: string
-    directory: string
-    created: number
-    updated: number
-    archived?: number
-    interruptible: boolean
-    tasks: Array<{
-      id: string
-      title: string
-      status: "queued" | "active" | "completed" | "failed" | "cancelled"
-      executionStatus: "success" | "failed" | "running"
-      priority: "critical" | "high" | "normal" | "low"
-      source: string
-      directory: string
-      created: number
-      updated: number
-      started?: number
-      completed?: number
-    }>
-    taskStats: {
-      total: number
-      queued: number
-      active: number
-      completed: number
-      failed: number
-      cancelled: number
-    }
-  }
-}
-
-export type MissionRenameResponse = MissionRenameResponses[keyof MissionRenameResponses]
-
-export type MissionAbortData = {
-  body?: never
-  path: {
-    missionID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/mission/{missionID}/abort"
-}
-
-export type MissionAbortErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-  /**
-   * Conflict
-   */
-  409:
-    | {
-        name: "ReplyTargetEnvelopeMissingError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "AgentSessionPendingCoordinationError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "TaskCancellationIncompleteError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type MissionAbortError = MissionAbortErrors[keyof MissionAbortErrors]
-
-export type MissionAbortResponses = {
-  /**
-   * Mission abort accepted
-   */
-  200: boolean
-}
-
-export type MissionAbortResponse = MissionAbortResponses[keyof MissionAbortResponses]
-
-export type MissionDeleteData = {
-  body?: never
-  path: {
-    missionID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/mission/{missionID}"
-}
-
-export type MissionDeleteErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type MissionDeleteError = MissionDeleteErrors[keyof MissionDeleteErrors]
-
-export type MissionDeleteResponses = {
-  /**
-   * Mission deleted
-   */
-  200: boolean
-}
-
-export type MissionDeleteResponse = MissionDeleteResponses[keyof MissionDeleteResponses]
-
-export type MissionWakeData = {
-  body: {
-    missionID?: string
-    text: string
-    title?: string
-    model?: string
-    promptProfile?: string
-  }
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/mission/wake"
-}
-
-export type MissionWakeErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type MissionWakeError = MissionWakeErrors[keyof MissionWakeErrors]
-
-export type MissionWakeResponses = {
-  /**
-   * Mission wake accepted
-   */
-  200: {
-    missionID: string
-    sessionID: string
-    created: boolean
-  }
-}
-
-export type MissionWakeResponse = MissionWakeResponses[keyof MissionWakeResponses]
-
-export type QuicknoteCreateData = {
-  body?: CreateQuickNoteRequest
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/api/v1/notes"
-}
-
-export type QuicknoteCreateErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type QuicknoteCreateError = QuicknoteCreateErrors[keyof QuicknoteCreateErrors]
-
-export type QuicknoteCreateResponses = {
-  /**
-   * QuickNote created successfully
-   */
-  200: CreateQuickNoteResponse
-}
-
-export type QuicknoteCreateResponse = QuicknoteCreateResponses[keyof QuicknoteCreateResponses]
-
-export type BrowserPreviewTaskTargetData = {
-  body?: never
-  path: {
-    taskID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/task/{taskID}/browser-preview"
-}
-
-export type BrowserPreviewTaskTargetErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-  /**
-   * Browser preview evidence is corrupt
-   */
-  500: {
-    name: "BrowserPreviewEvidenceCorruptionError"
-    data: {
-      [key: string]: unknown
-    }
-  }
-}
-
-export type BrowserPreviewTaskTargetError = BrowserPreviewTaskTargetErrors[keyof BrowserPreviewTaskTargetErrors]
-
-export type BrowserPreviewTaskTargetResponses = {
-  /**
-   * Browser preview target
-   */
-  200: {
-    id?: string
-    taskID?: string
-    latestEvidenceIDs?: {
-      desktop?: string
-      tablet?: string
-      mobile?: string
-    }
-    kind: "task-url" | "missing" | "failed"
-    status: "ready" | "missing" | "failed"
-    projectRoot: string
-    url?: string
-    viewports: Array<{
-      id: "desktop" | "tablet" | "mobile"
-      labelKey: string
-      width: number
-      height: number
-    }>
-    diagnostics: Array<string>
-    candidates: Array<{
-      id: string
-      url: string
-      source: "task-artifact"
-      selected: boolean
-      timeUpdated: number
-    }>
-    source: "task-artifact" | "none"
-  }
-}
-
-export type BrowserPreviewTaskTargetResponse =
-  BrowserPreviewTaskTargetResponses[keyof BrowserPreviewTaskTargetResponses]
-
-export type BrowserPreviewReadTaskEvidenceData = {
-  body?: never
-  path: {
-    taskID: string
-    evidenceID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/task/{taskID}/browser-preview/evidence/{evidenceID}"
-}
-
-export type BrowserPreviewReadTaskEvidenceErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-  /**
-   * Browser preview evidence capture is corrupt
-   */
-  500: {
-    name: "BrowserPreviewEvidenceCorruptionError"
-    data: {
-      [key: string]: unknown
-    }
-  }
-}
-
-export type BrowserPreviewReadTaskEvidenceError =
-  BrowserPreviewReadTaskEvidenceErrors[keyof BrowserPreviewReadTaskEvidenceErrors]
-
-export type BrowserPreviewReadTaskEvidenceResponses = {
-  /**
-   * Persisted browser preview evidence
-   */
-  200: {
-    id: string
-    taskID: string
-    runID?: string
-    goalRunID?: string
-    acceptanceID?: string
-    targetID: string
-    viewportID: string
-    operationKind:
-      | "preview-capture"
-      | "reference-comparison"
-      | "scroll-slice-comparison"
-      | "source-binding"
-      | "layout-geometry"
-    regionID?: string
-    stateID?: string
-    cropIntent?: "full-region" | "content-well"
-    manifestPath?: string
-    artifactPaths?: {
-      [key: string]: string
-    }
-    status: "passed" | "failed"
-    summary: string
-    capture?: unknown
-    diagnostics: Array<string>
-    timeCompleted: number
-    timeCreated: number
-  }
-}
-
-export type BrowserPreviewReadTaskEvidenceResponse =
-  BrowserPreviewReadTaskEvidenceResponses[keyof BrowserPreviewReadTaskEvidenceResponses]
-
-export type BrowserPreviewReadTaskEvidenceCaptureData = {
-  body?: never
-  path: {
-    taskID: string
-    evidenceID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/task/{taskID}/browser-preview/evidence/{evidenceID}/capture.png"
-}
-
-export type BrowserPreviewReadTaskEvidenceCaptureErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-  /**
-   * Browser preview evidence artifact is corrupt
-   */
-  500: {
-    name: "BrowserPreviewEvidenceCorruptionError"
-    data: {
-      [key: string]: unknown
-    }
-  }
-}
-
-export type BrowserPreviewReadTaskEvidenceCaptureError =
-  BrowserPreviewReadTaskEvidenceCaptureErrors[keyof BrowserPreviewReadTaskEvidenceCaptureErrors]
-
-export type BrowserPreviewReadTaskEvidenceCaptureResponses = {
-  /**
-   * Persisted browser preview PNG screenshot
-   */
-  200: Blob | File
-}
-
-export type BrowserPreviewReadTaskEvidenceCaptureResponse =
-  BrowserPreviewReadTaskEvidenceCaptureResponses[keyof BrowserPreviewReadTaskEvidenceCaptureResponses]
-
-export type BrowserPreviewReadTaskEvidenceArtifactData = {
-  body?: never
-  path: {
-    taskID: string
-    evidenceID: string
-    artifactName: "source" | "implementation" | "side-by-side" | "diff"
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/task/{taskID}/browser-preview/evidence/{evidenceID}/artifact/{artifactName}"
-}
-
-export type BrowserPreviewReadTaskEvidenceArtifactErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-  /**
-   * Browser preview evidence is corrupt
-   */
-  500: {
-    name: "BrowserPreviewEvidenceCorruptionError"
-    data: {
-      [key: string]: unknown
-    }
-  }
-}
-
-export type BrowserPreviewReadTaskEvidenceArtifactError =
-  BrowserPreviewReadTaskEvidenceArtifactErrors[keyof BrowserPreviewReadTaskEvidenceArtifactErrors]
-
-export type BrowserPreviewReadTaskEvidenceArtifactResponses = {
-  /**
-   * Persisted browser preview region comparison PNG artifact
-   */
-  200: Blob | File
-}
-
-export type BrowserPreviewReadTaskEvidenceArtifactResponse =
-  BrowserPreviewReadTaskEvidenceArtifactResponses[keyof BrowserPreviewReadTaskEvidenceArtifactResponses]
-
-export type BrowserPreviewSelectTaskTargetData = {
-  body: {
-    targetID: string
-  }
-  path: {
-    taskID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/task/{taskID}/browser-preview/target"
-}
-
-export type BrowserPreviewSelectTaskTargetErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type BrowserPreviewSelectTaskTargetError =
-  BrowserPreviewSelectTaskTargetErrors[keyof BrowserPreviewSelectTaskTargetErrors]
-
-export type BrowserPreviewSelectTaskTargetResponses = {
-  /**
-   * Persisted browser preview target
-   */
-  200: {
-    id?: string
-    taskID?: string
-    latestEvidenceIDs?: {
-      desktop?: string
-      tablet?: string
-      mobile?: string
-    }
-    kind: "task-url" | "missing" | "failed"
-    status: "ready" | "missing" | "failed"
-    projectRoot: string
-    url?: string
-    viewports: Array<{
-      id: "desktop" | "tablet" | "mobile"
-      labelKey: string
-      width: number
-      height: number
-    }>
-    diagnostics: Array<string>
-    candidates: Array<{
-      id: string
-      url: string
-      source: "task-artifact"
-      selected: boolean
-      timeUpdated: number
-    }>
-    source: "task-artifact" | "none"
-  }
-}
-
-export type BrowserPreviewSelectTaskTargetResponse =
-  BrowserPreviewSelectTaskTargetResponses[keyof BrowserPreviewSelectTaskTargetResponses]
-
-export type BrowserPreviewCaptureTaskTargetData = {
-  body: {
-    targetID: string
-    viewportIDs: Array<"desktop" | "tablet" | "mobile">
-  }
-  path: {
-    taskID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/task/{taskID}/browser-preview/capture"
-}
-
-export type BrowserPreviewCaptureTaskTargetErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type BrowserPreviewCaptureTaskTargetError =
-  BrowserPreviewCaptureTaskTargetErrors[keyof BrowserPreviewCaptureTaskTargetErrors]
-
-export type BrowserPreviewCaptureTaskTargetResponses = {
-  /**
-   * Browser preview verification result
-   */
-  200: {
-    status: "passed" | "failed"
-    projectRoot: string
-    target: {
-      id?: string
+      sessionID?: string
       taskID?: string
-      latestEvidenceIDs?: {
-        desktop?: string
-        tablet?: string
-        mobile?: string
-      }
-      kind: "task-url" | "missing" | "failed"
-      status: "ready" | "missing" | "failed"
-      projectRoot: string
-      url?: string
-      viewports: Array<{
-        id: "desktop" | "tablet" | "mobile"
-        labelKey: string
-        width: number
-        height: number
-      }>
-      diagnostics: Array<string>
-      candidates: Array<{
-        id: string
-        url: string
-        source: "task-artifact"
-        selected: boolean
-        timeUpdated: number
-      }>
-      source: "task-artifact" | "none"
-    }
-    viewports: Array<{
-      id: "desktop" | "tablet" | "mobile"
-      labelKey: string
-      width: number
-      height: number
+      ts: number
     }>
-    captures: {
-      [key: string]: {
-        captured: boolean
-        passed: boolean
-        url: string
-        requested_viewport: {
-          width: number
-          height: number
-        }
-        viewport: {
-          width: number
-          height: number
-          capped: boolean
-        }
-        summary: string
-        path?: string
-        sha?: string
-        bytes?: number
-        manifest?: unknown
-        layers?: unknown
-        dom?: unknown
-        capture_error?: unknown
-      }
-    }
-    evidenceIDs: {
-      [key: string]: string
-    }
-    diagnostics: Array<string>
+    ok: true
+    traceDir: string
   }
 }
 
-export type BrowserPreviewCaptureTaskTargetResponse =
-  BrowserPreviewCaptureTaskTargetResponses[keyof BrowserPreviewCaptureTaskTargetResponses]
-
-export type BrowserPreviewCompareTaskTargetRegionsData = {
-  body: {
-    targetID: string
-    viewportIDs: Array<"desktop" | "tablet" | "mobile">
-    inlineBindings: Array<{
-      region_id: string
-      viewport_id: "desktop" | "tablet" | "mobile"
-      state_id?: string
-      region_scope: "page-section" | "card" | "content" | "title" | "chart" | "table" | "control" | "navigation"
-      crop_intent: "full-region" | "content-well"
-      source: {
-        reference_artifact_id: "reference.png" | "web-clone-source/reference.png"
-        bbox: {
-          x: number
-          y: number
-          width: number
-          height: number
-        }
-        semantic_role: string
-        text_anchors?: Array<string>
-        source_refs?: Array<string>
-      }
-      implementation: {
-        route?: string
-        locator:
-          | {
-              kind: "test-id"
-              value: string
-            }
-          | {
-              kind: "data-oc-region"
-              value: string
-            }
-          | {
-              kind: "role"
-              role: string
-              name: string
-            }
-          | {
-              kind: "selector"
-              value: string
-              owner_file: string
-            }
-        component_files?: Array<string>
-      }
-      acceptance_refs?: Array<string>
-    }>
-    output?: {
-      include_fullpage_overview?: boolean
-      include_side_by_side?: boolean
-      include_diff?: boolean
-    }
-  }
-  path: {
-    taskID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/task/{taskID}/browser-preview/compare"
-}
-
-export type BrowserPreviewCompareTaskTargetRegionsErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type BrowserPreviewCompareTaskTargetRegionsError =
-  BrowserPreviewCompareTaskTargetRegionsErrors[keyof BrowserPreviewCompareTaskTargetRegionsErrors]
-
-export type BrowserPreviewCompareTaskTargetRegionsResponses = {
-  /**
-   * Browser preview region comparison result
-   */
-  200: {
-    status: "passed" | "failed"
-    manifestPath: string
-    jobID: string
-    taskID: string
-    targetID: string
-    operation: "reference-comparison"
-    comparison_mode: "true-size"
-    artifact_note: string
-    comparison_guidance: {
-      side_by_side_legend: {
-        left: {
-          role: "source_reference"
-          label: "LEFT: source/reference image"
-          meaning: "Expected visual source of truth."
-        }
-        right: {
-          role: "local_implementation"
-          label: "RIGHT: rendered/local implementation"
-          meaning: "Actual implementation under review."
-        }
-        source_of_truth: "left"
-        instruction: "Compare the right implementation against the left reference; do not reverse them."
-      }
-      inspection_checklist: Array<{
-        id: string
-        label: string
-        inspect_for: string
-      }>
-    }
-    evidenceIDs: {
-      [key: string]: string
-    }
-    regions: Array<{
-      region_id: string
-      viewport_id: "desktop" | "tablet" | "mobile"
-      state_id?: string
-      crop_intent?: "full-region" | "content-well"
-      status: "completed" | "failed"
-      reason?: string
-      source_bbox?: {
-        x: number
-        y: number
-        width: number
-        height: number
-      }
-      implementation_bbox?: {
-        x: number
-        y: number
-        width: number
-        height: number
-      }
-      source_image_size?: {
-        width: number
-        height: number
-      }
-      implementation_viewport?: {
-        width: number
-        height: number
-      }
-      implementation_fullpage_size?: {
-        width: number
-        height: number
-      }
-      implementation_screenshot_path?: string
-      route_diagnostics?: {
-        route: string
-        url?: string
-        status?: number
-        content_type?: string
-        body_length?: number
-        title?: string
-        dom?: {
-          text_length: number
-          node_count: number
-          body_descendant_count: number
-        }
-        page_size?: {
-          width: number
-          height: number
-        }
-        failed_requests?: Array<{
-          url: string
-          status: number
-          reason: string
-        }>
-        console_errors?: Array<string>
-        page_errors?: Array<string>
-        valid_app_page: boolean
-        reason?: string
-        screenshot_path?: string
-      }
-      artifact_note?: string
-      visual?: {
-        overall_score: number
-        ssim_score: number
-        pixel_diff_percent: number
-        mismatched_pixels: number
-        total_pixels: number
-        dimensions_match: boolean
-      }
-      coverage?: {
-        source_width: number
-        source_height: number
-        implementation_width: number
-        implementation_height: number
-        implementation_covers_source: boolean
-        implementation_matches_source_size: boolean
-      }
-      content?: {
-        source: {
-          non_white_pixel_ratio: number
-          unique_color_count: number
-        }
-        implementation: {
-          non_white_pixel_ratio: number
-          unique_color_count: number
-        }
-      }
-      artifacts?: {
-        source_crop: string
-        implementation_crop: string
-        side_by_side: string
-        diff?: string
-      }
-      diagnostics: Array<string>
-    }>
-    diagnostics: Array<string>
-  }
-}
-
-export type BrowserPreviewCompareTaskTargetRegionsResponse =
-  BrowserPreviewCompareTaskTargetRegionsResponses[keyof BrowserPreviewCompareTaskTargetRegionsResponses]
+export type SessionTraceResponse = SessionTraceResponses[keyof SessionTraceResponses]
 
 export type ServerShutdownData = {
   body?: never
@@ -12322,214 +14014,917 @@ export type ServerShutdownResponses = {
 
 export type ServerShutdownResponse = ServerShutdownResponses[keyof ServerShutdownResponses]
 
-export type ServerRestartData = {
+export type AppSkillsData = {
   body?: never
   path?: never
-  query?: never
-  url: "/restart"
-}
-
-export type ServerRestartErrors = {
-  /**
-   * Shutdown handler unavailable
-   */
-  503: {
-    ok: boolean
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
   }
+  url: "/skill"
 }
 
-export type ServerRestartError = ServerRestartErrors[keyof ServerRestartErrors]
-
-export type ServerRestartResponses = {
+export type AppSkillsResponses = {
   /**
-   * Restart initiated
+   * List of skills
+   */
+  200: Array<{
+    agents?: Array<string>
+    auto_detect?: {
+      deps?: Array<string>
+      files?: Array<string>
+      task_signals?: {
+        /**
+         * True when the task carries a reference image attachment.
+         */
+        has_attachment_image?: boolean
+        /**
+         * Any of the listed npm/bun scripts exists in the project's package.json.
+         */
+        package_has_script?: Array<string>
+        /**
+         * True when the task request text contains a figma.com URL (file / design / proto / board path). Mutually exclusive with `request_contains_url` by construction in deriveUrlSignals.
+         */
+        request_contains_figma_url?: boolean
+        /**
+         * True when the task request text contains an http(s) URL — explicitly EXCLUDING figma.com URLs (those drive `request_contains_figma_url`).
+         */
+        request_contains_url?: boolean
+        /**
+         * Any listed case-insensitive substring must appear in the task request text.
+         */
+        request_text_any?: Array<string>
+      }
+    }
+    builtin?: boolean
+    content: string
+    description: string
+    duplicate_locations?: Array<string>
+    expires_at?: string
+    location: string
+    mounted_agents?: Array<string>
+    name: string
+    platforms?: Array<"win32" | "darwin" | "linux">
+    priority?: number
+    required_tools?: Array<string>
+  }>
+}
+
+export type AppSkillsResponse = AppSkillsResponses[keyof AppSkillsResponses]
+
+export type SkillDirectoriesData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/skill/directories"
+}
+
+export type SkillDirectoriesResponses = {
+  /**
+   * Skill directories
    */
   200: {
-    ok: boolean
+    global_config: string
+    managed_skills: string
+    remote_cache: string
   }
 }
 
-export type ServerRestartResponse = ServerRestartResponses[keyof ServerRestartResponses]
+export type SkillDirectoriesResponse = SkillDirectoriesResponses[keyof SkillDirectoriesResponses]
+
+export type SkillImportAndMountData = {
+  body: {
+    agent: string
+    import: {
+      archiveBase64?: string
+      content?: string
+      filename?: string
+      files?: Array<{
+        content?: string
+        contentBase64?: string
+        path: string
+      }>
+      policy?: PermissionAction
+      sourceName?: string
+    }
+    sessionID?: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/skill/import-and-mount"
+}
+
+export type SkillImportAndMountResponses = {
+  /**
+   * Updated agent skill mount matrix
+   */
+  200: {
+    active_profile: string
+    agents: Array<{
+      description?: string
+      hidden?: boolean
+      mode: "subagent" | "primary" | "all"
+      name: string
+      native?: boolean
+      skill_mountable: boolean
+      skill_tool_available: boolean
+      virtual_agent?: {
+        description?: string
+        id: string
+        label: string
+        projection_hash: string
+      }
+    }>
+    capability_profile_id: string
+    matrix: Array<{
+      agent: string
+      mounted: Array<{
+        description: string
+        enabled: boolean
+        location: string
+        name: string
+        reason?:
+          | "skill_tool_unavailable"
+          | "permission_denied"
+          | "platform_incompatible"
+          | "agent_incompatible"
+          | "missing_required_tool"
+      }>
+    }>
+    production_skill_names: Array<string>
+    project_mounts: {
+      agents?: {
+        [key: string]: Array<string>
+      }
+    }
+    projected_agents: Array<string>
+    projected_skill_names: Array<string>
+    projected_tool_ids: Array<string>
+    projection_hash: string
+    scope: "project" | "session"
+    selector_skill_names: Array<string>
+    skills: Array<{
+      agents?: Array<string>
+      auto_detect?: {
+        deps?: Array<string>
+        files?: Array<string>
+        task_signals?: {
+          has_attachment_image?: boolean
+          package_has_script?: Array<string>
+          request_contains_figma_url?: boolean
+          request_contains_url?: boolean
+          request_text_any?: Array<string>
+        }
+      }
+      builtin?: boolean
+      content: string
+      description: string
+      dir?: string
+      duplicate_locations?: Array<string>
+      expires_at?: string
+      location: string
+      managed: boolean
+      mounted_agents: Array<string>
+      name: string
+      platforms?: Array<"win32" | "darwin" | "linux">
+      policy: PermissionAction
+      priority?: number
+      recommended_policy: PermissionAction
+      required_tools?: Array<string>
+      risk: {
+        has_agents: boolean
+        has_references: boolean
+        has_scripts: boolean
+        has_templates: boolean
+        level: "low" | "medium" | "high"
+      }
+      source?: string
+      source_type: "builtin" | "managed_git" | "config_path" | "config_url" | "external" | "unknown"
+      trust: "builtin" | "official" | "curated" | "community" | "local" | "external" | "unknown"
+      unmounted: boolean
+      warning?: "unmounted"
+      writable: boolean
+    }>
+    unmounted_count: number
+  }
+}
+
+export type SkillImportAndMountResponse = SkillImportAndMountResponses[keyof SkillImportAndMountResponses]
+
+export type SkillImportFileData = {
+  body?: {
+    archiveBase64?: string
+    content?: string
+    filename?: string
+    files?: Array<{
+      content?: string
+      contentBase64?: string
+      path: string
+    }>
+    policy?: PermissionAction
+    sourceName?: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/skill/import-file"
+}
+
+export type SkillImportFileResponses = {
+  /**
+   * Imported project skill file
+   */
+  200: {
+    kind: "path"
+    name: string
+    names?: Array<string>
+    source: string
+    sources?: Array<string>
+  }
+}
+
+export type SkillImportFileResponse = SkillImportFileResponses[keyof SkillImportFileResponses]
+
+export type SkillInstallData = {
+  body: {
+    kind: "path" | "url" | "git"
+    policy?: PermissionAction
+    value: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/skill/install"
+}
+
+export type SkillInstallResponses = {
+  /**
+   * Installed skill source
+   */
+  200: {
+    kind: "path" | "url" | "git"
+    path?: string
+    source: string
+  }
+}
+
+export type SkillInstallResponse = SkillInstallResponses[keyof SkillInstallResponses]
+
+export type SkillInstalledData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/skill/installed"
+}
+
+export type SkillInstalledResponses = {
+  /**
+   * Installed skills
+   */
+  200: Array<{
+    agents?: Array<string>
+    auto_detect?: {
+      deps?: Array<string>
+      files?: Array<string>
+      task_signals?: {
+        has_attachment_image?: boolean
+        package_has_script?: Array<string>
+        request_contains_figma_url?: boolean
+        request_contains_url?: boolean
+        request_text_any?: Array<string>
+      }
+    }
+    builtin?: boolean
+    content: string
+    description: string
+    dir?: string
+    duplicate_locations?: Array<string>
+    expires_at?: string
+    location: string
+    managed: boolean
+    mounted_agents?: Array<string>
+    name: string
+    platforms?: Array<"win32" | "darwin" | "linux">
+    policy: PermissionAction
+    priority?: number
+    recommended_policy: PermissionAction
+    required_tools?: Array<string>
+    risk: {
+      has_agents: boolean
+      has_references: boolean
+      has_scripts: boolean
+      has_templates: boolean
+      level: "low" | "medium" | "high"
+    }
+    source?: string
+    source_type: "builtin" | "managed_git" | "config_path" | "config_url" | "external" | "unknown"
+    trust: "builtin" | "official" | "curated" | "community" | "local" | "external" | "unknown"
+    writable: boolean
+  }>
+}
+
+export type SkillInstalledResponse = SkillInstalledResponses[keyof SkillInstalledResponses]
+
+export type SkillMarketData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/skill/market"
+}
+
+export type SkillMarketResponses = {
+  /**
+   * Skill market entries
+   */
+  200: Array<{
+    description: string
+    homepage: string
+    id: string
+    install_kind: "git" | "url" | "manual"
+    name: string
+    notes?: string
+    provider: string
+    recommended_policy: PermissionAction
+    source?: string
+    trust: "official" | "curated" | "community"
+  }>
+}
+
+export type SkillMarketResponse = SkillMarketResponses[keyof SkillMarketResponses]
+
+export type SkillMountData = {
+  body: {
+    agent: string
+    sessionID?: string
+    skill: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/skill/mount"
+}
+
+export type SkillMountResponses = {
+  /**
+   * Updated agent skill mount matrix
+   */
+  200: {
+    active_profile: string
+    agents: Array<{
+      description?: string
+      hidden?: boolean
+      mode: "subagent" | "primary" | "all"
+      name: string
+      native?: boolean
+      skill_mountable: boolean
+      skill_tool_available: boolean
+      virtual_agent?: {
+        description?: string
+        id: string
+        label: string
+        projection_hash: string
+      }
+    }>
+    capability_profile_id: string
+    matrix: Array<{
+      agent: string
+      mounted: Array<{
+        description: string
+        enabled: boolean
+        location: string
+        name: string
+        reason?:
+          | "skill_tool_unavailable"
+          | "permission_denied"
+          | "platform_incompatible"
+          | "agent_incompatible"
+          | "missing_required_tool"
+      }>
+    }>
+    production_skill_names: Array<string>
+    project_mounts: {
+      agents?: {
+        [key: string]: Array<string>
+      }
+    }
+    projected_agents: Array<string>
+    projected_skill_names: Array<string>
+    projected_tool_ids: Array<string>
+    projection_hash: string
+    scope: "project" | "session"
+    selector_skill_names: Array<string>
+    skills: Array<{
+      agents?: Array<string>
+      auto_detect?: {
+        deps?: Array<string>
+        files?: Array<string>
+        task_signals?: {
+          has_attachment_image?: boolean
+          package_has_script?: Array<string>
+          request_contains_figma_url?: boolean
+          request_contains_url?: boolean
+          request_text_any?: Array<string>
+        }
+      }
+      builtin?: boolean
+      content: string
+      description: string
+      dir?: string
+      duplicate_locations?: Array<string>
+      expires_at?: string
+      location: string
+      managed: boolean
+      mounted_agents: Array<string>
+      name: string
+      platforms?: Array<"win32" | "darwin" | "linux">
+      policy: PermissionAction
+      priority?: number
+      recommended_policy: PermissionAction
+      required_tools?: Array<string>
+      risk: {
+        has_agents: boolean
+        has_references: boolean
+        has_scripts: boolean
+        has_templates: boolean
+        level: "low" | "medium" | "high"
+      }
+      source?: string
+      source_type: "builtin" | "managed_git" | "config_path" | "config_url" | "external" | "unknown"
+      trust: "builtin" | "official" | "curated" | "community" | "local" | "external" | "unknown"
+      unmounted: boolean
+      warning?: "unmounted"
+      writable: boolean
+    }>
+    unmounted_count: number
+  }
+}
+
+export type SkillMountResponse = SkillMountResponses[keyof SkillMountResponses]
+
+export type SkillMountsData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+    sessionID?: string
+    refresh?: "true"
+  }
+  url: "/skill/mounts"
+}
+
+export type SkillMountsResponses = {
+  /**
+   * Agent skill mount matrix
+   */
+  200: {
+    active_profile: string
+    agents: Array<{
+      description?: string
+      hidden?: boolean
+      mode: "subagent" | "primary" | "all"
+      name: string
+      native?: boolean
+      skill_mountable: boolean
+      skill_tool_available: boolean
+      virtual_agent?: {
+        description?: string
+        id: string
+        label: string
+        projection_hash: string
+      }
+    }>
+    capability_profile_id: string
+    matrix: Array<{
+      agent: string
+      mounted: Array<{
+        description: string
+        enabled: boolean
+        location: string
+        name: string
+        reason?:
+          | "skill_tool_unavailable"
+          | "permission_denied"
+          | "platform_incompatible"
+          | "agent_incompatible"
+          | "missing_required_tool"
+      }>
+    }>
+    production_skill_names: Array<string>
+    project_mounts: {
+      agents?: {
+        [key: string]: Array<string>
+      }
+    }
+    projected_agents: Array<string>
+    projected_skill_names: Array<string>
+    projected_tool_ids: Array<string>
+    projection_hash: string
+    scope: "project" | "session"
+    selector_skill_names: Array<string>
+    skills: Array<{
+      agents?: Array<string>
+      auto_detect?: {
+        deps?: Array<string>
+        files?: Array<string>
+        task_signals?: {
+          has_attachment_image?: boolean
+          package_has_script?: Array<string>
+          request_contains_figma_url?: boolean
+          request_contains_url?: boolean
+          request_text_any?: Array<string>
+        }
+      }
+      builtin?: boolean
+      content: string
+      description: string
+      dir?: string
+      duplicate_locations?: Array<string>
+      expires_at?: string
+      location: string
+      managed: boolean
+      mounted_agents: Array<string>
+      name: string
+      platforms?: Array<"win32" | "darwin" | "linux">
+      policy: PermissionAction
+      priority?: number
+      recommended_policy: PermissionAction
+      required_tools?: Array<string>
+      risk: {
+        has_agents: boolean
+        has_references: boolean
+        has_scripts: boolean
+        has_templates: boolean
+        level: "low" | "medium" | "high"
+      }
+      source?: string
+      source_type: "builtin" | "managed_git" | "config_path" | "config_url" | "external" | "unknown"
+      trust: "builtin" | "official" | "curated" | "community" | "local" | "external" | "unknown"
+      unmounted: boolean
+      warning?: "unmounted"
+      writable: boolean
+    }>
+    unmounted_count: number
+  }
+}
+
+export type SkillMountsResponse = SkillMountsResponses[keyof SkillMountsResponses]
+
+export type SkillPolicyData = {
+  body: {
+    action: PermissionAction
+    name: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/skill/policy"
+}
+
+export type SkillPolicyResponses = {
+  /**
+   * Updated skill policy
+   */
+  200: boolean
+}
+
+export type SkillPolicyResponse = SkillPolicyResponses[keyof SkillPolicyResponses]
+
+export type SkillRemoveData = {
+  body: {
+    kind?: "path" | "url" | "git"
+    source: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/skill/remove"
+}
+
+export type SkillRemoveResponses = {
+  /**
+   * Removed skill source
+   */
+  200: boolean
+}
+
+export type SkillRemoveResponse = SkillRemoveResponses[keyof SkillRemoveResponses]
+
+export type SkillUnmountData = {
+  body: {
+    agent: string
+    sessionID?: string
+    skill: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/skill/unmount"
+}
+
+export type SkillUnmountResponses = {
+  /**
+   * Updated agent skill mount matrix
+   */
+  200: {
+    active_profile: string
+    agents: Array<{
+      description?: string
+      hidden?: boolean
+      mode: "subagent" | "primary" | "all"
+      name: string
+      native?: boolean
+      skill_mountable: boolean
+      skill_tool_available: boolean
+      virtual_agent?: {
+        description?: string
+        id: string
+        label: string
+        projection_hash: string
+      }
+    }>
+    capability_profile_id: string
+    matrix: Array<{
+      agent: string
+      mounted: Array<{
+        description: string
+        enabled: boolean
+        location: string
+        name: string
+        reason?:
+          | "skill_tool_unavailable"
+          | "permission_denied"
+          | "platform_incompatible"
+          | "agent_incompatible"
+          | "missing_required_tool"
+      }>
+    }>
+    production_skill_names: Array<string>
+    project_mounts: {
+      agents?: {
+        [key: string]: Array<string>
+      }
+    }
+    projected_agents: Array<string>
+    projected_skill_names: Array<string>
+    projected_tool_ids: Array<string>
+    projection_hash: string
+    scope: "project" | "session"
+    selector_skill_names: Array<string>
+    skills: Array<{
+      agents?: Array<string>
+      auto_detect?: {
+        deps?: Array<string>
+        files?: Array<string>
+        task_signals?: {
+          has_attachment_image?: boolean
+          package_has_script?: Array<string>
+          request_contains_figma_url?: boolean
+          request_contains_url?: boolean
+          request_text_any?: Array<string>
+        }
+      }
+      builtin?: boolean
+      content: string
+      description: string
+      dir?: string
+      duplicate_locations?: Array<string>
+      expires_at?: string
+      location: string
+      managed: boolean
+      mounted_agents: Array<string>
+      name: string
+      platforms?: Array<"win32" | "darwin" | "linux">
+      policy: PermissionAction
+      priority?: number
+      recommended_policy: PermissionAction
+      required_tools?: Array<string>
+      risk: {
+        has_agents: boolean
+        has_references: boolean
+        has_scripts: boolean
+        has_templates: boolean
+        level: "low" | "medium" | "high"
+      }
+      source?: string
+      source_type: "builtin" | "managed_git" | "config_path" | "config_url" | "external" | "unknown"
+      trust: "builtin" | "official" | "curated" | "community" | "local" | "external" | "unknown"
+      unmounted: boolean
+      warning?: "unmounted"
+      writable: boolean
+    }>
+    unmounted_count: number
+  }
+}
+
+export type SkillUnmountResponse = SkillUnmountResponses[keyof SkillUnmountResponses]
 
 export type TaskCreateData = {
   body: {
-    project?: string
-    requestID?: string
-    source?: string
-    executor?: "opencorvus" | "codex" | "claude-code"
-    model?: string
-    title?: string
-    request: string
     attachments?: Array<{
-      mime: string
       data: string
       filename?: string
+      mime: string
     }>
-    priority?: "critical" | "high" | "normal" | "low"
-    queue?: boolean
-    kind?: "workflow" | "build"
-    promptProfile?: string
     budget?: {
       maxExecutorGroups?: number
     }
+    channelBinding?: {
+      channel: string
+      payload?: {
+        [key: string]: unknown
+      }
+      platform: string
+      thread: string
+    }
     checks?: {
-      build?: Array<string> | false
-      test?: Array<string> | false
-      lint?: Array<string> | false
-      verify_cmd?: Array<string> | false
-      named?: {
-        [key: string]: {
-          label?: string
-          family?: "build" | "test" | "lint" | "verify_cmd"
-          commands: Array<string>
-          enabled?: boolean
-          cwd?: string
-        }
-      }
-      startup?: {
-        command: string
-        ready_url?: string
-        ready_text?: string
-        timeout_ms?: number
-        warmup_ms?: number
-        require_exit_zero?: boolean
-        mode?: "soft" | "strict"
-      }
       artifact?: {
-        require_changed_files?: boolean
         min_changed_files?: number
+        mode?: "soft" | "strict"
+        require_changed_files?: boolean
         require_diff?: boolean
         require_summary?: boolean
-        mode?: "soft" | "strict"
       }
-      visual?: {
-        target: "web"
-        url: string
-        require_text?: Array<string>
-        require_title?: string
-        timeout_ms?: number
-        mode?: "soft" | "strict"
-      }
-      playwright?: {
-        target: "web"
-        url: string
-        browser?: "chrome" | "edge" | "chromium"
-        executable_path?: string
-        wait_for_selector?: string
-        wait_for_text?: string
-        require_text?: Array<string>
-        require_title?: string
-        full_page?: boolean
-        viewport?: {
-          width?: number
-          height?: number
-        }
-        timeout_ms?: number
-        mode?: "soft" | "strict"
-      }
-      ui_review?: {
-        target: "web"
-        url?: string
-        prompt?: string
-        focus?: Array<"layout" | "hierarchy" | "clarity" | "navigation" | "feedback" | "accessibility">
-        timeout_ms?: number
-        mode?: "soft" | "strict"
-      }
+      build?: Array<string> | false
       code_quality?: {
         enabled?: boolean
-        prompt?: string
         max_diffs?: number
         mode?: "soft" | "strict"
+        prompt?: string
       }
       code_review?: {
         enabled?: boolean
-        prompt?: string
         max_diffs?: number
         mode?: "soft" | "strict"
-      }
-      dead_code_review?: {
-        enabled?: boolean
         prompt?: string
-        max_diffs?: number
-        mode?: "soft" | "strict"
-      }
-      judge?: {
-        enabled?: boolean
-        prompt?: string
-        mode?: "soft" | "strict"
-      }
-      spec_check?: {
-        enabled?: boolean
-        prompt?: string
-        mode?: "soft" | "strict"
       }
       custom?: {
         [key: string]: {
           [key: string]: unknown
         }
       }
+      dead_code_review?: {
+        enabled?: boolean
+        max_diffs?: number
+        mode?: "soft" | "strict"
+        prompt?: string
+      }
+      judge?: {
+        enabled?: boolean
+        mode?: "soft" | "strict"
+        prompt?: string
+      }
+      lint?: Array<string> | false
+      named?: {
+        [key: string]: {
+          commands: Array<string>
+          cwd?: string
+          enabled?: boolean
+          family?: "build" | "test" | "lint" | "verify_cmd"
+          label?: string
+        }
+      }
+      playwright?: {
+        browser?: "chrome" | "edge" | "chromium"
+        executable_path?: string
+        full_page?: boolean
+        mode?: "soft" | "strict"
+        require_text?: Array<string>
+        require_title?: string
+        target: "web"
+        timeout_ms?: number
+        url: string
+        viewport?: {
+          height?: number
+          width?: number
+        }
+        wait_for_selector?: string
+        wait_for_text?: string
+      }
+      spec_check?: {
+        enabled?: boolean
+        mode?: "soft" | "strict"
+        prompt?: string
+      }
+      startup?: {
+        command: string
+        mode?: "soft" | "strict"
+        ready_text?: string
+        ready_url?: string
+        require_exit_zero?: boolean
+        timeout_ms?: number
+        warmup_ms?: number
+      }
+      test?: Array<string> | false
       timeout_ms?: number
+      ui_review?: {
+        focus?: Array<"layout" | "hierarchy" | "clarity" | "navigation" | "feedback" | "accessibility">
+        mode?: "soft" | "strict"
+        prompt?: string
+        target: "web"
+        timeout_ms?: number
+        url?: string
+      }
+      verify_cmd?: Array<string> | false
+      visual?: {
+        mode?: "soft" | "strict"
+        require_text?: Array<string>
+        require_title?: string
+        target: "web"
+        timeout_ms?: number
+        url: string
+      }
     }
-    routing?: {
-      spec?: "opencorvus" | "executor"
-      plan?: "opencorvus" | "executor"
-      evaluation?: "opencorvus" | "hybrid"
-    }
+    executor?: "opencorvus" | "codex" | "claude-code"
     goals?: Array<{
-      description: string
-      criteria: string
-      priority?: "blocking" | "advisory"
-      source?: string
-      title?: string
-      objective?: string
-      requirement_ids?: Array<string>
-      depends_on_goal_ids?: Array<string>
-      owned_paths?: Array<string>
       acceptance_specs?: Array<{
+        /**
+         * Goal ID this spec belongs to. Specs are goal-local; multiple specs may share a goal.
+         */
+        goal_id: string
         /**
          * Stable spec ID, e.g. 'acc-login-3s'.
          */
         id: string
         /**
-         * Requirement ID this spec was derived from (REQ-N).
-         */
-        source_requirement_id: string
-        /**
-         * Goal ID this spec belongs to. Specs are goal-local; multiple specs may share a goal.
-         */
-        goal_id: string
-        title: string
-        /**
          * Gherkin Given/When/Then scenario. Optional — omit for pure code checks.
          */
         scenario?: {
           given: Array<string>
-          when: Array<string>
           then: Array<string>
+          when: Array<string>
         }
         /**
          * At least one scorer — a spec without a scorer is untestable.
          */
         scorers: Array<
           | {
-              /**
-               * heuristic — deterministic shell/script check, pass/fail by exit code. Requires: name, spec{kind}.
-               */
-              type: "heuristic"
+              expect?: {
+                exit_code?: number
+              }
               name: string
               spec:
                 | {
-                    /**
-                     * shell — run an inline command. Requires: cmd; optional cwd.
-                     */
-                    kind: "shell"
                     /**
                      * Shell command. Exit 0 = pass unless expect.exit_code set.
                      */
                     cmd: string
                     cwd?: string
+                    /**
+                     * shell — run an inline command. Requires: cmd; optional cwd.
+                     */
+                    kind: "shell"
                   }
                 | {
+                    args?: Array<string>
                     /**
                      * script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.
                      */
@@ -12538,53 +14933,58 @@ export type TaskCreateData = {
                      * Repo-relative script path that already exists at registration time.
                      */
                     path: string
-                    args?: Array<string>
                   }
-              expect?: {
-                exit_code?: number
-              }
+              /**
+               * heuristic — deterministic shell/script check, pass/fail by exit code. Requires: name, spec{kind}.
+               */
+              type: "heuristic"
             }
           | {
-              /**
-               * llm_judge — natural-language rubric evaluation. Requires: name, criteria; optional rubric, inputs.
-               */
-              type: "llm_judge"
-              name: string
               /**
                * Single-criterion evaluation question in natural language.
                */
               criteria: string
               /**
+               * Which parts of the acceptance to feed the judge. Default: acceptance_summary. LLM judges cannot consume visual feedback; final rendered reference parity uses prebuilt visual-feedback-verification.
+               */
+              inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
+              name: string
+              /**
                * Ordinal anchors, 2-5 levels. Omit for binary MET/UNMET.
                */
               rubric?: Array<{
-                /**
-                 * Integer score for this level.
-                 */
-                score: number
-                /**
-                 * Short level label, e.g. 'fully met'.
-                 */
-                label: string
                 /**
                  * Behavioral description: what earns this score.
                  */
                 anchor: string
                 /**
+                 * Short level label, e.g. 'fully met'.
+                 */
+                label: string
+                /**
                  * Does this level count as pass for binary verdict?
                  */
                 passes: boolean
+                /**
+                 * Integer score for this level.
+                 */
+                score: number
               }>
               /**
-               * Which parts of the acceptance to feed the judge. Default: acceptance_summary. LLM judges cannot consume visual feedback; final rendered reference parity uses prebuilt visual-feedback-verification.
+               * llm_judge — natural-language rubric evaluation. Requires: name, criteria; optional rubric, inputs.
                */
-              inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
+              type: "llm_judge"
             }
           | {
+              config?: {
+                [key: string]: unknown
+              }
               /**
-               * prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.
+               * For name=visual-feedback-verification, requires a passing current visual feedback verification.
                */
-              type: "prebuilt"
+              expect?: {
+                status: "passed"
+              }
               name:
                 | "factuality"
                 | "relevance"
@@ -12593,9 +14993,6 @@ export type TaskCreateData = {
                 | "length_within"
                 | "json_schema"
                 | "visual-feedback-verification"
-              config?: {
-                [key: string]: unknown
-              }
               /**
                * For name=visual-feedback-verification, identifies the required visual feedback verification shape.
                */
@@ -12604,97 +15001,98 @@ export type TaskCreateData = {
                 viewport?: string
               }
               /**
-               * For name=visual-feedback-verification, requires a passing current visual feedback verification.
+               * prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.
                */
-              expect?: {
-                status: "passed"
-              }
+              type: "prebuilt"
             }
           | {
+              expect: {
+                status: "passed"
+              }
+              name: string
+              spec: {
+                contract_ids: Array<string>
+                kind: "contract_graph"
+              }
               /**
                * contract_audit — static audit of typed-contract field literals and graph artifact path materialization against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
                */
               type: "contract_audit"
-              name: string
-              spec: {
-                kind: "contract_graph"
-                contract_ids: Array<string>
-              }
-              expect: {
-                status: "passed"
-              }
             }
         >
         severity: "essential" | "important" | "optional" | "pitfall"
+        /**
+         * Requirement ID this spec was derived from (REQ-N).
+         */
+        source_requirement_id: string
+        title: string
         /**
          * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity.
          */
         trigger?: "on_goal" | "on_integrity"
       }>
+      criteria: string
+      depends_on_goal_ids?: Array<string>
+      description: string
       kind?: "bootstrap" | "feature" | "verification" | "integration" | "system"
       metadata?: {
         check_selector?: Array<string>
         [key: string]: unknown | Array<string> | undefined
       }
+      objective?: string
+      owned_paths?: Array<string>
+      priority?: "blocking" | "advisory"
+      requirement_ids?: Array<string>
+      source?: string
+      title?: string
     }>
+    kind?: "workflow" | "build"
+    metadata?: {
+      [key: string]: unknown
+    }
     milestones?: Array<{
-      title: string
       description?: string
       goals: Array<{
-        description: string
-        criteria: string
-        priority?: "blocking" | "advisory"
-        source?: string
-        title?: string
-        objective?: string
-        requirement_ids?: Array<string>
-        depends_on_goal_ids?: Array<string>
-        owned_paths?: Array<string>
         acceptance_specs?: Array<{
+          /**
+           * Goal ID this spec belongs to. Specs are goal-local; multiple specs may share a goal.
+           */
+          goal_id: string
           /**
            * Stable spec ID, e.g. 'acc-login-3s'.
            */
           id: string
           /**
-           * Requirement ID this spec was derived from (REQ-N).
-           */
-          source_requirement_id: string
-          /**
-           * Goal ID this spec belongs to. Specs are goal-local; multiple specs may share a goal.
-           */
-          goal_id: string
-          title: string
-          /**
            * Gherkin Given/When/Then scenario. Optional — omit for pure code checks.
            */
           scenario?: {
             given: Array<string>
-            when: Array<string>
             then: Array<string>
+            when: Array<string>
           }
           /**
            * At least one scorer — a spec without a scorer is untestable.
            */
           scorers: Array<
             | {
-                /**
-                 * heuristic — deterministic shell/script check, pass/fail by exit code. Requires: name, spec{kind}.
-                 */
-                type: "heuristic"
+                expect?: {
+                  exit_code?: number
+                }
                 name: string
                 spec:
                   | {
-                      /**
-                       * shell — run an inline command. Requires: cmd; optional cwd.
-                       */
-                      kind: "shell"
                       /**
                        * Shell command. Exit 0 = pass unless expect.exit_code set.
                        */
                       cmd: string
                       cwd?: string
+                      /**
+                       * shell — run an inline command. Requires: cmd; optional cwd.
+                       */
+                      kind: "shell"
                     }
                   | {
+                      args?: Array<string>
                       /**
                        * script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.
                        */
@@ -12703,53 +15101,58 @@ export type TaskCreateData = {
                        * Repo-relative script path that already exists at registration time.
                        */
                       path: string
-                      args?: Array<string>
                     }
-                expect?: {
-                  exit_code?: number
-                }
+                /**
+                 * heuristic — deterministic shell/script check, pass/fail by exit code. Requires: name, spec{kind}.
+                 */
+                type: "heuristic"
               }
             | {
-                /**
-                 * llm_judge — natural-language rubric evaluation. Requires: name, criteria; optional rubric, inputs.
-                 */
-                type: "llm_judge"
-                name: string
                 /**
                  * Single-criterion evaluation question in natural language.
                  */
                 criteria: string
                 /**
+                 * Which parts of the acceptance to feed the judge. Default: acceptance_summary. LLM judges cannot consume visual feedback; final rendered reference parity uses prebuilt visual-feedback-verification.
+                 */
+                inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
+                name: string
+                /**
                  * Ordinal anchors, 2-5 levels. Omit for binary MET/UNMET.
                  */
                 rubric?: Array<{
-                  /**
-                   * Integer score for this level.
-                   */
-                  score: number
-                  /**
-                   * Short level label, e.g. 'fully met'.
-                   */
-                  label: string
                   /**
                    * Behavioral description: what earns this score.
                    */
                   anchor: string
                   /**
+                   * Short level label, e.g. 'fully met'.
+                   */
+                  label: string
+                  /**
                    * Does this level count as pass for binary verdict?
                    */
                   passes: boolean
+                  /**
+                   * Integer score for this level.
+                   */
+                  score: number
                 }>
                 /**
-                 * Which parts of the acceptance to feed the judge. Default: acceptance_summary. LLM judges cannot consume visual feedback; final rendered reference parity uses prebuilt visual-feedback-verification.
+                 * llm_judge — natural-language rubric evaluation. Requires: name, criteria; optional rubric, inputs.
                  */
-                inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
+                type: "llm_judge"
               }
             | {
+                config?: {
+                  [key: string]: unknown
+                }
                 /**
-                 * prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.
+                 * For name=visual-feedback-verification, requires a passing current visual feedback verification.
                  */
-                type: "prebuilt"
+                expect?: {
+                  status: "passed"
+                }
                 name:
                   | "factuality"
                   | "relevance"
@@ -12758,9 +15161,6 @@ export type TaskCreateData = {
                   | "length_within"
                   | "json_schema"
                   | "visual-feedback-verification"
-                config?: {
-                  [key: string]: unknown
-                }
                 /**
                  * For name=visual-feedback-verification, identifies the required visual feedback verification shape.
                  */
@@ -12769,51 +15169,67 @@ export type TaskCreateData = {
                   viewport?: string
                 }
                 /**
-                 * For name=visual-feedback-verification, requires a passing current visual feedback verification.
+                 * prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.
                  */
-                expect?: {
-                  status: "passed"
-                }
+                type: "prebuilt"
               }
             | {
+                expect: {
+                  status: "passed"
+                }
+                name: string
+                spec: {
+                  contract_ids: Array<string>
+                  kind: "contract_graph"
+                }
                 /**
                  * contract_audit — static audit of typed-contract field literals and graph artifact path materialization against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
                  */
                 type: "contract_audit"
-                name: string
-                spec: {
-                  kind: "contract_graph"
-                  contract_ids: Array<string>
-                }
-                expect: {
-                  status: "passed"
-                }
               }
           >
           severity: "essential" | "important" | "optional" | "pitfall"
+          /**
+           * Requirement ID this spec was derived from (REQ-N).
+           */
+          source_requirement_id: string
+          title: string
           /**
            * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity.
            */
           trigger?: "on_goal" | "on_integrity"
         }>
+        criteria: string
+        depends_on_goal_ids?: Array<string>
+        description: string
         kind?: "bootstrap" | "feature" | "verification" | "integration" | "system"
         metadata?: {
           check_selector?: Array<string>
           [key: string]: unknown | Array<string> | undefined
         }
+        objective?: string
+        owned_paths?: Array<string>
+        priority?: "blocking" | "advisory"
+        requirement_ids?: Array<string>
+        source?: string
+        title?: string
       }>
+      title: string
     }>
-    channelBinding?: {
-      platform: string
-      channel: string
-      thread: string
-      payload?: {
-        [key: string]: unknown
-      }
+    model?: string
+    priority?: "critical" | "high" | "normal" | "low"
+    project?: string
+    promptProfile?: string
+    queue?: boolean
+    request: string
+    requestID?: string
+    routing?: {
+      evaluation?: "opencorvus" | "hybrid"
+      plan?: "opencorvus" | "executor"
+      spec?: "opencorvus" | "executor"
     }
-    metadata?: {
-      [key: string]: unknown
-    }
+    source?: string
+    title?: string
   }
   path?: never
   query?: {
@@ -12839,16 +15255,16 @@ export type TaskCreateErrors = {
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
 }
 
@@ -12864,368 +15280,6 @@ export type TaskCreateResponses = {
 }
 
 export type TaskCreateResponse = TaskCreateResponses[keyof TaskCreateResponses]
-
-export type TaskListData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-    q?: string
-    status?: string
-    limit?: number
-  }
-  url: "/tasks"
-}
-
-export type TaskListResponses = {
-  /**
-   * Project task board
-   */
-  200: {
-    project: {
-      id: string
-      name?: string
-      worktree: string
-    }
-    summary: {
-      total_tasks: number
-      open_tasks: number
-      running_tasks: number
-      blocked_tasks: number
-      completed_tasks: number
-      failed_tasks: number
-      cancelled_tasks: number
-      median_completion_ms?: number
-    }
-    tasks: Array<{
-      task: {
-        id: string
-        orderKey: string
-        projectID: string
-        directory?: string
-        sessionID?: string | null
-        activePlanVersionID?: string | null
-        activeRunID?: string | null
-        requestID?: string
-        parentTaskID?: string | null
-        source: string
-        title: string
-        request: string
-        status: "queued" | "active" | "completed" | "failed" | "cancelled"
-        terminalReason?: "completed" | "failed" | "cancelled" | "interrupted"
-        priority: "critical" | "high" | "normal" | "low"
-        queue?: {
-          order: number
-          revision?: string
-        }
-        kind?: "workflow" | "build"
-        blockingReason?: string
-        error?: string
-        budget?: {
-          maxExecutorGroups?: number
-        }
-        metadata?: {
-          [key: string]: unknown
-        }
-        attachments?: Array<{
-          sha: string
-          url: string
-          mime: string
-          size: number
-          filename?: string
-          intent?: string
-          source?: string
-        }>
-        time: {
-          created: number
-          updated: number
-          started?: number
-          completed?: number
-        }
-      }
-      project?: {
-        id: string
-        name?: string
-        worktree: string
-      } | null
-      plan?: {
-        id: string
-        taskID: string
-        version: number
-        status: "active" | "superseded"
-        summary: string
-        prompt: string
-        metadata?: {
-          [key: string]: unknown
-        }
-        time: {
-          created: number
-          updated: number
-        }
-      }
-      run?: {
-        id: string
-        taskID: string
-        planVersionID?: string | null
-        sessionID?: string | null
-        executor: "opencorvus" | "codex" | "claude-code"
-        status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-        phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
-        blockingReason?: string
-        error?: string
-        retryCount: number
-        executorRef?: {
-          sessionID?: string
-          queueTaskID?: string
-        }
-        metadata?: {
-          [key: string]: unknown
-        }
-        time: {
-          created: number
-          updated: number
-          started?: number
-          completed?: number
-        }
-      }
-      evaluation?: {
-        id: string
-        taskID: string
-        runID: string
-        acceptanceID?: string | null
-        status: "pending" | "passed" | "failed" | "inconclusive"
-        verdict: "accepted" | "rejected" | "inconclusive"
-        summary: string
-        checks: Array<{
-          name: string
-          label?: string
-          family?: string
-          status: "passed" | "failed" | "skipped" | "inconclusive"
-          evidence?: string
-        }>
-        time: {
-          created: number
-          updated: number
-          completed?: number
-        }
-      }
-      active_sessions: Array<{
-        sessionID: string
-        kind: string
-        goalID: string | null
-        lastActivityMs: number
-      }>
-      pending_interactions: number
-      pending_interaction_items: Array<{
-        id: string
-        taskID: string
-        orderKey: string
-        runID: string | null
-        sessionID?: string | null
-        externalID: string
-        type: "permission" | "question"
-        status: "pending" | "answered" | "rejected" | "expired"
-        title: string
-        body: string
-        payload?: {
-          [key: string]: unknown
-        }
-        response?: {
-          [key: string]: unknown
-        }
-        time: {
-          created: number
-          updated: number
-          resolved?: number
-        }
-      }>
-      updated_at: number
-    }>
-  }
-}
-
-export type TaskListResponse = TaskListResponses[keyof TaskListResponses]
-
-export type TaskGlobalListData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-    q?: string
-    status?: string
-    limit?: number
-    cursor?: number
-    cursorTaskID?: string
-  }
-  url: "/global/tasks"
-}
-
-export type TaskGlobalListResponses = {
-  /**
-   * Global task board
-   */
-  200: {
-    summary: {
-      total_tasks: number
-      open_tasks: number
-      running_tasks: number
-      blocked_tasks: number
-      completed_tasks: number
-      failed_tasks: number
-      cancelled_tasks: number
-      median_completion_ms?: number
-    }
-    tasks: Array<{
-      task: {
-        id: string
-        orderKey: string
-        projectID: string
-        directory?: string
-        sessionID?: string | null
-        activePlanVersionID?: string | null
-        activeRunID?: string | null
-        requestID?: string
-        parentTaskID?: string | null
-        source: string
-        title: string
-        request: string
-        status: "queued" | "active" | "completed" | "failed" | "cancelled"
-        terminalReason?: "completed" | "failed" | "cancelled" | "interrupted"
-        priority: "critical" | "high" | "normal" | "low"
-        queue?: {
-          order: number
-          revision?: string
-        }
-        kind?: "workflow" | "build"
-        blockingReason?: string
-        error?: string
-        budget?: {
-          maxExecutorGroups?: number
-        }
-        metadata?: {
-          [key: string]: unknown
-        }
-        attachments?: Array<{
-          sha: string
-          url: string
-          mime: string
-          size: number
-          filename?: string
-          intent?: string
-          source?: string
-        }>
-        time: {
-          created: number
-          updated: number
-          started?: number
-          completed?: number
-        }
-      }
-      project?: {
-        id: string
-        name?: string
-        worktree: string
-      } | null
-      plan?: {
-        id: string
-        taskID: string
-        version: number
-        status: "active" | "superseded"
-        summary: string
-        prompt: string
-        metadata?: {
-          [key: string]: unknown
-        }
-        time: {
-          created: number
-          updated: number
-        }
-      }
-      run?: {
-        id: string
-        taskID: string
-        planVersionID?: string | null
-        sessionID?: string | null
-        executor: "opencorvus" | "codex" | "claude-code"
-        status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-        phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
-        blockingReason?: string
-        error?: string
-        retryCount: number
-        executorRef?: {
-          sessionID?: string
-          queueTaskID?: string
-        }
-        metadata?: {
-          [key: string]: unknown
-        }
-        time: {
-          created: number
-          updated: number
-          started?: number
-          completed?: number
-        }
-      }
-      evaluation?: {
-        id: string
-        taskID: string
-        runID: string
-        acceptanceID?: string | null
-        status: "pending" | "passed" | "failed" | "inconclusive"
-        verdict: "accepted" | "rejected" | "inconclusive"
-        summary: string
-        checks: Array<{
-          name: string
-          label?: string
-          family?: string
-          status: "passed" | "failed" | "skipped" | "inconclusive"
-          evidence?: string
-        }>
-        time: {
-          created: number
-          updated: number
-          completed?: number
-        }
-      }
-      active_sessions: Array<{
-        sessionID: string
-        kind: string
-        goalID: string | null
-        lastActivityMs: number
-      }>
-      pending_interactions: number
-      pending_interaction_items: Array<{
-        id: string
-        taskID: string
-        orderKey: string
-        runID: string | null
-        sessionID?: string | null
-        externalID: string
-        type: "permission" | "question"
-        status: "pending" | "answered" | "rejected" | "expired"
-        title: string
-        body: string
-        payload?: {
-          [key: string]: unknown
-        }
-        response?: {
-          [key: string]: unknown
-        }
-        time: {
-          created: number
-          updated: number
-          resolved?: number
-        }
-      }>
-      updated_at: number
-    }>
-  }
-}
-
-export type TaskGlobalListResponse = TaskGlobalListResponses[keyof TaskGlobalListResponses]
 
 export type TaskQueueReorderData = {
   body: {
@@ -13260,114 +15314,12 @@ export type TaskQueueReorderResponses = {
    */
   200: {
     directory: string
-    revision: string
     queuedTaskIDs: Array<string>
+    revision: string
   }
 }
 
 export type TaskQueueReorderResponse = TaskQueueReorderResponses[keyof TaskQueueReorderResponses]
-
-export type TaskQueueStartNowData = {
-  body?: never
-  path: {
-    taskID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/task/{taskID}/start-now"
-}
-
-export type TaskQueueStartNowErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-  /**
-   * Task is not queued
-   */
-  409: unknown
-  /**
-   * Task has no working directory
-   */
-  422: unknown
-}
-
-export type TaskQueueStartNowError = TaskQueueStartNowErrors[keyof TaskQueueStartNowErrors]
-
-export type TaskQueueStartNowResponses = {
-  /**
-   * Queued task started and scheduler invoked
-   */
-  200: {
-    task: {
-      id: string
-      orderKey: string
-      projectID: string
-      directory?: string
-      sessionID?: string | null
-      activePlanVersionID?: string | null
-      activeRunID?: string | null
-      requestID?: string
-      parentTaskID?: string | null
-      source: string
-      title: string
-      request: string
-      status: "queued" | "active" | "completed" | "failed" | "cancelled"
-      terminalReason?: "completed" | "failed" | "cancelled" | "interrupted"
-      priority: "critical" | "high" | "normal" | "low"
-      queue?: {
-        order: number
-        revision?: string
-      }
-      kind?: "workflow" | "build"
-      blockingReason?: string
-      error?: string
-      budget?: {
-        maxExecutorGroups?: number
-      }
-      metadata?: {
-        [key: string]: unknown
-      }
-      attachments?: Array<{
-        sha: string
-        url: string
-        mime: string
-        size: number
-        filename?: string
-        intent?: string
-        source?: string
-      }>
-      time: {
-        created: number
-        updated: number
-        started?: number
-        completed?: number
-      }
-    }
-    directory: string
-    status: string
-    started: boolean
-    queuedTaskIDs: Array<string>
-  }
-}
-
-export type TaskQueueStartNowResponse = TaskQueueStartNowResponses[keyof TaskQueueStartNowResponses]
 
 export type TaskListEventsData = {
   body?: never
@@ -13381,14 +15333,14 @@ export type TaskListEventsResponses = {
    * Task-list change stream
    */
   200: {
-    type: string
-    taskID: string | null
-    sequence: number
-    notify?: {
-      tier: 1 | 2 | 3
-      badge?: boolean
-    }
     notificationDetails?: string
+    notify?: {
+      badge?: boolean
+      tier: 1 | 2 | 3
+    }
+    sequence: number
+    taskID: string | null
+    type: string
   }
 }
 
@@ -13409,16 +15361,16 @@ export type TaskDeleteErrors = {
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
 }
 
@@ -13446,16 +15398,16 @@ export type TaskGetErrors = {
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
 }
 
@@ -13466,112 +15418,180 @@ export type TaskGetResponses = {
    * Task
    */
   200: {
-    id: string
-    orderKey: string
-    projectID: string
-    directory?: string
-    sessionID?: string | null
     activePlanVersionID?: string | null
     activeRunID?: string | null
-    requestID?: string
+    attachments?: Array<{
+      filename?: string
+      intent?: string
+      mime: string
+      sha: string
+      size: number
+      source?: string
+      url: string
+    }>
+    blockingReason?: string
+    budget?: {
+      maxExecutorGroups?: number
+    }
+    directory?: string
+    error?: string
+    id: string
+    kind?: "workflow" | "build"
+    metadata?: {
+      [key: string]: unknown
+    }
+    orderKey: string
     parentTaskID?: string | null
-    source: string
-    title: string
-    request: string
-    status: "queued" | "active" | "completed" | "failed" | "cancelled"
-    terminalReason?: "completed" | "failed" | "cancelled" | "interrupted"
     priority: "critical" | "high" | "normal" | "low"
+    projectID: string
     queue?: {
       order: number
       revision?: string
     }
-    kind?: "workflow" | "build"
-    blockingReason?: string
-    error?: string
-    budget?: {
-      maxExecutorGroups?: number
-    }
-    metadata?: {
-      [key: string]: unknown
-    }
-    attachments?: Array<{
-      sha: string
-      url: string
-      mime: string
-      size: number
-      filename?: string
-      intent?: string
-      source?: string
-    }>
+    request: string
+    requestID?: string
+    sessionID?: string | null
+    source: string
+    status: "queued" | "active" | "completed" | "failed" | "cancelled"
+    terminalReason?: "completed" | "failed" | "cancelled" | "interrupted"
     time: {
-      created: number
-      updated: number
-      started?: number
       completed?: number
+      created: number
+      started?: number
+      updated: number
     }
+    title: string
   }
 }
 
 export type TaskGetResponse = TaskGetResponses[keyof TaskGetResponses]
 
-export type TaskStatusData = {
+export type TaskBindingsData = {
   body?: never
   path: {
     taskID: string
   }
   query?: never
-  url: "/task/{taskID}/status"
+  url: "/task/{taskID}/bindings"
 }
 
-export type TaskStatusErrors = {
+export type TaskBindingsResponses = {
+  /**
+   * Channel bindings for the task
+   */
+  200: Array<{
+    channel: string
+    id: string
+    payload?: {
+      [key: string]: unknown
+    }
+    platform: string
+    task_id: string
+    thread: string
+    time_created?: number
+    time_updated?: number
+  }>
+}
+
+export type TaskBindingsResponse = TaskBindingsResponses[keyof TaskBindingsResponses]
+
+export type TaskBoardData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: never
+  url: "/task/{taskID}/board"
+}
+
+export type TaskBoardErrors = {
   /**
    * Not found
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
 }
 
-export type TaskStatusError = TaskStatusErrors[keyof TaskStatusErrors]
+export type TaskBoardError = TaskBoardErrors[keyof TaskBoardErrors]
 
-export type TaskStatusResponses = {
+export type TaskBoardResponses = {
   /**
-   * Task status snapshot
+   * Task board
    */
   200: {
-    taskID: string
-    title: string
-    status: "success" | "failed" | "running"
-    lifecycleStatus: "queued" | "active" | "completed" | "failed" | "cancelled"
-    source: string
-    priority: "critical" | "high" | "normal" | "low"
-    directory?: string
-    error?: string
-    progress: {
-      total: number
-      completed: number
-      failed: number
-      running: number
-      pending: number
-      percent: number
+    acceptance?: {
+      id: string
+      result: {
+        artifacts?: Array<{
+          kind: string
+          label: string
+          payload?: {
+            [key: string]: unknown
+          }
+        }>
+        changedFiles: Array<string>
+        diffs: Array<AcceptanceDiffSummary>
+        publish?: {
+          [key: string]: unknown
+        }
+        summary: string
+      }
+      runID: string
+      status: "candidate" | "publishing" | "delivered" | "failed"
+      summary: string
+      taskID: string
+      time: {
+        created: number
+        updated: number
+      }
+    }
+    acceptedAcceptance?: {
+      id: string
+      result: {
+        artifacts?: Array<{
+          kind: string
+          label: string
+          payload?: {
+            [key: string]: unknown
+          }
+        }>
+        changedFiles: Array<string>
+        diffs: Array<AcceptanceDiffSummary>
+        publish?: {
+          [key: string]: unknown
+        }
+        summary: string
+      }
+      runID: string
+      status: "candidate" | "publishing" | "delivered" | "failed"
+      summary: string
+      taskID: string
+      time: {
+        created: number
+        updated: number
+      }
     }
     agentInvocationDAG: {
-      taskID: string
-      rootSessionID?: string
+      edges: Array<{
+        fromSessionID: string
+        relation: "agent_call"
+        toSessionID: string
+        viaSessionIDs?: Array<string>
+      }>
       nodes: Array<{
-        sessionID: string
-        orderKey: string
         agent: string
+        goalID?: string
         kind:
           | "root"
           | "orchestrator"
@@ -13594,103 +15614,612 @@ export type TaskStatusResponses = {
           | "visual-qa"
           | "evaluator"
           | "system"
-        title?: string
-        parentSessionID?: string
+        orderKey: string
         parentAgentSessionID?: string
-        goalID?: string
+        parentSessionID?: string
+        sessionID: string
         status?: {
-          type: string
-          reason?: string
-          error?: string
           emittedAt: number
+          error?: string
+          reason?: string
+          type: string
         }
         time: {
           created: number
           updated: number
         }
+        title?: string
       }>
-      edges: Array<{
-        fromSessionID: string
-        toSessionID: string
-        relation: "agent_call"
-        viaSessionIDs?: Array<string>
-      }>
+      rootSessionID?: string
+      taskID: string
       topLevelSessionIDs: Array<string>
     }
-    workflow?: {
-      id: string
-      name: string
-      steps: Array<{
-        id: string
-        label: string
-        scope: "task" | "goal"
-        tool: string
-        status: "success" | "failed" | "running"
-        rawStatus: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
+    architect?: {
+      categories: Array<string>
+      contractCount: number
+      decisions?: Array<{
+        goalID: string | null
+        key: string
+        reason: string
+        value: string
       }>
+      summary: string
     }
-    goals: Array<{
-      goalID: string
-      title: string
-      objective?: string
-      status: "success" | "failed" | "running"
-      rawStatus: string
-      orderIndex: number
-      priority: "blocking" | "advisory"
-      progress: {
-        total: number
-        completed: number
-        failed: number
-        running: number
-        pending: number
-        percent: number
-      }
-      steps: Array<{
-        stepID: string
-        label: string
-        status: "success" | "failed" | "running"
-        rawStatus: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
-        startedAt?: number
-        completedAt?: number
-        summary?: string
-        phases?: Array<{
-          phaseID: string
-          status: "success" | "failed" | "running"
-          rawStatus: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
-          startedAt?: number
-          completedAt?: number
-        }>
-      }>
-    }>
-    taskAgentOutcomes?: Array<{
+    artifacts: Array<{
+      acceptanceID?: string | null
       id: string
-      provider: string
-      artifactKind: string
-      scope: "task" | "goal"
-      capabilities?: Array<string>
-      runID?: string
-      sessionID?: string
-      status: string
-      result?: string
-      summary?: string
-      error?: string
+      kind: "patch" | "changed_file" | "log" | "report" | "image" | "diff" | "link" | "git_ref" | "pr"
+      label: string
+      payload?: {
+        [key: string]: unknown
+      }
+      runID: string
+      taskID: string
       time: {
         created: number
         updated: number
       }
     }>
-    time: {
-      created: number
-      updated: number
-      started?: number
-      completed?: number
+    brief: {
+      content: string
+      updated_at: number
+    }
+    candidateAcceptance?: {
+      id: string
+      result: {
+        artifacts?: Array<{
+          kind: string
+          label: string
+          payload?: {
+            [key: string]: unknown
+          }
+        }>
+        changedFiles: Array<string>
+        diffs: Array<AcceptanceDiffSummary>
+        publish?: {
+          [key: string]: unknown
+        }
+        summary: string
+      }
+      runID: string
+      status: "candidate" | "publishing" | "delivered" | "failed"
+      summary: string
+      taskID: string
+      time: {
+        created: number
+        updated: number
+      }
+    }
+    channels: Array<{
+      channel: string
+      id: string
+      payload?: {
+        [key: string]: unknown
+      }
+      platform: string
+      thread: string
+      time: {
+        created: number
+        updated: number
+      }
+    }>
+    criteriaResults?: Array<{
+      evidence?: string
+      family?: string
+      label?: string
+      name: string
+      status: "passed" | "failed" | "skipped" | "inconclusive"
+    }>
+    evaluation?: {
+      acceptanceID?: string | null
+      checks: Array<{
+        evidence?: string
+        family?: string
+        label?: string
+        name: string
+        status: "passed" | "failed" | "skipped" | "inconclusive"
+      }>
+      id: string
+      runID: string
+      status: "pending" | "passed" | "failed" | "inconclusive"
+      summary: string
+      taskID: string
+      time: {
+        completed?: number
+        created: number
+        updated: number
+      }
+      verdict: "accepted" | "rejected" | "inconclusive"
+    }
+    goalWorkflows?: Array<{
+      acceptanceSpecs?: Array<{
+        /**
+         * Goal ID this spec belongs to. Specs are goal-local; multiple specs may share a goal.
+         */
+        goal_id: string
+        /**
+         * Stable spec ID, e.g. 'acc-login-3s'.
+         */
+        id: string
+        /**
+         * Gherkin Given/When/Then scenario. Optional — omit for pure code checks.
+         */
+        scenario?: {
+          given: Array<string>
+          then: Array<string>
+          when: Array<string>
+        }
+        /**
+         * At least one scorer — a spec without a scorer is untestable.
+         */
+        scorers: Array<
+          | {
+              expect?: {
+                exit_code?: number
+              }
+              name: string
+              spec:
+                | {
+                    /**
+                     * Shell command. Exit 0 = pass unless expect.exit_code set.
+                     */
+                    cmd: string
+                    cwd?: string
+                    /**
+                     * shell — run an inline command. Requires: cmd; optional cwd.
+                     */
+                    kind: "shell"
+                  }
+                | {
+                    args?: Array<string>
+                    /**
+                     * script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.
+                     */
+                    kind: "script_ref"
+                    /**
+                     * Repo-relative script path that already exists at registration time.
+                     */
+                    path: string
+                  }
+              /**
+               * heuristic — deterministic shell/script check, pass/fail by exit code. Requires: name, spec{kind}.
+               */
+              type: "heuristic"
+            }
+          | {
+              /**
+               * Single-criterion evaluation question in natural language.
+               */
+              criteria: string
+              /**
+               * Which parts of the acceptance to feed the judge. Default: acceptance_summary. LLM judges cannot consume visual feedback; final rendered reference parity uses prebuilt visual-feedback-verification.
+               */
+              inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
+              name: string
+              /**
+               * Ordinal anchors, 2-5 levels. Omit for binary MET/UNMET.
+               */
+              rubric?: Array<{
+                /**
+                 * Behavioral description: what earns this score.
+                 */
+                anchor: string
+                /**
+                 * Short level label, e.g. 'fully met'.
+                 */
+                label: string
+                /**
+                 * Does this level count as pass for binary verdict?
+                 */
+                passes: boolean
+                /**
+                 * Integer score for this level.
+                 */
+                score: number
+              }>
+              /**
+               * llm_judge — natural-language rubric evaluation. Requires: name, criteria; optional rubric, inputs.
+               */
+              type: "llm_judge"
+            }
+          | {
+              config?: {
+                [key: string]: unknown
+              }
+              /**
+               * For name=visual-feedback-verification, requires a passing current visual feedback verification.
+               */
+              expect?: {
+                status: "passed"
+              }
+              name:
+                | "factuality"
+                | "relevance"
+                | "contains"
+                | "exact_match"
+                | "length_within"
+                | "json_schema"
+                | "visual-feedback-verification"
+              /**
+               * For name=visual-feedback-verification, identifies the required visual feedback verification shape.
+               */
+              spec?: {
+                kind: "visual_feedback_verification"
+                viewport?: string
+              }
+              /**
+               * prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.
+               */
+              type: "prebuilt"
+            }
+          | {
+              expect: {
+                status: "passed"
+              }
+              name: string
+              spec: {
+                contract_ids: Array<string>
+                kind: "contract_graph"
+              }
+              /**
+               * contract_audit — static audit of typed-contract field literals and graph artifact path materialization against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
+               */
+              type: "contract_audit"
+            }
+        >
+        severity: "essential" | "important" | "optional" | "pitfall"
+        /**
+         * Requirement ID this spec was derived from (REQ-N).
+         */
+        source_requirement_id: string
+        title: string
+        /**
+         * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity.
+         */
+        trigger?: "on_goal" | "on_integrity"
+      }>
+      contracts?: Array<{
+        key: string
+        reason?: string
+        value: string
+      }>
+      goalID: string
+      goalObjective?: string
+      goalRunID?: string
+      goalStatus: string
+      goalTitle: string
+      orderIndex: number
+      orderKey: string
+      priority: "blocking" | "advisory"
+      retryCount: number
+      steps: Array<{
+        completedAt?: number
+        label: string
+        orderKey: string
+        payload?: {
+          attemptChangedFiles?: Array<string>
+          attemptCommitRef?: string
+          attemptPublishedCommitRef?: string
+          buildOutcome?: {
+            acceptancePresent: boolean
+            changedFiles: Array<string>
+            commitRef?: string
+            diffBaseRef?: string
+            diffHeadRef?: string
+            error?: string
+            goalRunID: string
+            id: string
+            noDiffReason?: string
+            outcomeKind: "delivered" | "failed" | "aborted" | "no_project_diff"
+            publishedCommitRef?: string
+            summary?: string
+            terminalStatus: "completed" | "failed" | "aborted"
+          }
+          buildSessionID?: string
+          changedFileDiffs?: Array<{
+            additions: number
+            deletions: number
+            file: string
+            status: "added" | "deleted" | "modified"
+          }>
+          changedFiles?: Array<string>
+          checks?: Array<{
+            evidence?: string
+            family?: string
+            name: string
+            status: string
+          }>
+          commitRef?: string
+          diffBaseRef?: string
+          diffHeadRef?: string
+          diffStats?: {
+            additions?: number
+            deletions?: number
+            files?: number
+          }
+          evalSummary?: string
+          planNodes?: Array<{
+            brief: string
+            fileActions?: Array<{
+              intent: string
+              path: string
+            }>
+            id: string
+            orderIndex: number
+            title: string
+            verificationCommands?: Array<{
+              command: string
+              purpose: string
+            }>
+          }>
+          publishedCommitRef?: string
+          verdict?: string
+        }
+        phases?: {
+          [key: string]: {
+            completedAt?: number
+            orderKey: string
+            startedAt?: number
+            status: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
+          }
+        }
+        startedAt?: number
+        status: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
+        stepID: string
+        summary?: string
+      }>
+      workspaceBranch?: string
+      workspaceDir?: string
+    }>
+    interactions: Array<{
+      body: string
+      externalID: string
+      id: string
+      orderKey: string
+      payload?: {
+        [key: string]: unknown
+      }
+      response?: {
+        [key: string]: unknown
+      }
+      runID: string | null
+      sessionID?: string | null
+      status: "pending" | "answered" | "rejected" | "expired"
+      taskID: string
+      time: {
+        created: number
+        resolved?: number
+        updated: number
+      }
+      title: string
+      type: "permission" | "question"
+    }>
+    lastSequence?: number
+    overview: {
+      controls: {
+        canCancel: boolean
+        canReplan: boolean
+        canRetry: boolean
+      }
+      currentFailure?: {
+        checks?: Array<{
+          evidence?: string
+          family?: string
+          label?: string
+          name: string
+          status: "passed" | "failed" | "skipped" | "inconclusive"
+        }>
+        source: "task" | "run" | "interaction" | "evaluation"
+        summary: string
+        title: string
+      }
+      headline: string
+      nextStep: {
+        detail?: string
+        kind: "resolve_blocker" | "retry" | "replan" | "observe" | "review_acceptance" | "message"
+        title: string
+      }
+      summary: string
+    }
+    plan?: {
+      id: string
+      metadata?: {
+        [key: string]: unknown
+      }
+      prompt: string
+      status: "active" | "superseded"
+      summary: string
+      taskID: string
+      time: {
+        created: number
+        updated: number
+      }
+      version: number
+    }
+    project?: {
+      id: string
+      name?: string
+      worktree: string
+    }
+    requirements?: Array<{
+      description: string
+      id: string
+      priority: "blocking" | "advisory"
+      status: "pending" | "passed" | "failed"
+      type: "explicit" | "inferred" | "system"
+    }>
+    run?: {
+      blockingReason?: string
+      error?: string
+      executor: "opencorvus" | "codex" | "claude-code"
+      executorRef?: {
+        queueTaskID?: string
+        sessionID?: string
+      }
+      id: string
+      metadata?: {
+        [key: string]: unknown
+      }
+      phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
+      planVersionID?: string | null
+      retryCount: number
+      sessionID?: string | null
+      status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+      taskID: string
+      time: {
+        completed?: number
+        created: number
+        started?: number
+        updated: number
+      }
+    }
+    snapshotVersion: string
+    spec?: {
+      content: string
+      file?: string
+      source?: {
+        [key: string]: unknown
+      }
+      time: {
+        created: number
+      }
+    }
+    task: {
+      activePlanVersionID?: string | null
+      activeRunID?: string | null
+      attachments?: Array<{
+        filename?: string
+        intent?: string
+        mime: string
+        sha: string
+        size: number
+        source?: string
+        url: string
+      }>
+      blockingReason?: string
+      budget?: {
+        maxExecutorGroups?: number
+      }
+      directory?: string
+      error?: string
+      id: string
+      kind?: "workflow" | "build"
+      metadata?: {
+        [key: string]: unknown
+      }
+      orderKey: string
+      parentTaskID?: string | null
+      priority: "critical" | "high" | "normal" | "low"
+      projectID: string
+      queue?: {
+        order: number
+        revision?: string
+      }
+      request: string
+      requestID?: string
+      sessionID?: string | null
+      source: string
+      status: "queued" | "active" | "completed" | "failed" | "cancelled"
+      terminalReason?: "completed" | "failed" | "cancelled" | "interrupted"
+      time: {
+        completed?: number
+        created: number
+        started?: number
+        updated: number
+      }
+      title: string
+    }
+    taskAgentOutcomes?: Array<{
+      artifactKind: string
+      capabilities?: Array<string>
+      error?: string
+      id: string
+      provider: string
+      result?: string
+      runID?: string
+      scope: "task" | "goal"
+      sessionID?: string
+      status: string
+      summary?: string
+      time: {
+        created: number
+        updated: number
+      }
+    }>
+    workflow?: {
+      goalLoopStepIDs: Array<string>
+      id: string
+      name: string
+      steps: Array<{
+        id: string
+        label: string
+        orderKey: string
+        phases?: Array<{
+          id: string
+          label: string
+          sessionKind: string
+        }>
+        scope: "task" | "goal"
+        skippable: boolean
+        status: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
+        tool: string
+      }>
     }
   }
 }
 
-export type TaskStatusResponse = TaskStatusResponses[keyof TaskStatusResponses]
+export type TaskBoardResponse = TaskBoardResponses[keyof TaskBoardResponses]
 
-export type TaskProjectArchiveData = {
+export type TaskBriefData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: never
+  url: "/task/{taskID}/brief"
+}
+
+export type TaskBriefErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type TaskBriefError = TaskBriefErrors[keyof TaskBriefErrors]
+
+export type TaskBriefResponses = {
+  /**
+   * Task brief
+   */
+  200: {
+    content: string
+    goals: Array<{
+      criteria: string
+      description: string
+    }>
+    notes: Array<{
+      content: string
+      kind: string
+    }>
+  }
+}
+
+export type TaskBriefResponse = TaskBriefResponses[keyof TaskBriefResponses]
+
+export type BrowserPreviewTaskTargetData = {
   body?: never
   path: {
     taskID: string
@@ -13701,358 +16230,805 @@ export type TaskProjectArchiveData = {
      */
     directory?: string
   }
-  url: "/task/{taskID}/project-archive"
+  url: "/task/{taskID}/browser-preview"
 }
 
-export type TaskProjectArchiveErrors = {
+export type BrowserPreviewTaskTargetErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
   /**
    * Not found
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
   /**
-   * Task project is not a Git worktree
+   * Browser preview evidence is corrupt
    */
-  422: {
-    message: string
+  500: {
+    data: {
+      [key: string]: unknown
+    }
+    name: "BrowserPreviewEvidenceCorruptionError"
   }
 }
 
-export type TaskProjectArchiveError = TaskProjectArchiveErrors[keyof TaskProjectArchiveErrors]
+export type BrowserPreviewTaskTargetError = BrowserPreviewTaskTargetErrors[keyof BrowserPreviewTaskTargetErrors]
 
-export type TaskProjectArchiveResponses = {
+export type BrowserPreviewTaskTargetResponses = {
   /**
-   * ZIP archive
+   * Browser preview target
+   */
+  200: {
+    candidates: Array<{
+      id: string
+      selected: boolean
+      source: "task-artifact"
+      timeUpdated: number
+      url: string
+    }>
+    diagnostics: Array<string>
+    id?: string
+    kind: "task-url" | "missing" | "failed"
+    latestEvidenceIDs?: {
+      desktop?: string
+      mobile?: string
+      tablet?: string
+    }
+    projectRoot: string
+    source: "task-artifact" | "none"
+    status: "ready" | "missing" | "failed"
+    taskID?: string
+    url?: string
+    viewports: Array<{
+      height: number
+      id: "desktop" | "tablet" | "mobile"
+      labelKey: string
+      width: number
+    }>
+  }
+}
+
+export type BrowserPreviewTaskTargetResponse =
+  BrowserPreviewTaskTargetResponses[keyof BrowserPreviewTaskTargetResponses]
+
+export type BrowserPreviewCaptureTaskTargetData = {
+  body: {
+    targetID: string
+    viewportIDs: Array<"desktop" | "tablet" | "mobile">
+  }
+  path: {
+    taskID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/task/{taskID}/browser-preview/capture"
+}
+
+export type BrowserPreviewCaptureTaskTargetErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type BrowserPreviewCaptureTaskTargetError =
+  BrowserPreviewCaptureTaskTargetErrors[keyof BrowserPreviewCaptureTaskTargetErrors]
+
+export type BrowserPreviewCaptureTaskTargetResponses = {
+  /**
+   * Browser preview verification result
+   */
+  200: {
+    captures: {
+      [key: string]: {
+        bytes?: number
+        capture_error?: unknown
+        captured: boolean
+        dom?: unknown
+        layers?: unknown
+        manifest?: unknown
+        passed: boolean
+        path?: string
+        requested_viewport: {
+          height: number
+          width: number
+        }
+        sha?: string
+        summary: string
+        url: string
+        viewport: {
+          capped: boolean
+          height: number
+          width: number
+        }
+      }
+    }
+    diagnostics: Array<string>
+    evidenceIDs: {
+      [key: string]: string
+    }
+    projectRoot: string
+    status: "passed" | "failed"
+    target: {
+      candidates: Array<{
+        id: string
+        selected: boolean
+        source: "task-artifact"
+        timeUpdated: number
+        url: string
+      }>
+      diagnostics: Array<string>
+      id?: string
+      kind: "task-url" | "missing" | "failed"
+      latestEvidenceIDs?: {
+        desktop?: string
+        mobile?: string
+        tablet?: string
+      }
+      projectRoot: string
+      source: "task-artifact" | "none"
+      status: "ready" | "missing" | "failed"
+      taskID?: string
+      url?: string
+      viewports: Array<{
+        height: number
+        id: "desktop" | "tablet" | "mobile"
+        labelKey: string
+        width: number
+      }>
+    }
+    viewports: Array<{
+      height: number
+      id: "desktop" | "tablet" | "mobile"
+      labelKey: string
+      width: number
+    }>
+  }
+}
+
+export type BrowserPreviewCaptureTaskTargetResponse =
+  BrowserPreviewCaptureTaskTargetResponses[keyof BrowserPreviewCaptureTaskTargetResponses]
+
+export type BrowserPreviewCompareTaskTargetRegionsData = {
+  body: {
+    inlineBindings: Array<{
+      acceptance_refs?: Array<string>
+      crop_intent: "full-region" | "content-well"
+      implementation: {
+        component_files?: Array<string>
+        locator:
+          | {
+              kind: "test-id"
+              value: string
+            }
+          | {
+              kind: "data-oc-region"
+              value: string
+            }
+          | {
+              kind: "role"
+              name: string
+              role: string
+            }
+          | {
+              kind: "selector"
+              owner_file: string
+              value: string
+            }
+        route?: string
+      }
+      region_id: string
+      region_scope: "page-section" | "card" | "content" | "title" | "chart" | "table" | "control" | "navigation"
+      source: {
+        bbox: {
+          height: number
+          width: number
+          x: number
+          y: number
+        }
+        reference_artifact_id: "reference.png" | "web-clone-source/reference.png"
+        semantic_role: string
+        source_refs?: Array<string>
+        text_anchors?: Array<string>
+      }
+      state_id?: string
+      viewport_id: "desktop" | "tablet" | "mobile"
+    }>
+    output?: {
+      include_diff?: boolean
+      include_fullpage_overview?: boolean
+      include_side_by_side?: boolean
+    }
+    targetID: string
+    viewportIDs: Array<"desktop" | "tablet" | "mobile">
+  }
+  path: {
+    taskID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/task/{taskID}/browser-preview/compare"
+}
+
+export type BrowserPreviewCompareTaskTargetRegionsErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type BrowserPreviewCompareTaskTargetRegionsError =
+  BrowserPreviewCompareTaskTargetRegionsErrors[keyof BrowserPreviewCompareTaskTargetRegionsErrors]
+
+export type BrowserPreviewCompareTaskTargetRegionsResponses = {
+  /**
+   * Browser preview region comparison result
+   */
+  200: {
+    artifact_note: string
+    comparison_guidance: {
+      inspection_checklist: Array<{
+        id: string
+        inspect_for: string
+        label: string
+      }>
+      side_by_side_legend: {
+        instruction: "Compare the right implementation against the left reference; do not reverse them."
+        left: {
+          label: "LEFT: source/reference image"
+          meaning: "Expected visual source of truth."
+          role: "source_reference"
+        }
+        right: {
+          label: "RIGHT: rendered/local implementation"
+          meaning: "Actual implementation under review."
+          role: "local_implementation"
+        }
+        source_of_truth: "left"
+      }
+    }
+    comparison_mode: "true-size"
+    diagnostics: Array<string>
+    evidenceIDs: {
+      [key: string]: string
+    }
+    jobID: string
+    manifestPath: string
+    operation: "reference-comparison"
+    regions: Array<{
+      artifact_note?: string
+      artifacts?: {
+        diff?: string
+        implementation_crop: string
+        side_by_side: string
+        source_crop: string
+      }
+      content?: {
+        implementation: {
+          non_white_pixel_ratio: number
+          unique_color_count: number
+        }
+        source: {
+          non_white_pixel_ratio: number
+          unique_color_count: number
+        }
+      }
+      coverage?: {
+        implementation_covers_source: boolean
+        implementation_height: number
+        implementation_matches_source_size: boolean
+        implementation_width: number
+        source_height: number
+        source_width: number
+      }
+      crop_intent?: "full-region" | "content-well"
+      diagnostics: Array<string>
+      implementation_bbox?: {
+        height: number
+        width: number
+        x: number
+        y: number
+      }
+      implementation_fullpage_size?: {
+        height: number
+        width: number
+      }
+      implementation_screenshot_path?: string
+      implementation_viewport?: {
+        height: number
+        width: number
+      }
+      reason?: string
+      region_id: string
+      route_diagnostics?: {
+        body_length?: number
+        console_errors?: Array<string>
+        content_type?: string
+        dom?: {
+          body_descendant_count: number
+          node_count: number
+          text_length: number
+        }
+        failed_requests?: Array<{
+          reason: string
+          status: number
+          url: string
+        }>
+        page_errors?: Array<string>
+        page_size?: {
+          height: number
+          width: number
+        }
+        reason?: string
+        route: string
+        screenshot_path?: string
+        status?: number
+        title?: string
+        url?: string
+        valid_app_page: boolean
+      }
+      source_bbox?: {
+        height: number
+        width: number
+        x: number
+        y: number
+      }
+      source_image_size?: {
+        height: number
+        width: number
+      }
+      state_id?: string
+      status: "completed" | "failed"
+      viewport_id: "desktop" | "tablet" | "mobile"
+      visual?: {
+        dimensions_match: boolean
+        mismatched_pixels: number
+        overall_score: number
+        pixel_diff_percent: number
+        ssim_score: number
+        total_pixels: number
+      }
+    }>
+    status: "passed" | "failed"
+    targetID: string
+    taskID: string
+  }
+}
+
+export type BrowserPreviewCompareTaskTargetRegionsResponse =
+  BrowserPreviewCompareTaskTargetRegionsResponses[keyof BrowserPreviewCompareTaskTargetRegionsResponses]
+
+export type BrowserPreviewReadTaskEvidenceData = {
+  body?: never
+  path: {
+    taskID: string
+    evidenceID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/task/{taskID}/browser-preview/evidence/{evidenceID}"
+}
+
+export type BrowserPreviewReadTaskEvidenceErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+  /**
+   * Browser preview evidence capture is corrupt
+   */
+  500: {
+    data: {
+      [key: string]: unknown
+    }
+    name: "BrowserPreviewEvidenceCorruptionError"
+  }
+}
+
+export type BrowserPreviewReadTaskEvidenceError =
+  BrowserPreviewReadTaskEvidenceErrors[keyof BrowserPreviewReadTaskEvidenceErrors]
+
+export type BrowserPreviewReadTaskEvidenceResponses = {
+  /**
+   * Persisted browser preview evidence
+   */
+  200: {
+    acceptanceID?: string
+    artifactPaths?: {
+      [key: string]: string
+    }
+    capture?: unknown
+    cropIntent?: "full-region" | "content-well"
+    diagnostics: Array<string>
+    goalRunID?: string
+    id: string
+    manifestPath?: string
+    operationKind:
+      | "preview-capture"
+      | "reference-comparison"
+      | "scroll-slice-comparison"
+      | "source-binding"
+      | "layout-geometry"
+    regionID?: string
+    runID?: string
+    stateID?: string
+    status: "passed" | "failed"
+    summary: string
+    targetID: string
+    taskID: string
+    timeCompleted: number
+    timeCreated: number
+    viewportID: string
+  }
+}
+
+export type BrowserPreviewReadTaskEvidenceResponse =
+  BrowserPreviewReadTaskEvidenceResponses[keyof BrowserPreviewReadTaskEvidenceResponses]
+
+export type BrowserPreviewReadTaskEvidenceArtifactData = {
+  body?: never
+  path: {
+    taskID: string
+    evidenceID: string
+    artifactName: "source" | "implementation" | "side-by-side" | "diff"
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/task/{taskID}/browser-preview/evidence/{evidenceID}/artifact/{artifactName}"
+}
+
+export type BrowserPreviewReadTaskEvidenceArtifactErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+  /**
+   * Browser preview evidence is corrupt
+   */
+  500: {
+    data: {
+      [key: string]: unknown
+    }
+    name: "BrowserPreviewEvidenceCorruptionError"
+  }
+}
+
+export type BrowserPreviewReadTaskEvidenceArtifactError =
+  BrowserPreviewReadTaskEvidenceArtifactErrors[keyof BrowserPreviewReadTaskEvidenceArtifactErrors]
+
+export type BrowserPreviewReadTaskEvidenceArtifactResponses = {
+  /**
+   * Persisted browser preview region comparison PNG artifact
    */
   200: Blob | File
 }
 
-export type TaskProjectArchiveResponse = TaskProjectArchiveResponses[keyof TaskProjectArchiveResponses]
+export type BrowserPreviewReadTaskEvidenceArtifactResponse =
+  BrowserPreviewReadTaskEvidenceArtifactResponses[keyof BrowserPreviewReadTaskEvidenceArtifactResponses]
 
-export type TaskBindingsData = {
+export type BrowserPreviewReadTaskEvidenceCaptureData = {
   body?: never
   path: {
     taskID: string
+    evidenceID: string
   }
-  query?: never
-  url: "/task/{taskID}/bindings"
-}
-
-export type TaskBindingsResponses = {
-  /**
-   * Channel bindings for the task
-   */
-  200: Array<{
-    id: string
-    task_id: string
-    platform: string
-    channel: string
-    thread: string
-    payload?: {
-      [key: string]: unknown
-    }
-    time_created?: number
-    time_updated?: number
-  }>
-}
-
-export type TaskBindingsResponse = TaskBindingsResponses[keyof TaskBindingsResponses]
-
-export type TaskProgressData = {
-  body?: never
-  path: {
-    taskID: string
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
   }
-  query?: never
-  url: "/task/{taskID}/progress"
+  url: "/task/{taskID}/browser-preview/evidence/{evidenceID}/capture.png"
 }
 
-export type TaskProgressErrors = {
+export type BrowserPreviewReadTaskEvidenceCaptureErrors = {
   /**
    * Not found
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
+      }
+  /**
+   * Browser preview evidence artifact is corrupt
+   */
+  500: {
+    data: {
+      [key: string]: unknown
+    }
+    name: "BrowserPreviewEvidenceCorruptionError"
+  }
+}
+
+export type BrowserPreviewReadTaskEvidenceCaptureError =
+  BrowserPreviewReadTaskEvidenceCaptureErrors[keyof BrowserPreviewReadTaskEvidenceCaptureErrors]
+
+export type BrowserPreviewReadTaskEvidenceCaptureResponses = {
+  /**
+   * Persisted browser preview PNG screenshot
+   */
+  200: Blob | File
+}
+
+export type BrowserPreviewReadTaskEvidenceCaptureResponse =
+  BrowserPreviewReadTaskEvidenceCaptureResponses[keyof BrowserPreviewReadTaskEvidenceCaptureResponses]
+
+export type BrowserPreviewSelectTaskTargetData = {
+  body: {
+    targetID: string
+  }
+  path: {
+    taskID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/task/{taskID}/browser-preview/target"
+}
+
+export type BrowserPreviewSelectTaskTargetErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
       }
 }
 
-export type TaskProgressError = TaskProgressErrors[keyof TaskProgressErrors]
+export type BrowserPreviewSelectTaskTargetError =
+  BrowserPreviewSelectTaskTargetErrors[keyof BrowserPreviewSelectTaskTargetErrors]
 
-export type TaskProgressResponses = {
+export type BrowserPreviewSelectTaskTargetResponses = {
   /**
-   * Task progress
+   * Persisted browser preview target
    */
   200: {
-    task: {
+    candidates: Array<{
       id: string
-      orderKey: string
-      projectID: string
-      directory?: string
-      sessionID?: string | null
-      activePlanVersionID?: string | null
-      activeRunID?: string | null
-      requestID?: string
-      parentTaskID?: string | null
-      source: string
-      title: string
-      request: string
-      status: "queued" | "active" | "completed" | "failed" | "cancelled"
-      terminalReason?: "completed" | "failed" | "cancelled" | "interrupted"
-      priority: "critical" | "high" | "normal" | "low"
-      queue?: {
-        order: number
-        revision?: string
-      }
-      kind?: "workflow" | "build"
-      blockingReason?: string
-      error?: string
-      budget?: {
-        maxExecutorGroups?: number
-      }
-      metadata?: {
-        [key: string]: unknown
-      }
-      attachments?: Array<{
-        sha: string
-        url: string
-        mime: string
-        size: number
-        filename?: string
-        intent?: string
-        source?: string
-      }>
-      time: {
-        created: number
-        updated: number
-        started?: number
-        completed?: number
-      }
-    }
-    plan?: {
-      id: string
-      taskID: string
-      version: number
-      status: "active" | "superseded"
-      summary: string
-      prompt: string
-      metadata?: {
-        [key: string]: unknown
-      }
-      time: {
-        created: number
-        updated: number
-      }
-    }
-    goals: Array<{
-      id: string
-      taskID: string
-      planVersionID: string
-      milestoneID?: string | null
-      description: string
-      criteria: string
-      priority: "blocking" | "advisory"
-      status: "pending" | "running" | "passed" | "failed"
-      orderIndex: number
-      metadata?: {
-        check_selector?: Array<string>
-      }
-      time: {
-        created: number
-        updated: number
-      }
+      selected: boolean
+      source: "task-artifact"
+      timeUpdated: number
+      url: string
     }>
-    milestones?: Array<{
-      id: string
-      taskID: string
-      planVersionID: string
-      title: string
-      description: string
-      status: "pending" | "active" | "passed" | "failed"
-      orderIndex: number
-      metadata?: {
-        [key: string]: unknown
-      }
-      time: {
-        created: number
-        updated: number
-      }
-    }>
-    run?: {
-      id: string
-      taskID: string
-      planVersionID?: string | null
-      sessionID?: string | null
-      executor: "opencorvus" | "codex" | "claude-code"
-      status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-      phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
-      blockingReason?: string
-      error?: string
-      retryCount: number
-      executorRef?: {
-        sessionID?: string
-        queueTaskID?: string
-      }
-      metadata?: {
-        [key: string]: unknown
-      }
-      time: {
-        created: number
-        updated: number
-        started?: number
-        completed?: number
-      }
+    diagnostics: Array<string>
+    id?: string
+    kind: "task-url" | "missing" | "failed"
+    latestEvidenceIDs?: {
+      desktop?: string
+      mobile?: string
+      tablet?: string
     }
-    pendingInteractions: Array<{
-      id: string
-      taskID: string
-      orderKey: string
-      runID: string | null
-      sessionID?: string | null
-      externalID: string
-      type: "permission" | "question"
-      status: "pending" | "answered" | "rejected" | "expired"
-      title: string
-      body: string
-      payload?: {
-        [key: string]: unknown
-      }
-      response?: {
-        [key: string]: unknown
-      }
-      time: {
-        created: number
-        updated: number
-        resolved?: number
-      }
-    }>
-    acceptance?: {
-      id: string
-      taskID: string
-      runID: string
-      status: "candidate" | "publishing" | "delivered" | "failed"
-      summary: string
-      result: {
-        summary: string
-        changedFiles: Array<string>
-        diffs: Array<AcceptanceDiffSummary>
-        artifacts?: Array<{
-          kind: string
-          label: string
-          payload?: {
-            [key: string]: unknown
-          }
-        }>
-        publish?: {
-          [key: string]: unknown
-        }
-      }
-      time: {
-        created: number
-        updated: number
-      }
-    }
-    evaluation?: {
-      id: string
-      taskID: string
-      runID: string
-      acceptanceID?: string | null
-      status: "pending" | "passed" | "failed" | "inconclusive"
-      verdict: "accepted" | "rejected" | "inconclusive"
-      summary: string
-      checks: Array<{
-        name: string
-        label?: string
-        family?: string
-        status: "passed" | "failed" | "skipped" | "inconclusive"
-        evidence?: string
-      }>
-      time: {
-        created: number
-        updated: number
-        completed?: number
-      }
-    }
-    snapshots: Array<{
-      id: string
-      taskID: string
-      status: "created" | "active" | "completed" | "failed" | "cancelled"
-      summary: string
-      payload?: {
-        [key: string]: unknown
-      }
-      time: {
-        created: number
-        updated: number
-      }
-    }>
-    activeSessions: Array<{
-      sessionID: string
-      kind: string
-      goalID: string | null
-      lastActivityMs: number
+    projectRoot: string
+    source: "task-artifact" | "none"
+    status: "ready" | "missing" | "failed"
+    taskID?: string
+    url?: string
+    viewports: Array<{
+      height: number
+      id: "desktop" | "tablet" | "mobile"
+      labelKey: string
+      width: number
     }>
   }
 }
 
-export type TaskProgressResponse = TaskProgressResponses[keyof TaskProgressResponses]
+export type BrowserPreviewSelectTaskTargetResponse =
+  BrowserPreviewSelectTaskTargetResponses[keyof BrowserPreviewSelectTaskTargetResponses]
 
-export type TaskEventsData = {
+export type TaskUpdateBudgetData = {
+  body: {
+    budget: {
+      maxExecutorGroups?: number
+    } | null
+  }
+  path: {
+    taskID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/task/{taskID}/budget"
+}
+
+export type TaskUpdateBudgetErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type TaskUpdateBudgetError = TaskUpdateBudgetErrors[keyof TaskUpdateBudgetErrors]
+
+export type TaskUpdateBudgetResponses = {
+  /**
+   * Budget updated
+   */
+  200: unknown
+}
+
+export type TaskCancelData = {
   body?: never
   path: {
     taskID: string
   }
-  query?: never
-  url: "/task/{taskID}/events"
-}
-
-export type TaskEventsResponses = {
-  /**
-   * Task event stream
-   */
-  200: {
-    event_id: string
-    task_id: string
-    orderKey: string
-    run_id?: string
-    type: string
-    emittedAt: number
-    timestamp: number
-    sequence?: number
-    live_sequence?: number
-    live_epoch?: number
-    summary: string
-    payload: {
-      [key: string]: unknown
-    }
-    notify?: {
-      tier: 1 | 2 | 3
-      badge?: boolean
-    }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
   }
+  url: "/task/{taskID}/cancel"
 }
 
-export type TaskEventsResponse = TaskEventsResponses[keyof TaskEventsResponses]
+export type TaskCancelErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+  /**
+   * Conflict
+   */
+  409:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "ReplyTargetEnvelopeMissingError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "AgentSessionPendingCoordinationError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "TaskCancellationIncompleteError"
+      }
+}
+
+export type TaskCancelError = TaskCancelErrors[keyof TaskCancelErrors]
+
+export type TaskCancelResponses = {
+  /**
+   * Task cancelled
+   */
+  200: boolean
+}
+
+export type TaskCancelResponse = TaskCancelResponses[keyof TaskCancelResponses]
 
 export type TaskConversationData = {
   body?: never
@@ -14071,16 +17047,16 @@ export type TaskConversationErrors = {
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
 }
 
@@ -14091,121 +17067,46 @@ export type TaskConversationResponses = {
    * Task conversation hydrate payload
    */
   200: {
-    lastSequence: number
-    messageWatermark: number
-    board: {
-      lastSequence?: number
-      snapshotVersion: string
-      task: {
-        id: string
+    agentView: {
+      messages: Array<{
+        goalID?: string
+        messageID: string
         orderKey: string
-        projectID: string
-        directory?: string
-        sessionID?: string | null
-        activePlanVersionID?: string | null
-        activeRunID?: string | null
-        requestID?: string
-        parentTaskID?: string | null
-        source: string
-        title: string
-        request: string
-        status: "queued" | "active" | "completed" | "failed" | "cancelled"
-        terminalReason?: "completed" | "failed" | "cancelled" | "interrupted"
-        priority: "critical" | "high" | "normal" | "low"
-        queue?: {
-          order: number
-          revision?: string
+        parentSessionID?: string
+        phase?: {
+          phaseID: string
+          stepID: string
         }
-        kind?: "workflow" | "build"
-        blockingReason?: string
-        error?: string
-        budget?: {
-          maxExecutorGroups?: number
+        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
+        sessionID: string
+        stage: string
+        time: number
+      }>
+      sessions: Array<{
+        firstMessageTime: number
+        firstObservedAt?: number
+        goalID?: string
+        lastDisplayMessageID?: string
+        lastMessageTime: number
+        lastObservedAt?: number
+        messageIDs: Array<string>
+        orderKey: string
+        parentSessionID?: string
+        phase?: {
+          phaseID: string
+          stepID: string
         }
-        metadata?: {
-          [key: string]: unknown
-        }
-        attachments?: Array<{
-          sha: string
-          url: string
-          mime: string
-          size: number
-          filename?: string
-          intent?: string
-          source?: string
-        }>
-        time: {
-          created: number
-          updated: number
-          started?: number
-          completed?: number
-        }
-      }
-      project?: {
-        id: string
-        name?: string
-        worktree: string
-      }
-      spec?: {
-        content: string
-        file?: string
-        source?: {
-          [key: string]: unknown
-        }
-        time: {
-          created: number
-        }
-      }
-      plan?: {
-        id: string
-        taskID: string
-        version: number
-        status: "active" | "superseded"
-        summary: string
-        prompt: string
-        metadata?: {
-          [key: string]: unknown
-        }
-        time: {
-          created: number
-          updated: number
-        }
-      }
-      run?: {
-        id: string
-        taskID: string
-        planVersionID?: string | null
-        sessionID?: string | null
-        executor: "opencorvus" | "codex" | "claude-code"
-        status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-        phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
-        blockingReason?: string
-        error?: string
-        retryCount: number
-        executorRef?: {
-          sessionID?: string
-          queueTaskID?: string
-        }
-        metadata?: {
-          [key: string]: unknown
-        }
-        time: {
-          created: number
-          updated: number
-          started?: number
-          completed?: number
-        }
-      }
+        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
+        sessionID: string
+        stage: string
+        status?: "pending" | "running" | "idle" | "completed" | "error" | "skipped"
+      }>
+      topLevelSessionIDs: Array<string>
+    }
+    board: {
       acceptance?: {
         id: string
-        taskID: string
-        runID: string
-        status: "candidate" | "publishing" | "delivered" | "failed"
-        summary: string
         result: {
-          summary: string
-          changedFiles: Array<string>
-          diffs: Array<AcceptanceDiffSummary>
           artifacts?: Array<{
             kind: string
             label: string
@@ -14213,36 +17114,17 @@ export type TaskConversationResponses = {
               [key: string]: unknown
             }
           }>
+          changedFiles: Array<string>
+          diffs: Array<AcceptanceDiffSummary>
           publish?: {
             [key: string]: unknown
           }
+          summary: string
         }
-        time: {
-          created: number
-          updated: number
-        }
-      }
-      candidateAcceptance?: {
-        id: string
-        taskID: string
         runID: string
         status: "candidate" | "publishing" | "delivered" | "failed"
         summary: string
-        result: {
-          summary: string
-          changedFiles: Array<string>
-          diffs: Array<AcceptanceDiffSummary>
-          artifacts?: Array<{
-            kind: string
-            label: string
-            payload?: {
-              [key: string]: unknown
-            }
-          }>
-          publish?: {
-            [key: string]: unknown
-          }
-        }
+        taskID: string
         time: {
           created: number
           updated: number
@@ -14250,14 +17132,7 @@ export type TaskConversationResponses = {
       }
       acceptedAcceptance?: {
         id: string
-        taskID: string
-        runID: string
-        status: "candidate" | "publishing" | "delivered" | "failed"
-        summary: string
         result: {
-          summary: string
-          changedFiles: Array<string>
-          diffs: Array<AcceptanceDiffSummary>
           artifacts?: Array<{
             kind: string
             label: string
@@ -14265,94 +17140,32 @@ export type TaskConversationResponses = {
               [key: string]: unknown
             }
           }>
+          changedFiles: Array<string>
+          diffs: Array<AcceptanceDiffSummary>
           publish?: {
             [key: string]: unknown
           }
+          summary: string
         }
-        time: {
-          created: number
-          updated: number
-        }
-      }
-      evaluation?: {
-        id: string
-        taskID: string
         runID: string
-        acceptanceID?: string | null
-        status: "pending" | "passed" | "failed" | "inconclusive"
-        verdict: "accepted" | "rejected" | "inconclusive"
+        status: "candidate" | "publishing" | "delivered" | "failed"
         summary: string
-        checks: Array<{
-          name: string
-          label?: string
-          family?: string
-          status: "passed" | "failed" | "skipped" | "inconclusive"
-          evidence?: string
-        }>
+        taskID: string
         time: {
           created: number
           updated: number
-          completed?: number
         }
       }
-      interactions: Array<{
-        id: string
-        taskID: string
-        orderKey: string
-        runID: string | null
-        sessionID?: string | null
-        externalID: string
-        type: "permission" | "question"
-        status: "pending" | "answered" | "rejected" | "expired"
-        title: string
-        body: string
-        payload?: {
-          [key: string]: unknown
-        }
-        response?: {
-          [key: string]: unknown
-        }
-        time: {
-          created: number
-          updated: number
-          resolved?: number
-        }
-      }>
-      channels: Array<{
-        id: string
-        platform: string
-        channel: string
-        thread: string
-        payload?: {
-          [key: string]: unknown
-        }
-        time: {
-          created: number
-          updated: number
-        }
-      }>
-      artifacts: Array<{
-        id: string
-        taskID: string
-        runID: string
-        acceptanceID?: string | null
-        kind: "patch" | "changed_file" | "log" | "report" | "image" | "diff" | "link" | "git_ref" | "pr"
-        label: string
-        payload?: {
-          [key: string]: unknown
-        }
-        time: {
-          created: number
-          updated: number
-        }
-      }>
       agentInvocationDAG: {
-        taskID: string
-        rootSessionID?: string
+        edges: Array<{
+          fromSessionID: string
+          relation: "agent_call"
+          toSessionID: string
+          viaSessionIDs?: Array<string>
+        }>
         nodes: Array<{
-          sessionID: string
-          orderKey: string
           agent: string
+          goalID?: string
           kind:
             | "root"
             | "orchestrator"
@@ -14375,234 +17188,164 @@ export type TaskConversationResponses = {
             | "visual-qa"
             | "evaluator"
             | "system"
-          title?: string
-          parentSessionID?: string
+          orderKey: string
           parentAgentSessionID?: string
-          goalID?: string
+          parentSessionID?: string
+          sessionID: string
           status?: {
-            type: string
-            reason?: string
-            error?: string
             emittedAt: number
+            error?: string
+            reason?: string
+            type: string
           }
           time: {
             created: number
             updated: number
           }
+          title?: string
         }>
-        edges: Array<{
-          fromSessionID: string
-          toSessionID: string
-          relation: "agent_call"
-          viaSessionIDs?: Array<string>
-        }>
+        rootSessionID?: string
+        taskID: string
         topLevelSessionIDs: Array<string>
       }
-      overview: {
-        headline: string
+      architect?: {
+        categories: Array<string>
+        contractCount: number
+        decisions?: Array<{
+          goalID: string | null
+          key: string
+          reason: string
+          value: string
+        }>
         summary: string
-        currentFailure?: {
-          source: "task" | "run" | "interaction" | "evaluation"
-          title: string
-          summary: string
-          checks?: Array<{
-            name: string
-            label?: string
-            family?: string
-            status: "passed" | "failed" | "skipped" | "inconclusive"
-            evidence?: string
-          }>
-        }
-        nextStep: {
-          kind: "resolve_blocker" | "retry" | "replan" | "observe" | "review_acceptance" | "message"
-          title: string
-          detail?: string
-        }
-        controls: {
-          canRetry: boolean
-          canReplan: boolean
-          canCancel: boolean
-        }
       }
+      artifacts: Array<{
+        acceptanceID?: string | null
+        id: string
+        kind: "patch" | "changed_file" | "log" | "report" | "image" | "diff" | "link" | "git_ref" | "pr"
+        label: string
+        payload?: {
+          [key: string]: unknown
+        }
+        runID: string
+        taskID: string
+        time: {
+          created: number
+          updated: number
+        }
+      }>
       brief: {
         content: string
         updated_at: number
       }
-      workflow?: {
+      candidateAcceptance?: {
         id: string
-        name: string
-        steps: Array<{
-          id: string
-          orderKey: string
-          label: string
-          tool: string
-          scope: "task" | "goal"
-          skippable: boolean
-          status: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
-          phases?: Array<{
-            id: string
+        result: {
+          artifacts?: Array<{
+            kind: string
             label: string
-            sessionKind: string
+            payload?: {
+              [key: string]: unknown
+            }
           }>
-        }>
-        goalLoopStepIDs: Array<string>
-      }
-      requirements?: Array<{
-        id: string
-        description: string
-        type: "explicit" | "inferred" | "system"
-        priority: "blocking" | "advisory"
-        status: "pending" | "passed" | "failed"
-      }>
-      architect?: {
+          changedFiles: Array<string>
+          diffs: Array<AcceptanceDiffSummary>
+          publish?: {
+            [key: string]: unknown
+          }
+          summary: string
+        }
+        runID: string
+        status: "candidate" | "publishing" | "delivered" | "failed"
         summary: string
-        contractCount: number
-        categories: Array<string>
-        decisions?: Array<{
-          key: string
-          value: string
-          reason: string
-          goalID: string | null
+        taskID: string
+        time: {
+          created: number
+          updated: number
+        }
+      }
+      channels: Array<{
+        channel: string
+        id: string
+        payload?: {
+          [key: string]: unknown
+        }
+        platform: string
+        thread: string
+        time: {
+          created: number
+          updated: number
+        }
+      }>
+      criteriaResults?: Array<{
+        evidence?: string
+        family?: string
+        label?: string
+        name: string
+        status: "passed" | "failed" | "skipped" | "inconclusive"
+      }>
+      evaluation?: {
+        acceptanceID?: string | null
+        checks: Array<{
+          evidence?: string
+          family?: string
+          label?: string
+          name: string
+          status: "passed" | "failed" | "skipped" | "inconclusive"
         }>
+        id: string
+        runID: string
+        status: "pending" | "passed" | "failed" | "inconclusive"
+        summary: string
+        taskID: string
+        time: {
+          completed?: number
+          created: number
+          updated: number
+        }
+        verdict: "accepted" | "rejected" | "inconclusive"
       }
       goalWorkflows?: Array<{
-        goalID: string
-        goalRunID?: string
-        orderKey: string
-        goalTitle: string
-        goalObjective?: string
-        goalStatus: string
-        orderIndex: number
-        workspaceDir?: string
-        workspaceBranch?: string
-        retryCount: number
-        priority: "blocking" | "advisory"
-        steps: Array<{
-          stepID: string
-          orderKey: string
-          label: string
-          status: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
-          startedAt?: number
-          completedAt?: number
-          summary?: string
-          payload?: {
-            planNodes?: Array<{
-              id: string
-              title: string
-              brief: string
-              orderIndex: number
-              fileActions?: Array<{
-                path: string
-                intent: string
-              }>
-              verificationCommands?: Array<{
-                command: string
-                purpose: string
-              }>
-            }>
-            buildSessionID?: string
-            commitRef?: string
-            publishedCommitRef?: string
-            diffBaseRef?: string
-            diffHeadRef?: string
-            changedFiles?: Array<string>
-            attemptChangedFiles?: Array<string>
-            attemptCommitRef?: string
-            attemptPublishedCommitRef?: string
-            changedFileDiffs?: Array<{
-              file: string
-              additions: number
-              deletions: number
-              status: "added" | "deleted" | "modified"
-            }>
-            diffStats?: {
-              files?: number
-              additions?: number
-              deletions?: number
-            }
-            buildOutcome?: {
-              id: string
-              goalRunID: string
-              terminalStatus: "completed" | "failed" | "aborted"
-              outcomeKind: "delivered" | "failed" | "aborted" | "no_project_diff"
-              acceptancePresent: boolean
-              summary?: string
-              error?: string
-              noDiffReason?: string
-              changedFiles: Array<string>
-              commitRef?: string
-              publishedCommitRef?: string
-              diffBaseRef?: string
-              diffHeadRef?: string
-            }
-            checks?: Array<{
-              name: string
-              status: string
-              evidence?: string
-              family?: string
-            }>
-            evalSummary?: string
-            verdict?: string
-          }
-          phases?: {
-            [key: string]: {
-              orderKey: string
-              status: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
-              startedAt?: number
-              completedAt?: number
-            }
-          }
-        }>
-        contracts?: Array<{
-          key: string
-          value: string
-          reason?: string
-        }>
         acceptanceSpecs?: Array<{
+          /**
+           * Goal ID this spec belongs to. Specs are goal-local; multiple specs may share a goal.
+           */
+          goal_id: string
           /**
            * Stable spec ID, e.g. 'acc-login-3s'.
            */
           id: string
           /**
-           * Requirement ID this spec was derived from (REQ-N).
-           */
-          source_requirement_id: string
-          /**
-           * Goal ID this spec belongs to. Specs are goal-local; multiple specs may share a goal.
-           */
-          goal_id: string
-          title: string
-          /**
            * Gherkin Given/When/Then scenario. Optional — omit for pure code checks.
            */
           scenario?: {
             given: Array<string>
-            when: Array<string>
             then: Array<string>
+            when: Array<string>
           }
           /**
            * At least one scorer — a spec without a scorer is untestable.
            */
           scorers: Array<
             | {
-                /**
-                 * heuristic — deterministic shell/script check, pass/fail by exit code. Requires: name, spec{kind}.
-                 */
-                type: "heuristic"
+                expect?: {
+                  exit_code?: number
+                }
                 name: string
                 spec:
                   | {
-                      /**
-                       * shell — run an inline command. Requires: cmd; optional cwd.
-                       */
-                      kind: "shell"
                       /**
                        * Shell command. Exit 0 = pass unless expect.exit_code set.
                        */
                       cmd: string
                       cwd?: string
+                      /**
+                       * shell — run an inline command. Requires: cmd; optional cwd.
+                       */
+                      kind: "shell"
                     }
                   | {
+                      args?: Array<string>
                       /**
                        * script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.
                        */
@@ -14611,53 +17354,58 @@ export type TaskConversationResponses = {
                        * Repo-relative script path that already exists at registration time.
                        */
                       path: string
-                      args?: Array<string>
                     }
-                expect?: {
-                  exit_code?: number
-                }
+                /**
+                 * heuristic — deterministic shell/script check, pass/fail by exit code. Requires: name, spec{kind}.
+                 */
+                type: "heuristic"
               }
             | {
-                /**
-                 * llm_judge — natural-language rubric evaluation. Requires: name, criteria; optional rubric, inputs.
-                 */
-                type: "llm_judge"
-                name: string
                 /**
                  * Single-criterion evaluation question in natural language.
                  */
                 criteria: string
                 /**
+                 * Which parts of the acceptance to feed the judge. Default: acceptance_summary. LLM judges cannot consume visual feedback; final rendered reference parity uses prebuilt visual-feedback-verification.
+                 */
+                inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
+                name: string
+                /**
                  * Ordinal anchors, 2-5 levels. Omit for binary MET/UNMET.
                  */
                 rubric?: Array<{
-                  /**
-                   * Integer score for this level.
-                   */
-                  score: number
-                  /**
-                   * Short level label, e.g. 'fully met'.
-                   */
-                  label: string
                   /**
                    * Behavioral description: what earns this score.
                    */
                   anchor: string
                   /**
+                   * Short level label, e.g. 'fully met'.
+                   */
+                  label: string
+                  /**
                    * Does this level count as pass for binary verdict?
                    */
                   passes: boolean
+                  /**
+                   * Integer score for this level.
+                   */
+                  score: number
                 }>
                 /**
-                 * Which parts of the acceptance to feed the judge. Default: acceptance_summary. LLM judges cannot consume visual feedback; final rendered reference parity uses prebuilt visual-feedback-verification.
+                 * llm_judge — natural-language rubric evaluation. Requires: name, criteria; optional rubric, inputs.
                  */
-                inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
+                type: "llm_judge"
               }
             | {
+                config?: {
+                  [key: string]: unknown
+                }
                 /**
-                 * prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.
+                 * For name=visual-feedback-verification, requires a passing current visual feedback verification.
                  */
-                type: "prebuilt"
+                expect?: {
+                  status: "passed"
+                }
                 name:
                   | "factuality"
                   | "relevance"
@@ -14666,9 +17414,6 @@ export type TaskConversationResponses = {
                   | "length_within"
                   | "json_schema"
                   | "visual-feedback-verification"
-                config?: {
-                  [key: string]: unknown
-                }
                 /**
                  * For name=visual-feedback-verification, identifies the required visual feedback verification shape.
                  */
@@ -14677,69 +17422,369 @@ export type TaskConversationResponses = {
                   viewport?: string
                 }
                 /**
-                 * For name=visual-feedback-verification, requires a passing current visual feedback verification.
+                 * prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.
                  */
-                expect?: {
-                  status: "passed"
-                }
+                type: "prebuilt"
               }
             | {
+                expect: {
+                  status: "passed"
+                }
+                name: string
+                spec: {
+                  contract_ids: Array<string>
+                  kind: "contract_graph"
+                }
                 /**
                  * contract_audit — static audit of typed-contract field literals and graph artifact path materialization against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
                  */
                 type: "contract_audit"
-                name: string
-                spec: {
-                  kind: "contract_graph"
-                  contract_ids: Array<string>
-                }
-                expect: {
-                  status: "passed"
-                }
               }
           >
           severity: "essential" | "important" | "optional" | "pitfall"
+          /**
+           * Requirement ID this spec was derived from (REQ-N).
+           */
+          source_requirement_id: string
+          title: string
           /**
            * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity.
            */
           trigger?: "on_goal" | "on_integrity"
         }>
+        contracts?: Array<{
+          key: string
+          reason?: string
+          value: string
+        }>
+        goalID: string
+        goalObjective?: string
+        goalRunID?: string
+        goalStatus: string
+        goalTitle: string
+        orderIndex: number
+        orderKey: string
+        priority: "blocking" | "advisory"
+        retryCount: number
+        steps: Array<{
+          completedAt?: number
+          label: string
+          orderKey: string
+          payload?: {
+            attemptChangedFiles?: Array<string>
+            attemptCommitRef?: string
+            attemptPublishedCommitRef?: string
+            buildOutcome?: {
+              acceptancePresent: boolean
+              changedFiles: Array<string>
+              commitRef?: string
+              diffBaseRef?: string
+              diffHeadRef?: string
+              error?: string
+              goalRunID: string
+              id: string
+              noDiffReason?: string
+              outcomeKind: "delivered" | "failed" | "aborted" | "no_project_diff"
+              publishedCommitRef?: string
+              summary?: string
+              terminalStatus: "completed" | "failed" | "aborted"
+            }
+            buildSessionID?: string
+            changedFileDiffs?: Array<{
+              additions: number
+              deletions: number
+              file: string
+              status: "added" | "deleted" | "modified"
+            }>
+            changedFiles?: Array<string>
+            checks?: Array<{
+              evidence?: string
+              family?: string
+              name: string
+              status: string
+            }>
+            commitRef?: string
+            diffBaseRef?: string
+            diffHeadRef?: string
+            diffStats?: {
+              additions?: number
+              deletions?: number
+              files?: number
+            }
+            evalSummary?: string
+            planNodes?: Array<{
+              brief: string
+              fileActions?: Array<{
+                intent: string
+                path: string
+              }>
+              id: string
+              orderIndex: number
+              title: string
+              verificationCommands?: Array<{
+                command: string
+                purpose: string
+              }>
+            }>
+            publishedCommitRef?: string
+            verdict?: string
+          }
+          phases?: {
+            [key: string]: {
+              completedAt?: number
+              orderKey: string
+              startedAt?: number
+              status: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
+            }
+          }
+          startedAt?: number
+          status: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
+          stepID: string
+          summary?: string
+        }>
+        workspaceBranch?: string
+        workspaceDir?: string
       }>
+      interactions: Array<{
+        body: string
+        externalID: string
+        id: string
+        orderKey: string
+        payload?: {
+          [key: string]: unknown
+        }
+        response?: {
+          [key: string]: unknown
+        }
+        runID: string | null
+        sessionID?: string | null
+        status: "pending" | "answered" | "rejected" | "expired"
+        taskID: string
+        time: {
+          created: number
+          resolved?: number
+          updated: number
+        }
+        title: string
+        type: "permission" | "question"
+      }>
+      lastSequence?: number
+      overview: {
+        controls: {
+          canCancel: boolean
+          canReplan: boolean
+          canRetry: boolean
+        }
+        currentFailure?: {
+          checks?: Array<{
+            evidence?: string
+            family?: string
+            label?: string
+            name: string
+            status: "passed" | "failed" | "skipped" | "inconclusive"
+          }>
+          source: "task" | "run" | "interaction" | "evaluation"
+          summary: string
+          title: string
+        }
+        headline: string
+        nextStep: {
+          detail?: string
+          kind: "resolve_blocker" | "retry" | "replan" | "observe" | "review_acceptance" | "message"
+          title: string
+        }
+        summary: string
+      }
+      plan?: {
+        id: string
+        metadata?: {
+          [key: string]: unknown
+        }
+        prompt: string
+        status: "active" | "superseded"
+        summary: string
+        taskID: string
+        time: {
+          created: number
+          updated: number
+        }
+        version: number
+      }
+      project?: {
+        id: string
+        name?: string
+        worktree: string
+      }
+      requirements?: Array<{
+        description: string
+        id: string
+        priority: "blocking" | "advisory"
+        status: "pending" | "passed" | "failed"
+        type: "explicit" | "inferred" | "system"
+      }>
+      run?: {
+        blockingReason?: string
+        error?: string
+        executor: "opencorvus" | "codex" | "claude-code"
+        executorRef?: {
+          queueTaskID?: string
+          sessionID?: string
+        }
+        id: string
+        metadata?: {
+          [key: string]: unknown
+        }
+        phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
+        planVersionID?: string | null
+        retryCount: number
+        sessionID?: string | null
+        status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+        taskID: string
+        time: {
+          completed?: number
+          created: number
+          started?: number
+          updated: number
+        }
+      }
+      snapshotVersion: string
+      spec?: {
+        content: string
+        file?: string
+        source?: {
+          [key: string]: unknown
+        }
+        time: {
+          created: number
+        }
+      }
+      task: {
+        activePlanVersionID?: string | null
+        activeRunID?: string | null
+        attachments?: Array<{
+          filename?: string
+          intent?: string
+          mime: string
+          sha: string
+          size: number
+          source?: string
+          url: string
+        }>
+        blockingReason?: string
+        budget?: {
+          maxExecutorGroups?: number
+        }
+        directory?: string
+        error?: string
+        id: string
+        kind?: "workflow" | "build"
+        metadata?: {
+          [key: string]: unknown
+        }
+        orderKey: string
+        parentTaskID?: string | null
+        priority: "critical" | "high" | "normal" | "low"
+        projectID: string
+        queue?: {
+          order: number
+          revision?: string
+        }
+        request: string
+        requestID?: string
+        sessionID?: string | null
+        source: string
+        status: "queued" | "active" | "completed" | "failed" | "cancelled"
+        terminalReason?: "completed" | "failed" | "cancelled" | "interrupted"
+        time: {
+          completed?: number
+          created: number
+          started?: number
+          updated: number
+        }
+        title: string
+      }
       taskAgentOutcomes?: Array<{
+        artifactKind: string
+        capabilities?: Array<string>
+        error?: string
         id: string
         provider: string
-        artifactKind: string
-        scope: "task" | "goal"
-        capabilities?: Array<string>
+        result?: string
         runID?: string
+        scope: "task" | "goal"
         sessionID?: string
         status: string
-        result?: string
         summary?: string
-        error?: string
         time: {
           created: number
           updated: number
         }
       }>
-      criteriaResults?: Array<{
+      workflow?: {
+        goalLoopStepIDs: Array<string>
+        id: string
         name: string
-        label?: string
-        family?: string
-        status: "passed" | "failed" | "skipped" | "inconclusive"
-        evidence?: string
-      }>
+        steps: Array<{
+          id: string
+          label: string
+          orderKey: string
+          phases?: Array<{
+            id: string
+            label: string
+            sessionKind: string
+          }>
+          scope: "task" | "goal"
+          skippable: boolean
+          status: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
+          tool: string
+        }>
+      }
     }
-    transcript: Array<VisibleMessageWithParts>
+    eventReplay: {
+      complete: boolean
+      cursor: number
+      latestSequence: number
+      limit: number
+      sinceTimestamp?: number | null
+    }
+    events: Array<{
+      emittedAt: number
+      event_id: string
+      live_epoch?: number
+      live_sequence?: number
+      notify?: {
+        badge?: boolean
+        tier: 1 | 2 | 3
+      }
+      orderKey: string
+      payload: {
+        [key: string]: unknown
+      }
+      run_id?: string
+      sequence?: number
+      summary: string
+      task_id: string
+      timestamp: number
+      type: string
+    }>
+    history: {
+      hasMore: boolean
+      limit: number
+      oldestMessageID?: string | null
+      oldestOrderKey: string | null
+      oldestTimestamp: number | null
+    }
+    lastSequence: number
+    messageWatermark: number
     timeline: Array<{
       info: {
         id: string
         orderKey: string
         role: "user" | "assistant" | "system"
+        sessionID?: string
         source?: string
         surface: string
         taskID?: string
-        sessionID?: string
         time: {
           created: number
           updated: number
@@ -14748,400 +17793,59 @@ export type TaskConversationResponses = {
       parts: Array<
         | {
             id: string
-            type: "text"
             text: string
+            type: "text"
           }
         | {
-            id: string
-            type: "file"
-            mime: string
-            url: string
             filename?: string
+            id: string
+            mime: string
+            type: "file"
+            url: string
           }
       >
     }>
-    events: Array<{
-      event_id: string
-      task_id: string
-      orderKey: string
-      run_id?: string
-      type: string
-      emittedAt: number
-      timestamp: number
-      sequence?: number
-      live_sequence?: number
-      live_epoch?: number
-      summary: string
-      payload: {
-        [key: string]: unknown
-      }
-      notify?: {
-        tier: 1 | 2 | 3
-        badge?: boolean
-      }
-    }>
-    eventReplay: {
-      cursor: number
-      latestSequence: number
-      complete: boolean
-      limit: number
-      sinceTimestamp?: number | null
-    }
-    history: {
-      oldestTimestamp: number | null
-      oldestOrderKey: string | null
-      oldestMessageID?: string | null
-      hasMore: boolean
-      limit: number
-    }
-    agentView: {
-      topLevelSessionIDs: Array<string>
-      sessions: Array<{
-        sessionID: string
-        orderKey: string
-        stage: string
-        parentSessionID?: string
-        goalID?: string
-        messageIDs: Array<string>
-        lastDisplayMessageID?: string
-        firstMessageTime: number
-        lastMessageTime: number
-        firstObservedAt?: number
-        lastObservedAt?: number
-        status?: "pending" | "running" | "idle" | "completed" | "error" | "skipped"
-        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
-        phase?: {
-          stepID: string
-          phaseID: string
-        }
-      }>
-      messages: Array<{
-        messageID: string
-        orderKey: string
-        sessionID: string
-        stage: string
-        parentSessionID?: string
-        goalID?: string
-        time: number
-        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
-        phase?: {
-          stepID: string
-          phaseID: string
-        }
-      }>
-    }
+    transcript: Array<VisibleMessageWithParts>
     view: {
-      topLevelSessionIDs: Array<string>
-      sessions: Array<{
-        sessionID: string
-        orderKey: string
-        stage: string
-        parentSessionID?: string
-        goalID?: string
-        messageIDs: Array<string>
-        lastDisplayMessageID?: string
-        firstMessageTime: number
-        lastMessageTime: number
-        firstObservedAt?: number
-        lastObservedAt?: number
-        status?: "pending" | "running" | "idle" | "completed" | "error" | "skipped"
-        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
-        phase?: {
-          stepID: string
-          phaseID: string
-        }
-      }>
       messages: Array<{
+        goalID?: string
         messageID: string
         orderKey: string
+        parentSessionID?: string
+        phase?: {
+          phaseID: string
+          stepID: string
+        }
+        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
         sessionID: string
         stage: string
-        parentSessionID?: string
-        goalID?: string
         time: number
-        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
-        phase?: {
-          stepID: string
-          phaseID: string
-        }
       }>
+      sessions: Array<{
+        firstMessageTime: number
+        firstObservedAt?: number
+        goalID?: string
+        lastDisplayMessageID?: string
+        lastMessageTime: number
+        lastObservedAt?: number
+        messageIDs: Array<string>
+        orderKey: string
+        parentSessionID?: string
+        phase?: {
+          phaseID: string
+          stepID: string
+        }
+        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
+        sessionID: string
+        stage: string
+        status?: "pending" | "running" | "idle" | "completed" | "error" | "skipped"
+      }>
+      topLevelSessionIDs: Array<string>
     }
   }
 }
 
 export type TaskConversationResponse = TaskConversationResponses[keyof TaskConversationResponses]
-
-export type TaskConversationSessionData = {
-  body?: never
-  path: {
-    taskID: string
-    sessionID: string
-  }
-  query?: never
-  url: "/task/{taskID}/conversation/session/{sessionID}"
-}
-
-export type TaskConversationSessionErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type TaskConversationSessionError = TaskConversationSessionErrors[keyof TaskConversationSessionErrors]
-
-export type TaskConversationSessionResponses = {
-  /**
-   * Task conversation session transcript
-   */
-  200: {
-    transcript: Array<VisibleMessageWithParts>
-    timeline: Array<{
-      info: {
-        id: string
-        orderKey: string
-        role: "user" | "assistant" | "system"
-        source?: string
-        surface: string
-        taskID?: string
-        sessionID?: string
-        time: {
-          created: number
-          updated: number
-        }
-      }
-      parts: Array<
-        | {
-            id: string
-            type: "text"
-            text: string
-          }
-        | {
-            id: string
-            type: "file"
-            mime: string
-            url: string
-            filename?: string
-          }
-      >
-    }>
-    events: Array<{
-      event_id: string
-      task_id: string
-      orderKey: string
-      run_id?: string
-      type: string
-      emittedAt: number
-      timestamp: number
-      sequence?: number
-      live_sequence?: number
-      live_epoch?: number
-      summary: string
-      payload: {
-        [key: string]: unknown
-      }
-      notify?: {
-        tier: 1 | 2 | 3
-        badge?: boolean
-      }
-    }>
-    view: {
-      topLevelSessionIDs: Array<string>
-      sessions: Array<{
-        sessionID: string
-        orderKey: string
-        stage: string
-        parentSessionID?: string
-        goalID?: string
-        messageIDs: Array<string>
-        lastDisplayMessageID?: string
-        firstMessageTime: number
-        lastMessageTime: number
-        firstObservedAt?: number
-        lastObservedAt?: number
-        status?: "pending" | "running" | "idle" | "completed" | "error" | "skipped"
-        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
-        phase?: {
-          stepID: string
-          phaseID: string
-        }
-      }>
-      messages: Array<{
-        messageID: string
-        orderKey: string
-        sessionID: string
-        stage: string
-        parentSessionID?: string
-        goalID?: string
-        time: number
-        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
-        phase?: {
-          stepID: string
-          phaseID: string
-        }
-      }>
-    }
-    history: {
-      oldestTimestamp: number | null
-      oldestOrderKey: string | null
-      oldestMessageID?: string | null
-      hasMore: boolean
-      limit: number
-    }
-  }
-}
-
-export type TaskConversationSessionResponse = TaskConversationSessionResponses[keyof TaskConversationSessionResponses]
-
-export type TaskConversationHistoryData = {
-  body?: never
-  path: {
-    taskID: string
-  }
-  query: {
-    before: number
-    before_order_key: string
-    before_id?: string
-    limit?: number
-  }
-  url: "/task/{taskID}/conversation/history"
-}
-
-export type TaskConversationHistoryErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type TaskConversationHistoryError = TaskConversationHistoryErrors[keyof TaskConversationHistoryErrors]
-
-export type TaskConversationHistoryResponses = {
-  /**
-   * Task conversation history page
-   */
-  200: {
-    transcript: Array<VisibleMessageWithParts>
-    timeline: Array<{
-      info: {
-        id: string
-        orderKey: string
-        role: "user" | "assistant" | "system"
-        source?: string
-        surface: string
-        taskID?: string
-        sessionID?: string
-        time: {
-          created: number
-          updated: number
-        }
-      }
-      parts: Array<
-        | {
-            id: string
-            type: "text"
-            text: string
-          }
-        | {
-            id: string
-            type: "file"
-            mime: string
-            url: string
-            filename?: string
-          }
-      >
-    }>
-    events: Array<{
-      event_id: string
-      task_id: string
-      orderKey: string
-      run_id?: string
-      type: string
-      emittedAt: number
-      timestamp: number
-      sequence?: number
-      live_sequence?: number
-      live_epoch?: number
-      summary: string
-      payload: {
-        [key: string]: unknown
-      }
-      notify?: {
-        tier: 1 | 2 | 3
-        badge?: boolean
-      }
-    }>
-    view: {
-      topLevelSessionIDs: Array<string>
-      sessions: Array<{
-        sessionID: string
-        orderKey: string
-        stage: string
-        parentSessionID?: string
-        goalID?: string
-        messageIDs: Array<string>
-        lastDisplayMessageID?: string
-        firstMessageTime: number
-        lastMessageTime: number
-        firstObservedAt?: number
-        lastObservedAt?: number
-        status?: "pending" | "running" | "idle" | "completed" | "error" | "skipped"
-        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
-        phase?: {
-          stepID: string
-          phaseID: string
-        }
-      }>
-      messages: Array<{
-        messageID: string
-        orderKey: string
-        sessionID: string
-        stage: string
-        parentSessionID?: string
-        goalID?: string
-        time: number
-        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
-        phase?: {
-          stepID: string
-          phaseID: string
-        }
-      }>
-    }
-    history: {
-      oldestTimestamp: number | null
-      oldestOrderKey: string | null
-      oldestMessageID?: string | null
-      hasMore: boolean
-      limit: number
-    }
-  }
-}
-
-export type TaskConversationHistoryResponse = TaskConversationHistoryResponses[keyof TaskConversationHistoryResponses]
 
 export type TaskConversationEventsData = {
   body?: never
@@ -15163,16 +17867,16 @@ export type TaskConversationEventsErrors = {
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
 }
 
@@ -15183,1013 +17887,349 @@ export type TaskConversationEventsResponses = {
    * Task conversation event page
    */
   200: {
-    events: Array<{
-      event_id: string
-      task_id: string
-      orderKey: string
-      run_id?: string
-      type: string
-      emittedAt: number
-      timestamp: number
-      sequence?: number
-      live_sequence?: number
-      live_epoch?: number
-      summary: string
-      payload: {
-        [key: string]: unknown
-      }
-      notify?: {
-        tier: 1 | 2 | 3
-        badge?: boolean
-      }
-    }>
     eventReplay: {
+      complete: boolean
       cursor: number
       latestSequence: number
-      complete: boolean
       limit: number
       sinceTimestamp?: number | null
     }
+    events: Array<{
+      emittedAt: number
+      event_id: string
+      live_epoch?: number
+      live_sequence?: number
+      notify?: {
+        badge?: boolean
+        tier: 1 | 2 | 3
+      }
+      orderKey: string
+      payload: {
+        [key: string]: unknown
+      }
+      run_id?: string
+      sequence?: number
+      summary: string
+      task_id: string
+      timestamp: number
+      type: string
+    }>
   }
 }
 
 export type TaskConversationEventsResponse = TaskConversationEventsResponses[keyof TaskConversationEventsResponses]
 
-export type TaskBriefData = {
+export type TaskConversationHistoryData = {
   body?: never
   path: {
     taskID: string
   }
-  query?: never
-  url: "/task/{taskID}/brief"
+  query: {
+    before: number
+    before_order_key: string
+    before_id?: string
+    limit?: number
+  }
+  url: "/task/{taskID}/conversation/history"
 }
 
-export type TaskBriefErrors = {
+export type TaskConversationHistoryErrors = {
   /**
    * Not found
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
 }
 
-export type TaskBriefError = TaskBriefErrors[keyof TaskBriefErrors]
+export type TaskConversationHistoryError = TaskConversationHistoryErrors[keyof TaskConversationHistoryErrors]
 
-export type TaskBriefResponses = {
+export type TaskConversationHistoryResponses = {
   /**
-   * Task brief
+   * Task conversation history page
    */
   200: {
-    content: string
-    notes: Array<{
-      kind: string
-      content: string
-    }>
-    goals: Array<{
-      description: string
-      criteria: string
-    }>
-  }
-}
-
-export type TaskBriefResponse = TaskBriefResponses[keyof TaskBriefResponses]
-
-export type TaskBoardData = {
-  body?: never
-  path: {
-    taskID: string
-  }
-  query?: never
-  url: "/task/{taskID}/board"
-}
-
-export type TaskBoardErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
+    events: Array<{
+      emittedAt: number
+      event_id: string
+      live_epoch?: number
+      live_sequence?: number
+      notify?: {
+        badge?: boolean
+        tier: 1 | 2 | 3
       }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type TaskBoardError = TaskBoardErrors[keyof TaskBoardErrors]
-
-export type TaskBoardResponses = {
-  /**
-   * Task board
-   */
-  200: {
-    lastSequence?: number
-    snapshotVersion: string
-    task: {
-      id: string
       orderKey: string
-      projectID: string
-      directory?: string
-      sessionID?: string | null
-      activePlanVersionID?: string | null
-      activeRunID?: string | null
-      requestID?: string
-      parentTaskID?: string | null
-      source: string
-      title: string
-      request: string
-      status: "queued" | "active" | "completed" | "failed" | "cancelled"
-      terminalReason?: "completed" | "failed" | "cancelled" | "interrupted"
-      priority: "critical" | "high" | "normal" | "low"
-      queue?: {
-        order: number
-        revision?: string
-      }
-      kind?: "workflow" | "build"
-      blockingReason?: string
-      error?: string
-      budget?: {
-        maxExecutorGroups?: number
-      }
-      metadata?: {
+      payload: {
         [key: string]: unknown
       }
-      attachments?: Array<{
-        sha: string
-        url: string
-        mime: string
-        size: number
-        filename?: string
-        intent?: string
-        source?: string
-      }>
-      time: {
-        created: number
-        updated: number
-        started?: number
-        completed?: number
-      }
-    }
-    project?: {
-      id: string
-      name?: string
-      worktree: string
-    }
-    spec?: {
-      content: string
-      file?: string
-      source?: {
-        [key: string]: unknown
-      }
-      time: {
-        created: number
-      }
-    }
-    plan?: {
-      id: string
-      taskID: string
-      version: number
-      status: "active" | "superseded"
+      run_id?: string
+      sequence?: number
       summary: string
-      prompt: string
-      metadata?: {
-        [key: string]: unknown
-      }
-      time: {
-        created: number
-        updated: number
-      }
-    }
-    run?: {
-      id: string
-      taskID: string
-      planVersionID?: string | null
-      sessionID?: string | null
-      executor: "opencorvus" | "codex" | "claude-code"
-      status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-      phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
-      blockingReason?: string
-      error?: string
-      retryCount: number
-      executorRef?: {
-        sessionID?: string
-        queueTaskID?: string
-      }
-      metadata?: {
-        [key: string]: unknown
-      }
-      time: {
-        created: number
-        updated: number
-        started?: number
-        completed?: number
-      }
-    }
-    acceptance?: {
-      id: string
-      taskID: string
-      runID: string
-      status: "candidate" | "publishing" | "delivered" | "failed"
-      summary: string
-      result: {
-        summary: string
-        changedFiles: Array<string>
-        diffs: Array<AcceptanceDiffSummary>
-        artifacts?: Array<{
-          kind: string
-          label: string
-          payload?: {
-            [key: string]: unknown
-          }
-        }>
-        publish?: {
-          [key: string]: unknown
-        }
-      }
-      time: {
-        created: number
-        updated: number
-      }
-    }
-    candidateAcceptance?: {
-      id: string
-      taskID: string
-      runID: string
-      status: "candidate" | "publishing" | "delivered" | "failed"
-      summary: string
-      result: {
-        summary: string
-        changedFiles: Array<string>
-        diffs: Array<AcceptanceDiffSummary>
-        artifacts?: Array<{
-          kind: string
-          label: string
-          payload?: {
-            [key: string]: unknown
-          }
-        }>
-        publish?: {
-          [key: string]: unknown
-        }
-      }
-      time: {
-        created: number
-        updated: number
-      }
-    }
-    acceptedAcceptance?: {
-      id: string
-      taskID: string
-      runID: string
-      status: "candidate" | "publishing" | "delivered" | "failed"
-      summary: string
-      result: {
-        summary: string
-        changedFiles: Array<string>
-        diffs: Array<AcceptanceDiffSummary>
-        artifacts?: Array<{
-          kind: string
-          label: string
-          payload?: {
-            [key: string]: unknown
-          }
-        }>
-        publish?: {
-          [key: string]: unknown
-        }
-      }
-      time: {
-        created: number
-        updated: number
-      }
-    }
-    evaluation?: {
-      id: string
-      taskID: string
-      runID: string
-      acceptanceID?: string | null
-      status: "pending" | "passed" | "failed" | "inconclusive"
-      verdict: "accepted" | "rejected" | "inconclusive"
-      summary: string
-      checks: Array<{
-        name: string
-        label?: string
-        family?: string
-        status: "passed" | "failed" | "skipped" | "inconclusive"
-        evidence?: string
-      }>
-      time: {
-        created: number
-        updated: number
-        completed?: number
-      }
-    }
-    interactions: Array<{
-      id: string
-      taskID: string
-      orderKey: string
-      runID: string | null
-      sessionID?: string | null
-      externalID: string
-      type: "permission" | "question"
-      status: "pending" | "answered" | "rejected" | "expired"
-      title: string
-      body: string
-      payload?: {
-        [key: string]: unknown
-      }
-      response?: {
-        [key: string]: unknown
-      }
-      time: {
-        created: number
-        updated: number
-        resolved?: number
-      }
+      task_id: string
+      timestamp: number
+      type: string
     }>
-    channels: Array<{
-      id: string
-      platform: string
-      channel: string
-      thread: string
-      payload?: {
-        [key: string]: unknown
-      }
-      time: {
-        created: number
-        updated: number
-      }
-    }>
-    artifacts: Array<{
-      id: string
-      taskID: string
-      runID: string
-      acceptanceID?: string | null
-      kind: "patch" | "changed_file" | "log" | "report" | "image" | "diff" | "link" | "git_ref" | "pr"
-      label: string
-      payload?: {
-        [key: string]: unknown
-      }
-      time: {
-        created: number
-        updated: number
-      }
-    }>
-    agentInvocationDAG: {
-      taskID: string
-      rootSessionID?: string
-      nodes: Array<{
-        sessionID: string
+    history: {
+      hasMore: boolean
+      limit: number
+      oldestMessageID?: string | null
+      oldestOrderKey: string | null
+      oldestTimestamp: number | null
+    }
+    timeline: Array<{
+      info: {
+        id: string
         orderKey: string
-        agent: string
-        kind:
-          | "root"
-          | "orchestrator"
-          | "assistant"
-          | "mission"
-          | "intent-analysis"
-          | "requirements"
-          | "frontend-design"
-          | "goal"
-          | "architect"
-          | "goal-workload-analyst"
-          | "integrity"
-          | "fact-check"
-          | "acceptance"
-          | "executor"
-          | "build"
-          | "explore"
-          | "deep-research"
-          | "frontend-research"
-          | "visual-qa"
-          | "evaluator"
-          | "system"
-        title?: string
-        parentSessionID?: string
-        parentAgentSessionID?: string
-        goalID?: string
-        status?: {
-          type: string
-          reason?: string
-          error?: string
-          emittedAt: number
-        }
+        role: "user" | "assistant" | "system"
+        sessionID?: string
+        source?: string
+        surface: string
+        taskID?: string
         time: {
           created: number
           updated: number
         }
+      }
+      parts: Array<
+        | {
+            id: string
+            text: string
+            type: "text"
+          }
+        | {
+            filename?: string
+            id: string
+            mime: string
+            type: "file"
+            url: string
+          }
+      >
+    }>
+    transcript: Array<VisibleMessageWithParts>
+    view: {
+      messages: Array<{
+        goalID?: string
+        messageID: string
+        orderKey: string
+        parentSessionID?: string
+        phase?: {
+          phaseID: string
+          stepID: string
+        }
+        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
+        sessionID: string
+        stage: string
+        time: number
       }>
-      edges: Array<{
-        fromSessionID: string
-        toSessionID: string
-        relation: "agent_call"
-        viaSessionIDs?: Array<string>
+      sessions: Array<{
+        firstMessageTime: number
+        firstObservedAt?: number
+        goalID?: string
+        lastDisplayMessageID?: string
+        lastMessageTime: number
+        lastObservedAt?: number
+        messageIDs: Array<string>
+        orderKey: string
+        parentSessionID?: string
+        phase?: {
+          phaseID: string
+          stepID: string
+        }
+        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
+        sessionID: string
+        stage: string
+        status?: "pending" | "running" | "idle" | "completed" | "error" | "skipped"
       }>
       topLevelSessionIDs: Array<string>
     }
-    overview: {
-      headline: string
-      summary: string
-      currentFailure?: {
-        source: "task" | "run" | "interaction" | "evaluation"
-        title: string
-        summary: string
-        checks?: Array<{
-          name: string
-          label?: string
-          family?: string
-          status: "passed" | "failed" | "skipped" | "inconclusive"
-          evidence?: string
-        }>
-      }
-      nextStep: {
-        kind: "resolve_blocker" | "retry" | "replan" | "observe" | "review_acceptance" | "message"
-        title: string
-        detail?: string
-      }
-      controls: {
-        canRetry: boolean
-        canReplan: boolean
-        canCancel: boolean
-      }
-    }
-    brief: {
-      content: string
-      updated_at: number
-    }
-    workflow?: {
-      id: string
-      name: string
-      steps: Array<{
-        id: string
-        orderKey: string
-        label: string
-        tool: string
-        scope: "task" | "goal"
-        skippable: boolean
-        status: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
-        phases?: Array<{
-          id: string
-          label: string
-          sessionKind: string
-        }>
-      }>
-      goalLoopStepIDs: Array<string>
-    }
-    requirements?: Array<{
-      id: string
-      description: string
-      type: "explicit" | "inferred" | "system"
-      priority: "blocking" | "advisory"
-      status: "pending" | "passed" | "failed"
-    }>
-    architect?: {
-      summary: string
-      contractCount: number
-      categories: Array<string>
-      decisions?: Array<{
-        key: string
-        value: string
-        reason: string
-        goalID: string | null
-      }>
-    }
-    goalWorkflows?: Array<{
-      goalID: string
-      goalRunID?: string
-      orderKey: string
-      goalTitle: string
-      goalObjective?: string
-      goalStatus: string
-      orderIndex: number
-      workspaceDir?: string
-      workspaceBranch?: string
-      retryCount: number
-      priority: "blocking" | "advisory"
-      steps: Array<{
-        stepID: string
-        orderKey: string
-        label: string
-        status: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
-        startedAt?: number
-        completedAt?: number
-        summary?: string
-        payload?: {
-          planNodes?: Array<{
-            id: string
-            title: string
-            brief: string
-            orderIndex: number
-            fileActions?: Array<{
-              path: string
-              intent: string
-            }>
-            verificationCommands?: Array<{
-              command: string
-              purpose: string
-            }>
-          }>
-          buildSessionID?: string
-          commitRef?: string
-          publishedCommitRef?: string
-          diffBaseRef?: string
-          diffHeadRef?: string
-          changedFiles?: Array<string>
-          attemptChangedFiles?: Array<string>
-          attemptCommitRef?: string
-          attemptPublishedCommitRef?: string
-          changedFileDiffs?: Array<{
-            file: string
-            additions: number
-            deletions: number
-            status: "added" | "deleted" | "modified"
-          }>
-          diffStats?: {
-            files?: number
-            additions?: number
-            deletions?: number
-          }
-          buildOutcome?: {
-            id: string
-            goalRunID: string
-            terminalStatus: "completed" | "failed" | "aborted"
-            outcomeKind: "delivered" | "failed" | "aborted" | "no_project_diff"
-            acceptancePresent: boolean
-            summary?: string
-            error?: string
-            noDiffReason?: string
-            changedFiles: Array<string>
-            commitRef?: string
-            publishedCommitRef?: string
-            diffBaseRef?: string
-            diffHeadRef?: string
-          }
-          checks?: Array<{
-            name: string
-            status: string
-            evidence?: string
-            family?: string
-          }>
-          evalSummary?: string
-          verdict?: string
-        }
-        phases?: {
-          [key: string]: {
-            orderKey: string
-            status: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
-            startedAt?: number
-            completedAt?: number
-          }
-        }
-      }>
-      contracts?: Array<{
-        key: string
-        value: string
-        reason?: string
-      }>
-      acceptanceSpecs?: Array<{
-        /**
-         * Stable spec ID, e.g. 'acc-login-3s'.
-         */
-        id: string
-        /**
-         * Requirement ID this spec was derived from (REQ-N).
-         */
-        source_requirement_id: string
-        /**
-         * Goal ID this spec belongs to. Specs are goal-local; multiple specs may share a goal.
-         */
-        goal_id: string
-        title: string
-        /**
-         * Gherkin Given/When/Then scenario. Optional — omit for pure code checks.
-         */
-        scenario?: {
-          given: Array<string>
-          when: Array<string>
-          then: Array<string>
-        }
-        /**
-         * At least one scorer — a spec without a scorer is untestable.
-         */
-        scorers: Array<
-          | {
-              /**
-               * heuristic — deterministic shell/script check, pass/fail by exit code. Requires: name, spec{kind}.
-               */
-              type: "heuristic"
-              name: string
-              spec:
-                | {
-                    /**
-                     * shell — run an inline command. Requires: cmd; optional cwd.
-                     */
-                    kind: "shell"
-                    /**
-                     * Shell command. Exit 0 = pass unless expect.exit_code set.
-                     */
-                    cmd: string
-                    cwd?: string
-                  }
-                | {
-                    /**
-                     * script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.
-                     */
-                    kind: "script_ref"
-                    /**
-                     * Repo-relative script path that already exists at registration time.
-                     */
-                    path: string
-                    args?: Array<string>
-                  }
-              expect?: {
-                exit_code?: number
-              }
-            }
-          | {
-              /**
-               * llm_judge — natural-language rubric evaluation. Requires: name, criteria; optional rubric, inputs.
-               */
-              type: "llm_judge"
-              name: string
-              /**
-               * Single-criterion evaluation question in natural language.
-               */
-              criteria: string
-              /**
-               * Ordinal anchors, 2-5 levels. Omit for binary MET/UNMET.
-               */
-              rubric?: Array<{
-                /**
-                 * Integer score for this level.
-                 */
-                score: number
-                /**
-                 * Short level label, e.g. 'fully met'.
-                 */
-                label: string
-                /**
-                 * Behavioral description: what earns this score.
-                 */
-                anchor: string
-                /**
-                 * Does this level count as pass for binary verdict?
-                 */
-                passes: boolean
-              }>
-              /**
-               * Which parts of the acceptance to feed the judge. Default: acceptance_summary. LLM judges cannot consume visual feedback; final rendered reference parity uses prebuilt visual-feedback-verification.
-               */
-              inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
-            }
-          | {
-              /**
-               * prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.
-               */
-              type: "prebuilt"
-              name:
-                | "factuality"
-                | "relevance"
-                | "contains"
-                | "exact_match"
-                | "length_within"
-                | "json_schema"
-                | "visual-feedback-verification"
-              config?: {
-                [key: string]: unknown
-              }
-              /**
-               * For name=visual-feedback-verification, identifies the required visual feedback verification shape.
-               */
-              spec?: {
-                kind: "visual_feedback_verification"
-                viewport?: string
-              }
-              /**
-               * For name=visual-feedback-verification, requires a passing current visual feedback verification.
-               */
-              expect?: {
-                status: "passed"
-              }
-            }
-          | {
-              /**
-               * contract_audit — static audit of typed-contract field literals and graph artifact path materialization against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
-               */
-              type: "contract_audit"
-              name: string
-              spec: {
-                kind: "contract_graph"
-                contract_ids: Array<string>
-              }
-              expect: {
-                status: "passed"
-              }
-            }
-        >
-        severity: "essential" | "important" | "optional" | "pitfall"
-        /**
-         * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity.
-         */
-        trigger?: "on_goal" | "on_integrity"
-      }>
-    }>
-    taskAgentOutcomes?: Array<{
-      id: string
-      provider: string
-      artifactKind: string
-      scope: "task" | "goal"
-      capabilities?: Array<string>
-      runID?: string
-      sessionID?: string
-      status: string
-      result?: string
-      summary?: string
-      error?: string
-      time: {
-        created: number
-        updated: number
-      }
-    }>
-    criteriaResults?: Array<{
-      name: string
-      label?: string
-      family?: string
-      status: "passed" | "failed" | "skipped" | "inconclusive"
-      evidence?: string
-    }>
   }
 }
 
-export type TaskBoardResponse = TaskBoardResponses[keyof TaskBoardResponses]
+export type TaskConversationHistoryResponse = TaskConversationHistoryResponses[keyof TaskConversationHistoryResponses]
 
-export type TaskTranscriptData = {
+export type TaskConversationSessionData = {
   body?: never
   path: {
-    taskID: string
-  }
-  query?: never
-  url: "/task/{taskID}/transcript"
-}
-
-export type TaskTranscriptErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type TaskTranscriptError = TaskTranscriptErrors[keyof TaskTranscriptErrors]
-
-export type TaskTranscriptResponses = {
-  /**
-   * Task session messages including tool calls
-   */
-  200: Array<VisibleMessageWithParts>
-}
-
-export type TaskTranscriptResponse = TaskTranscriptResponses[keyof TaskTranscriptResponses]
-
-export type TaskOperatorModelContextData = {
-  body?: never
-  path: {
-    taskID: string
-  }
-  query?: never
-  url: "/task/{taskID}/operator-model-context"
-}
-
-export type TaskOperatorModelContextErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-  /**
-   * Conflict
-   */
-  409:
-    | {
-        name: "ReplyTargetEnvelopeMissingError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "AgentSessionPendingCoordinationError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "TaskCancellationIncompleteError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type TaskOperatorModelContextError = TaskOperatorModelContextErrors[keyof TaskOperatorModelContextErrors]
-
-export type TaskOperatorModelContextResponses = {
-  /**
-   * Task operator model context
-   */
-  200: {
     taskID: string
     sessionID: string
-    agent: string
-    model: {
-      providerID: string
-      modelID: string
-    }
-  }
-}
-
-export type TaskOperatorModelContextResponse =
-  TaskOperatorModelContextResponses[keyof TaskOperatorModelContextResponses]
-
-export type TaskRunsData = {
-  body?: never
-  path: {
-    taskID: string
   }
   query?: never
-  url: "/task/{taskID}/runs"
+  url: "/task/{taskID}/conversation/session/{sessionID}"
 }
 
-export type TaskRunsErrors = {
+export type TaskConversationSessionErrors = {
   /**
    * Not found
    */
   404:
     | {
+        data: {
+          [key: string]: unknown
+        }
         name: "NotFoundError"
+      }
+    | {
         data: {
           [key: string]: unknown
         }
-      }
-    | {
         name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
       }
 }
 
-export type TaskRunsError = TaskRunsErrors[keyof TaskRunsErrors]
+export type TaskConversationSessionError = TaskConversationSessionErrors[keyof TaskConversationSessionErrors]
 
-export type TaskRunsResponses = {
+export type TaskConversationSessionResponses = {
   /**
-   * Task runs
+   * Task conversation session transcript
    */
-  200: Array<{
-    id: string
-    taskID: string
-    planVersionID?: string | null
-    sessionID?: string | null
-    executor: "opencorvus" | "codex" | "claude-code"
-    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-    phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
-    blockingReason?: string
-    error?: string
-    retryCount: number
-    executorRef?: {
-      sessionID?: string
-      queueTaskID?: string
-    }
-    metadata?: {
-      [key: string]: unknown
-    }
-    time: {
-      created: number
-      updated: number
-      started?: number
-      completed?: number
-    }
-  }>
-}
-
-export type TaskRunsResponse = TaskRunsResponses[keyof TaskRunsResponses]
-
-export type TaskInteractionsData = {
-  body?: never
-  path: {
-    taskID: string
-  }
-  query?: never
-  url: "/task/{taskID}/interactions"
-}
-
-export type TaskInteractionsErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
+  200: {
+    events: Array<{
+      emittedAt: number
+      event_id: string
+      live_epoch?: number
+      live_sequence?: number
+      notify?: {
+        badge?: boolean
+        tier: 1 | 2 | 3
       }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
+      orderKey: string
+      payload: {
+        [key: string]: unknown
       }
-}
-
-export type TaskInteractionsError = TaskInteractionsErrors[keyof TaskInteractionsErrors]
-
-export type TaskInteractionsResponses = {
-  /**
-   * Task interactions
-   */
-  200: Array<{
-    id: string
-    taskID: string
-    orderKey: string
-    runID: string | null
-    sessionID?: string | null
-    externalID: string
-    type: "permission" | "question"
-    status: "pending" | "answered" | "rejected" | "expired"
-    title: string
-    body: string
-    payload?: {
-      [key: string]: unknown
-    }
-    response?: {
-      [key: string]: unknown
-    }
-    time: {
-      created: number
-      updated: number
-      resolved?: number
-    }
-  }>
-}
-
-export type TaskInteractionsResponse = TaskInteractionsResponses[keyof TaskInteractionsResponses]
-
-export type TaskMessageData = {
-  body: {
-    text: string
-    source: string
-    user_id?: string
-    promptProfile?: string
-    attachments?: Array<{
-      mime: string
-      data: string
-      filename?: string
+      run_id?: string
+      sequence?: number
+      summary: string
+      task_id: string
+      timestamp: number
+      type: string
     }>
-    resolvedRole?: string
-    channel?: string
+    history: {
+      hasMore: boolean
+      limit: number
+      oldestMessageID?: string | null
+      oldestOrderKey: string | null
+      oldestTimestamp: number | null
+    }
+    timeline: Array<{
+      info: {
+        id: string
+        orderKey: string
+        role: "user" | "assistant" | "system"
+        sessionID?: string
+        source?: string
+        surface: string
+        taskID?: string
+        time: {
+          created: number
+          updated: number
+        }
+      }
+      parts: Array<
+        | {
+            id: string
+            text: string
+            type: "text"
+          }
+        | {
+            filename?: string
+            id: string
+            mime: string
+            type: "file"
+            url: string
+          }
+      >
+    }>
+    transcript: Array<VisibleMessageWithParts>
+    view: {
+      messages: Array<{
+        goalID?: string
+        messageID: string
+        orderKey: string
+        parentSessionID?: string
+        phase?: {
+          phaseID: string
+          stepID: string
+        }
+        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
+        sessionID: string
+        stage: string
+        time: number
+      }>
+      sessions: Array<{
+        firstMessageTime: number
+        firstObservedAt?: number
+        goalID?: string
+        lastDisplayMessageID?: string
+        lastMessageTime: number
+        lastObservedAt?: number
+        messageIDs: Array<string>
+        orderKey: string
+        parentSessionID?: string
+        phase?: {
+          phaseID: string
+          stepID: string
+        }
+        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
+        sessionID: string
+        stage: string
+        status?: "pending" | "running" | "idle" | "completed" | "error" | "skipped"
+      }>
+      topLevelSessionIDs: Array<string>
+    }
   }
+}
+
+export type TaskConversationSessionResponse = TaskConversationSessionResponses[keyof TaskConversationSessionResponses]
+
+export type TaskEventsData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: never
+  url: "/task/{taskID}/events"
+}
+
+export type TaskEventsResponses = {
+  /**
+   * Task event stream
+   */
+  200: {
+    emittedAt: number
+    event_id: string
+    live_epoch?: number
+    live_sequence?: number
+    notify?: {
+      badge?: boolean
+      tier: 1 | 2 | 3
+    }
+    orderKey: string
+    payload: {
+      [key: string]: unknown
+    }
+    run_id?: string
+    sequence?: number
+    summary: string
+    task_id: string
+    timestamp: number
+    type: string
+  }
+}
+
+export type TaskEventsResponse = TaskEventsResponses[keyof TaskEventsResponses]
+
+export type TaskFollowupData = {
+  body?: never
   path: {
     taskID: string
   }
@@ -16199,73 +18239,40 @@ export type TaskMessageData = {
      */
     directory?: string
   }
-  url: "/task/{taskID}/message"
+  url: "/task/{taskID}/followup"
 }
 
-export type TaskMessageErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
+export type TaskFollowupErrors = {
   /**
    * Not found
    */
   404:
     | {
+        data: {
+          [key: string]: unknown
+        }
         name: "NotFoundError"
+      }
+    | {
         data: {
           [key: string]: unknown
         }
-      }
-    | {
         name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-  /**
-   * Conflict
-   */
-  409:
-    | {
-        name: "ReplyTargetEnvelopeMissingError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "AgentSessionPendingCoordinationError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "TaskCancellationIncompleteError"
-        data: {
-          [key: string]: unknown
-        }
       }
 }
 
-export type TaskMessageError = TaskMessageErrors[keyof TaskMessageErrors]
+export type TaskFollowupError = TaskFollowupErrors[keyof TaskFollowupErrors]
 
-export type TaskMessageResponses = {
+export type TaskFollowupResponses = {
   /**
-   * Task message handled
+   * A single short follow-up suggestion string
    */
   200: {
-    kind: "goal" | "plan" | "note"
-    message: string
-    wake_status: "started" | "queued" | "not_woken"
-    should_resume: boolean
-    user_message?: {
-      info: TaskMessageUserInfo
-      parts: Array<TaskMessageUserPart>
-    }
+    suggestion: string
   }
 }
 
-export type TaskMessageResponse = TaskMessageResponses[keyof TaskMessageResponses]
+export type TaskFollowupResponse = TaskFollowupResponses[keyof TaskFollowupResponses]
 
 export type TaskInjectData = {
   body: {
@@ -16293,38 +18300,38 @@ export type TaskInjectErrors = {
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
   /**
    * Conflict
    */
   409:
     | {
+        data: {
+          [key: string]: unknown
+        }
         name: "ReplyTargetEnvelopeMissingError"
+      }
+    | {
         data: {
           [key: string]: unknown
         }
-      }
-    | {
         name: "AgentSessionPendingCoordinationError"
-        data: {
-          [key: string]: unknown
-        }
       }
     | {
-        name: "TaskCancellationIncompleteError"
         data: {
           [key: string]: unknown
         }
+        name: "TaskCancellationIncompleteError"
       }
 }
 
@@ -16336,110 +18343,91 @@ export type TaskInjectResponses = {
    */
   200: {
     appended: boolean
-    orchestratorWoken: boolean
     executorResumed: boolean
+    orchestratorWoken: boolean
     status: string
   }
 }
 
 export type TaskInjectResponse = TaskInjectResponses[keyof TaskInjectResponses]
 
-export type TaskSessionOperatorSteerData = {
-  body: {
-    message: string
-  }
+export type TaskInteractionsData = {
+  body?: never
   path: {
     taskID: string
-    sessionID: string
   }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/task/{taskID}/session/{sessionID}/operator-steer"
+  query?: never
+  url: "/task/{taskID}/interactions"
 }
 
-export type TaskSessionOperatorSteerErrors = {
-  /**
-   * Operator steer target or request body rejected
-   */
-  400:
-    | BadRequestError
-    | {
-        name: "OperatorSteerTargetError"
-        data: {
-          [key: string]: unknown
-        }
-      }
+export type TaskInteractionsErrors = {
   /**
    * Not found
    */
   404:
     | {
+        data: {
+          [key: string]: unknown
+        }
         name: "NotFoundError"
+      }
+    | {
         data: {
           [key: string]: unknown
         }
-      }
-    | {
         name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
       }
-  /**
-   * Operator steer conflict
-   */
-  409:
-    | {
-        name: "AgentSessionPendingCoordinationError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "OperatorSteerWakeError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-  /**
-   * Session runtime contract no longer present
-   */
-  410: SessionRuntimeContractMissingError
 }
 
-export type TaskSessionOperatorSteerError = TaskSessionOperatorSteerErrors[keyof TaskSessionOperatorSteerErrors]
+export type TaskInteractionsError = TaskInteractionsErrors[keyof TaskInteractionsErrors]
 
-export type TaskSessionOperatorSteerResponses = {
+export type TaskInteractionsResponses = {
   /**
-   * Operator steer request accepted
+   * Task interactions
    */
-  202: {
-    task_id: string
-    session_id: string
-    request_id: string
-    wake_status: "started" | "queued"
-  }
+  200: Array<{
+    body: string
+    externalID: string
+    id: string
+    orderKey: string
+    payload?: {
+      [key: string]: unknown
+    }
+    response?: {
+      [key: string]: unknown
+    }
+    runID: string | null
+    sessionID?: string | null
+    status: "pending" | "answered" | "rejected" | "expired"
+    taskID: string
+    time: {
+      created: number
+      resolved?: number
+      updated: number
+    }
+    title: string
+    type: "permission" | "question"
+  }>
 }
 
-export type TaskSessionOperatorSteerResponse =
-  TaskSessionOperatorSteerResponses[keyof TaskSessionOperatorSteerResponses]
+export type TaskInteractionsResponse = TaskInteractionsResponses[keyof TaskInteractionsResponses]
 
-export type TaskSessionReplyData = {
+export type TaskMessageData = {
   body: {
-    message: string
     attachments?: Array<{
-      mime: string
-      url: string
+      data: string
       filename?: string
+      mime: string
     }>
+    channel?: string
+    promptProfile?: string
+    resolvedRole?: string
+    source: string
+    text: string
+    user_id?: string
   }
   path: {
     taskID: string
-    sessionID: string
   }
   query?: {
     /**
@@ -16447,96 +18435,753 @@ export type TaskSessionReplyData = {
      */
     directory?: string
   }
-  url: "/task/{taskID}/session/{sessionID}/reply"
+  url: "/task/{taskID}/message"
 }
 
-export type TaskSessionReplyErrors = {
+export type TaskMessageErrors = {
   /**
-   * Reply rejected before persistence
+   * Bad request
    */
-  400:
-    | {
-        name: "InvalidReplyTargetKindError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "AgentDirectReplyDisabledError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "MissingModelConfigError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "AgentSessionAttachmentReferenceError"
-        data: {
-          [key: string]: unknown
-        }
-      }
+  400: BadRequestError
   /**
    * Not found
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
   /**
    * Conflict
    */
   409:
     | {
+        data: {
+          [key: string]: unknown
+        }
         name: "ReplyTargetEnvelopeMissingError"
+      }
+    | {
         data: {
           [key: string]: unknown
         }
-      }
-    | {
         name: "AgentSessionPendingCoordinationError"
-        data: {
-          [key: string]: unknown
-        }
       }
     | {
-        name: "TaskCancellationIncompleteError"
         data: {
           [key: string]: unknown
         }
+        name: "TaskCancellationIncompleteError"
       }
-  /**
-   * Session runtime contract no longer present
-   */
-  410: SessionRuntimeContractMissingError
 }
 
-export type TaskSessionReplyError = TaskSessionReplyErrors[keyof TaskSessionReplyErrors]
+export type TaskMessageError = TaskMessageErrors[keyof TaskMessageErrors]
 
-export type TaskSessionReplyResponses = {
+export type TaskMessageResponses = {
   /**
-   * Reply accepted
+   * Task message handled
    */
-  202: {
-    task_id: string
-    session_id: string
-    message_id: string
+  200: {
+    kind: "goal" | "plan" | "note"
+    message: string
+    should_resume: boolean
+    user_message?: {
+      info: TaskMessageUserInfo
+      parts: Array<TaskMessageUserPart>
+    }
+    wake_status: "started" | "queued" | "not_woken"
   }
 }
 
-export type TaskSessionReplyResponse = TaskSessionReplyResponses[keyof TaskSessionReplyResponses]
+export type TaskMessageResponse = TaskMessageResponses[keyof TaskMessageResponses]
+
+export type TaskOperatorModelContextData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: never
+  url: "/task/{taskID}/operator-model-context"
+}
+
+export type TaskOperatorModelContextErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+  /**
+   * Conflict
+   */
+  409:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "ReplyTargetEnvelopeMissingError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "AgentSessionPendingCoordinationError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "TaskCancellationIncompleteError"
+      }
+}
+
+export type TaskOperatorModelContextError = TaskOperatorModelContextErrors[keyof TaskOperatorModelContextErrors]
+
+export type TaskOperatorModelContextResponses = {
+  /**
+   * Task operator model context
+   */
+  200: {
+    agent: string
+    model: {
+      modelID: string
+      providerID: string
+    }
+    sessionID: string
+    taskID: string
+  }
+}
+
+export type TaskOperatorModelContextResponse =
+  TaskOperatorModelContextResponses[keyof TaskOperatorModelContextResponses]
+
+export type TaskProgressData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: never
+  url: "/task/{taskID}/progress"
+}
+
+export type TaskProgressErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type TaskProgressError = TaskProgressErrors[keyof TaskProgressErrors]
+
+export type TaskProgressResponses = {
+  /**
+   * Task progress
+   */
+  200: {
+    acceptance?: {
+      id: string
+      result: {
+        artifacts?: Array<{
+          kind: string
+          label: string
+          payload?: {
+            [key: string]: unknown
+          }
+        }>
+        changedFiles: Array<string>
+        diffs: Array<AcceptanceDiffSummary>
+        publish?: {
+          [key: string]: unknown
+        }
+        summary: string
+      }
+      runID: string
+      status: "candidate" | "publishing" | "delivered" | "failed"
+      summary: string
+      taskID: string
+      time: {
+        created: number
+        updated: number
+      }
+    }
+    activeSessions: Array<{
+      goalID: string | null
+      kind: string
+      lastActivityMs: number
+      sessionID: string
+    }>
+    evaluation?: {
+      acceptanceID?: string | null
+      checks: Array<{
+        evidence?: string
+        family?: string
+        label?: string
+        name: string
+        status: "passed" | "failed" | "skipped" | "inconclusive"
+      }>
+      id: string
+      runID: string
+      status: "pending" | "passed" | "failed" | "inconclusive"
+      summary: string
+      taskID: string
+      time: {
+        completed?: number
+        created: number
+        updated: number
+      }
+      verdict: "accepted" | "rejected" | "inconclusive"
+    }
+    goals: Array<{
+      criteria: string
+      description: string
+      id: string
+      metadata?: {
+        check_selector?: Array<string>
+      }
+      milestoneID?: string | null
+      orderIndex: number
+      planVersionID: string
+      priority: "blocking" | "advisory"
+      status: "pending" | "running" | "passed" | "failed"
+      taskID: string
+      time: {
+        created: number
+        updated: number
+      }
+    }>
+    milestones?: Array<{
+      description: string
+      id: string
+      metadata?: {
+        [key: string]: unknown
+      }
+      orderIndex: number
+      planVersionID: string
+      status: "pending" | "active" | "passed" | "failed"
+      taskID: string
+      time: {
+        created: number
+        updated: number
+      }
+      title: string
+    }>
+    pendingInteractions: Array<{
+      body: string
+      externalID: string
+      id: string
+      orderKey: string
+      payload?: {
+        [key: string]: unknown
+      }
+      response?: {
+        [key: string]: unknown
+      }
+      runID: string | null
+      sessionID?: string | null
+      status: "pending" | "answered" | "rejected" | "expired"
+      taskID: string
+      time: {
+        created: number
+        resolved?: number
+        updated: number
+      }
+      title: string
+      type: "permission" | "question"
+    }>
+    plan?: {
+      id: string
+      metadata?: {
+        [key: string]: unknown
+      }
+      prompt: string
+      status: "active" | "superseded"
+      summary: string
+      taskID: string
+      time: {
+        created: number
+        updated: number
+      }
+      version: number
+    }
+    run?: {
+      blockingReason?: string
+      error?: string
+      executor: "opencorvus" | "codex" | "claude-code"
+      executorRef?: {
+        queueTaskID?: string
+        sessionID?: string
+      }
+      id: string
+      metadata?: {
+        [key: string]: unknown
+      }
+      phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
+      planVersionID?: string | null
+      retryCount: number
+      sessionID?: string | null
+      status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+      taskID: string
+      time: {
+        completed?: number
+        created: number
+        started?: number
+        updated: number
+      }
+    }
+    snapshots: Array<{
+      id: string
+      payload?: {
+        [key: string]: unknown
+      }
+      status: "created" | "active" | "completed" | "failed" | "cancelled"
+      summary: string
+      taskID: string
+      time: {
+        created: number
+        updated: number
+      }
+    }>
+    task: {
+      activePlanVersionID?: string | null
+      activeRunID?: string | null
+      attachments?: Array<{
+        filename?: string
+        intent?: string
+        mime: string
+        sha: string
+        size: number
+        source?: string
+        url: string
+      }>
+      blockingReason?: string
+      budget?: {
+        maxExecutorGroups?: number
+      }
+      directory?: string
+      error?: string
+      id: string
+      kind?: "workflow" | "build"
+      metadata?: {
+        [key: string]: unknown
+      }
+      orderKey: string
+      parentTaskID?: string | null
+      priority: "critical" | "high" | "normal" | "low"
+      projectID: string
+      queue?: {
+        order: number
+        revision?: string
+      }
+      request: string
+      requestID?: string
+      sessionID?: string | null
+      source: string
+      status: "queued" | "active" | "completed" | "failed" | "cancelled"
+      terminalReason?: "completed" | "failed" | "cancelled" | "interrupted"
+      time: {
+        completed?: number
+        created: number
+        started?: number
+        updated: number
+      }
+      title: string
+    }
+  }
+}
+
+export type TaskProgressResponse = TaskProgressResponses[keyof TaskProgressResponses]
+
+export type TaskProjectArchiveData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/task/{taskID}/project-archive"
+}
+
+export type TaskProjectArchiveErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+  /**
+   * Task project is not a Git worktree
+   */
+  422: {
+    message: string
+  }
+}
+
+export type TaskProjectArchiveError = TaskProjectArchiveErrors[keyof TaskProjectArchiveErrors]
+
+export type TaskProjectArchiveResponses = {
+  /**
+   * ZIP archive
+   */
+  200: Blob | File
+}
+
+export type TaskProjectArchiveResponse = TaskProjectArchiveResponses[keyof TaskProjectArchiveResponses]
+
+export type TaskReplanData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/task/{taskID}/replan"
+}
+
+export type TaskReplanErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type TaskReplanError = TaskReplanErrors[keyof TaskReplanErrors]
+
+export type TaskReplanResponses = {
+  /**
+   * Task replan queued
+   */
+  200: {
+    blockingReason?: string
+    error?: string
+    executor: "opencorvus" | "codex" | "claude-code"
+    executorRef?: {
+      queueTaskID?: string
+      sessionID?: string
+    }
+    id: string
+    metadata?: {
+      [key: string]: unknown
+    }
+    phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
+    planVersionID?: string | null
+    retryCount: number
+    sessionID?: string | null
+    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+    taskID: string
+    time: {
+      completed?: number
+      created: number
+      started?: number
+      updated: number
+    }
+  }
+}
+
+export type TaskReplanResponse = TaskReplanResponses[keyof TaskReplanResponses]
+
+export type TaskRetryData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/task/{taskID}/retry"
+}
+
+export type TaskRetryErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type TaskRetryError = TaskRetryErrors[keyof TaskRetryErrors]
+
+export type TaskRetryResponses = {
+  /**
+   * Task retry queued
+   */
+  200: {
+    blockingReason?: string
+    error?: string
+    executor: "opencorvus" | "codex" | "claude-code"
+    executorRef?: {
+      queueTaskID?: string
+      sessionID?: string
+    }
+    id: string
+    metadata?: {
+      [key: string]: unknown
+    }
+    phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
+    planVersionID?: string | null
+    retryCount: number
+    sessionID?: string | null
+    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+    taskID: string
+    time: {
+      completed?: number
+      created: number
+      started?: number
+      updated: number
+    }
+  }
+}
+
+export type TaskRetryResponse = TaskRetryResponses[keyof TaskRetryResponses]
+
+export type TaskRewindData = {
+  body: {
+    anchor:
+      | {
+          anchorEventID?: string
+          cursorTime: number
+          kind: "cursorTime"
+        }
+      | {
+          kind: "message"
+          messageID: string
+          partID?: string
+          sessionID: string
+        }
+    reason?: string
+    resetWorktree: boolean
+  }
+  path: {
+    taskID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/task/{taskID}/rewind"
+}
+
+export type TaskRewindErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type TaskRewindError = TaskRewindErrors[keyof TaskRewindErrors]
+
+export type TaskRewindResponses = {
+  /**
+   * Rewind applied
+   */
+  200: {
+    anchorKind: "cursorTime" | "message"
+    cursorTime: number
+    resetWorktree: boolean
+    rewindCount: number
+    taskID: string
+  }
+}
+
+export type TaskRewindResponse = TaskRewindResponses[keyof TaskRewindResponses]
+
+export type TaskClearRewindCursorData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/task/{taskID}/rewind/clear"
+}
+
+export type TaskClearRewindCursorErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type TaskClearRewindCursorError = TaskClearRewindCursorErrors[keyof TaskClearRewindCursorErrors]
+
+export type TaskClearRewindCursorResponses = {
+  /**
+   * Cursor cleared
+   */
+  200: boolean
+}
+
+export type TaskClearRewindCursorResponse = TaskClearRewindCursorResponses[keyof TaskClearRewindCursorResponses]
+
+export type TaskRunsData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: never
+  url: "/task/{taskID}/runs"
+}
+
+export type TaskRunsErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type TaskRunsError = TaskRunsErrors[keyof TaskRunsErrors]
+
+export type TaskRunsResponses = {
+  /**
+   * Task runs
+   */
+  200: Array<{
+    blockingReason?: string
+    error?: string
+    executor: "opencorvus" | "codex" | "claude-code"
+    executorRef?: {
+      queueTaskID?: string
+      sessionID?: string
+    }
+    id: string
+    metadata?: {
+      [key: string]: unknown
+    }
+    phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
+    planVersionID?: string | null
+    retryCount: number
+    sessionID?: string | null
+    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+    taskID: string
+    time: {
+      completed?: number
+      created: number
+      started?: number
+      updated: number
+    }
+  }>
+}
+
+export type TaskRunsResponse = TaskRunsResponses[keyof TaskRunsResponses]
 
 export type TaskSessionCancelData = {
   body?: never
@@ -16563,38 +19208,38 @@ export type TaskSessionCancelErrors = {
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
   /**
    * Conflict
    */
   409:
     | {
+        data: {
+          [key: string]: unknown
+        }
         name: "ReplyTargetEnvelopeMissingError"
+      }
+    | {
         data: {
           [key: string]: unknown
         }
-      }
-    | {
         name: "AgentSessionPendingCoordinationError"
-        data: {
-          [key: string]: unknown
-        }
       }
     | {
-        name: "TaskCancellationIncompleteError"
         data: {
           [key: string]: unknown
         }
+        name: "TaskCancellationIncompleteError"
       }
 }
 
@@ -16605,788 +19250,20 @@ export type TaskSessionCancelResponses = {
    * Agent session cancelled
    */
   200: {
-    task_id: string
-    session_id: string
     cancelled: true
+    session_id: string
+    task_id: string
   }
 }
 
 export type TaskSessionCancelResponse = TaskSessionCancelResponses[keyof TaskSessionCancelResponses]
 
-export type TaskCancelData = {
-  body?: never
-  path: {
-    taskID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/task/{taskID}/cancel"
-}
-
-export type TaskCancelErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-  /**
-   * Conflict
-   */
-  409:
-    | {
-        name: "ReplyTargetEnvelopeMissingError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "AgentSessionPendingCoordinationError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "TaskCancellationIncompleteError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type TaskCancelError = TaskCancelErrors[keyof TaskCancelErrors]
-
-export type TaskCancelResponses = {
-  /**
-   * Task cancelled
-   */
-  200: boolean
-}
-
-export type TaskCancelResponse = TaskCancelResponses[keyof TaskCancelResponses]
-
-export type TaskRewindData = {
+export type TaskSessionOperatorSteerData = {
   body: {
-    anchor:
-      | {
-          kind: "cursorTime"
-          cursorTime: number
-          anchorEventID?: string
-        }
-      | {
-          kind: "message"
-          sessionID: string
-          messageID: string
-          partID?: string
-        }
-    resetWorktree: boolean
-    reason?: string
+    message: string
   }
   path: {
     taskID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/task/{taskID}/rewind"
-}
-
-export type TaskRewindErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type TaskRewindError = TaskRewindErrors[keyof TaskRewindErrors]
-
-export type TaskRewindResponses = {
-  /**
-   * Rewind applied
-   */
-  200: {
-    taskID: string
-    cursorTime: number
-    rewindCount: number
-    resetWorktree: boolean
-    anchorKind: "cursorTime" | "message"
-  }
-}
-
-export type TaskRewindResponse = TaskRewindResponses[keyof TaskRewindResponses]
-
-export type TaskClearRewindCursorData = {
-  body?: never
-  path: {
-    taskID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/task/{taskID}/rewind/clear"
-}
-
-export type TaskClearRewindCursorErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type TaskClearRewindCursorError = TaskClearRewindCursorErrors[keyof TaskClearRewindCursorErrors]
-
-export type TaskClearRewindCursorResponses = {
-  /**
-   * Cursor cleared
-   */
-  200: boolean
-}
-
-export type TaskClearRewindCursorResponse = TaskClearRewindCursorResponses[keyof TaskClearRewindCursorResponses]
-
-export type TaskRetryData = {
-  body?: never
-  path: {
-    taskID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/task/{taskID}/retry"
-}
-
-export type TaskRetryErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type TaskRetryError = TaskRetryErrors[keyof TaskRetryErrors]
-
-export type TaskRetryResponses = {
-  /**
-   * Task retry queued
-   */
-  200: {
-    id: string
-    taskID: string
-    planVersionID?: string | null
-    sessionID?: string | null
-    executor: "opencorvus" | "codex" | "claude-code"
-    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-    phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
-    blockingReason?: string
-    error?: string
-    retryCount: number
-    executorRef?: {
-      sessionID?: string
-      queueTaskID?: string
-    }
-    metadata?: {
-      [key: string]: unknown
-    }
-    time: {
-      created: number
-      updated: number
-      started?: number
-      completed?: number
-    }
-  }
-}
-
-export type TaskRetryResponse = TaskRetryResponses[keyof TaskRetryResponses]
-
-export type TaskReplanData = {
-  body?: never
-  path: {
-    taskID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/task/{taskID}/replan"
-}
-
-export type TaskReplanErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type TaskReplanError = TaskReplanErrors[keyof TaskReplanErrors]
-
-export type TaskReplanResponses = {
-  /**
-   * Task replan queued
-   */
-  200: {
-    id: string
-    taskID: string
-    planVersionID?: string | null
-    sessionID?: string | null
-    executor: "opencorvus" | "codex" | "claude-code"
-    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-    phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
-    blockingReason?: string
-    error?: string
-    retryCount: number
-    executorRef?: {
-      sessionID?: string
-      queueTaskID?: string
-    }
-    metadata?: {
-      [key: string]: unknown
-    }
-    time: {
-      created: number
-      updated: number
-      started?: number
-      completed?: number
-    }
-  }
-}
-
-export type TaskReplanResponse = TaskReplanResponses[keyof TaskReplanResponses]
-
-export type TaskFollowupData = {
-  body?: never
-  path: {
-    taskID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/task/{taskID}/followup"
-}
-
-export type TaskFollowupErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type TaskFollowupError = TaskFollowupErrors[keyof TaskFollowupErrors]
-
-export type TaskFollowupResponses = {
-  /**
-   * A single short follow-up suggestion string
-   */
-  200: {
-    suggestion: string
-  }
-}
-
-export type TaskFollowupResponse = TaskFollowupResponses[keyof TaskFollowupResponses]
-
-export type RunGetData = {
-  body?: never
-  path: {
-    runID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/run/{runID}"
-}
-
-export type RunGetErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type RunGetError = RunGetErrors[keyof RunGetErrors]
-
-export type RunGetResponses = {
-  /**
-   * Run
-   */
-  200: {
-    id: string
-    taskID: string
-    planVersionID?: string | null
-    sessionID?: string | null
-    executor: "opencorvus" | "codex" | "claude-code"
-    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-    phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
-    blockingReason?: string
-    error?: string
-    retryCount: number
-    executorRef?: {
-      sessionID?: string
-      queueTaskID?: string
-    }
-    metadata?: {
-      [key: string]: unknown
-    }
-    time: {
-      created: number
-      updated: number
-      started?: number
-      completed?: number
-    }
-  }
-}
-
-export type RunGetResponse = RunGetResponses[keyof RunGetResponses]
-
-export type RunBriefData = {
-  body?: never
-  path: {
-    runID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/run/{runID}/brief"
-}
-
-export type RunBriefErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type RunBriefError = RunBriefErrors[keyof RunBriefErrors]
-
-export type RunBriefResponses = {
-  /**
-   * Run brief
-   */
-  200: {
-    content: string
-    notes: Array<{
-      kind: string
-      content: string
-    }>
-    goals: Array<{
-      description: string
-      criteria: string
-    }>
-  }
-}
-
-export type RunBriefResponse = RunBriefResponses[keyof RunBriefResponses]
-
-export type RunAbortData = {
-  body?: never
-  path: {
-    runID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/run/{runID}/abort"
-}
-
-export type RunAbortErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-  /**
-   * Conflict
-   */
-  409:
-    | {
-        name: "ReplyTargetEnvelopeMissingError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "AgentSessionPendingCoordinationError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "TaskCancellationIncompleteError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type RunAbortError = RunAbortErrors[keyof RunAbortErrors]
-
-export type RunAbortResponses = {
-  /**
-   * Run aborted
-   */
-  200: boolean
-}
-
-export type RunAbortResponse = RunAbortResponses[keyof RunAbortResponses]
-
-export type RunAcceptanceData = {
-  body?: never
-  path: {
-    runID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/run/{runID}/acceptance"
-}
-
-export type RunAcceptanceErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type RunAcceptanceError = RunAcceptanceErrors[keyof RunAcceptanceErrors]
-
-export type RunAcceptanceResponses = {
-  /**
-   * Run acceptance
-   */
-  200: {
-    id: string
-    taskID: string
-    runID: string
-    status: "candidate" | "publishing" | "delivered" | "failed"
-    summary: string
-    result: {
-      summary: string
-      changedFiles: Array<string>
-      diffs: Array<AcceptanceDiffSummary>
-      artifacts?: Array<{
-        kind: string
-        label: string
-        payload?: {
-          [key: string]: unknown
-        }
-      }>
-      publish?: {
-        [key: string]: unknown
-      }
-    }
-    time: {
-      created: number
-      updated: number
-    }
-  }
-}
-
-export type RunAcceptanceResponse = RunAcceptanceResponses[keyof RunAcceptanceResponses]
-
-export type RunDiffData = {
-  body?: never
-  path: {
-    runID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/run/{runID}/diff"
-}
-
-export type RunDiffErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type RunDiffError = RunDiffErrors[keyof RunDiffErrors]
-
-export type RunDiffResponses = {
-  /**
-   * Run workspace diff preview bodies
-   */
-  200: Array<FileDiff>
-}
-
-export type RunDiffResponse = RunDiffResponses[keyof RunDiffResponses]
-
-export type GoalRunAcceptanceData = {
-  body?: never
-  path: {
-    goalRunID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/goal-run/{goalRunID}/acceptance"
-}
-
-export type GoalRunAcceptanceErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type GoalRunAcceptanceError = GoalRunAcceptanceErrors[keyof GoalRunAcceptanceErrors]
-
-export type GoalRunAcceptanceResponses = {
-  /**
-   * Goal-run acceptance, or null when the goal_run exists but has not produced a acceptance yet (in-flight build).
-   */
-  200: {
-    id: string
-    taskID: string
-    runID: string
-    status: "candidate" | "publishing" | "delivered" | "failed"
-    summary: string
-    result: {
-      summary: string
-      changedFiles: Array<string>
-      diffs: Array<AcceptanceDiffSummary>
-      artifacts?: Array<{
-        kind: string
-        label: string
-        payload?: {
-          [key: string]: unknown
-        }
-      }>
-      publish?: {
-        [key: string]: unknown
-      }
-    }
-    time: {
-      created: number
-      updated: number
-    }
-  } | null
-}
-
-export type GoalRunAcceptanceResponse = GoalRunAcceptanceResponses[keyof GoalRunAcceptanceResponses]
-
-export type GoalRunDiffData = {
-  body?: never
-  path: {
-    goalRunID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/goal-run/{goalRunID}/diff"
-}
-
-export type GoalRunDiffErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type GoalRunDiffError = GoalRunDiffErrors[keyof GoalRunDiffErrors]
-
-export type GoalRunDiffResponses = {
-  /**
-   * Goal-run workspace diff preview bodies
-   */
-  200: Array<FileDiff>
-}
-
-export type GoalRunDiffResponse = GoalRunDiffResponses[keyof GoalRunDiffResponses]
-
-export type SessionTraceData = {
-  body?: never
-  path: {
     sessionID: string
   }
   query?: {
@@ -17395,225 +19272,88 @@ export type SessionTraceData = {
      */
     directory?: string
   }
-  url: "/session/{sessionID}/trace"
+  url: "/task/{taskID}/session/{sessionID}/operator-steer"
 }
 
-export type SessionTraceResponses = {
+export type TaskSessionOperatorSteerErrors = {
   /**
-   * Session AgentTrace events
+   * Operator steer target or request body rejected
    */
-  200: {
-    ok: true
-    events: Array<{
-      ts: number
-      kind: string
-      sessionID?: string
-      parentSessionID?: string
-      taskID?: string
-      agentName?: string
-      agentMode?: string
-      payload?: {
-        [key: string]: unknown
+  400:
+    | BadRequestError
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "OperatorSteerTargetError"
       }
-    }>
-    traceDir: string
-    enabled: boolean
-  }
-}
-
-export type SessionTraceResponse = SessionTraceResponses[keyof SessionTraceResponses]
-
-export type TaskTraceData = {
-  body?: never
-  path: {
-    taskID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/task/{taskID}/trace"
-}
-
-export type TaskTraceErrors = {
   /**
    * Not found
    */
   404:
     | {
+        data: {
+          [key: string]: unknown
+        }
         name: "NotFoundError"
+      }
+    | {
         data: {
           [key: string]: unknown
         }
-      }
-    | {
         name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
       }
-}
-
-export type TaskTraceError = TaskTraceErrors[keyof TaskTraceErrors]
-
-export type TaskTraceResponses = {
   /**
-   * Aggregated task AgentTrace events
+   * Operator steer conflict
    */
-  200: {
-    ok: true
-    events: Array<{
-      ts: number
-      kind: string
-      sessionID?: string
-      parentSessionID?: string
-      taskID?: string
-      agentName?: string
-      agentMode?: string
-      payload?: {
-        [key: string]: unknown
-      }
-    }>
-    traceDir: string
-    enabled: boolean
-  }
-}
-
-export type TaskTraceResponse = TaskTraceResponses[keyof TaskTraceResponses]
-
-export type RunArtifactsData = {
-  body?: never
-  path: {
-    runID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/run/{runID}/artifacts"
-}
-
-export type RunArtifactsErrors = {
-  /**
-   * Not found
-   */
-  404:
+  409:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "AgentSessionPendingCoordinationError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "OperatorSteerWakeError"
       }
-}
-
-export type RunArtifactsError = RunArtifactsErrors[keyof RunArtifactsErrors]
-
-export type RunArtifactsResponses = {
   /**
-   * Run artifacts
+   * Session runtime contract no longer present
    */
-  200: Array<{
-    id: string
-    taskID: string
-    runID: string
-    acceptanceID?: string | null
-    kind: "patch" | "changed_file" | "log" | "report" | "image" | "diff" | "link" | "git_ref" | "pr"
-    label: string
-    payload?: {
-      [key: string]: unknown
-    }
-    time: {
-      created: number
-      updated: number
-    }
-  }>
+  410: SessionRuntimeContractMissingError
 }
 
-export type RunArtifactsResponse = RunArtifactsResponses[keyof RunArtifactsResponses]
+export type TaskSessionOperatorSteerError = TaskSessionOperatorSteerErrors[keyof TaskSessionOperatorSteerErrors]
 
-export type RunEvaluationsData = {
-  body?: never
-  path: {
-    runID: string
+export type TaskSessionOperatorSteerResponses = {
+  /**
+   * Operator steer request accepted
+   */
+  202: {
+    request_id: string
+    session_id: string
+    task_id: string
+    wake_status: "started" | "queued"
   }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/run/{runID}/evaluations"
 }
 
-export type RunEvaluationsErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
+export type TaskSessionOperatorSteerResponse =
+  TaskSessionOperatorSteerResponses[keyof TaskSessionOperatorSteerResponses]
 
-export type RunEvaluationsError = RunEvaluationsErrors[keyof RunEvaluationsErrors]
-
-export type RunEvaluationsResponses = {
-  /**
-   * Run evaluations
-   */
-  200: Array<{
-    id: string
-    taskID: string
-    runID: string
-    acceptanceID?: string | null
-    status: "pending" | "passed" | "failed" | "inconclusive"
-    verdict: "accepted" | "rejected" | "inconclusive"
-    summary: string
-    checks: Array<{
-      name: string
-      label?: string
-      family?: string
-      status: "passed" | "failed" | "skipped" | "inconclusive"
-      evidence?: string
-    }>
-    time: {
-      created: number
-      updated: number
-      completed?: number
-    }
-  }>
-}
-
-export type RunEvaluationsResponse = RunEvaluationsResponses[keyof RunEvaluationsResponses]
-
-export type InteractionReplyData = {
+export type TaskSessionReplyData = {
   body: {
-    reply?: "once" | "always" | "reject"
-    autoReply: boolean
-    message?: string
-    answers?: Array<QuestionAnswer>
+    attachments?: Array<{
+      filename?: string
+      mime: string
+      url: string
+    }>
+    message: string
   }
   path: {
-    interactionID: string
+    taskID: string
+    sessionID: string
   }
   query?: {
     /**
@@ -17621,142 +19361,101 @@ export type InteractionReplyData = {
      */
     directory?: string
   }
-  url: "/interaction/{interactionID}/reply"
+  url: "/task/{taskID}/session/{sessionID}/reply"
 }
 
-export type InteractionReplyErrors = {
+export type TaskSessionReplyErrors = {
   /**
-   * Bad request
+   * Reply rejected before persistence
    */
-  400: BadRequestError
+  400:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "InvalidReplyTargetKindError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "AgentDirectReplyDisabledError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "MissingModelConfigError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "AgentSessionAttachmentReferenceError"
+      }
   /**
    * Not found
    */
   404:
     | {
+        data: {
+          [key: string]: unknown
+        }
         name: "NotFoundError"
+      }
+    | {
         data: {
           [key: string]: unknown
         }
-      }
-    | {
         name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
       }
-}
-
-export type InteractionReplyError = InteractionReplyErrors[keyof InteractionReplyErrors]
-
-export type InteractionReplyResponses = {
   /**
-   * Interaction resolved
+   * Conflict
    */
-  200: {
-    id: string
-    taskID: string
-    orderKey: string
-    runID: string | null
-    sessionID?: string | null
-    externalID: string
-    type: "permission" | "question"
-    status: "pending" | "answered" | "rejected" | "expired"
-    title: string
-    body: string
-    payload?: {
-      [key: string]: unknown
-    }
-    response?: {
-      [key: string]: unknown
-    }
-    time: {
-      created: number
-      updated: number
-      resolved?: number
-    }
-  }
-}
-
-export type InteractionReplyResponse = InteractionReplyResponses[keyof InteractionReplyResponses]
-
-export type InteractionRejectData = {
-  body: {
-    autoReply: boolean
-    message?: string
-  }
-  path: {
-    interactionID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/interaction/{interactionID}/reject"
-}
-
-export type InteractionRejectErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404:
+  409:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "ReplyTargetEnvelopeMissingError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "AgentSessionPendingCoordinationError"
       }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "TaskCancellationIncompleteError"
+      }
+  /**
+   * Session runtime contract no longer present
+   */
+  410: SessionRuntimeContractMissingError
 }
 
-export type InteractionRejectError = InteractionRejectErrors[keyof InteractionRejectErrors]
+export type TaskSessionReplyError = TaskSessionReplyErrors[keyof TaskSessionReplyErrors]
 
-export type InteractionRejectResponses = {
+export type TaskSessionReplyResponses = {
   /**
-   * Interaction rejected
+   * Reply accepted
    */
-  200: {
-    id: string
-    taskID: string
-    orderKey: string
-    runID: string | null
-    sessionID?: string | null
-    externalID: string
-    type: "permission" | "question"
-    status: "pending" | "answered" | "rejected" | "expired"
-    title: string
-    body: string
-    payload?: {
-      [key: string]: unknown
-    }
-    response?: {
-      [key: string]: unknown
-    }
-    time: {
-      created: number
-      updated: number
-      resolved?: number
-    }
+  202: {
+    message_id: string
+    session_id: string
+    task_id: string
   }
 }
 
-export type InteractionRejectResponse = InteractionRejectResponses[keyof InteractionRejectResponses]
+export type TaskSessionReplyResponse = TaskSessionReplyResponses[keyof TaskSessionReplyResponses]
 
-export type GoalDeleteData = {
+export type TaskQueueStartNowData = {
   body?: never
   path: {
-    goalID: string
+    taskID: string
   }
   query?: {
     /**
@@ -17764,276 +19463,272 @@ export type GoalDeleteData = {
      */
     directory?: string
   }
-  url: "/goal/{goalID}"
+  url: "/task/{taskID}/start-now"
 }
 
-export type GoalDeleteErrors = {
+export type TaskQueueStartNowErrors = {
   /**
    * Not found
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
-}
-
-export type GoalDeleteError = GoalDeleteErrors[keyof GoalDeleteErrors]
-
-export type GoalDeleteResponses = {
   /**
-   * Goal deleted
+   * Task is not queued
    */
-  200: boolean
+  409: unknown
+  /**
+   * Task has no working directory
+   */
+  422: unknown
 }
 
-export type GoalDeleteResponse = GoalDeleteResponses[keyof GoalDeleteResponses]
+export type TaskQueueStartNowError = TaskQueueStartNowErrors[keyof TaskQueueStartNowErrors]
 
-export type GoalUpdateData = {
-  body: {
-    description: string
-    acceptance_specs: Array<{
-      /**
-       * Stable spec ID, e.g. 'acc-login-3s'.
-       */
+export type TaskQueueStartNowResponses = {
+  /**
+   * Queued task started and scheduler invoked
+   */
+  200: {
+    directory: string
+    queuedTaskIDs: Array<string>
+    started: boolean
+    status: string
+    task: {
+      activePlanVersionID?: string | null
+      activeRunID?: string | null
+      attachments?: Array<{
+        filename?: string
+        intent?: string
+        mime: string
+        sha: string
+        size: number
+        source?: string
+        url: string
+      }>
+      blockingReason?: string
+      budget?: {
+        maxExecutorGroups?: number
+      }
+      directory?: string
+      error?: string
       id: string
-      /**
-       * Requirement ID this spec was derived from (REQ-N).
-       */
-      source_requirement_id: string
-      /**
-       * Goal ID this spec belongs to. Specs are goal-local; multiple specs may share a goal.
-       */
-      goal_id: string
+      kind?: "workflow" | "build"
+      metadata?: {
+        [key: string]: unknown
+      }
+      orderKey: string
+      parentTaskID?: string | null
+      priority: "critical" | "high" | "normal" | "low"
+      projectID: string
+      queue?: {
+        order: number
+        revision?: string
+      }
+      request: string
+      requestID?: string
+      sessionID?: string | null
+      source: string
+      status: "queued" | "active" | "completed" | "failed" | "cancelled"
+      terminalReason?: "completed" | "failed" | "cancelled" | "interrupted"
+      time: {
+        completed?: number
+        created: number
+        started?: number
+        updated: number
+      }
       title: string
-      /**
-       * Gherkin Given/When/Then scenario. Optional — omit for pure code checks.
-       */
-      scenario?: {
-        given: Array<string>
-        when: Array<string>
-        then: Array<string>
-      }
-      /**
-       * At least one scorer — a spec without a scorer is untestable.
-       */
-      scorers: Array<
-        | {
-            /**
-             * heuristic — deterministic shell/script check, pass/fail by exit code. Requires: name, spec{kind}.
-             */
-            type: "heuristic"
-            name: string
-            spec:
-              | {
-                  /**
-                   * shell — run an inline command. Requires: cmd; optional cwd.
-                   */
-                  kind: "shell"
-                  /**
-                   * Shell command. Exit 0 = pass unless expect.exit_code set.
-                   */
-                  cmd: string
-                  cwd?: string
-                }
-              | {
-                  /**
-                   * script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.
-                   */
-                  kind: "script_ref"
-                  /**
-                   * Repo-relative script path that already exists at registration time.
-                   */
-                  path: string
-                  args?: Array<string>
-                }
-            expect?: {
-              exit_code?: number
-            }
-          }
-        | {
-            /**
-             * llm_judge — natural-language rubric evaluation. Requires: name, criteria; optional rubric, inputs.
-             */
-            type: "llm_judge"
-            name: string
-            /**
-             * Single-criterion evaluation question in natural language.
-             */
-            criteria: string
-            /**
-             * Ordinal anchors, 2-5 levels. Omit for binary MET/UNMET.
-             */
-            rubric?: Array<{
-              /**
-               * Integer score for this level.
-               */
-              score: number
-              /**
-               * Short level label, e.g. 'fully met'.
-               */
-              label: string
-              /**
-               * Behavioral description: what earns this score.
-               */
-              anchor: string
-              /**
-               * Does this level count as pass for binary verdict?
-               */
-              passes: boolean
-            }>
-            /**
-             * Which parts of the acceptance to feed the judge. Default: acceptance_summary. LLM judges cannot consume visual feedback; final rendered reference parity uses prebuilt visual-feedback-verification.
-             */
-            inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
-          }
-        | {
-            /**
-             * prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.
-             */
-            type: "prebuilt"
-            name:
-              | "factuality"
-              | "relevance"
-              | "contains"
-              | "exact_match"
-              | "length_within"
-              | "json_schema"
-              | "visual-feedback-verification"
-            config?: {
-              [key: string]: unknown
-            }
-            /**
-             * For name=visual-feedback-verification, identifies the required visual feedback verification shape.
-             */
-            spec?: {
-              kind: "visual_feedback_verification"
-              viewport?: string
-            }
-            /**
-             * For name=visual-feedback-verification, requires a passing current visual feedback verification.
-             */
-            expect?: {
-              status: "passed"
-            }
-          }
-        | {
-            /**
-             * contract_audit — static audit of typed-contract field literals and graph artifact path materialization against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
-             */
-            type: "contract_audit"
-            name: string
-            spec: {
-              kind: "contract_graph"
-              contract_ids: Array<string>
-            }
-            expect: {
-              status: "passed"
-            }
-          }
-      >
-      severity: "essential" | "important" | "optional" | "pitfall"
-      /**
-       * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity.
-       */
-      trigger?: "on_goal" | "on_integrity"
-    }>
+    }
   }
-  path: {
-    goalID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/goal/{goalID}"
 }
 
-export type GoalUpdateErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
+export type TaskQueueStartNowResponse = TaskQueueStartNowResponses[keyof TaskQueueStartNowResponses]
 
-export type GoalUpdateError = GoalUpdateErrors[keyof GoalUpdateErrors]
-
-export type GoalUpdateResponses = {
-  /**
-   * Goal updated
-   */
-  200: boolean
-}
-
-export type GoalUpdateResponse = GoalUpdateResponses[keyof GoalUpdateResponses]
-
-export type TaskUpdateBudgetData = {
-  body: {
-    budget: {
-      maxExecutorGroups?: number
-    } | null
-  }
+export type TaskStatusData = {
+  body?: never
   path: {
     taskID: string
   }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/task/{taskID}/budget"
+  query?: never
+  url: "/task/{taskID}/status"
 }
 
-export type TaskUpdateBudgetErrors = {
+export type TaskStatusErrors = {
   /**
    * Not found
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
 }
 
-export type TaskUpdateBudgetError = TaskUpdateBudgetErrors[keyof TaskUpdateBudgetErrors]
+export type TaskStatusError = TaskStatusErrors[keyof TaskStatusErrors]
 
-export type TaskUpdateBudgetResponses = {
+export type TaskStatusResponses = {
   /**
-   * Budget updated
+   * Task status snapshot
    */
-  200: unknown
+  200: {
+    agentInvocationDAG: {
+      edges: Array<{
+        fromSessionID: string
+        relation: "agent_call"
+        toSessionID: string
+        viaSessionIDs?: Array<string>
+      }>
+      nodes: Array<{
+        agent: string
+        goalID?: string
+        kind:
+          | "root"
+          | "orchestrator"
+          | "assistant"
+          | "mission"
+          | "intent-analysis"
+          | "requirements"
+          | "frontend-design"
+          | "goal"
+          | "architect"
+          | "goal-workload-analyst"
+          | "integrity"
+          | "fact-check"
+          | "acceptance"
+          | "executor"
+          | "build"
+          | "explore"
+          | "deep-research"
+          | "frontend-research"
+          | "visual-qa"
+          | "evaluator"
+          | "system"
+        orderKey: string
+        parentAgentSessionID?: string
+        parentSessionID?: string
+        sessionID: string
+        status?: {
+          emittedAt: number
+          error?: string
+          reason?: string
+          type: string
+        }
+        time: {
+          created: number
+          updated: number
+        }
+        title?: string
+      }>
+      rootSessionID?: string
+      taskID: string
+      topLevelSessionIDs: Array<string>
+    }
+    directory?: string
+    error?: string
+    goals: Array<{
+      goalID: string
+      objective?: string
+      orderIndex: number
+      priority: "blocking" | "advisory"
+      progress: {
+        completed: number
+        failed: number
+        pending: number
+        percent: number
+        running: number
+        total: number
+      }
+      rawStatus: string
+      status: "success" | "failed" | "running"
+      steps: Array<{
+        completedAt?: number
+        label: string
+        phases?: Array<{
+          completedAt?: number
+          phaseID: string
+          rawStatus: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
+          startedAt?: number
+          status: "success" | "failed" | "running"
+        }>
+        rawStatus: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
+        startedAt?: number
+        status: "success" | "failed" | "running"
+        stepID: string
+        summary?: string
+      }>
+      title: string
+    }>
+    lifecycleStatus: "queued" | "active" | "completed" | "failed" | "cancelled"
+    priority: "critical" | "high" | "normal" | "low"
+    progress: {
+      completed: number
+      failed: number
+      pending: number
+      percent: number
+      running: number
+      total: number
+    }
+    source: string
+    status: "success" | "failed" | "running"
+    taskAgentOutcomes?: Array<{
+      artifactKind: string
+      capabilities?: Array<string>
+      error?: string
+      id: string
+      provider: string
+      result?: string
+      runID?: string
+      scope: "task" | "goal"
+      sessionID?: string
+      status: string
+      summary?: string
+      time: {
+        created: number
+        updated: number
+      }
+    }>
+    taskID: string
+    time: {
+      completed?: number
+      created: number
+      started?: number
+      updated: number
+    }
+    title: string
+    workflow?: {
+      id: string
+      name: string
+      steps: Array<{
+        id: string
+        label: string
+        rawStatus: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
+        scope: "task" | "goal"
+        status: "success" | "failed" | "running"
+        tool: string
+      }>
+    }
+  }
 }
+
+export type TaskStatusResponse = TaskStatusResponses[keyof TaskStatusResponses]
 
 export type TaskUpdateTitleData = {
   body: {
@@ -18061,16 +19756,16 @@ export type TaskUpdateTitleErrors = {
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
 }
 
@@ -18083,10 +19778,10 @@ export type TaskUpdateTitleResponses = {
   200: unknown
 }
 
-export type ExportSessionData = {
+export type TaskTraceData = {
   body?: never
   path: {
-    sessionID: string
+    taskID: string
   }
   query?: {
     /**
@@ -18094,645 +19789,95 @@ export type ExportSessionData = {
      */
     directory?: string
   }
-  url: "/export/session/{sessionID}"
+  url: "/task/{taskID}/trace"
 }
 
-export type ExportSessionErrors = {
+export type TaskTraceErrors = {
   /**
    * Not found
    */
   404:
     | {
-        name: "NotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "NotFoundError"
       }
     | {
-        name: "LogFileNotFoundError"
         data: {
           [key: string]: unknown
         }
+        name: "LogFileNotFoundError"
       }
 }
 
-export type ExportSessionError = ExportSessionErrors[keyof ExportSessionErrors]
+export type TaskTraceError = TaskTraceErrors[keyof TaskTraceErrors]
 
-export type ExportSessionResponses = {
+export type TaskTraceResponses = {
   /**
-   * Session metadata and messages
+   * Aggregated task AgentTrace events
    */
   200: {
-    session: unknown
-    messages: Array<unknown>
-  }
-}
-
-export type ExportSessionResponse = ExportSessionResponses[keyof ExportSessionResponses]
-
-export type FindTextData = {
-  body?: never
-  path?: never
-  query: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-    pattern: string
-  }
-  url: "/find"
-}
-
-export type FindTextErrors = {
-  /**
-   * Internal server error
-   */
-  500: UnknownError
-}
-
-export type FindTextError = FindTextErrors[keyof FindTextErrors]
-
-export type FindTextResponses = {
-  /**
-   * Matches
-   */
-  200: Array<{
-    path: {
-      text: string
-    }
-    lines: {
-      text: string
-    }
-    line_number: number
-    absolute_offset: number
-    submatches: Array<{
-      match: {
-        text: string
+    enabled: boolean
+    events: Array<{
+      agentMode?: string
+      agentName?: string
+      kind: string
+      parentSessionID?: string
+      payload?: {
+        [key: string]: unknown
       }
-      start: number
-      end: number
+      sessionID?: string
+      taskID?: string
+      ts: number
     }>
-  }>
-}
-
-export type FindTextResponse = FindTextResponses[keyof FindTextResponses]
-
-export type FindFilesData = {
-  body?: never
-  path?: never
-  query: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-    query: string
-    dirs?: "true" | "false"
-    type?: "file" | "directory"
-    limit?: number
-  }
-  url: "/find/file"
-}
-
-export type FindFilesErrors = {
-  /**
-   * Internal server error
-   */
-  500: UnknownError
-}
-
-export type FindFilesError = FindFilesErrors[keyof FindFilesErrors]
-
-export type FindFilesResponses = {
-  /**
-   * File paths
-   */
-  200: Array<string>
-}
-
-export type FindFilesResponse = FindFilesResponses[keyof FindFilesResponses]
-
-export type FindSymbolsData = {
-  body?: never
-  path?: never
-  query: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-    query: string
-  }
-  url: "/find/symbol"
-}
-
-export type FindSymbolsResponses = {
-  /**
-   * Symbols
-   */
-  200: Array<Symbol>
-}
-
-export type FindSymbolsResponse = FindSymbolsResponses[keyof FindSymbolsResponses]
-
-export type FileListData = {
-  body?: never
-  path?: never
-  query: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-    path: string
-  }
-  url: "/file"
-}
-
-export type FileListResponses = {
-  /**
-   * Files and directories
-   */
-  200: Array<FileNode>
-}
-
-export type FileListResponse = FileListResponses[keyof FileListResponses]
-
-export type FileReadData = {
-  body?: never
-  path?: never
-  query: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-    path: string
-  }
-  url: "/file/content"
-}
-
-export type FileReadErrors = {
-  /**
-   * File not found
-   */
-  404: {
-    name: "FileNotFoundError"
-    data: {
-      [key: string]: unknown
-    }
-  }
-  /**
-   * File read failed
-   */
-  500: {
-    name: "UnknownError"
-    data: {
-      [key: string]: unknown
-    }
+    ok: true
+    traceDir: string
   }
 }
 
-export type FileReadError = FileReadErrors[keyof FileReadErrors]
+export type TaskTraceResponse = TaskTraceResponses[keyof TaskTraceResponses]
 
-export type FileReadResponses = {
-  /**
-   * File content
-   */
-  200: FileContent
-}
-
-export type FileReadResponse = FileReadResponses[keyof FileReadResponses]
-
-export type FileWriteData = {
-  body: {
-    path: string
-    content: string
-  }
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/file/content"
-}
-
-export type FileWriteErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-  /**
-   * Internal server error
-   */
-  500: UnknownError
-}
-
-export type FileWriteError = FileWriteErrors[keyof FileWriteErrors]
-
-export type FileWriteResponses = {
-  /**
-   * Updated file content
-   */
-  200: FileContent
-}
-
-export type FileWriteResponse = FileWriteResponses[keyof FileWriteResponses]
-
-export type FileDeleteData = {
-  body?: never
-  path?: never
-  query: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-    path: string
-  }
-  url: "/file/item"
-}
-
-export type FileDeleteErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type FileDeleteError = FileDeleteErrors[keyof FileDeleteErrors]
-
-export type FileDeleteResponses = {
-  /**
-   * Deleted file path
-   */
-  200: {
-    path: string
-  }
-}
-
-export type FileDeleteResponse = FileDeleteResponses[keyof FileDeleteResponses]
-
-export type FileMoveData = {
-  body: {
-    path: string
-    newPath: string
-  }
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/file/item"
-}
-
-export type FileMoveErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-  /**
-   * Conflict
-   */
-  409:
-    | {
-        name: "ReplyTargetEnvelopeMissingError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "AgentSessionPendingCoordinationError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "TaskCancellationIncompleteError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type FileMoveError = FileMoveErrors[keyof FileMoveErrors]
-
-export type FileMoveResponses = {
-  /**
-   * Moved file node
-   */
-  200: {
-    previousPath: string
-    path: string
-    node: FileNode
-  }
-}
-
-export type FileMoveResponse = FileMoveResponses[keyof FileMoveResponses]
-
-export type FileCreateData = {
-  body: {
-    path: string
-    type: "file" | "directory"
-    content?: string
-  }
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/file/item"
-}
-
-export type FileCreateErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-  /**
-   * Conflict
-   */
-  409:
-    | {
-        name: "ReplyTargetEnvelopeMissingError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "AgentSessionPendingCoordinationError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "TaskCancellationIncompleteError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type FileCreateError = FileCreateErrors[keyof FileCreateErrors]
-
-export type FileCreateResponses = {
-  /**
-   * Created file node
-   */
-  200: FileNode
-}
-
-export type FileCreateResponse = FileCreateResponses[keyof FileCreateResponses]
-
-export type FileCopyData = {
-  body: {
-    path: string
-    newPath: string
-  }
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/file/item/copy"
-}
-
-export type FileCopyErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-  /**
-   * Conflict
-   */
-  409:
-    | {
-        name: "ReplyTargetEnvelopeMissingError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "AgentSessionPendingCoordinationError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "TaskCancellationIncompleteError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type FileCopyError = FileCopyErrors[keyof FileCopyErrors]
-
-export type FileCopyResponses = {
-  /**
-   * Copied file node
-   */
-  200: {
-    sourcePath: string
-    path: string
-    node: FileNode
-  }
-}
-
-export type FileCopyResponse = FileCopyResponses[keyof FileCopyResponses]
-
-export type FileUploadData = {
-  body: {
-    targetDir: string
-    files: Array<{
-      name: string
-      contentBase64: string
-      mimeType?: string
-    }>
-  }
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/file/upload"
-}
-
-export type FileUploadErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Conflict
-   */
-  409:
-    | {
-        name: "ReplyTargetEnvelopeMissingError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "AgentSessionPendingCoordinationError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "TaskCancellationIncompleteError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type FileUploadError = FileUploadErrors[keyof FileUploadErrors]
-
-export type FileUploadResponses = {
-  /**
-   * Uploaded files
-   */
-  200: Array<{
-    name: string
-    path: string
-    bytes: number
-  }>
-}
-
-export type FileUploadResponse = FileUploadResponses[keyof FileUploadResponses]
-
-export type FileStatusData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/file/status"
-}
-
-export type FileStatusResponses = {
-  /**
-   * File status
-   */
-  200: Array<File>
-}
-
-export type FileStatusResponse = FileStatusResponses[keyof FileStatusResponses]
-
-export type AttachmentGetData = {
+export type TaskTranscriptData = {
   body?: never
   path: {
-    projectID: string
-    name: string
+    taskID: string
   }
   query?: never
-  url: "/attachment/{projectID}/{name}"
+  url: "/task/{taskID}/transcript"
 }
 
-export type AttachmentGetErrors = {
+export type TaskTranscriptErrors = {
   /**
    * Not found
    */
-  404: unknown
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
 }
 
-export type AttachmentGetResponses = {
+export type TaskTranscriptError = TaskTranscriptErrors[keyof TaskTranscriptErrors]
+
+export type TaskTranscriptResponses = {
   /**
-   * Attachment bytes
+   * Task session messages including tool calls
    */
-  200: unknown
+  200: Array<VisibleMessageWithParts>
 }
 
-export type McpStatusData = {
+export type TaskTranscriptResponse = TaskTranscriptResponses[keyof TaskTranscriptResponses]
+
+export type TaskListData = {
   body?: never
   path?: never
   query?: {
@@ -18740,25 +19885,186 @@ export type McpStatusData = {
      * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
      */
     directory?: string
+    q?: string
+    status?: string
+    limit?: number
   }
-  url: "/mcp"
+  url: "/tasks"
 }
 
-export type McpStatusResponses = {
+export type TaskListResponses = {
   /**
-   * MCP server status
+   * Project task board
    */
   200: {
-    [key: string]: McpStatus
+    project: {
+      id: string
+      name?: string
+      worktree: string
+    }
+    summary: {
+      blocked_tasks: number
+      cancelled_tasks: number
+      completed_tasks: number
+      failed_tasks: number
+      median_completion_ms?: number
+      open_tasks: number
+      running_tasks: number
+      total_tasks: number
+    }
+    tasks: Array<{
+      active_sessions: Array<{
+        goalID: string | null
+        kind: string
+        lastActivityMs: number
+        sessionID: string
+      }>
+      evaluation?: {
+        acceptanceID?: string | null
+        checks: Array<{
+          evidence?: string
+          family?: string
+          label?: string
+          name: string
+          status: "passed" | "failed" | "skipped" | "inconclusive"
+        }>
+        id: string
+        runID: string
+        status: "pending" | "passed" | "failed" | "inconclusive"
+        summary: string
+        taskID: string
+        time: {
+          completed?: number
+          created: number
+          updated: number
+        }
+        verdict: "accepted" | "rejected" | "inconclusive"
+      }
+      pending_interaction_items: Array<{
+        body: string
+        externalID: string
+        id: string
+        orderKey: string
+        payload?: {
+          [key: string]: unknown
+        }
+        response?: {
+          [key: string]: unknown
+        }
+        runID: string | null
+        sessionID?: string | null
+        status: "pending" | "answered" | "rejected" | "expired"
+        taskID: string
+        time: {
+          created: number
+          resolved?: number
+          updated: number
+        }
+        title: string
+        type: "permission" | "question"
+      }>
+      pending_interactions: number
+      plan?: {
+        id: string
+        metadata?: {
+          [key: string]: unknown
+        }
+        prompt: string
+        status: "active" | "superseded"
+        summary: string
+        taskID: string
+        time: {
+          created: number
+          updated: number
+        }
+        version: number
+      }
+      project?: {
+        id: string
+        name?: string
+        worktree: string
+      } | null
+      run?: {
+        blockingReason?: string
+        error?: string
+        executor: "opencorvus" | "codex" | "claude-code"
+        executorRef?: {
+          queueTaskID?: string
+          sessionID?: string
+        }
+        id: string
+        metadata?: {
+          [key: string]: unknown
+        }
+        phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
+        planVersionID?: string | null
+        retryCount: number
+        sessionID?: string | null
+        status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+        taskID: string
+        time: {
+          completed?: number
+          created: number
+          started?: number
+          updated: number
+        }
+      }
+      task: {
+        activePlanVersionID?: string | null
+        activeRunID?: string | null
+        attachments?: Array<{
+          filename?: string
+          intent?: string
+          mime: string
+          sha: string
+          size: number
+          source?: string
+          url: string
+        }>
+        blockingReason?: string
+        budget?: {
+          maxExecutorGroups?: number
+        }
+        directory?: string
+        error?: string
+        id: string
+        kind?: "workflow" | "build"
+        metadata?: {
+          [key: string]: unknown
+        }
+        orderKey: string
+        parentTaskID?: string | null
+        priority: "critical" | "high" | "normal" | "low"
+        projectID: string
+        queue?: {
+          order: number
+          revision?: string
+        }
+        request: string
+        requestID?: string
+        sessionID?: string | null
+        source: string
+        status: "queued" | "active" | "completed" | "failed" | "cancelled"
+        terminalReason?: "completed" | "failed" | "cancelled" | "interrupted"
+        time: {
+          completed?: number
+          created: number
+          started?: number
+          updated: number
+        }
+        title: string
+      }
+      updated_at: number
+    }>
   }
 }
 
-export type McpStatusResponse = McpStatusResponses[keyof McpStatusResponses]
+export type TaskListResponse = TaskListResponses[keyof TaskListResponses]
 
-export type McpAddData = {
+export type TerminalOpenData = {
   body: {
-    name: string
-    config: McpLocalConfig | McpRemoteConfig
+    cwd: string
+    profileID?: string
   }
   path?: never
   query?: {
@@ -18767,369 +20073,28 @@ export type McpAddData = {
      */
     directory?: string
   }
-  url: "/mcp"
+  url: "/terminal/open"
 }
 
-export type McpAddErrors = {
+export type TerminalOpenErrors = {
   /**
    * Bad request
    */
   400: BadRequestError
 }
 
-export type McpAddError = McpAddErrors[keyof McpAddErrors]
+export type TerminalOpenError = TerminalOpenErrors[keyof TerminalOpenErrors]
 
-export type McpAddResponses = {
+export type TerminalOpenResponses = {
   /**
-   * MCP server added successfully
+   * Terminal launch result
    */
-  200: {
-    [key: string]: McpStatus
-  }
+  200: SystemTerminalOpenResponse
 }
 
-export type McpAddResponse = McpAddResponses[keyof McpAddResponses]
+export type TerminalOpenResponse = TerminalOpenResponses[keyof TerminalOpenResponses]
 
-export type McpAuthRemoveData = {
-  body?: never
-  path: {
-    name: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/mcp/{name}/auth"
-}
-
-export type McpAuthRemoveErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-  /**
-   * Internal server error
-   */
-  500: UnknownError
-}
-
-export type McpAuthRemoveError = McpAuthRemoveErrors[keyof McpAuthRemoveErrors]
-
-export type McpAuthRemoveResponses = {
-  /**
-   * OAuth credentials removed
-   */
-  200: {
-    success: true
-  }
-}
-
-export type McpAuthRemoveResponse = McpAuthRemoveResponses[keyof McpAuthRemoveResponses]
-
-export type McpAuthStartData = {
-  body?: never
-  path: {
-    name: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/mcp/{name}/auth"
-}
-
-export type McpAuthStartErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-  /**
-   * MCP OAuth start failed
-   */
-  500: {
-    name: "UnknownError"
-    data: {
-      [key: string]: unknown
-    }
-  }
-}
-
-export type McpAuthStartError = McpAuthStartErrors[keyof McpAuthStartErrors]
-
-export type McpAuthStartResponses = {
-  /**
-   * OAuth flow started
-   */
-  200: {
-    /**
-     * URL to open in browser for authorization
-     */
-    authorizationUrl: string
-  }
-}
-
-export type McpAuthStartResponse = McpAuthStartResponses[keyof McpAuthStartResponses]
-
-export type McpAuthCallbackData = {
-  body: {
-    /**
-     * Authorization code from OAuth callback
-     */
-    code: string
-    /**
-     * OAuth state parameter from OAuth callback
-     */
-    state: string
-  }
-  path: {
-    name: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/mcp/{name}/auth/callback"
-}
-
-export type McpAuthCallbackErrors = {
-  /**
-   * Invalid MCP OAuth callback request
-   */
-  400:
-    | BadRequestError
-    | {
-        name: "MCPOAuthStateError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-  /**
-   * MCP OAuth completion failed
-   */
-  500: {
-    name: "UnknownError"
-    data: {
-      [key: string]: unknown
-    }
-  }
-}
-
-export type McpAuthCallbackError = McpAuthCallbackErrors[keyof McpAuthCallbackErrors]
-
-export type McpAuthCallbackResponses = {
-  /**
-   * OAuth authentication completed
-   */
-  200: McpStatus
-}
-
-export type McpAuthCallbackResponse = McpAuthCallbackResponses[keyof McpAuthCallbackResponses]
-
-export type McpAuthAuthenticateData = {
-  body?: never
-  path: {
-    name: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/mcp/{name}/auth/authenticate"
-}
-
-export type McpAuthAuthenticateErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-  /**
-   * MCP OAuth completion failed
-   */
-  500: {
-    name: "UnknownError"
-    data: {
-      [key: string]: unknown
-    }
-  }
-}
-
-export type McpAuthAuthenticateError = McpAuthAuthenticateErrors[keyof McpAuthAuthenticateErrors]
-
-export type McpAuthAuthenticateResponses = {
-  /**
-   * OAuth authentication completed
-   */
-  200: McpStatus
-}
-
-export type McpAuthAuthenticateResponse = McpAuthAuthenticateResponses[keyof McpAuthAuthenticateResponses]
-
-export type McpConnectData = {
-  body?: never
-  path: {
-    name: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/mcp/{name}/connect"
-}
-
-export type McpConnectErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-  /**
-   * MCP connection failed
-   */
-  500: {
-    name: "UnknownError"
-    data: {
-      [key: string]: unknown
-    }
-  }
-}
-
-export type McpConnectError = McpConnectErrors[keyof McpConnectErrors]
-
-export type McpConnectResponses = {
-  /**
-   * MCP server connected successfully
-   */
-  200: boolean
-}
-
-export type McpConnectResponse = McpConnectResponses[keyof McpConnectResponses]
-
-export type McpDisconnectData = {
-  body?: never
-  path: {
-    name: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/mcp/{name}/disconnect"
-}
-
-export type McpDisconnectErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type McpDisconnectError = McpDisconnectErrors[keyof McpDisconnectErrors]
-
-export type McpDisconnectResponses = {
-  /**
-   * MCP server disconnected successfully
-   */
-  200: boolean
-}
-
-export type McpDisconnectResponse = McpDisconnectResponses[keyof McpDisconnectResponses]
-
-export type PtyListData = {
+export type TerminalProfilesData = {
   body?: never
   path?: never
   query?: {
@@ -19138,297 +20103,26 @@ export type PtyListData = {
      */
     directory?: string
   }
-  url: "/pty"
+  url: "/terminal/profiles"
 }
 
-export type PtyListResponses = {
-  /**
-   * List of sessions
-   */
-  200: Array<Pty>
-}
-
-export type PtyListResponse = PtyListResponses[keyof PtyListResponses]
-
-export type PtyCreateData = {
-  body: {
-    command: string
-    args?: Array<string>
-    cwd?: string
-    title?: string
-    env?: {
-      [key: string]: string
-    }
-  }
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/pty"
-}
-
-export type PtyCreateErrors = {
+export type TerminalProfilesErrors = {
   /**
    * Bad request
    */
   400: BadRequestError
 }
 
-export type PtyCreateError = PtyCreateErrors[keyof PtyCreateErrors]
+export type TerminalProfilesError = TerminalProfilesErrors[keyof TerminalProfilesErrors]
 
-export type PtyCreateResponses = {
+export type TerminalProfilesResponses = {
   /**
-   * Created session
+   * Terminal profile list
    */
-  200: Pty
+  200: TerminalProfileList
 }
 
-export type PtyCreateResponse = PtyCreateResponses[keyof PtyCreateResponses]
-
-export type PtyRemoveData = {
-  body?: never
-  path: {
-    ptyID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/pty/{ptyID}"
-}
-
-export type PtyRemoveErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type PtyRemoveError = PtyRemoveErrors[keyof PtyRemoveErrors]
-
-export type PtyRemoveResponses = {
-  /**
-   * Session removed
-   */
-  200: boolean
-}
-
-export type PtyRemoveResponse = PtyRemoveResponses[keyof PtyRemoveResponses]
-
-export type PtyGetData = {
-  body?: never
-  path: {
-    ptyID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/pty/{ptyID}"
-}
-
-export type PtyGetErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type PtyGetError = PtyGetErrors[keyof PtyGetErrors]
-
-export type PtyGetResponses = {
-  /**
-   * Session info
-   */
-  200: Pty
-}
-
-export type PtyGetResponse = PtyGetResponses[keyof PtyGetResponses]
-
-export type PtyUpdateData = {
-  body?: {
-    title?: string
-    size?: {
-      rows: number
-      cols: number
-    }
-  }
-  path: {
-    ptyID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/pty/{ptyID}"
-}
-
-export type PtyUpdateErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type PtyUpdateError = PtyUpdateErrors[keyof PtyUpdateErrors]
-
-export type PtyUpdateResponses = {
-  /**
-   * Updated session
-   */
-  200: Pty
-}
-
-export type PtyUpdateResponse = PtyUpdateResponses[keyof PtyUpdateResponses]
-
-export type PtyConnectData = {
-  body?: never
-  path: {
-    ptyID: string
-  }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/pty/{ptyID}/connect"
-}
-
-export type PtyConnectErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type PtyConnectError = PtyConnectErrors[keyof PtyConnectErrors]
-
-export type PtyConnectResponses = {
-  /**
-   * Connected session
-   */
-  200: boolean
-}
-
-export type PtyConnectResponse = PtyConnectResponses[keyof PtyConnectResponses]
-
-export type InstanceDisposeData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/instance/dispose"
-}
-
-export type InstanceDisposeErrors = {
-  /**
-   * Active executor sessions prevent this operation
-   */
-  409: {
-    name: "ActiveExecutorSessionsError"
-    data: {
-      [key: string]: unknown
-    }
-  }
-}
-
-export type InstanceDisposeError = InstanceDisposeErrors[keyof InstanceDisposeErrors]
-
-export type InstanceDisposeResponses = {
-  /**
-   * Instance disposed
-   */
-  200: boolean
-}
-
-export type InstanceDisposeResponse = InstanceDisposeResponses[keyof InstanceDisposeResponses]
-
-export type PathGetData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/path"
-}
-
-export type PathGetResponses = {
-  /**
-   * Path
-   */
-  200: Path
-}
-
-export type PathGetResponse = PathGetResponses[keyof PathGetResponses]
+export type TerminalProfilesResponse = TerminalProfilesResponses[keyof TerminalProfilesResponses]
 
 export type VcsGetData = {
   body?: never
@@ -19470,682 +20164,3 @@ export type VcsDiffResponses = {
 }
 
 export type VcsDiffResponse = VcsDiffResponses[keyof VcsDiffResponses]
-
-export type CommandListData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/command"
-}
-
-export type CommandListErrors = {
-  /**
-   * Command list failed
-   */
-  500: {
-    name: "UnknownError"
-    data: {
-      [key: string]: unknown
-    }
-  }
-}
-
-export type CommandListError = CommandListErrors[keyof CommandListErrors]
-
-export type CommandListResponses = {
-  /**
-   * List of commands
-   */
-  200: Array<Command>
-}
-
-export type CommandListResponse = CommandListResponses[keyof CommandListResponses]
-
-export type LogReadData = {
-  body?: never
-  path?: never
-  query?: {
-    file?: string
-    n?: number
-  }
-  url: "/log"
-}
-
-export type LogReadErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type LogReadError = LogReadErrors[keyof LogReadErrors]
-
-export type LogReadResponses = {
-  /**
-   * Log lines
-   */
-  200: {
-    directory: string
-    path: string
-    file: string
-    lines: Array<string>
-  }
-}
-
-export type LogReadResponse = LogReadResponses[keyof LogReadResponses]
-
-export type AppLogData = {
-  body: {
-    /**
-     * Service name for the log entry
-     */
-    service: string
-    /**
-     * Log level
-     */
-    level: "debug" | "info" | "error" | "warn"
-    /**
-     * Log message
-     */
-    message: string
-    /**
-     * Additional metadata for the log entry
-     */
-    extra?: {
-      [key: string]: unknown
-    }
-  }
-  path?: never
-  query?: never
-  url: "/log"
-}
-
-export type AppLogErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type AppLogError = AppLogErrors[keyof AppLogErrors]
-
-export type AppLogResponses = {
-  /**
-   * Log entry written successfully
-   */
-  200: boolean
-}
-
-export type AppLogResponse = AppLogResponses[keyof AppLogResponses]
-
-export type LogFilesData = {
-  body?: never
-  path?: never
-  query?: never
-  url: "/log/files"
-}
-
-export type LogFilesResponses = {
-  /**
-   * Log files
-   */
-  200: {
-    directory: string
-    current: string
-    files: Array<{
-      name: string
-      path: string
-      size: number
-      modified: string
-      current: boolean
-    }>
-  }
-}
-
-export type LogFilesResponse = LogFilesResponses[keyof LogFilesResponses]
-
-export type LogTailData = {
-  body?: never
-  path?: never
-  query?: {
-    n?: number
-  }
-  url: "/log/tail"
-}
-
-export type LogTailErrors = {
-  /**
-   * Not found
-   */
-  404:
-    | {
-        name: "NotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "LogFileNotFoundError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-}
-
-export type LogTailError = LogTailErrors[keyof LogTailErrors]
-
-export type LogTailResponses = {
-  /**
-   * Log lines
-   */
-  200: {
-    directory: string
-    path: string
-    file: string
-    lines: Array<string>
-  }
-}
-
-export type LogTailResponse = LogTailResponses[keyof LogTailResponses]
-
-export type AppAgentsData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/agent"
-}
-
-export type AppAgentsResponses = {
-  /**
-   * List of agents
-   */
-  200: Array<Agent>
-}
-
-export type AppAgentsResponse = AppAgentsResponses[keyof AppAgentsResponses]
-
-export type LspStatusData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/lsp"
-}
-
-export type LspStatusResponses = {
-  /**
-   * LSP server status
-   */
-  200: Array<LspStatus>
-}
-
-export type LspStatusResponse = LspStatusResponses[keyof LspStatusResponses]
-
-export type FormatterStatusData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/formatter"
-}
-
-export type FormatterStatusResponses = {
-  /**
-   * Formatter status
-   */
-  200: Array<FormatterStatus>
-}
-
-export type FormatterStatusResponse = FormatterStatusResponses[keyof FormatterStatusResponses]
-
-export type EventSubscribeData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/event"
-}
-
-export type EventSubscribeResponses = {
-  /**
-   * Event stream
-   */
-  200: Event
-}
-
-export type EventSubscribeResponse = EventSubscribeResponses[keyof EventSubscribeResponses]
-
-export type GlobalHealthData = {
-  body?: never
-  path?: never
-  query?: never
-  url: "/global/health"
-}
-
-export type GlobalHealthResponses = {
-  /**
-   * Health information
-   */
-  200: {
-    healthy: true
-    version: string
-    paths: {
-      database: string
-      data: string
-      home: string
-    }
-  }
-}
-
-export type GlobalHealthResponse = GlobalHealthResponses[keyof GlobalHealthResponses]
-
-export type GlobalProjectsDiscoverData = {
-  body?: never
-  path?: never
-  query?: never
-  url: "/global/projects/discover"
-}
-
-export type GlobalProjectsDiscoverErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type GlobalProjectsDiscoverError = GlobalProjectsDiscoverErrors[keyof GlobalProjectsDiscoverErrors]
-
-export type GlobalProjectsDiscoverResponses = {
-  /**
-   * Discovered projects
-   */
-  200: ProjectDiscovery
-}
-
-export type GlobalProjectsDiscoverResponse = GlobalProjectsDiscoverResponses[keyof GlobalProjectsDiscoverResponses]
-
-export type GlobalEventData = {
-  body?: never
-  path?: never
-  query?: never
-  url: "/global/event"
-}
-
-export type GlobalEventResponses = {
-  /**
-   * Event stream
-   */
-  200: GlobalEvent
-}
-
-export type GlobalEventResponse = GlobalEventResponses[keyof GlobalEventResponses]
-
-export type GlobalConfigGetData = {
-  body?: never
-  path?: never
-  query?: never
-  url: "/global/config"
-}
-
-export type GlobalConfigGetResponses = {
-  /**
-   * Get global config info
-   */
-  200: Config
-}
-
-export type GlobalConfigGetResponse = GlobalConfigGetResponses[keyof GlobalConfigGetResponses]
-
-export type GlobalConfigUpdateData = {
-  body?: Config
-  path?: never
-  query?: never
-  url: "/global/config"
-}
-
-export type GlobalConfigUpdateErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type GlobalConfigUpdateError = GlobalConfigUpdateErrors[keyof GlobalConfigUpdateErrors]
-
-export type GlobalConfigUpdateResponses = {
-  /**
-   * Successfully updated global config
-   */
-  200: Config
-}
-
-export type GlobalConfigUpdateResponse = GlobalConfigUpdateResponses[keyof GlobalConfigUpdateResponses]
-
-export type GlobalDisposeData = {
-  body?: never
-  path?: never
-  query?: never
-  url: "/global/dispose"
-}
-
-export type GlobalDisposeErrors = {
-  /**
-   * Active executor sessions prevent this operation
-   */
-  409: {
-    name: "ActiveExecutorSessionsError"
-    data: {
-      [key: string]: unknown
-    }
-  }
-}
-
-export type GlobalDisposeError = GlobalDisposeErrors[keyof GlobalDisposeErrors]
-
-export type GlobalDisposeResponses = {
-  /**
-   * Global disposed
-   */
-  200: boolean
-}
-
-export type GlobalDisposeResponse = GlobalDisposeResponses[keyof GlobalDisposeResponses]
-
-export type GlobalDbResetData = {
-  body: {
-    database: string
-  }
-  path?: never
-  query?: never
-  url: "/global/db/reset"
-}
-
-export type GlobalDbResetErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Active executor sessions prevent this operation
-   */
-  409: {
-    name: "ActiveExecutorSessionsError"
-    data: {
-      [key: string]: unknown
-    }
-  }
-  /**
-   * Database file deletion failed
-   */
-  500: {
-    ok: false
-    restarting: false
-    targets: Array<{
-      label: string
-      path: string
-      ok: boolean
-      error?: string
-    }>
-  }
-  /**
-   * Server restart handler is not registered
-   */
-  503: {
-    ok: false
-    error: string
-  }
-}
-
-export type GlobalDbResetError = GlobalDbResetErrors[keyof GlobalDbResetErrors]
-
-export type GlobalDbResetResponses = {
-  /**
-   * Reset results
-   */
-  200: {
-    ok: boolean
-    restarting: boolean
-    targets: Array<{
-      label: string
-      path: string
-      ok: boolean
-      error?: string
-    }>
-  }
-}
-
-export type GlobalDbResetResponse = GlobalDbResetResponses[keyof GlobalDbResetResponses]
-
-export type GlobalDbMysqlSchemaData = {
-  body?: never
-  path?: never
-  query?: never
-  url: "/global/db/mysql/schema"
-}
-
-export type GlobalDbMysqlSchemaResponses = {
-  /**
-   * MySQL transfer schema
-   */
-  200: {
-    format: "opencorvus.mysql-transfer.v1"
-    schemaFingerprint: string
-    mysqlDDL: string
-    tables: Array<{
-      name: string
-      columns: Array<string>
-    }>
-    derivedTables: Array<string>
-    skippedIndexes: Array<{
-      table: string
-      index: string
-      reason: string
-    }>
-  }
-}
-
-export type GlobalDbMysqlSchemaResponse = GlobalDbMysqlSchemaResponses[keyof GlobalDbMysqlSchemaResponses]
-
-export type GlobalDbMysqlExportData = {
-  body?: never
-  path?: never
-  query?: never
-  url: "/global/db/mysql/export"
-}
-
-export type GlobalDbMysqlExportResponses = {
-  /**
-   * MySQL transfer package
-   */
-  200: {
-    schema: {
-      format: "opencorvus.mysql-transfer.v1"
-      schemaFingerprint: string
-      mysqlDDL: string
-      tables: Array<{
-        name: string
-        columns: Array<string>
-      }>
-      derivedTables: Array<string>
-      skippedIndexes: Array<{
-        table: string
-        index: string
-        reason: string
-      }>
-    }
-    snapshot: {
-      format: "opencorvus.mysql-transfer.v1"
-      schemaFingerprint: string
-      tables: Array<{
-        name: string
-        columns: Array<string>
-        rows: Array<{
-          [key: string]: unknown
-        }>
-      }>
-    }
-  }
-}
-
-export type GlobalDbMysqlExportResponse = GlobalDbMysqlExportResponses[keyof GlobalDbMysqlExportResponses]
-
-export type GlobalDbMysqlImportData = {
-  body: {
-    snapshot: {
-      format: "opencorvus.mysql-transfer.v1"
-      schemaFingerprint: string
-      tables: Array<{
-        name: string
-        columns: Array<string>
-        rows: Array<{
-          [key: string]: unknown
-        }>
-      }>
-    }
-  }
-  path?: never
-  query?: never
-  url: "/global/db/mysql/import"
-}
-
-export type GlobalDbMysqlImportErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Active executor sessions prevent this operation
-   */
-  409: {
-    name: "ActiveExecutorSessionsError"
-    data: {
-      [key: string]: unknown
-    }
-  }
-}
-
-export type GlobalDbMysqlImportError = GlobalDbMysqlImportErrors[keyof GlobalDbMysqlImportErrors]
-
-export type GlobalDbMysqlImportResponses = {
-  /**
-   * Import result
-   */
-  200: {
-    ok: boolean
-    schemaFingerprint: string
-    tables: Array<{
-      name: string
-      rows: number
-    }>
-  }
-}
-
-export type GlobalDbMysqlImportResponse = GlobalDbMysqlImportResponses[keyof GlobalDbMysqlImportResponses]
-
-export type AuthRemoveData = {
-  body?: never
-  path: {
-    providerID: string
-  }
-  query?: never
-  url: "/auth/{providerID}"
-}
-
-export type AuthRemoveErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type AuthRemoveError = AuthRemoveErrors[keyof AuthRemoveErrors]
-
-export type AuthRemoveResponses = {
-  /**
-   * Successfully removed authentication credentials
-   */
-  200: boolean
-}
-
-export type AuthRemoveResponse = AuthRemoveResponses[keyof AuthRemoveResponses]
-
-export type AuthSetData = {
-  body?: Auth
-  path: {
-    providerID: string
-  }
-  query?: never
-  url: "/auth/{providerID}"
-}
-
-export type AuthSetErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type AuthSetError = AuthSetErrors[keyof AuthSetErrors]
-
-export type AuthSetResponses = {
-  /**
-   * Successfully set authentication credentials
-   */
-  200: boolean
-}
-
-export type AuthSetResponse = AuthSetResponses[keyof AuthSetResponses]

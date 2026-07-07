@@ -1,31 +1,35 @@
 #!/usr/bin/env bun
 
-import { Script } from "@opencorvus-ai/script"
 import { $ } from "bun"
+import { mkdir, readdir, rm } from "node:fs/promises"
+import path from "node:path"
 import { fileURLToPath } from "url"
+import { buildPublishPackageJson, type SdkPackageJson } from "./publish-manifest"
 
 const dir = fileURLToPath(new URL("..", import.meta.url))
 process.chdir(dir)
 
+await $`bun run build`
+
 const pkg = (await import("../package.json").then((m) => m.default)) as {
   exports: Record<string, string | object>
+  name: string
+  version: string
 }
-const original = JSON.parse(JSON.stringify(pkg))
-function transformExports(exports: Record<string, string | object>) {
-  for (const [key, value] of Object.entries(exports)) {
-    if (typeof value === "object" && value !== null) {
-      transformExports(value as Record<string, string | object>)
-    } else if (typeof value === "string") {
-      const file = value.replace("./src/", "./dist/").replace(".ts", "")
-      exports[key] = {
-        import: file + ".js",
-        types: file + ".d.ts",
-      }
-    }
-  }
+buildPublishPackageJson(pkg as SdkPackageJson)
+
+const packageTarballPrefix = `${pkg.name.split("/").pop()}-`
+for (const entry of await readdir(dir)) {
+  if (entry.startsWith(packageTarballPrefix) && entry.endsWith(".tgz")) await rm(path.join(dir, entry))
 }
-transformExports(pkg.exports)
-await Bun.write("package.json", JSON.stringify(pkg, null, 2))
-await $`bun pm pack`
-await $`npm publish *.tgz --tag ${Script.channel} --access public`
-await Bun.write("package.json", JSON.stringify(original, null, 2))
+const packDirectory = path.join(dir, ".tmp-sdk-pack")
+const packFilename = `${pkg.name.replace(/^@/, "").replace(/\//g, "-")}-${pkg.version}.tgz`
+const packPath = path.join(packDirectory, packFilename)
+await rm(packDirectory, { recursive: true, force: true })
+await mkdir(packDirectory, { recursive: true })
+try {
+  await $`bun pm pack --ignore-scripts --destination ${packDirectory} --filename ${packFilename}`
+  await $`npm publish ${packPath} --access public`
+} finally {
+  await rm(packDirectory, { recursive: true, force: true })
+}

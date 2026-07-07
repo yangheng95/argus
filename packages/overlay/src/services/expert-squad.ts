@@ -88,9 +88,19 @@ export interface ExpertSquadActiveAgentProjection {
   agents: Array<
     ExpertSquadVirtualAgent & {
       projection_hash: string
+      built_in_tool_ids: string[]
+      default_skill_refs: string[]
       package_skill_refs: string[]
+      default_tool_refs: string[]
       package_tool_refs: string[]
+      default_mcp_server_refs: string[]
       package_mcp_server_refs: string[]
+      default_mcp_tool_refs: string[]
+      package_mcp_tool_refs: string[]
+      default_mcp_prompt_refs: string[]
+      package_mcp_prompt_refs: string[]
+      default_mcp_resource_refs: string[]
+      package_mcp_resource_refs: string[]
     }
   >
 }
@@ -181,6 +191,7 @@ export function expertSquadCatalogRefreshToken(): number {
 }
 
 export function markExpertSquadCatalogStale(): void {
+  pendingExpertSquadCatalogLoad = null
   setExpertSquadCatalogRefreshTokenValue((value) => value + 1)
 }
 
@@ -223,7 +234,11 @@ export async function loadExpertSquadCatalog(scope: ExpertSquadCatalogScope): Pr
   }
 }
 
-export async function setProjectExpertSquadActive(expertSquadID: string, directory: string): Promise<any> {
+export async function setProjectExpertSquadActive(
+  expertSquadID: string,
+  directory: string,
+  options: { isCurrentDirectory?: (directory: string) => boolean } = {},
+): Promise<any> {
   const saved = await updateConfig((current) => {
     const promptProfile =
       current.prompt_profile && typeof current.prompt_profile === "object" && !Array.isArray(current.prompt_profile)
@@ -233,7 +248,7 @@ export async function setProjectExpertSquadActive(expertSquadID: string, directo
       ...promptProfile,
       active: expertSquadID,
     }
-  }, { directory })
+  }, { directory, isCurrentDirectory: options.isCurrentDirectory })
   markExpertSquadCatalogStale()
   return saved
 }

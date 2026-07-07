@@ -9,20 +9,8 @@
     "scheduler": {
       "role_base": true,
       "built_in_tool_ids": [
-        "analyze_intent",
-        "requirements",
-        "architect",
-        "deep_research",
-        "workload_analysis",
-        "build",
-        "integrity",
-        "fact_check",
-        "explore",
-        "add_goal",
-        "modify_goal",
-        "complete_goal",
-        "delete_goal",
-        "propose_task",
+        "dispatch_agent",
+        "manage_task",
         "refine",
         "bash"
       ]

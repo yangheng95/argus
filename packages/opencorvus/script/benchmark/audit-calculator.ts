@@ -3,7 +3,7 @@
 // Walks the 16 spec requirements, builds the project, drives it with Playwright,
 // and writes screenshots + a JSON verdict to <project>/.scratch/audit-report/.
 
-import { spawn, type ChildProcess } from "node:child_process"
+import { spawn, spawnSync, type ChildProcess } from "node:child_process"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { launchBrowser, type OverlayBrowser, type OverlayPage } from "../../../overlay/test/launch"
@@ -24,6 +24,67 @@ function record(id: string, req: string, status: Finding["status"], note: string
   findings.push({ id, req, status, note })
   const tag = status === "pass" ? "PASS" : "FAIL"
   console.log(`[${tag}] ${id} ${req} — ${note}`)
+}
+
+function childHasExited(child: ChildProcess): boolean {
+  return child.exitCode !== null || child.signalCode !== null
+}
+
+async function waitForChildClose(child: ChildProcess, timeoutMs: number): Promise<boolean> {
+  if (childHasExited(child)) return true
+  return await new Promise<boolean>((resolve) => {
+    let settled = false
+    const finish = (value: boolean) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      child.off("close", onClose)
+      resolve(value)
+    }
+    const onClose = () => finish(true)
+    const timer = setTimeout(() => finish(childHasExited(child)), timeoutMs)
+    child.once("close", onClose)
+  })
+}
+
+async function terminateChildProcessTree(child: ChildProcess | null, label: string, graceMs = 1_500): Promise<void> {
+  const pid = child?.pid
+  if (!child || !pid || childHasExited(child)) return
+  if (process.platform === "win32") {
+    const result = spawnSync("taskkill.exe", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore", windowsHide: true })
+    if (result.error) {
+      throw new Error(`[audit] ${label} failed to run taskkill for process tree ${pid}: ${result.error.message}`)
+    }
+    if (result.status !== 0 && !childHasExited(child)) {
+      throw new Error(`[audit] ${label} taskkill exited with status ${result.status ?? "null"} for process tree ${pid}`)
+    }
+    if (!(await waitForChildClose(child, graceMs))) {
+      throw new Error(`[audit] ${label} process tree did not exit after taskkill`)
+    }
+    return
+  }
+  try {
+    process.kill(-pid, "SIGTERM")
+  } catch (error) {
+    throw new Error(
+      `[audit] ${label} failed to signal POSIX process group ${pid}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    )
+  }
+  if (await waitForChildClose(child, graceMs)) return
+  try {
+    process.kill(-pid, "SIGKILL")
+  } catch (error) {
+    throw new Error(
+      `[audit] ${label} failed to SIGKILL POSIX process group ${pid}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    )
+  }
+  if (!(await waitForChildClose(child, graceMs))) {
+    throw new Error(`[audit] ${label} process tree did not exit after SIGKILL`)
+  }
 }
 
 // --- 1. static inspection -------------------------------------------------
@@ -69,7 +130,7 @@ function run(
   opts: { cwd?: string; inactivityTimeoutMs?: number } = {},
 ): Promise<{ code: number; out: string; err: string }> {
   return new Promise((resolve) => {
-    const child = spawn(cmd, args, { cwd: opts.cwd ?? ROOT, shell: true })
+    const child = spawn(cmd, args, { cwd: opts.cwd ?? ROOT, shell: true, detached: process.platform !== "win32" })
     const inactivityTimeoutMs = opts.inactivityTimeoutMs ?? 600_000
     let out = "",
       err = ""
@@ -89,7 +150,17 @@ function run(
       clearInactivityTimer()
       inactivityTimer = setTimeout(() => {
         err += `\n[audit] ${cmd} inactive for ${inactivityTimeoutMs}ms after ${source}; terminating process`
-        child.kill("SIGKILL")
+        void (async () => {
+          try {
+            await terminateChildProcessTree(child, `${cmd} inactivity`)
+          } catch (error) {
+            err += `\n[audit] ${cmd} process-tree termination failed: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          } finally {
+            finish(-1)
+          }
+        })()
       }, inactivityTimeoutMs)
     }
     child.stdout.on("data", (d) => {
@@ -149,6 +220,7 @@ async function startPreview(): Promise<string> {
     cwd: ROOT,
     shell: true,
     stdio: ["ignore", "pipe", "pipe"],
+    detached: process.platform !== "win32",
   })
   let log = ""
   let previewExit: { code: number | null; signal: NodeJS.Signals | null } | null = null
@@ -733,24 +805,18 @@ if (page && baseURL) {
   const rows = new Set(ys.map((y) => Math.round(y / 8)))
   const colorKey = (button: (typeof layout.buttons)[number]) => `${button.cs.bg}|${button.cs.color}`
   const numberKeys = layout.buttons.filter((button) => /^(?:\d|00|\.)$/.test(button.text))
-  const operatorKeys = layout.buttons.filter((button) => /^(?:=|\+|−|-|×|x|\*|÷|\/|%|AC|C|CE|DEL|Delete|⌫|Back)$/i.test(button.text))
-  const functionKeys = layout.buttons.filter((button) => /^(?:sin|cos|tan|log|ln|sqrt|√|\(|\)|π|pi|e|x²|x\^2)$/i.test(button.text))
+  const operatorKeys = layout.buttons.filter((button) =>
+    /^(?:=|\+|−|-|×|x|\*|÷|\/|%|AC|C|CE|DEL|Delete|⌫|Back)$/i.test(button.text),
+  )
+  const functionKeys = layout.buttons.filter((button) =>
+    /^(?:sin|cos|tan|log|ln|sqrt|√|\(|\)|π|pi|e|x²|x\^2)$/i.test(button.text),
+  )
   const numberColors = new Set(numberKeys.map(colorKey))
   const operatorColors = new Set(operatorKeys.map(colorKey))
   const functionColors = new Set(functionKeys.map(colorKey))
   const colorDistinctFromNumbers = (colors: Set<string>) => [...colors].some((color) => !numberColors.has(color))
-  record(
-    "R11-grid",
-    "4-column keypad grid",
-    cols.size === 4 ? "pass" : "fail",
-    `unique x-buckets=${cols.size}`,
-  )
-  record(
-    "R11-rows",
-    "5-row keypad grid",
-    rows.size === 5 ? "pass" : "fail",
-    `unique y-buckets=${rows.size}`,
-  )
+  record("R11-grid", "4-column keypad grid", cols.size === 4 ? "pass" : "fail", `unique x-buckets=${cols.size}`)
+  record("R11-rows", "5-row keypad grid", rows.size === 5 ? "pass" : "fail", `unique y-buckets=${rows.size}`)
   record(
     "R11-operator-color",
     "operator keys have distinct color",
@@ -848,13 +914,19 @@ if (pkgJson.scripts?.["test:run"] || pkgJson.scripts?.test) {
 } else record("TESTS", "unit tests", "fail", "no test script in package.json")
 
 // --- 6. cleanup -----------------------------------------------------------
-try {
-  await browser?.close()
-} catch {}
-try {
-  preview?.kill("SIGTERM")
-  setTimeout(() => preview?.kill("SIGKILL"), 1500).unref()
-} catch {}
+const cleanupErrors: string[] = []
+async function recordCleanup(label: string, action: () => Promise<void>): Promise<void> {
+  try {
+    await action()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    cleanupErrors.push(message)
+    record(`CLEANUP-${label}`, `${label} cleanup`, "fail", message)
+  }
+}
+
+if (browser) await recordCleanup("browser", () => browser.close())
+if (preview) await recordCleanup("preview", () => terminateChildProcessTree(preview, "preview cleanup"))
 
 // --- 7. report ------------------------------------------------------------
 const passed = findings.filter((f) => f.status === "pass").length

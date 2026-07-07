@@ -159,12 +159,12 @@ mock.module("@modelcontextprotocol/sdk/client/sse.js", () => ({
   },
 }))
 
-const { MCP } = await import("../../src/mcp")
-const { McpAuth } = await import("../../src/mcp/auth")
-const { McpOAuthCallback } = await import("../../src/mcp/oauth-callback")
-const { Instance } = await import("../../src/project/instance")
-const { Database } = await import("../../src/storage/db")
-const { tmpdir } = await import("../fixture/fixture")
+const { MCP } = await import("../../../src/mcp")
+const { McpAuth } = await import("../../../src/mcp/auth")
+const { McpOAuthCallback } = await import("../../../src/mcp/oauth-callback")
+const { Instance } = await import("../../../src/project/instance")
+const { Database } = await import("../../../src/storage/db")
+const { tmpdir } = await import("../../fixture/fixture")
 
 beforeEach(async () => {
   connectError = undefined
@@ -553,6 +553,37 @@ describe("MCP prompt and resource listing", () => {
     expect(connectOptions[0]).toEqual({ resetTimeoutOnProgress: true, timeout: 6_789 })
     expect(listToolOptions[0]).toEqual({ resetTimeoutOnProgress: true, timeout: 6_789 })
     expectTransportSignal(transportRequestInits[0])
+  })
+
+  test("scoped MCP prompt and resource requests use the global timeout override", async () => {
+    resourceList = [{ uri: "mcp://fixture/shared.md", name: "README", mimeType: "text/markdown" }]
+    const scopedMcp = {
+      type: "remote" as const,
+      url: "https://example.com/mcp",
+      transport: "streamable-http" as const,
+      oauth: false,
+    }
+
+    await MCP.getScopedPromptProjectionPayload({
+      key: "scoped_prompt",
+      mcp: scopedMcp,
+      promptName: "template",
+      cwd: process.cwd(),
+      globalTimeout: 12_345,
+    })
+    await MCP.readScopedResourceProjectionPayload({
+      key: "scoped_resource",
+      mcp: scopedMcp,
+      resourceName: "README",
+      cwd: process.cwd(),
+      globalTimeout: 12_345,
+    })
+
+    expect(connectOptions.at(-2)).toEqual({ resetTimeoutOnProgress: true, timeout: 12_345 })
+    expect(connectOptions.at(-1)).toEqual({ resetTimeoutOnProgress: true, timeout: 12_345 })
+    expect(listResourceOptions.at(-1)).toEqual({ resetTimeoutOnProgress: true, timeout: 12_345 })
+    expect(projectionRequestOptions.at(-2)).toEqual({ resetTimeoutOnProgress: true, timeout: 12_345 })
+    expect(projectionRequestOptions.at(-1)).toEqual({ resetTimeoutOnProgress: true, timeout: 12_345 })
   })
 
   test("OAuth startAuth closes the probe client and transport after an already-authenticated probe", async () => {

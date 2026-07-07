@@ -652,7 +652,20 @@ export namespace Orchestrator {
       // the serial queue when it picks the task up). Per rule 23 the
       // LLM reads describe output for actual phase identification, not
       // a cached step-FSM cell.
-      const workflowID = await WorkflowRegistry.defaultIDForTaskKind(task.kind)
+      const profileScope = task.session_id ? { sessionID: task.session_id } : { taskID: task.id }
+      const [schedulerConfig, schedulerProjectDirectory] = await Promise.all([
+        EffectiveConfig.effective(profileScope),
+        EffectiveConfig.directory(profileScope),
+      ])
+      const schedulerCapability = await PromptProfileResolver.resolveSchedulerCapability({
+        projectDirectory: schedulerProjectDirectory,
+        config: schedulerConfig,
+      })
+      const declaredWorkflowID = schedulerCapability.dynamicAttributes.scheduler.default_workflow_id
+      const workflowID =
+        task.kind === "workflow" && declaredWorkflowID
+          ? declaredWorkflowID
+          : await WorkflowRegistry.defaultIDForTaskKind(task.kind)
       const workflow = await WorkflowRegistry.resolve(workflowID)
       if (!workflow) {
         throw new Error(`Orchestrator workflow "${workflowID}" is not registered`)
@@ -700,17 +713,8 @@ export namespace Orchestrator {
       agentSessionID = agentSession.id
       agentSessionInfo = agentSession
 
-      // 3. Resolve the active expert-squad scheduler projection, then create
-      //    and project the exact tool table before guard/enable/runtime setup.
-      const profileScope = task.session_id ? { sessionID: task.session_id } : { taskID: task.id }
-      const [schedulerConfig, schedulerProjectDirectory] = await Promise.all([
-        EffectiveConfig.effective(profileScope),
-        EffectiveConfig.directory(profileScope),
-      ])
-      const schedulerCapability = await PromptProfileResolver.resolveSchedulerCapability({
-        projectDirectory: schedulerProjectDirectory,
-        config: schedulerConfig,
-      })
+      // 3. Project the exact active expert-squad scheduler tool table before
+      //    guard/enable/runtime setup.
       const { tools: rawTools } = createOrchestratorTools({
         taskID,
         agentSessionID: agentSession.id,
@@ -742,9 +746,10 @@ export namespace Orchestrator {
       // Build attachment inventory when the task has file attachments. Wakes
       // carry link/index refs only; no hidden model-only file parts are added.
       // Orchestrator does NOT own a `read` tool. Attachments are forwarded
-      // automatically to every sub-agent it dispatches (requirements /
-      // frontend_design / architect / build / refine — see orchestrator/tools.ts
-      // dispatch sites that pass `attachments: task.attachments`). The
+      // automatically to every sub-agent it dispatches through dispatch_agent
+      // targets such as requirements / frontend_design / architect / build /
+      // refine — see orchestrator/tools.ts dispatch sites that pass
+      // `attachments: task.attachments`. The
       // inventory below tells the orchestrator what is available when
       // deciding which sub-agent to invoke; the trailing instruction is a
       // HARD design constraint (no read tool here) and a hard requirement
@@ -764,7 +769,7 @@ export namespace Orchestrator {
           " " +
           "Text/json refs can be read by sub-agents that expose attachment-reading tools. " +
           "You do NOT have a `read` tool yourself — do not attempt to fetch reference content. " +
-          "When you call `requirements` / `frontend_design` / `architect` / `build` / `refine`, the engine forwards every attachment to the sub-agent automatically — but the sub-agent's prompt only cites them when YOU mention them by filename in your dispatch instructions. ALWAYS cite the relevant attachments by EXACT filename and explain their relevance. NEVER reference an attachment that is not listed below — if this section is empty, the user attached nothing in this wake and any phrase implying you saw a file is a hallucination.",
+          "When you call `dispatch_agent`, the engine forwards every attachment to the selected sub-agent automatically — but the sub-agent's prompt only cites them when YOU mention them by filename in your dispatch instructions. ALWAYS cite the relevant attachments by EXACT filename and explain their relevance. NEVER reference an attachment that is not listed below — if this section is empty, the user attached nothing in this wake and any phrase implying you saw a file is a hallucination.",
       })
       const inventoryText = renderAgentContextPacketSection(attachmentPacket ? [attachmentPacket] : []) ?? ""
       const enrichedUserText = appendUserMessage ? userText + inventoryText : ""
@@ -798,8 +803,8 @@ export namespace Orchestrator {
       // Abort hooks translate external interrupts to SessionPrompt.cancel on
       // the child session so the loop releases its processor cleanly. We
       // ALSO cascade the cancel to every descendant session: orchestrator
-      // tools (`explore`, `requirements`, `frontend_design`, `architect`,
-      // `build`, ...) spawn their own SessionPrompt loops, and the
+      // dispatch_agent targets (`explore`, `requirements`, `frontend_design`,
+      // `architect`, `build`, ...) spawn their own SessionPrompt loops, and the
       // orchestrator's ctrl signal is not threaded into them — without
       // cascading here, an `interruptTaskLoop` (or a hard abort) returns
       // immediately from the orchestrator while every in-flight subagent
@@ -993,8 +998,8 @@ export namespace Orchestrator {
       // Per rule 23 we do NOT transition the task to `failed` here AND we
       // do NOT auto-rewake — both are state-machine reactions. The next
       // external wake re-enters processTask; the LLM reads the abort fact
-      // via describe and decides itself (retry, re-dispatch, propose_task,
-      // fail_task, or ask the operator).
+      // via describe and decides itself (retry, re-dispatch, manage_task
+      // action=propose_task / action=fail_task, or ask the operator).
       if (streamErrors.length > 0) {
         const first = streamErrors[0]
         const reason = `${first?.errorName ?? "stream-error"}: ${first?.reason ?? "unknown"}`
@@ -1322,10 +1327,10 @@ async function buildSystemParts(
   // reads facts and routes repair; it does not expose a retry-loop switch.
   ctx.push("## Recovery Discipline")
   ctx.push(
-    "- Rejected acceptance reviews and failed terminal waves require same-task diagnosis from the rendered facts. Route product, dependency, toolchain, git-worktree, preview, browser-runner, and no_project_diff producer blockers to Build; route graph or dependency-contract blockers to modify_goal for point repair, and use architect only when the persisted architect artifact itself is proven invalid and named. Ask the operator only for external, destructive, or out-of-scope blockers.",
+    "- Rejected acceptance reviews and failed terminal waves require same-task diagnosis from the rendered facts. Route product, dependency, toolchain, git-worktree, preview, browser-runner, and no_project_diff producer blockers to `dispatch_agent` target=build; route graph or dependency-contract blockers to `manage_task` action=modify_goal for point repair, and use `dispatch_agent` target=architect only when the persisted architect artifact itself is proven invalid and named. Ask the operator only for external, destructive, or out-of-scope blockers.",
   )
   ctx.push(
-    "- Do not restart upstream merely because a Build attempt failed, a producer is no_project_diff, or a retained worktree contains partial files. Do not delete a dependency edge to bypass a non-delivered producer. Reuse `query_failed_goals`, build retry requests, or `modify_goal` according to the proven owner, then rerun the relevant verification or integrity path; use `propose_task`, `fail_task`, or `question` when the active workflow contract is invalid or blocked outside the current task.",
+    "- Do not restart upstream merely because a Build attempt failed, a producer is no_project_diff, or a retained worktree contains partial files. Do not delete a dependency edge to bypass a non-delivered producer. Reuse `manage_task` action=query_failed_goals, `dispatch_agent` target=build retry requests, or `manage_task` action=modify_goal according to the proven owner, then rerun the relevant verification or integrity path; use `manage_task` action=propose_task, `manage_task` action=fail_task, or `question` when the active workflow contract is invalid or blocked outside the current task.",
   )
   ctx.push("")
 

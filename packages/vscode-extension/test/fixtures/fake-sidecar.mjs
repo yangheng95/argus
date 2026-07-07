@@ -6,6 +6,7 @@
 //   FAKE_SIDECAR_FAIL=missing-token — exit 2 if no OPENCORVUS_SERVER_PASSWORD
 //   FAKE_SIDECAR_FAIL=existing-instance — exit 3 immediately
 //   FAKE_SIDECAR_NEVER_HANDSHAKE — exit 0 after 30s without writing handshake
+//   FAKE_SIDECAR_IGNORE_SHUTDOWN — acknowledge /shutdown but wait for the manager-owned process cleanup path
 
 import { createServer } from "node:http"
 import { appendFileSync } from "node:fs"
@@ -15,6 +16,7 @@ function record(type, data = {}) {
   if (!eventsFile) return
   appendFileSync(eventsFile, `${JSON.stringify({ type, time: Date.now(), ...data })}\n`)
 }
+record("start", { pid: process.pid })
 
 const failMode = process.env.FAKE_SIDECAR_FAIL
 if (failMode === "missing-token") {
@@ -32,6 +34,7 @@ if (failMode === "existing-instance") {
 
 const delayMs = Number(process.env.FAKE_SIDECAR_DELAY_MS || 0)
 const neverHandshake = process.env.FAKE_SIDECAR_NEVER_HANDSHAKE === "1"
+const ignoreShutdown = process.env.FAKE_SIDECAR_IGNORE_SHUTDOWN === "1"
 
 const server = createServer((req, res) => {
   const url = req.url || "/"
@@ -115,7 +118,7 @@ const server = createServer((req, res) => {
   if (url === "/shutdown" && req.method === "POST") {
     record("shutdown")
     sendJson(req, res, 200, { ok: true })
-    setTimeout(() => process.exit(0), 25)
+    if (!ignoreShutdown) setTimeout(() => process.exit(0), 25)
     return
   }
   record("response", { method: req.method, url, status: 404 })

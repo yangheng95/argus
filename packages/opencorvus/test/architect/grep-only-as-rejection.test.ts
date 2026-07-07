@@ -60,7 +60,8 @@ describe("architect grep-only acceptance spec discipline", () => {
   test("core prompt gives exact final visual feedback acceptance repair path", async () => {
     const prompt = await readArchitectPrompt()
 
-    expect(prompt).toContain("register_visual_feedback_acceptance")
+    expect(prompt).toContain("manage_goal action=register_visual_feedback_acceptance")
+    expect(prompt).toContain('manage_goal({ action: "register_visual_feedback_acceptance"')
     expect(prompt).toContain("reference_tokens")
     expect(prompt).toContain('"name":"visual-feedback-verification"')
     expect(prompt).toContain('"kind":"visual_feedback_verification"')

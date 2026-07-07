@@ -649,7 +649,7 @@ describe("skill routes", () => {
   }, 20000)
 
   test("GET /skill/mounts exposes opentest virtual agents as base-role metadata", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, dispose: async () => Instance.disposeAll() })
     await copyRepositoryExpertSquadPackage(tmp.path, "opentest")
 
     await Instance.provide({
@@ -671,9 +671,22 @@ describe("skill routes", () => {
           project_mounts: { agents?: Record<string, string[]> }
         }
         expect(body.active_profile).toBe("opentest")
-        expect(body.projected_agents).toEqual(expect.arrayContaining(["orchestrator", "build", "integrity"]))
+        expect(body.projected_agents).toEqual(
+          expect.arrayContaining(["orchestrator", "requirements", "architect", "build", "integrity", "visual-qa"]),
+        )
+        expect(body.projected_agents).not.toContain("opentest-requirements-analyst")
+        expect(body.projected_agents).not.toContain("opentest-test-architect")
         expect(body.projected_agents).not.toContain("opentest-implementer")
         expect(body.projected_agents).not.toContain("opentest-reviewer")
+        expect(body.projected_agents).not.toContain("opentest-visual-qa-reviewer")
+        expect(body.agents.find((agent) => agent.name === "requirements")?.virtual_agent).toMatchObject({
+          id: "opentest-requirements-analyst",
+          label: "OpenTest Requirements Analyst",
+        })
+        expect(body.agents.find((agent) => agent.name === "architect")?.virtual_agent).toMatchObject({
+          id: "opentest-test-architect",
+          label: "OpenTest Test Architect",
+        })
         expect(body.agents.find((agent) => agent.name === "build")?.virtual_agent).toMatchObject({
           id: "opentest-implementer",
           label: "OpenTest Implementer",
@@ -682,10 +695,20 @@ describe("skill routes", () => {
           id: "opentest-reviewer",
           label: "OpenTest Reviewer",
         })
+        expect(body.agents.find((agent) => agent.name === "visual-qa")?.virtual_agent).toMatchObject({
+          id: "opentest-visual-qa-reviewer",
+          label: "OpenTest Visual QA Reviewer",
+        })
+        expect(body.project_mounts.agents?.requirements).toContain("software-test-requirements")
+        expect(body.project_mounts.agents?.architect).toContain("software-test-architecture")
         expect(body.project_mounts.agents?.build).toContain("software-test-implementation")
         expect(body.project_mounts.agents?.integrity).toContain("software-test-review")
+        expect(body.project_mounts.agents?.["visual-qa"]).toContain("software-visual-test-review")
+        expect(body.project_mounts.agents?.["opentest-requirements-analyst"]).toBeUndefined()
+        expect(body.project_mounts.agents?.["opentest-test-architect"]).toBeUndefined()
         expect(body.project_mounts.agents?.["opentest-implementer"]).toBeUndefined()
         expect(body.project_mounts.agents?.["opentest-reviewer"]).toBeUndefined()
+        expect(body.project_mounts.agents?.["opentest-visual-qa-reviewer"]).toBeUndefined()
       },
     })
   }, 20000)

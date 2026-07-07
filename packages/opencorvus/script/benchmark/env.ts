@@ -124,7 +124,7 @@ async function resetBenchmarkState() {
     import("../../src/project/instance"),
   ])
   Config.global.reset()
-  await Instance.disposeAll().catch(() => undefined)
+  await Instance.disposeAll()
 }
 
 export function explicitModel(providers: Awaited<ReturnType<typeof providerList>>, explicit: string) {

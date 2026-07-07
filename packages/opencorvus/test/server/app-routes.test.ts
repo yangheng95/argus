@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock, test } from "bun:test"
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Server } from "../../src/server/server"
 import { clearServerShutdownHandler, registerServerShutdownHandler } from "../../src/server/shutdown"
 import { Log } from "../../src/util/log"
@@ -103,6 +103,23 @@ describe("app routes", () => {
       paths["/global/dispose"]?.post?.responses?.[409]?.content?.["application/json"]?.schema?.properties?.name
         ?.const,
     ).toBe("ActiveExecutorSessionsError")
+  })
+
+  test("POST /restart reports replacement child early exit before shutdown handoff", async () => {
+    const reasons: string[] = []
+    registerServerShutdownHandler((reason) => {
+      reasons.push(reason)
+    })
+    const unref = mock(() => undefined)
+    const spawn = spyOn(Bun, "spawn").mockReturnValue({ unref, exited: Promise.resolve(7) } as any)
+
+    const response = await Server.App().request("/restart", { method: "POST" })
+
+    expect(response.status).toBe(503)
+    expect(await response.json()).toEqual({ ok: false })
+    expect(spawn).toHaveBeenCalledTimes(1)
+    expect(unref).toHaveBeenCalledTimes(1)
+    expect(reasons).toEqual([])
   })
 
   test("Server.openapi documents browser-preview and panel memory not-found responses", async () => {

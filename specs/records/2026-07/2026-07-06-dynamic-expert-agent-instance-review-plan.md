@@ -4,6 +4,8 @@ Date: 2026-07-06
 Status: Draft for independent agent review
 Owner: Codex
 
+Supersession note: Package-layout statements in this draft that use `.opencorvus/expert-squads/<id>` are superseded by `2026-07-06-expert-squad-namespaced-source-layout.md`; current project package roots are `.opencorvus/expert-squads/<namespace>/<id>/`.
+
 ## Glossary
 
 - Agent ID: Agent Identifier, the runtime name used to address an agent or an agent-like worker.

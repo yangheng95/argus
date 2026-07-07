@@ -38,10 +38,16 @@ function goal(input: {
   }
 }
 
+type ArchitectTools = ReturnType<typeof createArchitectOutputTools>["tools"]
+
+async function registerGoal(tools: ArchitectTools, input: Record<string, unknown>) {
+  return await tools.manage_goal.execute!({ action: "register_goal", ...input } as any, {} as any)
+}
+
 async function findingsFor(goals: RegisteredGoal[]) {
   const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd() })
   for (const registeredGoal of goals) {
-    await kit.tools.register_goal.execute!(registeredGoal as any, {} as any)
+    await registerGoal(kit.tools, registeredGoal as any)
   }
   return architectValidationFindings(kit.getCollector(), { workDir: process.cwd() })
 }
@@ -60,7 +66,7 @@ test("blocks overlapping feature goal owned_paths without depends_on", async () 
     expect.objectContaining({
       severity: "blocker",
       scope: { goal_ids: ["goal_a", "goal_b"] },
-      repair_tools: ["modify_goal", "remove_goal"],
+      repair_tools: ["manage_goal action=modify_goal", "manage_goal action=remove_goal"],
     }),
   ])
 })

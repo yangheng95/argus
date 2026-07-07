@@ -71,6 +71,104 @@ describe("Scheduler.register", () => {
       },
     })
     expect(runs.count).toBe(1)
+    await Scheduler.disposeGlobal()
+  })
+
+  test("instance disposal waits for an active instance-scoped tick", async () => {
+    await using project = await tmpdir({ git: true })
+    let release!: () => void
+    let started!: () => void
+    const ready = new Promise<void>((resolve) => {
+      started = resolve
+    })
+    const complete = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const id = "scheduler.instance.active." + Math.random().toString(36).slice(2)
+
+    await Instance.provide({
+      directory: project.path,
+      fn: async () => {
+        Scheduler.register({
+          id,
+          interval: hour,
+          run: async () => {
+            started()
+            await complete
+          },
+        })
+        await ready
+        let finished = false
+        const disposal = Instance.dispose().then(() => {
+          finished = true
+        })
+        await Promise.resolve()
+
+        expect(finished).toBe(false)
+        release()
+        await disposal
+        expect(finished).toBe(true)
+      },
+    })
+  })
+
+  test("global disposal waits for an active global tick and clears the registration", async () => {
+    await using one = await tmpdir({ git: true })
+    await using two = await tmpdir({ git: true })
+    let release!: () => void
+    let started!: () => void
+    const ready = new Promise<void>((resolve) => {
+      started = resolve
+    })
+    const complete = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const id = "scheduler.global.active." + Math.random().toString(36).slice(2)
+    const runs = { count: 0 }
+
+    await Instance.provide({
+      directory: one.path,
+      fn: async () => {
+        Scheduler.register({
+          id,
+          interval: hour,
+          scope: "global",
+          run: async () => {
+            runs.count += 1
+            started()
+            await complete
+          },
+        })
+        await ready
+      },
+    })
+    let finished = false
+    const disposal = Scheduler.disposeGlobal().then(() => {
+      finished = true
+    })
+    await Promise.resolve()
+
+    expect(finished).toBe(false)
+    release()
+    await disposal
+    expect(finished).toBe(true)
+    expect(runs.count).toBe(1)
+
+    await Instance.provide({
+      directory: two.path,
+      fn: async () => {
+        Scheduler.register({
+          id,
+          interval: hour,
+          scope: "global",
+          run: async () => {
+            runs.count += 1
+          },
+        })
+      },
+    })
+    await Scheduler.disposeGlobal()
+    expect(runs.count).toBe(2)
   })
 
   test("successful scheduler ticks are debug logs only", () => {

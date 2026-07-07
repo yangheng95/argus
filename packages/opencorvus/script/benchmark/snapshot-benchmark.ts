@@ -374,6 +374,7 @@ async function main() {
   const activity = withStreamActivity({ idleMs, label: "snapshot-benchmark" })
   let pass = 0
   let fail = 0
+  const cleanupErrors: string[] = []
   const t0 = Date.now()
   try {
     for (const s of suites) {
@@ -397,10 +398,18 @@ async function main() {
     }
   } finally {
     activity.dispose()
+    try {
+      await Instance.disposeAll()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      cleanupErrors.push(`instance.disposeAll: ${message}`)
+      console.log(`[cleanup] instance.disposeAll failed: ${message}`)
+    }
   }
-  console.log(`\nresult: pass=${pass} fail=${fail} total=${pass + fail} elapsed=${Date.now() - t0}ms idleMs=${idleMs}`)
-  await Instance.disposeAll().catch(() => {})
-  process.exit(fail)
+  console.log(
+    `\nresult: pass=${pass} fail=${fail} cleanup_fail=${cleanupErrors.length} total=${pass + fail} elapsed=${Date.now() - t0}ms idleMs=${idleMs}`,
+  )
+  process.exit(fail > 0 || cleanupErrors.length > 0 ? 1 : 0)
 }
 
 async function runWithIdleSignal<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {

@@ -7,7 +7,6 @@ import { pathToFileURL, fileURLToPath } from "url"
 import { LSPServer } from "./server"
 import z from "zod"
 import { Config } from "../config/config"
-import { spawn } from "child_process"
 import { Instance, lazyInstanceState } from "../project/instance"
 import { Flag } from "@/flag/flag"
 import { entries, values as objectValues } from "@/util/object"
@@ -163,7 +162,7 @@ export namespace LSP {
         return createState(servers, clients)
       }
 
-      for (const server of objectValues(LSPServer as Record<string, LSPServer.Info>)) {
+      for (const server of LSPServer.builtInServers()) {
         servers[server.id] = server
       }
 
@@ -183,7 +182,7 @@ export namespace LSP {
           extensions: item.extensions ?? existing?.extensions ?? [],
           spawn: async (root) => {
             return {
-              process: spawn(item.command[0], item.command.slice(1), {
+              process: LSPServer.spawnStdio(item.command[0], item.command.slice(1), {
                 cwd: root,
                 env: {
                   ...process.env,
@@ -470,12 +469,11 @@ export namespace LSP {
   export async function documentSymbol(uri: string) {
     const file = fileURLToPath(uri)
     return run(file, (client) =>
-      client.connection
-        .sendRequest("textDocument/documentSymbol", {
-          textDocument: {
-            uri,
-          },
-        }),
+      client.connection.sendRequest("textDocument/documentSymbol", {
+        textDocument: {
+          uri,
+        },
+      }),
     )
       .then((result) => result.flat() as (LSP.DocumentSymbol | LSP.Symbol)[])
       .then((result) => result.filter(Boolean))

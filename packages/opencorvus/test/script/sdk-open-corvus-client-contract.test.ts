@@ -56,7 +56,7 @@ describe("SDK OpenCorvus client contract", () => {
     expect(index).toContain("initGit?: boolean")
     expect(index).toContain('throw new Error("createOpenCorvus initGit=true requires a directory")')
     expect(index).toContain('client.project.current2.initGit({ directory }, { responseStyle: "fields" })')
-    expect(index).toContain("server.close()")
+    expect(index).toContain("await server.close()")
     expect(index).toContain("directory,")
     expect(source).not.toContain("WorktreeNotGitError")
     expect(client).not.toContain("createTask")

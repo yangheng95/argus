@@ -18,6 +18,7 @@ test("MCP status starts local transports asynchronously and records startup fail
         },
       },
     },
+    dispose: async () => Instance.disposeAll(),
   })
 
   await Instance.provide({

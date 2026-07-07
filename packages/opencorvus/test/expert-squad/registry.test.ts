@@ -4,6 +4,7 @@ import { EngineConfig } from "../../src/engine/config"
 import { WorkflowRegistry } from "../../src/engine/workflow"
 import { builtInPackageSources } from "../../src/expert-squad/builtin"
 import { ExpertSquadRegistry } from "../../src/expert-squad/registry"
+import { NON_BASE_FRONTEND_TOOL_IDS } from "../../src/tool/non-base-tool-ids"
 import { repositoryExpertSquadRoot } from "../fixture/expert-squad"
 import { tmpdir } from "../fixture/fixture"
 import fs from "fs/promises"
@@ -308,17 +309,22 @@ describe("ExpertSquadRegistry", () => {
     expect(loaded.packageSkillRefs.has("opentest/architect/test-architecture")).toBe(true)
     expect(loaded.packageSkillRefs.has("opentest/build/test-implementation")).toBe(true)
     expect(loaded.packageSkillRefs.has("opentest/integrity/test-review")).toBe(true)
+    expect(loaded.packageSkillRefs.has("opentest/visual-qa/visual-test-review")).toBe(true)
     expect(loaded.packageToolRefs.has("opentest/shared/test-artifact-inventory")).toBe(false)
     expect(loaded.packageToolRefs.has("opentest/shared/opentest-protocol-engine")).toBe(true)
+    expect(loaded.packageToolRefs.has("opentest/shared/opentest-runner")).toBe(true)
     expect(loaded.manifest.capability_projection.scheduler.package_tool_refs).toEqual([
       "opentest/shared/opentest-protocol-engine",
     ])
-    expect(loaded.explicitSchedulerWorkflowTools).toEqual(["build", "requirements", "architect", "integrity"])
+    expect([...loaded.explicitSchedulerWorkflowTools].sort()).toEqual(
+      ["architect", "build", "integrity", "requirements", "visual_qa"].sort(),
+    )
     expect(Object.keys(loaded.manifest.capability_projection.agents).sort()).toEqual([
       "architect",
       "build",
       "integrity",
       "requirements",
+      "visual-qa",
     ])
     for (const customRole of ["tester", "script-writer", "failure-handler"]) {
       expect(loaded.explicitSchedulerWorkflowTools).not.toContain(customRole)
@@ -331,6 +337,19 @@ describe("ExpertSquadRegistry", () => {
     expect(loaded.promptProfile.virtualAgents.architect?.id).toBe("opentest-test-architect")
     expect(loaded.promptProfile.virtualAgents.build?.id).toBe("opentest-implementer")
     expect(loaded.promptProfile.virtualAgents.integrity?.id).toBe("opentest-reviewer")
+    expect(loaded.promptProfile.virtualAgents["visual-qa"]?.id).toBe("opentest-visual-qa-reviewer")
+    expect(loaded.manifest.capability_projection.agents.build.package_tool_refs).toEqual([
+      "opentest/shared/opentest-protocol-engine",
+      "opentest/shared/opentest-runner",
+    ])
+    expect(loaded.manifest.capability_projection.agents.integrity.package_tool_refs).toEqual([
+      "opentest/shared/opentest-protocol-engine",
+      "opentest/shared/opentest-runner",
+    ])
+    expect(loaded.manifest.capability_projection.agents["visual-qa"].package_tool_refs).toEqual([
+      "opentest/shared/opentest-protocol-engine",
+      "opentest/shared/opentest-runner",
+    ])
     expect(loaded.promptProfile.virtualAgents.requirements?.promptContent).toContain(
       ".opencorvus/expert-squads/wujiang/opentest/protocol-engine/opentest-contract.json",
     )
@@ -343,6 +362,9 @@ describe("ExpertSquadRegistry", () => {
     expect(loaded.promptProfile.virtualAgents.integrity?.promptContent).toContain(
       ".opencorvus/expert-squads/wujiang/opentest/protocol-engine/opentest-contract.json",
     )
+    expect(loaded.promptProfile.virtualAgents["visual-qa"]?.promptContent).toContain(
+      ".opencorvus/expert-squads/wujiang/opentest/protocol-engine/opentest-contract.json",
+    )
     expect(loaded.promptProfile.virtualAgents.requirements?.promptContent).not.toContain(
       ".opencorvus/expert-squads/opentest/",
     )
@@ -353,6 +375,9 @@ describe("ExpertSquadRegistry", () => {
       ".opencorvus/expert-squads/opentest/",
     )
     expect(loaded.promptProfile.virtualAgents.integrity?.promptContent).not.toContain(
+      ".opencorvus/expert-squads/opentest/",
+    )
+    expect(loaded.promptProfile.virtualAgents["visual-qa"]?.promptContent).not.toContain(
       ".opencorvus/expert-squads/opentest/",
     )
   })
@@ -445,6 +470,10 @@ describe("ExpertSquadRegistry", () => {
       acceptance: '{"status":"accepted"}\n',
       result: '{"status":"passed"}\n',
     })
+    const validScriptDate = new Date("2026-07-06T00:00:01.000Z")
+    const validTestDate = new Date("2026-07-06T00:00:02.000Z")
+    await fs.utimes(path.join(tmp.path, "valid", "script.ts"), validScriptDate, validScriptDate)
+    await fs.utimes(path.join(tmp.path, "valid", "TEST.md"), validTestDate, validTestDate)
 
     const valid = await engine.validateOpenTestCase({
       contract,
@@ -1182,6 +1211,24 @@ describe("ExpertSquadRegistry", () => {
     })
 
     await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/unknown built-in tool/)
+  })
+
+  test("rejects non-base frontend host ids declared as built-in tools", async () => {
+    await using tmp = await tmpdir()
+    const toolID = NON_BASE_FRONTEND_TOOL_IDS[0]
+    const packageRoot = await writeValidPackage(tmp.path, {
+      capability_projection: {
+        ...manifest().capability_projection,
+        scheduler: {
+          ...manifest().capability_projection.scheduler,
+          built_in_tool_ids: ["select_expert_squad", toolID],
+        },
+      },
+    })
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(
+      new RegExp(`unknown built-in tool "${toolID}"`),
+    )
   })
 
   test("rejects retired workflow target names as scheduler built-in tools", async () => {

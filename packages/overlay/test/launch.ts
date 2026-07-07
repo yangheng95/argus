@@ -63,6 +63,7 @@ export type OverlayPage = {
     up(options?: Record<string, unknown>): Promise<void>
   }
   on(event: string, handler: EventHandler): void
+  off(event: string, handler: EventHandler): void
 }
 
 export type OverlayElement = {
@@ -94,6 +95,83 @@ const browserLockDir = join(tmpdir(), "pptr-overlay-browser-lock")
 const browserLockHeartbeat = join(browserLockDir, "heartbeat")
 const STALE_BROWSER_LOCK_MS = 120_000
 const BROWSER_RPC_INACTIVITY_TIMEOUT_MS = 30_000
+const BROWSER_RPC_TERMINATE_GRACE_MS = 1_000
+const BROWSER_RPC_TERMINATE_FINAL_MS = 5_000
+
+type PendingRpc = {
+  method: string
+  inactivityTimeoutMs: number
+  resolve: (value: JsonValue) => void
+  reject: (error: Error) => void
+  timer?: ReturnType<typeof setTimeout>
+}
+
+function delay(ms: number): Promise<false> {
+  return new Promise((resolve) => setTimeout(() => resolve(false), ms))
+}
+
+function killWindowsProcessTree(pid: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
+      stdio: ["ignore", "ignore", "pipe"],
+      windowsHide: true,
+    })
+    let stderr = ""
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString()
+    })
+    child.once("error", reject)
+    child.once("close", (code) => {
+      if (code === 0) resolve()
+      else reject(new Error(`taskkill.exe failed for overlay browser sidecar ${pid} with exit code ${code}: ${stderr.trim()}`))
+    })
+  })
+}
+
+async function signalBrowserSidecarTree(child: ChildProcessWithoutNullStreams, signal: NodeJS.Signals): Promise<void> {
+  const pid = child.pid
+  if (!pid) return
+  if (process.platform === "win32") {
+    await killWindowsProcessTree(pid)
+    return
+  }
+  try {
+    process.kill(-pid, signal)
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | undefined)?.code
+    if (code !== "ESRCH") throw error
+  }
+}
+
+function browserSidecarProcessGroupIsRunning(pid: number): boolean {
+  try {
+    process.kill(-pid, 0)
+    return true
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | undefined)?.code
+    if (code === "ESRCH") return false
+    return code === "EPERM"
+  }
+}
+
+async function waitForBrowserSidecarTreeExit(
+  child: ChildProcessWithoutNullStreams,
+  exitTask: Promise<void> | undefined,
+  timeoutMs: number,
+): Promise<boolean> {
+  if (process.platform === "win32") {
+    if (!exitTask) return child.exitCode !== null || child.signalCode !== null
+    return (await Promise.race([exitTask, delay(timeoutMs)])) !== false
+  }
+  const pid = child.pid
+  if (!pid) return true
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (!browserSidecarProcessGroupIsRunning(pid)) return true
+    await delay(25)
+  }
+  return !browserSidecarProcessGroupIsRunning(pid)
+}
 
 function lockedOwnerIsDead() {
   try {
@@ -193,11 +271,10 @@ export async function launchBrowser(extraArgs?: string[], options: LaunchBrowser
 
 class OverlayBrowserSidecar {
   private child: ChildProcessWithoutNullStreams | undefined
+  private exitTask: Promise<void> | undefined
+  private terminateTask: Promise<void> | undefined
   private nextId = 1
-  private pending = new Map<
-    number,
-    { resolve: (value: JsonValue) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }
-  >()
+  private pending = new Map<number, PendingRpc>()
   private pageHandlers = new Map<string, Map<string, EventHandler[]>>()
   private buffer = ""
   private disconnectedHandlers: Array<() => void> = []
@@ -223,18 +300,36 @@ class OverlayBrowserSidecar {
       },
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
+      detached: process.platform !== "win32",
     })
     this.child.stdout.setEncoding("utf8")
     this.child.stderr.setEncoding("utf8")
     this.child.stdout.on("data", (chunk) => this.readStdout(chunk))
     this.child.stderr.on("data", (chunk) => {
+      this.refreshPendingRpcTimers("stderr")
       if (chunk.trim()) console.error(`[overlay-browser-node] ${chunk.trim()}`)
     })
-    this.child.once("exit", () => {
-      this.release()
-      for (const item of this.disconnectedHandlers) item()
+    this.exitTask = new Promise((resolve) => {
+      this.child!.once("close", (code, signal) => {
+        this.rejectPendingBrowserCalls(
+          new Error(`Overlay browser sidecar exited with ${signal ?? code ?? 0}`),
+        )
+        this.child = undefined
+        this.release()
+        for (const item of this.disconnectedHandlers) item()
+        resolve()
+      })
     })
-    await this.call("launch", { extraArgs: this.extraArgs, headless: this.headless })
+    try {
+      await this.call("launch", { extraArgs: this.extraArgs, headless: this.headless })
+    } catch (error) {
+      try {
+        await this.terminateSidecar("browser launch failed")
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], "Overlay browser launch failed and sidecar cleanup failed")
+      }
+      throw error
+    }
   }
 
   browserProxy(): OverlayBrowser {
@@ -247,12 +342,9 @@ class OverlayBrowserSidecar {
       },
       close: async () => {
         let collectorError: unknown
-        try {
-          await Promise.race([this.call("closeBrowser"), new Promise((resolve) => setTimeout(resolve, 5_000))])
-        } finally {
-          this.child?.kill()
-          this.release()
-        }
+        await this.call("closeBrowser", undefined, 5_000).catch(() => undefined)
+        await this.terminateSidecar("browser close")
+        await this.exitTask
         try {
           this.assertNoUnexpectedBrowserErrors()
         } catch (error) {
@@ -362,6 +454,15 @@ class OverlayBrowserSidecar {
         this.pageHandlers.set(pageId, events)
         void this.call("registerPageEvent", { pageId, event })
       },
+      off: (event, handler) => {
+        const events = this.pageHandlers.get(pageId)
+        const handlers = events?.get(event)
+        if (!events || !handlers) return
+        const next = handlers.filter((item) => item !== handler)
+        if (next.length > 0) events.set(event, next)
+        else events.delete(event)
+        if (events.size === 0) this.pageHandlers.delete(pageId)
+      },
     } as OverlayPage
   }
 
@@ -377,6 +478,7 @@ class OverlayBrowserSidecar {
   }
 
   private readStdout(chunk: string) {
+    this.refreshPendingRpcTimers("stdout")
     this.buffer += chunk
     while (true) {
       const index = this.buffer.indexOf("\n")
@@ -398,23 +500,73 @@ class OverlayBrowserSidecar {
     const pending = this.pending.get(message.id)
     if (!pending) return
     this.pending.delete(message.id)
-    clearTimeout(pending.timer)
+    this.clearPendingRpcTimer(pending)
     if (message.ok) pending.resolve(decode(message.result))
     else pending.reject(Object.assign(new Error(message.error), { stack: message.stack }))
   }
 
-  private call(method: string, params?: unknown): Promise<JsonValue> {
+  private clearPendingRpcTimer(pending: PendingRpc) {
+    if (pending.timer) clearTimeout(pending.timer)
+    pending.timer = undefined
+  }
+
+  private resetPendingRpcTimer(id: number, pending: PendingRpc, source: string) {
+    this.clearPendingRpcTimer(pending)
+    pending.timer = setTimeout(() => {
+      if (this.pending.get(id) !== pending) return
+      this.pending.delete(id)
+      pending.reject(
+        new Error(
+          `Overlay browser RPC inactive for ${pending.inactivityTimeoutMs}ms after ${source}: ${pending.method}`,
+        ),
+      )
+      void this.terminateSidecar(`inactive RPC ${pending.method}`)
+    }, pending.inactivityTimeoutMs)
+  }
+
+  private refreshPendingRpcTimers(source: string) {
+    for (const [id, pending] of this.pending) this.resetPendingRpcTimer(id, pending, source)
+  }
+
+  private rejectPendingBrowserCalls(error: Error) {
+    for (const [id, pending] of this.pending) {
+      this.pending.delete(id)
+      this.clearPendingRpcTimer(pending)
+      pending.reject(error)
+    }
+  }
+
+  private async terminateSidecar(reason: string): Promise<void> {
+    if (this.terminateTask) return this.terminateTask
+    const child = this.child
+    if (!child) {
+      await this.exitTask
+      return
+    }
+    this.terminateTask = (async () => {
+      await signalBrowserSidecarTree(child, "SIGTERM").catch(() => undefined)
+      if (await waitForBrowserSidecarTreeExit(child, this.exitTask, BROWSER_RPC_TERMINATE_GRACE_MS)) return
+      await signalBrowserSidecarTree(child, "SIGKILL").catch(() => undefined)
+      if (!(await waitForBrowserSidecarTreeExit(child, this.exitTask, BROWSER_RPC_TERMINATE_FINAL_MS))) {
+        throw new Error(`Overlay browser sidecar did not exit after forced termination for ${reason}`)
+      }
+    })()
+    return this.terminateTask
+  }
+
+  private call(
+    method: string,
+    params?: unknown,
+    inactivityTimeoutMs = BROWSER_RPC_INACTIVITY_TIMEOUT_MS,
+  ): Promise<JsonValue> {
     if (!this.child) throw new Error("Overlay browser sidecar is not started")
     const id = this.nextId++
     const request: RpcRequest = { id, method, params: encode(params) as JsonValue }
     this.child.stdin.write(`${JSON.stringify(request)}\n`)
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pending.delete(id)
-        reject(new Error(`Overlay browser RPC timed out after ${BROWSER_RPC_INACTIVITY_TIMEOUT_MS}ms: ${method}`))
-        this.child?.kill()
-      }, BROWSER_RPC_INACTIVITY_TIMEOUT_MS)
-      this.pending.set(id, { resolve, reject, timer })
+      const pending: PendingRpc = { method, inactivityTimeoutMs, resolve, reject }
+      this.pending.set(id, pending)
+      this.resetPendingRpcTimer(id, pending, "request")
     })
   }
 

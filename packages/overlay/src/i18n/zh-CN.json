@@ -812,6 +812,7 @@
   "expert_squad.readme_title": "README",
   "expert_squad.orchestrator_append": "追加给调度器",
   "expert_squad.capability_projection": "调度器能力投影",
+  "expert_squad.agent_capability_projection": "Agent 能力投影",
   "project.close": "关闭项目",
   "section.acceptance": "交付",
   "section.files": "文件变更",

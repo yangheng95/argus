@@ -11,7 +11,7 @@ import { BusEvent } from "@/bus/bus-event"
 import { iife } from "@/util/iife"
 import { GlobalBus } from "@/bus/global"
 import { existsSync } from "fs"
-import { realpath, readdir, stat } from "fs/promises"
+import { readFile, realpath, readdir, stat } from "fs/promises"
 import { git } from "../util/git"
 import { Glob } from "../util/glob"
 import { which } from "@/util/which"
@@ -99,6 +99,27 @@ export namespace Project {
   async function standaloneCommon(worktree: string, common: string) {
     const localCommon = path.join(worktree, ".git")
     return samePath(common, localCommon) || (await sameFilesystemLocation(common, localCommon))
+  }
+
+  export async function localGitDirectory(worktree: string): Promise<string | undefined> {
+    const dotgit = path.join(worktree, ".git")
+    const info = await stat(dotgit).catch((error) => {
+      if (isMissingPathError(error)) return undefined
+      throw error
+    })
+    if (!info) return undefined
+    if (info.isDirectory()) return dotgit
+    if (!info.isFile()) {
+      throw new Error(`Unsupported .git filesystem entry: ${dotgit}`)
+    }
+
+    const content = await readFile(dotgit, "utf8")
+    const match = /^gitdir:\s*(.+?)\s*$/i.exec(content.trim())
+    if (!match?.[1]) {
+      throw new Error(`Malformed .git file: ${dotgit}`)
+    }
+    const gitdir = Filesystem.windowsPath(match[1])
+    return Filesystem.resolve(path.isAbsolute(gitdir) ? gitdir : path.join(worktree, gitdir))
   }
 
   function projectIDTables(db: Database.TxOrDb) {

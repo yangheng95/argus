@@ -99,7 +99,7 @@ try {
   const health = await client.global.health({ throwOnError: true })
   console.log(health.data)
 } finally {
-  server.close()
+  await server.close()
 }
 ```
 
@@ -108,7 +108,7 @@ try {
 ```typescript
 {
   client: OpenCorvusClient
-  server: { url: string; close: () => void }
+  server: { url: string; close: () => Promise<void> }
 }
 ```
 

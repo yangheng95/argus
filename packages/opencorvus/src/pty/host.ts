@@ -10,6 +10,7 @@ import {
 import { Identifier } from "@/id/id"
 import { Instance, lazyInstanceState } from "@/project/instance"
 import { requireRuntimePackage, runtimePackageRequire } from "@/runtime/package-require"
+import { ProcessSupervisor } from "@/shell/process-supervisor"
 
 const MAX_BUFFER_BYTES = 1_000_000
 const BUFFER_CHUNK = 64 * 1024
@@ -22,14 +23,21 @@ const Pty = require(payload.nodePtyRequirePath)
 function send(message) {
   process.stdout.write(JSON.stringify(message) + "\n")
 }
-const proc = Pty.spawn(payload.command, payload.args, {
-  name: "xterm-256color",
-  cols: payload.cols,
-  rows: payload.rows,
-  cwd: payload.cwd,
-  env: { ...process.env, ...payload.env },
-  useConptyDll: false,
-})
+let proc
+try {
+  proc = Pty.spawn(payload.command, payload.args, {
+    name: "xterm-256color",
+    cols: payload.cols,
+    rows: payload.rows,
+    cwd: payload.cwd,
+    env: { ...process.env, ...payload.env },
+    useConptyDll: false,
+  })
+  send({ type: "ready" })
+} catch (error) {
+  send({ type: "startup_error", error: error instanceof Error ? error.message : String(error) })
+  process.exit(1)
+}
 proc.onData((data) => send({ type: "data", data }))
 proc.onExit((event) => {
   send({ type: "exit", exitCode: event.exitCode })
@@ -61,7 +69,7 @@ interface HostProcess {
   pid: number
   write(data: string): void
   resize(cols: number, rows: number): void
-  kill(): void
+  kill(): Promise<void>
   onData(handler: (chunk: string) => void): void
   onExit(handler: ExitHandler): void
 }
@@ -102,7 +110,7 @@ const state = lazyInstanceState(
   }),
   async (s) => {
     for (const session of s.sessions.values()) {
-      closeSession(session, "PTY host stopped")
+      await closeSession(session, "PTY host stopped")
     }
     s.sessions.clear()
     s.primaryID = null
@@ -198,12 +206,12 @@ function currentSession() {
   return s.primaryID ? (s.sessions.get(s.primaryID) ?? null) : null
 }
 
-function closeSession(session: HostSession, reason: string) {
+async function closeSession(session: HostSession, reason: string) {
   for (const connection of session.connections) {
     connection.close(1000, reason)
   }
   session.connections.clear()
-  session.process?.kill()
+  await session.process?.kill()
   session.process = null
   session.status = "exited"
   session.updatedAt = Date.now()
@@ -233,13 +241,49 @@ function directPtyProcess(input: {
     env: input.env,
     useConptyDll: false,
   })
+  let exited = false
+  let exitEvent: { exitCode: number | null } | undefined
+  const exitHandlers = new Set<ExitHandler>()
+  const waitForExit = (timeoutMs: number) =>
+    new Promise<boolean>((resolve) => {
+      if (exited) {
+        resolve(true)
+        return
+      }
+      const timer = setTimeout(() => {
+        exitHandlers.delete(onExit)
+        resolve(false)
+      }, timeoutMs)
+      unrefTimer(timer)
+      const onExit = () => {
+        clearTimeout(timer)
+        resolve(true)
+      }
+      exitHandlers.add(onExit)
+    })
+  proc.onExit((event) => {
+    exited = true
+    exitEvent = { exitCode: event.exitCode }
+    for (const handler of exitHandlers) handler(exitEvent)
+    exitHandlers.clear()
+  })
   return {
     pid: proc.pid,
     write: (data) => proc.write(data),
     resize: (cols, rows) => proc.resize(cols, rows),
-    kill: () => proc.kill(),
+    kill: async () => {
+      if (!exited) proc.kill()
+      if (await waitForExit(2_000)) return
+      throw new Error(`PTY process ${proc.pid} did not exit after kill`)
+    },
     onData: (handler) => proc.onData(handler),
-    onExit: (handler) => proc.onExit((event) => handler({ exitCode: event.exitCode })),
+    onExit: (handler) => {
+      if (exitEvent) {
+        handler(exitEvent)
+        return
+      }
+      exitHandlers.add(handler)
+    },
   }
 }
 
@@ -288,30 +332,91 @@ function unrefTimer(timer: ReturnType<typeof setTimeout>) {
   unref.unref?.()
 }
 
-function forceKillBridgeChild(child: ChildProcess) {
+async function waitForBridgeExit(child: ChildProcess, timeoutMs: number): Promise<boolean> {
+  if (bridgeExited(child)) return true
+  return await new Promise<boolean>((resolve) => {
+    let settled = false
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      child.off("exit", onExit)
+      resolve(false)
+    }, timeoutMs)
+    unrefTimer(timer)
+    const onExit = () => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolve(true)
+    }
+    child.once("exit", onExit)
+  })
+}
+
+async function waitForChildProcessIDExit(processID: number, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (!processIDIsRunning(processID)) return true
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
+  return !processIDIsRunning(processID)
+}
+
+function processIDIsRunning(processID: number): boolean {
+  try {
+    process.kill(processID, 0)
+    return true
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === "ESRCH") return false
+    return code === "EPERM"
+  }
+}
+
+async function forceKillBridgeChild(child: ChildProcess) {
   if (bridgeExited(child) || !child.pid) return
   if (process.platform === "win32") {
-    const killer = nodeSpawn("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
-      stdio: "ignore",
-      windowsHide: true,
-    })
-    killer.on("error", () => {})
+    await ProcessSupervisor.terminateProcessTree(child.pid, `PTY bridge process tree ${child.pid}`)
     return
   }
   child.kill("SIGKILL")
+  if (await waitForBridgeExit(child, 1_000)) return
+  throw new Error(`PTY bridge process ${child.pid} did not exit after SIGKILL`)
 }
 
-function terminateBridgeChild(child: ChildProcess) {
+async function terminateBridgeChild(child: ChildProcess) {
   if (bridgeExited(child)) return
   bridgeMessage(child, { type: "kill" })
   child.stdin?.end()
-  unrefTimer(
-    setTimeout(() => {
-      if (bridgeExited(child)) return
-      child.kill("SIGTERM")
-      unrefTimer(setTimeout(() => forceKillBridgeChild(child), 1_000))
-    }, 1_000),
-  )
+  if (await waitForBridgeExit(child, 1_000)) return
+  child.kill("SIGTERM")
+  if (await waitForBridgeExit(child, 1_000)) return
+  await forceKillBridgeChild(child)
+}
+
+async function waitForBridgeSpawn(child: ChildProcess, executable: string): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const cleanup = () => {
+      child.off("spawn", onSpawn)
+      child.off("error", onError)
+      child.off("exit", onExit)
+    }
+    const onSpawn = () => {
+      cleanup()
+      resolve()
+    }
+    const onError = (error: Error) => {
+      cleanup()
+      reject(error)
+    }
+    const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
+      cleanup()
+      reject(new Error(`PTY bridge ${executable} exited before startup with ${signal ?? code}`))
+    }
+    child.once("spawn", onSpawn)
+    child.once("error", onError)
+    child.once("exit", onExit)
+  })
 }
 
 async function nodeBridgePtyProcess(input: {
@@ -338,6 +443,7 @@ async function nodeBridgePtyProcess(input: {
     stdio: ["pipe", "pipe", "pipe"],
     windowsHide: true,
   })
+  await waitForBridgeSpawn(child, runtime.nodeExecutable)
   child.stdin?.on("error", () => {
     // The Pseudo Terminal (PTY) child may exit before a late kill/input message reaches stdin.
   })
@@ -347,6 +453,21 @@ async function nodeBridgePtyProcess(input: {
   let pendingExit: { exitCode: number | null } | undefined
   let exited = false
   let terminating = false
+  let bridgeReadySettled = false
+  let resolveBridgeReady: (() => void) | undefined
+  let rejectBridgeReady: ((error: Error) => void) | undefined
+  const bridgeReady = new Promise<void>((resolve, reject) => {
+    resolveBridgeReady = () => {
+      if (bridgeReadySettled) return
+      bridgeReadySettled = true
+      resolve()
+    }
+    rejectBridgeReady = (error) => {
+      if (bridgeReadySettled) return
+      bridgeReadySettled = true
+      reject(error)
+    }
+  })
 
   const emitData = (chunk: string) => {
     if (dataHandlers.length === 0) {
@@ -372,9 +493,19 @@ async function nodeBridgePtyProcess(input: {
   const reader = createInterface({ input: child.stdout!, crlfDelay: Infinity })
   reader.on("line", (line) => {
     const message = JSON.parse(line) as
+      | { type: "ready" }
+      | { type: "startup_error"; error: string }
       | { type: "data"; data: string }
       | { type: "exit"; exitCode: number | null }
       | { type: "error"; error: string }
+    if (message.type === "ready") {
+      resolveBridgeReady?.()
+      return
+    }
+    if (message.type === "startup_error") {
+      rejectBridgeReady?.(new Error(`PTY bridge startup failed: ${message.error}`))
+      return
+    }
     if (message.type === "data") {
       emitData(message.data)
     }
@@ -387,22 +518,31 @@ async function nodeBridgePtyProcess(input: {
     }
   })
   child.on("exit", (exitCode) => {
+    rejectBridgeReady?.(new Error(`PTY bridge ${runtime.nodeExecutable} exited before PTY startup with ${exitCode}`))
     if (exited) return
     exited = true
     emitExit({ exitCode })
   })
   child.on("error", (error) => {
+    rejectBridgeReady?.(error)
     emitData(error.message)
   })
+
+  try {
+    await bridgeReady
+  } catch (error) {
+    await forceKillBridgeChild(child).catch(() => undefined)
+    throw error
+  }
 
   return {
     pid: child.pid ?? 0,
     write: (data) => bridgeMessage(child, { type: "input", data }),
     resize: (cols, rows) => bridgeMessage(child, { type: "resize", cols, rows }),
-    kill: () => {
+    kill: async () => {
       if (terminating) return
       terminating = true
-      terminateBridgeChild(child)
+      await terminateBridgeChild(child)
     },
     onData: (handler) => {
       dataHandlers.push(handler)
@@ -623,7 +763,7 @@ export namespace PtyHost {
     const s = state()
     const session = currentSession()
     if (!session) return true
-    closeSession(session, "PTY host stopped")
+    await closeSession(session, "PTY host stopped")
     s.sessions.delete(session.id)
     if (s.primaryID === session.id) s.primaryID = Array.from(s.sessions.keys()).at(-1) ?? null
     return true
@@ -633,7 +773,7 @@ export namespace PtyHost {
     const s = state()
     const session = s.sessions.get(input.id)
     if (!session) return true
-    closeSession(session, "PTY session removed")
+    await closeSession(session, "PTY session removed")
     s.sessions.delete(input.id)
     if (s.primaryID === input.id) s.primaryID = Array.from(s.sessions.keys()).at(-1) ?? null
     return true

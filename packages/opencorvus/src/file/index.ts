@@ -712,7 +712,7 @@ export namespace File {
       fetching = tracked
       return tracked
     }
-    void refresh().catch((error) => {
+    await refresh().catch((error) => {
       log.warn("file index scan failed", { error: error instanceof Error ? error.message : String(error) })
     })
 
@@ -723,8 +723,8 @@ export namespace File {
     }
   })
 
-  export function init() {
-    state()
+  export async function init() {
+    await state()
   }
 
   export async function status() {

@@ -20,7 +20,7 @@ import { boardStore, setTasksData, loadBoard, loadTasks, activeTaskID, activeSes
 import { appStore, setConnectionStatus } from "../store/app"
 import { workspaceMode } from "./workspace"
 import { selectTask, createTask, currentOpenCorvusModel } from "./task"
-import { patchSessionConfig } from "./config"
+import { setSessionExpertSquadActive } from "./expert-squad"
 import { ingestPersistedConversationMessage } from "./tree-writer"
 import { conversationSourceDirectory } from "./conversation"
 import { taskOwningDirectory } from "./task-directory"
@@ -451,11 +451,7 @@ export async function panelMessage(
       request.target = { kind: "session", sessionID, directory }
       setChatRequest(request as any)
       if (promptProfile) {
-        await patchSessionConfig({
-          sessionID,
-          directory,
-          diff: { prompt_profile: { active: promptProfile } },
-        })
+        await setSessionExpertSquadActive(sessionID, promptProfile, directory)
       }
       const result = await apiJson(
         directoryScopedPath(`session/${encodeURIComponent(sessionID)}/prompt_async`, directory, "session prompt"),

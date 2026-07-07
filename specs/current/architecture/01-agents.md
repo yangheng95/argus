@@ -142,7 +142,7 @@ orchestrator/loop.ts — runTaskLoop()
 
 1. **Worker / evidence 调用**：`dispatch_agent`，用 `target` 选择 `requirements`、`frontend_design`、`frontend_research`、`deep_research`、`architect`、`workload_analysis`、`build`、`visual_qa`、`integrity`、`fact_check`、`analyze_intent`、`explore`；可选 target 必须来自当前 workflow。
 2. **任务与 goal 生命周期**：`manage_task`，用 `action` 选择 `propose_task`、`complete_task`、`fail_task`、`cancel_task`、`retry_task`、`add_goal`、`modify_goal`、`complete_goal`、`delete_goal`。
-3. **Goal 诊断 / 上下文 / 预览**：`query_failed_goals`、`read_context`、`analytics`、`browser_preview`。
+3. **Goal 诊断 / 上下文 / 预览**：`manage_task action=query_failed_goals`、`read_context`、`analytics`、`browser_preview`。
 4. **用户交互 / 等待 / 调度控制**：`question`、`wait`、`inject_operator_message`、`cancel_subagent`（中止指定子 agent session；session 级恢复手段，取消后须显式重新 dispatch 同一 goal/stage；如果来源是 pending `agent_coordination_request`，取消只能走 `respond_agent_coordination(decision="cancel_worker")`）、`refine`。
 5. **A2A 协议响应**：`respond_agent_coordination` 是 orchestrator 回答 worker/operator-to-orchestrator coordination request 的唯一调度响应入口；它只能处理 durable `agent_coordination_request`，并写入 visible `agent_coordination_response` / `agent_coordination_action` 后执行 continue / cancel_worker / ask_user / `manage_task action=fail_task` / bound `dispatch_agent`。
 

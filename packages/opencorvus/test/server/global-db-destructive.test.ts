@@ -187,7 +187,7 @@ async function expectActiveSessionConflict(response: Response, operation: string
   Database.close()
 }
 
-function installRestartHarness() {
+function installRestartHarness(input: { exited?: Promise<number> } = {}) {
   const reasons: string[] = []
   let resolveShutdown!: (reason: string) => void
   const shutdown = new Promise<string>((resolve) => {
@@ -198,7 +198,7 @@ function installRestartHarness() {
     resolveShutdown(reason)
   })
   const unref = mock(() => undefined)
-  const spawn = spyOn(Bun, "spawn").mockReturnValue({ unref } as any)
+  const spawn = spyOn(Bun, "spawn").mockReturnValue({ unref, exited: input.exited ?? new Promise<number>(() => {}) } as any)
   return { reasons, shutdown, spawn, unref }
 }
 
@@ -323,6 +323,36 @@ describe("global destructive database routes", () => {
     expect(fs.existsSync(`${dbPath}-shm`)).toBe(false)
     expect(fs.readFileSync(path.join(runtimePath, "runtime.txt"), "utf8")).toBe("runtime")
     expect(fs.readFileSync(path.join(legacyRuntimePath, "legacy.txt"), "utf8")).toBe("legacy")
+  })
+
+  test.serial("DB reset reports restart child early exit instead of claiming restart success", async () => {
+    const dbPath = Database.Path()
+    fs.mkdirSync(path.dirname(dbPath), { recursive: true })
+    fs.writeFileSync(dbPath, "db")
+    spyOn(Instance, "disposeAll").mockResolvedValue(undefined)
+    const restart = installRestartHarness({ exited: Promise.resolve(1) })
+
+    const response = await Server.App().request("/global/db/reset", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ database: dbPath }),
+    })
+
+    expect(response.status).toBe(503)
+    const body = (await response.json()) as {
+      ok: boolean
+      restarting: boolean
+      targets: Array<{ label: string; path: string }>
+      error: string
+    }
+    expect(body.ok).toBe(false)
+    expect(body.restarting).toBe(false)
+    expect(body.error).toContain("Restart child exited before shutdown handoff")
+    expect(body.targets.map((target) => target.path)).toEqual([dbPath, `${dbPath}-wal`, `${dbPath}-shm`])
+    expect(restart.spawn).toHaveBeenCalledTimes(1)
+    expect(restart.unref).toHaveBeenCalledTimes(1)
+    expect(restart.reasons).toEqual([])
+    expect(fs.existsSync(dbPath)).toBe(false)
   })
 
   test.serial("DB reset deletes stale-schema database file without opening the project registry", async () => {

@@ -118,7 +118,9 @@ export function sanitizeExecutor(value: any): ExecutorID {
 
 export function sanitizeProjectEditor(value: any): ProjectEditorID {
   const text = String(value || "").trim()
-  return PROJECT_EDITOR_IDS.includes(text as ProjectEditorID) ? (text as ProjectEditorID) : "vscode"
+  if (!text) return DEFAULT_SETTINGS.preferredProjectEditor
+  if (PROJECT_EDITOR_IDS.includes(text as ProjectEditorID)) return text as ProjectEditorID
+  throw new Error(`invalid project editor id: ${text}`)
 }
 
 // ── Default locale ──

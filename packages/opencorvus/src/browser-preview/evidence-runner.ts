@@ -327,6 +327,17 @@ export async function writeBrowserEvidenceManifest(input: {
   requireBrowserEvidenceIdentity(input)
   await fs.mkdir(input.outDir, { recursive: true })
   const diagnosticsPath = path.join(input.outDir, "diagnostics.json")
+  const requestedCaptureComplete =
+    input.viewportIDs.length > 0 &&
+    input.viewportIDs.every((viewportID) => {
+      const capture = input.captures[viewportID]
+      return Boolean(
+        capture?.captured &&
+          capture.passed &&
+          typeof capture.path === "string" &&
+          input.artifactPaths.includes(capture.path),
+      )
+    })
   const manifest: BrowserEvidenceManifestSummary = {
     manifestPath: path.join(input.outDir, "manifest.json"),
     jobID: input.jobID,
@@ -335,9 +346,7 @@ export async function writeBrowserEvidenceManifest(input: {
     operations: [
       {
         kind: "preview-capture",
-        status: Object.values(input.captures).every((capture) => capture.captured && capture.passed)
-          ? "completed"
-          : "failed",
+        status: requestedCaptureComplete ? "completed" : "failed",
         viewportIDs: input.viewportIDs,
         artifactPaths: input.artifactPaths,
         diagnosticsPath,

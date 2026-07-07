@@ -318,8 +318,14 @@ test("notification task action is an explicit button on toast and panel surfaces
   const expertSquadCatalog = expertSquadCatalogFixture({
     active: "default",
     projectActive: "default",
-    defaultProfile: "general",
-    profiles: [
+    defaultSquad: "general",
+    squads: [
+      {
+        id: "general",
+        label: "General",
+        description: "General project profile.",
+        built_in: true,
+      },
       {
         id: "default",
         label: "Default",

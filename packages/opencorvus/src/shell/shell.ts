@@ -79,6 +79,7 @@ export namespace Shell {
       shell,
       cwd: opts.cwd,
       env: { ...process.env, ...opts.env, ...guardEnv },
+      requireProcessTreeCleanup: true,
     })
 
     let stdout = ""
@@ -87,7 +88,19 @@ export namespace Shell {
     let idleTimedOut = false
     let aborted = false
 
-    const terminate = () => supervisor.terminate()
+    let terminationPromise: Promise<number> | undefined
+    let resolveTerminationRequested: ((promise: Promise<number>) => void) | undefined
+    const terminationRequested = new Promise<Promise<number>>((resolve) => {
+      resolveTerminationRequested = resolve
+    })
+    const requestTermination = (reason: string) => {
+      if (!terminationPromise) {
+        terminationPromise = ProcessSupervisor.terminateAndWaitForExit(supervisor, `Shell.run ${reason}`)
+        terminationPromise.catch(() => undefined)
+        resolveTerminationRequested?.(terminationPromise)
+      }
+      return terminationPromise
+    }
 
     const idleMs =
       typeof opts.idleTimeoutMs === "number" && Number.isFinite(opts.idleTimeoutMs) && opts.idleTimeoutMs > 0
@@ -100,7 +113,7 @@ export namespace Shell {
       if (idleTimer) clearTimeout(idleTimer)
       idleTimer = setTimeout(() => {
         idleTimedOut = true
-        void terminate()
+        requestTermination("idle timeout")
       }, idleMs)
       idleTimer.unref?.()
     }
@@ -118,12 +131,12 @@ export namespace Shell {
 
     if (opts.abort?.aborted) {
       aborted = true
-      await terminate()
+      requestTermination("abort")
     }
 
     const abortHandler = () => {
       aborted = true
-      void terminate()
+      requestTermination("abort")
     }
     opts.abort?.addEventListener("abort", abortHandler, { once: true })
 
@@ -132,13 +145,17 @@ export namespace Shell {
       timeoutMs && timeoutMs > 0
         ? setTimeout(() => {
             timedOut = true
-            void terminate()
+            requestTermination("timeout")
           }, timeoutMs)
         : undefined
     timer?.unref?.()
 
+    let primaryError: unknown
     try {
-      const exitCode = await supervisor.exited
+      const exitCode = await Promise.race([supervisor.exited, terminationRequested.then((cleanup) => cleanup)])
+      if (terminationPromise) {
+        await terminationPromise
+      }
       return {
         exitCode,
         stdout,
@@ -148,11 +165,18 @@ export namespace Shell {
         aborted,
         pid: supervisor.pid,
       }
+    } catch (error) {
+      primaryError = error
+      throw error
     } finally {
       if (timer) clearTimeout(timer)
       if (idleTimer) clearTimeout(idleTimer)
       opts.abort?.removeEventListener("abort", abortHandler)
-      await supervisor.dispose()
+      try {
+        await ProcessSupervisor.disposeAndWaitForExit(supervisor, "Shell.run")
+      } catch (error) {
+        if (!primaryError) throw error
+      }
     }
   }
 
@@ -203,9 +227,23 @@ export namespace Shell {
       },
     )
 
+    let disposePromise: Promise<number> | undefined
+    let resolveDisposeRequested: ((promise: Promise<number>) => void) | undefined
+    const disposeRequested = new Promise<Promise<number>>((resolve) => {
+      resolveDisposeRequested = resolve
+    })
+    const requestDispose = (reason: string) => {
+      if (!disposePromise) {
+        disposePromise = ProcessSupervisor.disposeAndWaitForExit(supervisor, `Shell.launch ${reason}`)
+        disposePromise.catch(() => undefined)
+        resolveDisposeRequested?.(disposePromise)
+      }
+      return disposePromise
+    }
+
     const abortHandler = () => {
       aborted = true
-      void supervisor.dispose()
+      requestDispose("abort")
     }
     opts.abort?.addEventListener("abort", abortHandler, { once: true })
     if (opts.abort?.aborted) abortHandler()
@@ -223,35 +261,41 @@ export namespace Shell {
 
     if (aborted) {
       opts.abort?.removeEventListener("abort", abortHandler)
-      await supervisor.dispose()
+      await disposePromise
       throw new Error(`Process launch aborted. Output:\n${initialOutput.slice(0, 1000)}`)
     }
 
     if (exited) {
       opts.abort?.removeEventListener("abort", abortHandler)
-      await supervisor.dispose()
+      await ProcessSupervisor.disposeAndWaitForExit(supervisor, "Shell.launch immediate exit")
       throw new Error(`Process exited immediately after launch. Output:\n${initialOutput.slice(0, 1000)}`)
     }
 
-    const disposeSupervisor = () => supervisor.dispose()
     const leaseTimer =
       typeof leaseMs === "number" && Number.isFinite(leaseMs) && leaseMs > 0
         ? setTimeout(() => {
-            void disposeSupervisor()
+            requestDispose("lease timeout")
           }, leaseMs)
         : undefined
     leaseTimer?.unref?.()
     const exitedPromise = supervisor.exited
-      .finally(() => {
-        if (leaseTimer) clearTimeout(leaseTimer)
-        opts.abort?.removeEventListener("abort", abortHandler)
-      })
       .then(() => undefined)
-      .catch(() => undefined)
+      .catch((error) => {
+        throw error
+      })
+    const lifecyclePromise = Promise.race([
+      exitedPromise,
+      disposeRequested.then(async (cleanup) => {
+        await cleanup
+      }),
+    ]).finally(() => {
+      if (leaseTimer) clearTimeout(leaseTimer)
+      opts.abort?.removeEventListener("abort", abortHandler)
+    })
     supervisor.unref()
 
     const address = detectLaunchAddress(initialOutput)
-    return { pid: supervisor.pid, address, initialOutput: initialOutput.slice(0, 2000), exited: exitedPromise }
+    return { pid: supervisor.pid, address, initialOutput: initialOutput.slice(0, 2000), exited: lifecyclePromise }
   }
 
   function detectLaunchAddress(output: string): string | undefined {

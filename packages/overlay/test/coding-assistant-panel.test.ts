@@ -48,7 +48,8 @@ test("coding assistant activity selects an independent session in the shared mes
   expect(main).toContain("type CenterWorkbenchPanel =")
   expect(main).toContain('| "screenshots"')
   expect(main).toContain('type RightActivity = Exclude<CenterWorkbenchPanel, "file">')
-  expect(main).toContain('type LeftActivity = "tasks" | "mission" | "assistant" | "memory" | "skill" | "mcp"')
+  expect(main).toContain('type LeftActivity = "tasks" | "mission" | "assistant" | "memory" | "extensions"')
+  expect(main).not.toContain('type LeftActivity = "tasks" | "mission" | "assistant" | "memory" | "skill" | "mcp"')
   expect(main).toContain(
     'id: "mission", icon: "mission", labelKey: "mission.title", tooltipKey: "activity.tooltip.mission"',
   )
@@ -110,10 +111,9 @@ test("coding assistant activity selects an independent session in the shared mes
   )
   expect(main).toContain('composerDraftKey("session", sessionID)')
   expect(chat).toContain("session/${encodeURIComponent(sessionID)}/prompt_async")
-  expect(chat).toContain("await patchSessionConfig({")
+  expect(chat).toContain("await setSessionExpertSquadActive(sessionID, promptProfile, directory)")
   expect(chat).toContain('const directory = conversationSourceDirectory({ kind: "session", id: sessionID })')
-  expect(chat).toContain("directory,")
-  expect(chat).toContain("diff: { prompt_profile: { active: promptProfile } }")
+  expect(chat).not.toContain("diff: { prompt_profile: { active: promptProfile } }")
   expect(chat).toContain("activeSessionID()")
   expect(main).not.toContain("overlayRightActivityPlugins")
   expect(main).not.toContain("PluginPanel")

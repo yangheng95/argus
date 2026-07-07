@@ -19,7 +19,7 @@ const ctx = {
 }
 
 describe("tool.web_clone_generate_source_project", () => {
-  test("is exposed through owning agent-private tool pools", async () => {
+  test("is not exposed through base or agent-private tool pools", async () => {
     await using tmp = await tmpdir()
 
     await Instance.provide({
@@ -28,9 +28,11 @@ describe("tool.web_clone_generate_source_project", () => {
         const globalIDs = await ToolRegistry.ids()
         expect(globalIDs).not.toContain("web_clone_generate_source_project")
 
-        const coding = await Agent.get("coding")
-        const codingTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, coding)
-        expect(codingTools.map((tool) => tool.id)).toContain("web_clone_generate_source_project")
+        for (const agentID of ["coding", "coding-assistant", "general", "build"]) {
+          const agent = await Agent.get(agentID)
+          const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, agent)
+          expect(tools.map((tool) => tool.id)).not.toContain("web_clone_generate_source_project")
+        }
       },
     })
   }, 30_000)

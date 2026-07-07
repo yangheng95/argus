@@ -12,15 +12,6 @@ export interface ToolPoolAssignment {
 }
 
 export namespace AgentToolPool {
-  const CODING_PRIVATE_TOOL_IDS = [
-    "web_clone_prepare_context",
-    "web_clone_generate_source_project",
-  ] as const
-
-  const BUILD_PRIVATE_TOOL_IDS = [
-    "browser_preview_reference_regions",
-  ] as const
-
   const BUILD_DEFAULT_DISABLED_RUNTIME_TOOL_IDS = [
     "task",
     "webfetch",
@@ -49,7 +40,6 @@ export namespace AgentToolPool {
     "inject_operator_message",
     "respond_agent_coordination",
     "cancel_subagent",
-    "query_failed_goals",
     "read_context",
   ] as const
 
@@ -58,7 +48,6 @@ export namespace AgentToolPool {
     "skill",
     "question",
     "read_context",
-    "query_failed_goals",
     "dispatch_agent",
     "manage_task",
     "wait",
@@ -133,15 +122,12 @@ export namespace AgentToolPool {
   export const roleAssignments: Record<AgentRoleID, ToolPoolAssignment> = {
     coding: pool({
       global: codingGlobal,
-      private: CODING_PRIVATE_TOOL_IDS,
     }),
     "coding-assistant": pool({
       global: [...codingGlobal, "panel"],
-      private: CODING_PRIVATE_TOOL_IDS,
     }),
     build: pool({
       global: taskCodingGlobal,
-      private: BUILD_PRIVATE_TOOL_IDS,
       defaultRuntimeToolSwitches: {
         skill: true,
         ...Object.fromEntries(BUILD_DEFAULT_DISABLED_RUNTIME_TOOL_IDS.map((toolID) => [toolID, false])),
@@ -171,7 +157,6 @@ export namespace AgentToolPool {
         "lsp",
         "batch",
       ],
-      private: CODING_PRIVATE_TOOL_IDS,
     }),
     explore: pool({
       global: [
@@ -308,23 +293,7 @@ export namespace AgentToolPool {
 
   type PrivateRegistryToolLoader = () => Promise<Tool.Info>
 
-  const privateRegistryToolLoaders: Record<string, PrivateRegistryToolLoader> = {
-    browser_preview_reference_regions: async () =>
-      (await import("@/tool/browser-preview-reference-regions")).BrowserPreviewReferenceRegionsTool,
-    browser_preview_compare_scroll_slices: async () =>
-      (await import("@/tool/browser-preview-compare-scroll-slices")).BrowserPreviewCompareScrollSlicesTool,
-    browser_preview_layout_geometry: async () =>
-      (await import("@/tool/browser-preview-layout-geometry")).BrowserPreviewLayoutGeometryTool,
-    web_clone_prepare_context: async () =>
-      (await import("@/tool/web-clone-prepare-context")).WebClonePrepareContextTool,
-    web_clone_generate_source_project: async () =>
-      (await import("@/tool/web-clone-generate-source-project")).WebCloneGenerateSourceProjectTool,
-    webpage_extract: async () => (await import("@/frontend-design/tools/webpage-extract")).WebpageExtractTool,
-    webpage_compile: async () => (await import("@/frontend-design/tools/webpage-compile")).WebpageCompileTool,
-    webpage_analyze: async () => (await import("@/frontend-design/tools/webpage-analyze")).WebpageAnalyzeTool,
-    webpage_runtime_state: async () =>
-      (await import("@/frontend-design/tools/webpage-runtime-state")).WebpageRuntimeStateTool,
-  }
+  const privateRegistryToolLoaders: Record<string, PrivateRegistryToolLoader> = {}
 
   export async function privateRegistryTools(
     agent: AgentRoleID | string,

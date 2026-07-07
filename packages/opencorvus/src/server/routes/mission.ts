@@ -15,6 +15,7 @@ import { listMissionTasks, listTaskRows } from "@/engine/store"
 import { deriveTaskStatus } from "@/engine/task-status"
 import { PromptProfileResolver } from "@/expert-squad/prompt-profile-resolver"
 import { Config } from "@/config/config"
+import { EffectiveConfig } from "@/config/effective"
 import {
   MissionStatusSnapshot,
   StatusSnapshotState,
@@ -454,22 +455,35 @@ export function MissionRoutes() {
           missionID,
           defaultCwd: Instance.directory,
         })
+        let previousPromptProfileActive: string | undefined
         if (input.promptProfile) {
+          previousPromptProfileActive = (await EffectiveConfig.effective({ sessionID: session.id })).prompt_profile
+            .active
           await Session.mergeConfigOverlay({
             sessionID: session.id,
             patch: { prompt_profile: { active: input.promptProfile } },
           })
         }
-        await SessionWake.wake({
-          sessionID: session.id,
-          prompt: input.text,
-          agent: "mission",
-          model: input.model ? Provider.parseModel(input.model) : undefined,
-          reason: {
-            source: "mission.operator",
-            missionID,
-          },
-        })
+        try {
+          await SessionWake.wake({
+            sessionID: session.id,
+            prompt: input.text,
+            agent: "mission",
+            model: input.model ? Provider.parseModel(input.model) : undefined,
+            reason: {
+              source: "mission.operator",
+              missionID,
+            },
+          })
+        } catch (error) {
+          if (previousPromptProfileActive) {
+            await Session.mergeConfigOverlay({
+              sessionID: session.id,
+              patch: { prompt_profile: { active: previousPromptProfileActive } },
+            })
+          }
+          throw error
+        }
         return c.json(
           MissionWakeResult.parse({
             missionID,

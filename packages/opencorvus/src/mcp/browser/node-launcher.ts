@@ -7,8 +7,11 @@ import {
   packagedBrowserNodeRuntimePaths,
   resolveBrowserNodeSidecarRuntime,
 } from "@/browser/runtime/node-sidecar"
+import { ProcessSupervisor } from "@/shell/process-supervisor"
 
 export namespace BrowserMCPNodeLauncher {
+  const CHILD_CLEANUP_TIMEOUT_MS = 2_000
+
   export async function serveStdio() {
     await serve("stdio")
   }
@@ -41,7 +44,14 @@ export namespace BrowserMCPNodeLauncher {
         .finally(() => process.exit(143))
     }
     const stdinClosed = () => {
-      void terminate("SIGTERM").catch((error) => logLauncherError("stdin close terminate failed", error))
+      void terminate("SIGTERM")
+        .catch((error) => {
+          logLauncherError("stdin close terminate failed", error)
+          process.exitCode = 1
+        })
+        .finally(() => {
+          if (process.exitCode) process.exit(process.exitCode)
+        })
     }
     process.once("SIGINT", sigint)
     process.once("SIGTERM", sigterm)
@@ -133,46 +143,53 @@ export namespace BrowserMCPNodeLauncher {
     return env
   }
 
-  async function waitForProcessExit(child: ChildProcess): Promise<void> {
-    if (child.exitCode !== null || child.signalCode !== null) return
-    await new Promise<void>((resolve) => {
-      child.once("exit", () => resolve())
-    })
+  function processGroupIsRunning(pid: number): boolean {
+    try {
+      process.kill(-pid, 0)
+      return true
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (code === "ESRCH") return false
+      return code === "EPERM"
+    }
+  }
+
+  function signalProcessGroup(pid: number, signal: NodeJS.Signals): void {
+    try {
+      process.kill(-pid, signal)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ESRCH") return
+      throw error
+    }
+  }
+
+  async function waitForProcessGroupExit(pid: number, timeoutMs: number): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs
+    while (Date.now() < deadline) {
+      if (!processGroupIsRunning(pid)) return true
+      await new Promise((resolve) => setTimeout(resolve, 25))
+    }
+    return !processGroupIsRunning(pid)
   }
 
   async function terminateChildTree(child: ChildProcess, signal: NodeJS.Signals): Promise<void> {
     const pid = child.pid
     if (!pid) return
     if (process.platform === "win32") {
-      await new Promise<void>((resolve, reject) => {
-        const killer = spawn("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
-          stdio: "ignore",
-          windowsHide: true,
-        })
-        killer.once("exit", (code, childSignal) => {
-          if (code === 0) {
-            resolve()
-            return
-          }
-          reject(new Error(`taskkill exited with ${childSignal ?? code}`))
-        })
-        killer.once("error", reject)
-      })
-      await waitForProcessExit(child)
+      await ProcessSupervisor.terminateProcessTree(pid, `browser MCP node process tree ${pid}`)
       return
     }
-    process.kill(-pid, signal)
-    const force = setTimeout(() => {
-      if (child.exitCode !== null || child.signalCode !== null) return
-      try {
-        process.kill(-pid, "SIGKILL")
-      } catch (error) {
-        logLauncherError("process group force kill failed", error)
-      }
-    }, 2_000)
-    force.unref()
-    await waitForProcessExit(child)
-    clearTimeout(force)
+    signalProcessGroup(pid, signal)
+    if (await waitForProcessGroupExit(pid, CHILD_CLEANUP_TIMEOUT_MS)) return
+    try {
+      signalProcessGroup(pid, "SIGKILL")
+    } catch (error) {
+      logLauncherError("process group force kill failed", error)
+    }
+    if (await waitForProcessGroupExit(pid, CHILD_CLEANUP_TIMEOUT_MS)) {
+      return
+    }
+    throw new Error(`browser MCP node process ${pid} did not exit after SIGKILL within ${CHILD_CLEANUP_TIMEOUT_MS}ms`)
   }
 
   async function buildSourceBundle(transport: "http" | "stdio") {

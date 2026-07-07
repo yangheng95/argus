@@ -55,7 +55,7 @@ export async function createOpenCorvus(options?: OpenCorvusOptions) {
   if (initGit === true) {
     const result = await client.project.current2.initGit({ directory }, { responseStyle: "fields" })
     if (result.error) {
-      server.close()
+      await server.close()
       throw new Error(`createOpenCorvus initGit failed: ${JSON.stringify(result.error)}`)
     }
   }

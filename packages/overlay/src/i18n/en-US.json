@@ -812,6 +812,7 @@
   "expert_squad.readme_title": "README",
   "expert_squad.orchestrator_append": "Appended to Orchestrator",
   "expert_squad.capability_projection": "Scheduler Capability Projection",
+  "expert_squad.agent_capability_projection": "Agent Capability Projection",
   "project.close": "Close Project",
   "section.acceptance": "Acceptance",
   "section.files": "Files",

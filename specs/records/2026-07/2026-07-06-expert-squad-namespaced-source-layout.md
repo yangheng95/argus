@@ -49,7 +49,7 @@ The user requested a new expert-squad directory layer with `builtin` and `wujian
 - `specs/README.md`
 - `specs/current/architecture/04-extensions.md`
 - `specs/records/2026-07/README.md`
-- `specs/records/2026-07/路线规划.md`
+- An untracked July planning draft was observed as background user notes only and is not a committed source for this record.
 - `specs/records/2026-07/2026-07-06-opentest-contract-engine.md`
 - `packages/opencorvus/src/expert-squad/registry.ts`
 - `packages/opencorvus/src/expert-squad/manager.ts`

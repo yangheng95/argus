@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
+import { pathToFileURL } from "node:url"
 
 const repo = resolve(import.meta.dir, "../../../..")
 
@@ -108,7 +109,7 @@ describe("SDK build format contract", () => {
     const source = readRepo("packages/sdk/js/script/build.ts")
 
     expect(source).toContain('Bun.resolve("prettier/bin/prettier.cjs"')
-    expect(source).toContain("bun ${prettierBin} --write src")
+    expect(source).toContain("bun ${prettierBin} --write ${transactionSrc}")
     expect(source).not.toContain("bun prettier --write src")
     expect(source).not.toContain("bun run prettier")
   })
@@ -118,19 +119,175 @@ describe("SDK build format contract", () => {
     const build = readRepo("packages/sdk/js/script/build.ts")
     const generatedArtifacts = readRepo("script/generated-artifacts.ts")
 
-    expect(build).toContain("replaceDirectoryAfterSuccessfulBuild({")
-    expect(build).toContain('stagingRelative: ".tmp-sdk-gen"')
-    expect(build).toContain('targetRelative: "src/gen"')
+    expect(build).toContain("replaceGeneratedArtifactsAfterSuccessfulBuild({")
+    expect(build).toContain('stagingRelative: "js/.tmp-sdk-artifacts"')
+    expect(build).toContain('targetRelative: "js/src/gen"')
     expect(build).not.toContain('rmWithinPackage("src/gen"')
     expect(build).not.toContain('writeFileWithRetry(path.join(dir, "src", "gen"')
     expect(generatedArtifacts).toContain("GENERATED_ARTIFACT_PATHS")
     expect(generatedArtifacts).toContain('"packages/sdk/js/src/gen"')
-    expect(workflow).toContain("bun ./packages/sdk/js/script/build.ts")
-    expect(workflow).toContain("bun ./script/generated-artifacts.ts --print")
-    expect(workflow).toContain("mapfile -t GENERATED_ARTIFACTS")
-    expect(workflow).toContain('git diff --exit-code -- "${GENERATED_ARTIFACTS[@]}"')
+    expect(generatedArtifacts).toContain('"packages/sdk/js/src/route-policy.ts"')
+    expect(generatedArtifacts).toContain('"packages/opencorvus/src/provider/models-snapshot.ts"')
+    expect(generatedArtifacts).toContain('"packages/opencorvus/src/expert-squad/payload.ts"')
+    expect(readRepo("script/generate.ts")).toContain("CANONICAL_TEXT_ARTIFACT_PATHS")
+    expect(readRepo("script/generate.ts")).toContain('"packages/sdk/openapi.json"')
+    expect(readRepo("script/generate.ts")).toContain("OPENCORVUS_BUILD_ARTIFACT_PATHS")
+    expect(readRepo("script/generate.ts")).toContain('"packages/opencorvus/src/expert-squad/payload.ts"')
+    expect(readRepo("script/generate.ts")).toContain('"packages/opencorvus/src/provider/models-snapshot.ts"')
+    expect(workflow).toContain("./script/generate.ts")
+    expect(workflow).toContain("bun ./script/generated-artifacts.ts --check-clean-worktree")
+    expect(workflow).not.toContain("mapfile -t GENERATED_ARTIFACTS")
+    expect(workflow).not.toContain('git diff --exit-code -- "${GENERATED_ARTIFACTS[@]}"')
+    expect(generatedArtifacts).toContain("Generated artifact drift:")
+    expect(generatedArtifacts).toContain("--check-clean-worktree")
     expect(workflow).not.toContain("packages/sdk/js/src/gen packages/sdk/js/src/defaults.ts packages/sdk/openapi.json")
+    expect(workflow).not.toContain("bun ./packages/sdk/js/script/build.ts")
     expect(workflow).not.toContain("packages/sdk/js/src/v2/gen")
+  })
+
+  test("SDK build materializes the package dist surface declared by package.json", () => {
+    const build = readRepo("packages/sdk/js/script/build.ts")
+    const publish = readRepo("packages/sdk/js/script/publish.ts")
+    const npmrc = readRepo(".npmrc")
+    const packageJson = JSON.parse(readRepo("packages/sdk/js/package.json")) as {
+      exports: Record<string, Record<string, string>>
+      files: string[]
+      publishConfig?: Record<string, unknown>
+      scripts: Record<string, string>
+    }
+
+    expect(packageJson.files).toEqual(["dist"])
+    expect(packageJson.publishConfig).toBeUndefined()
+    expect(npmrc).toContain("tag=alpha")
+    expect(packageJson.scripts.prepack).toBe("bun run build")
+    expect(packageJson.scripts.prepublishOnly).toBe("bun run build")
+    for (const exported of Object.values(packageJson.exports)) {
+      expect(exported.types).toMatch(/^\.\/dist\/.+\.d\.ts$/)
+      for (const target of Object.values(exported)) {
+        expect(target).toMatch(/^\.\/dist\/.+\.(?:js|d\.ts)$/)
+        expect(target).not.toContain("./src/")
+      }
+    }
+
+    expect(build).toContain('const transactionDist = path.join(transactionRoot, "dist")')
+    expect(build).toContain('stagingRelative: "js/.tmp-sdk-artifacts"')
+    expect(build).toContain('targetRelative: "js/dist"')
+    expect(build).toContain('await fs.cp(transactionDist, path.join(stagingRoot, "dist")')
+    expect(build).not.toContain('await rmWithinPackage("dist"')
+
+    expect(publish.indexOf("await $`bun run build`")).toBeLessThan(
+      publish.indexOf("await $`bun pm pack --ignore-scripts --destination ${packDirectory} --filename ${packFilename}`"),
+    )
+    expect(publish).toContain("buildPublishPackageJson(pkg as SdkPackageJson)")
+    expect(publish).not.toContain('await Bun.write("package.json"')
+  })
+
+  test("SDK publish manifest validates dist conditional exports", async () => {
+    const publish = readRepo("packages/sdk/js/script/publish.ts")
+    const build = readRepo("packages/sdk/js/script/build.ts")
+    const client = readRepo("packages/sdk/js/src/client.ts")
+    const routePolicy = readRepo("packages/sdk/js/src/route-policy.ts")
+    const protocol = readRepo("packages/transport-protocol/src/index.ts")
+    const { buildPublishPackageJson } = (await import(
+      pathToFileURL(resolve(repo, "packages/sdk/js/script/publish-manifest.ts")).href
+    )) as typeof import("../../../../packages/sdk/js/script/publish-manifest")
+    const packageJson = JSON.parse(readRepo("packages/sdk/js/package.json"))
+    const published = buildPublishPackageJson(packageJson)
+
+    expect(publish).toContain("buildPublishPackageJson")
+    expect(publish).not.toContain("function transformExports")
+    expect(build).toContain("generatedRoutePolicySource")
+    expect(build).toContain(
+      'const routePolicySourcePath = path.resolve(dir, "..", "..", "transport-protocol", "src", "index.ts")',
+    )
+    expect(build).toContain('const transactionRoutePolicy = path.join(transactionSrc, "route-policy.ts")')
+    expect(build).toContain('await writeFileWithRetry(path.join(stagingRoot, "route-policy.ts"), generatedRoutePolicy)')
+    expect(build).toContain('targetRelative: "js/src/route-policy.ts"')
+    expect(client).toContain('from "./route-policy.js"')
+    expect(client).not.toContain("@opencorvus-ai/transport-protocol")
+    expect(routePolicy).toContain("Auto-generated from packages/transport-protocol/src/index.ts")
+    expect(routePolicy).toContain("export function routeRequiresProjectDirectory")
+    expect(protocol).toContain(routePolicy.split("\n").slice(3).join("\n").trim())
+    expect(JSON.stringify(packageJson.dependencies ?? {})).not.toContain("workspace:")
+    expect(JSON.stringify(published.dependencies ?? {})).not.toContain("workspace:")
+    expect(published.dependencies ?? {}).not.toHaveProperty("@opencorvus-ai/transport-protocol")
+    expect(published.exports).toEqual(packageJson.exports)
+
+    for (const [subpath, conditions] of Object.entries(published.exports as Record<string, Record<string, unknown>>)) {
+      expect(conditions && typeof conditions === "object" && !Array.isArray(conditions)).toBe(true)
+      for (const [condition, target] of Object.entries(conditions)) {
+        expect(typeof target).toBe("string")
+        expect(target).toContain("./dist/")
+        if (condition === "types") {
+          expect(target).toMatch(/\.d\.ts$/)
+          expect(target).not.toContain(".d.d.ts")
+        } else if (condition === "import" || condition === "default") {
+          expect(target).toMatch(/\.js$/)
+          expect(target).not.toMatch(/\.d\.js$/)
+        } else {
+          throw new Error(`unexpected SDK publish export condition ${subpath}.${condition}`)
+        }
+      }
+    }
+
+    expect(() =>
+      buildPublishPackageJson({
+        exports: {
+          ".": {
+            types: "./dist/index.d.ts",
+            import: "./src/index.ts",
+            default: "./dist/index.js",
+          },
+        },
+      }),
+    ).toThrow("generated dist module")
+  })
+
+  test("SDK publish targets the current tarball instead of a directory glob", () => {
+    const publish = readRepo("packages/sdk/js/script/publish.ts")
+
+    expect(publish).toContain('const packDirectory = path.join(dir, ".tmp-sdk-pack")')
+    expect(publish).toContain("const packFilename =")
+    expect(publish).toContain("await rm(packDirectory, { recursive: true, force: true })")
+    expect(publish).toContain("await $`bun pm pack --ignore-scripts --destination ${packDirectory} --filename ${packFilename}`")
+    expect(publish).toContain("await $`npm publish ${packPath} --access public`")
+    expect(publish).not.toContain("Script.channel")
+    expect(publish).not.toContain("--tag")
+    expect(publish).not.toContain("npm publish *.tgz")
+    expect(publish).not.toContain("bun pm pack`")
+    expect(publish).not.toContain("publishConfig")
+  })
+
+  test("SDK build uses the registered root OpenAPI artifact as its only OpenAPI output", () => {
+    const build = readRepo("packages/sdk/js/script/build.ts")
+
+    expect(build).toContain('const sdkRoot = path.resolve(dir, "..")')
+    expect(build).toContain('const transactionOpenapi = path.join(transactionRoot, "openapi.json")')
+    expect(build).toContain('targetRelative: "openapi.json"')
+    expect(build).toContain('await writeFileWithRetry(path.join(stagingRoot, "openapi.json"), generatedOpenapi)')
+    expect(build).toContain("await generate(transactionOpenapi, transactionGen)")
+    expect(build).not.toContain('path.join(dir, "openapi.json")')
+    expect(build).not.toContain('rmWithinPackage("openapi.json")')
+  })
+
+  test("SDK build validates staged generated artifacts before committing all real outputs together", () => {
+    const build = readRepo("packages/sdk/js/script/build.ts")
+    const typecheckIndex = build.indexOf("await $`bun tsc --project ${transactionTsconfig}`")
+    const transactionCommitIndex = build.indexOf("await replaceGeneratedArtifactsAfterSuccessfulBuild({")
+
+    expect(build).toContain('const transactionRelative = ".tmp-sdk-build"')
+    expect(build).toContain("await writeFileWithRetry(transactionDefaults, generatedDefaults)")
+    expect(build).toContain("await writeFileWithRetry(transactionOpenapi, generatedOpenapi)")
+    expect(build).toContain("await requireFlatSdkBodyFieldsFromOpenApi({")
+    expect(build).toContain('targetRelative: "js/dist"')
+    expect(build).toContain('targetRelative: "js/src/gen"')
+    expect(build).toContain('targetRelative: "js/src/defaults.ts"')
+    expect(build).toContain('targetRelative: "js/src/route-policy.ts"')
+    expect(build).toContain('targetRelative: "openapi.json"')
+    expect(build).not.toContain('writeFileWithRetry(path.join(dir, "src", "defaults.ts")')
+    expect(build).not.toContain('writeFileWithRetry(path.join(dir, "src", "route-policy.ts")')
+    expect(typecheckIndex).toBeGreaterThan(0)
+    expect(transactionCommitIndex).toBeGreaterThan(typecheckIndex)
   })
 
   test("SDK build writes generated files through an atomic temp-file rename retry", () => {

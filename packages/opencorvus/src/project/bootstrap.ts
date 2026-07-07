@@ -27,8 +27,8 @@ export async function InstanceBootstrap() {
   await Plugin.init()
   Format.init()
   await LSP.init()
-  FileWatcher.init()
-  File.init()
+  await FileWatcher.init()
+  await File.init()
   Vcs.init()
   // Snapshot has no init/cleanup of its own — disk reclaim is ProjectGC's
   // sole responsibility (whole-project rm). See snapshot/index.ts.

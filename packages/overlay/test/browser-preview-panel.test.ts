@@ -48,10 +48,54 @@ test("browser preview panel uses native WebView surface with task evidence as th
   expect(component).toContain('onClick={() => navigateNativePreview("back")}')
   expect(component).toContain('onClick={() => navigateNativePreview("forward")}')
   expect(component).toContain('onClick={() => navigateNativePreview("reload")}')
+  expect(component).toContain("function currentNativePreviewSyncKey()")
+  expect(component).toContain("const nativePreviewNavigationReady = createMemo")
+  expect(component).toContain("lastNativePreviewSyncKey === syncKey && !previewActionPending()")
+  expect(component).toContain("if (!nativePreviewNavigationReady()) return")
+  expect(component).toContain("const syncKey = currentNativePreviewSyncKey()")
+  expect(component).toContain(
+    "if (lastNativePreviewSyncKey !== syncKey || currentNativePreviewSyncKey() !== syncKey) return",
+  )
+  expect(component).toContain("disabled={!nativePreviewNavigationReady()}")
   expect(component).toContain('imageDataUI="browser-preview-screenshot"')
   expect(component).toContain("<PreviewableImage")
   expect(component).toContain("<SelectControl<BrowserPreviewCandidate>")
   expect(component).toContain("<SegmentedControl<BrowserPreviewViewportID>")
+  expect(component).toContain("type BrowserPreviewScopedTarget = BrowserPreviewTarget & { directory: string }")
+  expect(component).toContain("resolved.taskID !== taskID || resolved.directory !== directory")
+  expect(component).toContain("loadError?.taskID === taskID && loadError.directory === directory")
+  expect(component).toContain("if (target.loading) return undefined")
+  expect(component).toContain("refreshKey: props.refreshKey()")
+  expect(component).toContain("const targetRequestKey = createMemo")
+  expect(component).toContain("return `${taskID}:${directory}:${String(props.refreshKey())}:${refreshToken()}`")
+  expect(component).toContain('if (previous && previous !== key) setTargetSelectionError("")')
+  expect(component).toContain("targetKey: string")
+  expect(component).toContain("targetKey: browserPreviewTargetKey(resolved)")
+  expect(component).toContain("request.targetKey !== browserPreviewTargetKey(resolved)")
+  expect(component).not.toContain("request.refreshKey !== props.refreshKey()")
+  expect(component).toContain("const previewActionPending = createMemo")
+  expect(component).toContain("disabled: previewActionPending()")
+  expect(component).toContain("disabled={!props.taskID() || previewActionPending()}")
+  expect(component).toContain("disabled={candidates().length <= 1 || previewActionPending()}")
+  expect(component).toContain("disabled={!props.taskID() || !readyTarget() || previewActionPending()}")
+  expect(component).not.toContain("disabled={candidates().length <= 1}")
+  expect(component).not.toContain(
+    "disabled={!props.taskID() || !readyTarget() || currentVerificationLoading() || currentLatestEvidenceLoading()}",
+  )
+  expect(component).toContain("if (currentVerificationRequest())")
+  expect(component.indexOf('setNativePreviewError("")')).toBeLessThan(
+    component.indexOf("setVerificationRequest({\n      taskID,\n      directory,\n      targetID: resolved.id"),
+  )
+  expect(component).toContain(
+    'onClick={() => {\n                  setTargetSelectionError("")\n                  setTargetLoadError(undefined)\n                  setVerificationRequest(undefined)\n                  setRefreshToken((value) => value + 1)\n                }}',
+  )
+  expect(component.indexOf("<Match when={currentVerificationLoading()}>")).toBeLessThan(
+    component.indexOf("<Match when={nativePreviewError()}>"),
+  )
+  expect(component).toContain("image.directory !== directory")
+  expect(component).toContain("props.taskID() !== taskID || props.directory() !== directory")
+  expect(component).toContain("scopeKey: browserPreviewNativeScopeKey(scope)")
+  expect(component).toContain("if (!browserPreviewNativeSurfaceAvailable())")
 
   expect(component).not.toContain("loadTaskBrowserPreviewLiveSnapshotObjectUrl")
   expect(component).not.toContain("sendTaskBrowserPreviewLiveInputsObjectUrl")
@@ -92,6 +136,7 @@ test("browser preview panel uses native WebView surface with task evidence as th
   expect(nativeService).toContain('"browserPreview.close"')
   expect(nativeService).toContain("getHostTransport().capabilities.nativeCommands")
   expect(nativeService).toContain('kind: "browserPreview.sync"')
+  expect(nativeService).toContain("scopeKey: input.scopeKey")
   expect(nativeService).toContain('kind: "browserPreview.navigate"')
   expect(nativeService).toContain('kind: "browserPreview.close"')
 
@@ -99,12 +144,15 @@ test("browser preview panel uses native WebView surface with task evidence as th
   expect(hostTransport).toContain('"browserPreview.navigate": true')
   expect(hostTransport).toContain('"browserPreview.close": true')
   expect(tauriTransport).toContain('invokeTauri("overlay_browser_preview_sync"')
+  expect(tauriTransport).toContain("scopeKey: command.scopeKey")
   expect(tauriTransport).toContain('invokeTauri("overlay_browser_preview_navigate"')
   expect(tauriTransport).toContain('invokeTauri("overlay_browser_preview_close"')
 
   expect(tauriCargo).toContain('features = ["tray-icon", "unstable"]')
   expect(tauriMain).toContain('const BROWSER_PREVIEW_WEBVIEW_LABEL: &str = "browser-preview-live-webview";')
   expect(tauriMain).toContain("overlay_browser_preview_sync")
+  expect(tauriMain).toContain("BROWSER_PREVIEW_SCOPE_KEY")
+  expect(tauriMain).toContain("scope_changed")
   expect(tauriMain).toContain("tauri::webview::WebviewBuilder")
   expect(tauriMain).toContain(".add_child(builder, position, size)")
   expect(tauriMain).toContain(".navigate(target_url)")

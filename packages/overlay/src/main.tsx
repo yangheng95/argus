@@ -1376,7 +1376,10 @@ async function refreshExpertSquads(scope: ExpertSquadCatalogScope, requestKey: s
       setActiveExpertSquad("")
       expertSquadLoadedRequestKey = ""
     }
-    throw error
+    AppLog.warn("expert-squad", "Catalog unavailable for composer selector", {
+      error: runtimeErrorMessage(error),
+      requestKey,
+    })
   } finally {
     if (expertSquadInFlightRequestKey === requestKey) expertSquadInFlightRequestKey = ""
   }
@@ -1402,7 +1405,7 @@ createEffect<string>((previousKey) => {
     setActiveExpertSquad("")
     return requestKey
   }
-  void refreshExpertSquads(scope, requestKey).catch((error) => reportOverlayRuntimeError("expert-squad", error))
+  void refreshExpertSquads(scope, requestKey)
   return requestKey
 }, "")
 

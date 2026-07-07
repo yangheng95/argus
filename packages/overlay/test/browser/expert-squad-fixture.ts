@@ -8,16 +8,25 @@ export interface ExpertSquadFixture {
   display_prefix?: string
   built_in?: boolean
   editable?: boolean
-  agents?: Record<string, string>
   virtual_agents?: Array<{
     base_role: string
     virtual_agent_id: string
     label: string
     description?: string
     projection_hash?: string
+    built_in_tool_ids?: string[]
+    default_skill_refs?: string[]
     package_skill_refs?: string[]
+    default_tool_refs?: string[]
     package_tool_refs?: string[]
+    default_mcp_server_refs?: string[]
     package_mcp_server_refs?: string[]
+    default_mcp_tool_refs?: string[]
+    package_mcp_tool_refs?: string[]
+    default_mcp_prompt_refs?: string[]
+    package_mcp_prompt_refs?: string[]
+    default_mcp_resource_refs?: string[]
+    package_mcp_resource_refs?: string[]
   }>
 }
 
@@ -54,15 +63,35 @@ export function emptyExpertSquadProjectionEntry() {
   }
 }
 
+function projectionEntryFromVirtualAgent(agent: NonNullable<ExpertSquadFixture["virtual_agents"]>[number]) {
+  return {
+    ...emptyExpertSquadProjectionEntry(),
+    built_in_tool_ids: agent.built_in_tool_ids ?? [],
+    default_skill_refs: agent.default_skill_refs ?? [],
+    package_skill_refs: agent.package_skill_refs ?? [],
+    default_tool_refs: agent.default_tool_refs ?? [],
+    package_tool_refs: agent.package_tool_refs ?? [],
+    default_mcp_server_refs: agent.default_mcp_server_refs ?? [],
+    package_mcp_server_refs: agent.package_mcp_server_refs ?? [],
+    default_mcp_tool_refs: agent.default_mcp_tool_refs ?? [],
+    package_mcp_tool_refs: agent.package_mcp_tool_refs ?? [],
+    default_mcp_prompt_refs: agent.default_mcp_prompt_refs ?? [],
+    package_mcp_prompt_refs: agent.package_mcp_prompt_refs ?? [],
+    default_mcp_resource_refs: agent.default_mcp_resource_refs ?? [],
+    package_mcp_resource_refs: agent.package_mcp_resource_refs ?? [],
+  }
+}
+
 function projectPackageRoot(namespace: string, id: string): string {
   return `D:/repo/.opencorvus/expert-squads/${namespace}/${id}`
 }
 
 export function expertSquadOptionFixture(squad: ExpertSquadFixture) {
-  const agents = squad.agents ?? {}
   const builtIn = squad.built_in ?? squad.id === "general"
   const displayLabel = squad.display_prefix ? `${squad.display_prefix}/${squad.label}` : squad.label
   const virtualAgents = squad.virtual_agents ?? []
+  const virtualAgentsByRole = new Map(virtualAgents.map((agent) => [agent.base_role, agent]))
+  const projectedAgentRoles = virtualAgents.map((agent) => agent.base_role).sort()
   const namespace = squad.namespace ?? "project"
   const root = projectPackageRoot(namespace, squad.id)
   return {
@@ -73,10 +102,10 @@ export function expertSquadOptionFixture(squad: ExpertSquadFixture) {
     description: squad.description,
     built_in: builtIn,
     editable: squad.editable ?? false,
-    agents,
+    agents: {},
     capability_profile_id: squad.id,
     projection_hash: `test-${squad.id}`,
-    projected_agents: Object.keys(agents),
+    projected_agents: projectedAgentRoles,
     virtual_agents: virtualAgents.map((agent) => ({
       base_role: agent.base_role,
       virtual_agent_id: agent.virtual_agent_id,
@@ -85,7 +114,14 @@ export function expertSquadOptionFixture(squad: ExpertSquadFixture) {
     })),
     capability_projection: {
       scheduler: emptyExpertSquadProjectionEntry(),
-      agents: Object.fromEntries(Object.keys(agents).map((agent) => [agent, emptyExpertSquadProjectionEntry()])),
+      agents: Object.fromEntries(
+        projectedAgentRoles.map((agent) => [
+          agent,
+          virtualAgentsByRole.has(agent)
+            ? projectionEntryFromVirtualAgent(virtualAgentsByRole.get(agent)!)
+            : emptyExpertSquadProjectionEntry(),
+        ]),
+      ),
     },
     source: builtIn
       ? { kind: "built_in" }
@@ -110,6 +146,12 @@ export function expertSquadOptionFixture(squad: ExpertSquadFixture) {
 }
 
 export function expertSquadCatalogFixture(input: ExpertSquadCatalogFixtureInput = {}) {
+  const allowedInputKeys = new Set(["active", "projectActive", "sessionOverride", "defaultSquad", "targets", "squads"])
+  for (const key of Object.keys(input)) {
+    if (!allowedInputKeys.has(key)) {
+      throw new Error(`expertSquadCatalogFixture received unsupported field ${JSON.stringify(key)}`)
+    }
+  }
   const active = input.active ?? "general"
   const squads =
     input.squads ??
@@ -129,9 +171,19 @@ export function expertSquadCatalogFixture(input: ExpertSquadCatalogFixtureInput 
     label: agent.label,
     description: agent.description,
     projection_hash: agent.projection_hash ?? `test-${active}-${agent.base_role}`,
+    built_in_tool_ids: agent.built_in_tool_ids ?? [],
+    default_skill_refs: agent.default_skill_refs ?? [],
     package_skill_refs: agent.package_skill_refs ?? [],
+    default_tool_refs: agent.default_tool_refs ?? [],
     package_tool_refs: agent.package_tool_refs ?? [],
+    default_mcp_server_refs: agent.default_mcp_server_refs ?? [],
     package_mcp_server_refs: agent.package_mcp_server_refs ?? [],
+    default_mcp_tool_refs: agent.default_mcp_tool_refs ?? [],
+    package_mcp_tool_refs: agent.package_mcp_tool_refs ?? [],
+    default_mcp_prompt_refs: agent.default_mcp_prompt_refs ?? [],
+    package_mcp_prompt_refs: agent.package_mcp_prompt_refs ?? [],
+    default_mcp_resource_refs: agent.default_mcp_resource_refs ?? [],
+    package_mcp_resource_refs: agent.package_mcp_resource_refs ?? [],
   }))
   return {
     active: {
@@ -159,7 +211,7 @@ export function expertSquadCatalogFixture(input: ExpertSquadCatalogFixtureInput 
       built_in: active === "general",
       projection_hash: `test-${active}`,
       projected_tool_ids: [],
-      projected_agent_ids: ["orchestrator"],
+      projected_agent_ids: activeProjectedAgents.map((agent) => agent.base_role),
       selector_skill_names: [],
       production_skill_names: [],
       projected_skill_names: [],

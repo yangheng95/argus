@@ -23,11 +23,10 @@ jobs:
 
       - name: Verify generated SDK and OpenAPI
         run: |
-          bun ./packages/sdk/js/script/build.ts
+          ./script/generate.ts
           bun --cwd packages/opencorvus dev generate > /tmp/openapi.generated.json
           diff -u /tmp/openapi.generated.json packages/sdk/openapi.json
-          mapfile -t GENERATED_ARTIFACTS < <(bun ./script/generated-artifacts.ts --print)
-          git diff --exit-code -- "${GENERATED_ARTIFACTS[@]}"
+          bun ./script/generated-artifacts.ts --check-clean-worktree
 
       - name: Verify generated API docs
         run: bun run ./packages/opencorvus/script/docs/render-api-md.ts --check

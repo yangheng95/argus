@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import path from "node:path"
 import fs from "node:fs"
 import { collectInventoryViolations, compareOpenApiSpecs } from "../../script/check/routes"
-import { generateOpenApiSpec } from "../../src/cli/cmd/generate"
+import { generateOpenApiSpec, serializeOpenApiSpec } from "../../src/cli/cmd/generate"
 
 const repoRoot = path.resolve(import.meta.dir, "..", "..", "..", "..")
 
@@ -111,8 +111,10 @@ describe("api routes check OpenAPI drift", () => {
     const generateScript = readRepoFile("script", "generate.ts")
     const generateWorkflow = readRepoFile(".github", "workflows", "generate.yml")
 
-    expect(routeCheck).toContain('import { generateOpenApiSpec } from "../../src/cli/cmd/generate"')
+    expect(routeCheck).toContain('from "../../src/cli/cmd/generate"')
     expect(routeCheck).toContain("const generated = await generateOpenApiSpec()")
+    expect(routeCheck).toContain("serializeOpenApiSpec(generated)")
+    expect(routeCheck).toContain("serializeOpenApiSpec(tracked)")
     expect(routeCheck).toContain(
       "return collectInventoryViolations({ runtime, generated, tracked, sdk: generatedSdk })",
     )
@@ -134,12 +136,21 @@ describe("api routes check OpenAPI drift", () => {
     expect(generateWorkflow).toContain("bun ./script/generated-artifacts.ts --print")
     expect(generateWorkflow).toContain("bun ./script/generated-artifacts.ts --check-worktree")
     expect(generateScript).toContain('import { GENERATED_ARTIFACT_PATHS } from "./generated-artifacts"')
+    expect(generateScript).toContain(
+      'import { generateOpencorvusGeneratedBuildArtifacts } from "../packages/opencorvus/script/generate-build-artifacts"',
+    )
+    expect(generateScript).toContain("await generateOpencorvusGeneratedBuildArtifacts({ log: console.log })")
     expect(generateScript).toContain("bun ./packages/sdk/js/script/build.ts")
     expect(generateScript).toContain("bun ./packages/opencorvus/script/docs/render-api-md.ts")
     expect(generateScript).toContain("API_MDX_ARTIFACT_PATHS")
+    expect(generateScript).toContain("CANONICAL_TEXT_ARTIFACT_PATHS")
+    expect(generateScript).toContain('"packages/sdk/openapi.json"')
     expect(generateScript).toContain("prettierArtifactPaths")
     expect(generateScript).toContain(
       'Bun.spawn(["bun", "run", "prettier", "--ignore-unknown", "--write", ...prettierArtifactPaths]',
+    )
+    expect(generateScript.indexOf("await generateOpencorvusGeneratedBuildArtifacts")).toBeLessThan(
+      generateScript.indexOf("bun ./packages/sdk/js/script/build.ts"),
     )
     expect(generateScript.indexOf("bun ./packages/opencorvus/script/docs/render-api-md.ts")).toBeLessThan(
       generateScript.indexOf('Bun.spawn(["bun", "run", "prettier", "--ignore-unknown", "--write"'),
@@ -147,6 +158,35 @@ describe("api routes check OpenAPI drift", () => {
     expect(generateScript).not.toContain("bun ./script/format.ts")
     expect(generateScript).not.toContain("--write .")
     expect(generateScript).not.toContain("generate-openapi.ts >")
+  })
+
+  test(
+    "CLI and direct OpenAPI generation produce the same canonical text",
+    async () => {
+      const direct = serializeOpenApiSpec(await generateOpenApiSpec())
+      const child = Bun.spawn(["bun", "--cwd", "packages/opencorvus", "dev", "generate"], {
+        cwd: repoRoot,
+        stdout: "pipe",
+        stderr: "pipe",
+      })
+      const [stdout, stderr, code] = await Promise.all([
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+        child.exited,
+      ])
+
+      expect(code).toBe(0)
+      expect(stderr.trim()).toBe("$ bun ./src/index.ts generate")
+      expect(stdout).toBe(direct)
+      expect(stdout.endsWith("\n")).toBe(true)
+    },
+    { timeout: 60_000 },
+  )
+
+  test("tracked SDK OpenAPI artifact is canonical text", () => {
+    const tracked = readRepoFile("packages", "sdk", "openapi.json")
+
+    expect(tracked).toBe(serializeOpenApiSpec(JSON.parse(tracked)))
   })
 
   test("DB reset request requires the current database path in generated OpenAPI", async () => {

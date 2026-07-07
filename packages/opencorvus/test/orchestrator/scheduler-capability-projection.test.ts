@@ -28,7 +28,6 @@ const expectedSchedulerRoleBaseToolIDs = [
   "skill",
   "question",
   "read_context",
-  "query_failed_goals",
   "dispatch_agent",
   "manage_task",
   "wait",
@@ -229,6 +228,7 @@ describe("orchestrator scheduler capability projection", () => {
       "modify_goal",
       "complete_goal",
       "delete_goal",
+      "query_failed_goals",
     ]) {
       expect(Object.hasOwn(publicTools, hidden), `${hidden} must not be public`).toBe(false)
     }

@@ -186,8 +186,13 @@ export function AppRoutes(root: Hono) {
           return c.json({ ok: false }, 503)
         }
         log.info("restart requested, spawning new process")
-        startServerRestart("server.restart")
-        return c.json({ ok: true })
+        try {
+          await startServerRestart("server.restart")
+          return c.json({ ok: true })
+        } catch (error) {
+          log.error("restart child failed before shutdown handoff", { error })
+          return c.json({ ok: false }, 503)
+        }
       },
     )
     .route("/", EngineRoutes())

@@ -2,7 +2,7 @@
 import path from "node:path"
 import fs from "node:fs"
 import { Server } from "../../src/server/server"
-import { generateOpenApiSpec } from "../../src/cli/cmd/generate"
+import { generateOpenApiSpec, serializeOpenApiSpec } from "../../src/cli/cmd/generate"
 import { extractSdkRoutesFromText } from "./sdk-route-extractor"
 
 const ROOT = path.resolve(import.meta.dir, "..", "..")
@@ -152,20 +152,6 @@ function readJsonFile(pathname: string) {
   return JSON.parse(text) as unknown
 }
 
-function stableJsonValue(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(stableJsonValue)
-  if (!value || typeof value !== "object") return value
-  const sorted: Record<string, unknown> = {}
-  for (const key of Object.keys(value).sort()) {
-    sorted[key] = stableJsonValue((value as Record<string, unknown>)[key])
-  }
-  return sorted
-}
-
-function stableJsonText(value: unknown) {
-  return JSON.stringify(stableJsonValue(value), null, 2)
-}
-
 function minimalDiff(label: string, expected: string, actual: string): string {
   const expectedLines = expected.split("\n")
   const actualLines = actual.split("\n")
@@ -184,8 +170,8 @@ function minimalDiff(label: string, expected: string, actual: string): string {
 }
 
 export function compareOpenApiSpecs(generated: unknown, tracked: unknown): InventoryViolation[] {
-  const generatedText = stableJsonText(generated)
-  const trackedText = stableJsonText(tracked)
+  const generatedText = serializeOpenApiSpec(generated)
+  const trackedText = serializeOpenApiSpec(tracked)
   if (generatedText === trackedText) return []
   return [
     {

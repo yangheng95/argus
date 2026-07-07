@@ -82,6 +82,20 @@ function buildSdkAccessorResolver(specs: Awaited<ReturnType<typeof Server.openap
   }
 }
 
+export function stableOpenApiJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stableOpenApiJsonValue)
+  if (!value || typeof value !== "object") return value
+  const sorted: Record<string, unknown> = {}
+  for (const key of Object.keys(value).sort()) {
+    sorted[key] = stableOpenApiJsonValue((value as Record<string, unknown>)[key])
+  }
+  return sorted
+}
+
+export function serializeOpenApiSpec(specs: unknown): string {
+  return `${JSON.stringify(stableOpenApiJsonValue(specs), null, 2)}\n`
+}
+
 export async function generateOpenApiSpec() {
   const specs = await Server.openapi()
   const sdkOperationAccessor = buildSdkAccessorResolver(specs)
@@ -111,7 +125,7 @@ export const GenerateCommand = {
   command: "generate",
   handler: async () => {
     const specs = await generateOpenApiSpec()
-    const json = JSON.stringify(specs, null, 2)
+    const json = serializeOpenApiSpec(specs)
 
     // Wait for stdout to finish writing before process.exit() is called
     await new Promise<void>((resolve, reject) => {

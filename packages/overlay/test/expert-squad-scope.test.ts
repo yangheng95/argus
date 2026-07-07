@@ -3,18 +3,23 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import type { HostTransport, TransportRequest } from "../src/services/host-transport"
 import { expertSquadCatalogFixture } from "./browser/expert-squad-fixture"
-
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 
 const MAIN_SOURCE = readFileSync(join(import.meta.dir, "../src/main.tsx"), "utf8")
 const SERVICE_SOURCE = readFileSync(join(import.meta.dir, "../src/services/expert-squad.ts"), "utf8")
-const SKILL_MARKET_SOURCE = readFileSync(join(import.meta.dir, "../src/components/settings/SkillMarketPanel.tsx"), "utf8")
+const PANEL_SOURCE = readFileSync(join(import.meta.dir, "../src/components/settings/ExpertSquadPanel.tsx"), "utf8")
+const SKILL_MARKET_SOURCE = readFileSync(
+  join(import.meta.dir, "../src/components/settings/SkillMarketPanel.tsx"),
+  "utf8",
+)
 
 const { configure } = await import("../src/services/api")
-const { loadExpertSquadCatalog, markExpertSquadCatalogStale } = await import("../src/services/expert-squad")
+const { loadExpertSquadCatalog, markExpertSquadCatalogStale, setProjectExpertSquadActive } = await import(
+  "../src/services/expert-squad"
+)
 const { markSessionConfigStale } = await import("../src/services/config")
 const { HOST_CAPABILITIES, __setHostTransportForTest } = await import("../src/services/host-transport")
-const { setAppStore } = await import("../src/store/app")
+const { appStore, setAppStore } = await import("../src/store/app")
 const { setBoardStore } = await import("../src/store/board")
 const { setSettingsStore } = await import("../src/store/settings")
 const { expertSquadCatalogDirectory, expertSquadCatalogRequestKey, expertSquadCatalogScope } = await import(
@@ -327,12 +332,127 @@ describe("expert squad task session owner", () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(requests).toHaveLength(1)
 
+    markExpertSquadCatalogStale()
+    const third = loadExpertSquadCatalog({ kind: "session", directory: "D:/repo/task", sessionID: "ses_root" })
+
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(requests).toHaveLength(2)
+
     release?.()
 
-    await expect(Promise.all([first, second])).resolves.toEqual([responseBody, responseBody])
+    await expect(Promise.all([first, second, third])).resolves.toEqual([responseBody, responseBody, responseBody])
 
     await loadExpertSquadCatalog({ kind: "session", directory: "D:/repo/task", sessionID: "ses_root" })
 
-    expect(requests).toHaveLength(2)
+    expect(requests).toHaveLength(3)
+  })
+
+  test("project activation ignores config responses after directory ownership changes", async () => {
+    resetStores()
+    const requests: TransportRequest[] = []
+    __setHostTransportForTest({
+      kind: "browser",
+      capabilities: HOST_CAPABILITIES.browser,
+      async request(req) {
+        requests.push(req)
+        return {
+          status: 200,
+          ok: true,
+          headers: {},
+          body:
+            req.method === "PATCH"
+              ? { prompt_profile: { active: "backend" } }
+              : { prompt_profile: { active: "frontend-replica" } },
+        }
+      },
+      openStream() {
+        return { close() {} }
+      },
+      async native() {
+        return true
+      },
+      subscribeUiCommand() {
+        return { unsubscribe() {} }
+      },
+    } satisfies HostTransport)
+
+    await setProjectExpertSquadActive("backend", "D:/repo/project", {
+      isCurrentDirectory: () => false,
+    })
+
+    expect(requests.map((request) => request.method ?? "GET")).toEqual(["GET", "PATCH"])
+    expect(requests.every((request) => request.query?.directory === "D:/repo/project")).toBe(true)
+    expect(appStore.config.prompt_profile.active).toBe("frontend-replica")
+  })
+
+  test("settings panel expert squad writes are bound to the captured catalog scope", () => {
+    expect(PANEL_SOURCE).toContain("function catalogScopeIdentity")
+    expect(PANEL_SOURCE).toContain("function captureCatalogActionScope")
+    expect(PANEL_SOURCE).toContain("const actionScopeIdentity = captured.identity")
+    expect(PANEL_SOURCE).toContain("if (currentScopeIdentity() !== actionScopeIdentity) return")
+    expect(PANEL_SOURCE).toContain("await refreshCatalog(squad.id, actionScope, actionScopeIdentity)")
+    expect(PANEL_SOURCE).toContain("await refreshCatalog(projectActiveID(), actionScope, actionScopeIdentity)")
+  })
+
+  test("settings panel import and export actions use the captured catalog scope", () => {
+    expect(PANEL_SOURCE).toContain("const captured = captureCatalogActionScope()")
+    expect(PANEL_SOURCE).toContain("const sourceDirectory = await pickDirectory(captured.scope.directory)")
+    expect(PANEL_SOURCE).toContain("directory: captured.scope.directory")
+    expect(PANEL_SOURCE).toContain("await refreshCatalog(result.id, captured.scope, captured.identity)")
+    expect(PANEL_SOURCE).toContain("await exportExpertSquadArchive(captured.scope.directory, squad.id)")
+    expect(PANEL_SOURCE).toContain('"import-folder"')
+    expect(PANEL_SOURCE).toContain('"import-archive"')
+    expect(PANEL_SOURCE).toContain('"export"')
+  })
+
+  test("settings panel archive import captures scope before opening the native file picker", () => {
+    expect(PANEL_SOURCE).toContain("let pendingArchiveImportScope: CapturedCatalogActionScope | null = null")
+    expect(PANEL_SOURCE).toContain("function openArchivePicker()")
+    expect(PANEL_SOURCE).toContain("pendingArchiveImportScope = captured")
+    expect(PANEL_SOURCE.indexOf("pendingArchiveImportScope = captured")).toBeLessThan(
+      PANEL_SOURCE.indexOf("archiveInput?.click()"),
+    )
+    expect(PANEL_SOURCE).toContain("const captured = pendingArchiveImportScope")
+    expect(PANEL_SOURCE).toContain("pendingArchiveImportScope = null")
+    expect(PANEL_SOURCE).toContain("onClick={openArchivePicker}")
+  })
+
+  test("settings panel clears stale transient state after catalog scope changes", () => {
+    expect(PANEL_SOURCE).toContain("clearNotice()")
+    expect(PANEL_SOURCE).toContain('if (scope.kind === "unavailable" || scope.kind === "pending")')
+    expect(PANEL_SOURCE).toContain('t("expert_squad.scope_pending")')
+    expect(PANEL_SOURCE).toContain('data-ui="expert-squad-scope-state"')
+    expect(PANEL_SOURCE).toContain('setActionError("")')
+    expect(PANEL_SOURCE).toContain("setLoading(false)")
+    expect(PANEL_SOURCE).toContain("loadSequence++")
+    expect(PANEL_SOURCE).toContain("type BusyAction = { key: string; scopeIdentity: string }")
+    expect(PANEL_SOURCE).toContain("const activeBusy = createMemo")
+    expect(PANEL_SOURCE).toContain("setBusy({ key, scopeIdentity: expectedScopeIdentity })")
+    expect(PANEL_SOURCE).toContain(
+      "current?.key === key && current.scopeIdentity === expectedScopeIdentity ? null : current",
+    )
+  })
+
+  test("settings panel catalog-derived overview is scoped to the current catalog identity", () => {
+    expect(PANEL_SOURCE).toContain('const [catalogIdentity, setCatalogIdentity] = createSignal("")')
+    expect(PANEL_SOURCE).toContain(
+      "const scopedCatalog = createMemo(() => (catalogIdentity() === currentScopeIdentity() ? catalog() : null))",
+    )
+    expect(PANEL_SOURCE).toContain("const squads = createMemo(() => scopedCatalog()?.squads ?? [])")
+    expect(PANEL_SOURCE).toContain('const projectActiveID = createMemo(() => scopedCatalog()?.active.project ?? "")')
+    expect(PANEL_SOURCE).toContain('const effectiveActiveID = createMemo(() => scopedCatalog()?.active.effective ?? "")')
+    expect(PANEL_SOURCE).toContain("setCatalogIdentity(expectedScopeIdentity)")
+    expect(PANEL_SOURCE).toContain('setCatalogIdentity("")')
+  })
+
+  test("settings panel clears stale catalog errors before same-scope reload starts", () => {
+    expect(PANEL_SOURCE).toContain('if (currentScopeIdentity() === expectedScopeIdentity) setCatalogError("")')
+    expect(
+      PANEL_SOURCE.indexOf('if (currentScopeIdentity() === expectedScopeIdentity) setCatalogError("")'),
+    ).toBeLessThan(PANEL_SOURCE.indexOf("const next = await loadExpertSquadCatalog(scope)"))
+    expect(PANEL_SOURCE).toContain("<Show when={catalogError()}>")
+    expect(PANEL_SOURCE).toContain(
+      '<Show when={!loading()} fallback={<div class="loading-hint">{t("expert_squad.loading")}</div>}>',
+    )
   })
 })

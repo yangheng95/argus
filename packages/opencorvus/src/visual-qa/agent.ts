@@ -18,6 +18,7 @@ import { RequestOrchestratorDecisionTool } from "@/tool/request-orchestrator-dec
 import {
   VISUAL_QA_CONTEXT_TOOL_IDS,
   VISUAL_QA_EVIDENCE_TOOL_IDS,
+  VISUAL_QA_RUNTIME_EVIDENCE_TOOL_IDS,
   VISUAL_QA_SESSION_TOOL_IDS,
   VISUAL_QA_UTILITY_TOOL_IDS,
 } from "./static-tools"
@@ -188,7 +189,7 @@ async function createVisualQaEvidenceTools(input: { taskID?: string; signal?: Ab
     browser_preview_compare_scroll_slices: await createVisualQaTool(BrowserPreviewCompareScrollSlicesTool, input),
     browser_preview_layout_geometry: await createVisualQaTool(BrowserPreviewLayoutGeometryTool, input),
   }
-  return selectVisualQaStaticTools(tools, VISUAL_QA_EVIDENCE_TOOL_IDS, "visual-qa evidence")
+  return selectVisualQaStaticTools(tools, VISUAL_QA_RUNTIME_EVIDENCE_TOOL_IDS, "visual-qa evidence")
 }
 
 async function createVisualQaUtilityTools(input: { taskID?: string; signal?: AbortSignal }): Promise<ToolSet> {

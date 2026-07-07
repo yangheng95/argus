@@ -6,6 +6,15 @@ import { validateArchitectContractGraph, type ArchitectContractGraph } from "@/a
 import { createArchitectOutputTools, architectValidationFindings } from "@/architect/output-tools"
 import { GoalContractFieldsSchema } from "@/pipeline/goal-contract.schema"
 
+async function withTempDirectory<T>(prefix: string, run: (directory: string) => Promise<T>): Promise<T> {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), prefix))
+  try {
+    return await run(directory)
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true })
+  }
+}
+
 function acceptance(goalID: string, contractIDs: string[] = [], sourceRequirementID = "REQ-1") {
   return {
     id: `acc-${goalID}`,
@@ -64,6 +73,32 @@ function scriptRefAcceptance(goalID: string, scriptPath: string) {
       },
     ],
   }
+}
+
+type ArchitectTools = ReturnType<typeof createArchitectOutputTools>["tools"]
+
+async function manageGoalAction(tools: ArchitectTools, action: string, input: Record<string, unknown>, options: any = {}) {
+  return await tools.manage_goal.execute!({ action, ...input } as any, options)
+}
+
+async function registerGoal(tools: ArchitectTools, input: Record<string, unknown>, options: any = {}) {
+  return await manageGoalAction(tools, "register_goal", input, options)
+}
+
+async function modifyGoal(tools: ArchitectTools, input: Record<string, unknown>, options: any = {}) {
+  return await manageGoalAction(tools, "modify_goal", input, options)
+}
+
+async function removeGoal(tools: ArchitectTools, input: Record<string, unknown>, options: any = {}) {
+  return await manageGoalAction(tools, "remove_goal", input, options)
+}
+
+async function registerVisualFeedbackAcceptance(
+  tools: ArchitectTools,
+  input: Record<string, unknown>,
+  options: any = {},
+) {
+  return await manageGoalAction(tools, "register_visual_feedback_acceptance", input, options)
 }
 
 function baseGraph(contractIDs: string[] = ["contract_order"]): ArchitectContractGraph {
@@ -147,7 +182,7 @@ function contractWithoutAuditCoverageFindings(input: {
 test("register_goal rejects internal runtime owned paths before collector mutation", async () => {
   const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd() })
 
-  const out = await kit.tools.register_goal.execute!(
+  const out = await registerGoal(kit.tools,
     {
       id: "goal_stage1_manifest",
       title: "Stage 1 manifest",
@@ -174,7 +209,7 @@ async function registerTwoGoalGraph(input?: { uiDependsOn?: string[] }) {
     workDir: process.cwd(),
   })
   const { tools } = kit
-  await tools.register_goal.execute!(
+  await registerGoal(tools,
     {
       id: "goal_model",
       title: "Model",
@@ -188,7 +223,7 @@ async function registerTwoGoalGraph(input?: { uiDependsOn?: string[] }) {
     } as any,
     {} as any,
   )
-  await tools.register_goal.execute!(
+  await registerGoal(tools,
     {
       id: "goal_ui",
       title: "UI",
@@ -324,7 +359,7 @@ test("remove_goal cascades depends_on references from remaining goals", async ()
     {} as any,
   )
 
-  const out = await tools.remove_goal.execute!(
+  const out = await removeGoal(tools,
     {
       id: "goal_model",
       reason: "model surface was folded into the UI goal during re-sizing",
@@ -344,7 +379,7 @@ test("remove_goal cascades depends_on references from remaining goals", async ()
 test("architect normalizes frontend-design source baseline owned paths to acceptance root", async () => {
   const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd() })
 
-  const result = await kit.tools.register_goal.execute!(
+  const result = await registerGoal(kit.tools,
     {
       id: "goal_frontend_api",
       title: "Frontend API",
@@ -549,7 +584,7 @@ test("contract without essential contract_audit coverage reports audit coverage 
     code: "contract_without_audit_coverage",
     severity: "concern",
     scope: { contract_ids: ["contract_order"], goal_ids: ["goal_model", "goal_ui"] },
-    repair_tools: ["register_goal", "modify_goal", "register_contract"],
+    repair_tools: ["manage_goal action=register_goal", "manage_goal action=modify_goal", "register_contract"],
   })
 })
 
@@ -646,7 +681,7 @@ test("incident regression flags only drifted contract_audit ids as blockers", ()
 
 test("submit_architect blocks single large goal decomposition", async () => {
   const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd() })
-  await kit.tools.register_goal.execute!(
+  await registerGoal(kit.tools,
     {
       id: "goal_everything",
       title: "Everything",
@@ -686,7 +721,7 @@ test("explicit architect goal count contract blocks readiness below requested mi
     },
   })
 
-  await kit.tools.register_goal.execute!(
+  await registerGoal(kit.tools,
     {
       id: "goal_prd",
       title: "PRD",
@@ -700,7 +735,7 @@ test("explicit architect goal count contract blocks readiness below requested mi
     } as any,
     {} as any,
   )
-  await kit.tools.register_goal.execute!(
+  await registerGoal(kit.tools,
     {
       id: "goal_design",
       title: "Design",
@@ -763,7 +798,7 @@ test("submit_architect blocks contract_audit ids absent from graph contracts", a
 
 test("submit_architect reports zero graph contracts as a concern without blocking goal finalization", async () => {
   const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd() })
-  await kit.tools.register_goal.execute!(
+  await registerGoal(kit.tools,
     {
       id: "goal_model",
       title: "Model",
@@ -777,7 +812,7 @@ test("submit_architect reports zero graph contracts as a concern without blockin
     } as any,
     {} as any,
   )
-  await kit.tools.register_goal.execute!(
+  await registerGoal(kit.tools,
     {
       id: "goal_render",
       title: "Render",
@@ -810,7 +845,7 @@ test("submit_architect reports zero graph contracts as a concern without blockin
 test("register_goal accepts forward contract_audit ids and final validation blocks if unresolved", async () => {
   const kit = await registerTwoGoalGraph()
 
-  const out = await kit.tools.register_goal.execute!(
+  const out = await registerGoal(kit.tools,
     {
       id: "goal_ui",
       title: "UI",
@@ -850,7 +885,7 @@ test("register_goal accepts forward contract_audit ids and final validation bloc
 test("modify_goal accepts forward contract_audit ids and keeps final validation authoritative", async () => {
   const kit = await registerTwoGoalGraph()
 
-  const out = await kit.tools.modify_goal.execute!(
+  const out = await modifyGoal(kit.tools,
     {
       id: "goal_ui",
       updates: {
@@ -874,7 +909,7 @@ test("register_goal and modify_goal accept contract_audit ids after contract reg
   const registerContractOut = await kit.tools.register_contract.execute!(contractRef() as any, {} as any)
   expect(registerContractOut).toContain("Registered contract ids: contract_order")
 
-  const registerGoalOut = await kit.tools.register_goal.execute!(
+  const registerGoalOut = await registerGoal(kit.tools,
     {
       id: "goal_ui",
       title: "UI",
@@ -890,7 +925,7 @@ test("register_goal and modify_goal accept contract_audit ids after contract reg
   )
   expect(registerGoalOut).toContain('OK: goal "goal_ui" updated in-place')
 
-  const modifyGoalOut = await kit.tools.modify_goal.execute!(
+  const modifyGoalOut = await modifyGoal(kit.tools,
     {
       id: "goal_ui",
       updates: {
@@ -917,7 +952,7 @@ test("register_visual_feedback_acceptance attaches canonical final visual feedba
     requireReferenceCoverage: true,
   })
 
-  await kit.tools.register_goal.execute!(
+  await registerGoal(kit.tools,
     {
       id: "goal_page_impl",
       title: "Page implementation",
@@ -931,7 +966,7 @@ test("register_visual_feedback_acceptance attaches canonical final visual feedba
     } as any,
     {} as any,
   )
-  await kit.tools.register_goal.execute!(
+  await registerGoal(kit.tools,
     {
       id: "goal_visual_verify",
       title: "Visual verification",
@@ -957,7 +992,7 @@ test("register_visual_feedback_acceptance attaches canonical final visual feedba
     {} as any,
   )
 
-  const out = await kit.tools.register_visual_feedback_acceptance.execute!(
+  const out = await registerVisualFeedbackAcceptance(kit.tools,
     {
       goal_id: "goal_visual_verify",
       source_requirement_id: "REQ-1",
@@ -990,7 +1025,7 @@ test("register_visual_feedback_acceptance attaches canonical final visual feedba
 test("register_reference_coverage records structured goal-bound reference crop regions", async () => {
   const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd(), knownRequirementIDs: ["REQ-1"] })
 
-  await kit.tools.register_goal.execute!(
+  await registerGoal(kit.tools,
     {
       id: "goal_hero",
       title: "Hero region",
@@ -1035,7 +1070,7 @@ test("register_reference_coverage records structured goal-bound reference crop r
 test("register_reference_coverage rejects malformed reference region keys", async () => {
   const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd(), knownRequirementIDs: ["REQ-1"] })
 
-  await kit.tools.register_goal.execute!(
+  await registerGoal(kit.tools,
     {
       id: "goal_hero",
       title: "Hero region",
@@ -1074,7 +1109,7 @@ test("register_reference_coverage rejects malformed reference region keys", asyn
 
 test("register_visual_feedback_acceptance rejects non-final goal kinds without mutation", async () => {
   const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd(), knownRequirementIDs: ["REQ-1"] })
-  await kit.tools.register_goal.execute!(
+  await registerGoal(kit.tools,
     {
       id: "goal_feature_visual",
       title: "Feature visual implementation",
@@ -1091,7 +1126,7 @@ test("register_visual_feedback_acceptance rejects non-final goal kinds without m
   )
   const before = JSON.stringify(kit.getCollector().goals)
 
-  const out = await kit.tools.register_visual_feedback_acceptance.execute!(
+  const out = await registerVisualFeedbackAcceptance(kit.tools,
     {
       goal_id: "goal_feature_visual",
       source_requirement_id: "REQ-1",
@@ -1110,7 +1145,7 @@ test("register_visual_feedback_acceptance rejects non-final goal kinds without m
 test("register_goal accepts final visual verification with contract_audit and visual feedback verification", async () => {
   const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd() })
 
-  const out = await kit.tools.register_goal.execute!(
+  const out = await registerGoal(kit.tools,
     {
       id: "goal_we_verification",
       title: "World economy final verification",
@@ -1157,150 +1192,155 @@ test("register_goal accepts final visual verification with contract_audit and vi
 })
 
 test("register_goal rejects script_ref acceptance specs whose scripts do not exist", async () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "oc-architect-script-ref-"))
-  const kit = createArchitectOutputTools({ existingGoals: [], workDir: tmp })
+  await withTempDirectory("oc-architect-script-ref-", async (tmp) => {
+    const kit = createArchitectOutputTools({ existingGoals: [], workDir: tmp })
 
-  const out = await kit.tools.register_goal.execute!(
-    {
-      id: "goal_missing_script",
-      title: "Missing script",
-      objective: "Define a goal whose scripted acceptance must reference a real repository script.",
-      acceptance_specs: [scriptRefAcceptance("goal_missing_script", "scripts/missing-check.sh")],
-      owned_paths: ["src/missing.ts"],
-      depends_on: [],
-      priority: "blocking",
-      kind: "feature",
-      requirement_ids: ["REQ-1"],
-    } as any,
-    {} as any,
-  )
+    const out = await registerGoal(kit.tools,
+      {
+        id: "goal_missing_script",
+        title: "Missing script",
+        objective: "Define a goal whose scripted acceptance must reference a real repository script.",
+        acceptance_specs: [scriptRefAcceptance("goal_missing_script", "scripts/missing-check.sh")],
+        owned_paths: ["src/missing.ts"],
+        depends_on: [],
+        priority: "blocking",
+        kind: "feature",
+        requirement_ids: ["REQ-1"],
+      } as any,
+      {} as any,
+    )
 
-  expect(out).toContain("references missing script_ref acceptance scorer path(s)")
-  expect(out).toContain("script_ref is only for existing repo scripts")
-  expect(out).toContain("contract_audit is a scorer type, not a script_ref path")
-  expect(out).toContain('Use spec.kind="shell" with cmd for inline page checks')
-  expect(kit.getCollector().goals).toEqual([])
+    expect(out).toContain("references missing script_ref acceptance scorer path(s)")
+    expect(out).toContain("script_ref is only for existing repo scripts")
+    expect(out).toContain("contract_audit is a scorer type, not a script_ref path")
+    expect(out).toContain('Use spec.kind="shell" with cmd for inline page checks')
+    expect(kit.getCollector().goals).toEqual([])
+  })
 })
 
 test("register_goal rejects package.json masquerading as script_ref", async () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "oc-architect-package-script-ref-"))
-  fs.writeFileSync(path.join(tmp, "package.json"), JSON.stringify({ scripts: { build: "tsc" } }, null, 2))
-  const kit = createArchitectOutputTools({ existingGoals: [], workDir: tmp })
+  await withTempDirectory("oc-architect-package-script-ref-", async (tmp) => {
+    fs.writeFileSync(path.join(tmp, "package.json"), JSON.stringify({ scripts: { build: "tsc" } }, null, 2))
+    const kit = createArchitectOutputTools({ existingGoals: [], workDir: tmp })
 
-  const out = await kit.tools.register_goal.execute!(
-    {
-      id: "goal_package_script_ref",
-      title: "Package script ref",
-      objective: "Define a goal whose package-manager acceptance must use shell rather than package.json.",
-      acceptance_specs: [scriptRefAcceptance("goal_package_script_ref", "package.json")],
-      owned_paths: ["src/package-script-ref.ts"],
-      depends_on: [],
-      priority: "blocking",
-      kind: "feature",
-      requirement_ids: ["REQ-1"],
-    } as any,
-    {} as any,
-  )
+    const out = await registerGoal(kit.tools,
+      {
+        id: "goal_package_script_ref",
+        title: "Package script ref",
+        objective: "Define a goal whose package-manager acceptance must use shell rather than package.json.",
+        acceptance_specs: [scriptRefAcceptance("goal_package_script_ref", "package.json")],
+        owned_paths: ["src/package-script-ref.ts"],
+        depends_on: [],
+        priority: "blocking",
+        kind: "feature",
+        requirement_ids: ["REQ-1"],
+      } as any,
+      {} as any,
+    )
 
-  expect(out).toContain("invalid or missing script_ref acceptance scorer path(s)")
-  expect(out).toContain("package.json")
-  expect(out).toContain("package manifests are not executable repo scripts")
-  expect(out).toContain("package-manager commands")
-  expect(kit.getCollector().goals).toEqual([])
+    expect(out).toContain("invalid or missing script_ref acceptance scorer path(s)")
+    expect(out).toContain("package.json")
+    expect(out).toContain("package manifests are not executable repo scripts")
+    expect(out).toContain("package-manager commands")
+    expect(kit.getCollector().goals).toEqual([])
+  })
 })
 
 test("register_goal explains contract_audit is not a script_ref path", async () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "oc-architect-contract-audit-script-ref-"))
-  const kit = createArchitectOutputTools({ existingGoals: [], workDir: tmp })
+  await withTempDirectory("oc-architect-contract-audit-script-ref-", async (tmp) => {
+    const kit = createArchitectOutputTools({ existingGoals: [], workDir: tmp })
 
-  const out = await kit.tools.register_goal.execute!(
-    {
-      id: "goal_contract_audit_confusion",
-      title: "Contract audit confusion",
-      objective: "Define a goal whose acceptance must not mistake contract_audit for a repo script.",
-      acceptance_specs: [scriptRefAcceptance("goal_contract_audit_confusion", ".opencorvus/scripts/contract-audit")],
-      owned_paths: ["src/page.tsx"],
-      depends_on: [],
-      priority: "blocking",
-      kind: "feature",
-      requirement_ids: ["REQ-1"],
-    } as any,
-    {} as any,
-  )
+    const out = await registerGoal(kit.tools,
+      {
+        id: "goal_contract_audit_confusion",
+        title: "Contract audit confusion",
+        objective: "Define a goal whose acceptance must not mistake contract_audit for a repo script.",
+        acceptance_specs: [scriptRefAcceptance("goal_contract_audit_confusion", ".opencorvus/scripts/contract-audit")],
+        owned_paths: ["src/page.tsx"],
+        depends_on: [],
+        priority: "blocking",
+        kind: "feature",
+        requirement_ids: ["REQ-1"],
+      } as any,
+      {} as any,
+    )
 
-  expect(out).toContain(".opencorvus/scripts/contract-audit")
-  expect(out).toContain("contract_audit is a scorer type, not a script_ref path")
-  expect(out).toContain('type="contract_audit" with registered contract_ids')
-  expect(out).toContain("collector unchanged")
-  expect(kit.getCollector().goals).toEqual([])
+    expect(out).toContain(".opencorvus/scripts/contract-audit")
+    expect(out).toContain("contract_audit is a scorer type, not a script_ref path")
+    expect(out).toContain('type="contract_audit" with registered contract_ids')
+    expect(out).toContain("collector unchanged")
+    expect(kit.getCollector().goals).toEqual([])
+  })
 })
 
 test("register_goal accepts existing script_ref and exposes scorer kind in goal snapshot", async () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "oc-architect-script-ref-"))
-  fs.mkdirSync(path.join(tmp, "scripts"))
-  fs.writeFileSync(path.join(tmp, "scripts", "check.sh"), "echo ok\n")
-  const kit = createArchitectOutputTools({ existingGoals: [], workDir: tmp })
+  await withTempDirectory("oc-architect-script-ref-", async (tmp) => {
+    fs.mkdirSync(path.join(tmp, "scripts"))
+    fs.writeFileSync(path.join(tmp, "scripts", "check.sh"), "echo ok\n")
+    const kit = createArchitectOutputTools({ existingGoals: [], workDir: tmp })
 
-  const out = await kit.tools.register_goal.execute!(
-    {
-      id: "goal_existing_script",
-      title: "Existing script",
-      objective: "Define a goal whose scripted acceptance references a real repository script.",
-      acceptance_specs: [scriptRefAcceptance("goal_existing_script", "scripts/check.sh")],
-      owned_paths: ["src/existing.ts"],
-      depends_on: [],
-      priority: "blocking",
-      kind: "feature",
-      requirement_ids: ["REQ-1"],
-    } as any,
-    {} as any,
-  )
+    const out = await registerGoal(kit.tools,
+      {
+        id: "goal_existing_script",
+        title: "Existing script",
+        objective: "Define a goal whose scripted acceptance references a real repository script.",
+        acceptance_specs: [scriptRefAcceptance("goal_existing_script", "scripts/check.sh")],
+        owned_paths: ["src/existing.ts"],
+        depends_on: [],
+        priority: "blocking",
+        kind: "feature",
+        requirement_ids: ["REQ-1"],
+      } as any,
+      {} as any,
+    )
 
-  expect(out).toContain('OK: goal "goal_existing_script" registered')
-  expect(out).toContain("heuristic:script_ref:scripts/check.sh")
+    expect(out).toContain('OK: goal "goal_existing_script" registered')
+    expect(out).toContain("heuristic:script_ref:scripts/check.sh")
+  })
 })
 
 test("modify_goal rejects package.json masquerading as script_ref without mutating prior goal", async () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "oc-architect-package-script-ref-"))
-  fs.writeFileSync(path.join(tmp, "package.json"), JSON.stringify({ scripts: { build: "tsc" } }, null, 2))
-  const kit = createArchitectOutputTools({ existingGoals: [], workDir: tmp })
+  await withTempDirectory("oc-architect-package-script-ref-", async (tmp) => {
+    fs.writeFileSync(path.join(tmp, "package.json"), JSON.stringify({ scripts: { build: "tsc" } }, null, 2))
+    const kit = createArchitectOutputTools({ existingGoals: [], workDir: tmp })
 
-  await kit.tools.register_goal.execute!(
-    {
-      id: "goal_modify_package_script_ref",
-      title: "Modify package script ref",
-      objective: "Define a stable goal whose later package-manager acceptance must use shell.",
-      acceptance_specs: [acceptance("goal_modify_package_script_ref")],
-      owned_paths: ["src/modify-package-script-ref.ts"],
-      depends_on: [],
-      priority: "blocking",
-      kind: "feature",
-      requirement_ids: ["REQ-1"],
-    } as any,
-    {} as any,
-  )
-  const before = JSON.stringify(kit.getCollector().goals[0])
+    await registerGoal(kit.tools,
+      {
+        id: "goal_modify_package_script_ref",
+        title: "Modify package script ref",
+        objective: "Define a stable goal whose later package-manager acceptance must use shell.",
+        acceptance_specs: [acceptance("goal_modify_package_script_ref")],
+        owned_paths: ["src/modify-package-script-ref.ts"],
+        depends_on: [],
+        priority: "blocking",
+        kind: "feature",
+        requirement_ids: ["REQ-1"],
+      } as any,
+      {} as any,
+    )
+    const before = JSON.stringify(kit.getCollector().goals[0])
 
-  const out = await kit.tools.modify_goal.execute!(
-    {
-      id: "goal_modify_package_script_ref",
-      updates: {
-        acceptance_specs: [scriptRefAcceptance("goal_modify_package_script_ref", "package.json")],
-      },
-    } as any,
-    {} as any,
-  )
+    const out = await modifyGoal(kit.tools,
+      {
+        id: "goal_modify_package_script_ref",
+        updates: {
+          acceptance_specs: [scriptRefAcceptance("goal_modify_package_script_ref", "package.json")],
+        },
+      } as any,
+      {} as any,
+    )
 
-  expect(out).toContain("invalid or missing script_ref acceptance scorer path(s)")
-  expect(out).toContain("package manifests are not executable repo scripts")
-  expect(out).toContain("collector unchanged")
-  expect(JSON.stringify(kit.getCollector().goals[0])).toBe(before)
+    expect(out).toContain("invalid or missing script_ref acceptance scorer path(s)")
+    expect(out).toContain("package manifests are not executable repo scripts")
+    expect(out).toContain("collector unchanged")
+    expect(JSON.stringify(kit.getCollector().goals[0])).toBe(before)
+  })
 })
 
 test("register_goal exposes shell scorer kind and command preview in goal snapshot", async () => {
   const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd() })
 
-  const out = await kit.tools.register_goal.execute!(
+  const out = await registerGoal(kit.tools,
     {
       id: "goal_shell_snapshot",
       title: "Shell snapshot",
@@ -1331,9 +1371,9 @@ test("modify_goal reports no-op instead of fake changed count for identical upda
     kind: "feature" as const,
     requirement_ids: ["REQ-1"],
   }
-  await kit.tools.register_goal.execute!(goal as any, {} as any)
+  await registerGoal(kit.tools,goal as any, {} as any)
 
-  const out = await kit.tools.modify_goal.execute!(
+  const out = await modifyGoal(kit.tools,
     {
       id: "goal_noop",
       updates: {
@@ -1389,7 +1429,7 @@ test("register_goal schema rejects malformed scorer type before execute", () => 
 test("register_goal execute normalizes canonical schema defaults before collector mutation", async () => {
   const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd() })
 
-  const out = await kit.tools.register_goal.execute!(
+  const out = await registerGoal(kit.tools,
     {
       id: "goal_defaults",
       title: "Defaults",
@@ -1418,7 +1458,7 @@ test("architect validation blocks acceptance specs whose source requirement is n
     knownRequirementIDs: ["REQ-1", "REQ-3"],
   })
 
-  await kit.tools.register_goal.execute!(
+  await registerGoal(kit.tools,
     {
       id: "goal_trace",
       title: "Trace",
@@ -1449,7 +1489,7 @@ test("architect validation blocks acceptance specs whose source requirement is n
 test("architect validation blocks unknown requirement ids in goals and acceptance specs", async () => {
   const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd(), knownRequirementIDs: ["REQ-1"] })
 
-  await kit.tools.register_goal.execute!(
+  await registerGoal(kit.tools,
     {
       id: "goal_unknown_req",
       title: "Unknown requirement",
@@ -1490,7 +1530,7 @@ test("architect validation blocks known requirements without owning goals", asyn
     knownRequirementIDs: ["REQ-1", "REQ-2", "REQ-3"],
   })
 
-  await kit.tools.register_goal.execute!(
+  await registerGoal(kit.tools,
     {
       id: "goal_req_one",
       title: "Requirement one",
@@ -1504,7 +1544,7 @@ test("architect validation blocks known requirements without owning goals", asyn
     } as any,
     {} as any,
   )
-  await kit.tools.register_goal.execute!(
+  await registerGoal(kit.tools,
     {
       id: "goal_req_two",
       title: "Requirement two",
@@ -1558,7 +1598,7 @@ test("architect validation blocks known requirements without goal-local acceptan
     knownRequirementIDs: ["REQ-1", "REQ-2"],
   })
 
-  await kit.tools.register_goal.execute!(
+  await registerGoal(kit.tools,
     {
       id: "goal_claims_two",
       title: "Claims two requirements",
@@ -1572,7 +1612,7 @@ test("architect validation blocks known requirements without goal-local acceptan
     } as any,
     {} as any,
   )
-  await kit.tools.register_goal.execute!(
+  await registerGoal(kit.tools,
     {
       id: "goal_other",
       title: "Other",
@@ -1614,7 +1654,7 @@ test("architect validation blocks missing traceability after every known require
     knownRequirementIDs: ["REQ-1", "REQ-2"],
   })
 
-  await kit.tools.register_goal.execute!(
+  await registerGoal(kit.tools,
     {
       id: "goal_owned_one",
       title: "Owned one",
@@ -1628,7 +1668,7 @@ test("architect validation blocks missing traceability after every known require
     } as any,
     {} as any,
   )
-  await kit.tools.register_goal.execute!(
+  await registerGoal(kit.tools,
     {
       id: "goal_owned_two",
       title: "Owned two",
@@ -1671,7 +1711,7 @@ test("register_traceability rejects unknown requirements, unknown goals, and non
     knownRequirementIDs: ["REQ-1", "REQ-2"],
   })
 
-  await kit.tools.register_goal.execute!(
+  await registerGoal(kit.tools,
     {
       id: "goal_trace_owner",
       title: "Trace owner",
@@ -1840,7 +1880,7 @@ test("depends_on edge without graph reason is a blocker", async () => {
 
 test("dependency cycle is a blocker", async () => {
   const kit = await registerTwoGoalGraph()
-  await kit.tools.register_goal.execute!(
+  await registerGoal(kit.tools,
     {
       id: "goal_model",
       title: "Model",

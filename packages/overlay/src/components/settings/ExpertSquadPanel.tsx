@@ -71,6 +71,53 @@ function activeAgentToolRefCount(agent: ExpertSquadCatalog["active_agent_project
   )
 }
 
+type ProjectionEntry = ExpertSquadOption["capability_projection"]["scheduler"]
+
+function projectionMcpRefCount(entry: ProjectionEntry): number {
+  return (
+    projectionCount(entry.default_mcp_server_refs) +
+    projectionCount(entry.package_mcp_server_refs) +
+    projectionCount(entry.default_mcp_tool_refs) +
+    projectionCount(entry.package_mcp_tool_refs) +
+    projectionCount(entry.default_mcp_prompt_refs) +
+    projectionCount(entry.package_mcp_prompt_refs) +
+    projectionCount(entry.default_mcp_resource_refs) +
+    projectionCount(entry.package_mcp_resource_refs)
+  )
+}
+
+function projectionSkillRefCount(entry: ProjectionEntry): number {
+  return projectionCount(entry.default_skill_refs) + projectionCount(entry.package_skill_refs)
+}
+
+function projectionToolRefCount(entry: ProjectionEntry): number {
+  return (
+    projectionCount(entry.built_in_tool_ids) +
+    projectionCount(entry.default_tool_refs) +
+    projectionCount(entry.package_tool_refs) +
+    projectionCount(entry.default_mcp_tool_refs) +
+    projectionCount(entry.package_mcp_tool_refs)
+  )
+}
+
+function projectionRows(entry: ProjectionEntry) {
+  return [
+    ["built_in_tool_ids", entry.built_in_tool_ids],
+    ["default_skill_refs", entry.default_skill_refs],
+    ["package_skill_refs", entry.package_skill_refs],
+    ["default_tool_refs", entry.default_tool_refs],
+    ["package_tool_refs", entry.package_tool_refs],
+    ["default_mcp_server_refs", entry.default_mcp_server_refs],
+    ["package_mcp_server_refs", entry.package_mcp_server_refs],
+    ["default_mcp_tool_refs", entry.default_mcp_tool_refs],
+    ["package_mcp_tool_refs", entry.package_mcp_tool_refs],
+    ["default_mcp_prompt_refs", entry.default_mcp_prompt_refs],
+    ["package_mcp_prompt_refs", entry.package_mcp_prompt_refs],
+    ["default_mcp_resource_refs", entry.default_mcp_resource_refs],
+    ["package_mcp_resource_refs", entry.package_mcp_resource_refs],
+  ] as const
+}
+
 function catalogScopeIdentity(scope = expertSquadCatalogScope()): string {
   if (scope.kind === "project") return `project:${scope.directory}`
   if (scope.kind === "session") return `session:${scope.directory}:${scope.sessionID}`
@@ -78,9 +125,10 @@ function catalogScopeIdentity(scope = expertSquadCatalogScope()): string {
 }
 
 type WritableCatalogScope = Extract<ReturnType<typeof expertSquadCatalogScope>, { kind: "project" | "session" }>
+type CapturedCatalogActionScope = { scope: WritableCatalogScope; identity: string }
 type BusyAction = { key: string; scopeIdentity: string }
 
-function captureCatalogActionScope(): { scope: WritableCatalogScope; identity: string } | null {
+function captureCatalogActionScope(): CapturedCatalogActionScope | null {
   const scope = expertSquadCatalogScope()
   if (scope.kind !== "project" && scope.kind !== "session") return null
   return { scope, identity: catalogScopeIdentity(scope) }
@@ -124,11 +172,13 @@ export default function ExpertSquadPanel() {
   const [loading, setLoading] = createSignal(false)
   const [replaceExisting, setReplaceExisting] = createSignal(false)
   const [catalogError, setCatalogError] = createSignal("")
+  const [catalogIdentity, setCatalogIdentity] = createSignal("")
   const [actionError, setActionError] = createSignal("")
 
   let noticeTimer: ReturnType<typeof setTimeout> | undefined
   let loadSequence = 0
   let archiveInput: HTMLInputElement | undefined
+  let pendingArchiveImportScope: CapturedCatalogActionScope | null = null
 
   const currentScope = createMemo(() => expertSquadCatalogScope())
   const currentScopeIdentity = createMemo(() => catalogScopeIdentity(currentScope()))
@@ -145,12 +195,13 @@ export default function ExpertSquadPanel() {
     const scope = currentScope()
     return scope.kind === "session" ? scope.sessionID : ""
   })
-  const squads = createMemo(() => catalog()?.squads ?? [])
-  const projectActiveID = createMemo(() => catalog()?.active.project ?? "")
-  const sessionOverrideID = createMemo(() => catalog()?.active.session_override ?? "")
-  const effectiveActiveID = createMemo(() => catalog()?.active.effective ?? "")
-  const activeProjection = createMemo(() => catalog()?.active_skill_projection ?? null)
-  const activeAgentProjection = createMemo(() => catalog()?.active_agent_projection ?? null)
+  const scopedCatalog = createMemo(() => (catalogIdentity() === currentScopeIdentity() ? catalog() : null))
+  const squads = createMemo(() => scopedCatalog()?.squads ?? [])
+  const projectActiveID = createMemo(() => scopedCatalog()?.active.project ?? "")
+  const sessionOverrideID = createMemo(() => scopedCatalog()?.active.session_override ?? "")
+  const effectiveActiveID = createMemo(() => scopedCatalog()?.active.effective ?? "")
+  const activeProjection = createMemo(() => scopedCatalog()?.active_skill_projection ?? null)
+  const activeAgentProjection = createMemo(() => scopedCatalog()?.active_agent_projection ?? null)
   const currentSquad = createMemo(() => {
     const list = squads()
     return list.find((squad) => squad.id === selectedSquadID()) ?? list[0]
@@ -195,16 +246,19 @@ export default function ExpertSquadPanel() {
     if (scope.kind === "unavailable" || scope.kind === "pending") {
       loadSequence++
       setCatalog(null)
+      setCatalogIdentity("")
       setCatalogError("")
       setLoading(false)
       return
     }
     setLoading(true)
+    if (currentScopeIdentity() === expectedScopeIdentity) setCatalogError("")
     const sequence = ++loadSequence
     try {
       const next = await loadExpertSquadCatalog(scope)
       if (sequence !== loadSequence || currentScopeIdentity() !== expectedScopeIdentity) return
       setCatalog(next)
+      setCatalogIdentity(expectedScopeIdentity)
       setCatalogError("")
       setSelectedSquadID((current) =>
         next.squads.some((squad) => squad.id === (nextSelectedID || current))
@@ -214,6 +268,7 @@ export default function ExpertSquadPanel() {
     } catch (error) {
       if (sequence === loadSequence && currentScopeIdentity() === expectedScopeIdentity) {
         setCatalog(null)
+        setCatalogIdentity("")
         setCatalogError(error instanceof Error ? error.message : String(error))
       }
       throw error
@@ -231,6 +286,7 @@ export default function ExpertSquadPanel() {
     if (scope.kind === "unavailable" || scope.kind === "pending") {
       loadSequence++
       setCatalog(null)
+      setCatalogIdentity("")
       setCatalogError("")
       setLoading(false)
       return key
@@ -368,8 +424,12 @@ export default function ExpertSquadPanel() {
   }
 
   async function importArchive(file: File | undefined) {
-    const captured = captureCatalogActionScope()
-    if (!captured || !file) return
+    const captured = pendingArchiveImportScope
+    pendingArchiveImportScope = null
+    if (!captured || !file) {
+      if (archiveInput) archiveInput.value = ""
+      return
+    }
     await runBusy(
       "import-archive",
       async () => {
@@ -393,6 +453,13 @@ export default function ExpertSquadPanel() {
       captured.identity,
     )
     if (archiveInput) archiveInput.value = ""
+  }
+
+  function openArchivePicker() {
+    const captured = captureCatalogActionScope()
+    if (!captured) return
+    pendingArchiveImportScope = captured
+    archiveInput?.click()
   }
 
   async function exportCurrent() {
@@ -452,7 +519,7 @@ export default function ExpertSquadPanel() {
                 tone="neutral"
                 data-ui="expert-squad-import-archive"
                 disabled={!writableScopeAvailable() || !!activeBusy()}
-                onClick={() => archiveInput?.click()}
+                onClick={openArchivePicker}
               >
                 <Icon name="upload" size={13} />
                 {t("expert_squad.import_archive")}
@@ -775,54 +842,11 @@ export default function ExpertSquadPanel() {
                         <div class="expert-squad-section-head">
                           <strong>{t("expert_squad.capability_projection")}</strong>
                           <SettingsPill tone="muted">
-                            {t("expert_squad.tool_count", {
-                              count:
-                                projectionCount(squad.capability_projection.scheduler.built_in_tool_ids) +
-                                projectionCount(squad.capability_projection.scheduler.default_tool_refs) +
-                                projectionCount(squad.capability_projection.scheduler.package_tool_refs) +
-                                projectionCount(squad.capability_projection.scheduler.default_mcp_tool_refs) +
-                                projectionCount(squad.capability_projection.scheduler.package_mcp_tool_refs),
-                            })}
+                            {t("expert_squad.tool_count", { count: projectionToolRefCount(squad.capability_projection.scheduler) })}
                           </SettingsPill>
                         </div>
                         <div class="expert-squad-projection-grid">
-                          <For
-                            each={
-                              [
-                                ["built_in_tool_ids", squad.capability_projection.scheduler.built_in_tool_ids],
-                                ["default_skill_refs", squad.capability_projection.scheduler.default_skill_refs],
-                                ["package_skill_refs", squad.capability_projection.scheduler.package_skill_refs],
-                                ["default_tool_refs", squad.capability_projection.scheduler.default_tool_refs],
-                                ["package_tool_refs", squad.capability_projection.scheduler.package_tool_refs],
-                                [
-                                  "default_mcp_server_refs",
-                                  squad.capability_projection.scheduler.default_mcp_server_refs,
-                                ],
-                                [
-                                  "package_mcp_server_refs",
-                                  squad.capability_projection.scheduler.package_mcp_server_refs,
-                                ],
-                                ["default_mcp_tool_refs", squad.capability_projection.scheduler.default_mcp_tool_refs],
-                                ["package_mcp_tool_refs", squad.capability_projection.scheduler.package_mcp_tool_refs],
-                                [
-                                  "default_mcp_prompt_refs",
-                                  squad.capability_projection.scheduler.default_mcp_prompt_refs,
-                                ],
-                                [
-                                  "package_mcp_prompt_refs",
-                                  squad.capability_projection.scheduler.package_mcp_prompt_refs,
-                                ],
-                                [
-                                  "default_mcp_resource_refs",
-                                  squad.capability_projection.scheduler.default_mcp_resource_refs,
-                                ],
-                                [
-                                  "package_mcp_resource_refs",
-                                  squad.capability_projection.scheduler.package_mcp_resource_refs,
-                                ],
-                              ] as const
-                            }
-                          >
+                          <For each={projectionRows(squad.capability_projection.scheduler)}>
                             {([key, values]) => (
                               <div class="expert-squad-projection-row">
                                 <span>{key}</span>
@@ -831,6 +855,47 @@ export default function ExpertSquadPanel() {
                             )}
                           </For>
                         </div>
+                      </div>
+
+                      <div class="expert-squad-section" data-ui="expert-squad-agent-capability-projection">
+                        <div class="expert-squad-section-head">
+                          <strong>{t("expert_squad.agent_capability_projection")}</strong>
+                          <SettingsPill tone="muted">
+                            {t("expert_squad.agent_count", {
+                              count: Object.keys(squad.capability_projection.agents).length,
+                            })}
+                          </SettingsPill>
+                        </div>
+                        <Show
+                          when={Object.keys(squad.capability_projection.agents).length > 0}
+                          fallback={<div class="empty-hint">-</div>}
+                        >
+                          <div class="expert-squad-projection-grid">
+                            <For each={Object.entries(squad.capability_projection.agents)}>
+                              {([agentID, projection]) => (
+                                <div class="expert-squad-projection-row">
+                                  <span>{agentID}</span>
+                                  <strong>
+                                    {t("expert_squad.skill_count", { count: projectionSkillRefCount(projection) })} ·{" "}
+                                    {t("expert_squad.tool_count", { count: projectionToolRefCount(projection) })}
+                                  </strong>
+                                  <small>
+                                    {[
+                                      projectionMcpRefCount(projection)
+                                        ? t("expert_squad.mcp_ref_count", { count: projectionMcpRefCount(projection) })
+                                        : "",
+                                      ...projectionRows(projection)
+                                        .filter(([, values]) => values.length > 0)
+                                        .map(([key, values]) => `${key}: ${values.join(", ")}`),
+                                    ]
+                                      .filter(Boolean)
+                                      .join(" · ") || "-"}
+                                  </small>
+                                </div>
+                              )}
+                            </For>
+                          </div>
+                        </Show>
                       </div>
                     </div>
                   )}

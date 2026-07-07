@@ -231,6 +231,7 @@ const idleMs = benchmarkIdleMs()
 const activity = withStreamActivity({ idleMs, label: "rewind-checkpoint-benchmark" })
 let pass = 0
 let fail = 0
+const cleanupErrors: string[] = []
 const started = Date.now()
 
 try {
@@ -251,11 +252,18 @@ try {
   }
 } finally {
   activity.dispose()
-  await Instance.disposeAll().catch(() => {})
-  Database.close()
+  try {
+    await Instance.disposeAll()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    cleanupErrors.push(`instance.disposeAll: ${message}`)
+    console.log(`[cleanup] instance.disposeAll failed: ${message}`)
+  } finally {
+    Database.close()
+  }
 }
 
 console.log(
-  `\nresult: pass=${pass} fail=${fail} total=${pass + fail} elapsed=${Date.now() - started}ms idleMs=${idleMs}`,
+  `\nresult: pass=${pass} fail=${fail} cleanup_fail=${cleanupErrors.length} total=${pass + fail} elapsed=${Date.now() - started}ms idleMs=${idleMs}`,
 )
-process.exit(fail)
+process.exit(fail > 0 || cleanupErrors.length > 0 ? 1 : 0)

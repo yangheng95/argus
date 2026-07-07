@@ -43,6 +43,20 @@ function currentRuntimeHost(): ArtifactNodeRuntimeHost {
   }
 }
 
+const repoRoot = resolve(import.meta.dir, "../../../..")
+
+function expectGitIndexContains(relativePaths: string[]) {
+  const result = Bun.spawnSync({
+    cmd: ["git", "ls-files", "--error-unmatch", "--", ...relativePaths],
+    cwd: repoRoot,
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+  const stderr = new TextDecoder().decode(result.stderr)
+  expect(stderr).toBe("")
+  expect(result.exitCode).toBe(0)
+}
+
 describe("build-artifact", () => {
   test("default flavor stays on the full cli artifact name", () => {
     expect(parseBuildFlavor(["bun", "run", "build"])).toBe("cli")
@@ -70,10 +84,24 @@ describe("build-artifact", () => {
   test("supported compile build scripts regenerate expert-squad payloads before Bun compile", () => {
     const buildSource = readFileSync(resolve(import.meta.dir, "../../script/build.ts"), "utf8")
     const localBuildSource = readFileSync(resolve(import.meta.dir, "../../script/build.local.ts"), "utf8")
+    const generatorSource = readFileSync(resolve(import.meta.dir, "../../script/generate-build-artifacts.ts"), "utf8")
+    expect(generatorSource).toContain('import { generateExpertSquadPayloadModule } from "./generate-expert-squad-payload"')
+    expect(generatorSource).toContain("await generateExpertSquadPayloadModule(repoRoot)")
     for (const source of [buildSource, localBuildSource]) {
-      expect(source).toContain('import { generateExpertSquadPayloadModule } from "./generate-expert-squad-payload"')
-      expect(source.indexOf("await generateExpertSquadPayloadModule(repoRoot)")).toBeLessThan(source.indexOf("await Bun.build("))
+      expect(source).toContain('import { generateOpencorvusGeneratedBuildArtifacts } from "./generate-build-artifacts"')
+      expect(source).not.toContain("expertSquadPayloadTextPlugin")
+      expect(source).not.toContain("plugins: [expertSquadPayloadTextPlugin()]")
+      expect(source.indexOf("await generateOpencorvusGeneratedBuildArtifacts")).toBeLessThan(
+        source.indexOf("await Bun.build("),
+      )
     }
+  })
+
+  test("generated build helper modules are tracked delivery inputs", () => {
+    expectGitIndexContains([
+      "packages/opencorvus/script/generate-build-artifacts.ts",
+      "packages/opencorvus/script/build-overlay-payload-stamp.ts",
+    ])
   })
 
   test("overlay-server build scripts do not package the removed coding agent TUI plugin", () => {
@@ -182,7 +210,7 @@ describe("build-artifact", () => {
       for (const source of [buildSource, localBuildSource]) {
         expect(source).toContain("writePackagedRuntimePackageJson")
         expect(source).toContain("outdir: browserMcpRuntimeDir")
-        expect(source).toContain('name: `${name}-browser-mcp-node`')
+        expect(source).toContain("name: `${name}-browser-mcp-node`")
       }
     } finally {
       await rm(outdir, { recursive: true, force: true })
@@ -251,12 +279,19 @@ describe("build-artifact", () => {
 
   test("overlay-server build emits a single payload stamp for Tauri rerun detection", () => {
     const buildSource = readFileSync(resolve(import.meta.dir, "../../script/build.ts"), "utf8")
+    const localBuildSource = readFileSync(resolve(import.meta.dir, "../../script/build.local.ts"), "utf8")
+    const stampSource = readFileSync(resolve(import.meta.dir, "../../script/build-overlay-payload-stamp.ts"), "utf8")
     const tauriBuildSource = readFileSync(resolve(import.meta.dir, "../../../overlay/src-tauri/build.rs"), "utf8")
 
-    expect(buildSource).toContain('const OVERLAY_PAYLOAD_STAMP_FILE = ".opencorvus-overlay-payload.stamp"')
-    expect(buildSource).toContain("async function writeOverlayPayloadStamp")
-    expect(buildSource).toContain('if (buildFlavor === "overlay-server")')
-    expect(buildSource).toContain('await writeOverlayPayloadStamp(path.join(dir, "dist", name))')
+    expect(stampSource).toContain('export const OVERLAY_PAYLOAD_STAMP_FILE = ".opencorvus-overlay-payload.stamp"')
+    expect(stampSource).toContain("export async function writeOverlayPayloadStamp")
+    expect(buildSource).not.toContain("async function writeOverlayPayloadStamp")
+    expect(localBuildSource).not.toContain("async function writeOverlayPayloadStamp")
+    for (const source of [buildSource, localBuildSource]) {
+      expect(source).toContain('import { writeOverlayPayloadStamp } from "./build-overlay-payload-stamp"')
+      expect(source).toContain('if (buildFlavor === "overlay-server")')
+      expect(source).toContain('await writeOverlayPayloadStamp(path.join(dir, "dist", name))')
+    }
 
     expect(tauriBuildSource).toContain('const OVERLAY_PAYLOAD_STAMP_FILE: &str = ".opencorvus-overlay-payload.stamp";')
     expect(tauriBuildSource).toContain("fn require_payload_stamp")
@@ -416,6 +451,14 @@ describe("build-artifact", () => {
     } finally {
       await rm(outdir, { recursive: true, force: true })
     }
+  })
+
+  test("runtime node module copy does not rely on Bun recursive fs.cp", () => {
+    const source = readFileSync(resolve(import.meta.dir, "../../script/build-runtime-node-modules.ts"), "utf8")
+
+    expect(source).toContain("async function copyPackageEntry")
+    expect(source).toContain("await fs.promises.copyFile(source, destination)")
+    expect(source).not.toContain("fs.promises.cp")
   })
 
   test("runtime node module copy flattens the AWS shared dependency graph", async () => {

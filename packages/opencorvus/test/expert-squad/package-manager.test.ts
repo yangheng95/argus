@@ -1,7 +1,9 @@
 import { BlobReader, TextReader, TextWriter, Uint8ArrayWriter, ZipReader, ZipWriter } from "@zip.js/zip.js"
-import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, mock, spyOn, test as baseTest } from "bun:test"
+import { mkdirSync, writeFileSync } from "fs"
 import fs from "fs/promises"
 import path from "path"
+import { pathToFileURL } from "url"
 import { ExpertSquadPackageManager } from "../../src/expert-squad/manager"
 import { payloadPackageSources } from "../../src/expert-squad/payload"
 import { ExpertSquadRegistry } from "../../src/expert-squad/registry"
@@ -13,6 +15,7 @@ import { tmpdir } from "../fixture/fixture"
 
 const PACKAGE_ID = "custom-replica"
 const PACKAGE_NAMESPACE = "partner"
+const test = baseTest.serial
 
 async function writeFile(root: string, relativePath: string, content: string) {
   const target = path.join(root, relativePath)
@@ -57,9 +60,11 @@ async function withPackageManagerInactivityTimeout<T>(
       }, inactivityTimeoutMilliseconds)
     }
     reset(lastActivity)
-    run(reset).then(resolve, reject).finally(() => {
-      if (timer) clearTimeout(timer)
-    })
+    run(reset)
+      .then(resolve, reject)
+      .finally(() => {
+        if (timer) clearTimeout(timer)
+      })
   })
 }
 
@@ -125,7 +130,7 @@ function manifest(overrides: Record<string, unknown> = {}) {
     capability_projection: {
       scheduler: {
         role_base: true,
-        built_in_tool_ids: ["select_expert_squad", "skill", "build"],
+        built_in_tool_ids: ["select_expert_squad", "skill", "dispatch_agent", "manage_task"],
         package_tool_refs: [`${id}/orchestrator/source-evidence`],
         package_skill_refs: [`${id}/orchestrator/scheduler`],
       },
@@ -255,7 +260,9 @@ describe("ExpertSquadPackageManager", () => {
     expect(loaded.readmeContent).toContain("observable symptom -> direct trigger")
     expect(source!.files["selector.md"]).toContain("An expert frontend debug result must include a causal debug model")
     expect(source!.files["agents/orchestrator/system.md"]).toContain("rejected alternatives")
-    expect(source!.files["agents/build/system.md"]).toContain("if the chain is missing, gather evidence instead of patching")
+    expect(source!.files["agents/build/system.md"]).toContain(
+      "if the chain is missing, gather evidence instead of patching",
+    )
   })
 
   test("payload packages carry formal expert contracts", () => {
@@ -278,11 +285,11 @@ describe("ExpertSquadPackageManager", () => {
       },
       {
         id: "frontend-innovate",
-        readme: ["## Expert Contract", "Resource boundary", "Direction discipline", "Rendered proof"],
+        readme: ["## Expert Contract", "Resource boundary", "Direction discipline", "Rendered design proof"],
         selector: ["## Expert Contract", "design-convergence model", "Do not accept a frontend innovation result"],
         overlays: [
           ["agents/orchestrator/system.md", "frontend innovation Expert Contract"],
-          ["agents/frontend-design/system.md", "resources are unindexed"],
+          ["agents/frontend-design/system.md", "competitor/source resources are missing"],
         ],
       },
       {
@@ -291,17 +298,28 @@ describe("ExpertSquadPackageManager", () => {
         selector: ["## Expert Contract", "source-to-render model", "Do not accept source-row prose"],
         overlays: [
           ["agents/orchestrator/system.md", "replica Expert Contract"],
-          ["agents/build/system.md", "same requested surface"],
+          ["agents/build/system.md", "same surface"],
         ],
       },
       {
         id: "opentest",
-        readme: ["# OpenTest", "## Expert Contract", "protocol-engine/opentest-contract.json", "opentest-protocol-engine"],
+        readme: [
+          "# OpenTest",
+          "## Expert Contract",
+          "protocol-engine/opentest-contract.json",
+          "opentest-protocol-engine",
+        ],
         selector: ["## Expert Contract", "test-validity model", "Do not accept tests that were not run"],
         overlays: [
           ["agents/orchestrator/system.md", "WuJiang/OpenTest Expert Contract"],
+          ["virtual-agents/requirements/system.md", "active OpenTest protocol engine"],
+          ["virtual-agents/architect/system.md", "active OpenTest protocol engine"],
           ["virtual-agents/build/system.md", "active WuJiang/OpenTest protocol engine"],
           ["virtual-agents/integrity/system.md", "active WuJiang/OpenTest protocol engine"],
+          ["virtual-agents/visual-qa/system.md", "active WuJiang/OpenTest protocol engine"],
+          ["virtual-agents/requirements/skills/test-requirements/SKILL.md", "software-test-requirements"],
+          ["virtual-agents/architect/skills/test-architecture/SKILL.md", "software-test-architecture"],
+          ["virtual-agents/visual-qa/skills/visual-test-review/SKILL.md", "software-visual-test-review"],
         ],
       },
     ] as const
@@ -318,18 +336,61 @@ describe("ExpertSquadPackageManager", () => {
     }
   })
 
-  test("opentest payload exposes one external OpenTest protocol engine source", () => {
+  test("opentest payload exposes external OpenTest engine and runner sources", () => {
     const source = payloadPackageSources.find((candidate) => candidate.id === "opentest")
     expect(source).toBeDefined()
     expect(Object.keys(source!.files)).toContain("protocol-engine/opentest-contract.json")
     expect(Object.keys(source!.files)).toContain("protocol-engine/opentest-protocol-engine.ts")
     expect(Object.keys(source!.files)).toContain("tools/opentest-protocol-engine.ts")
+    expect(Object.keys(source!.files)).toContain("tools/opentest-runner.ts")
+    expect(Object.keys(source!.files)).toContain("virtual-agents/visual-qa/system.md")
+    expect(Object.keys(source!.files)).toContain("virtual-agents/visual-qa/skills/visual-test-review/SKILL.md")
     expect(Object.keys(source!.files)).not.toContain("tools/test-artifact-inventory.ts")
     expect(Object.keys(source!.files)).not.toContain("tools/test-protocol-contract.ts")
     expect(source!.manifestText).not.toContain("test-artifact-inventory")
     expect(source!.files["tools/opentest-protocol-engine.ts"]).toContain("parseProtocolContract(contractText)")
-    expect(source!.files["protocol-engine/opentest-protocol-engine.ts"]).toContain("export function parseProtocolContract")
+    expect(source!.files["tools/opentest-runner.ts"]).toContain("spawn(input.executable")
+    expect(source!.files["tools/opentest-runner.ts"]).toContain('detached: process.platform !== "win32"')
+    expect(source!.files["tools/opentest-runner.ts"]).toContain('signalProcessGroup(pid, "SIGTERM")')
+    expect(source!.files["tools/opentest-runner.ts"]).toContain("Get-CimInstance Win32_Process")
+    expect(source!.files["tools/opentest-runner.ts"]).toContain("ParentProcessId")
+    expect(source!.files["tools/opentest-runner.ts"]).toContain("const terminationFailure = new Promise<never>")
+    expect(source!.files["tools/opentest-runner.ts"]).toContain(
+      "completion = await Promise.race([completionPromise, terminationFailure])",
+    )
+    expect(source!.files["tools/opentest-runner.ts"]).toContain("if (input.abort.aborted) throw new Error")
+    expect(source!.files["tools/opentest-runner.ts"]).toContain("} finally {\n    clearInactivityTimer()")
+    expect(source!.files["tools/opentest-runner.ts"]).toContain('input.abort.removeEventListener("abort", onAbort)')
+    expect(source!.files["tools/opentest-runner.ts"]).toContain(
+      "const WINDOWS_POWERSHELL_CLEANUP_TIMEOUT_MS = 5_000",
+    )
+    expect(source!.files["tools/opentest-runner.ts"]).toContain("PowerShell cleanup timed out after")
+    expect(source!.files["tools/opentest-runner.ts"]).toContain("runner.kill()")
+    expect(source!.files["tools/opentest-runner.ts"]).toContain(
+      "Stop-Process -Id $target -Force -ErrorAction SilentlyContinue",
+    )
+    expect(source!.files["tools/opentest-runner.ts"]).not.toContain(
+      "Stop-Process -Id $target -Force -ErrorAction Stop",
+    )
+    expect(source!.files["tools/opentest-runner.ts"]).not.toContain("package_scripts")
+    expect(source!.files["protocol-engine/opentest-protocol-engine.ts"]).toContain(
+      "export function parseProtocolContract",
+    )
     expect(source!.files["protocol-engine/opentest-protocol-engine.ts"]).not.toContain("const OPEN_TEST_PROTOCOL")
+  })
+
+  test("payload source loading does not shadow executable OpenTest protocol engine imports", async () => {
+    const source = payloadPackageSources.find((candidate) => candidate.id === "opentest")
+    expect(source).toBeDefined()
+    const packageRoot = repositoryExpertSquadRoot("opentest")
+    const engine = await import(
+      pathToFileURL(path.join(packageRoot, "protocol-engine", "opentest-protocol-engine.ts")).href
+    )
+
+    expect(typeof engine.parseProtocolContract).toBe("function")
+    expect(engine.parseProtocolContract(source!.files["protocol-engine/opentest-contract.json"]).protocol).toBe(
+      "OpenTest",
+    )
   })
 
   test("rejects payload package sources with unsafe embedded file paths", () => {
@@ -376,6 +437,37 @@ describe("ExpertSquadPackageManager", () => {
     ).toBe("# Project-owned Frontend Replica\n")
   })
 
+  test("payload release ignores stale direct-child roots while installing namespaced payload packages", async () => {
+    await using project = await tmpdir({ git: true })
+    const staleSource = payloadPackageSources[0]!
+    const staleRoot = path.join(project.path, ".opencorvus", "expert-squads", staleSource.id)
+    await writeFile(
+      staleRoot,
+      ExpertSquadRegistry.MANIFEST,
+      JSON.stringify(
+        {
+          schema_version: 1,
+          id: staleSource.id,
+          label: "Stale Direct Child",
+          description: "Superseded direct-child package root.",
+          version: "2026.07.01",
+        },
+        null,
+        2,
+      ),
+    )
+    await writeFile(staleRoot, "README.md", "# Stale Direct Child\n")
+
+    const targetRoot = path.join(project.path, ".opencorvus", "expert-squads", staleSource.namespace, staleSource.id)
+
+    const result = await ExpertSquadPackageManager.releasePayloadPackages({ projectDirectory: project.path })
+
+    expect(result.installed.map((item) => item.id)).toContain(staleSource.id)
+    await expect(ExpertSquadRegistry.loadPackage(targetRoot)).resolves.toMatchObject({ id: staleSource.id })
+    expect((await fs.stat(path.join(staleRoot, ExpertSquadRegistry.MANIFEST))).isFile()).toBe(true)
+    await expect(ExpertSquadRegistry.discover(project.path)).rejects.toThrow("direct package roots are not supported")
+  })
+
   test("payload release skips an existing package with the same manifest id in another namespace", async () => {
     await using project = await tmpdir({ git: true })
     const existingRoot = path.join(project.path, ".opencorvus", "expert-squads", PACKAGE_NAMESPACE, "frontend-replica")
@@ -399,6 +491,98 @@ describe("ExpertSquadPackageManager", () => {
     })
     await expect(
       fs.lstat(path.join(project.path, ".opencorvus", "expert-squads", "builtin", "frontend-replica")),
+    ).rejects.toMatchObject({ code: "ENOENT" })
+  })
+
+  test("payload release validates embedded manifest identity before existing-package skip", async () => {
+    await using project = await tmpdir({ git: true })
+    const source = payloadPackageSources[0]!
+    const existingRoot = path.join(project.path, ".opencorvus", "expert-squads", PACKAGE_NAMESPACE, source.id)
+    for (const [relativePath, content] of Object.entries(
+      packageFileMap("", {
+        [ExpertSquadRegistry.MANIFEST]: JSON.stringify(
+          manifest({ namespace: PACKAGE_NAMESPACE, id: source.id }),
+          null,
+          2,
+        ),
+      }),
+    )) {
+      await writeFile(existingRoot, relativePath, content)
+    }
+
+    const originalLoadEmbeddedPackage = ExpertSquadRegistry.loadEmbeddedPackage
+    spyOn(ExpertSquadRegistry, "loadEmbeddedPackage").mockImplementation((candidate) => {
+      if (candidate.id === source.id) throw new Error("forced embedded manifest identity failure")
+      return originalLoadEmbeddedPackage(candidate)
+    })
+
+    await expect(ExpertSquadPackageManager.releasePayloadPackages({ projectDirectory: project.path })).rejects.toThrow(
+      "forced embedded manifest identity failure",
+    )
+  })
+
+  test("payload release does not parse inactive existing package MCP definitions", async () => {
+    await using project = await tmpdir({ git: true })
+    const inactiveRoot = path.join(project.path, ".opencorvus", "expert-squads", "project", "inactive-broken")
+    for (const [relativePath, content] of Object.entries(
+      packageFileMap("", {
+        [ExpertSquadRegistry.MANIFEST]: JSON.stringify(
+          manifest({ namespace: "project", id: "inactive-broken" }),
+          null,
+          2,
+        ),
+        "mcp/broken.jsonc": "{",
+      }),
+    )) {
+      await writeFile(inactiveRoot, relativePath, content)
+    }
+
+    const result = await ExpertSquadPackageManager.releasePayloadPackages({ projectDirectory: project.path })
+
+    expect(result.installed.map((item) => item.id)).toEqual(payloadPackageSources.map((source) => source.id))
+    expect(result.skipped).toEqual([])
+    await expect(ExpertSquadRegistry.loadPackage(inactiveRoot)).rejects.toThrow(/JSON|json|Expected|Unexpected/)
+  })
+
+  test("payload release rechecks same-id packages inside the install lock", async () => {
+    await using project = await tmpdir({ git: true })
+    const raceSource = payloadPackageSources.find((source) => source.id === "frontend-replica")!
+    const existingRoot = path.join(project.path, ".opencorvus", "expert-squads", PACKAGE_NAMESPACE, raceSource.id)
+    const originalLoadEmbeddedPackage = ExpertSquadRegistry.loadEmbeddedPackage
+    let wroteConcurrentPackage = false
+    spyOn(ExpertSquadRegistry, "loadEmbeddedPackage").mockImplementation((source) => {
+      const loaded = originalLoadEmbeddedPackage(source)
+      if (!wroteConcurrentPackage && loaded.id === raceSource.id) {
+        wroteConcurrentPackage = true
+        for (const [relativePath, content] of Object.entries(
+          packageFileMap("", {
+            [ExpertSquadRegistry.MANIFEST]: JSON.stringify(
+              manifest({ namespace: PACKAGE_NAMESPACE, id: raceSource.id }),
+              null,
+              2,
+            ),
+          }),
+        )) {
+          const target = path.join(existingRoot, relativePath)
+          mkdirSync(path.dirname(target), { recursive: true })
+          writeFileSync(target, content)
+        }
+      }
+      return loaded
+    })
+
+    const result = await ExpertSquadPackageManager.releasePayloadPackages({ projectDirectory: project.path })
+
+    expect(wroteConcurrentPackage).toBe(true)
+    expect(result.installed.map((item) => item.id)).not.toContain(raceSource.id)
+    expect(result.skipped).toContainEqual({
+      namespace: PACKAGE_NAMESPACE,
+      id: raceSource.id,
+      targetRoot: existingRoot,
+      replaced: false,
+    })
+    await expect(
+      fs.lstat(path.join(project.path, ".opencorvus", "expert-squads", raceSource.namespace, raceSource.id)),
     ).rejects.toMatchObject({ code: "ENOENT" })
   })
 
@@ -431,46 +615,56 @@ describe("ExpertSquadPackageManager", () => {
     await expect(fs.lstat(targetRoot)).rejects.toMatchObject({ code: "ENOENT" })
   })
 
-  test("imports a source folder into the canonical expert-squad directory without selecting it", { timeout: 0 }, async () => {
-    await withPackageManagerInactivityTimeout("import source folder into canonical expert-squad directory", 15_000, async (activity) => {
-      await using project = await tmpdir({ git: true })
-      activity("created temporary project")
-      await using source = await tmpdir()
-      const sourceRoot = await writeSourcePackage(source.path, "arbitrary-upload-name")
-      activity("created source package")
-      const projectConfig = await writePromptProfileConfig(project.path)
-      const sessionOverlay = { prompt_profile: { active: "general" } } as const
+  test(
+    "imports a source folder into the canonical expert-squad directory without selecting it",
+    { timeout: 0 },
+    async () => {
+      await withPackageManagerInactivityTimeout(
+        "import source folder into canonical expert-squad directory",
+        15_000,
+        async (activity) => {
+          await using project = await tmpdir({ git: true })
+          activity("created temporary project")
+          await using source = await tmpdir()
+          const sourceRoot = await writeSourcePackage(source.path, "arbitrary-upload-name")
+          activity("created source package")
+          const projectConfig = await writePromptProfileConfig(project.path)
+          const sessionOverlay = { prompt_profile: { active: "general" } } as const
 
-      const imported = await Instance.provide({
-        directory: project.path,
-        fn: async () => {
-          activity("instance provided")
-          const rootSession = await Session.create({ kind: "root", title: "expert squad import root" })
-          activity("created root session")
-          await Session.mergeConfigOverlay({ sessionID: rootSession.id, patch: sessionOverlay })
-          const overlayBefore = (await Session.get(rootSession.id)).metadata?.configOverlay
-          activity("session overlay written")
-          const result = await ExpertSquadPackageManager.importDirectory({
-            projectDirectory: project.path,
-            sourceDirectory: sourceRoot,
-            replace: false,
+          const imported = await Instance.provide({
+            directory: project.path,
+            fn: async () => {
+              activity("instance provided")
+              const rootSession = await Session.create({ kind: "root", title: "expert squad import root" })
+              activity("created root session")
+              await Session.mergeConfigOverlay({ sessionID: rootSession.id, patch: sessionOverlay })
+              const overlayBefore = (await Session.get(rootSession.id)).metadata?.configOverlay
+              activity("session overlay written")
+              const result = await ExpertSquadPackageManager.importDirectory({
+                projectDirectory: project.path,
+                sourceDirectory: sourceRoot,
+                replace: false,
+              })
+              activity("source package imported")
+              expect((await Session.get(rootSession.id)).metadata?.configOverlay).toEqual(overlayBefore)
+              return result
+            },
           })
-          activity("source package imported")
-          expect((await Session.get(rootSession.id)).metadata?.configOverlay).toEqual(overlayBefore)
-          return result
-        },
-      })
-      activity("instance import finished")
+          activity("instance import finished")
 
-      const targetRoot = path.join(project.path, ".opencorvus", "expert-squads", PACKAGE_NAMESPACE, PACKAGE_ID)
-      expect(imported).toEqual({ namespace: PACKAGE_NAMESPACE, id: PACKAGE_ID, targetRoot, replaced: false })
-      expect(await fs.readFile(path.join(targetRoot, "README.md"), "utf8")).toContain("Frontend Replica")
-      expect(await fs.readFile(path.join(targetRoot, "agents", "general", "system.md"), "utf8")).toContain("general overlay")
-      await expect(ExpertSquadRegistry.loadPackage(targetRoot)).resolves.toMatchObject({ id: PACKAGE_ID })
-      expect(await readJsonFile(projectConfig.file)).toEqual(projectConfig.value)
-      expect(await ExpertSquadRegistry.discover(project.path)).toHaveLength(1)
-    })
-  })
+          const targetRoot = path.join(project.path, ".opencorvus", "expert-squads", PACKAGE_NAMESPACE, PACKAGE_ID)
+          expect(imported).toEqual({ namespace: PACKAGE_NAMESPACE, id: PACKAGE_ID, targetRoot, replaced: false })
+          expect(await fs.readFile(path.join(targetRoot, "README.md"), "utf8")).toContain("Frontend Replica")
+          expect(await fs.readFile(path.join(targetRoot, "agents", "general", "system.md"), "utf8")).toContain(
+            "general overlay",
+          )
+          await expect(ExpertSquadRegistry.loadPackage(targetRoot)).resolves.toMatchObject({ id: PACKAGE_ID })
+          expect(await readJsonFile(projectConfig.file)).toEqual(projectConfig.value)
+          expect(await ExpertSquadRegistry.discover(project.path)).toHaveLength(1)
+        },
+      )
+    },
+  )
 
   test("imports and exports packages using active project workflow bindings", async () => {
     await using project = await tmpdir({ git: true })
@@ -481,7 +675,7 @@ describe("ExpertSquadPackageManager", () => {
       capability_projection: {
         scheduler: {
           role_base: true,
-          built_in_tool_ids: ["select_expert_squad", "skill", "build"],
+          built_in_tool_ids: ["select_expert_squad", "skill", "dispatch_agent", "manage_task"],
           package_tool_refs: [`${PACKAGE_ID}/orchestrator/source-evidence`],
           package_skill_refs: [`${PACKAGE_ID}/orchestrator/scheduler`],
         },
@@ -532,7 +726,7 @@ describe("ExpertSquadPackageManager", () => {
       capability_projection: {
         scheduler: {
           role_base: true,
-          built_in_tool_ids: ["select_expert_squad", "skill", "build"],
+          built_in_tool_ids: ["select_expert_squad", "skill", "dispatch_agent", "manage_task"],
           package_tool_refs: [`${PACKAGE_ID}/orchestrator/source-evidence`],
           package_skill_refs: [`${PACKAGE_ID}/orchestrator/scheduler`],
         },
@@ -576,7 +770,9 @@ describe("ExpertSquadPackageManager", () => {
     }
 
     expect(imported.id).toBe(PACKAGE_ID)
-    expect(imported.targetRoot).toBe(path.join(project.path, ".opencorvus", "expert-squads", PACKAGE_NAMESPACE, PACKAGE_ID))
+    expect(imported.targetRoot).toBe(
+      path.join(project.path, ".opencorvus", "expert-squads", PACKAGE_NAMESPACE, PACKAGE_ID),
+    )
     await expect(fs.lstat(path.join(project.path, ".gitignore"))).rejects.toMatchObject({ code: "ENOENT" })
   })
 
@@ -657,9 +853,15 @@ describe("ExpertSquadPackageManager", () => {
     })
 
     await expect(
-      ExpertSquadPackageManager.importDirectory({ projectDirectory: project.path, sourceDirectory: sourceRoot, replace: false }),
+      ExpertSquadPackageManager.importDirectory({
+        projectDirectory: project.path,
+        sourceDirectory: sourceRoot,
+        replace: false,
+      }),
     ).rejects.toThrow(/collides with a built-in expert squad id/)
-    await expect(fs.lstat(path.join(project.path, ".opencorvus", "expert-squads", "builtin", "general"))).rejects.toMatchObject({
+    await expect(
+      fs.lstat(path.join(project.path, ".opencorvus", "expert-squads", "builtin", "general")),
+    ).rejects.toMatchObject({
       code: "ENOENT",
     })
   })
@@ -668,10 +870,18 @@ describe("ExpertSquadPackageManager", () => {
     await using project = await tmpdir()
     await using source = await tmpdir()
     const sourceRoot = await writeSourcePackage(source.path)
-    await ExpertSquadPackageManager.importDirectory({ projectDirectory: project.path, sourceDirectory: sourceRoot, replace: false })
+    await ExpertSquadPackageManager.importDirectory({
+      projectDirectory: project.path,
+      sourceDirectory: sourceRoot,
+      replace: false,
+    })
 
     await expect(
-      ExpertSquadPackageManager.importDirectory({ projectDirectory: project.path, sourceDirectory: sourceRoot, replace: false }),
+      ExpertSquadPackageManager.importDirectory({
+        projectDirectory: project.path,
+        sourceDirectory: sourceRoot,
+        replace: false,
+      }),
     ).rejects.toThrow(/already exists/)
 
     await writeFile(sourceRoot, "README.md", "# Frontend Replica Replacement\n")
@@ -698,27 +908,33 @@ describe("ExpertSquadPackageManager", () => {
       })
       activity("installed initial package")
       const replacementRoots: string[] = []
-      for (let index = 0; index < 6; index++) {
-        await using replacement = await tmpdir()
-        const root = await writeSourcePackage(replacement.path, `replacement-${index}`)
-        await writeFile(root, "README.md", `# Replacement ${index}\n`)
-        replacementRoots.push(root)
+      const replacements: Array<Awaited<ReturnType<typeof tmpdir>>> = []
+      try {
+        for (let index = 0; index < 6; index++) {
+          const replacement = await tmpdir()
+          replacements.push(replacement)
+          const root = await writeSourcePackage(replacement.path, `replacement-${index}`)
+          await writeFile(root, "README.md", `# Replacement ${index}\n`)
+          replacementRoots.push(root)
+        }
+        activity("created replacement packages")
+
+        const results = await Promise.all(
+          replacementRoots.map((sourceDirectory) =>
+            ExpertSquadPackageManager.importDirectory({
+              projectDirectory: project.path,
+              sourceDirectory,
+              replace: true,
+            }),
+          ),
+        )
+        activity("completed concurrent replacements")
+
+        expect(results).toHaveLength(replacementRoots.length)
+        expect(results.every((result) => result.replaced)).toBe(true)
+      } finally {
+        for (const replacement of replacements.reverse()) await replacement[Symbol.asyncDispose]()
       }
-      activity("created replacement packages")
-
-      const results = await Promise.all(
-        replacementRoots.map((sourceDirectory) =>
-          ExpertSquadPackageManager.importDirectory({
-            projectDirectory: project.path,
-            sourceDirectory,
-            replace: true,
-          }),
-        ),
-      )
-      activity("completed concurrent replacements")
-
-      expect(results).toHaveLength(replacementRoots.length)
-      expect(results.every((result) => result.replaced)).toBe(true)
       await expect(ExpertSquadRegistry.loadPackage(first.targetRoot)).resolves.toMatchObject({ id: PACKAGE_ID })
       activity("validated final package")
       expect(await ExpertSquadRegistry.discover(project.path)).toHaveLength(1)
@@ -731,7 +947,11 @@ describe("ExpertSquadPackageManager", () => {
     const sourceRoot = await writeSourcePackage(path.join(project.path, ".opencorvus", "r"), "runtime-package")
 
     await expect(
-      ExpertSquadPackageManager.importDirectory({ projectDirectory: project.path, sourceDirectory: sourceRoot, replace: false }),
+      ExpertSquadPackageManager.importDirectory({
+        projectDirectory: project.path,
+        sourceDirectory: sourceRoot,
+        replace: false,
+      }),
     ).rejects.toThrow(/inside OpenCorvus runtime storage/)
   })
 
@@ -742,7 +962,11 @@ describe("ExpertSquadPackageManager", () => {
     await writeFile(project.path, `.opencorvus/expert-squads/${PACKAGE_NAMESPACE}/${PACKAGE_ID}`, "not a directory")
 
     await expect(
-      ExpertSquadPackageManager.importDirectory({ projectDirectory: project.path, sourceDirectory: sourceRoot, replace: true }),
+      ExpertSquadPackageManager.importDirectory({
+        projectDirectory: project.path,
+        sourceDirectory: sourceRoot,
+        replace: true,
+      }),
     ).rejects.toThrow(/expected package directory|not a directory/)
   })
 
@@ -759,7 +983,11 @@ describe("ExpertSquadPackageManager", () => {
     await fs.rm(path.join(sourceRoot, "agents", "build", "tools", "build-evidence.ts"))
 
     await expect(
-      ExpertSquadPackageManager.importDirectory({ projectDirectory: project.path, sourceDirectory: sourceRoot, replace: true }),
+      ExpertSquadPackageManager.importDirectory({
+        projectDirectory: project.path,
+        sourceDirectory: sourceRoot,
+        replace: true,
+      }),
     ).rejects.toThrow(/not declared in this package/)
 
     expect(await fs.readFile(path.join(imported.targetRoot, "README.md"), "utf8")).toContain("Frontend Replica")
@@ -778,12 +1006,17 @@ describe("ExpertSquadPackageManager", () => {
     await writeFile(sourceRoot, "README.md", "# Broken Replacement After Move\n")
     const originalLoadPackage = ExpertSquadRegistry.loadPackage
     const loadPackage = spyOn(ExpertSquadRegistry, "loadPackage").mockImplementation(async (root) => {
-      if (path.resolve(root) === path.resolve(imported.targetRoot)) throw new Error("post-move replacement validation failed")
+      if (path.resolve(root) === path.resolve(imported.targetRoot))
+        throw new Error("post-move replacement validation failed")
       return originalLoadPackage(root)
     })
 
     await expect(
-      ExpertSquadPackageManager.importDirectory({ projectDirectory: project.path, sourceDirectory: sourceRoot, replace: true }),
+      ExpertSquadPackageManager.importDirectory({
+        projectDirectory: project.path,
+        sourceDirectory: sourceRoot,
+        replace: true,
+      }),
     ).rejects.toThrow(/post-move replacement validation failed/)
 
     loadPackage.mockRestore()
@@ -803,7 +1036,11 @@ describe("ExpertSquadPackageManager", () => {
     })
 
     await expect(
-      ExpertSquadPackageManager.importDirectory({ projectDirectory: project.path, sourceDirectory: sourceRoot, replace: false }),
+      ExpertSquadPackageManager.importDirectory({
+        projectDirectory: project.path,
+        sourceDirectory: sourceRoot,
+        replace: false,
+      }),
     ).rejects.toThrow(/post-move validation failed/)
 
     await expect(fs.lstat(targetRoot)).rejects.toMatchObject({ code: "ENOENT" })
@@ -823,7 +1060,11 @@ describe("ExpertSquadPackageManager", () => {
     })
 
     await expect(
-      ExpertSquadPackageManager.importDirectory({ projectDirectory: project.path, sourceDirectory: sourceRoot, replace: false }),
+      ExpertSquadPackageManager.importDirectory({
+        projectDirectory: project.path,
+        sourceDirectory: sourceRoot,
+        replace: false,
+      }),
     ).rejects.toThrow(/id changed during import/)
 
     expect(loadCount).toBe(2)
@@ -835,10 +1076,17 @@ describe("ExpertSquadPackageManager", () => {
     const extraEntryCount = ExpertSquadPackageManager.archiveImportLimits.entries + 1
     const manyEntries = await zipBase64([
       ...Object.entries(packageFileMap("pkg")),
-      ...Array.from({ length: extraEntryCount }, (_, index) => [`pkg/agents/build/skills/extra-${index}/SKILL.md`, "x"] as const),
+      ...Array.from(
+        { length: extraEntryCount },
+        (_, index) => [`pkg/agents/build/skills/extra-${index}/SKILL.md`, "x"] as const,
+      ),
     ])
     await expect(
-      ExpertSquadPackageManager.importArchive({ projectDirectory: project.path, archiveBase64: manyEntries, replace: false }),
+      ExpertSquadPackageManager.importArchive({
+        projectDirectory: project.path,
+        archiveBase64: manyEntries,
+        replace: false,
+      }),
     ).rejects.toThrow(/entry count exceeds limit/)
 
     const oversizedFile = "x".repeat(ExpertSquadPackageManager.archiveImportLimits.fileBytes + 1)
@@ -847,28 +1095,40 @@ describe("ExpertSquadPackageManager", () => {
       ["pkg/agents/build/skills/implementation/large.md", oversizedFile],
     ])
     await expect(
-      ExpertSquadPackageManager.importArchive({ projectDirectory: project.path, archiveBase64: oversizedArchive, replace: false }),
+      ExpertSquadPackageManager.importArchive({
+        projectDirectory: project.path,
+        archiveBase64: oversizedArchive,
+        replace: false,
+      }),
     ).rejects.toThrow(/archive file .* exceeds expert squad archive limit/)
 
     const chunk = "x".repeat(Math.floor(ExpertSquadPackageManager.archiveImportLimits.fileBytes / 2))
     const chunkCount = Math.floor(ExpertSquadPackageManager.archiveImportLimits.totalUnpackedBytes / chunk.length) + 1
     const totalOversizedArchive = await zipBase64([
       ...Object.entries(packageFileMap("pkg")),
-      ...Array.from({ length: chunkCount }, (_, index) => [`pkg/agents/build/skills/bulk-${index}/SKILL.md`, chunk] as const),
+      ...Array.from(
+        { length: chunkCount },
+        (_, index) => [`pkg/agents/build/skills/bulk-${index}/SKILL.md`, chunk] as const,
+      ),
     ])
     await expect(
-      ExpertSquadPackageManager.importArchive({ projectDirectory: project.path, archiveBase64: totalOversizedArchive, replace: false }),
+      ExpertSquadPackageManager.importArchive({
+        projectDirectory: project.path,
+        archiveBase64: totalOversizedArchive,
+        replace: false,
+      }),
     ).rejects.toThrow(/unpacked content exceeds expert squad archive limit/)
   }, 20000)
 
   test("rejects ZIP path traversal, absolute paths, and duplicate normalized entries", async () => {
     await using project = await tmpdir()
-    const traversal = await zipBase64([
-      ...Object.entries(packageFileMap("pkg")),
-      ["pkg/../evil.txt", "bad"],
-    ])
+    const traversal = await zipBase64([...Object.entries(packageFileMap("pkg")), ["pkg/../evil.txt", "bad"]])
     await expect(
-      ExpertSquadPackageManager.importArchive({ projectDirectory: project.path, archiveBase64: traversal, replace: false }),
+      ExpertSquadPackageManager.importArchive({
+        projectDirectory: project.path,
+        archiveBase64: traversal,
+        replace: false,
+      }),
     ).rejects.toThrow(/unsafe expert squad archive path/)
 
     const absolute = await zipBase64([
@@ -876,7 +1136,11 @@ describe("ExpertSquadPackageManager", () => {
       ["/pkg/README.md", "# absolute duplicate\n"],
     ])
     await expect(
-      ExpertSquadPackageManager.importArchive({ projectDirectory: project.path, archiveBase64: absolute, replace: false }),
+      ExpertSquadPackageManager.importArchive({
+        projectDirectory: project.path,
+        archiveBase64: absolute,
+        replace: false,
+      }),
     ).rejects.toThrow(/absolute expert squad archive path/)
 
     const colon = await zipBase64([
@@ -887,12 +1151,13 @@ describe("ExpertSquadPackageManager", () => {
       ExpertSquadPackageManager.importArchive({ projectDirectory: project.path, archiveBase64: colon, replace: false }),
     ).rejects.toThrow(/unsafe expert squad archive path/)
 
-    const duplicate = await zipBase64([
-      ...Object.entries(packageFileMap("pkg")),
-      ["pkg\\README.md", "# duplicate\n"],
-    ])
+    const duplicate = await zipBase64([...Object.entries(packageFileMap("pkg")), ["pkg\\README.md", "# duplicate\n"]])
     await expect(
-      ExpertSquadPackageManager.importArchive({ projectDirectory: project.path, archiveBase64: duplicate, replace: false }),
+      ExpertSquadPackageManager.importArchive({
+        projectDirectory: project.path,
+        archiveBase64: duplicate,
+        replace: false,
+      }),
     ).rejects.toThrow(/Duplicate expert squad archive path/)
   })
 
@@ -904,7 +1169,11 @@ describe("ExpertSquadPackageManager", () => {
       [`${canonicalWrapper}/readme.md`, "# duplicate by case\n"],
     ])
     await expect(
-      ExpertSquadPackageManager.importArchive({ projectDirectory: project.path, archiveBase64: caseCollision, replace: false }),
+      ExpertSquadPackageManager.importArchive({
+        projectDirectory: project.path,
+        archiveBase64: caseCollision,
+        replace: false,
+      }),
     ).rejects.toThrow(/Duplicate expert squad archive path/)
 
     const fileDirectoryCollision = await zipBase64([
@@ -923,9 +1192,9 @@ describe("ExpertSquadPackageManager", () => {
   test("rejects export IDs that are not manifest IDs", async () => {
     await using project = await tmpdir()
 
-    await expect(ExpertSquadPackageManager.exportArchive({ projectDirectory: project.path, id: `../${PACKAGE_ID}` })).rejects.toThrow(
-      /invalid expert squad id/,
-    )
+    await expect(
+      ExpertSquadPackageManager.exportArchive({ projectDirectory: project.path, id: `../${PACKAGE_ID}` }),
+    ).rejects.toThrow(/invalid expert squad id/)
   })
 
   test("rejects export when an installed package contains OpenCorvus runtime internals", async () => {
@@ -939,9 +1208,9 @@ describe("ExpertSquadPackageManager", () => {
     })
     await writeFile(imported.targetRoot, ".opencorvus/r/runtime/worktrees/.opencorvus-meta.json", "{}")
 
-    await expect(ExpertSquadPackageManager.exportArchive({ projectDirectory: project.path, id: PACKAGE_ID })).rejects.toThrow(
-      /runtime-internal entry ".opencorvus" is not allowed/,
-    )
+    await expect(
+      ExpertSquadPackageManager.exportArchive({ projectDirectory: project.path, id: PACKAGE_ID }),
+    ).rejects.toThrow(/runtime-internal entry ".opencorvus" is not allowed/)
   })
 
   test("exports a canonical package ZIP that can be imported into another project", async () => {
@@ -949,7 +1218,11 @@ describe("ExpertSquadPackageManager", () => {
     await using second = await tmpdir()
     await using source = await tmpdir()
     const sourceRoot = await writeSourcePackage(source.path)
-    await ExpertSquadPackageManager.importDirectory({ projectDirectory: first.path, sourceDirectory: sourceRoot, replace: false })
+    await ExpertSquadPackageManager.importDirectory({
+      projectDirectory: first.path,
+      sourceDirectory: sourceRoot,
+      replace: false,
+    })
 
     const exported = await ExpertSquadPackageManager.exportArchive({ projectDirectory: first.path, id: PACKAGE_ID })
     const entries = await zipEntries(exported.bytes)
@@ -957,7 +1230,9 @@ describe("ExpertSquadPackageManager", () => {
     expect(exported.filename).toBe(`${PACKAGE_ID}-expert-squad.zip`)
     expect(exported.fileCount).toBe(entries.size)
     expect(entries.has(ExpertSquadRegistry.MANIFEST)).toBe(false)
-    expect(entries.get(`${PACKAGE_NAMESPACE}/${PACKAGE_ID}/${ExpertSquadRegistry.MANIFEST}`)).toContain(`"id": "${PACKAGE_ID}"`)
+    expect(entries.get(`${PACKAGE_NAMESPACE}/${PACKAGE_ID}/${ExpertSquadRegistry.MANIFEST}`)).toContain(
+      `"id": "${PACKAGE_ID}"`,
+    )
     expect(entries.get(`${PACKAGE_NAMESPACE}/${PACKAGE_ID}/agents/general/system.md`)).toBe("general overlay")
     expect(Array.from(entries.keys()).some((entry) => entry.includes(".opencorvus/r"))).toBe(false)
 

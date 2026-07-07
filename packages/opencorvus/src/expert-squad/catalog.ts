@@ -60,13 +60,21 @@ export const ExpertSquadCatalogActiveSchema = z
   })
   .strict()
 
-export const ExpertSquadCatalogScopeSchema = z
-  .object({
-    kind: z.enum(["project", "session"]),
-    directory: z.string(),
-    sessionID: z.string().optional(),
-  })
-  .strict()
+export const ExpertSquadCatalogScopeSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("project"),
+      directory: z.string(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("session"),
+      directory: z.string(),
+      sessionID: z.string(),
+    })
+    .strict(),
+])
 
 export const ExpertSquadCatalogSkillSummarySchema = z
   .object({
@@ -101,9 +109,19 @@ export const ExpertSquadActiveAgentProjectionAgentSchema = z
     label: z.string(),
     description: z.string().optional(),
     projection_hash: z.string(),
+    built_in_tool_ids: z.array(z.string()),
+    default_skill_refs: z.array(z.string()),
     package_skill_refs: z.array(z.string()),
+    default_tool_refs: z.array(z.string()),
     package_tool_refs: z.array(z.string()),
+    default_mcp_server_refs: z.array(z.string()),
     package_mcp_server_refs: z.array(z.string()),
+    default_mcp_tool_refs: z.array(z.string()),
+    package_mcp_tool_refs: z.array(z.string()),
+    default_mcp_prompt_refs: z.array(z.string()),
+    package_mcp_prompt_refs: z.array(z.string()),
+    default_mcp_resource_refs: z.array(z.string()),
+    package_mcp_resource_refs: z.array(z.string()),
   })
   .strict()
 
