@@ -1,0 +1,204 @@
+{
+  "schema_version": 1,
+  "namespace": "template",
+  "id": "portable-template",
+  "label": "Portable Expert Squad Template",
+  "description": "Copy-and-edit template for portable OpenCorvus expert squads; prune unused roles before installation.",
+  "version": "2026.07.07",
+  "readme": "README.md",
+  "selector": {
+    "summary": "Template selector. Replace this before installation; do not select an unedited template for production work.",
+    "selection_guidance": "After this template is renamed and specialized, use select_expert_squad with the new profile_id when the task matches its domain.",
+    "instructions": "selector.md"
+  },
+  "capability_projection": {
+    "scheduler": {
+      "role_base": false,
+      "built_in_tool_ids": [
+        "select_expert_squad",
+        "skill",
+        "question",
+        "read_context",
+        "dispatch_agent",
+        "manage_task",
+        "refine",
+        "wait",
+        "browser_preview",
+        "bash",
+        "respond_agent_coordination",
+        "cancel_subagent"
+      ],
+      "package_skill_refs": [
+        "portable-template/shared/expert-squad-authoring"
+      ]
+    },
+    "agents": {
+      "coding": {
+        "role_base": true
+      },
+      "coding-assistant": {
+        "role_base": true
+      },
+      "build": {
+        "role_base": true,
+        "package_skill_refs": [
+          "portable-template/shared/expert-squad-authoring"
+        ]
+      },
+      "visual-qa": {
+        "role_base": true,
+        "package_skill_refs": [
+          "portable-template/shared/expert-squad-authoring"
+        ]
+      },
+      "general": {
+        "role_base": true
+      },
+      "explore": {
+        "role_base": true
+      },
+      "orchestrator": {
+        "role_base": true
+      },
+      "mission": {
+        "role_base": true
+      },
+      "requirements": {
+        "role_base": true,
+        "package_skill_refs": [
+          "portable-template/shared/expert-squad-authoring"
+        ]
+      },
+      "architect": {
+        "role_base": true,
+        "package_skill_refs": [
+          "portable-template/shared/expert-squad-authoring"
+        ]
+      },
+      "frontend-design": {
+        "role_base": true,
+        "package_skill_refs": [
+          "portable-template/shared/expert-squad-authoring"
+        ]
+      },
+      "intent-analysis": {
+        "role_base": true,
+        "package_skill_refs": [
+          "portable-template/shared/expert-squad-authoring"
+        ]
+      },
+      "integrity": {
+        "role_base": true,
+        "package_skill_refs": [
+          "portable-template/shared/expert-squad-authoring"
+        ]
+      },
+      "fact-check": {
+        "role_base": true,
+        "package_skill_refs": [
+          "portable-template/shared/expert-squad-authoring"
+        ]
+      },
+      "deep-research": {
+        "role_base": true,
+        "package_skill_refs": [
+          "portable-template/shared/expert-squad-authoring"
+        ]
+      },
+      "frontend-research": {
+        "role_base": true,
+        "package_skill_refs": [
+          "portable-template/shared/expert-squad-authoring"
+        ]
+      },
+      "goal-workload-analyst": {
+        "role_base": true,
+        "package_skill_refs": [
+          "portable-template/shared/expert-squad-authoring"
+        ]
+      }
+    }
+  },
+  "agents": {
+    "orchestrator": {
+      "prompt": "agents/orchestrator/system.md",
+      "skill_refs": [
+        "portable-template/shared/expert-squad-authoring"
+      ]
+    }
+  },
+  "virtual_agents": {
+    "build": {
+      "id": "portable-build",
+      "label": "Portable Build",
+      "description": "Template virtual agent identity projected onto the existing build base role.",
+      "prompt": "virtual-agents/build/system.md"
+    },
+    "visual-qa": {
+      "id": "portable-visual-qa",
+      "label": "Portable Visual Qa",
+      "description": "Template virtual agent identity projected onto the existing visual-qa base role.",
+      "prompt": "virtual-agents/visual-qa/system.md"
+    },
+    "explore": {
+      "id": "portable-explore",
+      "label": "Portable Explore",
+      "description": "Template virtual agent identity projected onto the existing explore base role.",
+      "prompt": "virtual-agents/explore/system.md"
+    },
+    "requirements": {
+      "id": "portable-requirements",
+      "label": "Portable Requirements",
+      "description": "Template virtual agent identity projected onto the existing requirements base role.",
+      "prompt": "virtual-agents/requirements/system.md"
+    },
+    "architect": {
+      "id": "portable-architect",
+      "label": "Portable Architect",
+      "description": "Template virtual agent identity projected onto the existing architect base role.",
+      "prompt": "virtual-agents/architect/system.md"
+    },
+    "frontend-design": {
+      "id": "portable-frontend-design",
+      "label": "Portable Frontend Design",
+      "description": "Template virtual agent identity projected onto the existing frontend-design base role.",
+      "prompt": "virtual-agents/frontend-design/system.md"
+    },
+    "intent-analysis": {
+      "id": "portable-intent-analysis",
+      "label": "Portable Intent Analysis",
+      "description": "Template virtual agent identity projected onto the existing intent-analysis base role.",
+      "prompt": "virtual-agents/intent-analysis/system.md"
+    },
+    "integrity": {
+      "id": "portable-integrity",
+      "label": "Portable Integrity",
+      "description": "Template virtual agent identity projected onto the existing integrity base role.",
+      "prompt": "virtual-agents/integrity/system.md"
+    },
+    "fact-check": {
+      "id": "portable-fact-check",
+      "label": "Portable Fact Check",
+      "description": "Template virtual agent identity projected onto the existing fact-check base role.",
+      "prompt": "virtual-agents/fact-check/system.md"
+    },
+    "deep-research": {
+      "id": "portable-deep-research",
+      "label": "Portable Deep Research",
+      "description": "Template virtual agent identity projected onto the existing deep-research base role.",
+      "prompt": "virtual-agents/deep-research/system.md"
+    },
+    "frontend-research": {
+      "id": "portable-frontend-research",
+      "label": "Portable Frontend Research",
+      "description": "Template virtual agent identity projected onto the existing frontend-research base role.",
+      "prompt": "virtual-agents/frontend-research/system.md"
+    },
+    "goal-workload-analyst": {
+      "id": "portable-goal-workload-analyst",
+      "label": "Portable Goal Workload Analyst",
+      "description": "Template virtual agent identity projected onto the existing goal-workload-analyst base role.",
+      "prompt": "virtual-agents/goal-workload-analyst/system.md"
+    }
+  }
+}
