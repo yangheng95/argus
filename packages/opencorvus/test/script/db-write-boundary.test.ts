@@ -32,6 +32,7 @@ const approvedWriters: Record<string, string> = {
   EnginePlanVersionTable: "packages/opencorvus/src/engine/persist.ts",
   EngineProgressSnapshotTable: "packages/opencorvus/src/engine/progress.ts",
   EngineSpecSnapshotTable: "packages/opencorvus/src/engine/spec-snapshot.ts",
+  EngineTaskTable: "packages/opencorvus/src/engine/task.ts",
 }
 
 function directWriteViolations(tableName: string): string[] {
@@ -83,5 +84,9 @@ describe("database write boundary", () => {
 
   test("only the engine persistence writer directly writes EngineGoalTable", () => {
     expect(directWriteViolations("EngineGoalTable")).toEqual([])
+  })
+
+  test("only the engine task writer directly writes EngineTaskTable", () => {
+    expect(directWriteViolations("EngineTaskTable")).toEqual([])
   })
 })

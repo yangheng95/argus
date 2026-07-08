@@ -1,4 +1,4 @@
-import { Database, and, eq, inArray, sql } from "@/storage/db"
+import { Database, and, eq, inArray, isNull, sql } from "@/storage/db"
 import { EngineTaskTable, type EngineMetadata } from "./engine.sql"
 
 type EngineTaskInsert = typeof EngineTaskTable.$inferInsert
@@ -56,6 +56,30 @@ export function touchEngineTask(db: Database.TxOrDb, input: { taskID: string; ti
     .run()
 }
 
+export function updateEngineTaskState(
+  db: Database.TxOrDb,
+  input: {
+    taskID: string
+    values: Partial<EngineTaskInsert>
+    timeUpdated: number
+    onlyWhenIncomplete?: boolean
+  },
+): EngineTaskSelect | undefined {
+  return db
+    .update(EngineTaskTable)
+    .set({
+      ...input.values,
+      time_updated: input.timeUpdated,
+    })
+    .where(
+      input.onlyWhenIncomplete
+        ? and(eq(EngineTaskTable.id, input.taskID), isNull(EngineTaskTable.time_completed))
+        : eq(EngineTaskTable.id, input.taskID),
+    )
+    .returning()
+    .get()
+}
+
 export function setEngineTaskBudget(
   db: Database.TxOrDb,
   input: { taskID: string; budget: EngineTaskInsert["budget"] | null },
@@ -65,6 +89,41 @@ export function setEngineTaskBudget(
 
 export function setEngineTaskTitle(db: Database.TxOrDb, input: { taskID: string; title: string }): void {
   db.update(EngineTaskTable).set({ title: input.title }).where(eq(EngineTaskTable.id, input.taskID)).run()
+}
+
+export function setEngineTaskRewindCursor(
+  db: Database.TxOrDb,
+  input: {
+    taskID: string
+    cursorTime: number
+    anchorEventID?: string | null
+    rewindCount: number
+    timeUpdated: number
+  },
+): void {
+  db.update(EngineTaskTable)
+    .set({
+      rewind_cursor_time: input.cursorTime,
+      rewind_cursor_event_id: input.anchorEventID ?? null,
+      rewind_count: input.rewindCount,
+      time_updated: input.timeUpdated,
+    })
+    .where(eq(EngineTaskTable.id, input.taskID))
+    .run()
+}
+
+export function clearEngineTaskRewindCursor(
+  db: Database.TxOrDb,
+  input: { taskID: string; timeUpdated: number },
+): void {
+  db.update(EngineTaskTable)
+    .set({
+      rewind_cursor_time: null,
+      rewind_cursor_event_id: null,
+      time_updated: input.timeUpdated,
+    })
+    .where(eq(EngineTaskTable.id, input.taskID))
+    .run()
 }
 
 export function setEngineTaskQueueOrder(

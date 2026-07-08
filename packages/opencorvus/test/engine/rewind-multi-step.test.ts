@@ -17,6 +17,12 @@ async function exists(path: string): Promise<boolean> {
     .catch(() => false)
 }
 
+function latestTaskRewoundEvent(taskID: string) {
+  return ProtocolStore.listTaskEvents(taskID)
+    .filter((event) => event.type === "task.rewound")
+    .at(-1)
+}
+
 afterEach(async () => {
   await resetDatabase()
 })
@@ -47,7 +53,7 @@ describe("task rewind unified entrypoint", () => {
         expect(await exists(path.join(scenario.existingGoalWorktree, "goal-after.txt"))).toBe(false)
         expect(await exists(scenario.postCursorGoalWorktree)).toBe(false)
         expect(findTask(scenario.taskID)?.rewind_cursor_time).toBe(result.cursorTime)
-        const event = ProtocolStore.listTaskEvents(scenario.taskID).at(-1)
+        const event = latestTaskRewoundEvent(scenario.taskID)
         expect(event?.type).toBe("task.rewound")
         expect(event?.payload).toMatchObject({ resetWorktree: true, anchorKind: "message" })
       },

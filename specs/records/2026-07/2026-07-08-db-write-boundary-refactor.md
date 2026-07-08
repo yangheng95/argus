@@ -424,3 +424,55 @@ Phase 13 verification:
 Additional verification attempt not counted as passing evidence:
 
 - `bun test --timeout 60000 packages/opencorvus/test/server/task-queue-routes.test.ts` printed the file header and then produced no further output for roughly 150 seconds. The process also did not respond to the configured test timeout, so the matching Bun process for that test command was stopped. This is recorded as a test-runner hang and is not counted as Phase 13 passing evidence.
+
+## Phase 14 Task Lifecycle State Boundary
+
+`engine/state.ts` directly updated `EngineTaskTable` in two places: the central
+task lifecycle writer and the run-update task timestamp bump. This phase moves
+both mutations behind `engine/task.ts` while preserving `state.ts` as the owner
+of lifecycle semantics, progress snapshots, protocol events, terminal lineage
+notifications, decision-log bundle refresh, and live-run finalization.
+
+Phase 14 acceptance criteria:
+
+- `engine/state.ts` no longer directly writes `EngineTaskTable`.
+- `updateTask` and `terminalTask` preserve no-op behavior, terminal compare-and-set,
+  progress snapshot writes, task events, terminal event emission, and live-run
+  finalization.
+- `updateRun` preserves run artifact append behavior and task `time_updated`
+  bump.
+- Focused writer tests cover lifecycle state update and terminal compare-and-set
+  behavior.
+
+Phase 14 verification:
+
+- `rg -n 'db\\.(insert|update|delete)\\(EngineTaskTable|\\.(insert|update|delete)\\(EngineTaskTable' packages/opencorvus/src -g '*.ts'` no longer reports `engine/state.ts`.
+- `bun test --timeout 60000 packages/opencorvus/test/engine/task-writer.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/engine/update-task-reactivation.test.ts packages/opencorvus/test/engine/task-terminal-run-finalization.test.ts`
+
+## Phase 15 Task Rewind Cursor Boundary And Static Guard
+
+The final non-writer direct `EngineTaskTable` writes were in `engine/rewind.ts`
+for setting and clearing task rewind cursor fields. This phase moves those
+mutations into `engine/task.ts`, updates the rewind event-order test to assert
+the latest `task.rewound` event rather than assuming it is the final task event,
+and adds `EngineTaskTable` to the static write-boundary guard.
+
+Phase 15 acceptance criteria:
+
+- `engine/rewind.ts` no longer directly writes `EngineTaskTable`.
+- `rewindTask` preserves cursor time/event/count updates, worktree reset
+  behavior, task-rewound event payload, and log metadata.
+- `clearRewindCursor` preserves no-op behavior when no cursor exists, cursor
+  clearing, and task-rewound event payload.
+- Production source direct `EngineTaskTable` writes exist only in
+  `engine/task.ts`.
+- The static database write-boundary test rejects future direct
+  `EngineTaskTable` writes outside `engine/task.ts`.
+
+Phase 15 verification:
+
+- `rg -n 'db\\.(insert|update|delete)\\(EngineTaskTable|\\.(insert|update|delete)\\(EngineTaskTable' packages/opencorvus/src -g '*.ts'` reports only `packages/opencorvus/src/engine/task.ts`.
+- `bun test --timeout 60000 packages/opencorvus/test/engine/task-writer.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/engine/rewind-clear.test.ts packages/opencorvus/test/engine/rewind-multi-step.test.ts`
+- `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`

@@ -1,10 +1,11 @@
-import { and, Database, eq, isNull } from "@/storage/db"
+import { Database, eq } from "@/storage/db"
 import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
 import { progressStatus } from "./helpers"
 import { EngineArtifactTable, EngineTaskTable } from "./engine.sql"
 import { insertEngineArtifact } from "./artifact"
 import { insertEngineProgressSnapshot } from "./progress"
+import { touchEngineTask, updateEngineTaskState } from "./task"
 import { findActiveRunForTask, findRun, requireRun, requireTask, type RunRow, type TaskRow } from "./store"
 import { deriveTaskStatus } from "./task-status"
 import { doesRunStatusImplyStarted, isLiveRunStatus, isTerminalRunStatus } from "./catalog"
@@ -175,19 +176,12 @@ async function applyTaskUpdate(
   let updated: TaskRow | undefined
   let existingTerminal: TaskRow | undefined
   Database.transaction((db) => {
-    updated = db
-      .update(EngineTaskTable)
-      .set({
-        ...resolved,
-        time_updated: now,
-      })
-      .where(
-        terminalIntent
-          ? and(eq(EngineTaskTable.id, row.id), isNull(EngineTaskTable.time_completed))
-          : eq(EngineTaskTable.id, row.id),
-      )
-      .returning()
-      .get()
+    updated = updateEngineTaskState(db, {
+      taskID: row.id,
+      values: resolved,
+      timeUpdated: now,
+      onlyWhenIncomplete: terminalIntent,
+    })
     if (!updated) {
       const current = db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, row.id)).get()
       if (terminalIntent && current?.time_completed != null) {
@@ -377,7 +371,7 @@ export async function updateRun(row: RunRow, values: Partial<RunRow>, summary: s
     // Phase-6-f-3: task.active_run_id deleted — derive via
     // findActiveRunForTask(taskID) from the run artifact stream. Keep the
     // time_updated bump so task listings refresh on run writes.
-    db.update(EngineTaskTable).set({ time_updated: effectiveNow }).where(eq(EngineTaskTable.id, row.task_id)).run()
+    touchEngineTask(db, { taskID: row.task_id, timeUpdated: effectiveNow })
     Database.effect(() =>
       EngineProtocol.emit(
         Event.RunUpdated,

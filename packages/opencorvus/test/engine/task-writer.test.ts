@@ -3,6 +3,7 @@ import { EngineTaskTable } from "../../src/engine/engine.sql"
 import {
   claimNextEngineTaskForCwd,
   claimQueuedEngineTaskForCwd,
+  clearEngineTaskRewindCursor,
   deleteEngineTask,
   deleteEngineTasksForProjectSessions,
   insertEngineTask,
@@ -10,8 +11,10 @@ import {
   setEngineTaskBudget,
   setEngineTaskMetadata,
   setEngineTaskQueueOrder,
+  setEngineTaskRewindCursor,
   setEngineTaskTitle,
   touchEngineTask,
+  updateEngineTaskState,
 } from "../../src/engine/task"
 import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
@@ -159,6 +162,71 @@ describe("engine task writer", () => {
           id: taskID,
           metadata: { checks: { lint: false } },
           time_updated: now + 3,
+        })
+
+        const active = Database.transaction((db) =>
+          updateEngineTaskState(db, {
+            taskID,
+            values: { time_started: now + 4 },
+            timeUpdated: now + 4,
+          }),
+        )
+        expect(active).toMatchObject({
+          id: taskID,
+          time_started: now + 4,
+          time_updated: now + 4,
+        })
+
+        const terminal = Database.transaction((db) =>
+          updateEngineTaskState(db, {
+            taskID,
+            values: { time_completed: now + 5, error: null },
+            timeUpdated: now + 5,
+            onlyWhenIncomplete: true,
+          }),
+        )
+        expect(terminal).toMatchObject({
+          id: taskID,
+          time_completed: now + 5,
+          time_updated: now + 5,
+        })
+
+        const ignored = Database.transaction((db) =>
+          updateEngineTaskState(db, {
+            taskID,
+            values: { error: "late terminal update" },
+            timeUpdated: now + 6,
+            onlyWhenIncomplete: true,
+          }),
+        )
+        expect(ignored).toBeUndefined()
+
+        Database.transaction((db) =>
+          setEngineTaskRewindCursor(db, {
+            taskID,
+            cursorTime: now + 7,
+            anchorEventID: "evt_task_writer_rewind",
+            rewindCount: 2,
+            timeUpdated: now + 7,
+          }),
+        )
+        row = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
+        expect(row).toMatchObject({
+          id: taskID,
+          rewind_cursor_time: now + 7,
+          rewind_cursor_event_id: "evt_task_writer_rewind",
+          rewind_count: 2,
+          time_updated: now + 7,
+        })
+
+        Database.transaction((db) => clearEngineTaskRewindCursor(db, { taskID, timeUpdated: now + 8 }))
+        row = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
+        expect(row).toMatchObject({
+          id: taskID,
+          rewind_cursor_time: null,
+          rewind_cursor_event_id: null,
+          rewind_count: 2,
+          time_updated: now + 8,
         })
       },
     })
