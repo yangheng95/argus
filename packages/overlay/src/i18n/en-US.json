@@ -99,6 +99,7 @@
   "card.agent_reply_wake_failed": "The steer request was recorded but the orchestrator wake was not accepted. Retry after the task state refreshes.",
   "card.agent_reply_missing_task": "No active task is selected for operator steer. Select the task again before retrying.",
   "card.activity_summary": "{{messages}} messages · {{tools}} tools · {{agents}} agents · {{skills}} skills",
+  "card.agent_summary_label": "I did",
   "card.activity.tools": "{{count}} tool calls",
   "card.activity.tools_short": "Tools",
   "card.activity.messages": "{{count}} messages",

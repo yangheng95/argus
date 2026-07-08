@@ -8,6 +8,7 @@ import {
 } from "../utils/card-tree"
 import { t } from "../utils/i18n"
 import { goalRevisionLabel } from "../utils/goal-label"
+import { AgentSummaryBlock } from "./AgentSummaryBlock"
 import { CardDurationChip, CardHeaderChrome } from "./CardHeaderChrome"
 import { CardTodoSummary } from "./CardTodoSummary"
 import { Button } from "./ui/Button"
@@ -57,11 +58,13 @@ export function CardHeader(props: {
     !props.expanded && props.node.status !== "running" && isStageCard(props.node) && props.node.kind !== "tool"
   const collapsedPreview = () =>
     collapsedActive() ? collapsedActivityPreviewText(collectLatestActivityText(props.node), props.node.title) : ""
+  const agentSummaryText = () =>
+    !props.expanded && props.node.status !== "running" ? props.node.agentSummary?.text?.trim() || "" : ""
   const todoSummary = () => (collapsedActive() ? collectTodoSummary(props.node) : null)
   // Drives `card__head--with-meta` (flex-start vs center). Only true when
   // we render a row BELOW the title row — subtitle is inline, so it does
   // not count toward "needs vertical alignment to top".
-  const hasSecondaryText = () => !!collapsedPreview() || !!todoSummary()
+  const hasSecondaryText = () => !!agentSummaryText() || !!collapsedPreview() || !!todoSummary()
   const stepRevisionLabel = () =>
     props.node.kind === "step" ? goalRevisionLabel(props.node.round, props.node.attempt) : ""
 
@@ -104,6 +107,7 @@ export function CardHeader(props: {
             </Show>
             <span class="card__title-spacer" aria-hidden="true" />
           </span>
+          <Show when={agentSummaryText()}>{(text) => <AgentSummaryBlock text={text()} />}</Show>
           <Show when={collapsedPreview()}>
             <span class="card__preview-row">
               <span class="card__collapsed-preview" title={collapsedPreview()}>

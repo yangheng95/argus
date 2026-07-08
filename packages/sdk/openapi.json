@@ -9462,6 +9462,10 @@
                 ],
                 "type": "string"
               },
+              "summary": {
+                "minLength": 1,
+                "type": "string"
+              },
               "type": {
                 "const": "terminal",
                 "type": "string"

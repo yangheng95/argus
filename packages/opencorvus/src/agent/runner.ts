@@ -991,6 +991,7 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
     }
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err)
+    const failureReport = buildTraceReport(input.toolKit, { error: errorMessage })
     await recordAgentErrorForOrchestrator({
       taskID: input.taskID,
       goalID: input.goalID,
@@ -1016,7 +1017,7 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
         })(),
         streamErrors,
         error: errorMessage,
-        report: buildTraceReport(input.toolKit, { error: errorMessage }),
+        report: failureReport,
       })
     }
     // Subagent dispatch boundary: surface terminal to the overlay the moment
@@ -1029,6 +1030,7 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
     SessionStatus.set(session.id, {
       type: "terminal",
       reason: input.signal?.aborted ? "aborted" : "error",
+      summary: failureReport.summary,
       error: errorMessage,
     })
     throw err
@@ -1038,9 +1040,32 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
   const structured = input.format ? (finalMessage.info as Message.Assistant).structured : undefined
   collector ??= input.toolKit.getCollector()
 
-  SessionStatus.set(session.id, { type: "terminal", reason: "completed" })
-
   const finalText = finalTextFromMessage(finalMessage)
+  let successReport: AgentReport
+  try {
+    successReport = buildTraceReport(input.toolKit, { structured, finalText })
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err)
+    const failureReport = errorReport(errorMessage)
+    await recordAgentErrorForOrchestrator({
+      taskID: input.taskID,
+      goalID: input.goalID,
+      sessionID: session.id,
+      agentName,
+      kind,
+      error: err,
+      streamErrors,
+    })
+    SessionStatus.set(session.id, {
+      type: "terminal",
+      reason: "error",
+      summary: failureReport.summary,
+      error: errorMessage,
+    })
+    throw err
+  }
+
+  SessionStatus.set(session.id, { type: "terminal", reason: "completed", summary: successReport.summary })
 
   log.info(`${agentName} agent finished`, {
     kind,
@@ -1060,7 +1085,7 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
       structured,
       streamErrors,
       finalText,
-      report: buildTraceReport(input.toolKit, { structured, finalText }),
+      report: successReport,
     })
   }
 

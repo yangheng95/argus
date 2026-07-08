@@ -292,6 +292,7 @@ export function stepHeaderNodeWithBuildPhase(
     timeCompleted: buildPhase.timeCompleted ?? node.timeCompleted,
     errorReason: buildPhase.errorReason ?? node.errorReason,
     terminalReason: buildPhase.terminalReason ?? node.terminalReason,
+    agentSummary: buildPhase.agentSummary ?? node.agentSummary,
   }
 }
 

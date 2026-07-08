@@ -3163,6 +3163,7 @@ export type SessionStatus =
   | {
       error?: string
       reason: "completed" | "error" | "aborted" | "artifact_missing"
+      summary?: string
       type: "terminal"
     }
 

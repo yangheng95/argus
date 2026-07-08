@@ -146,6 +146,11 @@ export interface TodoActivityHit {
   todos: any[]
 }
 
+export interface AgentSummary {
+  text: string
+  source: "session_status"
+}
+
 /** CardNode is the fundamental unit of the conversation tree. Child
  *  relationships are ALWAYS stored as ids, never inline objects; the renderer
  *  dereferences through `cardTreeStore.cards[id]`. This indirection is what makes targeted
@@ -275,6 +280,10 @@ export interface CardNode {
    *  sessions intentionally use the terminal status channel while rendering
    *  differently from hard errors. */
   terminalReason?: "completed" | "error" | "aborted"
+  /** First-person terminal report for a completed subagent. Projected only
+   *  from `session.status.status.summary`, which is produced by the agent
+   *  runner from the same AgentReport used for trace reporting. */
+  agentSummary?: AgentSummary
   /** Structured integrity review payload. Populated on the integrity
    *  supervisor session card (`kind="agent"`, `stage="integrity"`) when
    *  consensus completes; reviewer child session cards usually carry only

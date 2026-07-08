@@ -7,14 +7,20 @@ const CARD_TODO_SUMMARY_TSX = readFileSync(
   join(import.meta.dir, "..", "src", "components", "CardTodoSummary.tsx"),
   "utf8",
 )
+const CARD_HEADER_TSX = readFileSync(join(import.meta.dir, "..", "src", "components", "CardHeader.tsx"), "utf8")
 const CARD_HEADER_CHROME_TSX = readFileSync(
   join(import.meta.dir, "..", "src", "components", "CardHeaderChrome.tsx"),
+  "utf8",
+)
+const AGENT_SUMMARY_BLOCK_TSX = readFileSync(
+  join(import.meta.dir, "..", "src", "components", "AgentSummaryBlock.tsx"),
   "utf8",
 )
 const CHAT_BUBBLE_CSS = readFileSync(
   join(import.meta.dir, "..", "src", "styles", "surfaces", "chat-bubble.css"),
   "utf8",
 )
+const CARD_CSS = readFileSync(join(import.meta.dir, "..", "src", "styles", "surfaces", "card.css"), "utf8")
 
 test("ChatBubble uses one unified IM bubble for user and agent cards with restorable folding", () => {
   expect(CHAT_BUBBLE_TSX).toContain("data-align={align()}")
@@ -53,6 +59,8 @@ test("ChatBubble uses one unified IM bubble for user and agent cards with restor
   expect(CHAT_BUBBLE_TSX).toContain("collapsedActivityPreviewText")
   expect(CHAT_BUBBLE_TSX).toContain("collectLatestActivityText")
   expect(CHAT_BUBBLE_TSX).toContain('class="card__collapsed-preview"')
+  expect(CHAT_BUBBLE_TSX).toContain('import { AgentSummaryBlock } from "./AgentSummaryBlock"')
+  expect(CHAT_BUBBLE_TSX).toContain("<AgentSummaryBlock text={text()} />")
   expect(CHAT_BUBBLE_TSX).toContain("collectTodoSummary")
   expect(CHAT_BUBBLE_TSX).toContain('import { CardTodoSummary } from "./CardTodoSummary"')
   expect(CHAT_BUBBLE_TSX).toContain("<CardTodoSummary summary={summary()} />")
@@ -113,17 +121,35 @@ test("ChatBubble uses one unified IM bubble for user and agent cards with restor
 
 test("ChatBubble keeps collapsed preview and TODO summary inside its disclosure button", () => {
   const disclosureOpen = CHAT_BUBBLE_TSX.indexOf('data-ui="chat-bubble-head-main"')
+  const agentSummary = CHAT_BUBBLE_TSX.indexOf("<AgentSummaryBlock text={text()} />", disclosureOpen)
   const collapsedPreview = CHAT_BUBBLE_TSX.indexOf('class="card__collapsed-preview"', disclosureOpen)
   const todoSummary = CHAT_BUBBLE_TSX.indexOf("<CardTodoSummary summary={summary()} />", disclosureOpen)
   const disclosureClose = CHAT_BUBBLE_TSX.indexOf("</Button>", disclosureOpen)
   const actionRail = CHAT_BUBBLE_TSX.indexOf("<CardHeaderChrome", disclosureOpen)
 
   expect(disclosureOpen).toBeGreaterThan(0)
-  expect(collapsedPreview).toBeGreaterThan(disclosureOpen)
+  expect(agentSummary).toBeGreaterThan(disclosureOpen)
+  expect(collapsedPreview).toBeGreaterThan(agentSummary)
   expect(todoSummary).toBeGreaterThan(collapsedPreview)
   expect(disclosureClose).toBeGreaterThan(todoSummary)
   expect(actionRail).toBeGreaterThan(disclosureClose)
   expect(CHAT_BUBBLE_TSX).not.toContain('<div class="card__preview-row">')
+})
+
+test("collapsed agent summary is a shared designed section, not preview text scraping", () => {
+  expect(AGENT_SUMMARY_BLOCK_TSX).toContain('data-ui="agent-summary"')
+  expect(AGENT_SUMMARY_BLOCK_TSX).toContain('class="card__agent-summary-label"')
+  expect(AGENT_SUMMARY_BLOCK_TSX).toContain('t("card.agent_summary_label")')
+  expect(CARD_HEADER_TSX).toContain('import { AgentSummaryBlock } from "./AgentSummaryBlock"')
+  expect(CARD_HEADER_TSX).toContain("props.node.agentSummary?.text?.trim()")
+  expect(CHAT_BUBBLE_TSX).toContain("props.node.agentSummary?.text?.trim()")
+  expect(CARD_HEADER_TSX).toContain("<AgentSummaryBlock text={text()} />")
+  expect(CARD_CSS).toContain(".card__agent-summary")
+  expect(CARD_CSS).toContain("grid-template-columns: auto minmax(0, 1fr);")
+  expect(CARD_CSS).toContain("border-left-width: calc(3px * var(--ui-scale));")
+  expect(CARD_CSS).toContain("-webkit-line-clamp: 3;")
+  expect(CHAT_BUBBLE_TSX).not.toContain("collectLatestActivityText(props.node.agentSummary")
+  expect(CARD_HEADER_TSX).not.toContain("collectLatestActivityText(props.node.agentSummary")
 })
 
 test("ChatBubble action controls use Button primitives", () => {

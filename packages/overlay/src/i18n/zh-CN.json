@@ -99,6 +99,7 @@
   "card.agent_reply_wake_failed": "Steer request 已记录，但 orchestrator wake 未被接受。请等待任务状态刷新后重试。",
   "card.agent_reply_missing_task": "当前没有选中的任务，无法发送 operator steer。请重新选择任务后再试。",
   "card.activity_summary": "{{messages}} 条消息 · {{tools}} 次工具调用 · {{agents}} 个 agent · {{skills}} 次技能调用",
+  "card.agent_summary_label": "我做了",
   "card.activity.tools": "{{count}} 次工具调用",
   "card.activity.tools_short": "工具",
   "card.activity.messages": "{{count}} 条消息",

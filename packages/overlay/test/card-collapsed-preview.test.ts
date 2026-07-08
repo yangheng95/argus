@@ -5,6 +5,7 @@ import {
   collectTodoSummary,
   collectActivityCounts,
   defaultExpandedForNode,
+  stepHeaderNodeWithBuildPhase,
 } from "../src/utils/card-tree"
 import { cardTreeStore } from "../src/store/card-tree"
 
@@ -244,6 +245,35 @@ describe("defaultExpandedForNode conversation cards", () => {
         time: 1,
       } as any),
     ).toBe(true)
+  })
+})
+
+describe("stepHeaderNodeWithBuildPhase", () => {
+  test("forwards absorbed build phase agent summary to the collapsed step header", () => {
+    const step: any = {
+      id: "step:goal_summary:build",
+      kind: "step",
+      title: "Build summary",
+      status: "running",
+      time: 1,
+      childIDs: ["step:goal_summary:build:phase:build"],
+    }
+    const phase: any = {
+      id: "step:goal_summary:build:phase:build",
+      kind: "phase",
+      phaseID: "build",
+      title: "Build",
+      status: "completed",
+      time: 2,
+      agentSummary: {
+        text: "I implemented the UI and verified the screenshot.",
+        source: "session_status",
+      },
+    }
+    ;(cardTreeStore.cards as any)[step.id] = step
+    ;(cardTreeStore.cards as any)[phase.id] = phase
+
+    expect(stepHeaderNodeWithBuildPhase(step).agentSummary).toEqual(phase.agentSummary)
   })
 })
 
