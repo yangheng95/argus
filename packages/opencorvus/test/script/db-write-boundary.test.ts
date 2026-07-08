@@ -25,6 +25,7 @@ function projectPath(file: string): string {
 
 const approvedWriters: Record<string, string> = {
   EngineArtifactTable: "packages/opencorvus/src/engine/artifact.ts",
+  EngineChannelBindingTable: "packages/opencorvus/src/engine/channel-binding.ts",
   EngineInteractionRequestTable: "packages/opencorvus/src/engine/interaction-request.ts",
   EngineProgressSnapshotTable: "packages/opencorvus/src/engine/progress.ts",
 }
@@ -58,5 +59,9 @@ describe("database write boundary", () => {
 
   test("only the engine interaction request writer directly writes EngineInteractionRequestTable", () => {
     expect(directWriteViolations("EngineInteractionRequestTable")).toEqual([])
+  })
+
+  test("only the engine channel binding writer directly writes EngineChannelBindingTable", () => {
+    expect(directWriteViolations("EngineChannelBindingTable")).toEqual([])
   })
 })

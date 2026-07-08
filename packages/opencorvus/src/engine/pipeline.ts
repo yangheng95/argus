@@ -6,13 +6,13 @@
  * fixed state machine.
  */
 import z from "zod"
-import { Identifier } from "@/id/id"
 import { Database } from "@/storage/db"
 import { Log } from "@/util/log"
 import { budgetRow } from "./helpers"
 import { CreateTaskInput, Event } from "./model"
-import { EngineChannelBindingTable, EngineTaskTable } from "./engine.sql"
+import { EngineTaskTable } from "./engine.sql"
 import { EngineProtocol } from "./protocol"
+import { insertEngineChannelBinding } from "./channel-binding"
 import { insertEngineProgressSnapshot } from "./progress"
 import { TaskGlobalProjectBindingError } from "./task-project-error"
 import type { RunRow } from "./store"
@@ -123,18 +123,14 @@ export function persistQueuedTask(input: {
       })
       .run()
     if (input.channelBinding) {
-      db.insert(EngineChannelBindingTable)
-        .values({
-          id: Identifier.ascending("binding"),
-          task_id: input.taskID,
-          platform: input.channelBinding.platform,
-          channel: input.channelBinding.channel,
-          thread: input.channelBinding.thread,
-          payload: input.channelBinding.payload ?? {},
-          time_created: input.now,
-          time_updated: input.now,
-        })
-        .run()
+      insertEngineChannelBinding(db, {
+        taskID: input.taskID,
+        platform: input.channelBinding.platform,
+        channel: input.channelBinding.channel,
+        thread: input.channelBinding.thread,
+        payload: input.channelBinding.payload ?? {},
+        timeCreated: input.now,
+      })
     }
     insertEngineProgressSnapshot(db, {
       taskID: input.taskID,

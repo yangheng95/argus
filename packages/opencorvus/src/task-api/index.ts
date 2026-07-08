@@ -49,6 +49,7 @@ import {
   type EngineMetadata,
 } from "@/engine/engine.sql"
 import { recordEngineArtifact } from "@/engine/artifact"
+import { deleteEngineChannelBindingsForTask } from "@/engine/channel-binding"
 import { resolveEngineInteractionRequest } from "@/engine/interaction-request"
 import { insertEngineProgressSnapshot } from "@/engine/progress"
 import {
@@ -2608,9 +2609,7 @@ export namespace EngineService {
       { projectDir: taskDirectory },
     )
     // Clean up channel bindings so the thread is not reused
-    Database.use((db) =>
-      db.delete(EngineChannelBindingTable).where(eq(EngineChannelBindingTable.task_id, taskID)).run(),
-    )
+    Database.use((db) => deleteEngineChannelBindingsForTask(db, taskID))
     return true
   }
 

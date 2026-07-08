@@ -148,3 +148,30 @@ output for repeated 30s windows. Those runs were stopped as invalid no-activity
 verifications. The focused `interaction-request.test.ts` now covers the writer
 row semantics and protocol event source behavior directly; `interaction-permission.test.ts`
 covers the permission bridge and service reply path.
+
+## Phase 5 Channel Binding Boundary
+
+The next clear single-table boundary is `engine_channel_binding`. It binds
+external channel coordinates to engine tasks and should not be directly assembled
+or deleted from unrelated service files.
+
+Phase 5 grep evidence:
+
+- `rg -n "\\.(insert|update|delete)\\s*\\(\\s*EngineChannelBindingTable\\b|db\\.(insert|update|delete)\\s*\\(\\s*EngineChannelBindingTable\\b" packages/opencorvus/src -g "*.ts"` shows direct insert in `engine/pipeline.ts` and direct delete in `task-api/index.ts`.
+- The creation path is part of queued task persistence; the deletion path is part of task removal. Both should use one engine-owned channel binding writer while preserving the caller's existing transaction placement.
+
+Phase 5 acceptance criteria:
+
+- Production source direct writes to `EngineChannelBindingTable` exist only in the channel binding writer.
+- Task creation still inserts channel binding rows with the same ID, task ID, platform, channel, thread, and timestamps.
+- Task deletion still removes channel binding rows inside the same deletion transaction.
+- The static database write-boundary test rejects future direct `EngineChannelBindingTable` writes outside the writer.
+
+Phase 5 verification:
+
+- `rg -n "db\\.(insert|update|delete)\\(EngineChannelBindingTable|\\.(insert|update|delete)\\(EngineChannelBindingTable" packages/opencorvus/src -g "*.ts"` reports only `engine/channel-binding.ts`.
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun test --timeout 60000 packages/opencorvus/test/engine/channel-binding.test.ts`
+- `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/engine/prepare-project-non-git.test.ts packages/opencorvus/test/engine/task-global-project-forbidden.test.ts`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts`
