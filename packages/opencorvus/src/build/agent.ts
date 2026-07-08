@@ -407,9 +407,7 @@ export async function repairManagedBuildSessionStagedFileParts(input: {
         mime: result.attachment.mime,
         filename: result.attachment.filename,
       }
-      Database.use((db) =>
-        db.update(PartTable).set({ data: nextData, time_updated: Date.now() }).where(eq(PartTable.id, row.id)).run(),
-      )
+      await Session.updatePartData({ partID: row.id, data: nextData })
       repaired++
       continue
     }
@@ -474,9 +472,7 @@ export async function repairManagedBuildSessionStagedFileParts(input: {
     }
 
     if (rowRepaired) {
-      Database.use((db) =>
-        db.update(PartTable).set({ data: nextData, time_updated: Date.now() }).where(eq(PartTable.id, row.id)).run(),
-      )
+      await Session.updatePartData({ partID: row.id, data: nextData })
     }
   }
   return { checked, repaired }

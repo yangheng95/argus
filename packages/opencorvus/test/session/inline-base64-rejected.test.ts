@@ -184,4 +184,40 @@ describe("Session.updatePart inline-base64 guard", () => {
       },
     })
   })
+
+  test("updatePartData rejects inline base64 on repaired persisted part data", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { sessionID, messageID } = await setupSession()
+        const partID = Identifier.ascending("part")
+        const originalUrl = `/attachment/${Instance.project.id}/abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890.png`
+        await Session.updatePart({
+          id: partID,
+          messageID,
+          sessionID,
+          type: "file",
+          mime: "image/png",
+          filename: "evidence.png",
+          url: originalUrl,
+        } as any)
+
+        await expect(
+          Session.updatePartData({
+            partID,
+            data: {
+              type: "file",
+              mime: "image/png",
+              filename: "evidence.png",
+              url: "data:image/png;base64,UE5H",
+            },
+          }),
+        ).rejects.toThrow(/InlineBase64InPartError|inline base64/i)
+
+        const row = Database.use((db) => db.select().from(PartTable).where(eq(PartTable.id, partID)).get())
+        expect((row?.data as { url?: string } | undefined)?.url).toBe(originalUrl)
+      },
+    })
+  })
 })

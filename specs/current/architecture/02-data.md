@@ -107,6 +107,11 @@ Metrics 域沿用 `engine_*` 表名承载评分流水，但写入边界归属 me
 
 新增的字段 `goal_id`：当 session 归属某个 goal（`executor` / `build` / `evaluator` session）时写入，overlay 据此把消息嵌在 goal 卡片下。`planner` kind 已删除，此处不再列入。
 
+Session message 表按 Session writer 分层写入：`part` 的唯一直接表写入文件是
+`session/index.ts`。Build、tool、server route、compaction 和 shell execution 只能通过
+`Session.updatePart` / `Session.updatePartData` / `Session.persistMessage` 等 Session writer API
+创建或修正 part row，不能直接写 `PartTable`。
+
 ## 控制 / 工作区
 
 | 表                | 文件                         | 作用                             |

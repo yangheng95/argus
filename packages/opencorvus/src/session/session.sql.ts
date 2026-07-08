@@ -99,7 +99,7 @@ export const SESSION_KINDS = [
 
 export type SessionKind = (typeof SESSION_KINDS)[number]
 
-type PartData = Omit<Message.Part, "id" | "sessionID" | "messageID" | "orderKey">
+export type PartData = Omit<Message.Part, "id" | "sessionID" | "messageID" | "orderKey">
 type InfoData = Omit<Message.Info, "id" | "sessionID">
 
 export const SessionTable = sqliteTable(

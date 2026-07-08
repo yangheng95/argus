@@ -510,16 +510,6 @@ Phase 16 verification:
 - `bun run --cwd packages/opencorvus typecheck`
 - `git diff --check`
 
-Additional verification attempt not counted as passing Phase 18 evidence:
-
-- `bun test --timeout 60000 packages/opencorvus/test/executor/opencorvus.test.ts`
-  passed the queue-related resume test and later failed two event-stream tests
-  that publish `message.part.delta` for message IDs not persisted in the
-  session table, causing `session-mirror: message ... missing persisted row for
-  overlay enrichment` and then a timeout waiting for a mapped event. That
-  failure is outside the `TaskQueueTable` write-boundary migration and remains
-  a separate executor event fixture issue.
-
 ## Phase 17 Schedule Tool To Scheduler Service Boundary
 
 The full production DB write inventory showed that `CronJobTable` and
@@ -587,6 +577,51 @@ Phase 18 verification:
 - `rg -n '\\.(insert|update|delete)\\s*\\(\\s*TaskQueueTable\\b|db\\.(insert|update|delete)\\s*\\(\\s*TaskQueueTable\\b' packages/opencorvus/src -g '*.ts'`
 - `bun test --timeout 60000 packages/opencorvus/test/scheduler/task-queue-service.test.ts -t "getStatusByID"`
 - `bun test --timeout 60000 packages/opencorvus/test/executor/opencorvus.test.ts -t "status and abort"`
+- `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `git diff --check`
+
+Additional verification attempt not counted as passing Phase 18 evidence:
+
+- `bun test --timeout 60000 packages/opencorvus/test/executor/opencorvus.test.ts`
+  passed the queue-related resume test and later failed two event-stream tests
+  that publish `message.part.delta` for message IDs not persisted in the
+  session table, causing `session-mirror: message ... missing persisted row for
+  overlay enrichment` and then a timeout waiting for a mapped event. That
+  failure is outside the `TaskQueueTable` write-boundary migration and remains
+  a separate executor event fixture issue.
+
+## Phase 19 Session Part Writer Boundary
+
+The full production DB write inventory still showed `PartTable` writes in
+`build/agent.ts` and `session/index.ts`. The build writes were part of managed
+build retry repair: after staging attachment bytes into the retry worktree,
+build code rewrote persisted file/tool part attachment references directly in
+the session table. That bypassed the Session writer and its inline-base64
+integrity check.
+
+This phase exposes a narrow `Session.updatePartData` writer for already
+persisted part data repair, reuses the existing inline-base64 detector for this
+path, and migrates build retry repair to call Session instead of directly
+updating `PartTable`.
+
+Phase 19 acceptance criteria:
+
+- `build/agent.ts` no longer directly writes `PartTable`.
+- `Session.updatePartData` updates only through `session/index.ts` and rejects
+  inline base64 payloads before they reach SQLite.
+- Managed build retry repair still updates repaired file/tool part data.
+- Production source direct `PartTable` writes exist only in `session/index.ts`.
+- The static database write-boundary test rejects future direct `PartTable`
+  writes outside `session/index.ts`.
+- The architecture data document states Session part writer ownership.
+
+Phase 19 verification:
+
+- `rg -n '\\.(insert|update|delete)\\s*\\(\\s*PartTable\\b|db\\.(insert|update|delete)\\s*\\(\\s*PartTable\\b' packages/opencorvus/src -g '*.ts'`
+- `bun test --timeout 60000 packages/opencorvus/test/session/inline-base64-rejected.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/build-agent/managed-worktree-runtime.test.ts -t "managed build retries repair persisted file parts"`
 - `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
 - `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/db-write-boundary.test.ts`
 - `bun run --cwd packages/opencorvus typecheck`
