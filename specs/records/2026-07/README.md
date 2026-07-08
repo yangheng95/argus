@@ -1,5 +1,6 @@
 # July 2026 Records
 
+- [2026-07-08-overlay-finished-message-collapse-scroll-bottom.md](2026-07-08-overlay-finished-message-collapse-scroll-bottom.md) records the overlay conversation change that collapses finished message/agent cards through the existing fold store while adding a floating scroll-to-bottom button backed by the existing auto-scroll owner.
 - [2026-07-08-schema-adversarial-audit.md](2026-07-08-schema-adversarial-audit.md) records the adversarial multi-agent follow-up to the crypto Mission scheduler stall, including strict provider schema predicate unification, dispatch reason tightening, fact-check target-scope validation, and production-shaped expert-squad overlay fixtures.
 - [2026-07-08-expert-squad-selector-contract-completion.md](2026-07-08-expert-squad-selector-contract-completion.md) records the audit and repair plan for completing selector-visible contracts on payload-distributed expert squads so non-general packages participate in the visible `skill` then `select_expert_squad` protocol.
 - [2026-07-08-dispatch-agent-null-schema-pollution.md](2026-07-08-dispatch-agent-null-schema-pollution.md) records the scheduler schema repair for `dispatch_agent target=build` looping on provider strict-schema null placeholders because optional literal fields were mistaken for discriminators.

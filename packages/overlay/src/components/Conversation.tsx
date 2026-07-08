@@ -1,4 +1,5 @@
 import { ErrorBoundary, Show, createMemo, onMount, onCleanup, createSignal, createEffect, on } from "solid-js"
+import { Portal } from "solid-js/web"
 import { Virtualizer, type CustomContainerComponentProps, type VirtualizerHandle } from "virtua/solid"
 import { Card } from "./Card"
 import { ChatBubble } from "./ChatBubble"
@@ -16,6 +17,7 @@ import { conversationAgentStore } from "../store/conversation-agents"
 import { listenConversationCardScroll, type ConversationCardScrollRequest } from "../services/conversation-scroll"
 import { createAnimationFrameScheduler } from "../utils/animation-frame"
 import { Icon } from "./Icon"
+import { Button } from "./ui/Button"
 
 const VIRTUAL_OVERSCAN_ITEMS = 4
 const ESTIMATED_CARD_HEIGHT = 320
@@ -251,6 +253,7 @@ export function Conversation(props: { container: HTMLElement }) {
 
   const [tracking, setTracking] = createSignal(true)
   const [historyAnchorPinID, setHistoryAnchorPinID] = createSignal<string | null>(null)
+  const [scrollButtonMount, setScrollButtonMount] = createSignal<HTMLElement | null>(null)
   const isSessionSource = () => boardStore.selectedSource?.kind === "session"
   const sessionBoard = () => (isSessionSource() ? (boardStore.board as any) : null)
   const currentTaskID = () => (isSessionSource() ? "" : String(activeTaskID() || boardStore.board?.task?.id || ""))
@@ -297,6 +300,9 @@ export function Conversation(props: { container: HTMLElement }) {
   }
 
   onMount(() => {
+    const mount = el.parentElement
+    if (!mount) throw new Error("Conversation requires chatScroll to be mounted inside conversation-scroll-shell")
+    setScrollButtonMount(mount)
     const c = setupAutoScroll(el, {
       isTracking: tracking,
       onUserScrollUp: () => setTracking(false),
@@ -408,6 +414,11 @@ export function Conversation(props: { container: HTMLElement }) {
   )
 
   const emptyText = () => t("chat.empty")
+  const scrollBottomLabel = () => t("chat.scroll_bottom")
+  const scrollToBottom = () => {
+    setTracking(true)
+    scrollController?.scrollToBottom()
+  }
 
   return (
     <>
@@ -443,6 +454,27 @@ export function Conversation(props: { container: HTMLElement }) {
         onMeasuredContentChanged={() => scrollController?.contentChanged()}
         onCardScrollRequest={() => setTracking(false)}
       />
+      <Show when={scrollButtonMount()} keyed>
+        {(mount) => (
+          <Portal mount={mount}>
+            <Show when={hasItems() && !tracking()}>
+              <Button
+                type="button"
+                variant="solid"
+                size="icon"
+                tone="neutral"
+                class="conversation-scroll-bottom"
+                data-ui="conversation-scroll-bottom"
+                title={scrollBottomLabel()}
+                aria-label={scrollBottomLabel()}
+                onClick={scrollToBottom}
+              >
+                <Icon name="chevron-down" size={16} />
+              </Button>
+            </Show>
+          </Portal>
+        )}
+      </Show>
     </>
   )
 }

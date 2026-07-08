@@ -133,6 +133,7 @@
   "chat.part_error_unknown": "A persisted message part could not be rendered as a valid message part.",
   "chat.render_error_title": "Card render failed",
   "chat.render_error_unknown": "Unknown render error",
+  "chat.scroll_bottom": "Scroll to bottom",
   "chat.git.baseline_created": "Created an initial git checkpoint",
   "chat.git.baseline_recorded": "Recorded current HEAD as the initial checkpoint",
   "chat.git.branch": "Branch",

@@ -18,6 +18,7 @@ import type {
 import { toolNameKey, displayToolIcon, displayToolDetail } from "./tool"
 import { extractTodos } from "./todos"
 import { isBoundaryMessagePart, isCardBodyMessagePart } from "./message-part"
+import { normalizeAgentRole } from "./message"
 
 export type { CardNode, CardKind, CardStatus, StepPayload, BoundaryPart } from "../store/card-tree"
 
@@ -58,6 +59,14 @@ function normGoalStatus(raw: any): CardStatus | undefined {
 // expanded regardless of completion status.
 const TODO_TOOLS = new Set(["todowrite", "todoread", "todoupdate", "updateplan"])
 
+function isFinishedConversationStatus(status: CardStatus | undefined): boolean {
+  return status === "completed" || status === "error" || status === "skipped" || status === "idle"
+}
+
+function isUserAuthoredCard(node: CardNode): boolean {
+  return normalizeAgentRole(node.role || node.stage || "") === "user"
+}
+
 // ── Part flattening ──
 
 // ── Default fold policy ──
@@ -83,6 +92,8 @@ export function defaultExpandedForNode(
 ): boolean {
   if (typeof node.defaultExpanded === "boolean") return node.defaultExpanded
   if (node.status === "running") return true
+  if ((node.kind === "agent" || node.kind === "message") && isUserAuthoredCard(node)) return true
+  if ((node.kind === "agent" || node.kind === "message") && isFinishedConversationStatus(node.status)) return false
   if (node.kind === "agent") return true
   if (node.kind === "message") return true
   // Integrity verdicts: always expand. The entire point of the card is to

@@ -54,6 +54,7 @@
 }
 
 .conversation-scroll-shell {
+  position: relative;
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
@@ -61,6 +62,38 @@
   flex-direction: column;
 }
 
+.conversation-scroll-bottom {
+  position: absolute;
+  inset-inline-start: 50%;
+  inset-block-end: calc(14px * var(--ui-scale));
+  z-index: var(--ui-z-sticky);
+  transform: translateX(-50%);
+}
+
+.conversation-scroll-shell > .oc-button[data-ui="conversation-scroll-bottom"] {
+  --oc-button-height: calc(34px * var(--ui-scale));
+  --oc-button-padding-x: 0;
+  --oc-button-bg: color-mix(in srgb, var(--text-strong) 86%, var(--surface));
+  --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--border-strong) 58%, transparent);
+  --oc-button-color: var(--text-on-strong);
+  --oc-button-shadow:
+    0 calc(10px * var(--ui-scale)) calc(22px * var(--ui-scale)) color-mix(in srgb, var(--ui-shadow-tone) 34%, transparent),
+    inset 0 calc(1px * var(--ui-scale)) 0 color-mix(in srgb, var(--text-on-strong) 18%, transparent);
+  min-width: calc(34px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+}
+
+.conversation-scroll-shell > .oc-button[data-ui="conversation-scroll-bottom"]:hover,
+.conversation-scroll-shell > .oc-button[data-ui="conversation-scroll-bottom"]:focus-visible {
+  --oc-button-bg: var(--text-strong);
+  --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 36%, transparent);
+  --oc-button-color: var(--text-on-strong);
+}
+
+.conversation-scroll-shell > .oc-button[data-ui="conversation-scroll-bottom"] svg {
+  width: calc(18px * var(--ui-scale));
+  height: calc(18px * var(--ui-scale));
+}
 .conversation-agent-rail {
   flex: 1 1 0;
   width: 100%;
