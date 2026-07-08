@@ -154,9 +154,9 @@ import {
   updateEngineSpecSnapshotContent,
 } from "@/engine/spec-snapshot"
 import {
-  supersedePriorActivePlansForTask,
   appendGoalToActiveGraph,
   completeGoal,
+  createActivePlanGraph,
   deleteGoal as deleteGoalRow,
   ensureBuildRetryEvidenceForGoal,
   persistTaskFrontendResearchBrief,
@@ -6410,78 +6410,22 @@ export function createOrchestratorTools(input: {
     const now = Date.now()
     const executor = task.executor
     const sessionID = task.session_id!
-    const planID = Identifier.ascending("plan")
-    const { EnginePlanVersionTable, EnginePlanNodeTable, EngineGoalTable } = await import("@/engine/engine.sql")
+    let planID = ""
 
     Database.transaction((db) => {
-      // Single-active-plan invariant: retire every prior active plan for this
-      // task before inserting the new one. Without this, a second
-      // createExecutionRunRecord call would leave two rows with
-      // status='active' / version=1; findActivePlanForTask's
-      // `ORDER BY version DESC LIMIT 1` then returns whichever rowid wins the
-      // tie (typically the older row, whose goals were re-pointed to the new
-      // plan), and the board loads zero goals.
-      supersedePriorActivePlansForTask(db, { taskID, now })
-      db.insert(EnginePlanVersionTable)
-        .values({
-          id: planID,
-          task_id: taskID,
-          spec_snapshot_id: activeSpec.id,
-          version: 1,
-          status: "active",
-          summary: `${dbGoals.length} goals`,
-          prompt: task.request,
-          metadata: {},
-          time_created: now,
-          time_updated: now,
-        })
-        .run()
-
-      const goalToPlanNode = new Map<string, string>()
-      const planNodeIDs: string[] = []
-      for (const goal of dbGoals) {
-        const pnID = Identifier.ascending("plan_node")
-        planNodeIDs.push(pnID)
-        goalToPlanNode.set(goal.id, pnID)
-      }
-
-      for (const [index, goal] of dbGoals.entries()) {
-        const resolvedDeps = (goal.depends_on ?? []).flatMap((depGoalID: string) => {
-          const pnID = goalToPlanNode.get(depGoalID)
-          if (!pnID) {
-            log.warn("create_run: goal.depends_on references unknown goal ID — dropping", {
-              goalID: goal.id,
-              goalTitle: goal.title,
-              unknownDep: depGoalID,
-            })
-          }
-          return pnID ? [pnID] : []
-        })
-
-        db.insert(EnginePlanNodeTable)
-          .values({
-            id: planNodeIDs[index],
-            task_id: taskID,
-            plan_version_id: planID,
-            kind: "goal",
-            goal_id: goal.id,
-            title: goal.title,
-            brief: renderSpecsAsText((goal.acceptance_specs ?? []) as AcceptanceSpec[]),
-            depends_on_ids: resolvedDeps.length > 0 ? resolvedDeps : undefined,
-            order_index: index,
-            metadata: {},
-            time_created: now,
-            time_updated: now,
-          })
-          .run()
-      }
-
-      for (const goal of dbGoals) {
-        db.update(EngineGoalTable)
-          .set({ plan_version_id: planID, time_updated: now })
-          .where(eq(EngineGoalTable.id, goal.id))
-          .run()
-      }
+      const createdPlan = createActivePlanGraph(db, {
+        taskID,
+        specSnapshotID: activeSpec.id,
+        prompt: task.request,
+        goals: dbGoals.map((goal) => ({
+          id: goal.id,
+          title: goal.title,
+          acceptance_specs: (goal.acceptance_specs ?? []) as AcceptanceSpec[],
+          depends_on: goal.depends_on ?? [],
+        })),
+        now,
+      })
+      planID = createdPlan.planID
     })
 
     const { createRun } = await import("@/engine/writer")

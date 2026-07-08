@@ -57,7 +57,10 @@ writer 创建或解析 interaction row。`engine_channel_binding` 的唯一直�
 是 `engine/channel-binding.ts`；task creation 和 task cancellation / removal 只能通过
 这个 writer 创建或删除 channel binding row。`engine_spec_snapshot` 的唯一直接表写入文件是
 `engine/spec-snapshot.ts`；requirements 和 architect 阶段只能通过这个 writer 创建、
-supersede 或更新 spec snapshot row。其他 `engine_*` 表的写入仍必须停留在
+supersede 或更新 spec snapshot row。`engine_plan_version` 和 `engine_plan_node`
+的唯一直接表写入文件是 `engine/persist.ts`；architect graph、operator add-goal
+和 create-run active plan graph 只能通过这个 persistence writer 创建、supersede
+或更新 plan graph row。其他 `engine_*` 表的写入仍必须停留在
 `task-api/index.ts` 和 engine 生命周期 writer/service 内，禁止跨域模块直接写。
 
 ## session 域（5 表）

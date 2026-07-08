@@ -207,3 +207,34 @@ Phase 6 verification:
 - `bun test --timeout 60000 packages/opencorvus/test/orchestrator/tools.test.ts -t "architect does not start without an active requirements spec snapshot"`
 - `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts`
 - `git diff --check`
+
+## Phase 7 Active Plan Graph Boundary
+
+The next production write cluster with a clean owner is the active execution plan
+graph. `createExecutionRunRecord` in `orchestrator/tools.ts` currently inserts
+`engine_plan_version`, inserts `engine_plan_node`, and updates
+`engine_goal.plan_version_id` directly while `engine/persist.ts` already owns
+architect goal graph writes and active-plan superseding.
+
+Phase 7 grep evidence:
+
+- `rg -n 'db\\.(insert|update|delete)\\(Engine(Task|Goal|PlanVersion|PlanNode|Requirement|SpecItem|Milestone)Table|\\.(insert|update|delete)\\(Engine(Task|Goal|PlanVersion|PlanNode|Requirement|SpecItem|Milestone)Table' packages/opencorvus/src -g '*.ts'` reports the create-run plan graph writes in `orchestrator/tools.ts` around `createExecutionRunRecord`.
+- Existing `engine/persist.ts` already has `supersedePriorActivePlansForTask` and `appendGoalToActiveGraph`; keeping create-run plan graph creation there avoids a second owner for active plan rows.
+- The existing behavior creates one active plan version, drops unknown `goal.depends_on` references from plan-node dependencies with a warning, inserts one node per current goal, and repoints each goal to the new plan version in the same transaction.
+
+Phase 7 acceptance criteria:
+
+- Production source direct writes to `EnginePlanVersionTable` and `EnginePlanNodeTable` exist only in `engine/persist.ts`.
+- `createExecutionRunRecord` keeps the same transaction placement, plan ID returned to the run writer, active-plan superseding, plan summary, prompt, node order, node dependency resolution, node brief rendering, and goal `plan_version_id` updates.
+- Unknown goal dependency references remain ignored for plan-node dependency IDs without blocking run creation.
+- Static database write-boundary tests reject future direct `EnginePlanVersionTable` / `EnginePlanNodeTable` writes outside the persistence writer.
+- Focused engine writer tests cover plan graph creation, prior active plan superseding, goal repointing, and unknown dependency pruning.
+
+Phase 7 verification:
+
+- `rg -n 'db\\.(insert|update|delete)\\(EnginePlanVersionTable|\\.(insert|update|delete)\\(EnginePlanVersionTable|db\\.(insert|update|delete)\\(EnginePlanNodeTable|\\.(insert|update|delete)\\(EnginePlanNodeTable' packages/opencorvus/src -g '*.ts'` reports only `engine/persist.ts`.
+- `bun test --timeout 60000 packages/opencorvus/test/engine/active-plan-graph.test.ts`
+- `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts`
+- `git diff --check`

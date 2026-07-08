@@ -272,6 +272,26 @@ export type AppendGoalToActiveGraphResult = {
   planNodeID?: string
 }
 
+export type CreateActivePlanGraphGoal = {
+  id: string
+  title: string
+  acceptance_specs?: import("@/acceptance/types").AcceptanceSpec[] | null
+  depends_on?: string[] | null
+}
+
+export type CreateActivePlanGraphInput = {
+  taskID: string
+  specSnapshotID: string
+  prompt: string
+  goals: CreateActivePlanGraphGoal[]
+  now: number
+}
+
+export type CreateActivePlanGraphResult = {
+  planID: string
+  planNodeIDs: string[]
+}
+
 function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
 }
@@ -498,6 +518,76 @@ export function insertGoalRows(
       metadata,
     }
   })
+}
+
+export function createActivePlanGraph(
+  db: Database.TxOrDb,
+  input: CreateActivePlanGraphInput,
+): CreateActivePlanGraphResult {
+  const planID = Identifier.ascending("plan")
+  supersedePriorActivePlansForTask(db, { taskID: input.taskID, now: input.now })
+  db.insert(EnginePlanVersionTable)
+    .values({
+      id: planID,
+      task_id: input.taskID,
+      spec_snapshot_id: input.specSnapshotID,
+      version: 1,
+      status: "active",
+      summary: `${input.goals.length} goals`,
+      prompt: input.prompt,
+      metadata: {},
+      time_created: input.now,
+      time_updated: input.now,
+    })
+    .run()
+
+  const goalToPlanNode = new Map<string, string>()
+  const planNodeIDs: string[] = []
+  for (const goal of input.goals) {
+    const planNodeID = Identifier.ascending("plan_node")
+    planNodeIDs.push(planNodeID)
+    goalToPlanNode.set(goal.id, planNodeID)
+  }
+
+  for (const [index, goal] of input.goals.entries()) {
+    const resolvedDeps = (goal.depends_on ?? []).flatMap((depGoalID) => {
+      const planNodeID = goalToPlanNode.get(depGoalID)
+      if (!planNodeID) {
+        log.warn("create_run: goal.depends_on references unknown goal ID — dropping", {
+          goalID: goal.id,
+          goalTitle: goal.title,
+          unknownDep: depGoalID,
+        })
+      }
+      return planNodeID ? [planNodeID] : []
+    })
+
+    db.insert(EnginePlanNodeTable)
+      .values({
+        id: planNodeIDs[index],
+        task_id: input.taskID,
+        plan_version_id: planID,
+        kind: "goal",
+        goal_id: goal.id,
+        title: goal.title,
+        brief: renderSpecsAsText(goal.acceptance_specs ?? []),
+        depends_on_ids: resolvedDeps.length > 0 ? resolvedDeps : undefined,
+        order_index: index,
+        metadata: {},
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run()
+  }
+
+  for (const goal of input.goals) {
+    db.update(EngineGoalTable)
+      .set({ plan_version_id: planID, time_updated: input.now })
+      .where(eq(EngineGoalTable.id, goal.id))
+      .run()
+  }
+
+  return { planID, planNodeIDs }
 }
 
 /**

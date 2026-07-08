@@ -27,6 +27,8 @@ const approvedWriters: Record<string, string> = {
   EngineArtifactTable: "packages/opencorvus/src/engine/artifact.ts",
   EngineChannelBindingTable: "packages/opencorvus/src/engine/channel-binding.ts",
   EngineInteractionRequestTable: "packages/opencorvus/src/engine/interaction-request.ts",
+  EnginePlanNodeTable: "packages/opencorvus/src/engine/persist.ts",
+  EnginePlanVersionTable: "packages/opencorvus/src/engine/persist.ts",
   EngineProgressSnapshotTable: "packages/opencorvus/src/engine/progress.ts",
   EngineSpecSnapshotTable: "packages/opencorvus/src/engine/spec-snapshot.ts",
 }
@@ -68,5 +70,13 @@ describe("database write boundary", () => {
 
   test("only the engine spec snapshot writer directly writes EngineSpecSnapshotTable", () => {
     expect(directWriteViolations("EngineSpecSnapshotTable")).toEqual([])
+  })
+
+  test("only the engine persistence writer directly writes EnginePlanVersionTable", () => {
+    expect(directWriteViolations("EnginePlanVersionTable")).toEqual([])
+  })
+
+  test("only the engine persistence writer directly writes EnginePlanNodeTable", () => {
+    expect(directWriteViolations("EnginePlanNodeTable")).toEqual([])
   })
 })
