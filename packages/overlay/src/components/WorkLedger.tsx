@@ -33,6 +33,7 @@ export interface WorkLedgerProps {
   onDeleteMission: (row: WorkLedgerMissionRow) => void | Promise<void>
   onCancelTask: (row: WorkLedgerTaskRow) => void | Promise<void>
   onDeleteTask: (row: WorkLedgerTaskRow) => void | Promise<void>
+  onCreateChat: (directory: string) => void | Promise<void>
   onStopChat: (row: WorkLedgerChatRow) => void | Promise<void>
   onDeleteChat: (row: WorkLedgerChatRow) => void | Promise<void>
 }
@@ -426,6 +427,7 @@ export function WorkLedger(props: WorkLedgerProps) {
               count={group.items.length}
               collapsed={collapsed}
               onToggle={() => directoryCollapse.toggle(group.directory)}
+              onCreateChat={props.onCreateChat}
               dataUi="work-ledger-project-group"
             >
               <For each={group.items}>

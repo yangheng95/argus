@@ -1069,6 +1069,8 @@
   "project.copy_failed_title": "项目复制失败",
   "project.copy_failed": "复制失败：{{error}}",
   "project.copy_clipboard_unavailable": "剪贴板不可用",
+  "project.new_chat_button_title": "为此项目新建 Chat",
+  "project.new_chat_missing_directory": "新建 Chat 需要项目目录。",
   "project.rename_button_title": "重命名项目",
   "project.rename_dialog_title": "重命名项目",
   "project.rename_input_label": "项目名称",

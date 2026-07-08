@@ -87,6 +87,7 @@ export type IconName =
   | "terminal"
   | "tasks"
   | "message"
+  | "message-add"
   | "workflow"
   | "notifications"
   | "screenshots"
@@ -285,6 +286,15 @@ const CUSTOM_ICON_PATHS: Partial<Record<IconName, IconRecord>> = {
         <path d="M2.6 6V4.9c0-.9.7-1.5 1.5-1.5h2.1c.4 0 .8.2 1.1.5l.8.9h3.8c.8 0 1.5.7 1.5 1.5V6" />
         <path d="M2.6 6.4h10.8v5.1c0 .8-.7 1.5-1.5 1.5H4.1c-.8 0-1.5-.7-1.5-1.5V6.4Z" />
         <path d="M8 8.2v3.2M6.4 9.8h3.2" />
+      </>
+    ),
+    strokeWidth: 1.45,
+  },
+  "message-add": {
+    body: () => (
+      <>
+        <path d="M3.4 4.4h7.2c1.2 0 2.1.9 2.1 2.1v2.2c0 1.2-.9 2.1-2.1 2.1H7.4l-2.8 2v-2H3.4c-1.2 0-2.1-.9-2.1-2.1V6.5c0-1.2.9-2.1 2.1-2.1Z" />
+        <path d="M8.8 6.5v2.8M7.4 7.9h2.8" />
       </>
     ),
     strokeWidth: 1.45,

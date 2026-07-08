@@ -18,18 +18,18 @@ body[data-theme="light"] {
   --text-on-accent: #ffffff;
   --text-on-strong: #ffffff;
   --text-on-danger: #101527;
-  --bg: rgb(238, 243, 255);
-  --surface: rgb(255, 255, 255);
-  --surface-hover: rgb(243, 247, 255);
-  --surface-inset: rgb(247, 249, 255);
-  --surface-strong: rgb(255, 255, 255);
-  --rail-surface: rgb(250, 252, 255);
-  --chat-canvas: rgb(255, 255, 255);
-  --inspector-surface: rgb(250, 252, 255);
-  --body-bg: linear-gradient(135deg, rgb(251, 253, 255) 0%, rgb(244, 247, 255) 42%, rgb(238, 241, 255) 100%);
-  --panel-body-bg: rgb(255, 255, 255);
+  --bg: rgb(241, 235, 224);
+  --surface: rgb(251, 248, 241);
+  --surface-hover: rgb(246, 240, 229);
+  --surface-inset: rgb(244, 238, 226);
+  --surface-strong: rgb(255, 252, 246);
+  --rail-surface: rgb(247, 242, 233);
+  --chat-canvas: rgb(250, 246, 239);
+  --inspector-surface: rgb(247, 242, 233);
+  --body-bg: linear-gradient(135deg, rgb(253, 249, 242) 0%, rgb(247, 240, 230) 48%, rgb(239, 232, 220) 100%);
+  --panel-body-bg: rgb(250, 246, 239);
   --panel-body-blur: blur(20px);
-  --chrome: rgb(255, 255, 255);
+  --chrome: rgb(252, 248, 241);
   --border: rgba(92, 112, 163, 0.16);
   --border-hover: rgba(85, 101, 238, 0.34);
   --border-strong: rgba(84, 103, 165, 0.22);
@@ -38,7 +38,7 @@ body[data-theme="light"] {
   --text-soft: #5f6b87;
   --text-muted: #616b87;
   --accent: #5256e8;
-  --accent-dim: color-mix(in srgb, var(--accent) 11%, transparent);
+  --accent-dim: color-mix(in srgb, var(--accent) 7%, transparent);
   --accent-hover: #474add;
   --accent-start: #4b8dff;
   --accent-mid: #6757f2;
@@ -53,7 +53,7 @@ body[data-theme="light"] {
     180deg,
     color-mix(in srgb, var(--accent) 10%, transparent),
     color-mix(in srgb, var(--accent) 3%, transparent) 58%,
-    rgba(255, 255, 255, 0.5)
+    color-mix(in srgb, var(--surface-strong) 50%, transparent)
   );
   --info: #2f80ed;
   --info-dim: rgba(47, 128, 237, 0.1);
@@ -63,12 +63,12 @@ body[data-theme="light"] {
   --warn-dim: rgba(143, 87, 12, 0.12);
   --bad: #d85666;
   --bad-dim: rgba(216, 86, 102, 0.12);
-  --shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
-  --shadow-md: inset 0 1px 0 rgba(255, 255, 255, 0.76);
-  --shadow-lg: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  --shadow: inset 0 1px 0 color-mix(in srgb, var(--surface-strong) 72%, transparent);
+  --shadow-md: inset 0 1px 0 color-mix(in srgb, var(--surface-strong) 76%, transparent);
+  --shadow-lg: inset 0 1px 0 color-mix(in srgb, var(--surface-strong) 80%, transparent);
   --scrollbar-thumb: rgba(95, 111, 162, 0.24);
   --scrollbar-thumb-hover: color-mix(in srgb, var(--accent) 34%, transparent);
-  --session-scrollbar-track: rgba(255, 255, 255, 0.48);
+  --session-scrollbar-track: color-mix(in srgb, var(--surface-strong) 48%, transparent);
   --subtle-1: color-mix(in srgb, var(--accent) 4%, transparent);
   --subtle-2: color-mix(in srgb, var(--accent) 6.5%, transparent);
   --subtle-3: color-mix(in srgb, var(--accent) 8.5%, transparent);
@@ -82,7 +82,7 @@ body[data-theme="light"] {
   --oc-syntax-string: #0a3069;
   --oc-syntax-comment: #57606a;
   --oc-syntax-number: #0550ae;
-  --oc-syntax-function: #8250df;
+  --oc-syntax-function: #6f42c1;
   --oc-syntax-variable: #953800;
   --oc-syntax-meta: #116329;
   --oc-syntax-addition-text: #116329;
@@ -90,33 +90,48 @@ body[data-theme="light"] {
   --oc-syntax-deletion-text: #82071e;
   --oc-syntax-deletion-bg: color-mix(in srgb, #cf222e 12%, transparent);
 
-  --dialog-bg: rgb(255, 255, 255);
+  --dialog-bg: rgb(252, 248, 241);
   --dialog-backdrop: rgba(0, 0, 0, 0.4);
   --ui-scrim: color-mix(in srgb, black 40%, transparent);
   --ui-shadow-tone: color-mix(in srgb, black 12%, transparent);
-  --ui-highlight-tone: color-mix(in srgb, white 56%, transparent);
-  --ui-glass-tint: color-mix(in srgb, white 62%, transparent);
+  --ui-highlight-tone: color-mix(in srgb, var(--surface-strong) 56%, transparent);
+  --ui-glass-tint: color-mix(in srgb, var(--surface-strong) 62%, transparent);
   --executor-menu-bg: var(--menu-panel-bg);
   --executor-menu-shadow: 0 calc(8px * var(--ui-scale)) calc(24px * var(--ui-scale)) var(--ui-shadow-tone);
   --executor-menu-row-hover-bg: var(--subtle-5);
   --task-bar-bg: var(--ui-glass-tint);
   --task-bar-backdrop-filter: blur(calc(18px * var(--ui-scale)));
   --task-bar-border-color: color-mix(in srgb, var(--accent) 14%, var(--border));
-  --menu-panel-bg: rgb(255, 255, 255);
+  --menu-panel-bg: rgb(252, 248, 241);
   --divider-soft: rgba(92, 112, 163, 0.12);
   --panel-fill:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.3) 58%, rgba(255, 255, 255, 0.5)),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface-strong) 70%, transparent),
+      color-mix(in srgb, var(--surface-strong) 30%, transparent) 58%,
+      color-mix(in srgb, var(--surface-strong) 50%, transparent)
+    ),
     var(--surface);
   --panel-fill-hover:
     linear-gradient(
       180deg,
       color-mix(in srgb, var(--accent) 10%, transparent),
-      rgba(255, 255, 255, 0.4) 58%,
-      rgba(255, 255, 255, 0.6)
+      color-mix(in srgb, var(--surface-strong) 40%, transparent) 58%,
+      color-mix(in srgb, var(--surface-strong) 60%, transparent)
     ),
     var(--surface-hover);
-  --card-fill: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.3) 72%), var(--subtle-1);
+  --card-fill:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface-strong) 70%, transparent),
+      color-mix(in srgb, var(--surface-strong) 30%, transparent) 72%
+    ),
+    var(--subtle-1);
   --card-fill-hover:
-    linear-gradient(180deg, color-mix(in srgb, var(--accent) 8%, transparent), rgba(255, 255, 255, 0.5) 68%),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--accent) 8%, transparent),
+      color-mix(in srgb, var(--surface-strong) 50%, transparent) 68%
+    ),
     var(--surface-hover);
 }

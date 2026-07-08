@@ -429,6 +429,17 @@ async function openWorkLedgerChat(row: WorkLedgerChatRow): Promise<void> {
   await selectCodingAssistantSession({ sessionID: row.sessionID, directory: row.directory })
 }
 
+async function createWorkLedgerProjectChat(directory: string): Promise<void> {
+  const projectDirectory = directory.trim()
+  if (!projectDirectory) throw new Error(t("project.new_chat_missing_directory"))
+  await createCodingAssistantSession({ directory: projectDirectory })
+  setComposerMode("chat")
+  bumpWorkspaceEpoch()
+  resetCenterWorkbenchToPrimaryPanel("chat")
+  setMissionSharedRefreshToken((value) => value + 1)
+  focusComposerInput()
+}
+
 async function openWorkLedgerMission(row: WorkLedgerMissionRow): Promise<void> {
   setComposerMode("mission")
   resetCenterWorkbenchToPrimaryPanel("mission")
@@ -1015,6 +1026,9 @@ if (workLedgerEl) {
         onDeleteMission={(row) => deleteWorkLedgerMission(row)}
         onCancelTask={(row) => cancelWorkLedgerTask(row)}
         onDeleteTask={(row) => deleteWorkLedgerTask(row)}
+        onCreateChat={(directory) =>
+          runMainAsync("work-ledger.project-new-chat", () => createWorkLedgerProjectChat(directory))
+        }
         onStopChat={(row) => stopWorkLedgerChat(row)}
         onDeleteChat={(row) => deleteWorkLedgerChat(row)}
       />

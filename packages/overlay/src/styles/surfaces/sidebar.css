@@ -983,6 +983,7 @@
   --oc-button-color: var(--text-soft);
 }
 
+.project-group .oc-button[data-ui="project-group-new-chat"],
 .project-group .oc-button[data-ui="project-group-copy"],
 .project-group .oc-button[data-ui="project-group-rename"],
 .project-group .oc-button[data-ui="project-group-delete"] {
@@ -1001,6 +1002,7 @@
   flex: 0 0 auto;
 }
 
+.project-group .oc-button[data-ui="project-group-new-chat"] > svg,
 .project-group .oc-button[data-ui="project-group-copy"] > svg,
 .project-group .oc-button[data-ui="project-group-rename"] > svg,
 .project-group-delete-icon > svg {
@@ -1008,6 +1010,8 @@
   height: calc(10px * var(--ui-scale));
 }
 
+.project-group .oc-button[data-ui="project-group-new-chat"]:hover,
+.project-group .oc-button[data-ui="project-group-new-chat"]:focus-visible,
 .project-group .oc-button[data-ui="project-group-copy"]:hover,
 .project-group .oc-button[data-ui="project-group-copy"]:focus-visible,
 .project-group .oc-button[data-ui="project-group-rename"]:hover,
