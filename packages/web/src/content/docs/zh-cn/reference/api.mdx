@@ -142,6 +142,7 @@ OpenAPI 只会给项目作用域操作标注 `directory` query 参数。单个 T
 | GET | `/task/{taskID}/trace` | Get task AgentTrace events (all sessions) 错误: `LogFileNotFoundError`, `NotFoundError`. | `task.trace` |
 | GET | `/task/{taskID}/transcript` | Get task transcript 错误: `LogFileNotFoundError`, `NotFoundError`. | `task.transcript` |
 | GET | `/tasks` | List project tasks | `task.list` |
+| GET | `/work-ledger` | List Work Ledger rows 错误: `BadRequestError`. | `workLedger.list` |
 
 ### Session
 

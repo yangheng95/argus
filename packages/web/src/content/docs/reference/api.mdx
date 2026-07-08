@@ -142,6 +142,7 @@ OpenAPI marks project-scoped operations with a `directory` query parameter. Thes
 | GET | `/task/{taskID}/trace` | Get task AgentTrace events (all sessions) Errors: `LogFileNotFoundError`, `NotFoundError`. | `task.trace` |
 | GET | `/task/{taskID}/transcript` | Get task transcript Errors: `LogFileNotFoundError`, `NotFoundError`. | `task.transcript` |
 | GET | `/tasks` | List project tasks | `task.list` |
+| GET | `/work-ledger` | List Work Ledger rows Errors: `BadRequestError`. | `workLedger.list` |
 
 ### Session
 

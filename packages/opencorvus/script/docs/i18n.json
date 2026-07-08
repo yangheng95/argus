@@ -63,6 +63,7 @@
     "agent": { "title_en": "Skill", "title_zh": "Skill", "merge_into": "skill" },
     "tasks": { "title_en": "Task / Orchestrator", "title_zh": "Task / Orchestrator", "merge_into": "task" },
     "mission": { "title_en": "Task / Orchestrator", "title_zh": "Task / Orchestrator", "merge_into": "task" },
+    "work-ledger": { "title_en": "Task / Orchestrator", "title_zh": "Task / Orchestrator", "merge_into": "task" },
     "task-queue": { "title_en": "Task / Orchestrator", "title_zh": "Task / Orchestrator", "merge_into": "task" },
     "goal-run": { "title_en": "Task / Orchestrator", "title_zh": "Task / Orchestrator", "merge_into": "task" },
     "lsp": { "title_en": "File / Search", "title_zh": "File / Search", "merge_into": "find" }
