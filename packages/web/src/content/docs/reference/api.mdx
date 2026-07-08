@@ -87,7 +87,7 @@ OpenAPI marks project-scoped operations with a `directory` query parameter. Thes
 | POST | `/interaction/{interactionID}/reply` | Reply to interaction Body: `answers`, `autoReply`, `message`, `reply`; Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `interaction.reply` |
 | GET | `/mission` | List Missions | `mission.list` |
 | POST | `/mission/wake` | Wake the Mission agent Body: `missionID`, `model`, `promptProfile`, `text`, `title`; Errors: `BadRequestError`. | `mission.wake` |
-| DELETE | `/mission/{missionID}` | Delete a Mission Errors: `LogFileNotFoundError`, `NotFoundError`. | `mission.delete` |
+| DELETE | `/mission/{missionID}` | Delete a Mission Errors: `AgentSessionPendingCoordinationError`, `LogFileNotFoundError`, `NotFoundError`, `ReplyTargetEnvelopeMissingError`, `TaskCancellationIncompleteError`. | `mission.delete` |
 | POST | `/mission/{missionID}/abort` | Abort a Mission Errors: `AgentSessionPendingCoordinationError`, `LogFileNotFoundError`, `NotFoundError`, `ReplyTargetEnvelopeMissingError`, `TaskCancellationIncompleteError`. | `mission.abort` |
 | GET | `/mission/{missionID}/project-archive` | Download Mission project archive Errors: `LogFileNotFoundError`, `NotFoundError`. | `mission.projectArchive` |
 | GET | `/mission/{missionID}/status` | Get Mission status Errors: `LogFileNotFoundError`, `NotFoundError`. | `mission.status` |
