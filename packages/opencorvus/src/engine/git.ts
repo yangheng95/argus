@@ -5,11 +5,11 @@ import { Vcs } from "@/project/vcs"
 import { Database, eq } from "@/storage/db"
 import { git } from "@/util/git"
 import { Log } from "@/util/log"
-import { Identifier } from "@/id/id"
-import { EngineProgressSnapshotTable, EngineTaskTable } from "./engine.sql"
+import { EngineTaskTable } from "./engine.sql"
 import { isActiveGoalRunStatus } from "./catalog"
 import { InternalGitCommitSubject } from "./internal-git-commit-subject"
 import { listGoalRunsForTask, requireTask, type AcceptanceRow, type PlanRow, type TaskRow } from "./store"
+import { insertEngineProgressSnapshot } from "./progress"
 import fs from "node:fs/promises"
 import path from "node:path"
 
@@ -107,20 +107,7 @@ function note(
   payload: Record<string, unknown>,
   time = Date.now(),
 ) {
-  Database.use((db) =>
-    db
-      .insert(EngineProgressSnapshotTable)
-      .values({
-        id: Identifier.ascending("progress"),
-        task_id: taskID,
-        status,
-        summary,
-        payload,
-        time_created: time,
-        time_updated: time,
-      })
-      .run(),
-  )
+  Database.use((db) => insertEngineProgressSnapshot(db, { taskID, status, summary, payload, timeCreated: time }))
 }
 
 function save(task: TaskRow, patch: Record<string, unknown>, time = Date.now()) {
@@ -302,7 +289,9 @@ export async function ensureGitignore() {
     // Append missing essentials without overwriting user content
     const existing = await file.text()
     const lines = new Set(existing.split(/\r?\n/).map((l) => l.trim()))
-    const missing = gitignoreEssentials().split("\n").filter((l) => l.trim() && !lines.has(l.trim()))
+    const missing = gitignoreEssentials()
+      .split("\n")
+      .filter((l) => l.trim() && !lines.has(l.trim()))
     if (missing.length > 0) {
       await Bun.write(
         `${dir}/.gitignore`,

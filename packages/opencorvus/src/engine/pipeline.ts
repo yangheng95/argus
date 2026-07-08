@@ -11,8 +11,9 @@ import { Database } from "@/storage/db"
 import { Log } from "@/util/log"
 import { budgetRow } from "./helpers"
 import { CreateTaskInput, Event } from "./model"
-import { EngineChannelBindingTable, EngineProgressSnapshotTable, EngineTaskTable } from "./engine.sql"
+import { EngineChannelBindingTable, EngineTaskTable } from "./engine.sql"
 import { EngineProtocol } from "./protocol"
+import { insertEngineProgressSnapshot } from "./progress"
 import { TaskGlobalProjectBindingError } from "./task-project-error"
 import type { RunRow } from "./store"
 
@@ -135,17 +136,13 @@ export function persistQueuedTask(input: {
         })
         .run()
     }
-    db.insert(EngineProgressSnapshotTable)
-      .values({
-        id: Identifier.ascending("progress"),
-        task_id: input.taskID,
-        status: progressStatus,
-        summary,
-        payload: { sessionID: input.sessionID, queue: input.queue },
-        time_created: input.now,
-        time_updated: input.now,
-      })
-      .run()
+    insertEngineProgressSnapshot(db, {
+      taskID: input.taskID,
+      status: progressStatus,
+      summary,
+      payload: { sessionID: input.sessionID, queue: input.queue },
+      timeCreated: input.now,
+    })
     Database.effect(() =>
       EngineProtocol.emit(
         Event.TaskCreated,

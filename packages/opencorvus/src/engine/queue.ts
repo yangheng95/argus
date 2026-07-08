@@ -17,8 +17,9 @@ import { ProjectTable } from "@/project/project.sql"
 import { SessionTable } from "@/session/session.sql"
 import { Database, and, desc, eq, sql } from "@/storage/db"
 import { Log } from "@/util/log"
-import { EngineArtifactTable, EngineProgressSnapshotTable, EngineTaskTable } from "./engine.sql"
+import { EngineArtifactTable, EngineTaskTable } from "./engine.sql"
 import { recordEngineArtifact, updateEngineArtifact, updateEngineArtifactsWhere } from "./artifact"
+import { insertEngineProgressSnapshot } from "./progress"
 import { findActiveRunForTask, findTask, type TaskRow } from "./store"
 import { deriveTaskStatus, isTaskActive, isTaskQueued, isTaskTerminal } from "./task-status"
 import type { OrchestratorEvent } from "@/orchestrator/agent"
@@ -637,17 +638,13 @@ export function claimNextForCwd(cwd: string, now = Date.now()): TaskRow | undefi
       .returning()
       .get()
     if (!result) return
-    db.insert(EngineProgressSnapshotTable)
-      .values({
-        id: Identifier.ascending("progress"),
-        task_id: result.id,
-        status: "active",
-        summary: "Task started",
-        payload: { status: "active" },
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
+    insertEngineProgressSnapshot(db, {
+      taskID: result.id,
+      status: "active",
+      summary: "Task started",
+      payload: { status: "active" },
+      timeCreated: now,
+    })
     Database.effect(() =>
       EngineProtocol.emit(
         Event.TaskUpdated,
@@ -693,17 +690,13 @@ export function claimQueuedTaskForCwd(taskID: string, cwd: string, now = Date.no
       .returning()
       .get()
     if (!result) return
-    db.insert(EngineProgressSnapshotTable)
-      .values({
-        id: Identifier.ascending("progress"),
-        task_id: result.id,
-        status: "active",
-        summary: "Task started",
-        payload: { status: "active" },
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
+    insertEngineProgressSnapshot(db, {
+      taskID: result.id,
+      status: "active",
+      summary: "Task started",
+      payload: { status: "active" },
+      timeCreated: now,
+    })
     Database.effect(() =>
       EngineProtocol.emit(
         Event.TaskUpdated,

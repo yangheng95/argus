@@ -2,8 +2,9 @@ import { and, Database, eq, isNull } from "@/storage/db"
 import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
 import { progressStatus } from "./helpers"
-import { EngineArtifactTable, EngineProgressSnapshotTable, EngineTaskTable } from "./engine.sql"
+import { EngineArtifactTable, EngineTaskTable } from "./engine.sql"
 import { insertEngineArtifact } from "./artifact"
+import { insertEngineProgressSnapshot } from "./progress"
 import { findActiveRunForTask, findRun, requireRun, requireTask, type RunRow, type TaskRow } from "./store"
 import { deriveTaskStatus } from "./task-status"
 import { doesRunStatusImplyStarted, isLiveRunStatus, isTerminalRunStatus } from "./catalog"
@@ -196,20 +197,16 @@ async function applyTaskUpdate(
       throw new Error(`task ${row.id} not found during updateTask`)
     }
     const nextStatus = deriveTaskStatus(updated)
-    db.insert(EngineProgressSnapshotTable)
-      .values({
-        id: Identifier.ascending("progress"),
-        task_id: row.id,
-        status: progressStatus(nextStatus),
-        summary,
-        payload: {
-          status: nextStatus,
-          error: nextError,
-        },
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
+    insertEngineProgressSnapshot(db, {
+      taskID: row.id,
+      status: progressStatus(nextStatus),
+      summary,
+      payload: {
+        status: nextStatus,
+        error: nextError,
+      },
+      timeCreated: now,
+    })
     const prevStatus = deriveTaskStatus(row)
     Database.effect(async () => {
       await EngineProtocol.emit(

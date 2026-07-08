@@ -45,12 +45,12 @@ import {
   EngineChannelBindingTable,
   EngineGoalTable,
   EngineInteractionRequestTable,
-  EngineProgressSnapshotTable,
   EngineTaskTable,
   type EngineInteractionStatus,
   type EngineMetadata,
 } from "@/engine/engine.sql"
 import { recordEngineArtifact } from "@/engine/artifact"
+import { insertEngineProgressSnapshot } from "@/engine/progress"
 import {
   Budget,
   CreateTaskInput,
@@ -2743,21 +2743,16 @@ export namespace EngineService {
     const run = findActiveRunForTask(task.id)
     const now = Date.now()
     Database.use((db) =>
-      db
-        .insert(EngineProgressSnapshotTable)
-        .values({
-          id: Identifier.ascending("progress"),
-          task_id: task.id,
-          status: progressStatus(deriveTaskStatus(task)),
-          summary: "Operator note recorded",
-          payload: {
-            note,
-            activeRunID: run?.id,
-          },
-          time_created: now,
-          time_updated: now,
-        })
-        .run(),
+      insertEngineProgressSnapshot(db, {
+        taskID: task.id,
+        status: progressStatus(deriveTaskStatus(task)),
+        summary: "Operator note recorded",
+        payload: {
+          note,
+          activeRunID: run?.id,
+        },
+        timeCreated: now,
+      }),
     )
     const wakeTask = await openTaskForOperatorWake(task, "Operator note reopened task")
     await reopenActiveRunForOperatorWake(wakeTask, "Operator note reopened blocked run")

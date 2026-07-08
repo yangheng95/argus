@@ -77,3 +77,34 @@ Phase 2 verification:
 - `bun test ./packages/opencorvus/test/fixture/isolated/tmpdir-git-lifecycle.isolated.ts`
 
 `packages/opencorvus/test/server/task-message-routes.test.ts` was attempted both as a full file and with `-t` filters for the operator-message wake commitment cases. In this Windows host run it produced no assertion failure but became inactive after startup; the first full-file attempt also exposed `EBUSY` during temp directory cleanup. The fixture cleanup now waits for transient Windows file-handle release and still throws persistent cleanup failures instead of hiding them. The route file remains a separate test-runner stability issue rather than evidence of a failed artifact writer migration.
+
+## Phase 3 Progress Snapshot Boundary
+
+The next table with clear scattered write ownership is `engine_progress_snapshot`.
+It is a process/projection fact table and should not be assembled independently by
+`engine/git.ts`, `engine/state.ts`, `engine/queue.ts`, `engine/pipeline.ts`, and
+`task-api/index.ts`.
+
+Phase 3 grep evidence:
+
+- `rg -n "\\.(insert|update|delete)\\s*\\(\\s*Engine[A-Za-z0-9_]*Table\\b|db\\.(insert|update|delete)\\s*\\(\\s*Engine[A-Za-z0-9_]*Table\\b" packages/opencorvus/src -g "*.ts"` shows direct `EngineProgressSnapshotTable` inserts in `engine/git.ts`, `engine/state.ts`, `engine/queue.ts`, `engine/pipeline.ts`, and `task-api/index.ts`.
+- These writes share the same row shape: generated `progress` ID, `task_id`, `status`, `summary`, JSON payload, and timestamps.
+
+Phase 3 acceptance criteria:
+
+- Production source direct writes to `EngineProgressSnapshotTable` exist only in the engine progress writer.
+- Existing transaction placement is preserved: callers that currently record a progress row inside a task state transaction still do so.
+- The static database write-boundary test rejects future direct `EngineProgressSnapshotTable` writes outside the writer.
+- Existing task creation, task update, queue claim, git note, and operator note behavior remains unchanged.
+
+Phase 3 verification:
+
+- `rg -n "db\\.(insert|update|delete)\\(EngineProgressSnapshotTable|\\.(insert|update|delete)\\(EngineProgressSnapshotTable|db\\.(insert|update|delete)\\(EngineArtifactTable|\\.(insert|update|delete)\\(EngineArtifactTable" packages/opencorvus/src packages/opencorvus/test -g "*.ts"` shows production source writes only in `engine/artifact.ts` and `engine/progress.ts`; remaining direct writes are test fixture setup.
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/engine/task-global-project-forbidden.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/engine/task-message-revive.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/engine/prepare-project-non-git.test.ts`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts`
+
+The first combined engine regression attempt used `--timeout 20000` and timed out in two slow `task-global-project-forbidden` channel-binding cases, then polluted the shared instance cleanup for the next file. Re-running the same affected files with `--timeout 60000` passed. The verified issue is an undersized test timeout for these Windows host cases, not a progress snapshot boundary regression.

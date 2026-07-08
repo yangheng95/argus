@@ -47,8 +47,11 @@
 **唯一写入者**：`engine_artifact` 的唯一直接表写入文件是
 `engine/artifact.ts`。所有过程 / 证据 / preview / review / run /
 goal-run artifact row 必须通过这个 writer 进入；生产源码中其他文件禁止直接
-`insert` / `update` / `delete` `EngineArtifactTable`。其他 `engine_*` 表的写入
-仍必须停留在 `task-api/index.ts` 和 engine 生命周期 writer/service 内，禁止跨域模块直接写。
+`insert` / `update` / `delete` `EngineArtifactTable`。`engine_progress_snapshot`
+的唯一直接表写入文件是 `engine/progress.ts`；任务创建、任务状态更新、队列
+claim、git note 和 operator note 都只能通过这个 writer 记录 progress row。
+其他 `engine_*` 表的写入仍必须停留在 `task-api/index.ts` 和 engine 生命周期
+writer/service 内，禁止跨域模块直接写。
 
 ## session 域（5 表）
 
