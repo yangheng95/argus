@@ -2,7 +2,7 @@ import z from "zod"
 import { Filesystem } from "../util/filesystem"
 import path from "path"
 import { createHash } from "crypto"
-import { Database, eq, sql } from "../storage/db"
+import { Database, eq, inArray, sql } from "../storage/db"
 import { ProjectTable } from "./project.sql"
 import { Log } from "../util/log"
 import { Flag } from "@/flag/flag"
@@ -672,6 +672,16 @@ export namespace Project {
     const row = Database.use((db) => db.select().from(ProjectTable).where(eq(ProjectTable.id, id)).get())
     if (!row) return undefined
     return fromRow(row)
+  }
+
+  export function deleteRows(ids: string[], db?: Database.TxOrDb): void {
+    if (ids.length === 0) return
+    const write = (target: Database.TxOrDb) => target.delete(ProjectTable).where(inArray(ProjectTable.id, ids)).run()
+    if (db) {
+      write(db)
+      return
+    }
+    Database.use(write)
   }
 
   export async function initGit(directory: string) {

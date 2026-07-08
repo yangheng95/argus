@@ -42,6 +42,7 @@ const approvedWriters: Record<string, string> = {
   EngineTaskTable: "packages/opencorvus/src/engine/task.ts",
   EventJobTable: "packages/opencorvus/src/scheduler/event-service.ts",
   PartTable: "packages/opencorvus/src/session/index.ts",
+  ProjectTable: "packages/opencorvus/src/project/project.ts",
   QuickNoteTable: "packages/opencorvus/src/quicknote/service.ts",
   TaskQueueTable: "packages/opencorvus/src/scheduler/task-queue-service.ts",
 }
@@ -143,5 +144,9 @@ describe("database write boundary", () => {
 
   test("only the quicknote service directly writes QuickNoteTable", () => {
     expect(directWriteViolations("QuickNoteTable")).toEqual([])
+  })
+
+  test("only the project service directly writes ProjectTable", () => {
+    expect(directWriteViolations("ProjectTable")).toEqual([])
   })
 })

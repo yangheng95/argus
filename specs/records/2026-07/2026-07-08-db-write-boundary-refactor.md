@@ -672,7 +672,44 @@ Phase 20 verification:
 - `bun test --timeout 60000 packages/opencorvus/test/control/timeline.test.ts -t "deleteProjectMessages"`
 - `bun test --timeout 60000 packages/opencorvus/test/pipeline/decision-log.test.ts -t "deleteDecisionLogsForTasks"`
 - `bun test packages/opencorvus/test/quicknote/service.test.ts`
-- `bun test --timeout 60000 packages/opencorvus/test/server/project-routes.test.ts -t "DELETE /project/current removes DB state"`
+- `bun test --timeout 60000 packages/opencorvus/test/server/project-routes.test.ts -t "DELETE /project/current deletes OpenCorvus project state without deleting source files"`
+- `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `git diff --check`
+
+## Phase 21 Project Table Writer Boundary
+
+After Phase 20 the only remaining production multi-writer table in the broad
+DB write inventory was `ProjectTable`, with direct writes in
+`project/project.ts`, `project/delete.ts`, and `project/gc.ts`. These are all
+project-domain lifecycle operations, but direct SQL was still split across
+separate project modules.
+
+This phase keeps `project/project.ts` as the single `ProjectTable` writer and
+adds `Project.deleteRows(ids, db?)` for lifecycle cleanup. Project delete and
+project garbage collection now call that writer instead of directly deleting
+project rows.
+
+Phase 21 acceptance criteria:
+
+- Production source direct `ProjectTable` writes exist only in
+  `project/project.ts`.
+- `project/delete.ts` still deletes the current project row inside the existing
+  project delete transaction.
+- `project/gc.ts` still removes expired project rows before deleting their
+  runtime cache directories.
+- The static database write-boundary test rejects future direct `ProjectTable`
+  writes outside `project/project.ts`.
+- The architecture data document states project table writer ownership.
+
+Phase 21 verification:
+
+- `rg -n '\\.(insert|update|delete)\\s*\\(\\s*ProjectTable\\b|db\\.(insert|update|delete)\\s*\\(\\s*ProjectTable\\b' packages/opencorvus/src -g '*.ts'`
+- full production multi-writer inventory emits no table with more than one
+  production write file.
+- `bun test --timeout 60000 packages/opencorvus/test/server/project-routes.test.ts -t "DELETE /project/current deletes OpenCorvus project state without deleting source files"`
+- `bun test --timeout 60000 packages/opencorvus/test/project/worktree-gc.test.ts`
 - `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
 - `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/db-write-boundary.test.ts`
 - `bun run --cwd packages/opencorvus typecheck`

@@ -1,6 +1,7 @@
 import fs from "fs/promises"
 import path from "path"
-import { Database, inArray } from "../storage/db"
+import { Database } from "../storage/db"
+import { Project } from "./project"
 import { ProjectTable } from "./project.sql"
 import { Log } from "../util/log"
 import { Scheduler } from "../scheduler"
@@ -90,7 +91,7 @@ export namespace ProjectGC {
     const expiredIds = plan.expiredProjects.map((p) => p.id)
     let removedProjectRows = 0
     if (expiredIds.length > 0) {
-      Database.use((db) => db.delete(ProjectTable).where(inArray(ProjectTable.id, expiredIds)).run())
+      Project.deleteRows(expiredIds)
       removedProjectRows = expiredIds.length
       for (const p of plan.expiredProjects) {
         log.info("expired project removed", { id: p.id, worktree: p.worktree, lastUsed: p.lastUsed })

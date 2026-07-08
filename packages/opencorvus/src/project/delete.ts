@@ -13,7 +13,7 @@ import { CANCEL_CLEANUP_TIMEOUT_MS, EngineService } from "@/task-api"
 import { withTimeout } from "@/util/await-with-timeout"
 import { Database, eq } from "@/storage/db"
 import { Instance } from "./instance"
-import { ProjectTable } from "./project.sql"
+import { Project } from "./project"
 import { ProjectRuntimePaths } from "./runtime-paths"
 
 export const ProjectDeleteResult = z
@@ -128,7 +128,7 @@ function deleteProjectRows(projectID: string, taskIDs: string[]): void {
     deleteDecisionLogsForTasks(taskIDs, db)
     ControlTimeline.deleteProjectMessages({ projectID }, db)
     deleteProjectNotes({ projectID }, db)
-    db.delete(ProjectTable).where(eq(ProjectTable.id, projectID)).run()
+    Project.deleteRows([projectID], db)
     Database.effect(() => Database.incrementalVacuum())
   })
 }

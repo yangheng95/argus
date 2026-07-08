@@ -127,6 +127,10 @@ Control 和轻量辅助域按领域 writer 分层写入：`control_message` 的�
 `quicknote/service.ts`。Project delete 可以编排项目级清理事务，但必须调用这些领域
 writer API，不能直接删除其它领域表。
 
+`project` 表的唯一直接表写入文件是 `project/project.ts`。Project delete 和
+Project GC（Garbage Collection，垃圾回收）可以编排项目生命周期，但必须调用
+`Project.deleteRows` 等项目领域 API，不能直接写 `ProjectTable`。
+
 ## Project Storage Namespace
 
 `project.id` / `project_id` 是后端 storage namespace，不是用户可见项目数。
