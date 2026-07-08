@@ -115,7 +115,7 @@ describe("expert-squad routes", () => {
     await resetDatabase()
   })
 
-  routeTest("GET /expert-squad/catalog does not release payload packages for an empty project", async (activity) => {
+  routeTest("GET /expert-squad/catalog reads project-open released payload packages", async (activity) => {
     await using project = await routeProjectTmpdir({ git: true })
     activity("created temporary project")
 
@@ -123,6 +123,11 @@ describe("expert-squad routes", () => {
       directory: project.path,
       fn: async () => {
         activity("instance provided")
+        const releasedPackages = await ExpertSquadRegistry.discover(project.path)
+        expect(releasedPackages.map((item) => `${item.namespace}/${item.id}`)).toEqual(
+          payloadPackageSources.map((source) => `${source.namespace}/${source.id}`),
+        )
+
         const response = await Server.App().request("/expert-squad/catalog", {
           headers: {
             "x-opencorvus-directory": project.path,
@@ -155,26 +160,34 @@ describe("expert-squad routes", () => {
           projection_hash: expect.stringMatching(/^[a-f0-9]{64}$/),
           agents: [],
         })
-        expect(body.squads.map((squad) => squad.id)).toEqual(["general"])
+        expect(body.squads.map((squad) => squad.id).sort()).toEqual([
+          "general",
+          ...payloadPackageSources.map((source) => source.id),
+        ].sort())
 
         const squads = new Map(body.squads.map((squad) => [squad.id, squad]))
         expect(squads.get("general")).toMatchObject({
           built_in: true,
           source: { kind: "built_in" },
         })
-        expect(await ExpertSquadRegistry.discover(project.path)).toEqual([])
-        expect(body.active_skill_projection.selector_skill_names).not.toEqual(
-          expect.arrayContaining([
-            "frontend-automation-debug-expert-squad",
-            "frontend-innovate-expert-squad",
-            "frontend-replica-expert-squad",
-          ]),
+        for (const source of payloadPackageSources) {
+          expect(squads.get(source.id)).toMatchObject({
+            built_in: false,
+            source: {
+              kind: "project_package",
+              namespace: source.namespace,
+              root: path.join(project.path, ".opencorvus", "expert-squads", source.namespace, source.id),
+            },
+          })
+        }
+        expect(body.active_skill_projection.selector_skill_names.sort()).toEqual(
+          payloadPackageSources.map((source) => `${source.id}-expert-squad`).sort(),
         )
       },
     })
   })
 
-  routeTest("POST /expert-squad/release-payload explicitly provisions bundled packages", async (activity) => {
+  routeTest("POST /expert-squad/release-payload repairs a missing bundled package after project open", async (activity) => {
     await using project = await routeProjectTmpdir({ git: true })
     activity("created temporary project")
 
@@ -182,6 +195,13 @@ describe("expert-squad routes", () => {
       directory: project.path,
       fn: async () => {
         activity("instance provided")
+        const missing = payloadPackageSources[0]!
+        await fs.rm(path.join(project.path, ".opencorvus", "expert-squads", missing.namespace, missing.id), {
+          recursive: true,
+          force: true,
+        })
+        activity("removed one released package")
+
         const response = await Server.App().request("/expert-squad/release-payload", {
           method: "POST",
           headers: {
@@ -195,9 +215,11 @@ describe("expert-squad routes", () => {
           installed: Array<{ namespace: string; id: string; targetRoot: string; replaced: boolean }>
           skipped: Array<{ namespace: string; id: string; targetRoot: string; replaced: boolean }>
         }
-        expect(body.skipped).toEqual([])
-        expect(body.installed.map((item) => `${item.namespace}/${item.id}`)).toEqual(
-          payloadPackageSources.map((source) => `${source.namespace}/${source.id}`),
+        expect(body.installed.map((item) => `${item.namespace}/${item.id}`)).toEqual([
+          `${missing.namespace}/${missing.id}`,
+        ])
+        expect(body.skipped.map((item) => `${item.namespace}/${item.id}`)).toEqual(
+          payloadPackageSources.slice(1).map((source) => `${source.namespace}/${source.id}`),
         )
         for (const item of body.installed) {
           expect(item.replaced).toBe(false)
@@ -242,8 +264,8 @@ describe("expert-squad routes", () => {
           installed: Array<{ namespace: string; id: string; targetRoot: string; replaced: boolean }>
           skipped: Array<{ namespace: string; id: string; targetRoot: string; replaced: boolean }>
         }
-        expect(body.skipped).toEqual([])
-        expect(body.installed.map((item) => item.id)).toEqual(payloadPackageSources.map((source) => source.id))
+        expect(body.installed).toEqual([])
+        expect(body.skipped.map((item) => item.id)).toEqual(payloadPackageSources.map((source) => source.id))
       },
     })
   })

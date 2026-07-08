@@ -63,6 +63,12 @@ async function bootstrapContext(ctx: Context, init?: InstanceInit) {
   // engine/git <-> instance cycle.
   const { ensureGitignore } = await import("@/engine/git")
   await ensureGitignore()
+  // Expert-squad payload release belongs to the project-open lifecycle, not
+  // resolver/catalog read paths. Lazy import avoids widening startup cycles.
+  const { ExpertSquadPackageManager } = await import("@/expert-squad/manager")
+  await ExpertSquadPackageManager.releasePayloadPackages({ projectDirectory: ctx.directory })
+  const { ExpertSquadRegistry } = await import("@/expert-squad/registry")
+  await ExpertSquadRegistry.discover(ctx.directory)
   // Sweep orphan attachments on first bootstrap per project
   // (attachment-store single-source contract).
   // `AttachmentStore.write` is content-addressed and write-only — without
