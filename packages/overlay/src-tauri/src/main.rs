@@ -909,7 +909,8 @@ enum BrowserPreviewSelectionResult {
     Canceled,
 }
 
-static BROWSER_PREVIEW_SELECTION: OnceLock<Mutex<Option<BrowserPreviewSelectionResult>>> = OnceLock::new();
+static BROWSER_PREVIEW_SELECTION: OnceLock<Mutex<Option<BrowserPreviewSelectionResult>>> =
+    OnceLock::new();
 
 fn browser_preview_selection_store() -> &'static Mutex<Option<BrowserPreviewSelectionResult>> {
     BROWSER_PREVIEW_SELECTION.get_or_init(|| Mutex::new(None))
@@ -937,7 +938,8 @@ fn validate_browser_preview_selection(
         || selection.height <= 0.0
     {
         return Err(
-            "browser preview selection must contain finite x/y and positive width/height".to_string(),
+            "browser preview selection must contain finite x/y and positive width/height"
+                .to_string(),
         );
     }
     let label = selection.label.trim().to_string();
@@ -1097,6 +1099,21 @@ fn browser_preview_selection_set_enabled_script(enabled: bool) -> String {
     )
 }
 
+fn clear_browser_preview_selection_store() -> Result<(), String> {
+    *browser_preview_selection_store()
+        .lock()
+        .map_err(|err| err.to_string())? = None;
+    Ok(())
+}
+
+fn browser_preview_selection_set_enabled_without_webview(enabled: bool) -> Result<bool, String> {
+    if enabled {
+        return Err("browser preview webview is not mounted".to_string());
+    }
+    clear_browser_preview_selection_store()?;
+    Ok(false)
+}
+
 // Toggle the in-guest element picker inside the browser-preview child webview.
 // Enabling arms the injected runtime's click capture; disabling clears it. This
 // keeps element selection inside the native webview (like open-mirror-app),
@@ -1107,13 +1124,11 @@ fn overlay_browser_preview_selection_set_enabled<R: Runtime>(
     app: AppHandle<R>,
     enabled: bool,
 ) -> Result<bool, String> {
-    let webview = app
-        .get_webview(BROWSER_PREVIEW_WEBVIEW_LABEL)
-        .ok_or_else(|| "browser preview webview is not mounted".to_string())?;
+    let Some(webview) = app.get_webview(BROWSER_PREVIEW_WEBVIEW_LABEL) else {
+        return browser_preview_selection_set_enabled_without_webview(enabled);
+    };
     if !enabled {
-        *browser_preview_selection_store()
-            .lock()
-            .map_err(|err| err.to_string())? = None;
+        clear_browser_preview_selection_store()?;
     }
     webview
         .eval(browser_preview_selection_set_enabled_script(enabled))
@@ -1132,7 +1147,8 @@ fn overlay_browser_preview_selection_report(
     let selection = validate_browser_preview_selection(selection)?;
     *browser_preview_selection_store()
         .lock()
-        .map_err(|err| err.to_string())? = Some(BrowserPreviewSelectionResult::Captured { selection });
+        .map_err(|err| err.to_string())? =
+        Some(BrowserPreviewSelectionResult::Captured { selection });
     Ok(true)
 }
 
@@ -1148,7 +1164,8 @@ fn overlay_browser_preview_selection_cancel() -> Result<bool, String> {
 // Pull-and-clear the latest guest selection state. The overlay polls this after
 // entering selection mode; returns None until the user picks a node or cancels.
 #[tauri::command]
-fn overlay_browser_preview_selection_take() -> Result<Option<BrowserPreviewSelectionResult>, String> {
+fn overlay_browser_preview_selection_take() -> Result<Option<BrowserPreviewSelectionResult>, String>
+{
     let mut guard = browser_preview_selection_store()
         .lock()
         .map_err(|err| err.to_string())?;
@@ -2716,6 +2733,25 @@ mod tests {
         );
         assert_eq!(browser_preview_navigation_script("reload").unwrap(), None);
         assert!(browser_preview_navigation_script("stop").is_err());
+    }
+
+    #[test]
+    fn browser_preview_selection_disable_without_webview_is_idempotent() {
+        *browser_preview_selection_store()
+            .lock()
+            .expect("selection store should lock") = Some(BrowserPreviewSelectionResult::Canceled);
+
+        assert_eq!(
+            browser_preview_selection_set_enabled_without_webview(false).unwrap(),
+            false
+        );
+        assert!(browser_preview_selection_store()
+            .lock()
+            .expect("selection store should lock")
+            .is_none());
+        assert!(browser_preview_selection_set_enabled_without_webview(true)
+            .unwrap_err()
+            .contains("browser preview webview is not mounted"));
     }
 
     /// W2-V35 — `sidecar_cwd_dir()` MUST never resolve to `/` (macOS app

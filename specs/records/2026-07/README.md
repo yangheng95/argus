@@ -1,5 +1,6 @@
 # July 2026 Records
 
+- [2026-07-09-browser-preview-selection-unmounted-rejection.md](2026-07-09-browser-preview-selection-unmounted-rejection.md) records the Browser Preview native selection cleanup repair for `window.unhandledrejection: browser preview webview is not mounted`.
 - [2026-07-09-browser-preview-header-project-action-visibility.md](2026-07-09-browser-preview-header-project-action-visibility.md) records the Browser Preview header height repair and the Projects row new-Mission action visibility fix.
 - [2026-07-08-project-actions-budget-capsule-repair.md](2026-07-08-project-actions-budget-capsule-repair.md) records the Overlay Projects row repair that keeps project counts visible with new-project actions and moves Hexin remaining budget display into the composer model capsule.
 - [2026-07-08-message-pane-rail-header-scrollbar-repair.md](2026-07-08-message-pane-rail-header-scrollbar-repair.md) records the Overlay message-pane repair that keeps the agent rail from shifting the message lane off the composer center, moves token usage before the IDE launcher, widens the transcript lane, and changes the primary transcript scrollbar to hover/focus visibility.

@@ -112,6 +112,9 @@ test("overlay keeps the global unhandledrejection diagnostic but assigns known a
 
   expect(browserPreview).toContain("const refetchTargetFromPanel = () =>")
   expect(browserPreview).not.toContain("void refetchTarget()")
+  expect(browserPreview).toContain("const disableNativeSelection = (reportError: boolean): void =>")
+  expect(browserPreview).toContain("void setNativeSelectionEnabled(false).catch((error) =>")
+  expect(browserPreview).not.toContain("void setNativeSelectionEnabled(false)\n")
 
   expect(titlebar).toContain("function runTitlebarMenuAction")
   expect(titlebar).not.toContain("void props.onClick")

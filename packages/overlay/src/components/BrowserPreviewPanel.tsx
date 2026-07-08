@@ -502,11 +502,18 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
       })
   }
 
-  const clearNodeSelection = () => {
+  const disableNativeSelection = (reportError: boolean): void => {
+    if (!browserPreviewNativeSurfaceAvailable()) return
+    void setNativeSelectionEnabled(false).catch((error) => {
+      if (reportError) setNativePreviewError(browserPreviewErrorMessage(error))
+    })
+  }
+
+  const clearNodeSelection = (reportNativeDisableError = false) => {
     setNodeSelection(undefined)
     setNodeSelectionEnabled(false)
     setNodeCommentText("")
-    void setNativeSelectionEnabled(false)
+    disableNativeSelection(reportNativeDisableError)
   }
 
   const submitNodeCommentDraft = () => {
@@ -758,7 +765,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     onCleanup(() => {
       cancelled = true
       if (timer) clearTimeout(timer)
-      void setNativeSelectionEnabled(false)
+      disableNativeSelection(Boolean(scope))
     })
   })
 

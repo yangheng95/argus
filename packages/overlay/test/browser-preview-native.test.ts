@@ -10,7 +10,9 @@ import {
   browserPreviewNativeSurfaceAvailable,
   closeBrowserPreviewNativeSurface,
   navigateBrowserPreviewNativeSurface,
+  setNativeSelectionEnabled,
   syncBrowserPreviewNativeSurface,
+  takeNativeSelection,
 } from "../src/services/browser-preview-native"
 
 function fakeTransport(host: "tauri" | "browser", commands: NativeCommand[]): HostTransport {
@@ -44,6 +46,7 @@ describe("browser preview native service", () => {
 
     expect(browserPreviewNativeSurfaceAvailable()).toBe(true)
     await syncBrowserPreviewNativeSurface({
+      scopeKey: "tsk_native:D:/workspace",
       url: "http://127.0.0.1:4173/preview",
       bounds: { x: 11, y: 22, width: 640, height: 480 },
     })
@@ -55,6 +58,7 @@ describe("browser preview native service", () => {
     expect(commands).toEqual([
       {
         kind: "browserPreview.sync",
+        scopeKey: "tsk_native:D:/workspace",
         url: "http://127.0.0.1:4173/preview",
         bounds: { x: 11, y: 22, width: 640, height: 480 },
       },
@@ -65,6 +69,22 @@ describe("browser preview native service", () => {
     ])
   })
 
+  test("routes native selection commands through HostTransport", async () => {
+    const commands: NativeCommand[] = []
+    __setHostTransportForTest(fakeTransport("tauri", commands))
+
+    await setNativeSelectionEnabled(true)
+    await setNativeSelectionEnabled(false)
+    const result = await takeNativeSelection()
+
+    expect(result).toEqual({ kind: "waiting" })
+    expect(commands).toEqual([
+      { kind: "browserPreview.selection.setEnabled", enabled: true },
+      { kind: "browserPreview.selection.setEnabled", enabled: false },
+      { kind: "browserPreview.selection.take" },
+    ])
+  })
+
   test("rejects hosts without native webview commands", async () => {
     const commands: NativeCommand[] = []
     __setHostTransportForTest(fakeTransport("browser", commands))
@@ -72,6 +92,7 @@ describe("browser preview native service", () => {
     expect(browserPreviewNativeSurfaceAvailable()).toBe(false)
     await expect(
       syncBrowserPreviewNativeSurface({
+        scopeKey: "tsk_native:D:/workspace",
         url: "http://127.0.0.1:4173/preview",
         bounds: { x: 0, y: 0, width: 640, height: 480 },
       }),

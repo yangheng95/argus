@@ -117,6 +117,7 @@ async function nativeCommands(page: OverlayPage): Promise<NativeCommandRecord[]>
         command: String(entry.command || ""),
         args: {
           ...(typeof args.action === "string" ? { action: args.action } : {}),
+          ...(typeof args.enabled === "boolean" ? { enabled: args.enabled } : {}),
           ...(typeof args.url === "string" ? { url: args.url } : {}),
           ...(typeof args.scopeKey === "string" ? { scopeKey: args.scopeKey } : {}),
           ...(bounds && typeof bounds === "object"
@@ -378,7 +379,14 @@ test("browser preview native surface owns browser navigation without PNG live ro
         workspaceDirectory: "D:/overlay/workspace/native-surface",
       }
       const nativeCommands: NativeCommandRecord[] = []
+      const unhandledRejections: string[] = []
+      let nativePreviewMounted = false
       ;(window as any).__browserPreviewNativeCommands = nativeCommands
+      ;(window as any).__browserPreviewUnhandledRejections = unhandledRejections
+      window.addEventListener("unhandledrejection", (event) => {
+        const reason = event.reason
+        unhandledRejections.push(reason instanceof Error ? reason.message : String(reason))
+      })
       ;(window as any).__TAURI__ = {
         core: {
           invoke: async (command: string, args: Record<string, unknown> = {}) => {
@@ -391,6 +399,14 @@ test("browser preview native surface owns browser navigation without PNG live ro
             if (command === "overlay_open_url") return true
             if (command.startsWith("overlay_browser_preview_")) {
               nativeCommands.push({ command, args })
+              if (command === "overlay_browser_preview_sync") nativePreviewMounted = true
+              if (
+                command === "overlay_browser_preview_selection_set_enabled" &&
+                args.enabled === false &&
+                !nativePreviewMounted
+              ) {
+                throw new Error("browser preview webview is not mounted")
+              }
               if ((window as any).__browserPreviewFailNativeSync && command === "overlay_browser_preview_sync") {
                 throw new Error("native sync unavailable")
               }
@@ -440,6 +456,23 @@ test("browser preview native surface owns browser navigation without PNG live ro
         ),
       "native browser preview sync",
       () => ({ errors, requestLog, nativeCommands: [] }),
+    )
+    const commandsAfterInitialSync = await nativeCommands(page)
+    const firstSyncIndex = commandsAfterInitialSync.findIndex((entry) => entry.command === "overlay_browser_preview_sync")
+    assert.ok(firstSyncIndex >= 0, `initial sync command missing: ${JSON.stringify(commandsAfterInitialSync)}`)
+    assert.ok(
+      commandsAfterInitialSync
+        .slice(0, firstSyncIndex)
+        .some(
+          (entry) =>
+            entry.command === "overlay_browser_preview_selection_set_enabled" && entry.args.enabled === false,
+        ),
+      `selection cleanup before native mount should be owned: ${JSON.stringify(commandsAfterInitialSync)}`,
+    )
+    assert.deepEqual(
+      await page.evaluate(() => (window as any).__browserPreviewUnhandledRejections || []),
+      [],
+      "selection cleanup before native mount must not reach window.unhandledrejection",
     )
 
     const nativeLayout = {
