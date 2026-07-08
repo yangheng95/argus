@@ -11,7 +11,7 @@ import { Installation } from "../installation"
 
 import { Database, NotFoundError, eq, and, gte, isNull, desc, like, inArray, or, sql } from "../storage/db"
 import type { SQL } from "../storage/db"
-import { SessionTable, MessageTable, PartTable, SESSION_KINDS, type SessionKind } from "./session.sql"
+import { SessionTable, MessageTable, PartTable, SESSION_KINDS, type PartData, type SessionKind } from "./session.sql"
 import { ProjectTable } from "../project/project.sql"
 import { Log } from "../util/log"
 import { Message } from "./message"
@@ -1148,13 +1148,7 @@ export namespace Session {
     }
   }
 
-  export function assertPartHasNoInlineBase64(part: Message.Part): void {
-    const { id } = part
-    const data = { ...part } as Record<string, unknown>
-    delete data.id
-    delete data.messageID
-    delete data.sessionID
-    delete data.orderKey
+  function assertPartDataHasNoInlineBase64(partID: string, data: unknown): void {
     // Cheap regex on the serialized string is O(N) over the part payload,
     // dominated by the JSON.stringify cost the insert below would pay
     // anyway. Triggers before the row touches SQLite — keeps the DB clean.
@@ -1162,9 +1156,37 @@ export namespace Session {
     const match = inlineBase64DataUrlMatch(serialized)
     if (match) {
       const snippet = inlineBase64DataUrlSnippet(serialized, match)
-      throw new InlineBase64InPartError(id, snippet)
+      throw new InlineBase64InPartError(partID, snippet)
     }
   }
+
+  export function assertPartHasNoInlineBase64(part: Message.Part): void {
+    const { id } = part
+    const data = { ...part } as Record<string, unknown>
+    delete data.id
+    delete data.messageID
+    delete data.sessionID
+    delete data.orderKey
+    assertPartDataHasNoInlineBase64(id, data)
+  }
+
+  const UpdatePartDataInput = z.object({
+    partID: z.string(),
+    data: z.custom<PartData>(),
+  })
+
+  export const updatePartData = fn(UpdatePartDataInput, async (input) => {
+    assertPartDataHasNoInlineBase64(input.partID, input.data)
+    const row = Database.use((db) =>
+      db
+        .update(PartTable)
+        .set({ data: input.data, time_updated: Date.now() })
+        .where(eq(PartTable.id, input.partID))
+        .returning({ id: PartTable.id })
+        .get(),
+    )
+    if (!row) throw new NotFoundError({ message: `Part not found: ${input.partID}` })
+  })
 
   function updatePartRow(part: Message.Part, options: { publish: boolean }): { outputPart: Message.Part; wrotePart: boolean } {
     assertPartHasNoInlineBase64(part)

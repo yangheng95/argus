@@ -13,7 +13,7 @@ import { ProviderError } from "@/provider/error"
 import { type SystemError } from "bun"
 import type { Provider } from "@/provider/provider"
 import { decodeDataUrlBase64Bytes, isDecodableText } from "./text-mime"
-import { STATEFUL_SNAPSHOT_TOOL_NAMES } from "@/orchestrator/stateful-tool-names"
+import { STATEFUL_SNAPSHOT_TOOL_NAMES, statefulSnapshotToolKey } from "@/orchestrator/stateful-tool-names"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { CompactionHandoff } from "./compaction-handoff"
 import { ToolFailureCause, renderToolFailureCause } from "./tool-failure-cause"
@@ -725,18 +725,19 @@ export namespace Message {
     // newer call exists, and leaving it in the prompt encourages the model
     // to reason about stale failures.
     const latestStatefulCallIDs = new Set<string>()
-    const seenStatefulTools = new Set<string>()
+    const seenStatefulKeys = new Set<string>()
     for (let i = input.length - 1; i >= 0; i--) {
       const msg = input[i]
       for (let j = msg.parts.length - 1; j >= 0; j--) {
         const p = msg.parts[j]
+        const statefulKey = p.type === "tool" ? statefulSnapshotToolKey(p.tool, p.state.input) : undefined
         if (
           p.type === "tool" &&
-          STATEFUL_SNAPSHOT_TOOLS.has(p.tool) &&
+          statefulKey &&
           (p.state.status === "completed" || p.state.status === "error") &&
-          !seenStatefulTools.has(p.tool)
+          !seenStatefulKeys.has(statefulKey)
         ) {
-          seenStatefulTools.add(p.tool)
+          seenStatefulKeys.add(statefulKey)
           latestStatefulCallIDs.add(p.callID)
         }
       }
@@ -1046,12 +1047,12 @@ export namespace Message {
             toolNames.add(part.tool)
             if (part.state.status === "completed") {
               let outputText: string
-              const isSupersededStatefulSnapshot =
-                STATEFUL_SNAPSHOT_TOOLS.has(part.tool) && !latestStatefulCallIDs.has(part.callID)
+              const statefulKey = statefulSnapshotToolKey(part.tool, part.state.input)
+              const isSupersededStatefulSnapshot = statefulKey !== undefined && !latestStatefulCallIDs.has(part.callID)
               if (part.state.time.compacted) {
                 outputText = "[Old tool result content cleared]"
               } else if (isSupersededStatefulSnapshot) {
-                outputText = `[${part.tool} snapshot superseded by a later call in this session]`
+                outputText = `[${statefulKey} snapshot superseded by a later call in this session]`
               } else {
                 outputText = compactToolOutput(part.state.output, options.toolOutputMaxChars)
               }
@@ -1089,10 +1090,10 @@ export namespace Message {
               })
             }
             if (part.state.status === "error") {
-              const isSupersededStatefulError =
-                STATEFUL_SNAPSHOT_TOOLS.has(part.tool) && !latestStatefulCallIDs.has(part.callID)
+              const statefulKey = statefulSnapshotToolKey(part.tool, part.state.input)
+              const isSupersededStatefulError = statefulKey !== undefined && !latestStatefulCallIDs.has(part.callID)
               const errorText = isSupersededStatefulError
-                ? `[${part.tool} error superseded by a later call in this session]`
+                ? `[${statefulKey} error superseded by a later call in this session]`
                 : renderToolFailureCause(part.state.failure)
               assistantMessage.parts.push({
                 type: ("tool-" + part.tool) as `tool-${string}`,

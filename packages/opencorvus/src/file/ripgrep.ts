@@ -99,6 +99,17 @@ export namespace Ripgrep {
     return detail ? `ripgrep ${action} failed with code ${code}: ${detail}` : `ripgrep ${action} failed with code ${code}`
   }
 
+  async function terminateChild(proc: Process.Child) {
+    if (proc.exitCode !== null || proc.signalCode !== null) return
+    proc.kill("SIGTERM")
+    const sigkillTimer = setTimeout(() => proc.kill("SIGKILL"), 1_000)
+    try {
+      await Promise.race([proc.exited.catch(() => undefined), new Promise((resolve) => setTimeout(resolve, 6_000))])
+    } finally {
+      clearTimeout(sigkillTimer)
+    }
+  }
+
   export async function filepath() {
     const { filepath } = await state()
     return filepath
@@ -146,27 +157,47 @@ export namespace Ripgrep {
 
     const stderr = readStreamBuffer(proc.stderr)
     let buffer = ""
-    const stream = proc.stdout as AsyncIterable<Buffer | string>
-    for await (const chunk of stream) {
+    let sawFile = false
+    let completed = false
+    try {
+      const stream = proc.stdout as AsyncIterable<Buffer | string>
+      for await (const chunk of stream) {
+        input.signal?.throwIfAborted()
+
+        buffer += typeof chunk === "string" ? chunk : chunk.toString()
+        // Handle both Unix (\n) and Windows (\r\n) line endings
+        const lines = buffer.split(/\r?\n/)
+        buffer = lines.pop() || ""
+
+        for (const line of lines) {
+          if (line) {
+            sawFile = true
+            yield line
+          }
+        }
+      }
+
+      if (buffer) {
+        sawFile = true
+        yield buffer
+      }
+      const [code, stderrBuffer] = await Promise.all([proc.exited, stderr])
+      if (code === 1 && !sawFile && !stderrBuffer.toString().trim()) {
+        completed = true
+        return
+      }
+      if (code !== 0) {
+        throw new Error(ripgrepFailure("files", code, stderrBuffer))
+      }
+
       input.signal?.throwIfAborted()
-
-      buffer += typeof chunk === "string" ? chunk : chunk.toString()
-      // Handle both Unix (\n) and Windows (\r\n) line endings
-      const lines = buffer.split(/\r?\n/)
-      buffer = lines.pop() || ""
-
-      for (const line of lines) {
-        if (line) yield line
+      completed = true
+    } finally {
+      if (!completed) {
+        await terminateChild(proc)
+        await stderr.catch(() => undefined)
       }
     }
-
-    if (buffer) yield buffer
-    const [code, stderrBuffer] = await Promise.all([proc.exited, stderr])
-    if (code !== 0) {
-      throw new Error(ripgrepFailure("files", code, stderrBuffer))
-    }
-
-    input.signal?.throwIfAborted()
   }
 
   export async function tree(input: { cwd: string; limit?: number; signal?: AbortSignal }) {

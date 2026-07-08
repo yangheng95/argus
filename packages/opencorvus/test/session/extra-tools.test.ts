@@ -13,6 +13,8 @@ import { Session } from "../../src/session"
 import { SessionStatus } from "../../src/session/status"
 import { withStreamActivity } from "../../src/util/stream-activity"
 import { BuildResultSchema } from "../../src/build/types"
+import { ProviderSchema } from "../../src/provider/schema"
+import { requiresOpenAIStrictToolSchema } from "../../src/provider/strict-tool-schema"
 import { Instance } from "../../src/project/instance"
 import { AttachmentStore } from "../../src/storage/attachment-store"
 import { tmpdir } from "../fixture/fixture"
@@ -25,6 +27,8 @@ import { SkillTool } from "../../src/tool/skill"
 import { MCP } from "../../src/mcp"
 import { Config } from "../../src/config/config"
 import { copyRepositoryExpertSquadPackage } from "../fixture/expert-squad"
+import { createOrchestratorTools } from "../../src/orchestrator/tools"
+import { WorkflowRegistry } from "../../src/engine/workflow"
 
 const dummyTool = () =>
   tool({
@@ -54,6 +58,142 @@ const runtimeContract = (
     },
   }
 }
+
+const dispatchAgentTargetCases = [
+  {
+    input: {
+      target: "requirements",
+      reason: "valid requirements reason",
+    },
+    expected: {
+      target: "requirements",
+      reason: "valid requirements reason",
+    },
+  },
+  {
+    input: {
+      target: "architect",
+      reason: "valid architect reason",
+    },
+    expected: {
+      target: "architect",
+      reason: "valid architect reason",
+    },
+  },
+  {
+    input: {
+      target: "frontend_design",
+      reason: "valid frontend design reason",
+      urls: ["https://example.com"],
+    },
+    expected: {
+      target: "frontend_design",
+      reason: "valid frontend design reason",
+      urls: ["https://example.com"],
+    },
+  },
+  {
+    input: {
+      target: "frontend_research",
+      reason: "valid frontend research reason",
+      source_urls: ["https://example.com"],
+    },
+    expected: {
+      target: "frontend_research",
+      reason: "valid frontend research reason",
+      source_urls: ["https://example.com"],
+    },
+  },
+  {
+    input: {
+      target: "deep_research",
+      reason: "valid deep research reason",
+    },
+    expected: {
+      target: "deep_research",
+      reason: "valid deep research reason",
+      source_urls: [],
+    },
+  },
+  {
+    input: {
+      target: "workload_analysis",
+      reason: "valid workload analysis reason",
+    },
+    expected: {
+      target: "workload_analysis",
+      reason: "valid workload analysis reason",
+    },
+  },
+  {
+    input: {
+      target: "analyze_intent",
+      reason: "valid intent analysis reason",
+    },
+    expected: {
+      target: "analyze_intent",
+      reason: "valid intent analysis reason",
+    },
+  },
+  {
+    input: {
+      target: "visual_qa",
+      reason: "valid visual qa reason",
+    },
+    expected: {
+      target: "visual_qa",
+      reason: "valid visual qa reason",
+    },
+  },
+  {
+    input: {
+      target: "fact_check",
+      reason: "valid fact check reason",
+      target_session_id: "ses_fact_check_target",
+      fact_check_items: [],
+    },
+    expected: {
+      target: "fact_check",
+      reason: "valid fact check reason",
+      target_session_id: "ses_fact_check_target",
+      fact_check_items: [],
+    },
+  },
+  {
+    input: {
+      target: "build",
+      reason: "valid goal build reason",
+      goalID: "gol_provider_clean_build",
+    },
+    expected: {
+      target: "build",
+      reason: "valid goal build reason",
+      goalID: "gol_provider_clean_build",
+    },
+  },
+  {
+    input: {
+      target: "explore",
+      reason: "valid explore reason",
+      question: "Which module owns scheduler schema materialization?",
+    },
+    expected: {
+      target: "explore",
+      reason: "valid explore reason",
+      question: "Which module owns scheduler schema materialization?",
+    },
+  },
+  {
+    input: {
+      target: "integrity",
+      reason: "valid integrity reason",
+    },
+    expected: {
+      target: "integrity",
+      reason: "valid integrity reason",
+    },
+  },
+]
 
 describe("SessionLoop session runtime contract", () => {
   test("round-trips a registered stage tool map", () => {
@@ -880,19 +1020,19 @@ describe("extras execute-return normalisation (integration via resolveTools)", (
     await using tmp = await tmpdir({
       git: true,
       init: async (dir) => {
-        const skillDir = path.join(dir, ".opencorvus", "skill", "runtime-needs-webpage-extract")
+        const skillDir = path.join(dir, ".opencorvus", "skill", "runtime-needs-bash")
         await Bun.write(
           path.join(skillDir, "SKILL.md"),
           `---
-name: runtime-needs-webpage-extract
-description: Skill requiring a frontend-design tool that is not in this exact runtime contract.
+name: runtime-needs-bash
+description: Skill requiring a canonical tool that is not in this exact runtime contract.
 required_tools:
-  - webpage_extract
+  - bash
 mounted_agents:
   - frontend-design
 ---
 
-# Runtime Needs Webpage Extract
+# Runtime Needs Bash
 `,
         )
       },
@@ -963,10 +1103,10 @@ mounted_agents:
           expect(Object.keys(resolved).sort()).toEqual(["skill", "submit_frontend_template"])
           await expect(
             (resolved.skill as any).execute(
-              { name: "runtime-needs-webpage-extract" },
+              { name: "runtime-needs-bash" },
               { toolCallId: "call_runtime_skill_surface" },
             ),
-          ).rejects.toThrow('Skill "runtime-needs-webpage-extract" not found or not allowed')
+          ).rejects.toThrow('Skill "runtime-needs-bash" not found or not allowed')
           SessionLoop.clearSessionRuntimeContract(sessionID)
         },
       })
@@ -1034,6 +1174,53 @@ describe("extra tool provider schema preparation", () => {
       url: "https://aimemodeldev.myhexin.com/litellm/v1",
     },
   } as any
+  const requestyOpenAIOModel = {
+    providerID: "requesty",
+    id: "requesty/openai/o4-mini",
+    api: {
+      id: "openai/o4-mini",
+      npm: "@ai-sdk/openai-compatible",
+      url: "https://router.requesty.ai/v1",
+    },
+  } as any
+  const requestyOpenAIChatGPTModel = {
+    providerID: "requesty-chatgpt",
+    id: "requesty/openai/chatgpt-4o-latest",
+    api: {
+      id: "openai/chatgpt-4o-latest",
+      npm: "@ai-sdk/openai-compatible",
+      url: "https://router.requesty.ai/v1",
+    },
+  } as any
+  const openAIModel = {
+    providerID: "openai",
+    id: "openai/gpt-5.1",
+    api: {
+      id: "gpt-5.1",
+      npm: "@ai-sdk/openai",
+      url: "https://api.openai.com/v1",
+    },
+  } as any
+  const azureModel = {
+    providerID: "azure",
+    id: "azure/gpt-5.1",
+    api: {
+      id: "gpt-5.1",
+      npm: "@ai-sdk/azure",
+      url: "https://example.openai.azure.com/openai/deployments/gpt-5.1",
+    },
+  } as any
+
+  const jsonSchemaAllowsNull = (schema: unknown): boolean => {
+    if (!schema || typeof schema !== "object" || Array.isArray(schema)) return false
+    const record = schema as Record<string, unknown>
+    if (record.type === "null") return true
+    if (Array.isArray(record.type) && record.type.includes("null")) return true
+    return (
+      (Array.isArray(record.anyOf) && record.anyOf.some(jsonSchemaAllowsNull)) ||
+      (Array.isArray(record.oneOf) && record.oneOf.some(jsonSchemaAllowsNull))
+    )
+  }
 
   test("keeps explicit final confirmation required on extra submit tools", () => {
     const prepared = SessionLoop.prepareProviderTool({
@@ -1157,6 +1344,53 @@ describe("extra tool provider schema preparation", () => {
     expect(seenArgs).toEqual({ chronology: [{ event: "captured" }] })
   })
 
+  test("uses one strict tool-schema predicate for provider schema and execution cleanup", async () => {
+    const cases = [
+      { model: openAIModel, strict: true },
+      { model: azureModel, strict: true },
+      { model: hexinGptModel, strict: true },
+      { model: requestyOpenAIOModel, strict: true },
+      { model: requestyOpenAIChatGPTModel, strict: true },
+      { model: dashScopeModel, strict: false },
+    ]
+    for (const { model, strict } of cases) {
+      expect(requiresOpenAIStrictToolSchema(model), model.id).toBe(strict)
+
+      const inputSchema = z.object({
+        required: z.string(),
+        optional: z.string().optional(),
+      })
+      const providerJsonSchema = asSchema(ProviderSchema.input(model, inputSchema) as never).jsonSchema as any
+      expect(jsonSchemaAllowsNull(providerJsonSchema.properties.optional), model.id).toBe(strict)
+
+      let seenArgs: unknown
+      const prepared = SessionLoop.prepareProviderTool({
+        name: `strict_schema_parity_${model.providerID}`,
+        source: "extra",
+        model,
+        tool: tool({
+          description: "strict schema parity",
+          inputSchema,
+          async execute(args) {
+            seenArgs = args
+            return { output: "ok", title: "", metadata: {} }
+          },
+        }),
+      }) as any
+
+      const execution = prepared.execute(
+        { required: "present", optional: null },
+        { toolCallId: `call_strict_schema_parity_${model.providerID}` },
+      )
+      if (strict) {
+        await execution
+        expect(seenArgs).toEqual({ required: "present" })
+      } else {
+        await expect(execution).rejects.toThrow("Invalid input")
+      }
+    }
+  })
+
   test("keeps BuildResult local semantics after GPT strict-schema null placeholders", async () => {
     let seenArgs: any
     const prepared = SessionLoop.prepareProviderTool({
@@ -1200,6 +1434,213 @@ describe("extra tool provider schema preparation", () => {
         { toolCallId: "call_build_string_error" },
       ),
     ).rejects.toThrow("Invalid input for tool report_build_result")
+  })
+
+  test("strips GPT strict-schema null placeholders for dispatch_agent target branches with optional literals", async () => {
+    const workflow = WorkflowRegistry.resolveSync("pipeline")!
+    const { tools } = createOrchestratorTools({
+      taskID: "tsk_dispatch_null_placeholders",
+      agentSessionID: "ses_dispatch_null_placeholders",
+      signal: new AbortController().signal,
+      workflow,
+    })
+    const reason =
+      "Current graph state: gol_001 completed; gol_002 is the only dependency-unblocked blocking goal."
+    const pollutedInput = {
+      reason,
+      source_urls: null,
+      focus: null,
+      continuation_artifact_id: null,
+      target: "build",
+      target_deliverable: null,
+      request: null,
+      goalID: "gol_dispatch_null_placeholders",
+      directBuildIntent: null,
+      worktreeUsage: "managed_worktree",
+      userConfirmedStaleIntegrityData: null,
+      app_url: null,
+      preview_command: null,
+      target_session_id: null,
+      target_agent: null,
+      fact_check_items: null,
+      question: null,
+    }
+    let seenArgs: unknown
+    const prepared = SessionLoop.prepareProviderTool({
+      name: "dispatch_agent",
+      source: "extra",
+      model: hexinGptModel,
+      tool: tool({
+        description: "dispatch agent schema materialization test",
+        inputSchema: (tools.dispatch_agent as { inputSchema: unknown }).inputSchema as any,
+        async execute(args) {
+          seenArgs = args
+          return { output: "ok", title: "", metadata: {} }
+        },
+      }),
+    }) as any
+
+    await prepared.execute(pollutedInput, { toolCallId: "call_dispatch_agent_null_placeholders" })
+    expect(seenArgs).toEqual({
+      reason,
+      target: "build",
+      goalID: "gol_dispatch_null_placeholders",
+      worktreeUsage: "managed_worktree",
+    })
+
+    await expect(
+      prepared.execute(
+        {
+          ...pollutedInput,
+          target_agent: "opentest-build-agent",
+        },
+        { toolCallId: "call_dispatch_agent_non_null_unknown" },
+      ),
+    ).rejects.toThrow("Invalid input for tool dispatch_agent")
+
+    await expect(
+      prepared.execute(
+        {
+          ...pollutedInput,
+          directBuildIntent: "wrong_intent",
+        },
+        { toolCallId: "call_dispatch_agent_wrong_literal" },
+      ),
+    ).rejects.toThrow("Invalid input for tool dispatch_agent")
+  })
+
+  test("strips GPT strict-schema null placeholders across scheduler discriminated tools", async () => {
+    const { tools } = createOrchestratorTools({
+      taskID: "tsk_scheduler_null_placeholders",
+      agentSessionID: "ses_scheduler_null_placeholders",
+      signal: new AbortController().signal,
+    })
+    const runPrepared = async (name: string, inputSchema: unknown, input: Record<string, unknown>) => {
+      let seenArgs: unknown
+      const prepared = SessionLoop.prepareProviderTool({
+        name,
+        source: "extra",
+        model: hexinGptModel,
+        tool: tool({
+          description: "scheduler discriminated tool schema materialization test",
+          inputSchema: inputSchema as any,
+          async execute(args) {
+            seenArgs = args
+            return { output: "ok", title: "", metadata: {} }
+          },
+        }),
+      }) as any
+
+      await prepared.execute(input, { toolCallId: `call_${name}_${input.target ?? input.action}` })
+      return seenArgs
+    }
+
+    const dispatchNulls = {
+      request: null,
+      goalID: null,
+      directBuildIntent: null,
+      worktreeUsage: null,
+      userConfirmedStaleIntegrityData: null,
+      target_deliverable: null,
+      source_urls: null,
+      urls: null,
+      figma_url: null,
+      materials: null,
+      focus: null,
+      app_url: null,
+      preview_command: null,
+      continuation_artifact_id: null,
+      target_session_id: null,
+      target_agent: null,
+      fact_check_items: null,
+    }
+    for (const { input, expected } of dispatchAgentTargetCases) {
+      await expect(
+        runPrepared("dispatch_agent", (tools.dispatch_agent as { inputSchema: unknown }).inputSchema, {
+          ...dispatchNulls,
+          ...input,
+        }),
+      ).resolves.toEqual(expected)
+    }
+
+    const manageTaskNulls = {
+      title: null,
+      request: null,
+      reason: null,
+      evidence_anchor: null,
+      priority: null,
+      queue: null,
+      kind: null,
+      summary: null,
+      error: null,
+      goalID: null,
+      updates: null,
+      goal: null,
+    }
+    const manageTaskCases = [
+      {
+        input: { action: "complete_task", summary: "complete evidence" },
+        expected: { action: "complete_task", summary: "complete evidence" },
+      },
+      {
+        input: { action: "fail_task", error: "fatal evidence" },
+        expected: { action: "fail_task", error: "fatal evidence" },
+      },
+      {
+        input: { action: "query_failed_goals" },
+        expected: { action: "query_failed_goals" },
+      },
+    ]
+    for (const { input, expected } of manageTaskCases) {
+      await expect(
+        runPrepared("manage_task", (tools.manage_task as { inputSchema: unknown }).inputSchema, {
+          ...manageTaskNulls,
+          ...input,
+        }),
+      ).resolves.toEqual(expected)
+    }
+
+    await expect(
+      runPrepared("manage_task", (tools.manage_task as { inputSchema: unknown }).inputSchema, {
+        ...manageTaskNulls,
+        action: "complete_task",
+        summary: "complete evidence",
+        error: "non-null cross-action field",
+      }),
+    ).rejects.toThrow("Invalid input for tool manage_task")
+  })
+
+  test("keeps dispatch_agent reason non-nullable in GPT strict provider schema", () => {
+    const { tools } = createOrchestratorTools({
+      taskID: "tsk_dispatch_reason_schema",
+      agentSessionID: "ses_dispatch_reason_schema",
+      signal: new AbortController().signal,
+    })
+    const providerJsonSchema = asSchema(
+      ProviderSchema.input(hexinGptModel, (tools.dispatch_agent as { inputSchema: unknown }).inputSchema) as never,
+    ).jsonSchema as any
+
+    expect(providerJsonSchema.required).toContain("reason")
+    expect(jsonSchemaAllowsNull(providerJsonSchema.properties.reason)).toBe(false)
+    expect(jsonSchemaAllowsNull(providerJsonSchema.properties.request)).toBe(true)
+
+    const dispatchInputSchema = (tools.dispatch_agent as { inputSchema: { safeParse: (input: unknown) => unknown } })
+      .inputSchema as any
+    for (const { input } of dispatchAgentTargetCases) {
+      expect(
+        dispatchInputSchema.safeParse({
+          ...input,
+          reason: "",
+        }).success,
+      ).toBe(false)
+    }
+    expect(
+      dispatchInputSchema.safeParse({
+        target: "build",
+        reason: "per-goal build reason",
+        goalID: "gol_dispatch_reason",
+      }).success,
+    ).toBe(true)
   })
 
   test("adds v6-aware model output conversion for project tool-result objects", () => {

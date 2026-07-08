@@ -61,35 +61,39 @@ test("Bun fetch honors proxiedFetchInit proxy URL and credentials", async () => 
 
 test("proxiedFetchInit attaches an Undici dispatcher in the Node runtime", async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "oc-network-proxy-node-"))
-  const outfile = path.join(dir, "network-proxy.mjs")
-  const source = path.resolve(import.meta.dir, "../../src/util/network-proxy.ts")
-  const build = await Bun.build({
-    entrypoints: [source],
-    target: "node",
-    format: "esm",
-    outdir: dir,
-    naming: "network-proxy.mjs",
-    write: true,
-  })
-  expect(build.success).toBe(true)
+  try {
+    const outfile = path.join(dir, "network-proxy.mjs")
+    const source = path.resolve(import.meta.dir, "../../src/util/network-proxy.ts")
+    const build = await Bun.build({
+      entrypoints: [source],
+      target: "node",
+      format: "esm",
+      outdir: dir,
+      naming: "network-proxy.mjs",
+      write: true,
+    })
+    expect(build.success).toBe(true)
 
-  const probe = `
-    import { proxiedFetchInit } from ${JSON.stringify(pathToFileURL(outfile).href)};
-    const init = proxiedFetchInit({ method: "GET" }, "http://hexin:hx300033@10.217.133.185:30100/");
-    console.log(JSON.stringify({
-      method: init.method,
-      proxy: init.proxy,
-      dispatcher: typeof init.dispatcher?.dispatch,
-    }));
-  `
-  const result = spawnSync("node", ["--input-type=module", "-e", probe], { encoding: "utf8" })
-  expect(result.stderr).toBe("")
-  expect(result.status).toBe(0)
-  expect(JSON.parse(result.stdout)).toEqual({
-    method: "GET",
-    proxy: "http://hexin:hx300033@10.217.133.185:30100/",
-    dispatcher: "function",
-  })
+    const probe = `
+      import { proxiedFetchInit } from ${JSON.stringify(pathToFileURL(outfile).href)};
+      const init = proxiedFetchInit({ method: "GET" }, "http://hexin:hx300033@10.217.133.185:30100/");
+      console.log(JSON.stringify({
+        method: init.method,
+        proxy: init.proxy,
+        dispatcher: typeof init.dispatcher?.dispatch,
+      }));
+    `
+    const result = spawnSync("node", ["--input-type=module", "-e", probe], { encoding: "utf8" })
+    expect(result.stderr).toBe("")
+    expect(result.status).toBe(0)
+    expect(JSON.parse(result.stdout)).toEqual({
+      method: "GET",
+      proxy: "http://hexin:hx300033@10.217.133.185:30100/",
+      dispatcher: "function",
+    })
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true })
+  }
 })
 
 test("proxiedFetchInit keeps direct transport fields absent when no proxy is resolved", () => {

@@ -1,12 +1,10 @@
 import z from "zod"
 import { Identifier } from "@/id/id"
 import { TaskQueueService } from "@/scheduler/task-queue-service"
-import { TaskQueueTable } from "@/scheduler/task-queue.sql"
 import { GlobalBus } from "@/bus/global"
 import { Session } from "@/session"
 import { Message } from "@/session"
 import { SessionSummary } from "@/session/summary"
-import { Database, eq, and, inArray } from "@/storage/db"
 import { createEventQueue } from "@/util/event-queue"
 import { EngineConfig } from "@/engine/config"
 import { mapSessionBusEvent } from "@/protocol/session-mirror"
@@ -73,12 +71,12 @@ export namespace OpencorvusExecutor {
   }
 
   export async function status(queueTaskID: string) {
-    const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, queueTaskID)).get())
+    const row = TaskQueueService.getStatusByID(queueTaskID)
     if (!row) throw new Error(`executor task not found: ${queueTaskID}`)
     return {
-      queueTaskID: row.id,
+      queueTaskID: row.taskID,
       status: row.status,
-      error: row.error_message ?? null,
+      error: row.error,
     }
   }
 
@@ -97,18 +95,7 @@ export namespace OpencorvusExecutor {
       await cancelSessionPromptByID({ sessionID: input.sessionID })
     }
     if (queueTaskID) {
-      Database.use((db) =>
-        db
-          .update(TaskQueueTable)
-          .set({
-            status: "failed",
-            error_message: "task cancelled",
-            time_completed: Date.now(),
-            time_updated: Date.now(),
-          })
-          .where(and(eq(TaskQueueTable.id, queueTaskID), inArray(TaskQueueTable.status, ["queued", "running"])))
-          .run(),
-      )
+      TaskQueueService.failQueuedOrRunning({ taskIDs: [queueTaskID], reason: "task cancelled" })
     }
     return true
   }

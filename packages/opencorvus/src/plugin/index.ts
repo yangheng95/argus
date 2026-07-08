@@ -26,7 +26,7 @@ import { and, desc, eq } from "drizzle-orm"
 import z from "zod"
 import { Database } from "@/storage/db"
 import { EngineArtifactTable, type EngineArtifactKind } from "@/engine/engine.sql"
-import { Identifier } from "@/id/id"
+import { recordEngineArtifact } from "@/engine/artifact"
 import { requireTask } from "@/engine/store"
 
 export namespace Plugin {
@@ -112,7 +112,9 @@ export namespace Plugin {
   function requirePluginTask(taskID: string) {
     const task = requireTask(taskID)
     if (task.project_id !== Instance.project.id) {
-      throw new Error(`Plugin task artifact ${taskID} belongs to project ${task.project_id}, expected ${Instance.project.id}`)
+      throw new Error(
+        `Plugin task artifact ${taskID} belongs to project ${task.project_id}, expected ${Instance.project.id}`,
+      )
     }
     return task
   }
@@ -122,24 +124,13 @@ export namespace Plugin {
       async create(input: PluginTaskArtifactCreateInput): Promise<PluginTaskArtifact> {
         requirePluginTask(input.taskID)
         const now = Date.now()
-        const id = Identifier.ascending("artifact")
-        Database.use((db) =>
-          db
-            .insert(EngineArtifactTable)
-            .values({
-              id,
-              task_id: input.taskID,
-              run_id: null,
-              goal_run_id: null,
-              acceptance_id: null,
-              kind: input.kind as EngineArtifactKind,
-              label: input.label,
-              payload: input.payload,
-              time_created: now,
-              time_updated: now,
-            })
-            .run(),
-        )
+        const id = recordEngineArtifact({
+          taskID: input.taskID,
+          kind: input.kind as EngineArtifactKind,
+          label: input.label,
+          payload: input.payload,
+          timeCreated: now,
+        })
         return {
           id,
           taskID: input.taskID,

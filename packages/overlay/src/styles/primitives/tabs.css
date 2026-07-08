@@ -67,10 +67,16 @@
   --oc-tab-color: var(--oc-tab-active-color);
 }
 
-.oc-tab[data-highlighted],
-.oc-tab:hover {
+.oc-tab[data-highlighted]:not(:disabled):not([data-disabled]),
+.oc-tab:hover:not(:disabled):not([data-disabled]) {
   --oc-tab-bg: var(--surface-hover);
   --oc-tab-color: var(--text-strong);
+}
+
+.oc-tab:disabled,
+.oc-tab[data-disabled] {
+  cursor: default;
+  opacity: var(--ui-opacity-disabled);
 }
 
 .oc-tab:focus-visible {

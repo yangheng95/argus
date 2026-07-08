@@ -14,16 +14,11 @@
     "scheduler": {
       "role_base": true,
       "built_in_tool_ids": [
-        "add_goal",
-        "modify_goal",
-        "complete_goal",
-        "delete_goal",
-        "propose_task",
+        "dispatch_agent",
+        "manage_task",
         "refine",
         "browser_preview",
-        "bash",
-        "dispatch_agent",
-        "manage_task"
+        "bash"
       ]
     },
     "agents": {

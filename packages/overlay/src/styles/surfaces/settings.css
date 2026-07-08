@@ -10,8 +10,8 @@
    settings panel. VSCode/JetBrains visual style: flat, no card
    border, hover via the dialog's settings-surface-hover wash,
    hierarchy expressed through `--ui-font-weight-*` + the
-   text-strong / text-soft / text-muted triad (not font size —
-   --ui-font-heading / title / body remain 14/13/12).
+   text-strong / text-soft / text-muted triad, not a settings-only
+   font-size scale. The shared typography tokens own size hierarchy.
 
    Migration map: settings-specific legacy row wrappers converge on
    .s-row, group wrappers converge on .s-group, and settings-owned
@@ -2022,6 +2022,34 @@ button.s-row:focus-visible {
   font-weight: var(--ui-font-weight-strong);
   line-height: 1.35;
   overflow-wrap: anywhere;
+}
+
+.expert-squad-recovery {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  align-items: start;
+  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--warn) 46%, var(--border));
+  border-radius: var(--oc-radius-soft);
+  background: color-mix(in srgb, var(--warn) 7%, var(--settings-surface-muted));
+}
+
+.expert-squad-recovery svg {
+  grid-row: 1 / span 2;
+  color: var(--warn);
+}
+
+.expert-squad-recovery strong {
+  color: var(--text-strong);
+  font-size: var(--ui-font-control);
+  line-height: 1.35;
+}
+
+.expert-squad-recovery span {
+  color: var(--text-muted);
+  font-size: var(--ui-font-meta);
+  line-height: 1.35;
 }
 
 .expert-squad-head-actions,

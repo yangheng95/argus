@@ -227,7 +227,7 @@ describe("overlay window and pane size contract", () => {
     expect(pane).toContain('layoutTokens.tokenPx("--ui-rail-min-width")')
     expect(pane).toContain('layoutTokens.tokenPx("--ui-chat-min-width")')
     expect(pane).toContain('layoutTokens.tokenPx("--ui-rail-width")')
-    expect(pane).toContain('leftFixedControlIds: ["solidLeftActivityToolbar"]')
+    expect(pane).toContain("leftFixedControlIds: []")
     expect(pane).toContain('remainingFixedControlIds: ["solidRightActivityToolbar"]')
     expect(pane).toContain("remainingMinWidth: defaultPanelRemainingMinWidth")
     expect(pane).toContain("function readPaneGeometrySnapshot(config: PaneConfig): PaneGeometrySnapshot | null")

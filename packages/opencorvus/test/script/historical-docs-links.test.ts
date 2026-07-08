@@ -153,14 +153,25 @@ function rootDocFiles(): string[] {
     .map((entry) => path.join(repoRoot, entry.name))
 }
 
+function monthlyRecordReadmes(): string[] {
+  const recordsRoot = path.join(repoRoot, "specs", "records")
+  if (!fs.existsSync(recordsRoot)) return []
+  return fs
+    .readdirSync(recordsRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && /^20\d{2}-\d{2}$/.test(entry.name))
+    .map((entry) => path.join(recordsRoot, entry.name, "README.md"))
+    .filter((file) => fs.existsSync(file))
+}
+
 function docsFiles(): string[] {
-  docsFilesCache ??= docsScanRoots
-    .flatMap((dir) => walkDocs(path.join(repoRoot, dir)))
-    .concat([
-      path.join(repoRoot, "specs", "README.md"),
-      path.join(repoRoot, "specs", "records", "2026-06", "README.md"),
-    ])
-    .concat(rootDocFiles().filter((filePath) => fs.existsSync(filePath)))
+  docsFilesCache ??= Array.from(
+    new Set(
+      docsScanRoots
+        .flatMap((dir) => walkDocs(path.join(repoRoot, dir)))
+        .concat([path.join(repoRoot, "specs", "README.md"), ...monthlyRecordReadmes()])
+        .concat(rootDocFiles().filter((filePath) => fs.existsSync(filePath))),
+    ),
+  )
   return docsFilesCache
 }
 
@@ -417,19 +428,33 @@ function linkedFiles(indexPath: string): Set<string> {
   )
 }
 
+function markdownSection(text: string, heading: string): string {
+  const pattern = new RegExp(`^## ${heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "m")
+  const match = pattern.exec(text)
+  if (!match) return ""
+  const bodyStart = match.index + match[0].length
+  const next = /\n##\s/.exec(text.slice(bodyStart))
+  return text.slice(bodyStart, next ? bodyStart + next.index : undefined)
+}
+
 describe("historical docs repository links", () => {
   test("local historical doc references resolve", () => {
     expect(missingReferences(docsFiles())).toEqual([])
   }, 30000)
 
+  test("monthly record README files are part of local docs link scans", () => {
+    const scanned = docsFiles().map((file) => path.relative(repoRoot, file).replace(/\\/g, "/"))
+
+    expect(scanned).toContain("specs/records/2026-06/README.md")
+    expect(scanned).toContain("specs/records/2026-07/README.md")
+  })
+
   test("repository historical doc references resolve", () => {
     const thisFile = path.relative(repoRoot, import.meta.path).replace(/\\/g, "/")
-    const activeFiles = repositoryFiles().filter(
-      (file) => {
-        const rel = path.relative(repoRoot, file).replace(/\\/g, "/")
-        return rel !== thisFile && !isMonthlyRecordPath(rel)
-      },
-    )
+    const activeFiles = repositoryFiles().filter((file) => {
+      const rel = path.relative(repoRoot, file).replace(/\\/g, "/")
+      return rel !== thisFile && !isMonthlyRecordPath(rel)
+    })
 
     expect(missingReferences(activeFiles)).toEqual([])
   }, 30000)
@@ -509,6 +534,17 @@ describe("historical docs repository links", () => {
       (rel) => !/^## Recall$/m.test(fs.readFileSync(path.join(repoRoot, rel), "utf8")),
     )
     expect(missingRecall).toEqual([])
+
+    const recordsMissingIndependentAgentFeedback = [
+      "specs/records/2026-07/2026-07-06-gui-quality-bug-hunt-iteration.md",
+      "specs/records/2026-07/2026-07-07-opentest-lifecycle-virtual-agents.md",
+    ].filter(
+      (rel) =>
+        !/^### Independent Agent Feedback$/m.test(
+          markdownSection(fs.readFileSync(path.join(repoRoot, rel), "utf8"), "Recall"),
+        ),
+    )
+    expect(recordsMissingIndependentAgentFeedback).toEqual([])
   })
 
   test("spec consolidation record keeps addendum numbers contiguous", () => {
@@ -525,9 +561,8 @@ describe("historical docs repository links", () => {
     expect(addendumNumbers.length).toBeGreaterThan(50)
     expect(addendumNumbers).toEqual(addendumNumbers.map((_, index) => index + 1))
     const addendumNumberSet = new Set(addendumNumbers)
-    const validationNumbers = Array.from(
-      laterAddenda!.matchAll(/^Validation after addendum (\d+):$/gm),
-      (match) => Number(match[1]),
+    const validationNumbers = Array.from(laterAddenda!.matchAll(/^Validation after addendum (\d+):$/gm), (match) =>
+      Number(match[1]),
     )
     expect(validationNumbers).toContain(addendumNumbers.at(-1))
     expect(validationNumbers.filter((number) => !addendumNumberSet.has(number))).toEqual([])

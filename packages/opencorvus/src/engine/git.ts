@@ -2,14 +2,14 @@ import { Snapshot } from "@/snapshot"
 import { Instance } from "@/project/instance"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Vcs } from "@/project/vcs"
-import { Database, eq } from "@/storage/db"
+import { Database } from "@/storage/db"
 import { git } from "@/util/git"
 import { Log } from "@/util/log"
-import { Identifier } from "@/id/id"
-import { EngineProgressSnapshotTable, EngineTaskTable } from "./engine.sql"
 import { isActiveGoalRunStatus } from "./catalog"
 import { InternalGitCommitSubject } from "./internal-git-commit-subject"
 import { listGoalRunsForTask, requireTask, type AcceptanceRow, type PlanRow, type TaskRow } from "./store"
+import { insertEngineProgressSnapshot } from "./progress"
+import { setEngineTaskMetadata } from "./task"
 import fs from "node:fs/promises"
 import path from "node:path"
 
@@ -107,20 +107,7 @@ function note(
   payload: Record<string, unknown>,
   time = Date.now(),
 ) {
-  Database.use((db) =>
-    db
-      .insert(EngineProgressSnapshotTable)
-      .values({
-        id: Identifier.ascending("progress"),
-        task_id: taskID,
-        status,
-        summary,
-        payload,
-        time_created: time,
-        time_updated: time,
-      })
-      .run(),
-  )
+  Database.use((db) => insertEngineProgressSnapshot(db, { taskID, status, summary, payload, timeCreated: time }))
 }
 
 function save(task: TaskRow, patch: Record<string, unknown>, time = Date.now()) {
@@ -129,16 +116,7 @@ function save(task: TaskRow, patch: Record<string, unknown>, time = Date.now()) 
     ...dict(meta.git),
     ...patch,
   }
-  Database.use((db) =>
-    db
-      .update(EngineTaskTable)
-      .set({
-        metadata: meta,
-        time_updated: time,
-      })
-      .where(eq(EngineTaskTable.id, task.id))
-      .run(),
-  )
+  Database.use((db) => setEngineTaskMetadata(db, { taskID: task.id, metadata: meta, timeUpdated: time }))
   return requireTask(task.id)
 }
 
@@ -302,7 +280,9 @@ export async function ensureGitignore() {
     // Append missing essentials without overwriting user content
     const existing = await file.text()
     const lines = new Set(existing.split(/\r?\n/).map((l) => l.trim()))
-    const missing = gitignoreEssentials().split("\n").filter((l) => l.trim() && !lines.has(l.trim()))
+    const missing = gitignoreEssentials()
+      .split("\n")
+      .filter((l) => l.trim() && !lines.has(l.trim()))
     if (missing.length > 0) {
       await Bun.write(
         `${dir}/.gitignore`,
@@ -361,6 +341,10 @@ export async function ensureGitignore() {
       "user.email=opencorvus@local",
       "-c",
       "user.name=OpenCorvus",
+      "-c",
+      "gc.auto=0",
+      "-c",
+      "maintenance.auto=false",
       "commit",
       ...(hasHead ? ["--only"] : []),
       "-m",
@@ -415,6 +399,10 @@ async function untrackOpencorvusGitExcludedPaths(dir: string) {
       "user.name=opencorvus",
       "-c",
       "user.email=noreply@opencorvus.ai",
+      "-c",
+      "gc.auto=0",
+      "-c",
+      "maintenance.auto=false",
       "commit",
       "--no-gpg-sign",
       "-m",

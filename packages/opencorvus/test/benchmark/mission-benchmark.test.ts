@@ -12,6 +12,7 @@ import {
 
 const repoRoot = path.resolve(import.meta.dir, "../../../..")
 const scriptPath = path.join(repoRoot, "packages/opencorvus/script/benchmark/mission-benchmark.ts")
+const benchmarkEnvPath = path.join(repoRoot, "packages/opencorvus/script/benchmark/env.ts")
 
 describe("mission benchmark scenario", () => {
   test("scenario stages stay separate from benchmark task input", () => {
@@ -273,6 +274,7 @@ describe("mission benchmark scenario", () => {
 
 describe("mission benchmark executable wiring", () => {
   const src = readFileSync(scriptPath, "utf8")
+  const benchmarkEnv = readFileSync(benchmarkEnvPath, "utf8")
 
   test("uses the mission wake route and never resurrects gateway master wake", () => {
     expect(src).toContain("/mission/wake")
@@ -306,19 +308,32 @@ describe("mission benchmark executable wiring", () => {
   })
 
   test("disposes isolated instance state before stopping the benchmark server", () => {
-    const disposeIndex = src.indexOf("await Instance.disposeAll().catch")
-    const stopIndex = src.indexOf("await server.stop(true).catch")
+    const disposeIndex = src.indexOf('await recordCleanup("instance disposal"')
+    const stopIndex = src.indexOf('await recordCleanup("benchmark server stop"')
     expect(disposeIndex).toBeGreaterThan(0)
     expect(stopIndex).toBeGreaterThan(disposeIndex)
   })
 
   test("exits explicitly only after cleanup has completed", () => {
-    const disposeIndex = src.indexOf("await Instance.disposeAll().catch")
-    const stopIndex = src.indexOf("await server.stop(true).catch")
+    const cleanupBlock = src.slice(src.indexOf("} finally {"), src.indexOf("async function wakeMission"))
+    const disposeIndex = cleanupBlock.indexOf('await recordCleanup("instance disposal"')
+    const stopIndex = cleanupBlock.indexOf('await recordCleanup("benchmark server stop"')
     const exitIndex = src.indexOf("process.exit(finalExitCode)")
     expect(src).toContain("let finalExitCode = 1")
-    expect(exitIndex).toBeGreaterThan(stopIndex)
-    expect(exitIndex).toBeGreaterThan(disposeIndex)
+    expect(exitIndex).toBeGreaterThan(src.indexOf("} finally {"))
+    expect(stopIndex).toBeGreaterThan(disposeIndex)
+    expect(cleanupBlock).toContain('type: "benchmark_cleanup_failed"')
+    expect(cleanupBlock).toContain("finalExitCode = 1")
+    expect(cleanupBlock).not.toContain(".catch(() => undefined)")
+  })
+
+  test("shared benchmark env does not swallow instance reset cleanup failures", () => {
+    const resetBlock = benchmarkEnv.slice(
+      benchmarkEnv.indexOf("async function resetBenchmarkState"),
+      benchmarkEnv.indexOf("export function explicitModel"),
+    )
+    expect(resetBlock).toContain("await Instance.disposeAll()")
+    expect(resetBlock).not.toContain("catch(() => undefined)")
   })
 
   test("uses observable inactivity timeout instead of a mechanical total wait deadline", () => {

@@ -129,6 +129,36 @@ describe("scheduler.task-queue-service", () => {
     await Instance.disposeAll()
   })
 
+  test("getStatusByID and failQueuedOrRunning own direct queue row status writes", { timeout: 0 }, async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant", title: "queue writer boundary" })
+        const taskID = TaskQueueService.enqueuePrompt({
+          sessionID: session.id,
+          prompt: { parts: [{ type: "text", text: "run" }] },
+          source: "engine.task",
+        })
+
+        expect(TaskQueueService.getStatusByID(taskID)).toMatchObject({
+          taskID,
+          sessionID: session.id,
+          status: "queued",
+          source: "engine.task",
+          error: null,
+        })
+
+        expect(TaskQueueService.failQueuedOrRunning({ taskIDs: [taskID], reason: "interrupted" })).toBe(1)
+        expect(TaskQueueService.getStatusByID(taskID)).toMatchObject({
+          taskID,
+          status: "failed",
+          error: "interrupted",
+        })
+      },
+    })
+  })
+
   test("init does not register a background task-flow poller", async () => {
     await using tmp = await tmpdir({ git: true })
     const register = spyOn(Scheduler, "register")

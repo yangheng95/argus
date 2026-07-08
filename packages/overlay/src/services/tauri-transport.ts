@@ -499,7 +499,11 @@ export function createTauriTransport(kind: Extract<HostKind, "tauri" | "browser"
         case "open-path":
           return invokeTauri("overlay_open_path", { path: command.path })
         case "browserPreview.sync":
-          return invokeTauri("overlay_browser_preview_sync", { url: command.url, bounds: command.bounds })
+          return invokeTauri("overlay_browser_preview_sync", {
+            scopeKey: command.scopeKey,
+            url: command.url,
+            bounds: command.bounds,
+          })
         case "browserPreview.navigate":
           return invokeTauri("overlay_browser_preview_navigate", { action: command.action })
         case "browserPreview.close":

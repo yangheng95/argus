@@ -338,6 +338,7 @@ interface ProjectedSessionStatus {
   terminalReason?: "completed" | "error" | "aborted"
   errorReason?: string
   timeCompleted?: number
+  agentSummary?: CardNode["agentSummary"]
 }
 const pendingSessionStatus = new Map<string, ProjectedSessionStatus>()
 /** Raw Question.ask interactions for standalone session conversations such as
@@ -1352,6 +1353,12 @@ function projectSessionStatus(event: any): ProjectedSessionStatus {
     }
     projected.terminalReason = reason
     projected.timeCompleted = eventEmittedAt(event, "session.status terminal")
+    if (typeof status.summary === "string" && status.summary.trim()) {
+      projected.agentSummary = {
+        text: status.summary.trim(),
+        source: "session_status",
+      }
+    }
     if (cardStatus === "error") {
       projected.errorReason =
         (typeof status.message === "string" && status.message) ||
@@ -1383,6 +1390,11 @@ function applyProjectedSessionStatus(cardID: string, projected: ProjectedSession
   }
   if (projected.errorReason) {
     setCardTreeStore("cards", cardID, "errorReason", projected.errorReason)
+  }
+  if (projected.agentSummary) {
+    setCardTreeStore("cards", cardID, "agentSummary", projected.agentSummary)
+  } else if (projected.cardStatus === "running" || projected.terminalReason) {
+    setCardTreeStore("cards", cardID, "agentSummary", undefined)
   }
 }
 

@@ -141,7 +141,15 @@ export namespace TaskQueueService {
         )
         .get(),
     )
-    if (!row) return null
+    return row ? queuedTaskStatusFromRow(row) : null
+  }
+
+  export function getStatusByID(taskID: string): QueuedTaskStatus | null {
+    const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, taskID)).get())
+    return row ? queuedTaskStatusFromRow(row) : null
+  }
+
+  function queuedTaskStatusFromRow(row: QueueTaskRow): QueuedTaskStatus {
     return {
       taskID: row.id,
       sessionID: row.session_id,
@@ -347,6 +355,29 @@ export namespace TaskQueueService {
     }
     const inFlightCancellations = requestInFlightCancellation({ sessionIDs, reason, source: input.source })
     return cancelledRows.length + inFlightCancellations
+  }
+
+  export function failQueuedOrRunning(input: { taskIDs: string[]; reason: string }): number {
+    const taskIDs = [...new Set(input.taskIDs.filter((id) => id.length > 0))]
+    if (taskIDs.length === 0) return 0
+    const now = Date.now()
+    const rows = Database.use((db) =>
+      db
+        .update(TaskQueueTable)
+        .set({
+          status: "failed",
+          error_message: input.reason,
+          time_completed: now,
+          time_updated: now,
+        })
+        .where(and(inArray(TaskQueueTable.id, taskIDs), inArray(TaskQueueTable.status, ["queued", "running"])))
+        .returning({ id: TaskQueueTable.id })
+        .all(),
+    )
+    if (Instance.current()) {
+      for (const row of rows) clearRecoveryTimer(row.id)
+    }
+    return rows.length
   }
 
   export async function awaitSessionPromptsIdle(input: { sessionIDs: string[]; source?: string }) {

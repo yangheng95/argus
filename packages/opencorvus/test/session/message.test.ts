@@ -1565,6 +1565,88 @@ describe("session.message.toModelMessage", () => {
     expect(first.output.value).not.toContain("SNAPSHOT_OLD")
   })
 
+  test("projects earlier manage_task query_failed_goals results by action key only", async () => {
+    const input: Message.WithParts[] = [
+      {
+        info: userInfo("m-u1"),
+        parts: [{ ...basePart("m-u1", "u1"), type: "text", text: "check failures" }] as Message.Part[],
+      },
+      {
+        info: assistantInfo("m-a1", "m-u1"),
+        parts: [
+          {
+            ...basePart("m-a1", "a1"),
+            type: "tool",
+            callID: "query-old",
+            tool: "manage_task",
+            state: {
+              status: "completed",
+              input: { action: "query_failed_goals" },
+              output: "OLD_FAILED_GOALS_SNAPSHOT",
+              title: "manage_task",
+              metadata: {},
+              time: { start: 0, end: 1 },
+            },
+          },
+        ] as Message.Part[],
+      },
+      {
+        info: userInfo("m-u2"),
+        parts: [{ ...basePart("m-u2", "u2"), type: "text", text: "check failures again" }] as Message.Part[],
+      },
+      {
+        info: assistantInfo("m-a2", "m-u2"),
+        parts: [
+          {
+            ...basePart("m-a2", "a2-query"),
+            type: "tool",
+            callID: "query-latest",
+            tool: "manage_task",
+            state: {
+              status: "completed",
+              input: { action: "query_failed_goals" },
+              output: "LATEST_FAILED_GOALS_SNAPSHOT",
+              title: "manage_task",
+              metadata: {},
+              time: { start: 2, end: 3 },
+            },
+          },
+          {
+            ...basePart("m-a2", "a2-complete"),
+            type: "tool",
+            callID: "complete-goal",
+            tool: "manage_task",
+            state: {
+              status: "completed",
+              input: { action: "complete_goal", goal_id: "goal_done", summary: "done" },
+              output: "COMPLETE_GOAL_RESULT",
+              title: "manage_task",
+              metadata: {},
+              time: { start: 4, end: 5 },
+            },
+          },
+        ] as Message.Part[],
+      },
+    ]
+
+    const out = await Message.toModelMessages(input, model)
+    const toolResults = out
+      .filter((m) => m.role === "tool")
+      .flatMap((m) => (Array.isArray(m.content) ? m.content : []))
+      .filter((c: any) => c.type === "tool-result") as Array<{
+      toolCallId: string
+      output: { type: string; value: string }
+    }>
+
+    expect(toolResults.find((r) => r.toolCallId === "query-old")?.output.value).toBe(
+      "[manage_task action=query_failed_goals snapshot superseded by a later call in this session]",
+    )
+    expect(toolResults.find((r) => r.toolCallId === "query-latest")?.output.value).toBe(
+      "LATEST_FAILED_GOALS_SNAPSHOT",
+    )
+    expect(toolResults.find((r) => r.toolCallId === "complete-goal")?.output.value).toBe("COMPLETE_GOAL_RESULT")
+  })
+
   test("does not project non-stateful tool results (e.g. bash) across turns", async () => {
     const input: Message.WithParts[] = [
       {
@@ -1641,12 +1723,12 @@ describe("session.message.toModelMessage", () => {
             ...basePart("m-a1", "a1"),
             type: "tool",
             callID: "only",
-            tool: "query_failed_goals",
+            tool: "manage_task",
             state: {
               status: "completed",
-              input: {},
+              input: { action: "query_failed_goals" },
               output: "FAILED_GOALS_SNAPSHOT",
-              title: "query_failed_goals",
+              title: "manage_task",
               metadata: {},
               time: { start: 0, end: 1 },
             },

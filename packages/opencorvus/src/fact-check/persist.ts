@@ -17,6 +17,7 @@ import { and, desc, eq, sql } from "drizzle-orm"
 import { Database } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { EngineArtifactTable } from "@/engine/engine.sql"
+import { recordEngineArtifact } from "@/engine/artifact"
 import type { FactCheckAttemptArtifact, FactCheckReport } from "./schema"
 
 export interface FactCheckAttemptRow {
@@ -58,22 +59,14 @@ export function recordFactCheckAttempt(input: RecordFactCheckAttemptInput): stri
     time_completed: input.timeCompleted ?? now,
     outcome: input.outcome,
   }
-  Database.use((db) =>
-    db
-      .insert(EngineArtifactTable)
-      .values({
-        id,
-        task_id: input.taskID,
-        run_id: null,
-        goal_run_id: null,
-        kind: "fact_check_attempt",
-        label: `fact_check-${input.outcome}`,
-        payload: payload as unknown as Record<string, unknown>,
-        time_created: now,
-        time_updated: now,
-      })
-      .run(),
-  )
+  recordEngineArtifact({
+    id,
+    taskID: input.taskID,
+    kind: "fact_check_attempt",
+    label: `fact_check-${input.outcome}`,
+    payload: payload as unknown as Record<string, unknown>,
+    timeCreated: now,
+  })
   return id
 }
 

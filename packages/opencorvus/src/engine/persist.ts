@@ -40,6 +40,7 @@ import { isGoalRunOrphaned } from "./orphan"
 import { findLiveBuildOwnershipByGoal } from "./tool-ownership"
 import { SessionStatus } from "@/session/status"
 import { EngineProtocol } from "./protocol"
+import { insertEngineArtifact, recordEngineArtifact } from "./artifact"
 import {
   findGoal,
   findGoalLatestWorkspace,
@@ -271,6 +272,28 @@ export type AppendGoalToActiveGraphResult = {
   planNodeID?: string
 }
 
+export type CreateActivePlanGraphGoal = {
+  id: string
+  title: string
+  acceptance_specs?: import("@/acceptance/types").AcceptanceSpec[] | null
+  depends_on?: string[] | null
+}
+
+export type CreateActivePlanGraphInput = {
+  taskID: string
+  specSnapshotID: string
+  prompt: string
+  goals: CreateActivePlanGraphGoal[]
+  now: number
+}
+
+export type CreateActivePlanGraphResult = {
+  planID: string
+  planNodeIDs: string[]
+}
+
+export type GoalContractFieldPatch = Partial<typeof EngineGoalTable.$inferInsert>
+
 function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
 }
@@ -497,6 +520,83 @@ export function insertGoalRows(
       metadata,
     }
   })
+}
+
+export function createActivePlanGraph(
+  db: Database.TxOrDb,
+  input: CreateActivePlanGraphInput,
+): CreateActivePlanGraphResult {
+  const planID = Identifier.ascending("plan")
+  supersedePriorActivePlansForTask(db, { taskID: input.taskID, now: input.now })
+  db.insert(EnginePlanVersionTable)
+    .values({
+      id: planID,
+      task_id: input.taskID,
+      spec_snapshot_id: input.specSnapshotID,
+      version: 1,
+      status: "active",
+      summary: `${input.goals.length} goals`,
+      prompt: input.prompt,
+      metadata: {},
+      time_created: input.now,
+      time_updated: input.now,
+    })
+    .run()
+
+  const goalToPlanNode = new Map<string, string>()
+  const planNodeIDs: string[] = []
+  for (const goal of input.goals) {
+    const planNodeID = Identifier.ascending("plan_node")
+    planNodeIDs.push(planNodeID)
+    goalToPlanNode.set(goal.id, planNodeID)
+  }
+
+  for (const [index, goal] of input.goals.entries()) {
+    const resolvedDeps = (goal.depends_on ?? []).flatMap((depGoalID) => {
+      const planNodeID = goalToPlanNode.get(depGoalID)
+      if (!planNodeID) {
+        log.warn("create_run: goal.depends_on references unknown goal ID — dropping", {
+          goalID: goal.id,
+          goalTitle: goal.title,
+          unknownDep: depGoalID,
+        })
+      }
+      return planNodeID ? [planNodeID] : []
+    })
+
+    db.insert(EnginePlanNodeTable)
+      .values({
+        id: planNodeIDs[index],
+        task_id: input.taskID,
+        plan_version_id: planID,
+        kind: "goal",
+        goal_id: goal.id,
+        title: goal.title,
+        brief: renderSpecsAsText(goal.acceptance_specs ?? []),
+        depends_on_ids: resolvedDeps.length > 0 ? resolvedDeps : undefined,
+        order_index: index,
+        metadata: {},
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run()
+  }
+
+  for (const goal of input.goals) {
+    db.update(EngineGoalTable)
+      .set({ plan_version_id: planID, time_updated: input.now })
+      .where(eq(EngineGoalTable.id, goal.id))
+      .run()
+  }
+
+  return { planID, planNodeIDs }
+}
+
+export function updateGoalContractFields(
+  db: Database.TxOrDb,
+  input: { goalID: string; values: GoalContractFieldPatch },
+): void {
+  db.update(EngineGoalTable).set(input.values).where(eq(EngineGoalTable.id, input.goalID)).run()
 }
 
 /**
@@ -796,20 +896,14 @@ export function persistArchitectContractGraph(
 ) {
   const graph = ArchitectContractGraphSchema.parse(input.graph)
   const id = Identifier.ascending("artifact")
-  db.insert(EngineArtifactTable)
-    .values({
-      id,
-      task_id: input.taskID,
-      run_id: null,
-      goal_run_id: null,
-      acceptance_id: null,
-      kind: "architect_contract_graph",
-      label: "active",
-      payload: graph,
-      time_created: input.now,
-      time_updated: input.now,
-    })
-    .run()
+  insertEngineArtifact(db, {
+    id,
+    taskID: input.taskID,
+    kind: "architect_contract_graph",
+    label: "active",
+    payload: graph,
+    timeCreated: input.now,
+  })
   return id
 }
 
@@ -833,24 +927,18 @@ export function persistGoalWorkload(
   },
 ) {
   const id = Identifier.ascending("artifact")
-  db.insert(EngineArtifactTable)
-    .values({
-      id,
-      task_id: input.taskID,
-      run_id: null,
-      goal_run_id: null,
-      acceptance_id: null,
-      kind: "goal_workload",
-      label: "active",
-      payload: {
-        briefs: input.briefs,
-        spec_snapshot_id: input.specSnapshotID,
-        summary: input.summary,
-      },
-      time_created: input.now,
-      time_updated: input.now,
-    })
-    .run()
+  insertEngineArtifact(db, {
+    id,
+    taskID: input.taskID,
+    kind: "goal_workload",
+    label: "active",
+    payload: {
+      briefs: input.briefs,
+      spec_snapshot_id: input.specSnapshotID,
+      summary: input.summary,
+    },
+    timeCreated: input.now,
+  })
   return id
 }
 
@@ -901,20 +989,14 @@ function persistResearchBriefArtifact(
     throw new Error(`${input.kind}: ${boundaryError}`)
   }
   const id = Identifier.ascending("artifact")
-  db.insert(EngineArtifactTable)
-    .values({
-      id,
-      task_id: input.taskID,
-      run_id: null,
-      goal_run_id: null,
-      acceptance_id: null,
-      kind: input.kind,
-      label: "active",
-      payload: brief,
-      time_created: input.now,
-      time_updated: input.now,
-    })
-    .run()
+  insertEngineArtifact(db, {
+    id,
+    taskID: input.taskID,
+    kind: input.kind,
+    label: "active",
+    payload: brief,
+    timeCreated: input.now,
+  })
   return id
 }
 
@@ -1135,22 +1217,16 @@ export function createGoalRun(input: {
     time_started: null,
     time_completed: null,
   }
-  Database.use((db) =>
-    db
-      .insert(EngineArtifactTable)
-      .values({
-        id,
-        task_id: input.taskID,
-        run_id: input.coordinatorRunID,
-        goal_run_id: id,
-        kind: "goal_run_attempt",
-        label: "attempt-queued",
-        payload,
-        time_created: now,
-        time_updated: now,
-      })
-      .run(),
-  )
+  recordEngineArtifact({
+    id,
+    taskID: input.taskID,
+    runID: input.coordinatorRunID,
+    goalRunID: id,
+    kind: "goal_run_attempt",
+    label: "attempt-queued",
+    payload,
+    timeCreated: now,
+  })
   const row = findGoalRun(id)
   if (!row) throw new Error(`createGoalRun: inserted goal run ${id} not found after insert`)
   syncGoalStatus(input.goalID, "createGoalRun")
@@ -1341,8 +1417,7 @@ function appendGoalRunArtifact(input: {
     // moves a previously owner-less row into a live status, stamp the current
     // process owner (the process driving it live owns it). Terminal/queued rows
     // without an owner stay null. Spec 2026-05-29-goal-run-owner-orphan-liveness.
-    owner:
-      merged.owner ?? (isLiveGoalRunStatus(merged.status) ? processOwner() : null),
+    owner: merged.owner ?? (isLiveGoalRunStatus(merged.status) ? processOwner() : null),
     time_started: merged.time_started,
     time_completed: merged.time_completed,
   }
@@ -1354,20 +1429,16 @@ function appendGoalRunArtifact(input: {
   // keeps each append strictly newer regardless of wall-clock resolution.
   const effectiveNow = Math.max(input.existing.time_updated + 1, input.now)
   const insert = (db: EngineDatabaseConnection) =>
-    db
-      .insert(EngineArtifactTable)
-      .values({
-        id: Identifier.uuid4First8(),
-        task_id: merged.task_id,
-        run_id: merged.coordinator_run_id,
-        goal_run_id: input.goalRunID,
-        kind: "goal_run_attempt",
-        label: input.label,
-        payload,
-        time_created: effectiveNow,
-        time_updated: effectiveNow,
-      })
-      .run()
+    insertEngineArtifact(db, {
+      id: Identifier.uuid4First8(),
+      taskID: merged.task_id,
+      runID: merged.coordinator_run_id,
+      goalRunID: input.goalRunID,
+      kind: "goal_run_attempt",
+      label: input.label,
+      payload,
+      timeCreated: effectiveNow,
+    })
   if (input.db) {
     insert(input.db)
   } else {
@@ -1517,14 +1588,10 @@ function buildGoalRunPatch(
   const patch: Partial<import("./store").GoalRunRow> = {
     ...values,
     ...(nextStatus !== "blocked" && values.blocking_reason === undefined ? { blocking_reason: null } : {}),
-    ...(!row.time_started &&
-    doesGoalRunStatusImplyStarted(nextStatus) &&
-    values.time_started === undefined
+    ...(!row.time_started && doesGoalRunStatusImplyStarted(nextStatus) && values.time_started === undefined
       ? { time_started: now }
       : {}),
-    ...(isTerminalGoalRunStatus(nextStatus) && values.time_completed === undefined
-      ? { time_completed: now }
-      : {}),
+    ...(isTerminalGoalRunStatus(nextStatus) && values.time_completed === undefined ? { time_completed: now } : {}),
   }
   return { nextStatus, statusChanged, patch }
 }
@@ -1657,92 +1724,73 @@ function writeAcceptanceRow(
   // carries the full AcceptanceRow shape so the read-model can reconstruct it
   // without a JOIN. `acceptanceID` is the artifact row id — consumers that
   // reference `acceptance_id` on other artifact rows still point at a valid id.
-  db.insert(EngineArtifactTable)
-    .values({
-      id: input.acceptanceID,
-      task_id: input.task.id,
-      run_id: input.run.id,
-      goal_run_id: input.goalRunID,
-      acceptance_id: input.acceptanceID,
-      kind: "acceptance",
-      label: input.goalRunID ? "acceptance-goal_run" : "acceptance-task",
-      payload: {
-        status: "candidate",
+  insertEngineArtifact(db, {
+    id: input.acceptanceID,
+    taskID: input.task.id,
+    runID: input.run.id,
+    goalRunID: input.goalRunID,
+    acceptanceID: input.acceptanceID,
+    kind: "acceptance",
+    label: input.goalRunID ? "acceptance-goal_run" : "acceptance-task",
+    payload: {
+      status: "candidate",
+      summary: input.acceptance.summary,
+      result: {
         summary: input.acceptance.summary,
-        result: {
-          summary: input.acceptance.summary,
-          commit_ref: input.acceptance.commitRef,
-          changed_files: acceptanceDiffs.map((item) => item.file),
-          diffs: acceptanceDiffs,
-          stats,
-          report: input.acceptance.report,
-        },
+        commit_ref: input.acceptance.commitRef,
+        changed_files: acceptanceDiffs.map((item) => item.file),
+        diffs: acceptanceDiffs,
+        stats,
+        report: input.acceptance.report,
       },
-      time_created: input.now,
-      time_updated: input.now,
-    })
-    .run()
-  db.insert(EngineArtifactTable)
-    .values({
-      id: Identifier.ascending("artifact"),
-      task_id: input.task.id,
-      run_id: input.run.id,
-      goal_run_id: input.goalRunID,
-      acceptance_id: input.acceptanceID,
-      kind: "report",
-      label: "assistant-summary",
-      payload: { summary: input.acceptance.summary },
-      time_created: input.now,
-      time_updated: input.now,
-    })
-    .run()
+    },
+    timeCreated: input.now,
+  })
+  insertEngineArtifact(db, {
+    taskID: input.task.id,
+    runID: input.run.id,
+    goalRunID: input.goalRunID,
+    acceptanceID: input.acceptanceID,
+    kind: "report",
+    label: "assistant-summary",
+    payload: { summary: input.acceptance.summary },
+    timeCreated: input.now,
+  })
   if (previewDiffs.length > 0) {
-    db.insert(EngineArtifactTable)
-      .values({
-        id: Identifier.ascending("artifact"),
-        task_id: input.task.id,
-        run_id: input.run.id,
-        goal_run_id: input.goalRunID,
-        acceptance_id: input.acceptanceID,
-        kind: "diff",
-        label: "workspace-diff",
-        payload: { diffs: previewDiffs },
-        time_created: input.now,
-        time_updated: input.now,
-      })
-      .run()
+    insertEngineArtifact(db, {
+      taskID: input.task.id,
+      runID: input.run.id,
+      goalRunID: input.goalRunID,
+      acceptanceID: input.acceptanceID,
+      kind: "diff",
+      label: "workspace-diff",
+      payload: { diffs: previewDiffs },
+      timeCreated: input.now,
+    })
   }
   if (input.acceptance.commitRef) {
-    db.insert(EngineArtifactTable)
-      .values({
-        id: Identifier.ascending("artifact"),
-        task_id: input.task.id,
-        run_id: input.run.id,
-        goal_run_id: input.goalRunID,
-        acceptance_id: input.acceptanceID,
-        kind: "git_ref",
-        label: "acceptance-commit",
-        payload: { commit_ref: input.acceptance.commitRef },
-        time_created: input.now,
-        time_updated: input.now,
-      })
-      .run()
+    insertEngineArtifact(db, {
+      taskID: input.task.id,
+      runID: input.run.id,
+      goalRunID: input.goalRunID,
+      acceptanceID: input.acceptanceID,
+      kind: "git_ref",
+      label: "acceptance-commit",
+      payload: { commit_ref: input.acceptance.commitRef },
+      timeCreated: input.now,
+    })
   }
   for (const item of acceptanceDiffs) {
-    db.insert(EngineArtifactTable)
-      .values({
-        id: Identifier.ascending("artifact"),
-        task_id: input.task.id,
-        run_id: input.run.id,
-        goal_run_id: input.goalRunID,
-        acceptance_id: input.acceptanceID,
-        kind: "changed_file",
-        label: item.file,
-        payload: item,
-        time_created: input.now,
-        time_updated: input.now,
-      })
-      .run()
+    insertEngineArtifact(db, {
+      taskID: input.task.id,
+      runID: input.run.id,
+      goalRunID: input.goalRunID,
+      acceptanceID: input.acceptanceID,
+      kind: "changed_file",
+      label: item.file,
+      payload: item,
+      timeCreated: input.now,
+    })
   }
 }
 
@@ -1921,23 +1969,16 @@ export function markAcceptancePublishing(acceptanceId: string, now: number) {
     throw new Error(`markAcceptancePublishing: no acceptance artifact found for ${acceptanceId}`)
   }
   const payload = (existing.payload ?? {}) as Record<string, unknown>
-  Database.use((db) =>
-    db
-      .insert(EngineArtifactTable)
-      .values({
-        id: Identifier.ascending("artifact"),
-        task_id: existing.task_id,
-        run_id: existing.run_id,
-        goal_run_id: existing.goal_run_id ?? null,
-        acceptance_id: acceptanceId,
-        kind: "acceptance",
-        label: existing.label,
-        payload: { ...payload, status: "publishing" },
-        time_created: now,
-        time_updated: now,
-      })
-      .run(),
-  )
+  recordEngineArtifact({
+    taskID: existing.task_id,
+    runID: existing.run_id,
+    goalRunID: existing.goal_run_id,
+    acceptanceID: acceptanceId,
+    kind: "acceptance",
+    label: existing.label,
+    payload: { ...payload, status: "publishing" },
+    timeCreated: now,
+  })
 }
 
 export function finalizeAcceptanceResult(input: {
@@ -1960,46 +2001,38 @@ export function finalizeAcceptanceResult(input: {
   const existingPayload = (existing.payload ?? {}) as Record<string, unknown>
   const existingResult = (existingPayload.result ?? input.acceptance.result ?? {}) as Record<string, unknown>
   Database.transaction((db) => {
-    db.insert(EngineArtifactTable)
-      .values({
-        id: Identifier.ascending("artifact"),
-        task_id: input.taskId,
-        run_id: input.runId,
-        goal_run_id: existing.goal_run_id ?? null,
-        acceptance_id: input.acceptanceId,
-        kind: "acceptance",
-        label: existing.label,
-        payload: {
-          status: input.result.status,
+    insertEngineArtifact(db, {
+      taskID: input.taskId,
+      runID: input.runId,
+      goalRunID: existing.goal_run_id,
+      acceptanceID: input.acceptanceId,
+      kind: "acceptance",
+      label: existing.label,
+      payload: {
+        status: input.result.status,
+        summary: input.result.summary,
+        result: {
+          ...existingResult,
           summary: input.result.summary,
-          result: {
-            ...existingResult,
-            summary: input.result.summary,
-            artifacts: input.result.artifacts.map((item) => ({
-              kind: item.kind,
-              label: item.label,
-            })),
-            publish: input.result.publish,
-          },
+          artifacts: input.result.artifacts.map((item) => ({
+            kind: item.kind,
+            label: item.label,
+          })),
+          publish: input.result.publish,
         },
-        time_created: input.now,
-        time_updated: input.now,
-      })
-      .run()
+      },
+      timeCreated: input.now,
+    })
     for (const artifact of input.result.artifacts) {
-      db.insert(EngineArtifactTable)
-        .values({
-          id: Identifier.ascending("artifact"),
-          task_id: input.taskId,
-          run_id: input.runId,
-          acceptance_id: input.acceptanceId,
-          kind: artifact.kind,
-          label: artifact.label,
-          payload: artifact.payload,
-          time_created: input.now,
-          time_updated: input.now,
-        })
-        .run()
+      insertEngineArtifact(db, {
+        taskID: input.taskId,
+        runID: input.runId,
+        acceptanceID: input.acceptanceId,
+        kind: artifact.kind,
+        label: artifact.label,
+        payload: artifact.payload,
+        timeCreated: input.now,
+      })
     }
   })
 }
@@ -2069,11 +2102,11 @@ export function completeGoal(input: { goalID: string; reason: string; now?: numb
   }
   const now = input.now ?? Date.now()
   const tip = findLatestTipGoalRun(input.goalID)
-  const blocker = tip ? liveGoalRunControlBlocker({ taskID: goal.task_id, goalID: input.goalID, goalRun: tip }) : undefined
+  const blocker = tip
+    ? liveGoalRunControlBlocker({ taskID: goal.task_id, goalID: input.goalID, goalRun: tip })
+    : undefined
   if (blocker) {
-    throw new Error(
-      `completeGoal: ${blocker}; finish or abort the active worker before marking the goal complete.`,
-    )
+    throw new Error(`completeGoal: ${blocker}; finish or abort the active worker before marking the goal complete.`)
   }
   if (tip?.status === "completed" && !tip.superseded_reason) {
     return tip
@@ -2089,42 +2122,35 @@ export function completeGoal(input: { goalID: string; reason: string; now?: numb
 
   if (!tip) {
     const id = Identifier.uuid4First8()
-    Database.use((db) =>
-      db
-        .insert(EngineArtifactTable)
-        .values({
-          id,
-          task_id: goal.task_id,
-          run_id: null,
-          goal_run_id: id,
-          kind: "goal_run_attempt",
-          label: "attempt-completed",
-          payload: {
-            goal_id: input.goalID,
-            plan_node_id: null,
-            session_id: null,
-            status: "completed",
-            retry_count: 0,
-            blocking_reason: null,
-            error: null,
-            workspace_dir: null,
-            workspace_branch: null,
-            workspace_base_ref: null,
-            base_ref: null,
-            merge_ref: null,
-            supersede_of: null,
-            superseded_reason: null,
-            superseded_at: null,
-            metadata: completionMetadata,
-            owner: null,
-            time_started: null,
-            time_completed: now,
-          },
-          time_created: now,
-          time_updated: now,
-        })
-        .run(),
-    )
+    recordEngineArtifact({
+      id,
+      taskID: goal.task_id,
+      goalRunID: id,
+      kind: "goal_run_attempt",
+      label: "attempt-completed",
+      payload: {
+        goal_id: input.goalID,
+        plan_node_id: null,
+        session_id: null,
+        status: "completed",
+        retry_count: 0,
+        blocking_reason: null,
+        error: null,
+        workspace_dir: null,
+        workspace_branch: null,
+        workspace_base_ref: null,
+        base_ref: null,
+        merge_ref: null,
+        supersede_of: null,
+        superseded_reason: null,
+        superseded_at: null,
+        metadata: completionMetadata,
+        owner: null,
+        time_started: null,
+        time_completed: now,
+      },
+      timeCreated: now,
+    })
     syncGoalStatus(input.goalID, "completeGoal")
     const row = findGoalRun(id)
     if (!row) throw new Error(`completeGoal: inserted goal run ${id} not found after insert`)
@@ -2314,34 +2340,28 @@ export function beginBuildAttempt(input: {
     time_completed: null,
   }
   Database.transaction((db) => {
-    db.insert(EngineArtifactTable)
-      .values({
-        id,
-        task_id: input.taskID,
-        run_id: input.runID ?? null,
-        goal_run_id: id,
-        kind: "goal_run_attempt",
-        label: "attempt-running",
-        payload,
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
+    insertEngineArtifact(db, {
+      id,
+      taskID: input.taskID,
+      runID: input.runID,
+      goalRunID: id,
+      kind: "goal_run_attempt",
+      label: "attempt-running",
+      payload,
+      timeCreated: now,
+    })
     for (const artifact of input.extraArtifacts?.({ goalRunID: id, now }) ?? []) {
-      db.insert(EngineArtifactTable)
-        .values({
-          id: artifact.id,
-          task_id: input.taskID,
-          run_id: artifact.runID ?? input.runID ?? null,
-          goal_run_id: artifact.goalRunID ?? id,
-          acceptance_id: artifact.acceptanceID ?? null,
-          kind: artifact.kind,
-          label: artifact.label,
-          payload: artifact.payload,
-          time_created: now,
-          time_updated: now,
-        })
-        .run()
+      insertEngineArtifact(db, {
+        id: artifact.id,
+        taskID: input.taskID,
+        runID: artifact.runID ?? input.runID,
+        goalRunID: artifact.goalRunID ?? id,
+        acceptanceID: artifact.acceptanceID,
+        kind: artifact.kind,
+        label: artifact.label,
+        payload: artifact.payload,
+        timeCreated: now,
+      })
     }
   })
   syncGoalStatus(input.goalID, `beginBuildAttempt`)
@@ -2411,42 +2431,39 @@ function writeBuildAttemptOutcome(
   },
 ) {
   const outcomeID = Identifier.ascending("artifact")
-  db.insert(EngineArtifactTable)
-    .values({
-      id: outcomeID,
+  insertEngineArtifact(db, {
+    id: outcomeID,
+    taskID: input.goalRun.task_id,
+    runID: input.goalRun.coordinator_run_id,
+    goalRunID: input.goalRun.id,
+    kind: "build_attempt_outcome",
+    label: input.outcomeKind,
+    payload: {
       task_id: input.goalRun.task_id,
-      run_id: input.goalRun.coordinator_run_id,
+      goal_id: input.goalRun.goal_id,
       goal_run_id: input.goalRun.id,
-      kind: "build_attempt_outcome",
-      label: input.outcomeKind,
-      payload: {
-        task_id: input.goalRun.task_id,
-        goal_id: input.goalRun.goal_id,
-        goal_run_id: input.goalRun.id,
-        run_id: input.goalRun.coordinator_run_id,
-        session_id: input.goalRun.session_id,
-        terminal_status: input.status,
-        outcome_kind: input.outcomeKind,
-        summary: input.summary?.trim() || `Build attempt ${input.goalRun.id} ${input.outcomeKind}.`,
-        error: input.error ?? null,
-        no_diff_reason: input.noDiffReason ?? null,
-        host_facts: {
-          contribution_commit_ref: input.commitRef ?? null,
-          published_commit_ref: input.publishedCommitRef ?? null,
-          diff_base_ref: input.diffBaseRef ?? null,
-          diff_head_ref: input.diffHeadRef ?? null,
-          actual_changed_files: input.changedFiles,
-        },
-        workspace: {
-          dir: input.workspaceDir ?? input.goalRun.workspace_dir,
-          branch: input.workspaceBranch ?? input.goalRun.workspace_branch,
-          base_ref: input.workspaceBaseRef ?? input.goalRun.workspace_base_ref,
-        },
+      run_id: input.goalRun.coordinator_run_id,
+      session_id: input.goalRun.session_id,
+      terminal_status: input.status,
+      outcome_kind: input.outcomeKind,
+      summary: input.summary?.trim() || `Build attempt ${input.goalRun.id} ${input.outcomeKind}.`,
+      error: input.error ?? null,
+      no_diff_reason: input.noDiffReason ?? null,
+      host_facts: {
+        contribution_commit_ref: input.commitRef ?? null,
+        published_commit_ref: input.publishedCommitRef ?? null,
+        diff_base_ref: input.diffBaseRef ?? null,
+        diff_head_ref: input.diffHeadRef ?? null,
+        actual_changed_files: input.changedFiles,
       },
-      time_created: input.now,
-      time_updated: input.now,
-    })
-    .run()
+      workspace: {
+        dir: input.workspaceDir ?? input.goalRun.workspace_dir,
+        branch: input.workspaceBranch ?? input.goalRun.workspace_branch,
+        base_ref: input.workspaceBaseRef ?? input.goalRun.workspace_base_ref,
+      },
+    },
+    timeCreated: input.now,
+  })
   return outcomeID
 }
 
@@ -2490,58 +2507,47 @@ export function recordTaskLevelBuildOutcome(input: {
     acceptanceDiffCount: actualChangedFiles.length,
   })
   const outcomeID = Identifier.ascending("artifact")
-  Database.use((db) =>
-    db
-      .insert(EngineArtifactTable)
-      .values({
-        id: outcomeID,
-        task_id: input.taskID,
-        run_id: input.runID ?? null,
-        goal_run_id: null,
-        kind: "build_attempt_outcome",
-        label: outcomeKind,
-        payload: {
-          task_id: input.taskID,
-          goal_id: null,
-          goal_run_id: null,
-          run_id: input.runID ?? null,
-          session_id: input.sessionID ?? null,
-          terminal_status: terminalStatus,
-          outcome_kind: outcomeKind,
-          summary: input.result.summary.trim() || `Task-level build ${outcomeKind}.`,
-          error: input.result.status === "failed" ? input.result.error : null,
-          no_diff_reason: noDiffReason ?? null,
-          build_report: input.result,
-          host_facts: {
-            merge_back_status: input.mergeBackStatus ?? null,
-            last_merge_back_outcome: input.lastMergeBackOutcome ?? null,
-            contribution_commit_ref: input.contributionCommitRef ?? null,
-            published_commit_ref: input.publishedCommitRef ?? null,
-            worktree_head: input.worktreeHead ?? null,
-            diff_base_ref: input.diffBaseRef ?? null,
-            diff_head_ref: input.diffHeadRef ?? null,
-            actual_changed_files: actualChangedFiles,
-            reported_changed_files: reportedChangedFiles,
-          },
-          workspace: {
-            dir: input.worktreeDir ?? null,
-            branch: input.worktreeBranch ?? null,
-            base_ref: input.worktreeBaseRef ?? null,
-          },
-        },
-        time_created: now,
-        time_updated: now,
-      })
-      .run(),
-  )
+  recordEngineArtifact({
+    id: outcomeID,
+    taskID: input.taskID,
+    runID: input.runID,
+    kind: "build_attempt_outcome",
+    label: outcomeKind,
+    payload: {
+      task_id: input.taskID,
+      goal_id: null,
+      goal_run_id: null,
+      run_id: input.runID ?? null,
+      session_id: input.sessionID ?? null,
+      terminal_status: terminalStatus,
+      outcome_kind: outcomeKind,
+      summary: input.result.summary.trim() || `Task-level build ${outcomeKind}.`,
+      error: input.result.status === "failed" ? input.result.error : null,
+      no_diff_reason: noDiffReason ?? null,
+      build_report: input.result,
+      host_facts: {
+        merge_back_status: input.mergeBackStatus ?? null,
+        last_merge_back_outcome: input.lastMergeBackOutcome ?? null,
+        contribution_commit_ref: input.contributionCommitRef ?? null,
+        published_commit_ref: input.publishedCommitRef ?? null,
+        worktree_head: input.worktreeHead ?? null,
+        diff_base_ref: input.diffBaseRef ?? null,
+        diff_head_ref: input.diffHeadRef ?? null,
+        actual_changed_files: actualChangedFiles,
+        reported_changed_files: reportedChangedFiles,
+      },
+      workspace: {
+        dir: input.worktreeDir ?? null,
+        branch: input.worktreeBranch ?? null,
+        base_ref: input.worktreeBaseRef ?? null,
+      },
+    },
+    timeCreated: now,
+  })
   return outcomeID
 }
 
-export function recordAbortedBuildAttemptOutcome(input: {
-  goalRunID: string
-  reason: string
-  now?: number
-}): void {
+export function recordAbortedBuildAttemptOutcome(input: { goalRunID: string; reason: string; now?: number }): void {
   const goalRun = findGoalRun(input.goalRunID)
   if (!goalRun) return
   const now = input.now ?? Date.now()
@@ -2612,9 +2618,7 @@ export function finalizeBuildAttempt(input: {
   if (input.workspaceBranch !== undefined) patch.workspace_branch = input.workspaceBranch
   if (input.workspaceBaseRef !== undefined) patch.workspace_base_ref = input.workspaceBaseRef
   const rawDiffs = Array.isArray(input.diffs) ? input.diffs : []
-  const acceptanceDiffs = rawDiffs.filter(
-    (item) => !ProjectRuntimePaths.isInternalRuntimeRelativePath(item.file),
-  )
+  const acceptanceDiffs = rawDiffs.filter((item) => !ProjectRuntimePaths.isInternalRuntimeRelativePath(item.file))
   const acceptanceDiffSummaries = summarizeAcceptanceDiffs(acceptanceDiffs)
   const previewDiffs = acceptancePreviewDiffs(acceptanceDiffs)
   const includeAcceptance = input.status === "completed" && !!input.commitRef && acceptanceDiffSummaries.length > 0
@@ -2661,50 +2665,43 @@ export function finalizeBuildAttempt(input: {
     if (includeAcceptance) {
       const stats = acceptanceDiffStats(acceptanceDiffSummaries)
       const acceptanceID = Identifier.ascending("acceptance")
-      db.insert(EngineArtifactTable)
-        .values({
-          id: acceptanceID,
-          task_id: input.taskID,
-          run_id: input.runID ?? goalRun.coordinator_run_id ?? null,
-          goal_run_id: input.goalRunID,
-          acceptance_id: acceptanceID,
-          kind: "acceptance",
-          label: "acceptance-goal_run",
-          payload: {
-            status: "candidate",
+      insertEngineArtifact(db, {
+        id: acceptanceID,
+        taskID: input.taskID,
+        runID: input.runID ?? goalRun.coordinator_run_id,
+        goalRunID: input.goalRunID,
+        acceptanceID,
+        kind: "acceptance",
+        label: "acceptance-goal_run",
+        payload: {
+          status: "candidate",
+          summary: acceptanceSummary,
+          result: {
             summary: acceptanceSummary,
-            result: {
-              summary: acceptanceSummary,
-              build_attempt_outcome_id: outcomeID,
-              commit_ref: input.commitRef,
-              published_commit_ref: input.publishedCommitRef,
-              diff_base_ref: input.diffBaseRef,
-              diff_head_ref: input.diffHeadRef,
-              changed_files: acceptanceDiffSummaries.map((d) => d.file),
-              file_changes: input.fileChanges ?? [],
-              diffs: acceptanceDiffSummaries,
-              stats,
-            },
+            build_attempt_outcome_id: outcomeID,
+            commit_ref: input.commitRef,
+            published_commit_ref: input.publishedCommitRef,
+            diff_base_ref: input.diffBaseRef,
+            diff_head_ref: input.diffHeadRef,
+            changed_files: acceptanceDiffSummaries.map((d) => d.file),
+            file_changes: input.fileChanges ?? [],
+            diffs: acceptanceDiffSummaries,
+            stats,
           },
-          time_created: now,
-          time_updated: now,
-        })
-        .run()
+        },
+        timeCreated: now,
+      })
       if (previewDiffs.length > 0) {
-        db.insert(EngineArtifactTable)
-          .values({
-            id: Identifier.ascending("artifact"),
-            task_id: input.taskID,
-            run_id: input.runID ?? goalRun.coordinator_run_id ?? null,
-            goal_run_id: input.goalRunID,
-            acceptance_id: acceptanceID,
-            kind: "diff",
-            label: "workspace-diff",
-            payload: { diffs: previewDiffs },
-            time_created: now,
-            time_updated: now,
-          })
-          .run()
+        insertEngineArtifact(db, {
+          taskID: input.taskID,
+          runID: input.runID ?? goalRun.coordinator_run_id,
+          goalRunID: input.goalRunID,
+          acceptanceID,
+          kind: "diff",
+          label: "workspace-diff",
+          payload: { diffs: previewDiffs },
+          timeCreated: now,
+        })
       }
     }
   })
@@ -2823,22 +2820,14 @@ export function recordIntegrityAttempt(input: {
     unresolvedDisagreements: input.unresolvedDisagreements ?? [],
     timeCompleted: now,
   })
-  Database.use((db) =>
-    db
-      .insert(EngineArtifactTable)
-      .values({
-        id,
-        task_id: input.taskID,
-        run_id: null,
-        goal_run_id: null,
-        kind: "integrity_attempt",
-        label: `verdict-${input.verdict}`,
-        payload,
-        time_created: now,
-        time_updated: now,
-      })
-      .run(),
-  )
+  recordEngineArtifact({
+    id,
+    taskID: input.taskID,
+    kind: "integrity_attempt",
+    label: `verdict-${input.verdict}`,
+    payload,
+    timeCreated: now,
+  })
   return id
 }
 
@@ -2860,25 +2849,17 @@ export function recordOrchestratorStreamError(input: {
   sessionID?: string
   now: number
 }) {
-  return Database.use((db) =>
-    db
-      .insert(EngineArtifactTable)
-      .values({
-        id: Identifier.ascending("artifact"),
-        task_id: input.taskID,
-        run_id: null,
-        kind: "orchestrator-stream-error",
-        label: "orchestrator-stream-error",
-        payload: {
-          reason: input.reason,
-          errorName: input.errorName,
-          sessionID: input.sessionID,
-        },
-        time_created: input.now,
-        time_updated: input.now,
-      })
-      .run(),
-  )
+  return recordEngineArtifact({
+    taskID: input.taskID,
+    kind: "orchestrator-stream-error",
+    label: "orchestrator-stream-error",
+    payload: {
+      reason: input.reason,
+      errorName: input.errorName,
+      sessionID: input.sessionID,
+    },
+    timeCreated: input.now,
+  })
 }
 
 /**
@@ -2894,25 +2875,17 @@ export function recordOrchestratorDecisionContractFailure(input: {
   sessionID?: string
   now: number
 }) {
-  return Database.use((db) =>
-    db
-      .insert(EngineArtifactTable)
-      .values({
-        id: Identifier.ascending("artifact"),
-        task_id: input.taskID,
-        run_id: null,
-        kind: "orchestrator-decision-contract-failure",
-        label: "orchestrator-decision-contract-failure",
-        payload: {
-          reason: input.reason,
-          errorName: input.errorName,
-          sessionID: input.sessionID,
-        },
-        time_created: input.now,
-        time_updated: input.now,
-      })
-      .run(),
-  )
+  return recordEngineArtifact({
+    taskID: input.taskID,
+    kind: "orchestrator-decision-contract-failure",
+    label: "orchestrator-decision-contract-failure",
+    payload: {
+      reason: input.reason,
+      errorName: input.errorName,
+      sessionID: input.sessionID,
+    },
+    timeCreated: input.now,
+  })
 }
 
 export function recordToolExecuteError(input: {
@@ -2928,30 +2901,23 @@ export function recordToolExecuteError(input: {
   failure: ToolFailureCause
   now: number
 }) {
-  return Database.use((db) =>
-    db
-      .insert(EngineArtifactTable)
-      .values({
-        id: Identifier.ascending("artifact"),
-        task_id: input.taskID,
-        run_id: input.runID ?? null,
-        goal_run_id: input.goalRunID ?? null,
-        kind: "tool-execute-error",
-        label: "tool-execute-error",
-        payload: {
-          sessionID: input.sessionID,
-          messageID: input.messageID,
-          partID: input.partID,
-          toolName: input.toolName,
-          callID: input.callID,
-          input: input.input,
-          failure: input.failure,
-        },
-        time_created: input.now,
-        time_updated: input.now,
-      })
-      .run(),
-  )
+  return recordEngineArtifact({
+    taskID: input.taskID,
+    runID: input.runID,
+    goalRunID: input.goalRunID,
+    kind: "tool-execute-error",
+    label: "tool-execute-error",
+    payload: {
+      sessionID: input.sessionID,
+      messageID: input.messageID,
+      partID: input.partID,
+      toolName: input.toolName,
+      callID: input.callID,
+      input: input.input,
+      failure: input.failure,
+    },
+    timeCreated: input.now,
+  })
 }
 
 /**

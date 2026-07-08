@@ -19,6 +19,7 @@ import { mkdtemp, rm, stat } from "node:fs/promises"
 import { homedir } from "node:os"
 import path from "node:path"
 import { Instance } from "../../src/project/instance"
+import { EffectiveConfig } from "../../src/config/effective"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { findExistingMissionSession } from "../../src/mission/session"
 import { Server } from "../../src/server/server"
@@ -33,6 +34,7 @@ import { tmpdir } from "../fixture/fixture"
 Log.init({ print: false })
 
 const homeWakeDirs: string[] = []
+const MISSION_ROUTE_TEST_TIMEOUT_MS = 15_000
 
 afterEach(async () => {
   mock.restore()
@@ -69,79 +71,100 @@ async function postWithDirectory(path: string, directory: string, body: unknown)
   })
 }
 
+function missionTmpdir() {
+  return tmpdir({
+    git: true,
+    dispose: async () => {
+      await Instance.disposeAll()
+    },
+  })
+}
+
 describe("POST /mission/wake — happy path", () => {
-  test("auto-generates missionID when omitted; returns {missionID, sessionID, created:true}", async () => {
-    await using tmp = await tmpdir({ git: true })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        // SessionWake.wake actually starts a SessionPrompt.loop which
-        // resolves a model — stub it to keep the route test focused on
-        // route mechanics, not LLM pipeline integration.
-        const wakeSpy = spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
-        const res = await post("/mission/wake", tmp.path, { text: "kick off the TV replay mission" })
-        expect(res.status).toBe(200)
-        const body = (await res.json()) as { missionID: string; sessionID: string; created: boolean }
-        expect(body.missionID).toMatch(/^[a-z0-9-]+$/)
-        expect(body.missionID.length).toBeGreaterThanOrEqual(8)
-        expect(body.sessionID).toMatch(/^ses_/)
-        expect(body.created).toBe(true)
-        expect(wakeSpy).toHaveBeenCalledTimes(1)
-        expect(wakeSpy.mock.calls[0]?.[0]?.agent).toBe("mission")
-        expect(wakeSpy.mock.calls[0]?.[0]?.prompt).toBe("kick off the TV replay mission")
-        expect(wakeSpy.mock.calls[0]?.[0]?.reason).toEqual({
-          source: "mission.operator",
-          missionID: body.missionID,
-        })
-      },
-    })
-  })
+  test(
+    "auto-generates missionID when omitted; returns {missionID, sessionID, created:true}",
+    async () => {
+      await using tmp = await missionTmpdir()
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          // SessionWake.wake actually starts a SessionPrompt.loop which
+          // resolves a model — stub it to keep the route test focused on
+          // route mechanics, not LLM pipeline integration.
+          const wakeSpy = spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
+          const res = await post("/mission/wake", tmp.path, { text: "kick off the TV replay mission" })
+          expect(res.status).toBe(200)
+          const body = (await res.json()) as { missionID: string; sessionID: string; created: boolean }
+          expect(body.missionID).toMatch(/^[a-z0-9-]+$/)
+          expect(body.missionID.length).toBeGreaterThanOrEqual(8)
+          expect(body.sessionID).toMatch(/^ses_/)
+          expect(body.created).toBe(true)
+          expect(wakeSpy).toHaveBeenCalledTimes(1)
+          expect(wakeSpy.mock.calls[0]?.[0]?.agent).toBe("mission")
+          expect(wakeSpy.mock.calls[0]?.[0]?.prompt).toBe("kick off the TV replay mission")
+          expect(wakeSpy.mock.calls[0]?.[0]?.reason).toEqual({
+            source: "mission.operator",
+            missionID: body.missionID,
+          })
+        },
+      })
+    },
+    MISSION_ROUTE_TEST_TIMEOUT_MS,
+  )
 
-  test("creates a session of kind 'mission' carrying metadata.mission.id", async () => {
-    await using tmp = await tmpdir({ git: true })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
-        const res = await post("/mission/wake", tmp.path, { missionID: "tv-replay", text: "go" })
-        expect(res.status).toBe(200)
-        const body = (await res.json()) as { sessionID: string; missionID: string }
-        const session = await Session.get(body.sessionID)
-        expect(session.kind).toBe("mission")
-        const mission = (session.metadata as { mission?: { id?: string; channelKey?: string } } | undefined)?.mission
-        expect(mission?.id).toBe("tv-replay")
-        expect(mission?.channelKey).toBe("mission:tv-replay")
-        const missionRoot = ProjectRuntimePaths.missionRoot(tmp.path, "tv-replay")
-        expect((await stat(missionRoot)).isDirectory()).toBe(true)
-        expect(missionRoot).not.toContain("tv-replay")
-      },
-    })
-  })
+  test(
+    "creates a session of kind 'mission' carrying metadata.mission.id",
+    async () => {
+      await using tmp = await missionTmpdir()
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
+          const res = await post("/mission/wake", tmp.path, { missionID: "tv-replay", text: "go" })
+          expect(res.status).toBe(200)
+          const body = (await res.json()) as { sessionID: string; missionID: string }
+          const session = await Session.get(body.sessionID)
+          expect(session.kind).toBe("mission")
+          const mission = (session.metadata as { mission?: { id?: string; channelKey?: string } } | undefined)?.mission
+          expect(mission?.id).toBe("tv-replay")
+          expect(mission?.channelKey).toBe("mission:tv-replay")
+          const missionRoot = ProjectRuntimePaths.missionRoot(tmp.path, "tv-replay")
+          expect((await stat(missionRoot)).isDirectory()).toBe(true)
+          expect(missionRoot).not.toContain("tv-replay")
+        },
+      })
+    },
+    MISSION_ROUTE_TEST_TIMEOUT_MS,
+  )
 
-  test("reuses session when same missionID wakes twice; created:false on second call", async () => {
-    await using tmp = await tmpdir({ git: true })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
-        const first = await post("/mission/wake", tmp.path, { missionID: "tv-replay", text: "kick off" })
-        expect(first.status).toBe(200)
-        const firstBody = (await first.json()) as { missionID: string; sessionID: string; created: boolean }
-        expect(firstBody.created).toBe(true)
-        expect(firstBody.missionID).toBe("tv-replay")
+  test(
+    "reuses session when same missionID wakes twice; created:false on second call",
+    async () => {
+      await using tmp = await missionTmpdir()
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
+          const first = await post("/mission/wake", tmp.path, { missionID: "tv-replay", text: "kick off" })
+          expect(first.status).toBe(200)
+          const firstBody = (await first.json()) as { missionID: string; sessionID: string; created: boolean }
+          expect(firstBody.created).toBe(true)
+          expect(firstBody.missionID).toBe("tv-replay")
 
-        const second = await post("/mission/wake", tmp.path, { missionID: "tv-replay", text: "wake again" })
-        expect(second.status).toBe(200)
-        const secondBody = (await second.json()) as { missionID: string; sessionID: string; created: boolean }
-        expect(secondBody.created).toBe(false)
-        expect(secondBody.missionID).toBe("tv-replay")
-        expect(secondBody.sessionID).toBe(firstBody.sessionID)
-      },
-    })
-  })
+          const second = await post("/mission/wake", tmp.path, { missionID: "tv-replay", text: "wake again" })
+          expect(second.status).toBe(200)
+          const secondBody = (await second.json()) as { missionID: string; sessionID: string; created: boolean }
+          expect(secondBody.created).toBe(false)
+          expect(secondBody.missionID).toBe("tv-replay")
+          expect(secondBody.sessionID).toBe(firstBody.sessionID)
+        },
+      })
+    },
+    MISSION_ROUTE_TEST_TIMEOUT_MS,
+  )
 
   test("same missionID in linked worktree wakes that directory's Mission session", async () => {
-    await using primary = await tmpdir({ git: true })
+    await using primary = await missionTmpdir()
     const unique = Date.now()
     const branch = `opencorvus/mission-wake-${unique}`
     const linkedDir = path.resolve(primary.path, "..", `mission-wake-linked-${unique}`)
@@ -183,121 +206,170 @@ describe("POST /mission/wake — happy path", () => {
     }
   }, 30_000)
 
-  test("accepts operator-supplied lowercase / hyphen / digit missionID", async () => {
-    await using tmp = await tmpdir({ git: true })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
+  test(
+    "accepts operator-supplied lowercase / hyphen / digit missionID",
+    async () => {
+      await using tmp = await missionTmpdir()
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
+          const res = await post("/mission/wake", tmp.path, { missionID: "abc-123-xyz", text: "go" })
+          expect(res.status).toBe(200)
+          const body = (await res.json()) as { missionID: string }
+          expect(body.missionID).toBe("abc-123-xyz")
+        },
+      })
+    },
+    MISSION_ROUTE_TEST_TIMEOUT_MS,
+  )
+
+  test(
+    "passes explicit model reference to SessionWake",
+    async () => {
+      await using tmp = await missionTmpdir()
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const wakeSpy = spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
+          const res = await post("/mission/wake", tmp.path, {
+            missionID: "tv-replay",
+            text: "go",
+            model: "opencorvus/gpt-5-nano",
+          })
+          expect(res.status).toBe(200)
+          expect(wakeSpy).toHaveBeenCalledTimes(1)
+          expect(wakeSpy.mock.calls[0]?.[0]?.model).toEqual({
+            providerID: "opencorvus",
+            modelID: "gpt-5-nano",
+          })
+        },
+      })
+    },
+    MISSION_ROUTE_TEST_TIMEOUT_MS,
+  )
+
+  test(
+    "applies selected prompt profile to the Mission session before wake",
+    async () => {
+      await using tmp = await missionTmpdir()
+      await writeProjectExpertSquadPackage(tmp.path)
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const wakeSpy = spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
+          const res = await post("/mission/wake", tmp.path, {
+            missionID: "profiled-mission",
+            text: "go",
+            promptProfile: PROJECT_EXPERT_SQUAD_ID,
+          })
+          expect(res.status).toBe(200)
+          const body = (await res.json()) as { sessionID: string }
+          const session = await Session.get(body.sessionID)
+          const overlay = (session.metadata as { configOverlay?: { prompt_profile?: { active?: string } } } | undefined)
+            ?.configOverlay
+          expect(overlay?.prompt_profile?.active).toBe(PROJECT_EXPERT_SQUAD_ID)
+          expect(wakeSpy).toHaveBeenCalledTimes(1)
+          expect(wakeSpy.mock.calls[0]?.[0]?.sessionID).toBe(body.sessionID)
+        },
+      })
+    },
+    MISSION_ROUTE_TEST_TIMEOUT_MS,
+  )
+
+  test(
+    "restores previous prompt profile when Mission wake fails",
+    async () => {
+      await using tmp = await missionTmpdir()
+      await writeProjectExpertSquadPackage(tmp.path)
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const wakeSpy = spyOn(SessionWake, "wake").mockRejectedValue(new Error("synthetic mission wake failure"))
+          const res = await post("/mission/wake", tmp.path, {
+            missionID: "profiled-mission-failure",
+            text: "go",
+            promptProfile: PROJECT_EXPERT_SQUAD_ID,
+          })
+          expect(res.status).toBe(500)
+          expect(wakeSpy).toHaveBeenCalledTimes(1)
+          const mission = findExistingMissionSession({ missionID: "profiled-mission-failure", directory: tmp.path })
+          expect(mission).toBeDefined()
+          expect((await EffectiveConfig.effective({ sessionID: mission!.id })).prompt_profile.active).toBe("general")
+        },
+      })
+    },
+    MISSION_ROUTE_TEST_TIMEOUT_MS,
+  )
+
+  test(
+    "rejects unknown prompt profile without waking or creating a Mission session",
+    async () => {
+      await using tmp = await missionTmpdir()
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const wakeSpy = spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
+          const res = await post("/mission/wake", tmp.path, {
+            missionID: "unknown-profile",
+            text: "go",
+            promptProfile: "does-not-exist",
+          })
+          expect(res.status).toBe(400)
+          expect(await res.json()).toMatchObject({
+            success: false,
+            data: { message: 'Unknown prompt profile "does-not-exist"' },
+          })
+          expect(wakeSpy).not.toHaveBeenCalled()
+          expect(findExistingMissionSession({ missionID: "unknown-profile", directory: tmp.path })).toBeUndefined()
+        },
+      })
+    },
+    MISSION_ROUTE_TEST_TIMEOUT_MS,
+  )
+
+  test(
+    "expands home directory in project-scoped wake header",
+    async () => {
+      const dir = await mkdtemp(path.join(homedir(), "opencorvus-home-test-"))
+      homeWakeDirs.push(dir)
+      try {
+        await $`git init`.cwd(dir).quiet()
+        await $`git commit --allow-empty -m "root commit"`.cwd(dir).quiet()
+        const shorthand = `~/${path.basename(dir)}`
         spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
-        const res = await post("/mission/wake", tmp.path, { missionID: "abc-123-xyz", text: "go" })
-        expect(res.status).toBe(200)
-        const body = (await res.json()) as { missionID: string }
-        expect(body.missionID).toBe("abc-123-xyz")
-      },
-    })
-  })
 
-  test("passes explicit model reference to SessionWake", async () => {
-    await using tmp = await tmpdir({ git: true })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const wakeSpy = spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
-        const res = await post("/mission/wake", tmp.path, {
-          missionID: "tv-replay",
-          text: "go",
-          model: "opencorvus/gpt-5-nano",
-        })
-        expect(res.status).toBe(200)
-        expect(wakeSpy).toHaveBeenCalledTimes(1)
-        expect(wakeSpy.mock.calls[0]?.[0]?.model).toEqual({
-          providerID: "opencorvus",
-          modelID: "gpt-5-nano",
-        })
-      },
-    })
-  })
-
-  test("applies selected prompt profile to the Mission session before wake", async () => {
-    await using tmp = await tmpdir({ git: true })
-    await writeProjectExpertSquadPackage(tmp.path)
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const wakeSpy = spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
-        const res = await post("/mission/wake", tmp.path, {
-          missionID: "profiled-mission",
-          text: "go",
-          promptProfile: PROJECT_EXPERT_SQUAD_ID,
-        })
+        const res = await postWithDirectory("/mission/wake", shorthand, { missionID: "home-dir", text: "go" })
         expect(res.status).toBe(200)
         const body = (await res.json()) as { sessionID: string }
         const session = await Session.get(body.sessionID)
-        const overlay = (session.metadata as { configOverlay?: { prompt_profile?: { active?: string } } } | undefined)
-          ?.configOverlay
-        expect(overlay?.prompt_profile?.active).toBe(PROJECT_EXPERT_SQUAD_ID)
-        expect(wakeSpy).toHaveBeenCalledTimes(1)
-        expect(wakeSpy.mock.calls[0]?.[0]?.sessionID).toBe(body.sessionID)
-      },
-    })
-  })
-
-  test("rejects unknown prompt profile without waking or creating a Mission session", async () => {
-    await using tmp = await tmpdir({ git: true })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const wakeSpy = spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
-        const res = await post("/mission/wake", tmp.path, {
-          missionID: "unknown-profile",
-          text: "go",
-          promptProfile: "does-not-exist",
-        })
-        expect(res.status).toBe(400)
-        expect(await res.json()).toMatchObject({
-          success: false,
-          data: { message: 'Unknown prompt profile "does-not-exist"' },
-        })
-        expect(wakeSpy).not.toHaveBeenCalled()
-        expect(findExistingMissionSession({ missionID: "unknown-profile", directory: tmp.path })).toBeUndefined()
-      },
-    })
-  })
-
-  test("expands home directory in project-scoped wake header", async () => {
-    const dir = await mkdtemp(path.join(homedir(), "opencorvus-home-test-"))
-    homeWakeDirs.push(dir)
-    try {
-      await $`git init`.cwd(dir).quiet()
-      await $`git commit --allow-empty -m "root commit"`.cwd(dir).quiet()
-      const shorthand = `~/${path.basename(dir)}`
-      spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
-
-      const res = await postWithDirectory("/mission/wake", shorthand, { missionID: "home-dir", text: "go" })
-      expect(res.status).toBe(200)
-      const body = (await res.json()) as { sessionID: string }
-      const session = await Session.get(body.sessionID)
-      expect(session.directory).toBe(Filesystem.resolve(shorthand))
-      expect(session.directory).not.toContain(`${path.sep}~${path.sep}`)
-    } finally {
-      await Instance.disposeAll()
-    }
-  })
+        expect(session.directory).toBe(Filesystem.resolve(shorthand))
+        expect(session.directory).not.toContain(`${path.sep}~${path.sep}`)
+      } finally {
+        await Instance.disposeAll()
+      }
+    },
+    MISSION_ROUTE_TEST_TIMEOUT_MS,
+  )
 })
 
 describe("legacy /gateway/master/wake is gone", () => {
-  test("POST /gateway/master/wake returns 404 — gateway namespace is infra-only", async () => {
-    await using tmp = await tmpdir({ git: true })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const wakeSpy = spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
-        const res = await post("/gateway/master/wake", tmp.path, { text: "go" })
-        expect(res.status).toBe(404)
-        expect(wakeSpy).not.toHaveBeenCalled()
-      },
-    })
-  })
+  test(
+    "POST /gateway/master/wake returns 404 — gateway namespace is infra-only",
+    async () => {
+      await using tmp = await missionTmpdir()
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const wakeSpy = spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
+          const res = await post("/gateway/master/wake", tmp.path, { text: "go" })
+          expect(res.status).toBe(404)
+          expect(wakeSpy).not.toHaveBeenCalled()
+        },
+      })
+    },
+    MISSION_ROUTE_TEST_TIMEOUT_MS,
+  )
 })
 
 describe("POST /mission/wake — input validation", () => {
@@ -310,45 +382,57 @@ describe("POST /mission/wake — input validation", () => {
     ["malformed model", { missionID: "ok", text: "go", model: "gpt-5-nano" }],
     ["empty text", { missionID: "ok", text: "" }],
     ["missing text", { missionID: "ok" } as any],
-  ])("rejects %s", async (_label, body) => {
-    await using tmp = await tmpdir({ git: true })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        // SessionWake must never be called for invalid input.
-        const wakeSpy = spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
-        const res = await post("/mission/wake", tmp.path, body)
-        expect(res.status).toBeGreaterThanOrEqual(400)
-        expect(res.status).toBeLessThan(500)
-        expect(wakeSpy).not.toHaveBeenCalled()
-      },
-    })
-  })
+  ])(
+    "rejects %s",
+    async (_label, body) => {
+      await using tmp = await missionTmpdir()
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          // SessionWake must never be called for invalid input.
+          const wakeSpy = spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
+          const res = await post("/mission/wake", tmp.path, body)
+          expect(res.status).toBeGreaterThanOrEqual(400)
+          expect(res.status).toBeLessThan(500)
+          expect(wakeSpy).not.toHaveBeenCalled()
+        },
+      })
+    },
+    MISSION_ROUTE_TEST_TIMEOUT_MS,
+  )
 
-  test("rejects missionID > 64 chars", async () => {
-    await using tmp = await tmpdir({ git: true })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const wakeSpy = spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
-        const res = await post("/mission/wake", tmp.path, { missionID: "a".repeat(65), text: "go" })
-        expect(res.status).toBeGreaterThanOrEqual(400)
-        expect(wakeSpy).not.toHaveBeenCalled()
-      },
-    })
-  })
+  test(
+    "rejects missionID > 64 chars",
+    async () => {
+      await using tmp = await missionTmpdir()
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const wakeSpy = spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
+          const res = await post("/mission/wake", tmp.path, { missionID: "a".repeat(65), text: "go" })
+          expect(res.status).toBeGreaterThanOrEqual(400)
+          expect(wakeSpy).not.toHaveBeenCalled()
+        },
+      })
+    },
+    MISSION_ROUTE_TEST_TIMEOUT_MS,
+  )
 
-  test("rejects text > 32_000 chars (DoS / token-cost guard)", async () => {
-    await using tmp = await tmpdir({ git: true })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const wakeSpy = spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
-        const oversized = "x".repeat(32_001)
-        const res = await post("/mission/wake", tmp.path, { text: oversized })
-        expect(res.status).toBeGreaterThanOrEqual(400)
-        expect(wakeSpy).not.toHaveBeenCalled()
-      },
-    })
-  })
+  test(
+    "rejects text > 32_000 chars (DoS / token-cost guard)",
+    async () => {
+      await using tmp = await missionTmpdir()
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const wakeSpy = spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
+          const oversized = "x".repeat(32_001)
+          const res = await post("/mission/wake", tmp.path, { text: oversized })
+          expect(res.status).toBeGreaterThanOrEqual(400)
+          expect(wakeSpy).not.toHaveBeenCalled()
+        },
+      })
+    },
+    MISSION_ROUTE_TEST_TIMEOUT_MS,
+  )
 })

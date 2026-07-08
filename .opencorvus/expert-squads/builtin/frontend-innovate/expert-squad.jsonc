@@ -47,7 +47,15 @@
         "role_base": true
       },
       "frontend-design": {
-        "role_base": true
+        "role_base": true,
+        "default_tool_refs": [
+          "default/tool/web_clone_generate_source_project",
+          "default/tool/create_frontend_skeleton_project",
+          "default/tool/create_visual_region_coordinate_atlas",
+          "default/tool/create_visual_region_binding_package",
+          "default/tool/record_frontend_region_selection",
+          "default/tool/record_frontend_replacement_result"
+        ]
       },
       "frontend-research": {
         "role_base": true
@@ -56,7 +64,12 @@
         "role_base": true
       },
       "visual-qa": {
-        "role_base": true
+        "role_base": true,
+        "default_tool_refs": [
+          "default/tool/browser_preview_reference_regions",
+          "default/tool/browser_preview_compare_scroll_slices",
+          "default/tool/browser_preview_layout_geometry"
+        ]
       },
       "deep-research": {
         "role_base": true

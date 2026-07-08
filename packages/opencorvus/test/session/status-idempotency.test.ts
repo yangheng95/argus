@@ -64,6 +64,39 @@ test("SessionStatus.set: status changes after terminal are dropped (no streaming
   })
 })
 
+test("SessionStatus.set: terminal summary is published and stored with the terminal lifecycle", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const session = await Session.create({ kind: "assistant", title: "status summary" })
+      const sessionID = session.id
+      const events: SessionStatus.Info[] = []
+      const sub = Bus.subscribe(SessionStatus.Event.Status, (msg) => {
+        if (msg.properties.sessionID === sessionID) events.push(msg.properties.status)
+      })
+      try {
+        SessionStatus.set(sessionID, {
+          type: "terminal",
+          reason: "completed",
+          summary: "I registered the requirements and reported two acceptance checks.",
+        })
+
+        expect(events).toEqual([
+          {
+            type: "terminal",
+            reason: "completed",
+            summary: "I registered the requirements and reported two acceptance checks.",
+          },
+        ])
+        expect(SessionStatus.get(sessionID)).toEqual(events[0])
+      } finally {
+        sub()
+      }
+    },
+  })
+})
+
 test("SessionStatus.set: pre-terminal flow (streaming/retry/idle) still works as before", async () => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({

@@ -1,19 +1,19 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import z from "zod"
-import { ControlMessageTable } from "@/control/control.sql"
-import { DecisionLogTable } from "@/decision-log/schema"
+import { ControlTimeline } from "@/control/timeline"
+import { deleteDecisionLogsForTasks } from "@/decision-log"
 import { assertSessionPromptSubtreeFinished, cancelSessionPromptInScope } from "@/engine/cancellation-scope"
 import { createTaskCancellationIncomplete } from "@/engine/cancellation-error"
 import { EngineTaskTable } from "@/engine/engine.sql"
-import { QuickNoteTable } from "@/quicknote/quicknote.sql"
+import { deleteProjectNotes } from "@/quicknote/service"
 import { TaskQueueService } from "@/scheduler/task-queue-service"
 import { SessionTable } from "@/session/session.sql"
 import { CANCEL_CLEANUP_TIMEOUT_MS, EngineService } from "@/task-api"
 import { withTimeout } from "@/util/await-with-timeout"
-import { Database, eq, inArray } from "@/storage/db"
+import { Database, eq } from "@/storage/db"
 import { Instance } from "./instance"
-import { ProjectTable } from "./project.sql"
+import { Project } from "./project"
 import { ProjectRuntimePaths } from "./runtime-paths"
 
 export const ProjectDeleteResult = z
@@ -125,12 +125,10 @@ async function cancelRemainingProjectSessionPrompts(projectID: string): Promise<
 
 function deleteProjectRows(projectID: string, taskIDs: string[]): void {
   Database.transaction((db) => {
-    if (taskIDs.length > 0) {
-      db.delete(DecisionLogTable).where(inArray(DecisionLogTable.task_id, taskIDs)).run()
-    }
-    db.delete(ControlMessageTable).where(eq(ControlMessageTable.project_id, projectID)).run()
-    db.delete(QuickNoteTable).where(eq(QuickNoteTable.project_id, projectID)).run()
-    db.delete(ProjectTable).where(eq(ProjectTable.id, projectID)).run()
+    deleteDecisionLogsForTasks(taskIDs, db)
+    ControlTimeline.deleteProjectMessages({ projectID }, db)
+    deleteProjectNotes({ projectID }, db)
+    Project.deleteRows([projectID], db)
     Database.effect(() => Database.incrementalVacuum())
   })
 }

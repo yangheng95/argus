@@ -215,6 +215,49 @@ const RegisterVisualFeedbackAcceptanceToolInputSchema = z
   })
   .strict()
 
+const ModifyGoalToolInputSchema = z
+  .object({
+    id: z.string().min(1).describe("Existing goal id to modify."),
+    updates: ArchitectGoalContractUpdateSchema,
+  })
+  .strict()
+
+const RemoveGoalToolInputSchema = z
+  .object({
+    id: z.string().min(1).describe("Goal id to remove"),
+    reason: z.string().min(5).describe("Why this goal is being removed (recorded for audit)"),
+  })
+  .strict()
+
+const ManageGoalActionInputSchemas = {
+  register_goal: ArchitectGoalContractFieldsSchema,
+  modify_goal: ModifyGoalToolInputSchema,
+  remove_goal: RemoveGoalToolInputSchema,
+  register_visual_feedback_acceptance: RegisterVisualFeedbackAcceptanceToolInputSchema,
+} satisfies Record<string, z.ZodObject<any>>
+
+type ManageGoalActionName = keyof typeof ManageGoalActionInputSchemas
+
+const MANAGE_GOAL_ACTION_NAMES = Object.keys(ManageGoalActionInputSchemas) as [
+  ManageGoalActionName,
+  ...ManageGoalActionName[],
+]
+
+const ManageGoalInputSchema = z.discriminatedUnion(
+  "action",
+  MANAGE_GOAL_ACTION_NAMES.map((action) =>
+    ManageGoalActionInputSchemas[action].safeExtend({
+      action: z.literal(action).describe("Goal mutation action to execute through the single Architect goal tool."),
+    }),
+  ) as any,
+)
+
+const ManageGoalDispatchInputSchema = z
+  .object({
+    action: z.enum(MANAGE_GOAL_ACTION_NAMES),
+  })
+  .passthrough()
+
 function parseRegisterContractInput(input: unknown): ArchitectContractRef {
   const parsed = RegisterContractToolInputSchema.parse(input)
   const typed = parsed.kind === "type" || parsed.kind === "function" || parsed.kind === "enum"
@@ -466,6 +509,11 @@ function unknownContractAuditContractIDs(collector: ArchitectCollector, specs: r
   return [...new Set(unknownIDs)]
 }
 
+const REPAIR_REGISTER_GOAL = "manage_goal action=register_goal"
+const REPAIR_MODIFY_GOAL = "manage_goal action=modify_goal"
+const REPAIR_REMOVE_GOAL = "manage_goal action=remove_goal"
+const REPAIR_REGISTER_VISUAL_FEEDBACK_ACCEPTANCE = "manage_goal action=register_visual_feedback_acceptance"
+
 export function architectValidationFindings(
   collector: ArchitectCollector,
   input?: ArchitectValidationInput,
@@ -487,21 +535,21 @@ export function architectValidationFindings(
   const minGoalCount = effectiveMinGoalCount(input)
   if (collector.goals.length === 0) {
     blocker("no_goals", `No goals registered - Architect must produce at least ${minGoalCount} goals`, {}, [
-      "register_goal",
+      REPAIR_REGISTER_GOAL,
     ])
   } else if (collector.goals.length < minGoalCount) {
     blocker(
       "insufficient_goal_decomposition",
       `Only ${collector.goals.length} goal registered - Architect must split the task into at least ${minGoalCount} independently executable goals; source=${formatGoalCountContractReason(input)}. A single large goal is forbidden.`,
       { goal_ids: collector.goals.map((goal) => goal.id) },
-      ["register_goal", "modify_goal"],
+      [REPAIR_REGISTER_GOAL, REPAIR_MODIFY_GOAL],
     )
   } else if (collector.contract_graph.contracts.length === 0) {
     concern(
       "missing_contract_graph_contract",
       `Multi-goal architecture registered ${collector.goals.length} goals but no graph contracts. Register at least one explicit handoff contract when a produced type, component, route, static data, render surface, behavior inventory, or verification surface is known.`,
       { goal_ids: collector.goals.map((goal) => goal.id) },
-      ["register_contract", "register_dependency_contract", "modify_goal"],
+      ["register_contract", "register_dependency_contract", REPAIR_MODIFY_GOAL],
     )
   }
   const knownGoalIDs = new Set(collector.goals.map((g) => g.id))
@@ -532,7 +580,7 @@ export function architectValidationFindings(
           "owned_paths_overlap_without_dependency",
           `Goals ${leftGoal.id} and ${rightGoal.id}: owned_paths overlap without dependency reachability. Add a depends_on edge between the dependent and prerequisite goals, or split ownership so independent goals do not claim the same paths. Examples: ${examples.join(", ")}`,
           { goal_ids: [leftGoal.id, rightGoal.id] },
-          ["modify_goal", "remove_goal"],
+          [REPAIR_MODIFY_GOAL, REPAIR_REMOVE_GOAL],
         )
       }
     }
@@ -543,7 +591,7 @@ export function architectValidationFindings(
       "multiple_bootstrap_goals",
       `Exactly one bootstrap goal is allowed in an active goal graph; found ${bootstrapGoals.length}`,
       { goal_ids: bootstrapGoals.map((goal) => goal.id) },
-      ["modify_goal", "remove_goal"],
+      [REPAIR_MODIFY_GOAL, REPAIR_REMOVE_GOAL],
     )
   } else if (bootstrapGoals.length === 1) {
     const bootstrapGoal = bootstrapGoals[0]
@@ -556,7 +604,7 @@ export function architectValidationFindings(
         "bootstrap_not_listed_as_dependency",
         `Bootstrap goal ${bootstrapGoal.id}: every non-bootstrap goal must list it in depends_on; missing ${missingBootstrapDeps.join(", ")}`,
         { goal_ids: [bootstrapGoal.id, ...missingBootstrapDeps] },
-        ["register_goal", "modify_goal"],
+        [REPAIR_REGISTER_GOAL, REPAIR_MODIFY_GOAL],
       )
     }
   }
@@ -568,7 +616,7 @@ export function architectValidationFindings(
         "internal_runtime_owned_path",
         formatInternalRuntimeOwnedPathError(g.id, internalRuntimePaths),
         { goal_ids: [g.id] },
-        ["register_goal", "modify_goal"],
+        [REPAIR_REGISTER_GOAL, REPAIR_MODIFY_GOAL],
       )
     }
     if (g.kind === "verification") {
@@ -578,7 +626,7 @@ export function architectValidationFindings(
           "verification_owns_feature_paths",
           `Goal ${g.id}: verification owned_paths may only cover tests, integration, benchmark, or spec evidence paths; move feature source ownership to a feature goal: ${featureSourcePaths.join(", ")}`,
           { goal_ids: [g.id] },
-          ["register_goal", "modify_goal"],
+          [REPAIR_REGISTER_GOAL, REPAIR_MODIFY_GOAL],
         )
       }
     }
@@ -588,7 +636,7 @@ export function architectValidationFindings(
           "acceptance_goal_mismatch",
           `Goal ${g.id}: acceptance spec ${spec.id} has mismatched goal_id "${spec.goal_id}"`,
           { goal_ids: [g.id, spec.goal_id] },
-          ["register_goal", "modify_goal"],
+          [REPAIR_REGISTER_GOAL, REPAIR_MODIFY_GOAL],
         )
       }
       if (knownRequirementIDs.size > 0 && !knownRequirementIDs.has(spec.source_requirement_id)) {
@@ -596,7 +644,7 @@ export function architectValidationFindings(
           "acceptance_unknown_requirement",
           `Goal ${g.id}: acceptance spec ${spec.id} uses unknown source_requirement_id "${spec.source_requirement_id}"`,
           { goal_ids: [g.id] },
-          ["register_goal", "modify_goal"],
+          [REPAIR_REGISTER_GOAL, REPAIR_MODIFY_GOAL],
         )
       }
       if (knownRequirementIDs.size > 0 && !g.requirement_ids.includes(spec.source_requirement_id)) {
@@ -604,7 +652,7 @@ export function architectValidationFindings(
           "acceptance_requirement_not_claimed",
           `Goal ${g.id}: acceptance spec ${spec.id} source_requirement_id "${spec.source_requirement_id}" is not listed in goal.requirement_ids`,
           { goal_ids: [g.id] },
-          ["register_goal", "modify_goal"],
+          [REPAIR_REGISTER_GOAL, REPAIR_MODIFY_GOAL],
         )
       }
       const acceptanceGoalIDs = acceptanceByRequirement.get(spec.source_requirement_id) ?? new Set<string>()
@@ -617,7 +665,7 @@ export function architectValidationFindings(
           "goal_unknown_requirement",
           `Goal ${g.id}: requirement_ids contains unknown requirement "${requirementID}"`,
           { goal_ids: [g.id] },
-          ["register_goal", "modify_goal"],
+          [REPAIR_REGISTER_GOAL, REPAIR_MODIFY_GOAL],
         )
       }
       if (!requiredTraceability.has(requirementID)) {
@@ -631,7 +679,7 @@ export function architectValidationFindings(
           "unknown_dependency_goal",
           `Goal ${g.id}: depends_on "${dep}" not registered`,
           { goal_ids: [g.id, dep] },
-          ["register_goal", "modify_goal"],
+          [REPAIR_REGISTER_GOAL, REPAIR_MODIFY_GOAL],
         )
       }
     }
@@ -649,7 +697,7 @@ export function architectValidationFindings(
         "missing_requirement_owner",
         `Known requirement(s) have no owning goal: ${missingOwnerRequirementIDs.join(", ")}. Architect must register or modify goals so every Requirements-produced REQ-N appears in at least one goal.requirement_ids entry before finalizing.`,
         {},
-        ["register_goal", "modify_goal"],
+        [REPAIR_REGISTER_GOAL, REPAIR_MODIFY_GOAL],
       )
     }
     const acceptedKnownRequirementIDs = new Set(
@@ -663,7 +711,7 @@ export function architectValidationFindings(
         "missing_requirement_acceptance",
         `Known requirement(s) have no goal-local acceptance spec: ${missingAcceptanceRequirementIDs.join(", ")}. Architect must register or modify goals so every Requirements-produced REQ-N appears in at least one acceptance_specs[].source_requirement_id before finalizing.`,
         {},
-        ["register_goal", "modify_goal"],
+        [REPAIR_REGISTER_GOAL, REPAIR_MODIFY_GOAL],
       )
     }
   }
@@ -693,7 +741,7 @@ export function architectValidationFindings(
           "traceability_goal_not_owner",
           `Traceability ${row.requirementID}: goal "${goalID}" does not claim this requirement in goal.requirement_ids.`,
           { goal_ids: [goalID] },
-          ["register_traceability", "modify_goal"],
+          ["register_traceability", REPAIR_MODIFY_GOAL],
         )
       }
       mappedGoalIDs.add(goalID)
@@ -784,18 +832,18 @@ export function architectValidationFindings(
         [
           "Missing visual feedback acceptance advisory: reference-driven tasks should include a verification/integration goal with an essential prebuilt visual-feedback-verification acceptance spec, but this is not a submit-time host gate.",
           `Reference coverage requirement: ${formatReferenceCoverageReason(input)}`,
-          "Preferred repair: call register_visual_feedback_acceptance on an existing verification/integration goal, with reference_tokens copied from registered reference coverage ids/surfaces/visual_spec_ids.",
+          "Preferred repair: call manage_goal action=register_visual_feedback_acceptance on an existing verification/integration goal, with reference_tokens copied from registered reference coverage ids/surfaces/visual_spec_ids.",
           "Recommended stored shape: kind=verification|integration acceptance_specs includes severity=essential trigger=on_goal and scorer=prebuilt name=visual-feedback-verification.",
           `Goal candidates: ${formatGoalCandidateList(collector.goals)}`,
         ].join(" "),
         { goal_ids: collector.goals.map((goal) => goal.id) },
-        ["register_visual_feedback_acceptance", "register_goal", "modify_goal"],
+        [REPAIR_REGISTER_VISUAL_FEEDBACK_ACCEPTANCE, REPAIR_REGISTER_GOAL, REPAIR_MODIFY_GOAL],
       )
     } else {
       const missingRegionOwnership = visualAcceptanceRegionOwnershipFindings(collector, visualAcceptanceOwners)
       for (const missing of missingRegionOwnership) {
         concern("missing_visual_region_acceptance_ownership", missing.message, { goal_ids: missing.goalIDs }, [
-          "register_visual_feedback_acceptance",
+          REPAIR_REGISTER_VISUAL_FEEDBACK_ACCEPTANCE,
           "register_reference_coverage",
         ])
       }
@@ -1061,9 +1109,9 @@ export function createArchitectOutputTools(input: {
       goalCountContract: input.goalCountContract,
     })
 
-  // Seed the collector with existing goals so modify_goal / remove_goal work
-  // without the LLM having to re-register them first. register_goal still
-  // wins if the LLM chooses to overwrite an existing id.
+  // Seed the collector with existing goals so manage_goal action=modify_goal /
+  // action=remove_goal work without the LLM having to re-register them first.
+  // action=register_goal still wins if the LLM chooses to overwrite an existing id.
   if (input.existingGoals?.length) {
     for (const g of input.existingGoals) collector.goals.push(toRegisteredGoal(g))
   }
@@ -1072,7 +1120,7 @@ export function createArchitectOutputTools(input: {
     register_visual_feedback_acceptance: tool({
       description:
         "Attach the canonical final visual feedback acceptance to an existing verification/integration goal. " +
-        "Use this for reference-driven UI/page replica tasks instead of hand-writing the nested llm_judge/prebuilt acceptance spec through modify_goal. " +
+        "Use this for reference-driven UI/page replica tasks instead of hand-writing the nested llm_judge/prebuilt acceptance spec through manage_goal action=modify_goal. " +
         "It stores an essential on_goal prebuilt visual-feedback-verification scorer and embeds the supplied reference tokens for region ownership.",
       inputSchema: RegisterVisualFeedbackAcceptanceToolInputSchema,
       execute: async (input) => {
@@ -1089,7 +1137,7 @@ export function createArchitectOutputTools(input: {
           return `Error: source_requirement_id "${parsed.source_requirement_id}" is not a known requirement id; collector unchanged.`
         }
         if (!prior.requirement_ids.includes(parsed.source_requirement_id)) {
-          return `Error: goal "${parsed.goal_id}" does not claim source_requirement_id "${parsed.source_requirement_id}" in requirement_ids. Use modify_goal to claim the requirement first; collector unchanged.`
+          return `Error: goal "${parsed.goal_id}" does not claim source_requirement_id "${parsed.source_requirement_id}" in requirement_ids. Use manage_goal action=modify_goal to claim the requirement first; collector unchanged.`
         }
         const visualSpec = buildFinalVisualFeedbackAcceptanceSpec({
           goalID: parsed.goal_id,
@@ -1109,7 +1157,7 @@ export function createArchitectOutputTools(input: {
             return `- ${pathLabel}: ${issue.message}`
           })
           return [
-            `Error: register_visual_feedback_acceptance produced an invalid goal after merge; collector unchanged.`,
+            `Error: manage_goal action=register_visual_feedback_acceptance produced an invalid goal after merge; collector unchanged.`,
             ...issueLines,
           ].join("\n")
         }
@@ -1182,7 +1230,7 @@ export function createArchitectOutputTools(input: {
       description:
         "Refine fields on an already-registered goal (including those seeded " +
         "from a prior run). Supply only the fields you want to change. Unknown " +
-        "ids are rejected — use register_goal if you intend a brand-new goal. " +
+        "ids are rejected — use manage_goal action=register_goal if you intend a brand-new goal. " +
         "A modified goal keeps its stable G number; the next implementation " +
         "attempt increments V. Architect-visible acceptance scorer schema does not expose script_ref; use inline shell, llm_judge, prebuilt visual-feedback-verification, or contract_audit.",
       inputSchema: z.object({
@@ -1192,7 +1240,7 @@ export function createArchitectOutputTools(input: {
       execute: async ({ id, updates }) => {
         const idx = collector.goals.findIndex((g) => g.id === id)
         if (idx < 0) {
-          return `Error: goal "${id}" not registered. Use register_goal to add new goals.`
+          return `Error: goal "${id}" not registered. Use manage_goal action=register_goal to add new goals.`
         }
         const prior = collector.goals[idx]
         const normalizedUpdates = Object.fromEntries(Object.entries(updates).filter(([, value]) => value !== undefined))
@@ -1202,9 +1250,10 @@ export function createArchitectOutputTools(input: {
             const pathLabel = issue.path.length > 0 ? issue.path.join(".") : "(root)"
             return `- ${pathLabel}: ${issue.message}`
           })
-          return [`Error: modify_goal produced an invalid goal after merge; collector unchanged.`, ...issueLines].join(
-            "\n",
-          )
+          return [
+            `Error: manage_goal action=modify_goal produced an invalid goal after merge; collector unchanged.`,
+            ...issueLines,
+          ].join("\n")
         }
         const normalized = normalizeSourceBaselineOwnedPaths(parsedNext.data)
         const next = normalized.goal
@@ -1389,7 +1438,7 @@ export function createArchitectOutputTools(input: {
           (goalID) => !collector.goals.find((goal) => goal.id === goalID)?.requirement_ids.includes(requirement_id),
         )
         if (nonOwners.length > 0) {
-          return `Error: traceability for ${requirement_id} references goal(s) that do not claim the requirement in goal.requirement_ids: ${nonOwners.join(", ")}. Use modify_goal to claim the requirement first; collector unchanged.`
+          return `Error: traceability for ${requirement_id} references goal(s) that do not claim the requirement in goal.requirement_ids: ${nonOwners.join(", ")}. Use manage_goal action=modify_goal to claim the requirement first; collector unchanged.`
         }
         collector.traceability.push({ requirementID: requirement_id, goalIDs: goal_ids })
         return `OK: ${requirement_id} → ${goal_ids.join(", ")}`
@@ -1615,8 +1664,38 @@ export function createArchitectOutputTools(input: {
     }),
   }
 
+  const manageGoalTool = tool({
+    description:
+      "Single Architect goal mutation tool. Use action=register_goal, action=modify_goal, action=remove_goal, or action=register_visual_feedback_acceptance. " +
+      "This replaces separate visible goal tools while preserving exact action-specific schemas and collector semantics.",
+    inputSchema: ManageGoalInputSchema,
+    execute: async (input, options) => {
+      const parsed = ManageGoalDispatchInputSchema.parse(input) as { action: ManageGoalActionName } & Record<
+        string,
+        unknown
+      >
+      const { action, ...actionInput } = parsed
+      const actionTool = tools[action]
+      if (!actionTool?.execute) {
+        throw new Error(`manage_goal action ${action} is not backed by an internal Architect goal action`)
+      }
+      return await actionTool.execute(actionInput as never, options as never)
+    },
+  })
+
+  const visibleTools = {
+    manage_goal: manageGoalTool,
+    register_traceability: tools.register_traceability,
+    register_source_coverage: tools.register_source_coverage,
+    register_reference_coverage: tools.register_reference_coverage,
+    register_assembly_owner: tools.register_assembly_owner,
+    register_contract: tools.register_contract,
+    register_dependency_contract: tools.register_dependency_contract,
+    submit_architect: tools.submit_architect,
+  }
+
   return {
-    tools,
+    tools: visibleTools,
     /** Reset the collector between retry attempts. */
     reset() {
       collector = emptyCollector()

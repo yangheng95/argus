@@ -1017,7 +1017,7 @@ test(
     const expertSquadCatalog = expertSquadCatalogFixture({
       active: "front",
       projectActive: "front",
-      defaultProfile: "general",
+      defaultSquad: "general",
       targets: [
         {
           id: "requirements",
@@ -1036,7 +1036,13 @@ test(
         { id: "planner", label: "Planner", description: "Planner agent prompt.", editable: true, built_in_only: false },
         { id: "build", label: "Build", description: "Build agent prompt.", editable: true, built_in_only: false },
       ],
-      profiles: [
+      squads: [
+        {
+          id: "general",
+          label: "General",
+          description: "General rewind stress benchmark profile.",
+          built_in: true,
+        },
         {
           id: "front",
           label: "Frontend",

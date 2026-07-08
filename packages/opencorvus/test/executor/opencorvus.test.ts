@@ -21,6 +21,16 @@ async function waitForMockCalls(spy: { mock: { calls: unknown[] } }, count: numb
   throw new Error(`mock was called ${spy.mock.calls.length} time(s), expected at least ${count}`)
 }
 
+async function waitForQueueStatus(id: string, status: string) {
+  for (let i = 0; i < 100; i += 1) {
+    const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())
+    if (row?.status === status) return row
+    await Bun.sleep(20)
+  }
+  const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())
+  throw new Error(`queue task ${id} did not reach ${status}; current=${row?.status ?? "missing"}`)
+}
+
 describe("executor.opencorvus", () => {
   afterEach(async () => {
     mock.restore()
@@ -55,6 +65,48 @@ describe("executor.opencorvus", () => {
 
     expect(runNow).not.toHaveBeenCalled()
     expect(prompt).toHaveBeenCalledTimes(1)
+  })
+
+  test("status and abort use the task queue service boundary", { timeout: 0 }, async () => {
+    await using tmp = await tmpdir({ git: true })
+    let resolvePrompt!: (value: Awaited<ReturnType<typeof SessionPrompt.prompt>>) => void
+    const pendingPrompt = new Promise<Awaited<ReturnType<typeof SessionPrompt.prompt>>>((resolve) => {
+      resolvePrompt = resolve
+    })
+    spyOn(SessionPrompt, "prompt").mockImplementation(() => pendingPrompt)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant", title: "executor queue status" })
+        const result = await OpencorvusExecutor.submit({
+          sessionID: session.id,
+          prompt: "hold this prompt",
+        })
+
+        const running = await waitForQueueStatus(result.queueTaskID, "running")
+        expect(running.session_id).toBe(session.id)
+
+        await expect(OpencorvusExecutor.status(result.queueTaskID)).resolves.toMatchObject({
+          queueTaskID: result.queueTaskID,
+          status: "running",
+          error: null,
+        })
+
+        await OpencorvusExecutor.abort({ queueTaskID: result.queueTaskID })
+        await expect(OpencorvusExecutor.status(result.queueTaskID)).resolves.toMatchObject({
+          queueTaskID: result.queueTaskID,
+          status: "failed",
+          error: "task cancelled",
+        })
+
+        resolvePrompt({
+          info: {} as never,
+          parts: [],
+        })
+        await Bun.sleep(0)
+      },
+    })
   })
 
   test("events streams session-scoped bus activity", async () => {

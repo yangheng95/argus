@@ -72,7 +72,7 @@ Examples:
 
     console.log(result.trim())
   } finally {
-    opencorvus.server.close()
+    await opencorvus.server.close()
   }
 }
 

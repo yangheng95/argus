@@ -26,45 +26,49 @@ describe("serve shutdown lifecycle", () => {
     expect(helperIndex).toBeLessThan(exitIndex)
   })
 
-  test("server stop helper captures synchronous stop failures", async () => {
+  test("server stop helper rejects synchronous stop failures", async () => {
     const errors: unknown[] = []
     let timeoutCalled = false
 
-    await stopServerWithTimeout({
-      stop: () => {
-        throw new Error("sync stop failed")
-      },
-      timeoutMilliseconds: 1000,
-      onStopError: (error) => {
-        errors.push(error)
-      },
-      onTimeout: () => {
-        timeoutCalled = true
-      },
-    })
+    await expect(
+      stopServerWithTimeout({
+        stop: () => {
+          throw new Error("sync stop failed")
+        },
+        timeoutMilliseconds: 1000,
+        onStopError: (error) => {
+          errors.push(error)
+        },
+        onTimeout: () => {
+          timeoutCalled = true
+        },
+      }),
+    ).rejects.toThrow("sync stop failed")
 
     expect(errors).toHaveLength(1)
     expect(errors[0]).toBeInstanceOf(Error)
     expect(timeoutCalled).toBe(false)
   })
 
-  test("server stop helper returns when stop never settles", async () => {
+  test("server stop helper rejects when stop never settles", async () => {
     let stopStarted = false
     let timeoutCalled = false
 
-    await stopServerWithTimeout({
-      stop: () =>
-        new Promise<void>(() => {
-          stopStarted = true
-        }),
-      timeoutMilliseconds: 5,
-      onStopError: () => {
-        throw new Error("stop should not fail in this scenario")
-      },
-      onTimeout: () => {
-        timeoutCalled = true
-      },
-    })
+    await expect(
+      stopServerWithTimeout({
+        stop: () =>
+          new Promise<void>(() => {
+            stopStarted = true
+          }),
+        timeoutMilliseconds: 5,
+        onStopError: () => {
+          throw new Error("stop should not fail in this scenario")
+        },
+        onTimeout: () => {
+          timeoutCalled = true
+        },
+      }),
+    ).rejects.toThrow("Server stop timed out after 5ms")
 
     expect(stopStarted).toBe(true)
     expect(timeoutCalled).toBe(true)

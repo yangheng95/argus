@@ -11,7 +11,7 @@ Per-goal build attempts publish durable evidence, and the task's final review is
 2. **Verification evidence** — browser preview targets, browser preview captures, runtime checks, screenshots, and visual evidence are stored as `engine_artifact` rows such as `verification-evidence`, `browser_preview_target`, and `browser_preview_evidence`.
 3. **Visual QA** — `visual_qa` reviews visible product evidence when the task has a frontend-visible surface; it does not complete the task.
 4. **Integrity review** — `integrity` reads the user request, requirements, architect contract graph, goal outputs, diffs, runtime/visual evidence, and previous attempts.
-5. **Completion decision** — `complete_task` requires the current post-build `integrity_attempt` id. Non-pass evidence routes back to build, `modify_goal`, `architect`, a user question, or `fail_task`.
+5. **Completion decision** — `manage_task action=complete_task` requires the current post-build `integrity_attempt` id. Non-pass evidence routes back to `dispatch_agent target=build`, `manage_task action=modify_goal`, `dispatch_agent target=architect`, a user question, or `manage_task action=fail_task`.
 
 ## Evidence Surfaces
 
@@ -43,8 +43,8 @@ Checks are audit evidence for operators and downstream review. They are not a re
 
 | Integrity outcome               | Orchestrator meaning                                                                                                                            |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| pass                            | The integrated system is acceptable for this task; the orchestrator may call `complete_task` with the latest post-build `integrity_attempt` id. |
-| non-pass with blocking findings | The orchestrator must route repairs to build, `modify_goal`, `architect`, or a user question based on evidence.                                 |
+| pass                            | The integrated system is acceptable for this task; the orchestrator may call `manage_task action=complete_task` with the latest post-build `integrity_attempt` id. |
+| non-pass with blocking findings | The orchestrator must route repairs to `dispatch_agent target=build`, `manage_task action=modify_goal`, `dispatch_agent target=architect`, or a user question based on evidence. |
 | thrown / artifact missing       | The orchestrator receives visible failure evidence and decides recovery; the UI should not silently show an empty card.                         |
 
 ## What's Next

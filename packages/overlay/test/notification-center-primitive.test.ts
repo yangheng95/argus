@@ -153,7 +153,7 @@ test("main preloads i18n before mounting translated Solid surfaces", () => {
     MAIN.indexOf('render(() => <NotificationCenter surface="toast" />'),
   )
   expect(MAIN.indexOf("await setLocale(localeTag())")).toBeLessThan(
-    MAIN.indexOf('document.getElementById("missionListPanel")'),
+    MAIN.indexOf('document.getElementById("workLedgerPanel")'),
   )
 })
 

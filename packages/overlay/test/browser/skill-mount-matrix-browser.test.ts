@@ -8,7 +8,16 @@ import { fileURLToPath } from "node:url"
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { installBrowserErrorCollector, type BrowserErrorCollector } from "./error-collector.ts"
-import { emptyExpertSquadProjectionEntry, generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
+import {
+  emptyExpertSquadProjectionEntry,
+  expertSquadProjectionEntryFixture,
+  generalExpertSquadCatalog,
+  projectedDefaultMcpToolID,
+  projectedDefaultToolID,
+  projectedPackageMcpToolID,
+  projectedPackageToolID,
+  projectedToolIDs,
+} from "./expert-squad-fixture.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
 
 await ensureOverlayDist()
@@ -16,6 +25,27 @@ await ensureOverlayDist()
 const OVERLAY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..")
 const SCRATCH_ROOT = resolve(OVERLAY_ROOT, "../../.scratch")
 const DIRECTORY = "D:/overlay/workspace/app"
+const FRONTEND_REPLICA_BUILD_PATCH_REF = "frontend-replica/build/patch"
+const FRONTEND_REPLICA_BUILD_PATCH_TOOL_ID = projectedPackageToolID(FRONTEND_REPLICA_BUILD_PATCH_REF)
+const FRONTEND_REPLICA_ORCHESTRATOR_AUDIT_REF = "frontend-replica/orchestrator/audit"
+const FRONTEND_REPLICA_ORCHESTRATOR_AUDIT_TOOL_ID = projectedPackageToolID(
+  FRONTEND_REPLICA_ORCHESTRATOR_AUDIT_REF,
+)
+const DEFAULT_BROWSER_SNAPSHOT_REF = "default/mcp/browser/tool/snapshot"
+const DEFAULT_BROWSER_SNAPSHOT_TOOL_ID = projectedDefaultMcpToolID(DEFAULT_BROWSER_SNAPSHOT_REF)
+const DEFAULT_READ_CONTEXT_REF = "default/tool/read_context"
+const DEFAULT_READ_CONTEXT_TOOL_ID = projectedDefaultToolID(DEFAULT_READ_CONTEXT_REF)
+const DEFAULT_BROWSER_PREVIEW_REF = "default/tool/browser_preview"
+const DEFAULT_BROWSER_PREVIEW_TOOL_ID = projectedDefaultToolID(DEFAULT_BROWSER_PREVIEW_REF)
+const FRONTEND_REPLICA_REQUIREMENTS_TRACE_REF = "frontend-replica/requirements/trace"
+const FRONTEND_REPLICA_REQUIREMENTS_TRACE_TOOL_ID = projectedPackageToolID(
+  FRONTEND_REPLICA_REQUIREMENTS_TRACE_REF,
+)
+const FRONTEND_REPLICA_BUILD_COMPARE_REGION_REF = "frontend-replica/build/browser/tool/compare-region"
+const FRONTEND_REPLICA_BUILD_COMPARE_REGION_TOOL_ID = projectedPackageMcpToolID(
+  FRONTEND_REPLICA_BUILD_COMPARE_REGION_REF,
+)
+const FRONTEND_REPLICA_BUILD_BROWSER_SESSION_REF = "frontend-replica/build/browser-session"
 
 function route(url: URL) {
   return url.pathname.replace(/\/+$/, "") || "/"
@@ -91,7 +121,7 @@ async function sidebarWidth(page: any) {
 }
 
 function projection(overrides: Partial<ReturnType<typeof emptyExpertSquadProjectionEntry>>) {
-  return { ...emptyExpertSquadProjectionEntry(), ...overrides }
+  return expertSquadProjectionEntryFixture(overrides)
 }
 
 function projectedExpertSquadCatalog() {
@@ -114,26 +144,26 @@ function projectedExpertSquadCatalog() {
     capability_projection: {
       scheduler: projection({
         built_in_tool_ids: ["select_expert_squad", "skill"],
-        package_tool_refs: ["frontend-replica.scheduler.audit"],
-        default_mcp_server_refs: ["project/browser"],
-        package_mcp_prompt_refs: ["frontend-replica/selector"],
+        package_tool_refs: [FRONTEND_REPLICA_ORCHESTRATOR_AUDIT_REF],
+        default_mcp_tool_refs: [DEFAULT_BROWSER_SNAPSHOT_REF],
+        package_mcp_prompt_refs: ["frontend-replica/orchestrator/browser/prompt/selector"],
       }),
       agents: {
         requirements: projection({
-          default_tool_refs: ["requirements.read_context"],
-          package_tool_refs: ["frontend-replica.requirements.trace"],
-          default_mcp_tool_refs: ["project/browser.snapshot"],
-          package_mcp_resource_refs: ["frontend-replica/reference-dom"],
+          default_tool_refs: [DEFAULT_READ_CONTEXT_REF],
+          package_tool_refs: [FRONTEND_REPLICA_REQUIREMENTS_TRACE_REF],
+          default_mcp_tool_refs: [DEFAULT_BROWSER_SNAPSHOT_REF],
+          package_mcp_resource_refs: ["frontend-replica/requirements/browser/resource/reference-dom"],
         }),
         build: projection({
-          built_in_tool_ids: ["exec_command", "apply_patch"],
-          package_tool_refs: ["frontend-replica.build.patch"],
-          package_mcp_server_refs: ["frontend-replica/local-preview"],
-          package_mcp_tool_refs: ["frontend-replica/compare-region"],
+          built_in_tool_ids: ["bash", "apply_patch"],
+          package_tool_refs: [FRONTEND_REPLICA_BUILD_PATCH_REF],
+          package_mcp_server_refs: [FRONTEND_REPLICA_BUILD_BROWSER_SESSION_REF],
+          package_mcp_tool_refs: [FRONTEND_REPLICA_BUILD_COMPARE_REGION_REF],
         }),
         "visual-qa": projection({
-          default_tool_refs: ["visual_qa.inspect"],
-          package_mcp_prompt_refs: ["frontend-replica/visual-guidance"],
+          default_tool_refs: [DEFAULT_BROWSER_PREVIEW_REF],
+          package_mcp_prompt_refs: ["frontend-replica/visual-qa/browser/prompt/visual-guidance"],
         }),
       },
     },
@@ -147,8 +177,20 @@ function projectedExpertSquadCatalog() {
       active_squad_id: "frontend-replica",
       capability_profile_id: "frontend-replica",
       projection_hash: "projection-vertical-tabs",
-      projected_tool_ids: ["select_expert_squad", "skill", "frontend-replica.build.patch"],
-      projected_agent_ids: ["requirements", "build", "visual-qa"],
+      projected_tool_ids: projectedToolIDs(
+        "select_expert_squad",
+        "skill",
+        FRONTEND_REPLICA_ORCHESTRATOR_AUDIT_TOOL_ID,
+        DEFAULT_BROWSER_SNAPSHOT_TOOL_ID,
+        DEFAULT_READ_CONTEXT_TOOL_ID,
+        FRONTEND_REPLICA_REQUIREMENTS_TRACE_TOOL_ID,
+        FRONTEND_REPLICA_BUILD_PATCH_TOOL_ID,
+        FRONTEND_REPLICA_BUILD_COMPARE_REGION_TOOL_ID,
+        "bash",
+        "apply_patch",
+        DEFAULT_BROWSER_PREVIEW_TOOL_ID,
+      ),
+      projected_agent_ids: ["orchestrator", "requirements", "build", "visual-qa"],
       selector_skill_names: ["frontend-replica-expert-squad"],
       production_skill_names: ["frontend-replica-build"],
       projected_skill_names: ["frontend-replica-expert-squad", "frontend-replica-build"],
@@ -184,6 +226,15 @@ const agents = [
     skill_mountable: false,
     skill_tool_available: true,
   },
+  {
+    name: "visual-qa",
+    description: "Visual QA",
+    mode: "subagent",
+    native: true,
+    hidden: false,
+    skill_mountable: true,
+    skill_tool_available: true,
+  },
 ]
 
 const baseSkills = [
@@ -214,8 +265,20 @@ function skillMountMatrix(mountedDebug = false) {
     active_profile: "frontend-replica",
     capability_profile_id: "frontend-replica",
     projection_hash: "projection-vertical-tabs",
-    projected_tool_ids: ["select_expert_squad", "frontend-replica.build.patch"],
-    projected_agents: ["requirements", "build"],
+    projected_tool_ids: projectedToolIDs(
+      "select_expert_squad",
+      "skill",
+      FRONTEND_REPLICA_ORCHESTRATOR_AUDIT_TOOL_ID,
+      DEFAULT_BROWSER_SNAPSHOT_TOOL_ID,
+      DEFAULT_READ_CONTEXT_TOOL_ID,
+      FRONTEND_REPLICA_REQUIREMENTS_TRACE_TOOL_ID,
+      FRONTEND_REPLICA_BUILD_PATCH_TOOL_ID,
+      FRONTEND_REPLICA_BUILD_COMPARE_REGION_TOOL_ID,
+      "bash",
+      "apply_patch",
+      DEFAULT_BROWSER_PREVIEW_TOOL_ID,
+    ),
+    projected_agents: ["orchestrator", "requirements", "build", "visual-qa"],
     selector_skill_names: ["frontend-replica-expert-squad"],
     production_skill_names: ["frontend-replica-build"],
     projected_skill_names: ["frontend-replica-expert-squad", "frontend-replica-build"],
@@ -249,6 +312,10 @@ function skillMountMatrix(mountedDebug = false) {
               },
             ]
           : [],
+      },
+      {
+        agent: "visual-qa",
+        mounted: [],
       },
     ],
     unmounted_count: mountedDebug ? 0 : 1,
@@ -395,7 +462,9 @@ test("left Tool, Skill, and MCP panels use vertical agent tabs and dynamic exper
     await openExtensionMode("tool", toolPanel)
     await page.waitForSelector(`${toolPanel}[data-active="true"] [data-ui="tool-agent-capability-tabs"]`)
     await page.waitForFunction(() =>
-      document.querySelector('#leftPanelExtensions [data-mode="tool"]')?.textContent?.includes("frontend-replica.build.patch"),
+      document
+        .querySelector('#leftPanelExtensions [data-mode="tool"]')
+        ?.textContent?.includes("frontend-replica/build/patch"),
     )
     const toolCollapsedLayout = await compactCapabilityLayoutState(page, toolPanel, "tool-agent-capability-tabs")
     assert.deepEqual(toolCollapsedLayout.selectedAgents, [])
@@ -440,7 +509,7 @@ test("left Tool, Skill, and MCP panels use vertical agent tabs and dynamic exper
       ).length,
     }))
     assert.match(toolSummary.text, /Projected Tool Pool/)
-    assert.match(toolSummary.text, /frontend-replica\.build\.patch/)
+    assert.match(toolSummary.text, /frontend-replica\/build\/patch/)
     assert.equal(toolSummary.tabCount >= 4, true)
     assert.equal(toolSummary.fakeMountButtons, 0)
     const toolScreenshot = await saveElementScreenshot(page, extensionPanel, "left-tool-panel.png")
@@ -502,7 +571,7 @@ test("left Tool, Skill, and MCP panels use vertical agent tabs and dynamic exper
       ),
     }))
     assert.equal(skillSummary.view, "agent-tabs")
-    assert.equal(skillSummary.tabCount, 2)
+    assert.equal(skillSummary.tabCount, 3)
     assert.equal(skillSummary.poolRows, 2)
     assert.deepEqual(skillSummary.mountedNames, ["claude-debug"])
     const skillScreenshot = await saveElementScreenshot(page, extensionPanel, "left-skill-panel.png")
@@ -510,7 +579,9 @@ test("left Tool, Skill, and MCP panels use vertical agent tabs and dynamic exper
     await openExtensionMode("mcp", mcpPanel)
     await page.waitForSelector(`${mcpPanel}[data-active="true"] [data-ui="mcp-agent-capability-tabs"]`)
     await page.waitForFunction(() =>
-      document.querySelector('#leftPanelExtensions [data-mode="mcp"]')?.textContent?.includes("frontend-replica/compare-region"),
+      document
+        .querySelector('#leftPanelExtensions [data-mode="mcp"]')
+        ?.textContent?.includes("frontend-replica/build/browser/tool/compare-region"),
     )
     const mcpCollapsedLayout = await compactCapabilityLayoutState(page, mcpPanel, "mcp-agent-capability-tabs")
     assert.deepEqual(mcpCollapsedLayout.selectedAgents, [])
@@ -552,7 +623,7 @@ test("left Tool, Skill, and MCP panels use vertical agent tabs and dynamic exper
       ).length,
     }))
     assert.match(mcpSummary.text, /Projected MCP Pool/)
-    assert.match(mcpSummary.text, /frontend-replica\/compare-region/)
+    assert.match(mcpSummary.text, /frontend-replica\/build\/browser\/tool\/compare-region/)
     assert.match(mcpSummary.text, /Configured MCP Status/)
     assert.equal(mcpSummary.tabCount >= 4, true)
     assert.equal(mcpSummary.fakeMountButtons, 0)

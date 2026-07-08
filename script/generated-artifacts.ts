@@ -6,6 +6,9 @@ export const GENERATED_ARTIFACT_PATHS = [
   "packages/sdk/openapi.json",
   "packages/sdk/js/src/gen",
   "packages/sdk/js/src/defaults.ts",
+  "packages/sdk/js/src/route-policy.ts",
+  "packages/opencorvus/src/expert-squad/payload.ts",
+  "packages/opencorvus/src/provider/models-snapshot.ts",
   "packages/web/src/content/docs/reference/api.mdx",
   "packages/web/src/content/docs/zh-cn/reference/api.mdx",
 ] as const
@@ -63,6 +66,22 @@ async function checkWorktree(): Promise<void> {
   process.exit(1)
 }
 
+async function checkCleanWorktree(): Promise<void> {
+  const changed = await changedPaths()
+  if (changed.length === 0) return
+  const generated = changed.filter(isGeneratedArtifactPath)
+  const offenders = changed.filter((file) => !isGeneratedArtifactPath(file))
+  if (generated.length > 0) {
+    console.error("Generated artifact drift:")
+    for (const file of generated) console.error(file)
+  }
+  if (offenders.length > 0) {
+    console.error("Generate changed non-generated file(s):")
+    for (const file of offenders) console.error(file)
+  }
+  process.exit(1)
+}
+
 if (import.meta.main) {
   const mode = process.argv[2] ?? ""
   if (mode === "--print") {
@@ -71,7 +90,11 @@ if (import.meta.main) {
     process.stdout.write(GENERATED_ARTIFACT_PATHS.join("\0"))
   } else if (mode === "--check-worktree") {
     await checkWorktree()
+  } else if (mode === "--check-clean-worktree") {
+    await checkCleanWorktree()
   } else {
-    throw new Error("Usage: bun ./script/generated-artifacts.ts <--print|--print0|--check-worktree>")
+    throw new Error(
+      "Usage: bun ./script/generated-artifacts.ts <--print|--print0|--check-worktree|--check-clean-worktree>",
+    )
   }
 }

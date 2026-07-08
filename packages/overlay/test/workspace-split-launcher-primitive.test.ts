@@ -47,7 +47,6 @@ describe("WorkspaceSplitLauncher primitive", () => {
     for (const selector of [
       ".workspace-terminal-option[data-highlighted]",
       ".workspace-editor-option[data-highlighted]",
-      ".workspace-coding-cli-option[data-highlighted]",
     ]) {
       const body = selectorRuleBody(selector)
       expect(body).toMatch(/background:\s*var\(--subtle-3\)/)

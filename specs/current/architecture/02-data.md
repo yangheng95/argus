@@ -20,20 +20,20 @@
 
 ### 计划与目标
 
-| 表                    | 关键字段 / 状态                                                                                                                                                                                                                                                                                                                                                                                                 |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `engine_plan_version` | status ∈ {active, superseded}                                                                                                                                                                                                                                                                                                                                                                                   |
-| `engine_milestone`    | status ∈ {pending, active, passed, failed}                                                                                                                                                                                                                                                                                                                                                                      |
+| 表                    | 关键字段 / 状态                                                                                                                                                                                                                                                                                                                                                                                   |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `engine_plan_version` | status ∈ {active, superseded}                                                                                                                                                                                                                                                                                                                                                                     |
+| `engine_milestone`    | status ∈ {pending, active, passed, failed}                                                                                                                                                                                                                                                                                                                                                        |
 | `engine_goal`         | priority ∈ {blocking, advisory}；**无** `status` 列（live 派生自 `engine/describe.ts::goalStatusByID`，旧 goal 状态列已退役）；**无** `workspace_dir` / `workspace_branch` / `workspace_base_ref` / `retry_count` / `cascade_state`（这些过程字段的单一来源已迁到 `engine_artifact[kind="goal_run_attempt"].payload`，通过 `engine/store.ts:findGoalLatestWorkspace` / `getGoalRetryCount` 读取） |
-| `engine_requirement`  | 需求追溯记录（`requirements` agent 写入）                                                                                                                                                                                                                                                                                                                                                                       |
-| `engine_plan_node`    | 计划步骤                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `engine_requirement`  | 需求追溯记录（`requirements` agent 写入）                                                                                                                                                                                                                                                                                                                                                         |
+| `engine_plan_node`    | 计划步骤                                                                                                                                                                                                                                                                                                                                                                                          |
 
 ### 执行与交付（artifact-centric）
 
-| 表                         | 关键字段 / 状态                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 表                         | 关键字段 / 状态                                                                                                                                                   |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `engine_artifact`          | **统一过程表**，`kind` 决定语义；替代旧的多表过程模型。`EngineArtifactKind` 的唯一真源是 `packages/opencorvus/src/engine/engine.sql.ts`，本文档禁止复制完整枚举。 |
-| `engine_progress_snapshot` | 进度快照（旧名 `orchestrator_progress_snapshot` 已重命名）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `engine_progress_snapshot` | 进度快照（旧名 `orchestrator_progress_snapshot` 已重命名）                                                                                                        |
 
 ### 交互与绑定
 
@@ -44,7 +44,36 @@
 
 > 实际 `sqliteTable` 注册以 `packages/opencorvus/src/engine/engine.sql.ts` 的 `export const Engine*Table = sqliteTable(...)` 为唯一真源；本文档只描述表职责，不复制完整注册清单或数量。
 
-**唯一写入者**：`task-api/index.ts` 和 `engine/persist.ts` / `engine/state.ts` / `engine/store.ts`。禁止其他模块直接写 `engine_*` 表。
+**唯一写入者**：`engine_artifact` 的唯一直接表写入文件是
+`engine/artifact.ts`。所有过程 / 证据 / preview / review / run /
+goal-run artifact row 必须通过这个 writer 进入；生产源码中其他文件禁止直接
+`insert` / `update` / `delete` `EngineArtifactTable`。`engine_progress_snapshot`
+的唯一直接表写入文件是 `engine/progress.ts`；任务创建、任务状态更新、队列
+claim、git note 和 operator note 都只能通过这个 writer 记录 progress row。
+`engine_interaction_request` 的唯一直接表写入文件是
+`engine/interaction-request.ts`；permission/question bridge、executor protocol
+interaction request 和 operator protocol interaction resolution 都只能通过这个
+writer 创建或解析 interaction row。`engine_channel_binding` 的唯一直接表写入文件
+是 `engine/channel-binding.ts`；task creation 和 task cancellation / removal 只能通过
+这个 writer 创建或删除 channel binding row。`engine_spec_snapshot` 的唯一直接表写入文件是
+`engine/spec-snapshot.ts`；requirements 和 architect 阶段只能通过这个 writer 创建、
+supersede 或更新 spec snapshot row。`engine_plan_version` 和 `engine_plan_node`
+的唯一直接表写入文件是 `engine/persist.ts`；architect graph、operator add-goal
+和 create-run active plan graph 只能通过这个 persistence writer 创建、supersede
+或更新 plan graph row。`engine_goal` 的唯一直接表写入文件是 `engine/persist.ts`；
+architect upsert、operator add/modify/delete/complete、active plan repoint 和 retry
+attempt bookkeeping 只能通过这个 persistence writer 变更 goal row。`engine_task`
+的唯一直接表写入文件是 `engine/task.ts`；task creation、metadata/touch、
+budget/title edits、physical delete、queue reorder/claim、lifecycle state updates、
+run bump 和 rewind cursor mutation 都只能通过这个 task writer 变更 task row。
+`engine_requirement` 的唯一直接表写入文件是 `engine/persist.ts`；requirements
+追溯记录只能通过这个 persistence writer 创建。
+其他 `engine_*` 表的写入仍必须停留在已声明的 engine-owned writer/service 内，
+禁止跨域模块直接写。
+
+Metrics 域沿用 `engine_*` 表名承载评分流水，但写入边界归属 metrics store：
+`engine_metric_spec`、`engine_metric_result` 和 `engine_iteration` 的唯一直接表写入文件
+是 `metrics/store.ts`。任务、agent、engine 或 UI 层不得直接写这些 metrics 表。
 
 ## session 域（5 表）
 
@@ -78,6 +107,11 @@
 
 新增的字段 `goal_id`：当 session 归属某个 goal（`executor` / `build` / `evaluator` session）时写入，overlay 据此把消息嵌在 goal 卡片下。`planner` kind 已删除，此处不再列入。
 
+Session message 表按 Session writer 分层写入：`part` 的唯一直接表写入文件是
+`session/index.ts`。Build、tool、server route、compaction 和 shell execution 只能通过
+`Session.updatePart` / `Session.updatePartData` / `Session.persistMessage` 等 Session writer API
+创建或修正 part row，不能直接写 `PartTable`。
+
 ## 控制 / 工作区
 
 | 表                | 文件                         | 作用                             |
@@ -86,6 +120,21 @@
 | `control_account` | `control/control.sql.ts`     | 外部控制账号（email + url）      |
 | `control_message` | `control/control.sql.ts`     | 外部控制消息 timeline            |
 | `project`         | `project/project.sql.ts`     | 项目根                           |
+
+Control 和轻量辅助域按领域 writer 分层写入：`control_message` 的唯一直接表写入文件是
+`control/timeline.ts`，`decision_log` 的唯一直接表写入文件是
+`decision-log/index.ts`，`quick_note` 的唯一直接表写入文件是
+`quicknote/service.ts`。Project delete 可以编排项目级清理事务，但必须调用这些领域
+writer API，不能直接删除其它领域表。
+
+`project` 表的唯一直接表写入文件是 `project/project.ts`。Project delete 和
+Project GC（Garbage Collection，垃圾回收）可以编排项目生命周期，但必须调用
+`Project.deleteRows` 等项目领域 API，不能直接写 `ProjectTable`。
+
+生产代码的直接表写入 registry 由
+`packages/opencorvus/test/script/db-write-boundary.test.ts` 强制维护：每个出现
+`.insert(Table)` / `.update(Table)` / `.delete(Table)` 的表都必须登记唯一 writer 文件。
+新增直接写表或第二个写文件会让该测试失败，不能用未登记表绕过分层边界。
 
 ## Project Storage Namespace
 
@@ -114,6 +163,12 @@ foreign attachment 来“修复”。Attachment bytes 的物理池在
 | `session_share`                                               | `share/share.sql.ts`         | 分享                                            |
 | `protocol_event` · `protocol_inbox` · `protocol_stream_chunk` | `protocol/protocol.sql.ts`   | executor 协议事件                               |
 | `task_queue` · `cron_job` · `event_job`                       | `scheduler/*.sql.ts`         | 调度器                                          |
+
+Scheduler 表按 service 分层写入：`task_queue` 的唯一直接表写入文件是
+`scheduler/task-queue-service.ts`；`cron_job` 的唯一直接表写入文件是
+`scheduler/cron-service.ts`；`event_job` 的唯一直接表写入文件是
+`scheduler/event-service.ts`。Tool、server route、engine 和 executor 层只能通过
+scheduler service 创建、更新或删除 scheduler job / queue rows，不能直接写 scheduler 表。
 
 ## Trace — 统一 workflow 追踪（横切）
 

@@ -192,10 +192,6 @@ export namespace FrontendDesignAgent {
     const processTrace = createFrontendProcessTrace()
     await configureFrontendProcessTracePersistence(input.taskID, processTrace)
     const contextTools = createFrontendDesignContextTools()
-    const webpageEvidenceTools = await createWebpageEvidenceTools(
-      { taskID: input.taskID, signal: input.signal },
-      processTrace,
-    )
     const implementationTools = await createFrontendImplementationTools(
       { taskID: input.taskID, signal: input.signal },
       processTrace,
@@ -234,7 +230,6 @@ export namespace FrontendDesignAgent {
       ...skeletonProjectToolKit,
       ...visualRegionBindingToolKit,
       ...processTraceToolKit,
-      ...webpageEvidenceTools,
       ...createReadAttachmentTool(projectID),
       ...submitFrontendTemplateTool,
     }

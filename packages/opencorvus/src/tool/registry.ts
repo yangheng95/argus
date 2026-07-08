@@ -13,6 +13,7 @@ import { Glob } from "../util/glob"
 import { pathToFileURL } from "url"
 import { AgentToolPool } from "@/agent/tool-pool-contract"
 import { BATCH_TOOL_ID, builtInGlobalTools } from "./global-tools"
+import { createPluginToolHost } from "./plugin-tool-host"
 
 export namespace ToolRegistry {
   const log = Log.create({ service: "tool.registry" })
@@ -75,6 +76,7 @@ export namespace ToolRegistry {
             ...ctx,
             directory: Instance.directory,
             worktree: Instance.worktree,
+            host: createPluginToolHost(),
           } as unknown as PluginToolContext
           const result = await def.execute(args as any, pluginCtx)
           const out = await Truncate.output(result, { sessionID: ctx.sessionID }, initCtx?.agent)

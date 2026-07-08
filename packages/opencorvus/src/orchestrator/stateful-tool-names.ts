@@ -27,17 +27,47 @@
 export const STATEFUL_SNAPSHOT_TOOL_NAMES = [
   // Live-state queries — called every turn; latest answer supersedes all.
   "read_context",
-  "query_failed_goals",
-  // Sub-agent orchestration — normally called once per task; if a retry
-  // path re-invokes them, the older ACK ceases to reflect reality. Full
-  // outputs persist in Decision Log / Spec snapshot, re-readable via
-  // read_context.
-  "requirements",
-  "architect",
+  // Refinement is normally called once per task; if a retry path re-invokes
+  // it, the older ACK ceases to reflect reality. Full outputs persist in
+  // Decision Log / task state, re-readable via read_context.
   "refine",
 ] as const
 
 export type StatefulSnapshotToolName = (typeof STATEFUL_SNAPSHOT_TOOL_NAMES)[number]
+
+export const STATEFUL_SNAPSHOT_TOOL_ACTIONS = [
+  {
+    tool: "manage_task",
+    action: "query_failed_goals",
+    key: "manage_task action=query_failed_goals",
+  },
+] as const
+
+export type StatefulSnapshotToolAction = (typeof STATEFUL_SNAPSHOT_TOOL_ACTIONS)[number]
+
+const STATEFUL_SNAPSHOT_TOOL_NAME_SET = new Set<string>(STATEFUL_SNAPSHOT_TOOL_NAMES)
+
+function parseToolInputRecord(input: unknown): Record<string, unknown> | undefined {
+  if (input && typeof input === "object" && !Array.isArray(input)) return input as Record<string, unknown>
+  if (typeof input !== "string" || input.trim().length === 0) return undefined
+  try {
+    const parsed = JSON.parse(input)
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
+export function statefulSnapshotToolKey(toolName: string, input: unknown): string | undefined {
+  if (STATEFUL_SNAPSHOT_TOOL_NAME_SET.has(toolName)) return toolName
+  const record = parseToolInputRecord(input)
+  if (!record) return undefined
+  return STATEFUL_SNAPSHOT_TOOL_ACTIONS.find(
+    (entry) => entry.tool === toolName && record.action === entry.action,
+  )?.key
+}
 
 /**
  * Orchestrator tools that cannot by themselves complete a scheduling decision.
@@ -49,7 +79,6 @@ export type StatefulSnapshotToolName = (typeof STATEFUL_SNAPSHOT_TOOL_NAMES)[num
  */
 export const ORCHESTRATOR_NO_DECISION_OBSERVATION_TOOL_NAMES = [
   "read_context",
-  "query_failed_goals",
   "browser_preview",
   "bash",
 ] as const

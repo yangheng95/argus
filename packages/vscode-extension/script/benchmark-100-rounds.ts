@@ -1,7 +1,9 @@
 #!/usr/bin/env bun
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
+import { terminateOwnedProcessTree } from "./process-tree"
 
 type CheckResult = {
   name: string
@@ -214,47 +216,66 @@ async function commandCheck(
   cmd: string[],
   env: Record<string, string> = {},
 ): Promise<CheckResult> {
+  if (cmd.length === 0) throw new Error(`${name} command must not be empty`)
   const started = Date.now()
   let timer: NodeJS.Timeout | undefined
   let timedOut = false
   let tail = ""
-  const touch = (proc: Bun.Subprocess<"ignore", "pipe", "pipe">) => {
+  let termination: Promise<void> | undefined
+  let terminationError: unknown
+  let rejectTerminationFailure: (error: unknown) => void = () => {}
+  const terminationFailure = new Promise<never>((_resolve, reject) => {
+    rejectTerminationFailure = reject
+  })
+  const requestTermination = (proc: ChildProcessWithoutNullStreams) => {
+    if (termination) return
+    termination = terminateOwnedProcessTree(proc, `VS Code 100-round benchmark ${name}`).catch((error) => {
+      terminationError = error
+      rejectTerminationFailure(error)
+    })
+  }
+  const touch = (proc: ChildProcessWithoutNullStreams) => {
     if (timer) clearTimeout(timer)
     timer = setTimeout(() => {
       timedOut = true
-      try {
-        proc.kill()
-      } catch {}
+      requestTermination(proc)
     }, idleMs)
     if (typeof timer.unref === "function") timer.unref()
   }
 
-  const proc = Bun.spawn(cmd, {
+  const executable = cmd[0]!
+  const proc = spawn(executable, cmd.slice(1), {
     cwd,
     env: { ...process.env, ...env },
-    stdin: "ignore",
-    stdout: "pipe",
-    stderr: "pipe",
+    stdio: ["ignore", "pipe", "pipe"],
+    detached: process.platform !== "win32",
+    windowsHide: true,
   })
   touch(proc)
 
-  const collect = async (stream: ReadableStream<Uint8Array>, label: "stdout" | "stderr") => {
-    const reader = stream.getReader()
+  const collect = async (stream: NodeJS.ReadableStream, label: "stdout" | "stderr") => {
     const decoder = new TextDecoder()
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
+    for await (const value of stream) {
       touch(proc)
-      const text = decoder.decode(value, { stream: true })
+      const text = decoder.decode(value as Buffer, { stream: true })
       tail = trimTail(tail + text)
       const lines = text.split(/\r?\n/).filter(Boolean)
       for (const line of lines.slice(-3)) console.log(`[${name}.${label}] ${line}`)
     }
   }
 
-  await Promise.all([collect(proc.stdout, "stdout"), collect(proc.stderr, "stderr"), proc.exited])
+  const collectors = Promise.all([collect(proc.stdout, "stdout"), collect(proc.stderr, "stderr")])
+  const completion = new Promise<{ code: number | null }>((resolve, reject) => {
+    proc.once("error", reject)
+    proc.once("close", (code) => resolve({ code }))
+  })
+  const completed = await Promise.race([completion, terminationFailure])
   if (timer) clearTimeout(timer)
-  const code = proc.exitCode
+  if (!termination) termination = terminateOwnedProcessTree(proc, `VS Code 100-round benchmark ${name}`)
+  if (termination) await termination
+  if (terminationError) throw terminationError
+  await collectors
+  const code = completed.code
   const ok = !timedOut && code === 0
   const result: CheckResult = {
     name,

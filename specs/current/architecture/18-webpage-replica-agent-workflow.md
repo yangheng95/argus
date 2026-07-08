@@ -181,7 +181,7 @@ files. Agents do not secretly message each other.
 | Build                                      | `build_session_contract`, BuildResult from `report_build_result`, changed-file facts, verification/browser evidence                                                                                                             | Orchestrator, Visual QA, Integrity, future Build retry                        | Passed Build evidence is implementation evidence, not task completion.                                                                                                                                                                                                              |
 | Visual QA                                  | Structured VisualQaReport, acceptance semantics, `decision_log phase=visual_qa` report records, problem DOM regions                                                                                                             | Orchestrator, Build, Integrity, workflow projection                           | Failed Visual QA becomes first-class `visualQaFeedback` for Build, not hidden acceptance feedback.                                                                                                                                                                                  |
 | Integrity                                  | `engine_artifact kind=integrity_attempt`, markdown report, required repairs                                                                                                                                                     | Orchestrator, Build, workflow projection                                      | Integrity non-pass is completed review evidence, not a failed lifecycle gate.                                                                                                                                                                                                       |
-| Orchestrator                               | Lifecycle tool call and visible task events                                                                                                                                                                                     | User, task board, next workflow turn                                          | `complete_task` / `fail_task` are explicit Orchestrator decisions.                                                                                                                                                                                                                  |
+| Orchestrator                               | Lifecycle tool call and visible task events                                                                                                                                                                                     | User, task board, next workflow turn                                          | `manage_task action=complete_task` / `manage_task action=fail_task` are explicit Orchestrator decisions.                                                                                                                                                                            |
 
 ## Webpage-Specific Stage Boundaries
 
@@ -306,7 +306,7 @@ flowchart LR
 The loop is LLM-orchestrated, not a host state machine. The important invariant
 is that failed Visual QA and non-pass Integrity are preserved as explicit Build
 context channels; they are not hidden inside acceptance text and they do not
-mechanically block `complete_task`.
+mechanically block `manage_task action=complete_task`.
 
 ## Task-Specific Web Clone Constraints
 
@@ -334,4 +334,4 @@ convenience loop.
    context.
 5. Integrity appears to block completion: inspect whether the UI is projecting a
    review report as lifecycle authority. Current contract says Orchestrator
-   alone calls `complete_task` or `fail_task`.
+   alone calls `manage_task action=complete_task` or `manage_task action=fail_task`.

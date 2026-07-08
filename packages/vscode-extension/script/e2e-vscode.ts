@@ -5,6 +5,8 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { spawn, spawnSync } from "node:child_process"
 import { fileURLToPath } from "node:url"
+import { readEvents, waitForEvent, watchEventLogActivity } from "./e2e-event-log"
+import { terminateOwnedProcessTree } from "./process-tree"
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const extensionRoot = path.resolve(here, "..")
@@ -16,6 +18,7 @@ const vscodeIdleMs = Number(process.env.VSCODE_E2E_IDLE_MS ?? 120_000)
 const visualHoldMs = Number(process.env.OPENCORVUS_E2E_HOLD_MS ?? 0)
 const visualEnabled = process.env.OPENCORVUS_E2E_VISUAL === "1" || Boolean(process.env.OPENCORVUS_E2E_VISUAL_DIR)
 const visualSettleMs = Number(process.env.OPENCORVUS_E2E_VISUAL_SETTLE_MS ?? 1_000)
+const WINDOWS_SCREEN_CAPTURE_TIMEOUT_MS = 15_000
 
 async function main() {
   if (!Number.isInteger(vscodeIdleMs) || vscodeIdleMs <= 0) {
@@ -82,6 +85,7 @@ async function main() {
         FAKE_SIDECAR_DELAY_MS: undefined,
         FAKE_SIDECAR_NEVER_HANDSHAKE: undefined,
       },
+      eventLogFile: testLogFile,
     })
     if (code !== 0) throw new Error(`VS Code E2E exited with code ${code}`)
   } catch (error) {
@@ -128,6 +132,7 @@ async function runVsCodeCli(options: {
     screenshotFile: string
     reportFile: string
   }
+  eventLogFile?: string
 }): Promise<number> {
   const executable = await downloadAndUnzipVSCode({ version: vscodeVersion })
   const [command, ...profileArgs] = resolveCliArgsFromVSCodeExecutablePath(executable, { reuseMachineInstall: true })
@@ -167,27 +172,32 @@ async function runVsCodeCli(options: {
       env: { ...process.env, ...options.env },
       shell: false,
       windowsHide: false,
+      detached: process.platform !== "win32",
     })
     let settled = false
     let idleTimer: NodeJS.Timeout | undefined
+    let stopEventLogActivity: (() => void) | undefined
     let visualDone = !options.visual
+    const failAfterCleanup = (error: Error) => {
+      if (settled) return
+      settled = true
+      if (idleTimer) clearTimeout(idleTimer)
+      stopEventLogActivity?.()
+      terminateOwnedProcessTree(child, "VS Code E2E")
+        .then(() => reject(error))
+        .catch((cleanupError) => {
+          const cleanupMessage = cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+          reject(new Error(`${error.message}; cleanup failed: ${cleanupMessage}`))
+        })
+    }
     const resetIdle = () => {
       if (idleTimer) clearTimeout(idleTimer)
       idleTimer = setTimeout(() => {
-        if (settled) return
-        settled = true
-        child.kill("SIGTERM")
-        reject(new Error(`VS Code E2E had no output for ${vscodeIdleMs}ms`))
+        failAfterCleanup(new Error(`VS Code E2E had no output for ${vscodeIdleMs}ms`))
       }, vscodeIdleMs)
     }
     const fail = (error: Error) => {
-      if (idleTimer) clearTimeout(idleTimer)
-      if (settled) return
-      settled = true
-      try {
-        child.kill("SIGTERM")
-      } catch {}
-      reject(error)
+      failAfterCleanup(error)
     }
     if (options.visual) {
       captureWhenVisualReady(options.visual)
@@ -200,6 +210,7 @@ async function runVsCodeCli(options: {
         })
     }
     resetIdle()
+    if (options.eventLogFile) stopEventLogActivity = watchEventLogActivity(options.eventLogFile, resetIdle)
     child.stdout?.on("data", (chunk) => {
       resetIdle()
       process.stdout.write(chunk)
@@ -213,6 +224,7 @@ async function runVsCodeCli(options: {
     })
     child.on("close", (code, signal) => {
       if (idleTimer) clearTimeout(idleTimer)
+      stopEventLogActivity?.()
       if (settled) return
       settled = true
       if (signal) reject(new Error(`VS Code E2E exited by signal ${signal}`))
@@ -270,16 +282,6 @@ async function captureWhenVisualReady(options: {
   fs.writeFileSync(options.ackFile, `${JSON.stringify(report)}\n`)
   console.log(`[e2e] visual screenshot=${options.screenshotFile}`)
   console.log(`[e2e] visual report=${options.reportFile}`)
-}
-
-async function waitForEvent(file: string, type: string, idleMs: number) {
-  const started = Date.now()
-  while (Date.now() - started < idleMs) {
-    const events = fs.existsSync(file) ? readEvents(file) : []
-    if (events.some((event) => event.type === type)) return
-    await sleep(100)
-  }
-  throw new Error(`timed out waiting for ${type} in ${file}`)
 }
 
 function captureWindowsScreen(file: string): {
@@ -375,6 +377,7 @@ $info = Get-Item -LiteralPath ${psLiteral(file)}
   const result = spawnSync("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded], {
     cwd: repoRoot,
     encoding: "utf8",
+    timeout: WINDOWS_SCREEN_CAPTURE_TIMEOUT_MS,
     windowsHide: true,
   })
   if (result.status !== 0) {
@@ -428,15 +431,6 @@ function createSidecarWrapper(tempRoot: string): string {
     mode: 0o755,
   })
   return wrapper
-}
-
-function readEvents(file: string): Array<Record<string, unknown>> {
-  if (!fs.existsSync(file)) throw new Error(`sidecar events file was not created: ${file}`)
-  return fs
-    .readFileSync(file, "utf8")
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .map((line) => JSON.parse(line))
 }
 
 function assertEvent(events: Array<Record<string, unknown>>, type: string) {

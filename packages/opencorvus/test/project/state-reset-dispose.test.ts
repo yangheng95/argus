@@ -20,6 +20,34 @@ describe("project State reset disposal", () => {
     expect(state()).toEqual({ id: "project-a" })
   })
 
+  test("reset waits for pending async state without a disposer before removing the entry", async () => {
+    let release!: () => void
+    const ready = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    let key = "project-reset-pending"
+    const state = State.create(
+      () => key,
+      async () => {
+        await ready
+        return { id: key }
+      },
+    )
+
+    const first = state()
+    let finished = false
+    const reset = state.reset().then(() => {
+      finished = true
+    })
+    await Promise.resolve()
+
+    expect(finished).toBe(false)
+    release()
+    await reset
+    await expect(first).resolves.toEqual({ id: "project-reset-pending" })
+    expect(state()).not.toBe(first)
+  })
+
   test("reset rejects and keeps the entry when disposal fails", async () => {
     let fail = true
     let key = "project-reset-failure"
@@ -77,6 +105,34 @@ describe("project State reset disposal", () => {
 
     fail = false
     await State.dispose(key)
+    expect(state()).not.toBe(first)
+  })
+
+  test("dispose waits for pending async state without a disposer before removing the entry", async () => {
+    let release!: () => void
+    const ready = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const key = "project-dispose-pending"
+    const state = State.create(
+      () => key,
+      async () => {
+        await ready
+        return { id: key }
+      },
+    )
+
+    const first = state()
+    let finished = false
+    const dispose = State.dispose(key).then(() => {
+      finished = true
+    })
+    await Promise.resolve()
+
+    expect(finished).toBe(false)
+    release()
+    await dispose
+    await expect(first).resolves.toEqual({ id: "project-dispose-pending" })
     expect(state()).not.toBe(first)
   })
 })

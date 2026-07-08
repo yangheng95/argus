@@ -134,9 +134,24 @@ const missionPrompt = [
 const reportApiErrors: string[] = []
 let server: any
 let finalExitCode = 1
+const cleanupErrors: string[] = []
 
 function log(message: string): void {
   process.stdout.write(`[mission-benchmark] ${message}\n`)
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+async function recordCleanup(label: string, fn: () => Promise<void>): Promise<void> {
+  try {
+    await fn()
+  } catch (error) {
+    const message = `${label}: ${errorMessage(error)}`
+    cleanupErrors.push(message)
+    log(`cleanup failed: ${message}`)
+  }
 }
 
 function failReport(error: unknown) {
@@ -279,11 +294,17 @@ try {
   finalExitCode = 1
 } finally {
   const { Instance } = await import("../../src/project/instance")
-  await Instance.disposeAll().catch(() => undefined)
-  if (server) await server.stop(true).catch(() => undefined)
+  await recordCleanup("instance disposal", () => Instance.disposeAll())
+  if (server) await recordCleanup("benchmark server stop", () => server.stop(true))
   if (!keep) {
-    await fs.rm(temp.home, { recursive: true, force: true }).catch(() => undefined)
-    if (ownsProjectDir) await fs.rm(temp.dir, { recursive: true, force: true }).catch(() => undefined)
+    await recordCleanup("benchmark home cleanup", () => fs.rm(temp.home, { recursive: true, force: true }))
+    if (ownsProjectDir) {
+      await recordCleanup("benchmark project cleanup", () => fs.rm(temp.dir, { recursive: true, force: true }))
+    }
+  }
+  if (cleanupErrors.length > 0) {
+    finalExitCode = 1
+    log(JSON.stringify({ type: "benchmark_cleanup_failed", failures: cleanupErrors }, null, 2))
   }
   process.exit(finalExitCode)
 }

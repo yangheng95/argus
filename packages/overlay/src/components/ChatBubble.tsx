@@ -20,6 +20,7 @@ import { submitTaskRewind } from "../services/rewind"
 import { currentTraceDirectory } from "../services/trace-directory"
 import { t } from "../utils/i18n"
 import { AgentSessionReplyBox } from "./AgentSessionReplyBox"
+import { AgentSummaryBlock } from "./AgentSummaryBlock"
 import { Avatar } from "./Avatar"
 import { CardDurationChip, CardHeaderChrome } from "./CardHeaderChrome"
 import { CardParts } from "./CardParts"
@@ -187,6 +188,9 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
       ? collapsedActivityPreviewText(collectLatestActivityText(props.node), props.node.title)
       : "",
   )
+  const agentSummaryText = createMemo(() =>
+    !expanded() && props.node.status !== "running" && isAgentBubble() ? props.node.agentSummary?.text?.trim() || "" : "",
+  )
   const todoSummary = createMemo(() =>
     !expanded() && props.node.status !== "running" && isAgentBubble() ? collectTodoSummary(props.node) : null,
   )
@@ -278,6 +282,7 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
                     </span>
                   </span>
                 </span>
+                <Show when={agentSummaryText()}>{(text) => <AgentSummaryBlock text={text()} />}</Show>
                 <Show when={collapsedPreview()}>
                   <span class="card__preview-row">
                     <span class="card__collapsed-preview" title={collapsedPreview()}>

@@ -5,7 +5,7 @@ test("orchestrator core prompt wires Integrity history guidance", async () => {
   expect(prompt).toContain("Persistent blocking roots")
   expect(prompt).toContain("SpecSnapshotLineage")
   expect(prompt).toContain("build lane has stopped converging")
-  expect(prompt).toContain("modify_goal` must not add a new capability")
+  expect(prompt).toContain("`manage_task` action=modify_goal must not add a new capability")
 })
 
 test("orchestrator core prompt leaves frontend evidence details outside the global scheduler core", async () => {
@@ -32,8 +32,8 @@ test("orchestrator core prompt forbids prose-only workflow decisions", async () 
   const normalized = prompt.replace(/\s+/g, " ")
 
   expect(normalized).toContain("Narrative text is never a task decision")
-  expect(normalized).toContain("must also call the deciding tool (`select_expert_squad`, `build`, `modify_goal`, `question`, `fail_task`, `complete_task`, `propose_task`, `retry_task`, or another real decision tool)")
-  expect(normalized).toContain("`skill`, `read_context`, `query_failed_goals`, and plain prose do not count as a workflow decision")
+  expect(normalized).toContain("must also call the deciding tool (`select_expert_squad`, `dispatch_agent`, `manage_task`, `question`, or another real decision tool)")
+  expect(normalized).toContain("`skill`, `read_context`, `manage_task` action=query_failed_goals, and plain prose do not count as a workflow decision")
 })
 
 test("orchestrator recovery guidance repairs no-diff producers without dependency bypass or generic Architect re-entry", async () => {
@@ -44,7 +44,7 @@ test("orchestrator recovery guidance repairs no-diff producers without dependenc
 
   expect(combined).toContain("no_project_diff producer")
   expect(combined).toContain("Do not delete a dependency edge to bypass `no_project_diff`")
-  expect(combined).toContain("Call architect only when the persisted architect artifact itself is proven invalid and named")
+  expect(combined).toContain("target=architect only when the persisted architect artifact itself is proven invalid and named")
   expect(combined).not.toContain("Re-run architect")
 })
 

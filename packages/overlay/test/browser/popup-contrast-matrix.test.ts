@@ -80,11 +80,10 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
               font-size: var(--ui-font-control);
             }
             .popup-sample .executor-popover,
-            .popup-sample .project-worktree-panel,
+            .popup-sample .project-runtime-status-panel,
             .popup-sample .recent-dir-panel,
             .popup-sample .workspace-terminal-menu,
             .popup-sample .workspace-editor-menu,
-            .popup-sample .workspace-coding-cli-menu,
             .popup-sample .titlebar-menubar-panel,
             .popup-sample .brand-guide-card,
             .popup-sample .cmdk-panel {
@@ -152,13 +151,32 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
             </section>
 
             <section class="popup-sample" data-popup-sample="worktree-panel">
-              <strong>Worktree Panel</strong>
-              <div class="project-worktree-panel">
-                <div class="project-worktree-panel-shell">
-                  <div class="project-worktree-panel-head">
-                    <div class="project-worktree-panel-title" data-popup-text>Worktrees</div>
+              <strong>Runtime Status Panel</strong>
+              <div class="project-runtime-status-panel">
+                <div class="project-runtime-panel-shell">
+                  <div class="project-runtime-panel-head">
+                    <div class="project-runtime-panel-title" data-popup-text>Runtime</div>
                     <span class="project-worktree-head-count" data-kind="active" data-popup-text>Active 1</span>
-                    <span class="project-worktree-cleanup-hint" data-popup-text>Expired cleanup available</span>
+                    <span class="project-worktree-head-count" data-kind="expired" data-popup-text>Expired 2</span>
+                    <button class="oc-button" data-variant="ghost" data-size="mini" data-tone="neutral" data-ui="project-worktree-cleanup-expired" type="button" data-popup-text>
+                      Cleanup
+                    </button>
+                  </div>
+                  <div class="project-runtime-git-section" data-tone="warn">
+                    <div class="project-runtime-section-head">
+                      <span class="project-runtime-section-title" data-popup-text>Git</span>
+                      <span class="project-runtime-git-state" data-popup-text>Dirty</span>
+                    </div>
+                    <div class="project-runtime-git-grid">
+                      <div class="project-runtime-git-row">
+                        <span data-popup-text>Branch</span>
+                        <span class="project-runtime-git-label" data-popup-text>Name</span>
+                        <span class="project-runtime-git-value" data-popup-text>main</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="project-runtime-section-head">
+                    <span class="project-runtime-section-title" data-popup-text>Worktrees</span>
                   </div>
                   <div class="project-worktree-row" data-status="expired">
                     <button class="project-worktree-item" type="button" data-highlighted>
@@ -255,12 +273,6 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
                 <button class="workspace-editor-option" type="button" data-highlighted>
                   <span aria-hidden="true">E</span>
                   <span class="workspace-editor-option-label" data-popup-text>Open editor</span>
-                </button>
-              </div>
-              <div class="workspace-coding-cli-menu">
-                <button class="workspace-coding-cli-option" type="button" data-highlighted>
-                  <span aria-hidden="true">C</span>
-                  <span class="workspace-coding-cli-option-label" data-popup-text>Open coding CLI</span>
                 </button>
               </div>
             </section>
@@ -503,7 +515,7 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
     assert.equal(highlightedMetrics.recentFocusedRemove.pointerEvents, "auto")
     assert.deepEqual(
       highlightedMetrics.workspaceOptions.map((option) => option.backgroundColor !== "rgba(0, 0, 0, 0)"),
-      [true, true, true],
+      [true, true],
     )
     assert.notEqual(highlightedMetrics.titlebarHighlighted.backgroundColor, "rgba(0, 0, 0, 0)")
     assert.notEqual(

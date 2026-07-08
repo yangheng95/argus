@@ -7,10 +7,10 @@ process.chdir(dir)
 import { $ } from "bun"
 import fs from "node:fs/promises"
 import path from "path"
-import { replaceDirectoryAfterSuccessfulBuild } from "./generation-transaction"
+import { replaceGeneratedArtifactsAfterSuccessfulBuild } from "./generation-transaction"
 
-const openapi = path.join(dir, "openapi.json")
-const rootOpenapi = path.join(dir, "..", "openapi.json")
+const sdkRoot = path.resolve(dir, "..")
+const routePolicySourcePath = path.resolve(dir, "..", "..", "transport-protocol", "src", "index.ts")
 
 import { createClient } from "@hey-api/openapi-ts"
 
@@ -60,7 +60,7 @@ async function writeFileWithRetry(file: string, contents: string) {
   }
 }
 
-async function waitForGeneratedClient(root = path.join(dir, "src", "gen")) {
+async function waitForGeneratedClient(root: string) {
   const checks = [
     {
       file: path.join(root, "client", "index.ts"),
@@ -127,9 +127,9 @@ function sdkBodyBindingKeys(block: string, field: string): string[] {
   return keys
 }
 
-async function requireFlatSdkBodyFieldsFromOpenApi() {
-  const spec = (await Bun.file(rootOpenapi).json()) as OpenApiSpec
-  const sdkPath = path.join(dir, "src", "gen", "sdk.gen.ts")
+async function requireFlatSdkBodyFieldsFromOpenApi(input: { openapiPath: string; sdkPath: string }) {
+  const spec = (await Bun.file(input.openapiPath).json()) as OpenApiSpec
+  const sdkPath = input.sdkPath
   let source = await Bun.file(sdkPath).text()
 
   for (const [routePath, pathItem] of Object.entries(spec.paths ?? {})) {
@@ -185,23 +185,36 @@ async function requireFlatSdkBodyFieldsFromOpenApi() {
   await writeFileWithRetry(sdkPath, source)
 }
 
-await writeFileWithRetry(
-  path.join(dir, "src", "defaults.ts"),
+async function generatedRoutePolicySource() {
+  const source = await fs.readFile(routePolicySourcePath, "utf8")
+  const startMarker = "// ── Server route directory policy ──"
+  const endMarker = "// ── Webview → Extension ──"
+  const start = source.indexOf(startMarker)
+  const end = source.indexOf(endMarker)
+  if (start < 0 || end <= start) {
+    throw new Error("transport protocol route policy block markers were not found")
+  }
+  const block = source.slice(start, end).trim()
+  return (
+    "// Auto-generated from packages/transport-protocol/src/index.ts by script/build.ts.\n" +
+    "// Do not edit - regenerate via `bun run build`.\n\n" +
+    `${block}\n`
+  )
+}
+
+const generatedDefaults =
   `// Auto-generated from packages/opencorvus/server-defaults.json by script/build.ts.\n` +
-    `// Do not edit — regenerate via \`bun run build\`.\n\n` +
-    `export const DEFAULT_SERVER_HOST = ${JSON.stringify(serverDefaults.host)}\n` +
-    `export const DEFAULT_SERVER_PORT = ${serverDefaults.port}\n` +
-    `export const DEFAULT_SERVER_URL = \`http://\${DEFAULT_SERVER_HOST}:\${DEFAULT_SERVER_PORT}\`\n`,
-)
+  `// Do not edit — regenerate via \`bun run build\`.\n\n` +
+  `export const DEFAULT_SERVER_HOST = ${JSON.stringify(serverDefaults.host)}\n` +
+  `export const DEFAULT_SERVER_PORT = ${serverDefaults.port}\n` +
+  `export const DEFAULT_SERVER_URL = \`http://\${DEFAULT_SERVER_HOST}:\${DEFAULT_SERVER_PORT}\`\n`
 
+const generatedRoutePolicy = await generatedRoutePolicySource()
 const generatedOpenapi = await $`bun ./script/generate-openapi.ts`.cwd(path.resolve(dir, "../../opencorvus")).text()
-await writeFileWithRetry(openapi, generatedOpenapi)
-await writeFileWithRetry(rootOpenapi, await Bun.file(openapi).text())
-await rmWithinPackage("dist", { recursive: true })
 
-const generate = async (output: string) =>
+const generate = async (input: string, output: string) =>
   createClient({
-    input: openapi,
+    input,
     output: {
       path: output,
       tsConfigPath: path.join(dir, "tsconfig.json"),
@@ -231,27 +244,63 @@ const generate = async (output: string) =>
     ],
   })
 
-await replaceDirectoryAfterSuccessfulBuild({
-  packageRoot: dir,
-  stagingRelative: ".tmp-sdk-gen",
-  targetRelative: "src/gen",
-  build: async (stagingDir) => {
-    await generate(stagingDir)
-    await waitForGeneratedClient(stagingDir)
+const transactionRelative = ".tmp-sdk-build"
+const transactionRoot = path.join(dir, transactionRelative)
+const transactionSrc = path.join(transactionRoot, "src")
+const transactionGen = path.join(transactionSrc, "gen")
+const transactionOpenapi = path.join(transactionRoot, "openapi.json")
+const transactionDefaults = path.join(transactionSrc, "defaults.ts")
+const transactionRoutePolicy = path.join(transactionSrc, "route-policy.ts")
+const transactionTsconfig = path.join(transactionRoot, "tsconfig.json")
+const transactionDist = path.join(transactionRoot, "dist")
+
+await rmWithinPackage(transactionRelative, { recursive: true })
+try {
+  await fs.cp(path.join(dir, "src"), transactionSrc, { recursive: true, force: true })
+  await fs.copyFile(path.join(dir, "tsconfig.json"), transactionTsconfig)
+  await writeFileWithRetry(transactionDefaults, generatedDefaults)
+  await writeFileWithRetry(transactionRoutePolicy, generatedRoutePolicy)
+  await writeFileWithRetry(transactionOpenapi, generatedOpenapi)
+  await generate(transactionOpenapi, transactionGen)
+  await waitForGeneratedClient(transactionGen)
+
+  const prettierBin = await Bun.resolve("prettier/bin/prettier.cjs", dir)
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    try {
+      await $`bun ${prettierBin} --write ${transactionSrc}`
+      break
+    } catch (error) {
+      if (attempt === 5) throw error
+      Bun.gc(true)
+      await Bun.sleep(500 * attempt)
+    }
+  }
+  await requireFlatSdkBodyFieldsFromOpenApi({
+    openapiPath: transactionOpenapi,
+    sdkPath: path.join(transactionGen, "sdk.gen.ts"),
+  })
+  await $`bun tsc --project ${transactionTsconfig}`
+} catch (error) {
+  await rmWithinPackage(transactionRelative, { recursive: true }).catch(() => undefined)
+  throw error
+}
+
+await replaceGeneratedArtifactsAfterSuccessfulBuild({
+  packageRoot: sdkRoot,
+  stagingRelative: "js/.tmp-sdk-artifacts",
+  artifacts: [
+    { stagingRelative: "dist", targetRelative: "js/dist", kind: "directory" },
+    { stagingRelative: "gen", targetRelative: "js/src/gen", kind: "directory" },
+    { stagingRelative: "defaults.ts", targetRelative: "js/src/defaults.ts", kind: "file" },
+    { stagingRelative: "route-policy.ts", targetRelative: "js/src/route-policy.ts", kind: "file" },
+    { stagingRelative: "openapi.json", targetRelative: "openapi.json", kind: "file" },
+  ],
+  build: async (stagingRoot) => {
+    await fs.cp(transactionDist, path.join(stagingRoot, "dist"), { recursive: true, force: true })
+    await fs.cp(transactionGen, path.join(stagingRoot, "gen"), { recursive: true, force: true })
+    await writeFileWithRetry(path.join(stagingRoot, "defaults.ts"), generatedDefaults)
+    await writeFileWithRetry(path.join(stagingRoot, "route-policy.ts"), generatedRoutePolicy)
+    await writeFileWithRetry(path.join(stagingRoot, "openapi.json"), generatedOpenapi)
   },
 })
-
-const prettierBin = await Bun.resolve("prettier/bin/prettier.cjs", dir)
-for (let attempt = 1; attempt <= 5; attempt++) {
-  try {
-    await $`bun ${prettierBin} --write src`
-    break
-  } catch (error) {
-    if (attempt === 5) throw error
-    Bun.gc(true)
-    await Bun.sleep(500 * attempt)
-  }
-}
-await requireFlatSdkBodyFieldsFromOpenApi()
-await $`bun tsc`
-await rmWithinPackage("openapi.json")
+await rmWithinPackage(transactionRelative, { recursive: true })

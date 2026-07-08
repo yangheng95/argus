@@ -19,6 +19,17 @@ function acceptanceSpecsNode(schema: JsonObject, path: string[]): JsonObject {
   return node
 }
 
+function manageGoalVariant(schema: JsonObject, action: string): JsonObject {
+  const variants = schema.anyOf ?? schema.oneOf
+  expect(Array.isArray(variants)).toBe(true)
+  const variant = (variants as JsonObject[]).find((candidate) => {
+    const properties = asObject(candidate.properties)
+    return asObject(properties.action).const === action
+  })
+  expect(variant).toBeDefined()
+  return asObject(variant)
+}
+
 function assertArchitectAcceptanceSpecSchemaVisible(node: JsonObject) {
   expect(node.type).toBe("array")
   const items = asObject(node.items)
@@ -46,9 +57,14 @@ function assertArchitectAcceptanceSpecSchemaVisible(node: JsonObject) {
 
 test("architect goal tool schemas expose scriptless acceptance_specs shape to the model", () => {
   const architect = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd() })
+  expect(Object.keys(architect.tools)).toContain("manage_goal")
+  expect(Object.keys(architect.tools)).not.toEqual(
+    expect.arrayContaining(["register_goal", "modify_goal", "remove_goal", "register_visual_feedback_acceptance"]),
+  )
 
-  const registerGoalJsonSchema = asObject(asSchema(architect.tools.register_goal.inputSchema as never).jsonSchema)
-  const modifyGoalJsonSchema = asObject(asSchema(architect.tools.modify_goal.inputSchema as never).jsonSchema)
+  const manageGoalJsonSchema = asObject(asSchema(architect.tools.manage_goal.inputSchema as never).jsonSchema)
+  const registerGoalJsonSchema = manageGoalVariant(manageGoalJsonSchema, "register_goal")
+  const modifyGoalJsonSchema = manageGoalVariant(manageGoalJsonSchema, "modify_goal")
 
   assertArchitectAcceptanceSpecSchemaVisible(
     acceptanceSpecsNode(registerGoalJsonSchema, ["properties", "acceptance_specs"]),
@@ -60,7 +76,8 @@ test("architect goal tool schemas expose scriptless acceptance_specs shape to th
 
 test("architect exposes canonical final visual feedback acceptance helper", () => {
   const architect = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd() })
-  const schema = asObject(asSchema(architect.tools.register_visual_feedback_acceptance.inputSchema as never).jsonSchema)
+  const manageGoalJsonSchema = asObject(asSchema(architect.tools.manage_goal.inputSchema as never).jsonSchema)
+  const schema = manageGoalVariant(manageGoalJsonSchema, "register_visual_feedback_acceptance")
   const rendered = JSON.stringify(schema)
 
   expect(Object.keys(asObject(schema.properties))).toEqual(

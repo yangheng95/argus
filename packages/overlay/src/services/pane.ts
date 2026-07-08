@@ -54,7 +54,7 @@ export interface PaneConfig {
 export const PANEL_PANE_CONFIG: PaneConfig = {
   bodyId: "panelBody",
   leftHandleId: "leftPaneResizer",
-  leftFixedControlIds: ["solidLeftActivityToolbar"],
+  leftFixedControlIds: [],
   leftControls: ["sidebar", "workspaceMain"],
   remainingFixedControlIds: ["solidRightActivityToolbar"],
   remainingMinWidth: defaultPanelRemainingMinWidth,

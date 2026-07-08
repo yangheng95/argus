@@ -2,7 +2,11 @@ import { describe, expect, test } from "bun:test"
 import path from "path"
 import { Instance } from "../../src/project/instance"
 import { createOrchestratorTools } from "../../src/orchestrator/tools"
-import { ORCHESTRATOR_NO_DECISION_OBSERVATION_TOOL_NAMES } from "../../src/orchestrator/stateful-tool-names"
+import {
+  ORCHESTRATOR_NO_DECISION_OBSERVATION_TOOL_NAMES,
+  STATEFUL_SNAPSHOT_TOOL_ACTIONS,
+  statefulSnapshotToolKey,
+} from "../../src/orchestrator/stateful-tool-names"
 import { Message } from "../../src/session/message"
 import { Log } from "../../src/util/log"
 
@@ -43,6 +47,33 @@ describe("STATEFUL_SNAPSHOT_TOOLS registry consistency", () => {
     // this module exists for vanish silently. An empty set is almost
     // certainly a mistake — fail loudly.
     expect(Message.STATEFUL_SNAPSHOT_TOOLS.size).toBeGreaterThan(0)
+  })
+
+  test("every stateful snapshot tool action targets a real orchestrator tool", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const { tools } = createOrchestratorTools({
+          taskID: "tsk_stateful_action_test",
+          agentSessionID: "ses_stateful_action_test",
+          signal: new AbortController().signal,
+          workflow: undefined,
+          workflowState: undefined,
+        })
+        const registered = new Set(Object.keys(tools))
+        const missing = STATEFUL_SNAPSHOT_TOOL_ACTIONS.filter((entry) => !registered.has(entry.tool)).map(
+          (entry) => entry.key,
+        )
+        expect(missing).toEqual([])
+      },
+    })
+  })
+
+  test("stateful snapshot key is scoped to the query_failed_goals manage_task action", () => {
+    expect(statefulSnapshotToolKey("manage_task", { action: "query_failed_goals" })).toBe(
+      "manage_task action=query_failed_goals",
+    )
+    expect(statefulSnapshotToolKey("manage_task", { action: "complete_goal", goal_id: "goal_done" })).toBeUndefined()
   })
 
   test("every no-decision observation tool name is a real orchestrator tool", async () => {

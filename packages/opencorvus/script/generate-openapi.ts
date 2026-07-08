@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 
-import { generateOpenApiSpec } from "../src/cli/cmd/generate"
+import { generateOpenApiSpec, serializeOpenApiSpec } from "../src/cli/cmd/generate"
 
-const json = JSON.stringify(await generateOpenApiSpec(), null, 2)
+const json = serializeOpenApiSpec(await generateOpenApiSpec())
 
 await new Promise<void>((resolve, reject) => {
   process.stdout.write(json, (error) => {

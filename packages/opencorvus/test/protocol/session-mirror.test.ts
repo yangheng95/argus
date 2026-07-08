@@ -353,6 +353,42 @@ describe("session mirror", () => {
     })
   })
 
+  test("preserves terminal status summary for collapsed subagent cards", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const sidebar = await Session.create({
+          kind: "assistant",
+          metadata: RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA,
+        })
+        const mapped = mapSessionBusEvent(
+          {
+            type: SessionStatus.Event.Status.type,
+            properties: {
+              sessionID: sidebar.id,
+              status: {
+                type: "terminal",
+                reason: "completed",
+                summary: "I checked the implementation and recorded the passing visual evidence.",
+              },
+            },
+          },
+          { sessionID: sidebar.id },
+        )
+
+        expect(mapped?.type).toBe("session.status")
+        expect(mapped?.summary).toBe("session status: terminal (completed)")
+        expect(mapped?.payload?.status).toEqual({
+          type: "terminal",
+          reason: "completed",
+          summary: "I checked the implementation and recorded the passing visual evidence.",
+        })
+      },
+    })
+  })
+
   test("stamps session diff and config changes with session order keys", async () => {
     await using tmp = await tmpdir({ git: true })
 

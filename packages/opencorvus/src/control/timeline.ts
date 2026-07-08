@@ -63,6 +63,10 @@ const AppendInput = z.object({
   ),
 })
 
+const DeleteProjectMessagesInput = z.object({
+  projectID: z.string(),
+})
+
 export namespace ControlTimeline {
   export function list(raw: z.input<typeof TimelineQuery>) {
     const input = TimelineQuery.parse(raw)
@@ -140,6 +144,17 @@ export namespace ControlTimeline {
           .run()
       }
     })
+  }
+
+  export function deleteProjectMessages(
+    raw: z.input<typeof DeleteProjectMessagesInput>,
+    db?: Database.TxOrDb,
+  ) {
+    const input = DeleteProjectMessagesInput.parse(raw)
+    const write = (target: Database.TxOrDb) =>
+      target.delete(ControlMessageTable).where(eq(ControlMessageTable.project_id, input.projectID)).run()
+    if (db) return write(db)
+    return Database.use(write)
   }
 }
 

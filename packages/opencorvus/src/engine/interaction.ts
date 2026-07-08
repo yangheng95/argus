@@ -1,13 +1,11 @@
 import { Bus } from "@/bus"
 import { PermissionNext } from "@/permission/next"
 import { Question } from "@/question"
-import { Database, eq } from "@/storage/db"
-import { EngineInteractionRequestTable, type EngineMetadata, type EngineInteractionStatus } from "./engine.sql"
-import { Event } from "./model"
-import { EngineProtocol } from "./protocol"
+import { Database } from "@/storage/db"
+import { type EngineMetadata, type EngineInteractionStatus } from "./engine.sql"
+import { insertEngineInteractionRequest, resolveEngineInteractionRequest } from "./interaction-request"
 import { activeRunBySession, findActiveRunForTask, findInteractionByExternal, type InteractionRow } from "./store"
 import { taskIDForSession } from "@/orchestrator/task-event"
-import { Identifier } from "@/id/id"
 import { EngineRuntime } from "./runtime"
 import type { RuntimeHooks } from "./runtime-hooks"
 
@@ -27,44 +25,27 @@ async function upsertPermission(request: PermissionNext.Request, hooks: RuntimeH
   if (!owner) return
   if (findInteractionByExternal(request.id)) return
   const now = Date.now()
-  const interactionID = Identifier.ascending("interaction")
   const runID = owner.run?.id ?? null
   Database.transaction((db) => {
-    db.insert(EngineInteractionRequestTable)
-      .values({
-        id: interactionID,
-        task_id: owner.taskID,
-        run_id: runID,
-        session_id: request.sessionID,
-        external_id: request.id,
-        request_type: "permission",
-        status: "pending",
-        title: `Permission: ${request.permission}`,
-        body: request.patterns.join("\n") || request.permission,
-        payload: {
-          permission: request.permission,
-          patterns: request.patterns,
-          metadata: request.metadata,
-          always: request.always,
-          tool: request.tool,
-        },
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
-    Database.effect(() =>
-      EngineProtocol.emit(
-        Event.InteractionRequested,
-        {
-          taskID: owner.taskID,
-          ...(runID ? { runID } : {}),
-          interactionID,
-          requestType: "permission",
-          summary: `Permission requested: ${request.permission}`,
-        },
-        { taskID: owner.taskID, ...(runID ? { runID } : {}), interactionID, source: "interaction.permission" },
-      ),
-    )
+    insertEngineInteractionRequest(db, {
+      taskID: owner.taskID,
+      runID,
+      sessionID: request.sessionID,
+      externalID: request.id,
+      requestType: "permission",
+      title: `Permission: ${request.permission}`,
+      body: request.patterns.join("\n") || request.permission,
+      payload: {
+        permission: request.permission,
+        patterns: request.patterns,
+        metadata: request.metadata,
+        always: request.always,
+        tool: request.tool,
+      },
+      eventSource: "interaction.permission",
+      eventSummary: `Permission requested: ${request.permission}`,
+      timeCreated: now,
+    })
   })
   if (runID) await EngineRuntime.syncRun(runID, hooks)
   else await EngineRuntime.syncTask(owner.taskID, hooks)
@@ -88,45 +69,28 @@ async function upsertQuestion(request: Question.Request, hooks: RuntimeHooks) {
   if (!owner) return
   if (findInteractionByExternal(request.id)) return
   const now = Date.now()
-  const interactionID = Identifier.ascending("interaction")
   const title = request.questions.map((item) => item.header).join(" / ") || "Question"
   const body = request.questions.map((item) => item.question).join("\n\n")
   const runID = owner.run?.id ?? null
   Database.transaction((db) => {
-    db.insert(EngineInteractionRequestTable)
-      .values({
-        id: interactionID,
-        task_id: owner.taskID,
-        run_id: runID,
-        session_id: request.sessionID,
-        external_id: request.id,
-        request_type: "question",
-        status: "pending",
-        title,
-        body,
-        payload: {
-          questions: request.questions,
-          tool: request.tool,
-        },
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
     // Always emit — overlay only filters by taskID, and a Task-Agent clarification
     // before any run has started still needs to surface in the InteractionPanel.
-    Database.effect(() =>
-      EngineProtocol.emit(
-        Event.InteractionRequested,
-        {
-          taskID: owner.taskID,
-          ...(runID ? { runID } : {}),
-          interactionID,
-          requestType: "question",
-          summary: title,
-        },
-        { taskID: owner.taskID, ...(runID ? { runID } : {}), interactionID, source: "interaction.question" },
-      ),
-    )
+    insertEngineInteractionRequest(db, {
+      taskID: owner.taskID,
+      runID,
+      sessionID: request.sessionID,
+      externalID: request.id,
+      requestType: "question",
+      title,
+      body,
+      payload: {
+        questions: request.questions,
+        tool: request.tool,
+      },
+      eventSource: "interaction.question",
+      eventSummary: title,
+      timeCreated: now,
+    })
   })
   if (runID) await EngineRuntime.syncRun(runID, hooks)
   else await EngineRuntime.syncTask(owner.taskID, hooks)
@@ -163,34 +127,14 @@ async function resolveInteraction(
 ) {
   const now = Date.now()
   Database.transaction((db) => {
-    db.update(EngineInteractionRequestTable)
-      .set({
-        status,
-        response,
-        time_resolved: now,
-        time_updated: now,
-      })
-      .where(eq(EngineInteractionRequestTable.id, interaction.id))
-      .run()
-    const runID = interaction.run_id ?? undefined
-    Database.effect(() =>
-      EngineProtocol.emit(
-        Event.InteractionResolved,
-        {
-          taskID: interaction.task_id,
-          ...(runID ? { runID } : {}),
-          interactionID: interaction.id,
-          status,
-          summary: status === "answered" ? "Interaction answered" : "Interaction rejected",
-        },
-        {
-          taskID: interaction.task_id,
-          ...(runID ? { runID } : {}),
-          interactionID: interaction.id,
-          source: "interaction.resolve",
-        },
-      ),
-    )
+    resolveEngineInteractionRequest(db, {
+      row: interaction,
+      status,
+      response,
+      eventSource: "interaction.resolve",
+      resolvedEventScope: "task",
+      timeResolved: now,
+    })
   })
   if (interaction.run_id) await EngineRuntime.syncRun(interaction.run_id, hooks)
   else await EngineRuntime.syncTask(interaction.task_id, hooks)

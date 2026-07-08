@@ -42,7 +42,7 @@ import {
 const ORCHESTRATOR_RUNTIME_PROMPT = [
   "You are the OpenCorvus Orchestrator.",
   "Follow the per-wake orchestrator instructions and task context supplied by the orchestrator runtime.",
-  "Use only the tools exposed in the current turn. The generic `task` tool is not an orchestrator tool; dispatch work only through the current scheduler-projected workflow tools and their visible descriptions. You are the only agent-side owner of engine task lifecycle decisions. If you need to offer a separate follow-up engine task, use `propose_task`; never call `task` or control-plane `panel`.",
+  "Use only the tools exposed in the current turn. The generic `task` tool is not an orchestrator tool; dispatch worker agents through `dispatch_agent` and manage task/goal lifecycle through `manage_task`. You are the only agent-side owner of engine task lifecycle decisions. If you need to offer a separate follow-up engine task, use `manage_task` with action=`propose_task`; never call `task` or control-plane `panel`.",
 ].join("\n")
 
 const CONTROL_RUNTIME_PROMPT = [
@@ -50,6 +50,21 @@ const CONTROL_RUNTIME_PROMPT = [
   "Follow the per-request control-plane system prompt supplied by the control runtime.",
   "Use only the panel tool exposed in the current turn.",
 ].join("\n")
+
+const CODING_ASSISTANT_RUNTIME_PROMPT = [
+  PROMPT_CODING,
+  [
+    "# Right-sidebar Chat Mission handoff",
+    "",
+    "You are the project-bound Chat assistant in the OpenCorvus right sidebar. Handle ordinary coding, debugging, explanation, and repository-edit requests interactively in this Chat session.",
+    "",
+    "When the user's request clearly needs durable workflow orchestration, long-running multi-step decomposition, autonomous benchmark/debug loops, cross-role planning, or Mission-owned task tracking, call the `panel` tool with `action: \"wake_mission\"`. Pass the full user request in `request` and a short semantic `title` when one is obvious.",
+    "",
+    "After `wake_mission` returns, tell the user that Mission accepted the request. Do not also create a normal task for the same request.",
+    "",
+    "When a Mission completion receipt appears in this Chat, surface it to the user as the Mission outcome.",
+  ].join("\n"),
+].join("\n\n")
 
 const INTEGRITY_RUNTIME_PROMPT = INTEGRITY_TEAM_CORE
 
@@ -169,7 +184,7 @@ export namespace Agent {
           "Right-sidebar coding assistant session. Uses the project conversation panel and executes tools based on configured permissions.",
         tools: AgentToolPool.assignment("coding-assistant"),
         options: {},
-        prompt: PROMPT_CODING,
+        prompt: CODING_ASSISTANT_RUNTIME_PROMPT,
         permission: nonDesignPermissions(
           PermissionNext.fromConfig({
             question: "allow",
@@ -381,7 +396,7 @@ export namespace Agent {
         // exposed every executor surface. Rule 22 — one role per tool list.
         // Allowed:
         //   - dispatch tools (the orchestrator's actual job)
-        //   - observation tools (read_context, query_failed_goals, goal_report)
+        //   - observation tools (read_context, manage_task action=query_failed_goals, goal_report)
         //   - runtime/toolchain repair command surface (`bash`) for blockers
         //     encountered while scheduling work
         //   - user interaction (question)
@@ -621,7 +636,7 @@ export namespace Agent {
    *  into visually identical cards. */
   const NATIVE_DEFAULTS: Record<string, string> = {
     coding: PROMPT_CODING,
-    "coding-assistant": PROMPT_CODING,
+    "coding-assistant": CODING_ASSISTANT_RUNTIME_PROMPT,
     build: BUILD_CORE,
     "visual-qa": VISUAL_QA_CORE,
     general: PROMPT_GENERAL,

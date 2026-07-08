@@ -5,6 +5,22 @@ import path from "node:path"
 import { runProcessWithInactivityTimeout } from "../../src/acceptance/checks/inactivity-timeout-process"
 
 describe("acceptance inactivity timeout process runner", () => {
+  test("windows inactivity cleanup uses task tree termination before root-only signals", async () => {
+    const source = await Bun.file(
+      new URL("../../src/acceptance/checks/inactivity-timeout-process.ts", import.meta.url),
+    ).text()
+    const timeoutBlock = source.slice(source.indexOf("const terminateTimedOutProcessTree"), source.indexOf("const refreshTimer"))
+
+    expect(source).toContain('import { ProcessSupervisor } from "@/shell/process-supervisor"')
+    expect(timeoutBlock).toContain('if (process.platform === "win32")')
+    expect(timeoutBlock).toContain('await signalProcessTree(proc, "SIGKILL")')
+    expect(timeoutBlock).not.toContain('proc.kill("SIGTERM")')
+    expect(source).toContain("Timeout cleanup failed")
+    expect(source).toContain("ProcessSupervisor.terminateProcessTree")
+    expect(source).not.toContain("taskkill.exe")
+    expect(source).not.toContain('void signalProcessTree(proc, "SIGKILL")\n')
+  })
+
   test("does not kill a process that keeps emitting output past the timeout window", async () => {
     const result = await runProcessWithInactivityTimeout({
       executable: process.execPath,
@@ -42,6 +58,28 @@ describe("acceptance inactivity timeout process runner", () => {
 
     expect(result.exitCode).toBeUndefined()
     expect(result.stderr).toContain("Command timed out after 80ms without stdout/stderr activity.")
+  })
+
+  test("returns after timing out a process tree with inherited stdio", async () => {
+    const started = Date.now()
+    const result = await runProcessWithInactivityTimeout({
+      executable: process.execPath,
+      args: [
+        "-e",
+        [
+          "const { spawn } = require('node:child_process');",
+          "spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: ['ignore', 'inherit', 'inherit'] });",
+          "process.on('SIGTERM', () => {});",
+          "setInterval(() => {}, 1000);",
+        ].join("\n"),
+      ],
+      cwd: process.cwd(),
+      timeoutMs: 80,
+    })
+
+    expect(result.exitCode).toBeUndefined()
+    expect(result.stderr).toContain("Command timed out after 80ms without stdout/stderr activity.")
+    expect(Date.now() - started).toBeLessThan(4_000)
   })
 
   test("returns after process handles release the working directory", async () => {

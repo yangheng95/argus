@@ -4,6 +4,7 @@ import { EngineConfig } from "../../src/engine/config"
 import { WorkflowRegistry } from "../../src/engine/workflow"
 import { builtInPackageSources } from "../../src/expert-squad/builtin"
 import { ExpertSquadRegistry } from "../../src/expert-squad/registry"
+import { NON_BASE_FRONTEND_TOOL_IDS } from "../../src/tool/non-base-tool-ids"
 import { repositoryExpertSquadRoot } from "../fixture/expert-squad"
 import { tmpdir } from "../fixture/fixture"
 import fs from "fs/promises"
@@ -133,6 +134,13 @@ describe("ExpertSquadRegistry", () => {
     expect(loaded.manifest.capability_projection.scheduler.package_mcp_resource_refs).toEqual([])
     expect(loaded.explicitSchedulerWorkflowTools).toEqual(["build"])
     expect(loaded.readmeContent).toBe("# Frontend Replica")
+  })
+
+  test("rejects package manifests without release version metadata", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, { version: undefined })
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/version/)
   })
 
   test("reads display prefix from README front matter without adding it to prompt content", async () => {
@@ -304,21 +312,28 @@ describe("ExpertSquadRegistry", () => {
     expect(loaded.selector?.ref).toBe("selector/opentest")
     expect(loaded.selector?.label).toBe("OpenTest")
     expect(loaded.packageSkillRefs.has("opentest/orchestrator/workflow")).toBe(true)
+    expect(loaded.packageSkillRefs.has("opentest/intent-analysis/test-intent-analysis")).toBe(true)
     expect(loaded.packageSkillRefs.has("opentest/requirements/test-requirements")).toBe(true)
     expect(loaded.packageSkillRefs.has("opentest/architect/test-architecture")).toBe(true)
     expect(loaded.packageSkillRefs.has("opentest/build/test-implementation")).toBe(true)
     expect(loaded.packageSkillRefs.has("opentest/integrity/test-review")).toBe(true)
+    expect(loaded.packageSkillRefs.has("opentest/visual-qa/visual-test-review")).toBe(true)
     expect(loaded.packageToolRefs.has("opentest/shared/test-artifact-inventory")).toBe(false)
     expect(loaded.packageToolRefs.has("opentest/shared/opentest-protocol-engine")).toBe(true)
+    expect(loaded.packageToolRefs.has("opentest/shared/opentest-runner")).toBe(true)
     expect(loaded.manifest.capability_projection.scheduler.package_tool_refs).toEqual([
       "opentest/shared/opentest-protocol-engine",
     ])
-    expect(loaded.explicitSchedulerWorkflowTools).toEqual(["build", "requirements", "architect", "integrity"])
+    expect([...loaded.explicitSchedulerWorkflowTools].sort()).toEqual(
+      ["analyze_intent", "architect", "build", "integrity", "requirements", "visual_qa"].sort(),
+    )
     expect(Object.keys(loaded.manifest.capability_projection.agents).sort()).toEqual([
       "architect",
       "build",
       "integrity",
+      "intent-analysis",
       "requirements",
+      "visual-qa",
     ])
     for (const customRole of ["tester", "script-writer", "failure-handler"]) {
       expect(loaded.explicitSchedulerWorkflowTools).not.toContain(customRole)
@@ -327,10 +342,30 @@ describe("ExpertSquadRegistry", () => {
     }
     expect(Object.keys(loaded.manifest.agents)).toEqual(["orchestrator"])
     expect(agentRoleDirectories).toEqual(["orchestrator"])
+    expect(loaded.promptProfile.virtualAgents["intent-analysis"]?.id).toBe("opentest-intent-analyst")
     expect(loaded.promptProfile.virtualAgents.requirements?.id).toBe("opentest-requirements-analyst")
     expect(loaded.promptProfile.virtualAgents.architect?.id).toBe("opentest-test-architect")
     expect(loaded.promptProfile.virtualAgents.build?.id).toBe("opentest-implementer")
     expect(loaded.promptProfile.virtualAgents.integrity?.id).toBe("opentest-reviewer")
+    expect(loaded.promptProfile.virtualAgents["visual-qa"]?.id).toBe("opentest-visual-qa-reviewer")
+    expect(loaded.manifest.capability_projection.agents.build.package_tool_refs).toEqual([
+      "opentest/shared/opentest-protocol-engine",
+      "opentest/shared/opentest-runner",
+    ])
+    expect(loaded.manifest.capability_projection.agents.integrity.package_tool_refs).toEqual([
+      "opentest/shared/opentest-protocol-engine",
+      "opentest/shared/opentest-runner",
+    ])
+    expect(loaded.manifest.capability_projection.agents["visual-qa"].package_tool_refs).toEqual([
+      "opentest/shared/opentest-protocol-engine",
+      "opentest/shared/opentest-runner",
+    ])
+    expect(loaded.manifest.capability_projection.agents["intent-analysis"].package_tool_refs).toEqual([
+      "opentest/shared/opentest-protocol-engine",
+    ])
+    expect(loaded.promptProfile.virtualAgents["intent-analysis"]?.promptContent).toContain(
+      ".opencorvus/expert-squads/wujiang/opentest/protocol-engine/opentest-contract.json",
+    )
     expect(loaded.promptProfile.virtualAgents.requirements?.promptContent).toContain(
       ".opencorvus/expert-squads/wujiang/opentest/protocol-engine/opentest-contract.json",
     )
@@ -343,6 +378,12 @@ describe("ExpertSquadRegistry", () => {
     expect(loaded.promptProfile.virtualAgents.integrity?.promptContent).toContain(
       ".opencorvus/expert-squads/wujiang/opentest/protocol-engine/opentest-contract.json",
     )
+    expect(loaded.promptProfile.virtualAgents["visual-qa"]?.promptContent).toContain(
+      ".opencorvus/expert-squads/wujiang/opentest/protocol-engine/opentest-contract.json",
+    )
+    expect(loaded.promptProfile.virtualAgents["intent-analysis"]?.promptContent).not.toContain(
+      ".opencorvus/expert-squads/opentest/",
+    )
     expect(loaded.promptProfile.virtualAgents.requirements?.promptContent).not.toContain(
       ".opencorvus/expert-squads/opentest/",
     )
@@ -353,6 +394,9 @@ describe("ExpertSquadRegistry", () => {
       ".opencorvus/expert-squads/opentest/",
     )
     expect(loaded.promptProfile.virtualAgents.integrity?.promptContent).not.toContain(
+      ".opencorvus/expert-squads/opentest/",
+    )
+    expect(loaded.promptProfile.virtualAgents["visual-qa"]?.promptContent).not.toContain(
       ".opencorvus/expert-squads/opentest/",
     )
   })
@@ -445,6 +489,10 @@ describe("ExpertSquadRegistry", () => {
       acceptance: '{"status":"accepted"}\n',
       result: '{"status":"passed"}\n',
     })
+    const validScriptDate = new Date("2026-07-06T00:00:01.000Z")
+    const validTestDate = new Date("2026-07-06T00:00:02.000Z")
+    await fs.utimes(path.join(tmp.path, "valid", "script.ts"), validScriptDate, validScriptDate)
+    await fs.utimes(path.join(tmp.path, "valid", "TEST.md"), validTestDate, validTestDate)
 
     const valid = await engine.validateOpenTestCase({
       contract,
@@ -1086,13 +1134,26 @@ describe("ExpertSquadRegistry", () => {
     await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow()
   })
 
-  test("omitted selector does not generate selector metadata", async () => {
+  test("rejects non-general packages without selector metadata", async () => {
     await using tmp = await tmpdir()
     const packageRoot = await writeValidPackage(tmp.path, { selector: undefined })
 
-    const loaded = await ExpertSquadRegistry.loadPackage(packageRoot)
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(
+      /project expert squad manifest requires selector metadata/,
+    )
+  })
 
-    expect(loaded.selector).toBeUndefined()
+  test("rejects project general packages without selector metadata", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(
+      tmp.path,
+      { namespace: "project", id: "general", selector: undefined },
+      "project/general",
+    )
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(
+      /project expert squad manifest requires selector metadata/,
+    )
   })
 
   test("allows manifest-declared selector instructions only as top-level selector.md", async () => {
@@ -1182,6 +1243,24 @@ describe("ExpertSquadRegistry", () => {
     })
 
     await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/unknown built-in tool/)
+  })
+
+  test("rejects non-base frontend host ids declared as built-in tools", async () => {
+    await using tmp = await tmpdir()
+    const toolID = NON_BASE_FRONTEND_TOOL_IDS[0]
+    const packageRoot = await writeValidPackage(tmp.path, {
+      capability_projection: {
+        ...manifest().capability_projection,
+        scheduler: {
+          ...manifest().capability_projection.scheduler,
+          built_in_tool_ids: ["select_expert_squad", toolID],
+        },
+      },
+    })
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(
+      new RegExp(`unknown built-in tool "${toolID}"`),
+    )
   })
 
   test("rejects retired workflow target names as scheduler built-in tools", async () => {

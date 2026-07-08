@@ -5,7 +5,6 @@
 import { createSignal, createMemo, createEffect, For, Show, onCleanup, onMount } from "solid-js"
 import type { JSX } from "solid-js"
 import { t, tArray } from "../utils/i18n"
-import { ExecutorSelector } from "./ExecutorSelector"
 import { nativeMessage } from "../services/app-dialog"
 import { formatErrorDetails, notifyError } from "../services/notify"
 import { messageStore, setChatAttachments } from "../store/messages"
@@ -46,6 +45,13 @@ export interface ChatAttachment {
 }
 
 export type { ExpertSquadOption } from "../services/expert-squad"
+
+export type ComposerMode = "mission" | "chat"
+
+interface ComposerModeOption {
+  id: ComposerMode
+  label: string
+}
 
 export interface ChatComposerProps {
   /**
@@ -94,6 +100,8 @@ export interface ChatComposerProps {
   expertSquads: ExpertSquadOption[]
   expertSquadID: string
   onExpertSquadChange: (expertSquadID: string) => void
+  composerMode: ComposerMode
+  onComposerModeChange: (mode: ComposerMode) => void
 }
 
 function composerDialogErrorMessage(error: unknown): string {
@@ -151,6 +159,184 @@ const PASTE_EXT_BY_MIME: Record<string, string> = {
   "application/pdf": "pdf",
   "text/plain": "txt",
 }
+
+const SUPPORTED_COMPOSER_FILE_ACCEPT = [
+  "image/*",
+  "application/pdf",
+  "text/plain",
+  "text/markdown",
+  "text/csv",
+  "text/tab-separated-values",
+  "application/json",
+  "application/xml",
+  "text/xml",
+  "application/zip",
+  "application/gzip",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ".c",
+  ".cpp",
+  ".cs",
+  ".css",
+  ".csv",
+  ".doc",
+  ".docx",
+  ".env",
+  ".gif",
+  ".go",
+  ".gz",
+  ".heic",
+  ".heif",
+  ".hpp",
+  ".html",
+  ".java",
+  ".jpeg",
+  ".jpg",
+  ".js",
+  ".json",
+  ".jsonc",
+  ".jsx",
+  ".kt",
+  ".log",
+  ".md",
+  ".markdown",
+  ".pdf",
+  ".png",
+  ".ppt",
+  ".pptx",
+  ".ps1",
+  ".py",
+  ".rs",
+  ".rtf",
+  ".sh",
+  ".sql",
+  ".svg",
+  ".tar",
+  ".tgz",
+  ".toml",
+  ".ts",
+  ".tsx",
+  ".tsv",
+  ".txt",
+  ".webp",
+  ".xls",
+  ".xlsx",
+  ".xml",
+  ".yaml",
+  ".yml",
+  ".zip",
+].join(",")
+
+interface ComposerAttachmentLoadersProps {
+  disabled: boolean
+  attachmentCount: number
+  onFiles: (files: readonly File[]) => void | Promise<void>
+  onFolderFiles: (files: readonly File[]) => void | Promise<void>
+}
+
+function ComposerAttachmentLoaders(props: ComposerAttachmentLoadersProps): JSX.Element {
+  let fileInputRef: HTMLInputElement | undefined
+  let folderInputRef: HTMLInputElement | undefined
+
+  function openFilePicker(event: MouseEvent): void {
+    event.preventDefault()
+    if (props.disabled) return
+    fileInputRef?.click()
+  }
+
+  function openFolderPicker(event: MouseEvent): void {
+    event.preventDefault()
+    if (props.disabled) return
+    folderInputRef?.click()
+  }
+
+  function bindFolderInput(input: HTMLInputElement): void {
+    folderInputRef = input
+    input.setAttribute("webkitdirectory", "")
+  }
+
+  function handleFileSelection(event: Event): void {
+    const input = event.currentTarget as HTMLInputElement
+    const files = Array.from(input.files ?? [])
+    input.value = ""
+    if (files.length === 0) return
+    void props.onFiles(files)
+  }
+
+  function handleFolderSelection(event: Event): void {
+    const input = event.currentTarget as HTMLInputElement
+    const files = Array.from(input.files ?? [])
+    input.value = ""
+    if (files.length === 0) return
+    void props.onFolderFiles(files)
+  }
+
+  return (
+    <div class="composer-attachment-loaders" data-ui="composer-attachment-loaders">
+      <input
+        ref={fileInputRef}
+        class="composer-attachment-input"
+        data-ui="composer-file-input"
+        type="file"
+        multiple
+        accept={SUPPORTED_COMPOSER_FILE_ACCEPT}
+        disabled={props.disabled}
+        tabIndex={-1}
+        aria-hidden="true"
+        onChange={handleFileSelection}
+      />
+      <input
+        ref={bindFolderInput}
+        class="composer-attachment-input"
+        data-ui="composer-folder-input"
+        type="file"
+        multiple
+        disabled={props.disabled}
+        tabIndex={-1}
+        aria-hidden="true"
+        onChange={handleFolderSelection}
+      />
+      <Show when={props.attachmentCount > 0}>
+        <span class="composer-attachment-loader-count" role="status" aria-live="polite">
+          {t("chat.attachment_loader.count", { count: props.attachmentCount })}
+        </span>
+      </Show>
+      <Button
+        variant="ghost"
+        size="icon"
+        tone="neutral"
+        type="button"
+        class="composer-attachment-loader-trigger"
+        data-ui="composer-file-loader-trigger"
+        disabled={props.disabled}
+        title={t("chat.attachment_loader.file_title")}
+        aria-label={t("chat.attachment_loader.file_title")}
+        onClick={openFilePicker}
+      >
+        <Icon name="attach" size={14} />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        tone="neutral"
+        type="button"
+        class="composer-attachment-loader-trigger"
+        data-ui="composer-folder-loader-trigger"
+        disabled={props.disabled}
+        title={t("chat.attachment_loader.folder_title")}
+        aria-label={t("chat.attachment_loader.folder_title")}
+        onClick={openFolderPicker}
+      >
+        <Icon name="folder-open" size={14} />
+      </Button>
+    </div>
+  )
+}
+
 function chooseAttachmentFilename(original: string | undefined, mime: string): string {
   if (original && SAFE_FILENAME_RE.test(original)) return original
   const ext = PASTE_EXT_BY_MIME[mime] ?? (mime.split("/")[1] ?? "bin").replace(/[^A-Za-z0-9]/g, "")
@@ -158,6 +344,21 @@ function chooseAttachmentFilename(original: string | undefined, mime: string): s
   // composer session at a glance — sha-style handles all blur together.
   const stamp = new Date().toISOString().replace(/[-:T]/g, "").replace(/\..+/, "")
   return `pasted-${stamp}.${ext || "bin"}`
+}
+
+function safeFolderAttachmentSegment(value: string): string {
+  return value.replace(/[^A-Za-z0-9._\-一-鿿 ]+/g, " ").replace(/\s+/g, " ").trim()
+}
+
+function folderAttachmentFilename(file: File, mime: string): string | undefined {
+  const relativePath = file.webkitRelativePath.trim()
+  if (!relativePath) return undefined
+  const segments = relativePath
+    .split(/[\\/]+/)
+    .map((segment) => safeFolderAttachmentSegment(segment))
+    .filter((segment) => segment.length > 0 && segment !== "." && segment !== "..")
+  if (segments.length === 0) return undefined
+  return chooseAttachmentFilename(segments.join(" - "), mime)
 }
 
 function utf8ByteLength(value: string): number {
@@ -335,16 +536,17 @@ export function ChatComposer(props: ChatComposerProps) {
 
   // ── Attachment handling ──
 
-  async function addAttachment(file: File) {
+  async function addAttachment(file: File, displayName?: string) {
     if (!canAcceptComposerAttachment()) return
     if (!file) return
+    const sourceName = displayName || file.name
     if (file.size > MAX_ATTACHMENT_SIZE) {
-      console.warn("[ChatComposer] file too large:", file.name, file.size)
+      console.warn("[ChatComposer] file too large:", sourceName, file.size)
       const limitMb = (MAX_ATTACHMENT_SIZE / (1024 * 1024)).toFixed(0)
       const sizeMb = (file.size / (1024 * 1024)).toFixed(1)
       showComposerMessage(
         "attachment-too-large",
-        t("chat.attach_too_large", { name: file.name, size: sizeMb, limit: limitMb }),
+        t("chat.attach_too_large", { name: sourceName, size: sizeMb, limit: limitMb }),
         {
           title: t("chat.attach_too_large_title"),
         },
@@ -365,8 +567,8 @@ export function ChatComposer(props: ChatComposerProps) {
     try {
       url = await fileToDataUrl(file)
     } catch (err) {
-      console.warn("[ChatComposer] FileReader failed for", file.name, err)
-      showComposerMessage("attachment-read-failed", t("chat.attach_read_failed", { name: file.name }), {
+      console.warn("[ChatComposer] FileReader failed for", sourceName, err)
+      showComposerMessage("attachment-read-failed", t("chat.attach_read_failed", { name: sourceName }), {
         title: t("chat.attach_too_large_title"),
       })
       return
@@ -381,7 +583,7 @@ export function ChatComposer(props: ChatComposerProps) {
       // the aggregate numbers.
       showComposerMessage(
         "attachment-total-too-large",
-        t("chat.attach_too_large", { name: file.name, size: sizeMb, limit: limitMb }),
+        t("chat.attach_too_large", { name: sourceName, size: sizeMb, limit: limitMb }),
         {
           title: t("chat.attach_too_large_title"),
         },
@@ -397,12 +599,30 @@ export function ChatComposer(props: ChatComposerProps) {
     // here per rule 9) so every downstream consumer gets a stable,
     // human-readable handle.
     const mime = file.type || "application/octet-stream"
-    const filename = chooseAttachmentFilename(file.name, mime)
+    const filename = chooseAttachmentFilename(sourceName, mime)
     setAttachments((prev) => [...prev, { mime, url, filename }])
   }
 
   function removeAttachment(index: number) {
     setAttachments((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  async function addFiles(files: readonly File[]): Promise<void> {
+    for (const file of files) await addAttachment(file)
+  }
+
+  async function addFolderFiles(files: readonly File[]): Promise<void> {
+    for (const file of files) {
+      const mime = file.type || "application/octet-stream"
+      const filename = folderAttachmentFilename(file, mime)
+      if (!filename) {
+        showComposerMessage("attachment-folder-path-missing", t("chat.attach_folder_path_missing", { name: file.name }), {
+          title: t("chat.attach_folder_path_missing_title"),
+        })
+        continue
+      }
+      await addAttachment(file, filename)
+    }
   }
 
   // ── Submit ──
@@ -569,10 +789,22 @@ export function ChatComposer(props: ChatComposerProps) {
     return selectedExpertSquad()?.display_label ?? props.expertSquadID
   })
   const expertSquadDisabled = createMemo(() => props.expertSquads.length === 0 || !props.enabled || props.busy)
+  const composerModeOptions = createMemo<ComposerModeOption[]>(() => [
+    { id: "chat", label: t("work_ledger.kind.chat") },
+    { id: "mission", label: t("work_ledger.kind.mission") },
+  ])
+  const selectedComposerMode = createMemo(() => {
+    return composerModeOptions().find((option) => option.id === props.composerMode) ?? composerModeOptions()[0]!
+  })
 
   function selectExpertSquad(squad: ExpertSquadOption | null): void {
     if (!squad || squad.id === props.expertSquadID) return
     props.onExpertSquadChange(squad.id)
+  }
+
+  function selectComposerMode(option: ComposerModeOption | null): void {
+    if (!option || option.id === props.composerMode) return
+    props.onComposerModeChange(option.id)
   }
 
   return (
@@ -704,11 +936,44 @@ export function ChatComposer(props: ChatComposerProps) {
         </div>
       </Show>
 
-      {/* Compose meta (executor selector). The drag/resize tip is now a
+      {/* Compose meta. The drag/resize tip is now a
        * native title on the textarea — appears only on hover so the row
        * stays clean. */}
       <div class="chat-compose-meta">
         <div class="chat-compose-meta-left">
+          <SelectControl<ComposerModeOption>
+            class="composer-mode-select-wrap"
+            options={composerModeOptions()}
+            value={selectedComposerMode()}
+            onChange={selectComposerMode}
+            optionValue="id"
+            optionTextValue={(option) => option.label}
+            disabled={!props.enabled || props.busy}
+            disallowEmptySelection
+            gutter={4}
+            sameWidth
+            triggerClass="composer-mode-select-trigger"
+            triggerDataUI="composer-mode-selector"
+            triggerTitle={t("work_ledger.mode_selector_title")}
+            ariaLabel={t("work_ledger.mode_selector_title")}
+            contentClass="composer-mode-select-content"
+            listboxClass="composer-mode-select-listbox"
+            optionClass="composer-mode-select-option"
+            optionCopyClass="composer-mode-select-option-copy"
+            iconClass="composer-mode-select-caret"
+            icon={<Icon name="caret-down" size={9} />}
+            optionData={(option) => ({
+              "data-composer-mode": option.id,
+              title: option.label,
+            })}
+            renderValue={() => (
+              <span class="composer-mode-select-copy">
+                <span class="composer-mode-select-label">{t("work_ledger.mode_selector_label")}</span>
+                <span class="composer-mode-select-value">{selectedComposerMode().label}</span>
+              </span>
+            )}
+            renderOptionLabel={(option) => option.label}
+          />
           <SelectControl<ExpertSquadOption>
             class="expert-squad-select-wrap"
             options={props.expertSquads}
@@ -743,8 +1008,13 @@ export function ChatComposer(props: ChatComposerProps) {
             renderOptionLabel={(option) => option.display_label}
             renderOptionDescription={(option) => option.description}
           />
-          <ExecutorSelector />
         </div>
+        <ComposerAttachmentLoaders
+          disabled={!canAcceptComposerAttachment()}
+          attachmentCount={attachments().length}
+          onFiles={addFiles}
+          onFolderFiles={addFolderFiles}
+        />
       </div>
     </form>
   )

@@ -54,7 +54,7 @@ The latest approved direction is:
 - `AGENTS.md`
 - `C:/Users/chuan/.codex/skills/opencorvus-expert-squad-creator/SKILL.md`
 - `C:/Users/chuan/.codex/skills/opencorvus-expert-squad-creator/references/open-corvus-expert-squad-checklist.md`
-- `specs/records/2026-07/路线规划.md`
+- An untracked July planning draft was observed as background user notes only and is not a committed source for this record.
 - `specs/records/2026-07/2026-07-06-self-contained-expert-squad-runtime.md`
 - `specs/records/2026-07/2026-07-06-dynamic-expert-agent-instance-review-plan.md`
 - `specs/current/architecture/04-extensions.md`

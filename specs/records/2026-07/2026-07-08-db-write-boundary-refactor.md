@@ -1,0 +1,749 @@
+# 2026-07-08 Database Write Boundary Refactor
+
+## Recall
+
+- User request: The backend database write model is wrong: each module appears to solve database reads and writes independently, which violates layered architecture. The user asked how serious it is, whether fixing it helps MySQL migration, whether frontend UI code must change, and then explicitly requested a new worktree, a detailed goal, the start of the refactor, and a durable prohibition against unscientific database implementation.
+- Acceptance criteria: Create a new git worktree; define a concrete refactor goal; record the goal and constraints under `specs/`; start the database write-boundary refactor in code; add a test that prevents future production code from writing core DB tables outside the approved boundary; keep frontend UI unchanged unless API or projection contracts change.
+- Hard constraints: No fallback, no compatibility path, no dual-source write model, no runtime gate to hide the issue, no blind patching, no git reset, preserve unrelated dirty worktree changes, use mature database layering rather than ad hoc SQL ownership, and keep specs under root `specs/`.
+- Sources read: `AGENTS.md`; `specs/README.md`; `specs/records/2026-07/README.md`; `specs/current/architecture/02-data.md`; `specs/current/architecture/09-verification-evidence.md`; `specs/current/architecture/10-worktree-lifecycle.md`; `specs/current/architecture/16-unified-teardown.md`; `specs/current/architecture/99-principles.md`; `packages/opencorvus/src/storage/db.ts`; `packages/opencorvus/src/engine/engine.sql.ts`.
+- Whole-repository search evidence: `rg -n "Database\\.|db\\.(insert|update|delete)\\(|\\.insert\\(|\\.update\\(|\\.delete\\(" packages/opencorvus/src -g "*.ts"` found broad direct database writes. `rg -n "db\\.(insert|update|delete)\\(EngineArtifactTable|\\.(insert|update|delete)\\(EngineArtifactTable" packages/opencorvus/src -g "*.ts"` showed cross-domain direct writes in acceptance, browser-preview, verification, fact-check, frontend-design, plugin, and orchestrator modules before this slice.
+- Independent agent feedback: None spawned for this first slice. The scope is narrow enough to validate by source inventory, architecture tests, and targeted domain tests.
+
+## Worktree
+
+- Path: `C:\Users\chuan\myhexin-local\opecorvus-db-write-boundary`
+- Branch: `codex/db-write-boundary-refactor`
+- Base commit: `944ca18cea dsw-33987 harden expert squad release schema`
+
+The main worktree had unrelated dirty and untracked user changes. This refactor worktree keeps those changes untouched.
+
+## Goal
+
+`db-write-boundary-refactor-g1`: establish a real database write boundary for the `engine_artifact` process table, migrate non-engine production modules to the engine-owned artifact writer, and add a regression test that blocks future non-engine direct writes to `EngineArtifactTable`.
+
+This is intentionally a first vertical slice, not a cosmetic rename. The serious architecture issue is that `engine_artifact` has become a shared universal table where domain modules directly encode their own write semantics. That makes invariants hard to audit, makes table evolution expensive, and makes a future MySQL migration riskier because SQL, transaction shape, ID generation, timestamps, and update semantics are scattered.
+
+## Scope
+
+In scope for this slice:
+
+- Add an engine-owned artifact writer module.
+- Replace non-engine direct artifact writes in acceptance, browser-preview, verification, fact-check, frontend-design, plugin, and orchestrator exploration persistence.
+- Keep reads stable where they are projection/query concerns.
+- Update architecture docs so `engine/artifact.ts` is the explicit artifact write boundary.
+- Add a script test that fails when production modules outside `engine/**` or `task-api/index.ts` directly insert, update, or delete `EngineArtifactTable`.
+
+Out of scope for this slice:
+
+- Full repository migration of every `engine_*` table write.
+- Schema redesign or DB migration. This project resets DBs for schema changes instead of carrying historical migration compatibility.
+- Frontend UI changes. UI only needs changes when API response shapes, SSE events, or projection DTOs change; this slice preserves those contracts.
+
+## Implementation Plan
+
+1. Create `packages/opencorvus/src/engine/artifact.ts` with insert/update helpers that own ID, timestamp, nullable FK, and payload write shape for `engine_artifact`.
+2. Migrate cross-domain artifact writes to the writer while preserving existing labels, kinds, payloads, timestamps, and emitted events.
+3. Add a production-source architecture test for non-engine direct `EngineArtifactTable` writes.
+4. Update `specs/current/architecture/02-data.md` to make the new boundary explicit.
+5. Run targeted tests for the migrated domains plus documentation health tests.
+
+## Follow-Up Goals
+
+- Collapse remaining direct `engine_artifact` writes inside `engine/**` into narrower command-style methods grouped by lifecycle semantics.
+- Establish similar write-boundary tests for other core `engine_*` tables after their service ownership is documented.
+- After table ownership is centralized, evaluate the SQL dialect assumptions that still block a MySQL storage implementation.
+
+## Phase 2 Tightening
+
+After review feedback that the first slice was too small, the second phase collapses the remaining direct `EngineArtifactTable` writes inside `engine/**` and `task-api/index.ts` behind `engine/artifact.ts`.
+
+Additional grep evidence before Phase 2:
+
+- `rg -n "db\\.(insert|update|delete)\\(EngineArtifactTable|\\.(insert|update|delete)\\(EngineArtifactTable" packages/opencorvus/src/engine packages/opencorvus/src/task-api/index.ts -g "*.ts"` found direct writes in `engine/persist.ts`, `engine/agent-coordination.ts`, `engine/queue.ts`, `engine/runtime.ts`, `engine/writer.ts`, `engine/state.ts`, `engine/stage-continuation.ts`, `engine/tool-ownership.ts`, and `task-api/index.ts`.
+
+Phase 2 acceptance criteria:
+
+- Production source direct writes to `EngineArtifactTable` exist only in `packages/opencorvus/src/engine/artifact.ts`.
+- Existing transaction and compare-and-set update semantics are preserved through writer helpers, including condition-based update-returning paths.
+- The static boundary test is tightened to reject all direct `EngineArtifactTable` writes outside `engine/artifact.ts`.
+
+Phase 2 verification:
+
+- `rg -n "db\\.(insert|update|delete)\\(EngineArtifactTable|\\.(insert|update|delete)\\(EngineArtifactTable" packages/opencorvus/src -g "*.ts"` now reports only `packages/opencorvus/src/engine/artifact.ts`.
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun test --timeout 20000 packages/opencorvus/test/engine/agent-coordination.test.ts packages/opencorvus/test/engine/begin-build-attempt-supersede.test.ts packages/opencorvus/test/engine/acceptance-latest-order.test.ts packages/opencorvus/test/engine/describe-bootstrap-active.test.ts packages/opencorvus/test/engine/describe-stream-error.test.ts`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts`
+- `bun test ./packages/opencorvus/test/fixture/isolated/tmpdir-git-lifecycle.isolated.ts`
+
+`packages/opencorvus/test/server/task-message-routes.test.ts` was attempted both as a full file and with `-t` filters for the operator-message wake commitment cases. In this Windows host run it produced no assertion failure but became inactive after startup; the first full-file attempt also exposed `EBUSY` during temp directory cleanup. The fixture cleanup now waits for transient Windows file-handle release and still throws persistent cleanup failures instead of hiding them. The route file remains a separate test-runner stability issue rather than evidence of a failed artifact writer migration.
+
+## Phase 3 Progress Snapshot Boundary
+
+The next table with clear scattered write ownership is `engine_progress_snapshot`.
+It is a process/projection fact table and should not be assembled independently by
+`engine/git.ts`, `engine/state.ts`, `engine/queue.ts`, `engine/pipeline.ts`, and
+`task-api/index.ts`.
+
+Phase 3 grep evidence:
+
+- `rg -n "\\.(insert|update|delete)\\s*\\(\\s*Engine[A-Za-z0-9_]*Table\\b|db\\.(insert|update|delete)\\s*\\(\\s*Engine[A-Za-z0-9_]*Table\\b" packages/opencorvus/src -g "*.ts"` shows direct `EngineProgressSnapshotTable` inserts in `engine/git.ts`, `engine/state.ts`, `engine/queue.ts`, `engine/pipeline.ts`, and `task-api/index.ts`.
+- These writes share the same row shape: generated `progress` ID, `task_id`, `status`, `summary`, JSON payload, and timestamps.
+
+Phase 3 acceptance criteria:
+
+- Production source direct writes to `EngineProgressSnapshotTable` exist only in the engine progress writer.
+- Existing transaction placement is preserved: callers that currently record a progress row inside a task state transaction still do so.
+- The static database write-boundary test rejects future direct `EngineProgressSnapshotTable` writes outside the writer.
+- Existing task creation, task update, queue claim, git note, and operator note behavior remains unchanged.
+
+Phase 3 verification:
+
+- `rg -n "db\\.(insert|update|delete)\\(EngineProgressSnapshotTable|\\.(insert|update|delete)\\(EngineProgressSnapshotTable|db\\.(insert|update|delete)\\(EngineArtifactTable|\\.(insert|update|delete)\\(EngineArtifactTable" packages/opencorvus/src packages/opencorvus/test -g "*.ts"` shows production source writes only in `engine/artifact.ts` and `engine/progress.ts`; remaining direct writes are test fixture setup.
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/engine/task-global-project-forbidden.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/engine/task-message-revive.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/engine/prepare-project-non-git.test.ts`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts`
+
+The first combined engine regression attempt used `--timeout 20000` and timed out in two slow `task-global-project-forbidden` channel-binding cases, then polluted the shared instance cleanup for the next file. Re-running the same affected files with `--timeout 60000` passed. The verified issue is an undersized test timeout for these Windows host cases, not a progress snapshot boundary regression.
+
+## Phase 4 Interaction Request Boundary
+
+The next half-converged table is `engine_interaction_request`. The code already
+has `engine/interaction.ts` as the event bridge for permission/question requests,
+but production source still writes the same table directly from `engine/runtime.ts`
+for executor protocol interaction requests and from `task-api/index.ts` for
+operator resolution of protocol interactions.
+
+Phase 4 grep evidence:
+
+- `rg -n "\\.(insert|update|delete)\\s*\\(\\s*EngineInteractionRequestTable\\b|db\\.(insert|update|delete)\\s*\\(\\s*EngineInteractionRequestTable\\b" packages/opencorvus/src -g "*.ts"` shows direct inserts/updates in `engine/interaction.ts`, `engine/runtime.ts`, and `task-api/index.ts`.
+- `engine/interaction.ts` imports `EngineRuntime` to sync task/run state after writes, so `engine/runtime.ts` must not import it directly. The writer boundary must live in a lower-level module that both files can use without a runtime/interaction circular dependency.
+
+Phase 4 acceptance criteria:
+
+- Production source direct writes to `EngineInteractionRequestTable` exist only in the interaction request writer.
+- Permission/question bridge creation, executor protocol interaction creation, and protocol interaction resolution preserve their current event payloads, event sources, timestamps, status/response writes, and post-write sync behavior.
+- The static database write-boundary test rejects future direct `EngineInteractionRequestTable` writes outside the writer.
+- Existing interaction route and task conversation tests keep passing without frontend/API contract changes.
+
+Phase 4 verification:
+
+- `rg -n "db\\.(insert|update|delete)\\(EngineArtifactTable|\\.(insert|update|delete)\\(EngineArtifactTable|db\\.(insert|update|delete)\\(EngineProgressSnapshotTable|\\.(insert|update|delete)\\(EngineProgressSnapshotTable|db\\.(insert|update|delete)\\(EngineInteractionRequestTable|\\.(insert|update|delete)\\(EngineInteractionRequestTable" packages/opencorvus/src -g "*.ts"` reports only `engine/artifact.ts`, `engine/progress.ts`, and `engine/interaction-request.ts`.
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/engine/interaction-request.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/engine/interaction-permission.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/engine/task-message-revive.test.ts`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts`
+
+The first server-side attempt combined `orchestrator-bridge-init.test.ts`,
+`task-conversation-routes.test.ts`, and `task-project-archive.test.ts`. It printed
+initial passing cases and then had no output for two consecutive 60s activity
+windows. Separate single-file attempts for `orchestrator-bridge-init.test.ts`
+and `task-project-archive.test.ts` also printed passing cases and then had no
+output for repeated 30s windows. Those runs were stopped as invalid no-activity
+verifications. The focused `interaction-request.test.ts` now covers the writer
+row semantics and protocol event source behavior directly; `interaction-permission.test.ts`
+covers the permission bridge and service reply path.
+
+## Phase 5 Channel Binding Boundary
+
+The next clear single-table boundary is `engine_channel_binding`. It binds
+external channel coordinates to engine tasks and should not be directly assembled
+or deleted from unrelated service files.
+
+Phase 5 grep evidence:
+
+- `rg -n "\\.(insert|update|delete)\\s*\\(\\s*EngineChannelBindingTable\\b|db\\.(insert|update|delete)\\s*\\(\\s*EngineChannelBindingTable\\b" packages/opencorvus/src -g "*.ts"` shows direct insert in `engine/pipeline.ts` and direct delete in `task-api/index.ts`.
+- The creation path is part of queued task persistence; the deletion path is part of task removal. Both should use one engine-owned channel binding writer while preserving the caller's existing transaction placement.
+
+Phase 5 acceptance criteria:
+
+- Production source direct writes to `EngineChannelBindingTable` exist only in the channel binding writer.
+- Task creation still inserts channel binding rows with the same ID, task ID, platform, channel, thread, and timestamps.
+- Task deletion still removes channel binding rows inside the same deletion transaction.
+- The static database write-boundary test rejects future direct `EngineChannelBindingTable` writes outside the writer.
+
+Phase 5 verification:
+
+- `rg -n "db\\.(insert|update|delete)\\(EngineChannelBindingTable|\\.(insert|update|delete)\\(EngineChannelBindingTable" packages/opencorvus/src -g "*.ts"` reports only `engine/channel-binding.ts`.
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun test --timeout 60000 packages/opencorvus/test/engine/channel-binding.test.ts`
+- `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/engine/prepare-project-non-git.test.ts packages/opencorvus/test/engine/task-global-project-forbidden.test.ts`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts`
+
+## Phase 6 Spec Snapshot Boundary
+
+The next clear cross-domain write boundary is `engine_spec_snapshot`. It is an
+engine-domain specification snapshot table, but production source currently
+creates and mutates it directly inside `orchestrator/tools.ts`.
+
+Phase 6 grep evidence:
+
+- `rg -n "db\\.(insert|update|delete)\\(EngineSpecSnapshotTable|\\.(insert|update|delete)\\(EngineSpecSnapshotTable" packages/opencorvus/src -g "*.ts"` reports direct writes only in `orchestrator/tools.ts`.
+- Architect persistence creates a version 2 snapshot, optionally copies requirements from the prior active spec, supersedes the prior active spec by id, and then updates the new snapshot content after goal ID remapping.
+- Requirements persistence supersedes all active snapshots for the task and creates a version 1 snapshot in the same transaction.
+
+Phase 6 acceptance criteria:
+
+- Production source direct writes to `EngineSpecSnapshotTable` exist only in the spec snapshot writer.
+- Architect and requirements persistence keep their existing transaction placement, IDs returned to callers, version/status/content/scope/timestamp semantics, and later reads via `findActiveSpecForTask`.
+- The static database write-boundary test rejects future direct `EngineSpecSnapshotTable` writes outside the writer.
+- Existing requirements/architect persistence tests keep passing without frontend/API contract changes.
+
+Phase 6 verification:
+
+- `rg -n 'db\\.(insert|update|delete)\\(EngineSpecSnapshotTable|\\.(insert|update|delete)\\(EngineSpecSnapshotTable' packages/opencorvus/src -g '*.ts'` reports only `engine/spec-snapshot.ts`.
+- `rg -n 'Identifier\\.ascending\\("spec"\\)' packages/opencorvus/src -g '*.ts'` reports only `engine/spec-snapshot.ts`.
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun test --timeout 60000 packages/opencorvus/test/engine/spec-snapshot.test.ts`
+- `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/orchestrator/tools.test.ts -t "requirements persists a spec snapshot through the shared stage dispatcher"`
+- `bun test --timeout 60000 packages/opencorvus/test/orchestrator/tools.test.ts -t "architect promotion keeps requirements attached to the active spec"`
+- `bun test --timeout 60000 packages/opencorvus/test/orchestrator/tools.test.ts -t "architect does not start without an active requirements spec snapshot"`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts`
+- `git diff --check`
+
+## Phase 7 Active Plan Graph Boundary
+
+The next production write cluster with a clean owner is the active execution plan
+graph. `createExecutionRunRecord` in `orchestrator/tools.ts` currently inserts
+`engine_plan_version`, inserts `engine_plan_node`, and updates
+`engine_goal.plan_version_id` directly while `engine/persist.ts` already owns
+architect goal graph writes and active-plan superseding.
+
+Phase 7 grep evidence:
+
+- `rg -n 'db\\.(insert|update|delete)\\(Engine(Task|Goal|PlanVersion|PlanNode|Requirement|SpecItem|Milestone)Table|\\.(insert|update|delete)\\(Engine(Task|Goal|PlanVersion|PlanNode|Requirement|SpecItem|Milestone)Table' packages/opencorvus/src -g '*.ts'` reports the create-run plan graph writes in `orchestrator/tools.ts` around `createExecutionRunRecord`.
+- Existing `engine/persist.ts` already has `supersedePriorActivePlansForTask` and `appendGoalToActiveGraph`; keeping create-run plan graph creation there avoids a second owner for active plan rows.
+- The existing behavior creates one active plan version, drops unknown `goal.depends_on` references from plan-node dependencies with a warning, inserts one node per current goal, and repoints each goal to the new plan version in the same transaction.
+
+Phase 7 acceptance criteria:
+
+- Production source direct writes to `EnginePlanVersionTable` and `EnginePlanNodeTable` exist only in `engine/persist.ts`.
+- `createExecutionRunRecord` keeps the same transaction placement, plan ID returned to the run writer, active-plan superseding, plan summary, prompt, node order, node dependency resolution, node brief rendering, and goal `plan_version_id` updates.
+- Unknown goal dependency references remain ignored for plan-node dependency IDs without blocking run creation.
+- Static database write-boundary tests reject future direct `EnginePlanVersionTable` / `EnginePlanNodeTable` writes outside the persistence writer.
+- Focused engine writer tests cover plan graph creation, prior active plan superseding, goal repointing, and unknown dependency pruning.
+
+Phase 7 verification:
+
+- `rg -n 'db\\.(insert|update|delete)\\(EnginePlanVersionTable|\\.(insert|update|delete)\\(EnginePlanVersionTable|db\\.(insert|update|delete)\\(EnginePlanNodeTable|\\.(insert|update|delete)\\(EnginePlanNodeTable' packages/opencorvus/src -g '*.ts'` reports only `engine/persist.ts`.
+- `bun test --timeout 60000 packages/opencorvus/test/engine/active-plan-graph.test.ts`
+- `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts`
+- `git diff --check`
+
+## Phase 8 Goal Contract Field Boundary
+
+The next small cross-layer write is `manage_task(action=modify_goal)`.
+`orchestrator/tools.ts` computes changed contract fields correctly, but then
+directly updates `engine_goal`. Goal row creation, deletion, architect upsert,
+operator add-goal, and active plan repointing already live in `engine/persist.ts`.
+
+Phase 8 grep evidence:
+
+- `rg -n 'db\\.(insert|update|delete)\\(EngineGoalTable|\\.(insert|update|delete)\\(EngineGoalTable' packages/opencorvus/src -g '*.ts'` reports one non-persist production write in `orchestrator/tools.ts` inside `modify_goal`.
+- The existing no-op filter and live-work blocking stay in `orchestrator/tools.ts`; the persistence boundary should only own the row update once the tool has proven a real contract change.
+
+Phase 8 acceptance criteria:
+
+- Production source direct writes to `EngineGoalTable` exist only in `engine/persist.ts`.
+- `modify_goal` keeps its existing no-op filtering, dependency graph mutation refusal, retry-intent behavior, and return text.
+- Static database write-boundary tests reject future direct `EngineGoalTable` writes outside `engine/persist.ts`.
+- A focused writer test covers applying a contract field patch to a goal row.
+
+Phase 8 verification:
+
+- `rg -n 'db\\.(insert|update|delete)\\(EngineGoalTable|\\.(insert|update|delete)\\(EngineGoalTable' packages/opencorvus/src -g '*.ts'` reports only `engine/persist.ts`.
+- `bun test --timeout 60000 packages/opencorvus/test/engine/goal-contract-fields.test.ts`
+- `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/orchestrator/tools.test.ts -t "modify_goal records retry intent without clearing a completed workspace pointer"`
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts`
+
+## Phase 9 Task Touch Boundary
+
+`EngineTaskTable` remains the largest unconverged core table. Current direct
+writes include lifecycle and queue CAS paths in `engine/state.ts`,
+`engine/queue.ts`, `engine/rewind.ts`, `task-api/index.ts`, and two
+stage-finalization touches in `orchestrator/tools.ts`.
+
+This phase deliberately does not claim full `engine_task` convergence. It
+extracts the non-lifecycle task touch/update used by requirements and architect
+stage persistence into a low-level engine task writer, preserving the existing
+transaction and event emission placement. Later phases must continue migrating
+the queue, terminal lifecycle, task creation, task deletion, and task API edit
+paths before `EngineTaskTable` can be added to the unique-writer static test.
+
+Phase 9 grep evidence:
+
+- `rg -n 'db\\.(insert|update|delete)\\(EngineTaskTable|\\.(insert|update|delete)\\(EngineTaskTable' packages/opencorvus/src -g '*.ts'` reports two `orchestrator/tools.ts` writes inside architect and requirements persistence, both updating `time_updated` and, for architect, `metadata.architect_fidelity`.
+- Existing `engine/state.ts::updateTask` owns lifecycle semantics and progress rows, but these stage-finalization writes intentionally do not write progress snapshots and already emit their own stage-specific `TaskUpdated` events from `orchestrator/tools.ts`.
+
+Phase 9 acceptance criteria:
+
+- The two `orchestrator/tools.ts` stage-finalization direct writes to `EngineTaskTable` are replaced by engine task writer calls.
+- The architect path preserves metadata merge semantics for `architect_fidelity`, the transaction boundary, and the existing `orchestrator.architect` event emission.
+- The requirements path preserves the timestamp touch, the transaction boundary, and the existing `orchestrator.requirements` event emission.
+- A focused writer test covers task touch and metadata merge behavior.
+- `EngineTaskTable` is not added to the unique-writer static test until all remaining production direct task writes are migrated.
+
+Phase 9 verification:
+
+- `rg -n 'db\\.(insert|update|delete)\\(EngineTaskTable|\\.(insert|update|delete)\\(EngineTaskTable' packages/opencorvus/src/orchestrator/tools.ts packages/opencorvus/src -g '*.ts'` no longer reports `orchestrator/tools.ts`; remaining production writes are still in engine/task lifecycle modules and task API and must be migrated in later phases.
+- `bun test --timeout 60000 packages/opencorvus/test/engine/task-writer.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/orchestrator/tools.test.ts -t "requirements persists a spec snapshot through the shared stage dispatcher"`
+- `bun test --timeout 60000 packages/opencorvus/test/orchestrator/tools.test.ts -t "architect promotion keeps requirements attached to the active spec"`
+- `bun run --cwd packages/opencorvus typecheck`
+
+## Phase 10 Task Metadata And Touch Boundary
+
+The next same-shape `engine_task` writes are non-lifecycle writes in engine
+modules:
+
+- `engine/checks.ts` replaces task metadata with a checks patch.
+- `engine/git.ts` replaces task metadata with a nested `git` patch.
+- `engine/writer.ts::createRun(linkAsActive=true)` only bumps `time_updated`.
+
+These are safe to route through the low-level task writer without absorbing
+queue CAS, terminal lifecycle, task creation, or task deletion semantics.
+
+Phase 10 acceptance criteria:
+
+- Production source direct `EngineTaskTable` writes in `engine/checks.ts`,
+  `engine/git.ts`, and `engine/writer.ts` are replaced by `engine/task.ts`
+  writer calls.
+- `writeTaskChecks` preserves its full metadata replacement behavior,
+  including deleting `metadata.checks` when checks are absent.
+- `engine/git.ts` preserves its nested `metadata.git` merge behavior.
+- `createRun(linkAsActive=true)` preserves the task `time_updated` bump in the
+  same transaction as run artifact creation.
+- Existing task writer tests cover metadata replacement and timestamp touch.
+
+Phase 10 verification:
+
+- `rg -n 'db\\.(insert|update|delete)\\(EngineTaskTable|\\.(insert|update|delete)\\(EngineTaskTable' packages/opencorvus/src -g '*.ts'` no longer reports `engine/checks.ts`, `engine/git.ts`, or `engine/writer.ts`; remaining production writes are `pipeline.ts`, `queue.ts`, `rewind.ts`, `state.ts`, `task-api/index.ts`, and `engine/task.ts`.
+- `bun test --timeout 60000 packages/opencorvus/test/engine/task-writer.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/engine/writer.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/tool/panel.test.ts -t "update_checks preserves advanced config when panel toggles standard checks"`
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts`
+
+Additional verification attempt not counted as passing evidence:
+
+- `bun test --timeout 60000 packages/opencorvus/test/engine/git-checkpoint-scenarios.test.ts` failed in the existing scenario 1 expectation: expected baseline mode `recorded_head`, received `created_commit`. This failure is in baseline dirty/commit classification, not in the task metadata writer call, and remains outside the Phase 10 accepted verification set.
+
+## Phase 11 Task Creation Boundary
+
+`engine/pipeline.ts::persistQueuedTask` was the remaining task creation path
+that directly inserted `EngineTaskTable`. This phase moves the insert into
+`engine/task.ts::insertEngineTask` while preserving `persistQueuedTask` as the
+owner of queue/direct-start semantics, channel binding creation, progress
+snapshot creation, and task-created/task-updated event emission.
+
+Phase 11 acceptance criteria:
+
+- `engine/pipeline.ts` no longer directly writes `EngineTaskTable`.
+- Task creation preserves project/session/request/source/title/request,
+  attachments, executor, kind, priority, queue order, budget, metadata, and
+  timestamp fields.
+- Existing channel binding, progress snapshot, and event emission placement is
+  unchanged.
+- A focused task writer test covers inserted row shape.
+
+Phase 11 verification:
+
+- `rg -n 'db\\.(insert|update|delete)\\(EngineTaskTable|\\.(insert|update|delete)\\(EngineTaskTable' packages/opencorvus/src -g '*.ts'` no longer reports `engine/pipeline.ts`.
+- `bun test --timeout 60000 packages/opencorvus/test/engine/task-writer.test.ts`
+
+## Phase 12 Task API Edit And Delete Boundary
+
+`task-api/index.ts` still directly wrote `EngineTaskTable` for physical task
+deletion, delete-session task cleanup, task budget edits, and task title edits.
+Those API functions own authorization, cancellation, settlement, breadcrumbing,
+session removal, vacuum scheduling, and event publication; they do not need to
+own table mutation mechanics.
+
+This phase moves those row mutations into `engine/task.ts` as task writer
+operations and leaves the API orchestration behavior in place.
+
+Phase 12 acceptance criteria:
+
+- `task-api/index.ts` no longer directly inserts, updates, or deletes
+  `EngineTaskTable`.
+- `deleteTask` preserves cancellation, settlement, physical-delete breadcrumb,
+  session removal, cascade delete, and incremental vacuum scheduling.
+- `deleteSession(..., { deleteTasks: true })` preserves task cancellation,
+  settlement, breadcrumbs, scoped deletion by project and session IDs, and
+  incremental vacuum scheduling.
+- `updateTaskBudget` and `updateTaskTitle` preserve project scoping and
+  `TaskUpdated` events.
+- Focused writer tests cover editable fields, single task delete, and scoped
+  project/session delete.
+
+Phase 12 verification:
+
+- `rg -n 'db\\.(insert|update|delete)\\(EngineTaskTable|\\.(insert|update|delete)\\(EngineTaskTable' packages/opencorvus/src -g '*.ts'` no longer reports `task-api/index.ts`; remaining production writes are `engine/queue.ts`, `engine/rewind.ts`, `engine/state.ts`, and the intended `engine/task.ts` writer.
+- `bun test --timeout 60000 packages/opencorvus/test/engine/task-writer.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/task-api/delete-task-breadcrumb.test.ts`
+
+## Phase 13 Task Queue Claim Boundary
+
+`engine/queue.ts` directly updated `EngineTaskTable` for directory queue
+reordering and two claim paths: claim the next queued task for a cwd and claim
+a specified queued task when the cwd is idle. These writes are queue-specific
+but still mutate the task row, so the table mutation belongs in the low-level
+task writer while `queue.ts` remains the owner of queue orchestration, progress
+snapshots, event emission, and task loop launch.
+
+Phase 13 acceptance criteria:
+
+- `engine/queue.ts` no longer directly writes `EngineTaskTable`.
+- Queue reorder preserves exact queue order and timestamp updates.
+- `claimNextForCwd` preserves the existing SQLite single-statement claim,
+  active-sibling exclusion, priority/order sorting, and returned row semantics.
+- `claimQueuedTaskForCwd` preserves specified-task claim conditions, cwd
+  matching, active-sibling exclusion, and returned row semantics.
+- Progress snapshots and `TaskUpdated` events remain in `engine/queue.ts`.
+- Focused writer and queue tests cover queue order, claim order, active sibling
+  blocking, explicit queued-task start, and interrupted active sibling behavior.
+
+Phase 13 verification:
+
+- `rg -n 'db\\.(insert|update|delete)\\(EngineTaskTable|\\.(insert|update|delete)\\(EngineTaskTable' packages/opencorvus/src -g '*.ts'` no longer reports `engine/queue.ts`; remaining production writes are `engine/rewind.ts`, `engine/state.ts`, and the intended `engine/task.ts` writer.
+- `bun test --timeout 60000 packages/opencorvus/test/engine/task-writer.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/engine/queue.test.ts -t "reorder"`
+- `bun test --timeout 60000 packages/opencorvus/test/engine/queue.test.ts -t "claim"`
+
+Additional verification attempt not counted as passing evidence:
+
+- `bun test --timeout 60000 packages/opencorvus/test/server/task-queue-routes.test.ts` printed the file header and then produced no further output for roughly 150 seconds. The process also did not respond to the configured test timeout, so the matching Bun process for that test command was stopped. This is recorded as a test-runner hang and is not counted as Phase 13 passing evidence.
+
+## Phase 14 Task Lifecycle State Boundary
+
+`engine/state.ts` directly updated `EngineTaskTable` in two places: the central
+task lifecycle writer and the run-update task timestamp bump. This phase moves
+both mutations behind `engine/task.ts` while preserving `state.ts` as the owner
+of lifecycle semantics, progress snapshots, protocol events, terminal lineage
+notifications, decision-log bundle refresh, and live-run finalization.
+
+Phase 14 acceptance criteria:
+
+- `engine/state.ts` no longer directly writes `EngineTaskTable`.
+- `updateTask` and `terminalTask` preserve no-op behavior, terminal compare-and-set,
+  progress snapshot writes, task events, terminal event emission, and live-run
+  finalization.
+- `updateRun` preserves run artifact append behavior and task `time_updated`
+  bump.
+- Focused writer tests cover lifecycle state update and terminal compare-and-set
+  behavior.
+
+Phase 14 verification:
+
+- `rg -n 'db\\.(insert|update|delete)\\(EngineTaskTable|\\.(insert|update|delete)\\(EngineTaskTable' packages/opencorvus/src -g '*.ts'` no longer reports `engine/state.ts`.
+- `bun test --timeout 60000 packages/opencorvus/test/engine/task-writer.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/engine/update-task-reactivation.test.ts packages/opencorvus/test/engine/task-terminal-run-finalization.test.ts`
+
+## Phase 15 Task Rewind Cursor Boundary And Static Guard
+
+The final non-writer direct `EngineTaskTable` writes were in `engine/rewind.ts`
+for setting and clearing task rewind cursor fields. This phase moves those
+mutations into `engine/task.ts`, updates the rewind event-order test to assert
+the latest `task.rewound` event rather than assuming it is the final task event,
+and adds `EngineTaskTable` to the static write-boundary guard.
+
+Phase 15 acceptance criteria:
+
+- `engine/rewind.ts` no longer directly writes `EngineTaskTable`.
+- `rewindTask` preserves cursor time/event/count updates, worktree reset
+  behavior, task-rewound event payload, and log metadata.
+- `clearRewindCursor` preserves no-op behavior when no cursor exists, cursor
+  clearing, and task-rewound event payload.
+- Production source direct `EngineTaskTable` writes exist only in
+  `engine/task.ts`.
+- The static database write-boundary test rejects future direct
+  `EngineTaskTable` writes outside `engine/task.ts`.
+
+Phase 15 verification:
+
+- `rg -n 'db\\.(insert|update|delete)\\(EngineTaskTable|\\.(insert|update|delete)\\(EngineTaskTable' packages/opencorvus/src -g '*.ts'` reports only `packages/opencorvus/src/engine/task.ts`.
+- `bun test --timeout 60000 packages/opencorvus/test/engine/task-writer.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/engine/rewind-clear.test.ts packages/opencorvus/test/engine/rewind-multi-step.test.ts`
+- `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
+
+## Phase 16 Requirement And Metrics Static Boundary
+
+The remaining broad `Engine*Table` production writes after Phase 15 were already
+single-writer shaped:
+
+- `EngineRequirementTable` is written only from `engine/persist.ts`.
+- `EngineMetricSpecTable`, `EngineMetricResultTable`, and
+  `EngineIterationTable` are written only from `metrics/store.ts`.
+
+This phase does not move business code because moving already-converged writes
+would add churn without improving the boundary. It registers those single
+writers in the static database write-boundary test and documents the boundary in
+`specs/current/architecture/02-data.md`.
+
+Phase 16 acceptance criteria:
+
+- Production source direct `EngineRequirementTable` writes exist only in
+  `engine/persist.ts`.
+- Production source direct `EngineMetricSpecTable`, `EngineMetricResultTable`,
+  and `EngineIterationTable` writes exist only in `metrics/store.ts`.
+- The static database write-boundary test rejects future direct writes to those
+  tables outside their declared writer files.
+- The architecture data document states the requirement and metrics writer
+  ownership explicitly.
+
+Phase 16 verification:
+
+- `rg -n '\\.(insert|update|delete)\\s*\\(\\s*Engine[A-Za-z0-9_]*Table\\b|db\\.(insert|update|delete)\\s*\\(\\s*Engine[A-Za-z0-9_]*Table\\b' packages/opencorvus/src -g '*.ts'`
+- `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `git diff --check`
+
+## Phase 17 Schedule Tool To Scheduler Service Boundary
+
+The full production DB write inventory showed that `CronJobTable` and
+`EventJobTable` had two direct production writers each: the scheduler services
+and `tool/schedule.ts`. The tool layer should own permission prompting and tool
+result formatting, but it should not construct scheduler table rows or delete
+jobs directly.
+
+This phase routes ScheduleTool create/list/cancel operations through
+`CronService` and `EventService`, preserving existing tool output shape and
+project-scoped behavior. It then registers `CronJobTable` and `EventJobTable`
+in the static write-boundary test.
+
+Phase 17 acceptance criteria:
+
+- `tool/schedule.ts` no longer imports or directly writes `CronJobTable` or
+  `EventJobTable`.
+- ScheduleTool cron create/list/cancel still returns the same observable output
+  fields and removes only the current project's job.
+- ScheduleTool event create/list/cancel still returns the same observable output
+  fields and removes only the current project's job.
+- Production source direct `CronJobTable` writes exist only in
+  `scheduler/cron-service.ts`.
+- Production source direct `EventJobTable` writes exist only in
+  `scheduler/event-service.ts`.
+- The architecture data document states scheduler job table writer ownership.
+
+Phase 17 verification:
+
+- `rg -n '\\.(insert|update|delete)\\s*\\(\\s*(CronJobTable|EventJobTable)\\b|db\\.(insert|update|delete)\\s*\\(\\s*(CronJobTable|EventJobTable)\\b' packages/opencorvus/src -g '*.ts'`
+- `bun test packages/opencorvus/test/tool/schedule.test.ts`
+- `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `git diff --check`
+
+## Phase 18 Task Queue Service Boundary
+
+The remaining scheduler-domain split writer was `TaskQueueTable`. The canonical
+owner is `scheduler/task-queue-service.ts`, but `executor/opencorvus.ts` directly
+read and failed queue rows for status/abort, and `engine/writer.ts` directly
+failed interrupted queue rows during live execution abort cleanup.
+
+This phase adds narrow `TaskQueueService` APIs for queue-task status by ID and
+for marking queued/running rows failed, then migrates executor and engine writer
+call sites to those APIs. The queue table remains visible to tests for
+assertions, but production writes are now service-owned.
+
+Phase 18 acceptance criteria:
+
+- `executor/opencorvus.ts` no longer imports or directly writes
+  `TaskQueueTable`.
+- `engine/writer.ts` no longer dynamically imports or directly writes
+  `TaskQueueTable`.
+- `TaskQueueService.getStatusByID` preserves executor status shape.
+- `TaskQueueService.failQueuedOrRunning` preserves queued/running failure
+  semantics with reason, completion time, and update time.
+- Production source direct `TaskQueueTable` writes exist only in
+  `scheduler/task-queue-service.ts`.
+- The static database write-boundary test rejects future direct
+  `TaskQueueTable` writes outside `scheduler/task-queue-service.ts`.
+
+Phase 18 verification:
+
+- `rg -n '\\.(insert|update|delete)\\s*\\(\\s*TaskQueueTable\\b|db\\.(insert|update|delete)\\s*\\(\\s*TaskQueueTable\\b' packages/opencorvus/src -g '*.ts'`
+- `bun test --timeout 60000 packages/opencorvus/test/scheduler/task-queue-service.test.ts -t "getStatusByID"`
+- `bun test --timeout 60000 packages/opencorvus/test/executor/opencorvus.test.ts -t "status and abort"`
+- `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `git diff --check`
+
+Additional verification attempt not counted as passing Phase 18 evidence:
+
+- `bun test --timeout 60000 packages/opencorvus/test/executor/opencorvus.test.ts`
+  passed the queue-related resume test and later failed two event-stream tests
+  that publish `message.part.delta` for message IDs not persisted in the
+  session table, causing `session-mirror: message ... missing persisted row for
+  overlay enrichment` and then a timeout waiting for a mapped event. That
+  failure is outside the `TaskQueueTable` write-boundary migration and remains
+  a separate executor event fixture issue.
+
+## Phase 19 Session Part Writer Boundary
+
+The full production DB write inventory still showed `PartTable` writes in
+`build/agent.ts` and `session/index.ts`. The build writes were part of managed
+build retry repair: after staging attachment bytes into the retry worktree,
+build code rewrote persisted file/tool part attachment references directly in
+the session table. That bypassed the Session writer and its inline-base64
+integrity check.
+
+This phase exposes a narrow `Session.updatePartData` writer for already
+persisted part data repair, reuses the existing inline-base64 detector for this
+path, and migrates build retry repair to call Session instead of directly
+updating `PartTable`.
+
+Phase 19 acceptance criteria:
+
+- `build/agent.ts` no longer directly writes `PartTable`.
+- `Session.updatePartData` updates only through `session/index.ts` and rejects
+  inline base64 payloads before they reach SQLite.
+- Managed build retry repair still updates repaired file/tool part data.
+- Production source direct `PartTable` writes exist only in `session/index.ts`.
+- The static database write-boundary test rejects future direct `PartTable`
+  writes outside `session/index.ts`.
+- The architecture data document states Session part writer ownership.
+
+Phase 19 verification:
+
+- `rg -n '\\.(insert|update|delete)\\s*\\(\\s*PartTable\\b|db\\.(insert|update|delete)\\s*\\(\\s*PartTable\\b' packages/opencorvus/src -g '*.ts'`
+- `bun test --timeout 60000 packages/opencorvus/test/session/inline-base64-rejected.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/build-agent/managed-worktree-runtime.test.ts -t "managed build retries repair persisted file parts"`
+- `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `git diff --check`
+
+## Phase 20 Project Delete Cross-Domain Cleanup Boundary
+
+After Phase 19, the production DB write inventory showed the remaining
+multi-writer tables were concentrated around project deletion:
+`ControlMessageTable`, `DecisionLogTable`, `QuickNoteTable`, and `ProjectTable`.
+`project/delete.ts` was directly deleting control timeline, decision log, and
+quicknote rows while also deleting the project row. The project layer should
+orchestrate project lifecycle cleanup, but it should not own the table write
+semantics of those domains.
+
+This phase adds narrow domain cleanup APIs and routes project deletion through
+them while preserving the existing project-delete transaction boundary:
+
+- `ControlTimeline.deleteProjectMessages({ projectID }, db)`
+- `deleteDecisionLogsForTasks(taskIDs, db)`
+- `deleteProjectNotes({ projectID }, db)`
+
+`ProjectTable` remains a separate project-domain boundary question because
+`project/project.ts`, `project/gc.ts`, and `project/delete.ts` all mutate the
+project lifecycle for different reasons. It is not folded into this phase.
+
+Phase 20 acceptance criteria:
+
+- `project/delete.ts` no longer imports or directly writes
+  `ControlMessageTable`, `DecisionLogTable`, or `QuickNoteTable`.
+- Project deletion still removes control timeline rows, decision-log rows for
+  deleted tasks, and quicknote rows for the deleted project.
+- Domain cleanup APIs can run inside the project delete transaction without
+  opening a second write source.
+- Production source direct `ControlMessageTable` writes exist only in
+  `control/timeline.ts`.
+- Production source direct `DecisionLogTable` writes exist only in
+  `decision-log/index.ts`.
+- Production source direct `QuickNoteTable` writes exist only in
+  `quicknote/service.ts`.
+- The static database write-boundary test rejects future cross-domain direct
+  writes for these three tables.
+- The architecture data document states these writer boundaries.
+
+Phase 20 verification:
+
+- `rg -n '\\.(insert|update|delete)\\s*\\(\\s*(ControlMessageTable|DecisionLogTable|QuickNoteTable)\\b|db\\.(insert|update|delete)\\s*\\(\\s*(ControlMessageTable|DecisionLogTable|QuickNoteTable)\\b' packages/opencorvus/src -g '*.ts'`
+- `bun test --timeout 60000 packages/opencorvus/test/control/timeline.test.ts -t "deleteProjectMessages"`
+- `bun test --timeout 60000 packages/opencorvus/test/pipeline/decision-log.test.ts -t "deleteDecisionLogsForTasks"`
+- `bun test packages/opencorvus/test/quicknote/service.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/server/project-routes.test.ts -t "DELETE /project/current deletes OpenCorvus project state without deleting source files"`
+- `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `git diff --check`
+
+## Phase 21 Project Table Writer Boundary
+
+After Phase 20 the only remaining production multi-writer table in the broad
+DB write inventory was `ProjectTable`, with direct writes in
+`project/project.ts`, `project/delete.ts`, and `project/gc.ts`. These are all
+project-domain lifecycle operations, but direct SQL was still split across
+separate project modules.
+
+This phase keeps `project/project.ts` as the single `ProjectTable` writer and
+adds `Project.deleteRows(ids, db?)` for lifecycle cleanup. Project delete and
+project garbage collection now call that writer instead of directly deleting
+project rows.
+
+Phase 21 acceptance criteria:
+
+- Production source direct `ProjectTable` writes exist only in
+  `project/project.ts`.
+- `project/delete.ts` still deletes the current project row inside the existing
+  project delete transaction.
+- `project/gc.ts` still removes expired project rows before deleting their
+  runtime cache directories.
+- The static database write-boundary test rejects future direct `ProjectTable`
+  writes outside `project/project.ts`.
+- The architecture data document states project table writer ownership.
+
+Phase 21 verification:
+
+- `rg -n '\\.(insert|update|delete)\\s*\\(\\s*ProjectTable\\b|db\\.(insert|update|delete)\\s*\\(\\s*ProjectTable\\b' packages/opencorvus/src -g '*.ts'`
+- full production multi-writer inventory emits no table with more than one
+  production write file.
+- `bun test --timeout 60000 packages/opencorvus/test/server/project-routes.test.ts -t "DELETE /project/current deletes OpenCorvus project state without deleting source files"`
+- `bun test --timeout 60000 packages/opencorvus/test/project/worktree-gc.test.ts`
+- `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `git diff --check`
+
+## Phase 22 Complete Direct-Write Registry Guard
+
+The Phase 21 matrix was empty for multi-writer tables, but the static test still
+had a blind spot: it asserted the approved boundary for selected tables only.
+A future change could introduce a new directly written table and forget to add
+it to `approvedWriters`, allowing unreviewed DB write ownership to enter the
+codebase without a failing test.
+
+This phase expands `db-write-boundary.test.ts` from a selected-table guard into
+a complete production direct-write registry. It inventories every production
+`.insert(Table)` / `.update(Table)` / `.delete(Table)` occurrence under
+`packages/opencorvus/src`, requires every table to be present in
+`approvedWriters`, and asserts the actual write files equal the approved single
+writer.
+
+Phase 22 acceptance criteria:
+
+- Every production directly written table is listed in `approvedWriters`.
+- Every listed table has exactly one direct production writer file.
+- Adding a new unregistered direct table write fails
+  `db-write-boundary.test.ts`.
+- Adding a second direct writer for any registered table fails
+  `db-write-boundary.test.ts`.
+- The architecture data document describes this registry as the durable
+  enforcement mechanism.
+
+Phase 22 verification:
+
+- `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `git diff --check`

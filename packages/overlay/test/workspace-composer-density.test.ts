@@ -58,8 +58,13 @@ describe("composer shell stays tighter than the surrounding canvas", () => {
     )
   })
 
-  test("narrow composer panels stack meta controls instead of clipping selector copy", () => {
+  test("narrow composer panels keep selectors and right attachment loaders on one meta row", () => {
+    expect(COMPOSER).toMatch(/\.chat-compose-meta\s*\{[^}]*flex-wrap:\s*nowrap\s*;/)
     expect(COMPOSER).toMatch(
+      /\.chat-compose-meta-left\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*calc\(160px \* var\(--ui-scale\)\)\)\s+minmax\(0,\s*1fr\);/,
+    )
+    expect(COMPOSER).toMatch(/\.composer-attachment-loaders\s*\{[^}]*justify-content:\s*flex-end\s*;/)
+    expect(COMPOSER).not.toMatch(
       /@container \(max-width: 520px\)\s*\{[\s\S]*?\.chat-compose-meta-left\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s*;/,
     )
     expect(COMPOSER).toMatch(

@@ -2,7 +2,7 @@ import z from "zod"
 import { Filesystem } from "../util/filesystem"
 import path from "path"
 import { createHash } from "crypto"
-import { Database, eq, sql } from "../storage/db"
+import { Database, eq, inArray, sql } from "../storage/db"
 import { ProjectTable } from "./project.sql"
 import { Log } from "../util/log"
 import { Flag } from "@/flag/flag"
@@ -11,7 +11,7 @@ import { BusEvent } from "@/bus/bus-event"
 import { iife } from "@/util/iife"
 import { GlobalBus } from "@/bus/global"
 import { existsSync } from "fs"
-import { realpath, readdir, stat } from "fs/promises"
+import { readFile, realpath, readdir, stat } from "fs/promises"
 import { git } from "../util/git"
 import { Glob } from "../util/glob"
 import { which } from "@/util/which"
@@ -99,6 +99,27 @@ export namespace Project {
   async function standaloneCommon(worktree: string, common: string) {
     const localCommon = path.join(worktree, ".git")
     return samePath(common, localCommon) || (await sameFilesystemLocation(common, localCommon))
+  }
+
+  export async function localGitDirectory(worktree: string): Promise<string | undefined> {
+    const dotgit = path.join(worktree, ".git")
+    const info = await stat(dotgit).catch((error) => {
+      if (isMissingPathError(error)) return undefined
+      throw error
+    })
+    if (!info) return undefined
+    if (info.isDirectory()) return dotgit
+    if (!info.isFile()) {
+      throw new Error(`Unsupported .git filesystem entry: ${dotgit}`)
+    }
+
+    const content = await readFile(dotgit, "utf8")
+    const match = /^gitdir:\s*(.+?)\s*$/i.exec(content.trim())
+    if (!match?.[1]) {
+      throw new Error(`Malformed .git file: ${dotgit}`)
+    }
+    const gitdir = Filesystem.windowsPath(match[1])
+    return Filesystem.resolve(path.isAbsolute(gitdir) ? gitdir : path.join(worktree, gitdir))
   }
 
   function projectIDTables(db: Database.TxOrDb) {
@@ -651,6 +672,16 @@ export namespace Project {
     const row = Database.use((db) => db.select().from(ProjectTable).where(eq(ProjectTable.id, id)).get())
     if (!row) return undefined
     return fromRow(row)
+  }
+
+  export function deleteRows(ids: string[], db?: Database.TxOrDb): void {
+    if (ids.length === 0) return
+    const write = (target: Database.TxOrDb) => target.delete(ProjectTable).where(inArray(ProjectTable.id, ids)).run()
+    if (db) {
+      write(db)
+      return
+    }
+    Database.use(write)
   }
 
   export async function initGit(directory: string) {

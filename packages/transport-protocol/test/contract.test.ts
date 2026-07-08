@@ -160,6 +160,7 @@ describe("isWebviewMessage", () => {
         id: "preview-sync",
         command: {
           kind: "browserPreview.sync",
+          scopeKey: "D:/workspace:tsk_preview:art_target:http://127.0.0.1:4173/preview",
           url: "http://127.0.0.1:4173/preview",
           bounds: { x: 10, y: 20, width: 640, height: 480 },
         },
@@ -172,6 +173,7 @@ describe("isWebviewMessage", () => {
         id: "preview-sync-zero",
         command: {
           kind: "browserPreview.sync",
+          scopeKey: "D:/workspace:tsk_preview:art_target:http://127.0.0.1:4173/preview",
           url: "http://127.0.0.1:4173/preview",
           bounds: { x: 10, y: 20, width: 0, height: 480 },
         },
@@ -184,8 +186,21 @@ describe("isWebviewMessage", () => {
         id: "preview-sync-infinite",
         command: {
           kind: "browserPreview.sync",
+          scopeKey: "D:/workspace:tsk_preview:art_target:http://127.0.0.1:4173/preview",
           url: "http://127.0.0.1:4173/preview",
           bounds: { x: Number.POSITIVE_INFINITY, y: 20, width: 640, height: 480 },
+        },
+      }),
+    ).toBe(false)
+    expect(
+      isWebviewMessage({
+        protocol: PROTOCOL_VERSION,
+        type: "native.request",
+        id: "preview-sync-missing-scope",
+        command: {
+          kind: "browserPreview.sync",
+          url: "http://127.0.0.1:4173/preview",
+          bounds: { x: 10, y: 20, width: 640, height: 480 },
         },
       }),
     ).toBe(false)
@@ -364,6 +379,7 @@ describe("schema snapshot (audit F8)", () => {
         id: "native-2",
         command: {
           kind: "browserPreview.sync",
+          scopeKey: "D:/workspace:tsk_preview:art_target:http://127.0.0.1:4173/preview",
           url: "http://127.0.0.1:4173/preview",
           bounds: { x: 0, y: 42, width: 720, height: 540 },
         },
@@ -396,6 +412,7 @@ describe("route directory policy", () => {
       "/auth/login",
       "/ui/index.html",
       "/mission",
+      "/work-ledger",
       "/attachment/project/shot.png",
       `/attachment/project/shot.png?variant=${SCREENSHOT_BROWSER_THUMBNAIL_VARIANT}`,
       "/task/abc",

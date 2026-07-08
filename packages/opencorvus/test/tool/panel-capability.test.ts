@@ -8,7 +8,9 @@ test("filters panel-only actions by surface", () => {
   const slack = panelCapabilities("slack")
 
   expect(panel.actions.some((item) => item.action === "set_executor")).toBe(true)
+  expect(panel.actions.some((item) => item.action === "wake_mission")).toBe(false)
   expect(slack.actions.some((item) => item.action === "set_executor")).toBe(false)
+  expect(slack.actions.some((item) => item.action === "wake_mission")).toBe(false)
   expect(slack.actions.some((item) => item.action === "view_board")).toBe(true)
 })
 
@@ -92,6 +94,7 @@ test("right sidebar capabilities come from the panel registry without session-ma
     "replan_task",
     "cancel_task",
     "update_checks",
+    "wake_mission",
     "set_executor",
     "select_task",
     "select_session",
@@ -108,4 +111,10 @@ test("right sidebar capabilities come from the panel registry without session-ma
   const selectTask = rightSidebar.actions.find((item) => item.action === "select_task")
   expect(selectTask?.local_only).toBe(true)
   expect(selectTask?.local_action_surfaces).toEqual(["panel", "right-sidebar"])
+
+  const wakeMission = rightSidebar.actions.find((item) => item.action === "wake_mission")
+  expect(wakeMission?.schema).toMatchObject({
+    type: "object",
+    required: expect.arrayContaining(["action", "request"]),
+  })
 })

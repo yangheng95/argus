@@ -25,7 +25,7 @@ import { MCP } from "@/mcp"
 import { Bus } from "@/bus"
 import path from "path"
 import z from "zod"
-import { WEBPAGE_EVIDENCE_BLOCKED_TOOL_IDS } from "@/frontend-design/tools/ids"
+import { EXECUTOR_MCP_DENIED_TOOL_IDS } from "@/tool/non-base-tool-ids"
 import { EngineService } from "@/task-api"
 
 const log = Log.create({ service: "mcp.serve" })
@@ -67,11 +67,7 @@ function executorToolImpl(id: ExecutorToolID): Tool.Info {
   return TaskReportTool
 }
 
-const EXECUTOR_PROXIED_TOOL_DENY_IDS = new Set([
-  ...WEBPAGE_EVIDENCE_BLOCKED_TOOL_IDS,
-  "web_clone_prepare_context",
-  "web_clone_generate_source_project",
-])
+const EXECUTOR_PROXIED_TOOL_DENY_IDS = new Set(EXECUTOR_MCP_DENIED_TOOL_IDS)
 
 export namespace MCPServe {
   export const Toolset = TOOLSET

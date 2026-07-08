@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from "node:child_process"
+import { spawn, spawnSync, type ChildProcess } from "node:child_process"
 import * as crypto from "node:crypto"
 import { HandshakeBuffer, type Handshake, startInactivityWatchdog } from "./handshake"
 import { SidecarExistingInstanceError, SidecarStartupError } from "./errors"
@@ -77,6 +77,7 @@ export async function startSidecar(opts: SidecarStartOptions): Promise<SidecarHa
         OPENCORVUS_DEV_BINARY: undefined,
       } as NodeJS.ProcessEnv,
       stdio: ["ignore", "pipe", "pipe"],
+      detached: process.platform !== "win32",
       windowsHide: true,
     },
   )
@@ -91,8 +92,59 @@ export async function startSidecar(opts: SidecarStartOptions): Promise<SidecarHa
   // no warning popup.
   let observedExit: { code: number | null; signal: NodeJS.Signals | null } | undefined
   let stderrTail = ""
+  let sidecarTermination: Promise<boolean> | undefined
   const appendStderrTail = (chunk: string) => {
     stderrTail = (stderrTail + chunk).slice(-STDERR_TAIL_BYTES)
+  }
+
+  const childExited = () => child.exitCode !== null || child.signalCode !== null
+
+  const waitForChildExit = (timeoutMs: number) => {
+    if (childExited()) return Promise.resolve(true)
+    return new Promise<boolean>((resolve) => {
+      let done = false
+      const timer = setTimeout(() => {
+        if (done) return
+        done = true
+        child.off("exit", onExit)
+        resolve(false)
+      }, timeoutMs)
+      if (typeof timer.unref === "function") timer.unref()
+      const onExit = () => {
+        if (done) return
+        done = true
+        clearTimeout(timer)
+        resolve(true)
+      }
+      child.once("exit", onExit)
+    })
+  }
+
+  const terminateSidecarProcess = (reason: string) => {
+    sidecarTermination ??= (async () => {
+      if (childExited() || !child.pid) return true
+      log(`[sidecar] terminating process tree after ${reason}`)
+      if (process.platform === "win32") {
+        spawnSync("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
+          stdio: "ignore",
+          windowsHide: true,
+        })
+        return await waitForChildExit(1_000)
+      }
+      try {
+        process.kill(-child.pid, "SIGTERM")
+      } catch {
+        child.kill("SIGTERM")
+      }
+      if (await waitForChildExit(5_000)) return true
+      try {
+        process.kill(-child.pid, "SIGKILL")
+      } catch {
+        child.kill("SIGKILL")
+      }
+      return await waitForChildExit(1_000)
+    })()
+    return sidecarTermination
   }
 
   return await new Promise<SidecarHandle>((resolve, reject) => {
@@ -109,10 +161,7 @@ export async function startSidecar(opts: SidecarStartOptions): Promise<SidecarHa
       stderrTailRef: () => stderrTail,
       onTimeout: (err) => {
         settle(() => {
-          try {
-            child.kill()
-          } catch {}
-          reject(err)
+          terminateSidecarProcess("handshake inactivity").finally(() => reject(err))
         })
       },
     })
@@ -212,26 +261,11 @@ export async function startSidecar(opts: SidecarStartOptions): Promise<SidecarHa
           // Fetch failure is fine; we still escalate below.
         }
 
-        // 2. Wait for graceful exit, then escalate.
-        await new Promise<void>((res) => {
-          if (child.exitCode !== null || child.signalCode !== null) return res()
-          let done = false
-          const timer = setTimeout(() => {
-            if (done) return
-            done = true
-            try {
-              child.kill()
-            } catch {}
-            res()
-          }, grace)
-          if (typeof timer.unref === "function") timer.unref()
-          child.once("exit", () => {
-            if (done) return
-            done = true
-            clearTimeout(timer)
-            res()
-          })
-        })
+        // 2. Wait for graceful exit, then escalate through the same owned
+        // process-tree path used before the handshake.
+        if (await waitForChildExit(grace)) return
+        if (await terminateSidecarProcess("shutdown grace timeout")) return
+        throw new Error(`sidecar process ${child.pid ?? "unknown"} did not exit after shutdown cleanup`)
       }
 
       settle(() => {

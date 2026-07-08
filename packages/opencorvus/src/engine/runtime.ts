@@ -26,8 +26,9 @@ import {
   listLiveRunsForProject,
   type RunRow,
 } from "./store"
-import { Identifier } from "@/id/id"
 import { isExecutorActiveRunStatus, isLiveGoalRunStatus, isTerminalRunStatus } from "./catalog"
+import { recordEngineArtifact } from "./artifact"
+import { insertEngineInteractionRequest } from "./interaction-request"
 
 export const ActiveExecutorSessionsError = NamedError.create(
   "ActiveExecutorSessionsError",
@@ -287,36 +288,29 @@ function recordTerminalGoalRefillWakeFact(input: {
   dispatchResult: "started" | "queued"
 }) {
   const now = Date.now()
-  Database.use((db) =>
-    db
-      .insert(EngineArtifactTable)
-      .values({
-        id: Identifier.ascending("artifact"),
-        task_id: input.taskID,
-        run_id: input.runID,
-        goal_run_id: input.terminalGoalRun.id,
-        kind: "goal_refill_notification" as EngineArtifactKind,
-        label: "goal-refill-wake-dispatched",
-        payload: {
-          task_id: input.taskID,
-          run_id: input.runID,
-          fingerprint: input.fingerprint,
-          terminal_goal_run: {
-            id: input.terminalGoalRun.id,
-            goal_id: input.terminalGoalRun.goal_id,
-            status: input.terminalGoalRun.status,
-          },
-          live_sibling_goal_runs: input.liveSiblingGoalRuns
-            .map((goalRun) => ({ id: goalRun.id, goal_id: goalRun.goal_id, status: goalRun.status }))
-            .sort((a, b) => a.id.localeCompare(b.id)),
-          dispatch_result: input.dispatchResult,
-          time_dispatched: now,
-        },
-        time_created: now,
-        time_updated: now,
-      })
-      .run(),
-  )
+  recordEngineArtifact({
+    taskID: input.taskID,
+    runID: input.runID,
+    goalRunID: input.terminalGoalRun.id,
+    kind: "goal_refill_notification" as EngineArtifactKind,
+    label: "goal-refill-wake-dispatched",
+    payload: {
+      task_id: input.taskID,
+      run_id: input.runID,
+      fingerprint: input.fingerprint,
+      terminal_goal_run: {
+        id: input.terminalGoalRun.id,
+        goal_id: input.terminalGoalRun.goal_id,
+        status: input.terminalGoalRun.status,
+      },
+      live_sibling_goal_runs: input.liveSiblingGoalRuns
+        .map((goalRun) => ({ id: goalRun.id, goal_id: goalRun.goal_id, status: goalRun.status }))
+        .sort((a, b) => a.id.localeCompare(b.id)),
+      dispatch_result: input.dispatchResult,
+      time_dispatched: now,
+    },
+    timeCreated: now,
+  })
 }
 
 function upsertExecutorInteraction(
@@ -338,7 +332,6 @@ function upsertExecutorInteraction(
   const externalID = `protocol:${executorSessionID}:${requestID}`
   if (findInteractionByExternal(externalID)) return
   const now = Date.now()
-  const interactionID = Identifier.ascending("interaction")
   const title =
     event.type === "approval_request"
       ? `Executor approval: ${String(event.payload?.approval ?? "request")}`
@@ -348,42 +341,26 @@ function upsertExecutorInteraction(
       ? String(event.summary ?? event.payload?.approval ?? "Approval requested")
       : questionBody(event.payload?.questions) || "The executor requested additional input."
   Database.transaction((db) => {
-    db.insert(EngineInteractionRequestTable)
-      .values({
-        id: interactionID,
-        task_id: taskID,
-        run_id: runID,
-        session_id: sessionID,
-        external_id: externalID,
-        request_type: event.type === "approval_request" ? "permission" : "question",
-        status: "pending",
-        title,
-        body,
-        payload: {
-          protocol_request: true,
-          provider,
-          executor_session_id: executorSessionID,
-          request_id: requestID,
-          request_kind: event.type,
-          ...(event.payload ?? {}),
-        },
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
-    Database.effect(() =>
-      EngineProtocol.emit(
-        Event.InteractionRequested,
-        {
-          taskID,
-          runID,
-          interactionID,
-          requestType: event.type === "approval_request" ? "permission" : "question",
-          summary: title,
-        },
-        { taskID, runID, interactionID, source: "runtime.interaction" },
-      ),
-    )
+    insertEngineInteractionRequest(db, {
+      taskID,
+      runID,
+      sessionID,
+      externalID,
+      requestType: event.type === "approval_request" ? "permission" : "question",
+      title,
+      body,
+      payload: {
+        protocol_request: true,
+        provider,
+        executor_session_id: executorSessionID,
+        request_id: requestID,
+        request_kind: event.type,
+        ...(event.payload ?? {}),
+      },
+      eventSource: "runtime.interaction",
+      eventSummary: title,
+      timeCreated: now,
+    })
   })
 }
 

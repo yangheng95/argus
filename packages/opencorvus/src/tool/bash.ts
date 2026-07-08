@@ -395,11 +395,27 @@ export const BashTool = Tool.define("bash", async () => {
       let exited = false
       let exitCode: number | null = null
 
-      const terminate = () => supervisor.terminate()
+      let terminationPromise: Promise<number> | undefined
+      let resolveTerminationRequested: ((promise: Promise<number>) => void) | undefined
+      const terminationRequested = new Promise<Promise<number>>((resolve) => {
+        resolveTerminationRequested = resolve
+      })
+      const requestTermination = (reason: string) => {
+        if (!terminationPromise) {
+          terminationPromise = ProcessSupervisor.terminateAndWaitForExit(supervisor, `bash foreground ${reason}`)
+          terminationPromise.catch(() => undefined)
+          resolveTerminationRequested?.(terminationPromise)
+        }
+        return terminationPromise
+      }
 
-      if (ctx.abort.aborted) {
-        aborted = true
-        await terminate()
+      let backgroundDisposePromise: Promise<number> | undefined
+      const requestBackgroundDispose = (reason: string) => {
+        if (!backgroundDisposePromise) {
+          backgroundDisposePromise = ProcessSupervisor.disposeAndWaitForExit(supervisor, `bash background ${reason}`)
+          backgroundDisposePromise.catch(() => undefined)
+        }
+        return backgroundDisposePromise
       }
 
       if (params.background) {
@@ -415,9 +431,18 @@ export const BashTool = Tool.define("bash", async () => {
             exitCode = null
           },
         )
+        if (ctx.abort.aborted) {
+          aborted = true
+          await requestBackgroundDispose("abort")
+        }
         backgroundLeaseTimer = setTimeout(() => {
           timedOut = true
-          void supervisor.dispose()
+          void requestBackgroundDispose("lease timeout").catch((error) => {
+            log.error("bash background lease cleanup failed", {
+              command: params.command,
+              error: error instanceof Error ? error.message : String(error),
+            })
+          })
         }, backgroundLease)
         backgroundLeaseTimer.unref?.()
         supervisor.unref()
@@ -457,23 +482,38 @@ export const BashTool = Tool.define("bash", async () => {
 
       const abortHandler = () => {
         aborted = true
-        void terminate()
+        requestTermination("abort")
       }
 
+      if (ctx.abort.aborted) {
+        aborted = true
+        await requestTermination("abort")
+      }
       ctx.abort.addEventListener("abort", abortHandler, { once: true })
 
       const timeoutTimer = setTimeout(() => {
         timedOut = true
-        void terminate()
+        requestTermination(`timeout ${timeout}ms`)
       }, timeout + 100)
 
+      let primaryError: unknown
       try {
-        exitCode = await supervisor.exited
+        exitCode = await Promise.race([supervisor.exited, terminationRequested.then((cleanup) => cleanup)])
         exited = true
+        if (terminationPromise) {
+          exitCode = await terminationPromise
+        }
+      } catch (error) {
+        primaryError = error
+        throw error
       } finally {
         clearTimeout(timeoutTimer)
         ctx.abort.removeEventListener("abort", abortHandler)
-        await supervisor.dispose()
+        try {
+          await ProcessSupervisor.disposeAndWaitForExit(supervisor, "bash foreground")
+        } catch (error) {
+          if (!primaryError) throw error
+        }
       }
 
       const resultMetadata: string[] = []

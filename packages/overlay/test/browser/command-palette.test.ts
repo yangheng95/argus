@@ -36,7 +36,7 @@ function eventStream() {
 
 const expertSquadCatalog = expertSquadCatalogFixture({
   targets: [{ id: "build", label: "Build", description: "Build agent prompt.", editable: true, built_in_only: false }],
-  profiles: [{ id: "general", label: "General", description: "General implementation profile.", built_in: true }],
+  squads: [{ id: "general", label: "General", description: "General implementation profile.", built_in: true }],
 })
 
 const installedSkills = [

@@ -391,7 +391,7 @@ describe("executor settings", () => {
     expect((bootstrapOverlaySettings(settingsStore) as any).workspaceTaskId).toBe("tsk_saved")
   })
 
-  test("invalid persisted preferred editor falls back to vscode", async () => {
+  test("invalid persisted preferred editor rejects the settings payload", async () => {
     __setHostTransportForTest(
       fakeTransport(
         () => {
@@ -404,8 +404,6 @@ describe("executor settings", () => {
       ),
     )
 
-    await loadSettings()
-
-    expect(settingsStore.preferredProjectEditor).toBe("vscode")
+    await expect(loadSettings()).rejects.toThrow("invalid project editor id: notepad")
   })
 })

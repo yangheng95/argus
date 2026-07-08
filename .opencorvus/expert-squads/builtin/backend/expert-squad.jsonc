@@ -3,21 +3,21 @@
   "id": "backend",
   "label": "Backend",
   "description": "API, state, data, integration, and operational correctness focused expert squad.",
-  "version": "2026.07.03",
+  "version": "2026.07.08",
   "readme": "README.md",
+  "selector": {
+    "summary": "Use for backend API, state, schema, storage, integration, permission, error, and operational correctness work.",
+    "selection_guidance": "Use select_expert_squad with profile_id backend when the task's acceptance depends on backend contracts, data state, route behavior, integration semantics, or operational failure handling.",
+    "instructions": "selector.md"
+  },
   "capability_projection": {
     "scheduler": {
       "role_base": true,
       "built_in_tool_ids": [
-        "add_goal",
-        "modify_goal",
-        "complete_goal",
-        "delete_goal",
-        "propose_task",
-        "refine",
-        "bash",
         "dispatch_agent",
-        "manage_task"
+        "manage_task",
+        "refine",
+        "bash"
       ]
     },
     "agents": {
@@ -98,6 +98,9 @@
     },
     "fact-check": {
       "prompt": "agents/fact-check/system.md"
+    },
+    "goal-workload-analyst": {
+      "prompt": "agents/goal-workload-analyst/system.md"
     },
     "integrity": {
       "prompt": "agents/integrity/system.md"

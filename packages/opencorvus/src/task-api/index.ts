@@ -44,12 +44,20 @@ import {
   EngineArtifactTable,
   EngineChannelBindingTable,
   EngineGoalTable,
-  EngineInteractionRequestTable,
-  EngineProgressSnapshotTable,
   EngineTaskTable,
   type EngineInteractionStatus,
   type EngineMetadata,
 } from "@/engine/engine.sql"
+import { recordEngineArtifact } from "@/engine/artifact"
+import { deleteEngineChannelBindingsForTask } from "@/engine/channel-binding"
+import { resolveEngineInteractionRequest } from "@/engine/interaction-request"
+import { insertEngineProgressSnapshot } from "@/engine/progress"
+import {
+  deleteEngineTask,
+  deleteEngineTasksForProjectSessions,
+  setEngineTaskBudget,
+  setEngineTaskTitle,
+} from "@/engine/task"
 import {
   Budget,
   CreateTaskInput,
@@ -1063,31 +1071,21 @@ function recordOperatorMessageWake(input: {
       : input.error === undefined
         ? undefined
         : { name: "Error", message: String(input.error) }
-  Database.use((db) =>
-    db
-      .insert(EngineArtifactTable)
-      .values({
-        id: Identifier.ascending("artifact"),
-        task_id: input.taskID,
-        run_id: null,
-        goal_run_id: null,
-        acceptance_id: null,
-        kind: "operator_message_wake",
-        label: input.wakeStatus,
-        payload: {
-          task_id: input.taskID,
-          message_id: input.messageID,
-          source: input.source,
-          wake_status: input.wakeStatus,
-          time_recorded: now,
-          recorded_by_process_id: process.pid,
-          ...(error ? { error } : {}),
-        },
-        time_created: now,
-        time_updated: now,
-      })
-      .run(),
-  )
+  recordEngineArtifact({
+    taskID: input.taskID,
+    kind: "operator_message_wake",
+    label: input.wakeStatus,
+    payload: {
+      task_id: input.taskID,
+      message_id: input.messageID,
+      source: input.source,
+      wake_status: input.wakeStatus,
+      time_recorded: now,
+      recorded_by_process_id: process.pid,
+      ...(error ? { error } : {}),
+    },
+    timeCreated: now,
+  })
 }
 
 function assertTaskOperatorMessageAccepted(task: TaskRow, text: string, attachments: readonly unknown[] = []) {
@@ -2217,7 +2215,7 @@ export namespace EngineService {
     // tasks/sessions in the same project still reference. Whole-project
     // reclaim is owned by ProjectGC (rm of `snapshot/<id>`).
     Database.use((db) => {
-      db.delete(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).run()
+      deleteEngineTask(db, { taskID })
       Database.effect(() => Database.incrementalVacuum())
     })
     return true
@@ -2226,7 +2224,7 @@ export namespace EngineService {
   export async function updateTaskBudget(taskID: string, budget: z.input<typeof Budget> | null) {
     const task = requireTaskInCurrentProject(taskID)
     const parsed = budget ? budgetRow(budget) : null
-    Database.use((db) => db.update(EngineTaskTable).set({ budget: parsed }).where(eq(EngineTaskTable.id, taskID)).run())
+    Database.use((db) => setEngineTaskBudget(db, { taskID, budget: parsed }))
     await Bus.publish(Event.TaskUpdated, {
       taskID,
       status: deriveTaskStatus(task),
@@ -2237,7 +2235,7 @@ export namespace EngineService {
 
   export async function updateTaskTitle(taskID: string, title: string) {
     const task = requireTaskInCurrentProject(taskID)
-    Database.use((db) => db.update(EngineTaskTable).set({ title }).where(eq(EngineTaskTable.id, taskID)).run())
+    Database.use((db) => setEngineTaskTitle(db, { taskID, title }))
     await Bus.publish(Event.TaskUpdated, {
       taskID,
       status: deriveTaskStatus(task),
@@ -2617,9 +2615,7 @@ export namespace EngineService {
       { projectDir: taskDirectory },
     )
     // Clean up channel bindings so the thread is not reused
-    Database.use((db) =>
-      db.delete(EngineChannelBindingTable).where(eq(EngineChannelBindingTable.task_id, taskID)).run(),
-    )
+    Database.use((db) => deleteEngineChannelBindingsForTask(db, taskID))
     return true
   }
 
@@ -2696,9 +2692,7 @@ export namespace EngineService {
         })
       }
       Database.use((db) => {
-        db.delete(EngineTaskTable)
-          .where(and(eq(EngineTaskTable.project_id, root.projectID), inArray(EngineTaskTable.session_id, ids)))
-          .run()
+        deleteEngineTasksForProjectSessions(db, { projectID: root.projectID, sessionIDs: ids })
         Database.effect(() => Database.incrementalVacuum())
       })
     }
@@ -2752,21 +2746,16 @@ export namespace EngineService {
     const run = findActiveRunForTask(task.id)
     const now = Date.now()
     Database.use((db) =>
-      db
-        .insert(EngineProgressSnapshotTable)
-        .values({
-          id: Identifier.ascending("progress"),
-          task_id: task.id,
-          status: progressStatus(deriveTaskStatus(task)),
-          summary: "Operator note recorded",
-          payload: {
-            note,
-            activeRunID: run?.id,
-          },
-          time_created: now,
-          time_updated: now,
-        })
-        .run(),
+      insertEngineProgressSnapshot(db, {
+        taskID: task.id,
+        status: progressStatus(deriveTaskStatus(task)),
+        summary: "Operator note recorded",
+        payload: {
+          note,
+          activeRunID: run?.id,
+        },
+        timeCreated: now,
+      }),
     )
     const wakeTask = await openTaskForOperatorWake(task, "Operator note reopened task")
     await reopenActiveRunForOperatorWake(wakeTask, "Operator note reopened blocked run")
@@ -3167,30 +3156,13 @@ function markProtocolInteraction(
   now: number,
 ) {
   Database.transaction((db) => {
-    db.update(EngineInteractionRequestTable)
-      .set({
-        status,
-        response,
-        time_resolved: now,
-        time_updated: now,
-      })
-      .where(eq(EngineInteractionRequestTable.id, row.id))
-      .run()
-    if (row.run_id) {
-      const runID = row.run_id
-      Database.effect(() =>
-        EngineProtocol.emit(
-          Event.InteractionResolved,
-          {
-            taskID: row.task_id,
-            runID,
-            interactionID: row.id,
-            status,
-            summary: status === "answered" ? "Interaction answered" : "Interaction rejected",
-          },
-          { taskID: row.task_id, runID, interactionID: row.id, source: "service.interaction" },
-        ),
-      )
-    }
+    resolveEngineInteractionRequest(db, {
+      row,
+      status,
+      response,
+      eventSource: "service.interaction",
+      resolvedEventScope: "run",
+      timeResolved: now,
+    })
   })
 }

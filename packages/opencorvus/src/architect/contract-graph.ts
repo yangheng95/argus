@@ -91,6 +91,9 @@ export const ArchitectContractGraphSchema = z.object({
 })
 export type ArchitectContractGraph = z.infer<typeof ArchitectContractGraphSchema>
 
+const REPAIR_REGISTER_GOAL = "manage_goal action=register_goal"
+const REPAIR_MODIFY_GOAL = "manage_goal action=modify_goal"
+
 export const ArchitectValidationFindingSchema = z.object({
   code: z.string().min(1),
   severity: z.enum(["blocker", "concern"]),
@@ -186,8 +189,8 @@ export function validateArchitectContractGraph(input: {
   for (const cycle of dependencyCycles(input.goals)) {
     findings.push(
       blocker("dependency_cycle", `Goal dependency cycle detected: ${cycle.join(" -> ")}.`, { goal_ids: cycle }, [
-        "register_goal",
-        "modify_goal",
+        REPAIR_REGISTER_GOAL,
+        REPAIR_MODIFY_GOAL,
       ]),
     )
   }
@@ -242,7 +245,7 @@ export function validateArchitectContractGraph(input: {
             "contract_producer_not_ancestor",
             `Contract ${contract.id} producer ${contract.producer_goal_id} is not in dependency ancestry for consumer ${consumerID}.`,
             { contract_ids: [contract.id], goal_ids: [contract.producer_goal_id, consumerID] },
-            ["register_goal", "register_dependency_contract"],
+            [REPAIR_REGISTER_GOAL, "register_dependency_contract"],
           ),
         )
       }
@@ -267,7 +270,7 @@ export function validateArchitectContractGraph(input: {
             "render_surface_non_render_artifact_path",
             `Contract ${contract.id} is a render_surface but includes non-render artifact path(s): ${nonRenderArtifactPaths.join(", ")}. Move documentation, audit notes, and blocker reports to goal-owned docs acceptance instead of making downstream goals consume them as a rendered surface.`,
             { contract_ids: [contract.id], goal_ids: [contract.producer_goal_id, ...contract.consumer_goal_ids] },
-            ["register_contract", "modify_goal"],
+            ["register_contract", REPAIR_MODIFY_GOAL],
           ),
         )
       }
@@ -305,7 +308,7 @@ export function validateArchitectContractGraph(input: {
           "dependency_contract_missing_depends_on",
           `Dependency contract ${edge.from_goal_id} -> ${edge.to_goal_id} has no matching depends_on edge.`,
           { goal_ids: edgeGoals },
-          ["register_goal", "register_dependency_contract"],
+          [REPAIR_REGISTER_GOAL, "register_dependency_contract"],
         ),
       )
     }
@@ -315,7 +318,7 @@ export function validateArchitectContractGraph(input: {
           "dependency_contract_producer_not_ancestor",
           `Dependency contract producer ${edge.from_goal_id} is not in dependency ancestry for ${edge.to_goal_id}.`,
           { goal_ids: edgeGoals },
-          ["register_goal", "register_dependency_contract"],
+          [REPAIR_REGISTER_GOAL, "register_dependency_contract"],
         ),
       )
     }
@@ -386,7 +389,7 @@ export function validateArchitectContractGraph(input: {
           "contract_audit_unknown_contract",
           `Goal ${goalID} contract_audit references unknown graph contract ${contractID}. Use contract ids registered in the architect contract graph.`,
           { goal_ids: [goalID], contract_ids: [contractID] },
-          ["register_goal", "modify_goal", "register_contract"],
+          [REPAIR_REGISTER_GOAL, REPAIR_MODIFY_GOAL, "register_contract"],
         ),
       )
     }
@@ -402,7 +405,7 @@ export function validateArchitectContractGraph(input: {
           "contract_without_audit_coverage",
           `Contract ${contract.id} is not covered by any related goal's essential contract_audit scorer; add an essential contract_audit acceptance spec that references this contract_ids entry or revise the graph contract.`,
           { contract_ids: [contract.id], goal_ids: relatedGoalIDs },
-          ["register_goal", "modify_goal", "register_contract"],
+          [REPAIR_REGISTER_GOAL, REPAIR_MODIFY_GOAL, "register_contract"],
         ),
       )
     }

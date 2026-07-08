@@ -37,6 +37,10 @@ describe("audit calculator benchmark verdict", () => {
     expect(source).toContain('resetInactivityTimer("stderr")')
     expect(source).toContain('resetInactivityTimer("spawn")')
     expect(source).toContain("inactive for ${inactivityTimeoutMs}ms")
+    expect(source).toContain("terminateChildProcessTree(child, `${cmd} inactivity`)")
+    expect(source).toContain("finish(-1)")
+    expect(source).toContain('detached: process.platform !== "win32"')
+    expect(source).not.toContain('child.kill("SIGKILL")')
     expect(source).not.toContain("timeoutMs?:")
     expect(source).not.toContain("opts.timeoutMs")
     expect(source).not.toContain("const t = setTimeout")
@@ -61,6 +65,22 @@ describe("audit calculator benchmark verdict", () => {
     expect(source).toContain("if (status >= 400)")
     expect(source).toContain('page.on("requestfailed"')
     expect(source).toContain("request.failure()")
+  })
+
+  test("preview cleanup uses process-tree termination and awaits child close", async () => {
+    const source = await fs.readFile(AUDIT_CALCULATOR, "utf8")
+
+    expect(source).toContain("async function terminateChildProcessTree")
+    expect(source).toContain('spawnSync("taskkill.exe", ["/PID", String(pid), "/T", "/F"]')
+    expect(source).toContain("result.status !== 0 && !childHasExited(child)")
+    expect(source).toContain("process tree did not exit after taskkill")
+    expect(source).toContain('process.kill(-pid, "SIGTERM")')
+    expect(source).toContain('process.kill(-pid, "SIGKILL")')
+    expect(source).toContain('() => terminateChildProcessTree(preview, "preview cleanup")')
+    expect(source).toContain("const cleanupErrors: string[] = []")
+    expect(source).toContain('record(`CLEANUP-${label}`, `${label} cleanup`, "fail", message)')
+    expect(source).not.toContain('preview?.kill("SIGTERM")')
+    expect(source).not.toContain('preview?.kill("SIGKILL")')
   })
 
   test("theme verdicts use rendered toggle behavior instead of source regex evidence", async () => {

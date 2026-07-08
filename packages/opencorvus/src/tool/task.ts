@@ -7,6 +7,7 @@ import { Identifier } from "../id/id"
 import { Agent } from "../agent/agent"
 import { SessionPrompt } from "../session/prompt"
 import { SessionStatus } from "../session/status"
+import { paragraphSummary } from "@/agent/report"
 import { iife } from "@/util/iife"
 import { defer } from "@/util/defer"
 import { EffectiveConfig } from "../config/effective"
@@ -253,6 +254,7 @@ export const TaskTool = Tool.define("task", async (ctx) => {
           parts: promptParts,
         })
       } catch (err) {
+        const error = err instanceof Error ? err.message : String(err)
         // The subagent's actor close path will eventually emit its own
         // terminal — but only when the actor itself shuts down. For the
         // overlay card to flip to its terminal display the moment the
@@ -262,12 +264,23 @@ export const TaskTool = Tool.define("task", async (ctx) => {
         SessionStatus.set(session.id, {
           type: "terminal",
           reason: "error",
-          error: err instanceof Error ? err.message : String(err),
+          summary: paragraphSummary(error),
+          error,
         })
         throw err
       }
 
       const text = result.parts.findLast((x) => x.type === "text")?.text ?? ""
+      if (!text.trim()) {
+        const error = `Task subagent ${session.id} completed without a text result`
+        SessionStatus.set(session.id, {
+          type: "terminal",
+          reason: "error",
+          summary: paragraphSummary(error),
+          error,
+        })
+        throw new Error(error)
+      }
 
       const output = [
         `task_id: ${session.id} (for resuming to continue this task if needed)`,
@@ -281,7 +294,7 @@ export const TaskTool = Tool.define("task", async (ctx) => {
       // may stay alive in standby (so a future task_id resume can re-enter
       // streaming) — that's fine, the next prompt() call will publish
       // streaming again and the card will flip back.
-      SessionStatus.set(session.id, { type: "terminal", reason: "completed" })
+      SessionStatus.set(session.id, { type: "terminal", reason: "completed", summary: paragraphSummary(text) })
 
       return {
         title: params.description,

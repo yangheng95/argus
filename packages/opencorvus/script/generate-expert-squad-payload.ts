@@ -41,7 +41,8 @@ async function collectPackageFiles(packageRoot: string): Promise<string[]> {
       a.name.localeCompare(b.name),
     )
     for (const entry of entries) {
-      if (entry.isSymbolicLink()) throw new Error(`Expert squad payload generation rejects symbolic link: ${entry.name}`)
+      if (entry.isSymbolicLink())
+        throw new Error(`Expert squad payload generation rejects symbolic link: ${entry.name}`)
       if (ExpertSquadRegistry.isRuntimeInternalEntry(entry.name, entry.isDirectory())) {
         throw new Error(`Expert squad payload generation rejects runtime entry: ${entry.name}`)
       }
@@ -57,7 +58,9 @@ async function collectPackageFiles(packageRoot: string): Promise<string[]> {
 
   await walk(packageRoot)
   if (!files.includes(ExpertSquadRegistry.MANIFEST)) {
-    throw new Error(`Expert squad payload generation found package without ${ExpertSquadRegistry.MANIFEST}: ${packageRoot}`)
+    throw new Error(
+      `Expert squad payload generation found package without ${ExpertSquadRegistry.MANIFEST}: ${packageRoot}`,
+    )
   }
   return files.sort(comparePath)
 }
@@ -81,10 +84,15 @@ export async function discoverExpertSquadPayloadPackages(repoRoot: string): Prom
     }
     const namespaceRoot = path.join(sourceRoot, namespaceEntry.name)
     const namespaceManifest = path.join(namespaceRoot, ExpertSquadRegistry.MANIFEST)
-    if (await fs.promises.stat(namespaceManifest).then(() => true, (error: NodeJS.ErrnoException) => {
-      if (error.code === "ENOENT") return false
-      throw error
-    })) {
+    if (
+      await fs.promises.stat(namespaceManifest).then(
+        () => true,
+        (error: NodeJS.ErrnoException) => {
+          if (error.code === "ENOENT") return false
+          throw error
+        },
+      )
+    ) {
       throw new Error(
         `Expert squad payload generation rejects direct package root ${path.join(sourceRoot, namespaceEntry.name)}; expected <namespace>/<id>`,
       )
@@ -124,29 +132,33 @@ export async function renderExpertSquadPayloadModule(repoRoot: string): Promise<
   const blocks: string[] = []
 
   for (const pkg of packages) {
-    const identifiers = new Map<string, string>()
+    const payloadExpressions = new Map<string, string>()
     for (const relativePath of pkg.files) {
-      const identifier = payloadImportIdentifier(pkg.id, relativePath)
-      identifiers.set(relativePath, identifier)
       const sourcePath = path.join(pkg.root, ...relativePath.split("/"))
-      imports.push(
-        `import ${identifier} from ${JSON.stringify(moduleImportSpecifier(modulePath, sourcePath))} with { type: "text" }`,
-      )
+      if (relativePath.endsWith(".ts")) {
+        payloadExpressions.set(relativePath, JSON.stringify(await fs.promises.readFile(sourcePath, "utf8")))
+      } else {
+        const identifier = payloadImportIdentifier(pkg.id, relativePath)
+        imports.push(
+          `import ${identifier} from ${JSON.stringify(moduleImportSpecifier(modulePath, sourcePath))} with { type: "text" }`,
+        )
+        payloadExpressions.set(relativePath, `textPayload(${identifier})`)
+      }
     }
 
-    const manifestIdentifier = identifiers.get(ExpertSquadRegistry.MANIFEST)
-    if (!manifestIdentifier) throw new Error(`Expert squad payload generation lost manifest for ${pkg.id}`)
+    const manifestExpression = payloadExpressions.get(ExpertSquadRegistry.MANIFEST)
+    if (!manifestExpression) throw new Error(`Expert squad payload generation lost manifest for ${pkg.id}`)
     blocks.push(
       [
         "  {",
         `    namespace: ${JSON.stringify(pkg.namespace)},`,
         `    id: ${JSON.stringify(pkg.id)},`,
-        `    manifestText: textPayload(${manifestIdentifier}),`,
+        `    manifestText: ${manifestExpression},`,
         "    files: {",
         ...pkg.files.map((relativePath) => {
-          const identifier = identifiers.get(relativePath)
-          if (!identifier) throw new Error(`Expert squad payload generation lost file ${pkg.id}/${relativePath}`)
-          return `      ${JSON.stringify(relativePath)}: textPayload(${identifier}),`
+          const expression = payloadExpressions.get(relativePath)
+          if (!expression) throw new Error(`Expert squad payload generation lost file ${pkg.id}/${relativePath}`)
+          return `      ${JSON.stringify(relativePath)}: ${expression},`
         }),
         "    },",
         "  },",

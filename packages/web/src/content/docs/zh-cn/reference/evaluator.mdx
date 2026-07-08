@@ -11,7 +11,7 @@ per-goal build attempt 会发布持久证据，任务最终复核面是 `integri
 2. **Verification evidence**：browser preview target、browser preview capture、runtime check、截图与视觉证据存为 `engine_artifact` 行，例如 `verification-evidence`、`browser_preview_target`、`browser_preview_evidence`。
 3. **Visual QA**：任务存在前端可见交付面时，`visual_qa` 复核可见产品证据；它不完成任务。
 4. **Integrity review**：`integrity` 读取用户请求、requirements、architect contract graph、goal outputs、diffs、runtime/visual evidence 与历史 attempts。
-5. **Completion decision**：`complete_task` 要求当前 post-build `integrity_attempt` id。non-pass 证据会路由回 build、`modify_goal`、`architect`、用户问题或 `fail_task`。
+5. **Completion decision**：`manage_task action=complete_task` 要求当前 post-build `integrity_attempt` id。non-pass 证据会路由回 `dispatch_agent target=build`、`manage_task action=modify_goal`、`dispatch_agent target=architect`、用户问题或 `manage_task action=fail_task`。
 
 ## 证据表面
 
@@ -43,8 +43,8 @@ checks 是给 operator 和后续 review 使用的审计证据，不能替代最�
 
 | Integrity outcome               | Orchestrator 含义                                                                                    |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| pass                            | 集成系统满足本任务；orchestrator 可以用最新 post-build `integrity_attempt` id 调用 `complete_task`。 |
-| non-pass 且有 blocking findings | orchestrator 必须基于证据把修复路由到 build、`modify_goal`、`architect` 或用户问题。                 |
+| pass                            | 集成系统满足本任务；orchestrator 可以用最新 post-build `integrity_attempt` id 调用 `manage_task action=complete_task`。 |
+| non-pass 且有 blocking findings | orchestrator 必须基于证据把修复路由到 `dispatch_agent target=build`、`manage_task action=modify_goal`、`dispatch_agent target=architect` 或用户问题。 |
 | thrown / artifact missing       | orchestrator 会收到可见失败证据并决定恢复；UI 不应静默显示空卡片。                                   |
 
 ## 你接下来要看的

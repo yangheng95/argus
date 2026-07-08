@@ -21,7 +21,10 @@ export namespace ExpertSquadRegistry {
   const Namespace = ID
   const RelativePath = z.string().min(1)
   const Ref = z.string().min(1)
-  const RefSegment = z.string().min(1).regex(/^[^/\\]+$/, "canonical ref segments cannot contain / or \\")
+  const RefSegment = z
+    .string()
+    .min(1)
+    .regex(/^[^/\\]+$/, "canonical ref segments cannot contain / or \\")
   const DisplayPrefix = z
     .string()
     .trim()
@@ -43,7 +46,6 @@ export namespace ExpertSquadRegistry {
       }),
     })
     .strict()
-    .optional()
 
   const AgentDefinition = z
     .object({
@@ -119,9 +121,9 @@ export namespace ExpertSquadRegistry {
       id: ID,
       label: z.string().min(1),
       description: z.string().optional(),
-      version: z.string().min(1).optional(),
+      version: z.string().min(1),
       readme: z.literal("README.md"),
-      selector: Selector,
+      selector: Selector.optional(),
       capability_projection: CapabilityProjection,
       dynamic_attributes: DynamicAttributes.optional().default({
         scheduler: {},
@@ -134,6 +136,15 @@ export namespace ExpertSquadRegistry {
       virtual_agents: z.record(z.string(), VirtualAgentDefinition).default({}),
     })
     .strict()
+    .superRefine((manifest, ctx) => {
+      if (!(manifest.namespace === "builtin" && manifest.id === "general") && !manifest.selector) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["selector"],
+          message: "project expert squad manifest requires selector metadata",
+        })
+      }
+    })
 
   export type Manifest = z.infer<typeof Manifest>
   export type Projection = z.infer<typeof Projection>
@@ -166,7 +177,7 @@ export namespace ExpertSquadRegistry {
     readmePath: string
     label: string
     description?: string
-    version?: string
+    version: string
     displayPrefix?: string
     selector?: SelectorMetadata
     selectorInstructions?: string
@@ -202,6 +213,10 @@ export namespace ExpertSquadRegistry {
       description?: string
       agents: Record<string, string>
     }
+    packageMcpServerRefs: Set<string>
+    packageMcpToolRefs: Set<string>
+    packageMcpPromptRefs: Set<string>
+    packageMcpResourceRefs: Set<string>
   }
 
   export interface EmbeddedPackageSource {
@@ -216,7 +231,7 @@ export namespace ExpertSquadRegistry {
     id: string
     label: string
     description?: string
-    version?: string
+    version: string
     displayPrefix?: string
     selector?: SelectorMetadata
     manifest: Manifest
@@ -245,9 +260,7 @@ export namespace ExpertSquadRegistry {
     const errors: ParseError[] = []
     const parsed = parseJsonc(text, errors, { allowTrailingComma: true })
     if (errors.length) {
-      const details = errors
-        .map((error) => `${printParseErrorCode(error.error)} at offset ${error.offset}`)
-        .join("; ")
+      const details = errors.map((error) => `${printParseErrorCode(error.error)} at offset ${error.offset}`).join("; ")
       throw new Error(`${source}: invalid JSONC: ${details}`)
     }
     return parsed
@@ -457,6 +470,8 @@ export namespace ExpertSquadRegistry {
     await walk(root, rootEntries)
   }
 
+  type McpCapabilityCollectionMode = "runtime" | "catalog"
+
   async function collectRolePackageRefs(input: {
     roleRoot: string
     refBase: string
@@ -467,8 +482,14 @@ export namespace ExpertSquadRegistry {
     mcpPromptRefs: Set<string>
     mcpResourceRefs: Set<string>
     context: string
+    mcpCapabilityMode: McpCapabilityCollectionMode
   }) {
-    await collectSkillRefs(path.join(input.roleRoot, "skills"), input.refBase, input.skillRefs, `${input.context}.skills`)
+    await collectSkillRefs(
+      path.join(input.roleRoot, "skills"),
+      input.refBase,
+      input.skillRefs,
+      `${input.context}.skills`,
+    )
     for (const tool of await collectFileEntries(path.join(input.roleRoot, "tools"), `${input.context}.tools`)) {
       if (!/\.(?:js|ts)$/.test(tool)) throw new Error(`${input.context}.tools.${tool}: unsupported tool extension`)
       const toolID = tool.replace(/\.(?:js|ts)$/, "")
@@ -480,10 +501,44 @@ export namespace ExpertSquadRegistry {
       mcpToolRefs: input.mcpToolRefs,
       mcpPromptRefs: input.mcpPromptRefs,
       mcpResourceRefs: input.mcpResourceRefs,
+      capabilityMode: input.mcpCapabilityMode,
     })
   }
 
-  async function collectPackageRefs(root: string, manifest: Manifest) {
+  function collectProjectionMcpTypedRefsForCatalog(
+    manifest: Manifest,
+    sets: {
+      mcpServerRefs: Set<string>
+      mcpToolRefs: Set<string>
+      mcpPromptRefs: Set<string>
+      mcpResourceRefs: Set<string>
+    },
+  ) {
+    const projections: Array<[string, Projection]> = [
+      ["capability_projection.scheduler", manifest.capability_projection.scheduler],
+      ...Object.entries(manifest.capability_projection.agents).map(
+        ([agentID, projection]) => [`capability_projection.agents.${agentID}`, projection] as [string, Projection],
+      ),
+    ]
+    const addTypedRef = (ref: string, kind: "tool" | "prompt" | "resource", context: string) => {
+      const serverRef = packageMcpServerRefFromTypedRef(ref, kind, context)
+      assertPackageRef(serverRef, manifest.id, sets.mcpServerRefs, context)
+      if (kind === "tool") sets.mcpToolRefs.add(ref)
+      else if (kind === "prompt") sets.mcpPromptRefs.add(ref)
+      else sets.mcpResourceRefs.add(ref)
+    }
+    for (const [context, projection] of projections) {
+      for (const ref of projection.package_mcp_tool_refs) addTypedRef(ref, "tool", context)
+      for (const ref of projection.package_mcp_prompt_refs) addTypedRef(ref, "prompt", context)
+      for (const ref of projection.package_mcp_resource_refs) addTypedRef(ref, "resource", context)
+    }
+  }
+
+  async function collectPackageRefs(
+    root: string,
+    manifest: Manifest,
+    options: { mcpCapabilityMode?: McpCapabilityCollectionMode } = {},
+  ) {
     const skillRefs = new Set<string>()
     const toolRefs = new Set<string>()
     const mcpServerRefs = new Set<string>()
@@ -491,6 +546,7 @@ export namespace ExpertSquadRegistry {
     const mcpPromptRefs = new Set<string>()
     const mcpResourceRefs = new Set<string>()
     const id = manifest.id
+    const mcpCapabilityMode = options.mcpCapabilityMode ?? "runtime"
 
     const agentRoot = path.join(root, "agents")
     for (const agentEntry of await readOptionalDirectoryEntries(agentRoot, "agents")) {
@@ -516,6 +572,7 @@ export namespace ExpertSquadRegistry {
         mcpPromptRefs,
         mcpResourceRefs,
         context: `agents.${agent}`,
+        mcpCapabilityMode,
       })
     }
 
@@ -537,6 +594,7 @@ export namespace ExpertSquadRegistry {
         mcpPromptRefs,
         mcpResourceRefs,
         context: `virtual-agents.${role}`,
+        mcpCapabilityMode,
       })
     }
 
@@ -552,7 +610,17 @@ export namespace ExpertSquadRegistry {
       mcpToolRefs,
       mcpPromptRefs,
       mcpResourceRefs,
+      capabilityMode: mcpCapabilityMode,
     })
+
+    if (mcpCapabilityMode === "catalog") {
+      collectProjectionMcpTypedRefsForCatalog(manifest, {
+        mcpServerRefs,
+        mcpToolRefs,
+        mcpPromptRefs,
+        mcpResourceRefs,
+      })
+    }
 
     return { skillRefs, toolRefs, mcpServerRefs, mcpToolRefs, mcpPromptRefs, mcpResourceRefs }
   }
@@ -585,6 +653,7 @@ export namespace ExpertSquadRegistry {
       mcpToolRefs: Set<string>
       mcpPromptRefs: Set<string>
       mcpResourceRefs: Set<string>
+      capabilityMode: McpCapabilityCollectionMode
     },
   ) {
     for (const file of await collectFileEntries(dir, dir)) {
@@ -593,6 +662,7 @@ export namespace ExpertSquadRegistry {
       assertCanonicalRefSegment(serverID, `${dir}/${file}`)
       const serverRef = `${refBase}/${serverID}`
       addRef(sets.mcpServerRefs, serverRef, dir)
+      if (sets.capabilityMode === "catalog") continue
       const raw = await readJsoncFile(path.join(dir, file))
       const capabilities = McpDefinition.parse(raw).capabilities
       for (const tool of capabilities.tools) addRef(sets.mcpToolRefs, `${serverRef}/tool/${tool}`, `${serverRef}.tools`)
@@ -849,7 +919,10 @@ export namespace ExpertSquadRegistry {
     }
   }
 
-  async function readPackageMetadata(root: string, options: { canonicalFolder: boolean }): Promise<ParsedPackageMetadata> {
+  async function readPackageMetadata(
+    root: string,
+    options: { canonicalFolder: boolean },
+  ): Promise<ParsedPackageMetadata> {
     const normalizedRoot = Filesystem.normalizePath(root)
     await validatePackageRoot(normalizedRoot)
     await validatePackageTree(normalizedRoot)
@@ -946,14 +1019,21 @@ export namespace ExpertSquadRegistry {
 
     let selectorInstructions: string | undefined
     if (manifest.selector?.instructions) {
-      assertSelectorInstructionsPath(manifest.selector.instructions, `built-in expert squad ${manifest.id}.selector.instructions`)
+      assertSelectorInstructionsPath(
+        manifest.selector.instructions,
+        `built-in expert squad ${manifest.id}.selector.instructions`,
+      )
       const instructions = source.files[manifest.selector.instructions]
       if (typeof instructions !== "string") {
-        throw new Error(`built-in expert squad ${manifest.id}: missing selector instructions ${manifest.selector.instructions}`)
+        throw new Error(
+          `built-in expert squad ${manifest.id}: missing selector instructions ${manifest.selector.instructions}`,
+        )
       }
       selectorInstructions = instructions.trim()
       if (!selectorInstructions) {
-        throw new Error(`built-in expert squad ${manifest.id}: blank selector instructions ${manifest.selector.instructions}`)
+        throw new Error(
+          `built-in expert squad ${manifest.id}: blank selector instructions ${manifest.selector.instructions}`,
+        )
       }
     }
 
@@ -975,10 +1055,14 @@ export namespace ExpertSquadRegistry {
     for (const [role, virtualAgent] of Object.entries(manifest.virtual_agents)) {
       assertRoleID(role, `built-in expert squad ${manifest.id}.virtual_agents.${role}`)
       if (Object.hasOwn(manifest.agents, role)) {
-        throw new Error(`built-in expert squad ${manifest.id}.virtual_agents.${role}: agents.${role} must be absent when a virtual agent is declared`)
+        throw new Error(
+          `built-in expert squad ${manifest.id}.virtual_agents.${role}: agents.${role} must be absent when a virtual agent is declared`,
+        )
       }
       if (virtualAgent.prompt !== virtualAgentPromptPath(role)) {
-        throw new Error(`built-in expert squad ${manifest.id}.virtual_agents.${role}.prompt must be ${virtualAgentPromptPath(role)}`)
+        throw new Error(
+          `built-in expert squad ${manifest.id}.virtual_agents.${role}.prompt must be ${virtualAgentPromptPath(role)}`,
+        )
       }
       const previousRole = virtualAgentIDs.get(virtualAgent.id)
       if (previousRole) {
@@ -989,10 +1073,13 @@ export namespace ExpertSquadRegistry {
       virtualAgentIDs.set(virtualAgent.id, role)
       const prompt = source.files[virtualAgent.prompt]
       if (typeof prompt !== "string") {
-        throw new Error(`built-in expert squad ${manifest.id}: missing virtual agent prompt file ${virtualAgent.prompt}`)
+        throw new Error(
+          `built-in expert squad ${manifest.id}: missing virtual agent prompt file ${virtualAgent.prompt}`,
+        )
       }
       const trimmed = prompt.trim()
-      if (!trimmed) throw new Error(`built-in expert squad ${manifest.id}: blank virtual agent prompt file ${virtualAgent.prompt}`)
+      if (!trimmed)
+        throw new Error(`built-in expert squad ${manifest.id}: blank virtual agent prompt file ${virtualAgent.prompt}`)
       virtualAgents[role] = {
         ...virtualAgent,
         promptContent: trimmed,
@@ -1052,7 +1139,10 @@ export namespace ExpertSquadRegistry {
     ].join("\n")
   }
 
-  function collectDeclaredRefs(manifest: Manifest, refs: Awaited<ReturnType<typeof collectPackageRefs>>): DeclaredPackageRefs {
+  function collectDeclaredRefs(
+    manifest: Manifest,
+    refs: Awaited<ReturnType<typeof collectPackageRefs>>,
+  ): DeclaredPackageRefs {
     const declared: DeclaredPackageRefs = {
       skillRefs: new Map(),
       toolRefs: new Map(),
@@ -1117,7 +1207,9 @@ export namespace ExpertSquadRegistry {
         throw error
       })
       if (roleOverlayInfo) {
-        throw new Error(`virtual_agents.${role}: agents/${role}/system.md must be absent when a virtual agent is declared`)
+        throw new Error(
+          `virtual_agents.${role}: agents/${role}/system.md must be absent when a virtual agent is declared`,
+        )
       }
       await assertNonBlankFile(metadata.root, virtualAgent.prompt, `virtual_agents.${role}.prompt`)
     }
@@ -1263,6 +1355,7 @@ export namespace ExpertSquadRegistry {
     const { manifest } = metadata
     validatePromptProfileManifest(manifest)
     const selectorInstructions = await readCatalogSelectorInstructions(metadata)
+    const refs = await collectPackageRefs(metadata.root, manifest, { mcpCapabilityMode: "catalog" })
     return {
       ...metadata,
       manifest,
@@ -1272,6 +1365,10 @@ export namespace ExpertSquadRegistry {
         description: metadata.description,
         agents: {},
       },
+      packageMcpServerRefs: refs.mcpServerRefs,
+      packageMcpToolRefs: refs.mcpToolRefs,
+      packageMcpPromptRefs: refs.mcpPromptRefs,
+      packageMcpResourceRefs: refs.mcpResourceRefs,
     }
   }
 

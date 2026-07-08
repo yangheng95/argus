@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import * as EngineQueue from "../../src/engine/queue"
+import { Config } from "../../src/config/config"
 import { EffectiveConfig } from "../../src/config/effective"
 import { createDecisionLog } from "../../src/decision-log"
 import { Identifier } from "../../src/id/id"
@@ -28,7 +29,6 @@ const expectedSchedulerRoleBaseToolIDs = [
   "skill",
   "question",
   "read_context",
-  "query_failed_goals",
   "dispatch_agent",
   "manage_task",
   "wait",
@@ -229,6 +229,7 @@ describe("orchestrator scheduler capability projection", () => {
       "modify_goal",
       "complete_goal",
       "delete_goal",
+      "query_failed_goals",
     ]) {
       expect(Object.hasOwn(publicTools, hidden), `${hidden} must not be public`).toBe(false)
     }
@@ -482,6 +483,148 @@ describe("orchestrator scheduler capability projection", () => {
         urls: ["https://example.com"],
       }).success,
     ).toBe(true)
+  })
+
+  test("dispatch_agent fact_check rejects target_agent assertions that disagree with the target session kind", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "mock-control/control" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const taskID = Identifier.ascending("task")
+        const root = await Session.create({ kind: "root", title: "fact-check target-agent mismatch root" })
+        const worker = await Session.create({
+          kind: "build",
+          parentID: root.id,
+          title: "fact-check target-agent mismatch worker",
+        })
+        insertWorkflowTask({
+          taskID,
+          rootSessionID: root.id,
+          now,
+          title: "fact-check target-agent mismatch",
+        })
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: root.id,
+          workflow: WorkflowRegistry.resolveSync("pipeline")!,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.dispatch_agent.execute(
+          {
+            target: "fact_check",
+            target_session_id: worker.id,
+            target_agent: "requirements",
+            fact_check_items: [],
+            reason: "Validate fact-check target agent assertion before dispatch.",
+          },
+          {},
+        )
+        const text = typeof result === "string" ? result : JSON.stringify(result)
+        expect(text).toContain(`target_agent mismatch for ${worker.id}: caller asserted requirements`)
+      },
+    })
+  })
+
+  test("dispatch_agent target schema intersects OpenTest active projection with workflow targets", async () => {
+    await using project = await tmpdir({ git: true })
+    await copyRepositoryExpertSquadPackage(project.path, "opentest")
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+    const capability = await PromptProfileResolver.resolveSchedulerCapability({
+      projectDirectory: project.path,
+      config: Config.Info.parse({ prompt_profile: { active: "opentest" } }),
+    })
+
+    expect(capability.projectedWorkflowTools).toEqual(
+      expect.arrayContaining(["analyze_intent", "requirements", "architect", "build", "visual_qa", "integrity"]),
+    )
+    for (const hiddenTarget of [
+      "frontend_research",
+      "deep_research",
+      "workload_analysis",
+      "fact_check",
+    ]) {
+      expect(capability.projectedWorkflowTools, `OpenTest must not project ${hiddenTarget}`).not.toContain(
+        hiddenTarget,
+      )
+    }
+
+    const { tools } = createOrchestratorTools({
+      taskID: "tsk_opentest_dispatch_schema",
+      agentSessionID: "ses_opentest_dispatch_schema",
+      workflow: pipeline,
+      dispatchAgentTargets: capability.projectedWorkflowTools,
+    })
+    const schema = tools.dispatch_agent.inputSchema!
+
+    for (const validInput of [
+      {
+        target: "analyze_intent",
+        reason: "OpenTest intent classification and missing-input analysis.",
+      },
+      {
+        target: "requirements",
+        reason: "OpenTest requirements intake.",
+      },
+      {
+        target: "architect",
+        reason: "OpenTest test architecture.",
+      },
+      {
+        target: "build",
+        reason: "OpenTest test implementation now has accepted goals.",
+        goalID: "gol_opentest_case_design",
+      },
+      {
+        target: "visual_qa",
+        reason: "Review browser and screenshot test evidence.",
+      },
+      {
+        target: "integrity",
+        reason: "Review OpenTest evidence.",
+      },
+    ]) {
+      expect(schema.safeParse(validInput).success, `${validInput.target} should be dispatchable`).toBe(true)
+    }
+
+    for (const invalidInput of [
+      {
+        target: "frontend_research",
+        reason: "OpenTest does not define frontend research.",
+        source_urls: ["https://example.com"],
+      },
+      {
+        target: "deep_research",
+        topic: "OpenTest does not define deep research.",
+        reason: "Unsupported by the active OpenTest projection.",
+      },
+      {
+        target: "workload_analysis",
+        reason: "OpenTest does not define workload analysis.",
+      },
+      {
+        target: "fact_check",
+        target_session_id: "ses_worker_report",
+        fact_check_items: [
+          {
+            claim: "OpenTest dispatch schema was narrowed by active projection.",
+            confidence: "high",
+            category: "protocol",
+            source: "test",
+          },
+        ],
+        reason: "OpenTest does not define fact-check.",
+      },
+      {
+        target: "requirements",
+        target_agent: "opentest-requirements-analyst",
+        reason: "Virtual agent ids are package metadata, not dispatch input.",
+      },
+    ]) {
+      expect(schema.safeParse(invalidInput).success, `${invalidInput.target} should be rejected`).toBe(false)
+    }
   })
 
   test("project package wake installs scheduler package tools without MCP activation", async () => {

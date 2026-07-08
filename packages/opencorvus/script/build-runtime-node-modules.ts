@@ -13,15 +13,27 @@ function packageDestination(nodeModules: string, packageName: string) {
 
 async function copyPackageDirectory(source: string, destination: string) {
   await fs.promises.rm(destination, { recursive: true, force: true })
+  await copyPackageEntry(source, source, destination)
+}
+
+async function copyPackageEntry(root: string, source: string, destination: string) {
+  const rel = path.relative(root, source)
+  if (rel !== "" && rel.split(path.sep).includes("node_modules")) return
+
+  const stat = await fs.promises.stat(source)
+  if (stat.isDirectory()) {
+    await fs.promises.mkdir(destination, { recursive: true })
+    const entries = await fs.promises.readdir(source)
+    entries.sort()
+    for (const entry of entries) {
+      await copyPackageEntry(root, path.join(source, entry), path.join(destination, entry))
+    }
+    return
+  }
+
+  if (!stat.isFile()) return
   await fs.promises.mkdir(path.dirname(destination), { recursive: true })
-  await fs.promises.cp(source, destination, {
-    recursive: true,
-    dereference: true,
-    filter: (entry) => {
-      const rel = path.relative(source, entry)
-      return rel === "" || !rel.split(path.sep).includes("node_modules")
-    },
-  })
+  await fs.promises.copyFile(source, destination)
 }
 
 function readPackageJson(source: string) {

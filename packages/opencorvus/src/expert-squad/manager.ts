@@ -66,11 +66,17 @@ export namespace ExpertSquadPackageManager {
   const packageInstallLocks = new Map<string, Promise<void>>()
 
   function canonicalBase(projectDirectory: string) {
-    return path.join(ProjectRuntimePaths.projectConfigRoot(Filesystem.resolve(projectDirectory)), ExpertSquadRegistry.DIRECTORY)
+    return path.join(
+      ProjectRuntimePaths.projectConfigRoot(Filesystem.resolve(projectDirectory)),
+      ExpertSquadRegistry.DIRECTORY,
+    )
   }
 
   function scratchBase(projectDirectory: string) {
-    return path.join(ProjectRuntimePaths.projectConfigRoot(Filesystem.resolve(projectDirectory)), "expert-squad-staging")
+    return path.join(
+      ProjectRuntimePaths.projectConfigRoot(Filesystem.resolve(projectDirectory)),
+      "expert-squad-staging",
+    )
   }
 
   function targetRoot(projectDirectory: string, namespace: string, id: string) {
@@ -124,10 +130,17 @@ export namespace ExpertSquadPackageManager {
     projectDirectory: string
     id: string
     target: string
+    existingPackages?: Map<string, ImportResult>
   }) {
-    const existing = (await ExpertSquadRegistry.discover(input.projectDirectory)).find(
-      (candidate) => candidate.id === input.id,
-    )
+    let existing: { root: string } | undefined
+    if (input.existingPackages) {
+      const entry = input.existingPackages.get(input.id)
+      if (entry) existing = { root: entry.targetRoot }
+    } else {
+      existing = (await ExpertSquadRegistry.discover(input.projectDirectory)).find(
+        (candidate) => candidate.id === input.id,
+      )
+    }
     if (!existing) return
     if (Filesystem.normalizePath(existing.root) === Filesystem.normalizePath(input.target)) return
     throw new Error(
@@ -183,7 +196,9 @@ export namespace ExpertSquadPackageManager {
     const root = singleArchiveRoot(files)
     const stripped = stripArchiveRoot(files, root)
     if (stripped.some((file) => file.path === ExpertSquadRegistry.MANIFEST)) {
-      throw new Error(`Expert squad archive wrapper "${root}" is not supported; expected root manifest or <namespace>/<id>`)
+      throw new Error(
+        `Expert squad archive wrapper "${root}" is not supported; expected root manifest or <namespace>/<id>`,
+      )
     }
 
     const id = singleArchiveRoot(stripped)
@@ -214,7 +229,10 @@ export namespace ExpertSquadPackageManager {
 
   function assertCanonicalArchiveWrapper(files: NormalizedArchiveFile[], namespace: string, id: string) {
     const manifestFile = files.find((file) => file.path === ExpertSquadRegistry.MANIFEST)
-    if (!manifestFile) throw new Error(`Expert squad archive wrapper "${namespace}/${id}" does not contain ${ExpertSquadRegistry.MANIFEST}`)
+    if (!manifestFile)
+      throw new Error(
+        `Expert squad archive wrapper "${namespace}/${id}" does not contain ${ExpertSquadRegistry.MANIFEST}`,
+      )
 
     const errors: ParseError[] = []
     const manifest = parseJsonc(new TextDecoder().decode(manifestFile.bytes), errors, { allowTrailingComma: true })
@@ -279,7 +297,9 @@ export namespace ExpertSquadPackageManager {
     try {
       const entries = await reader.getEntries()
       if (entries.length > archiveImportLimits.entries) {
-        throw new Error(`Expert squad archive entry count exceeds limit: ${entries.length} > ${archiveImportLimits.entries}`)
+        throw new Error(
+          `Expert squad archive entry count exceeds limit: ${entries.length} > ${archiveImportLimits.entries}`,
+        )
       }
       const files: NormalizedArchiveFile[] = []
       const seen = new Set<string>()
@@ -289,9 +309,14 @@ export namespace ExpertSquadPackageManager {
         if (entry.directory) continue
         const relativePath = normalizeArchivePath(entry.filename)
         const collisionKey = relativePath.toLowerCase()
-        if (seen.has(collisionKey)) throw new Error(`Duplicate expert squad archive path after normalization: ${relativePath}`)
+        if (seen.has(collisionKey))
+          throw new Error(`Duplicate expert squad archive path after normalization: ${relativePath}`)
         seen.add(collisionKey)
-        assertArchiveByteLimit(`Expert squad archive file ${relativePath}`, entry.uncompressedSize, archiveImportLimits.fileBytes)
+        assertArchiveByteLimit(
+          `Expert squad archive file ${relativePath}`,
+          entry.uncompressedSize,
+          archiveImportLimits.fileBytes,
+        )
         declaredUnpackedBytes += entry.uncompressedSize
         assertArchiveByteLimit(
           "Expert squad archive declared unpacked content",
@@ -308,7 +333,11 @@ export namespace ExpertSquadPackageManager {
           ]),
         )
         if (!data) continue
-        assertArchiveByteLimit(`Expert squad archive file ${relativePath}`, data.byteLength, archiveImportLimits.fileBytes)
+        assertArchiveByteLimit(
+          `Expert squad archive file ${relativePath}`,
+          data.byteLength,
+          archiveImportLimits.fileBytes,
+        )
         actualUnpackedBytes += data.byteLength
         assertArchiveByteLimit(
           "Expert squad archive unpacked content",
@@ -334,7 +363,8 @@ export namespace ExpertSquadPackageManager {
       if (!file.path) throw new Error("Expert squad archive wrapper contains a file at the package root name")
       const segments = file.path.split("/")
       const fileKey = file.path.toLowerCase()
-      if (fileKeys.has(fileKey)) throw new Error(`Duplicate expert squad archive path after normalization: ${file.path}`)
+      if (fileKeys.has(fileKey))
+        throw new Error(`Duplicate expert squad archive path after normalization: ${file.path}`)
       if (dirKeys.has(fileKey)) throw new Error(`Expert squad archive file/directory collision: ${file.path}`)
       for (let index = 1; index < segments.length; index++) {
         const dirKey = segments.slice(0, index).join("/").toLowerCase()
@@ -506,14 +536,33 @@ export namespace ExpertSquadPackageManager {
   async function installPayloadPackageSource(input: {
     projectDirectory: string
     source: (typeof payloadPackageSources)[number]
+    loaded?: ExpertSquadRegistry.EmbeddedPackage
     getLoadOptions: () => Promise<PackageLoadOptions>
   }): Promise<InstallSourceDirectoryResult> {
-    const loaded = validatePayloadPackageSource(input.source)
+    const loaded = input.loaded ?? validatePayloadPackageSource(input.source)
     assertNoBuiltInCollision(loaded.id)
     const target = targetRoot(input.projectDirectory, loaded.namespace, loaded.id)
     const installLockKey = `${Filesystem.normalizePath(canonicalBase(input.projectDirectory))}#${loaded.id}`
     return withPackageInstallLock(installLockKey, async () => {
-      await assertNoCrossNamespaceDuplicate({ projectDirectory: input.projectDirectory, id: loaded.id, target })
+      const existingPackages = await releaseExistingPackageMap({
+        projectDirectory: input.projectDirectory,
+      })
+      const existing = existingPackages.get(loaded.id)
+      if (existing) {
+        return {
+          namespace: existing.namespace,
+          id: existing.id,
+          targetRoot: existing.targetRoot,
+          replaced: false,
+          installed: false,
+        }
+      }
+      await assertNoCrossNamespaceDuplicate({
+        projectDirectory: input.projectDirectory,
+        id: loaded.id,
+        target,
+        existingPackages,
+      })
       const targetState = await lstat(target).catch((error: NodeJS.ErrnoException) => {
         if (error.code === "ENOENT") return undefined
         throw error
@@ -573,25 +622,81 @@ export namespace ExpertSquadPackageManager {
     })
   }
 
+  async function releaseExistingPackageMap(input: {
+    projectDirectory: string
+  }): Promise<Map<string, ImportResult>> {
+    const existing = new Map<string, ImportResult>()
+    const base = canonicalBase(input.projectDirectory)
+    const namespaceEntries = await readdir(base, { withFileTypes: true }).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return []
+      throw error
+    })
+    for (const namespaceEntry of namespaceEntries) {
+      if (!namespaceEntry.isDirectory()) continue
+      const namespaceRoot = path.join(base, namespaceEntry.name)
+      const packageEntries = await readdir(namespaceRoot, { withFileTypes: true }).catch(
+        (error: NodeJS.ErrnoException) => {
+          if (error.code === "ENOENT") return []
+          throw error
+        },
+      )
+      for (const packageEntry of packageEntries) {
+        if (!packageEntry.isDirectory()) continue
+        const targetRoot = path.join(namespaceRoot, packageEntry.name)
+        const manifestPath = path.join(targetRoot, ExpertSquadRegistry.MANIFEST)
+        const manifestText = await Filesystem.readText(manifestPath).catch((error: NodeJS.ErrnoException) => {
+          if (error.code === "ENOENT") return undefined
+          throw error
+        })
+        if (manifestText === undefined) continue
+        const errors: ParseError[] = []
+        const manifest = parseJsonc(manifestText, errors, { allowTrailingComma: true })
+        if (errors.length > 0) {
+          const error = errors[0]!
+          throw new Error(
+            `Expert squad package manifest parse error at ${manifestPath}:${error.offset}: ${printParseErrorCode(error.error)}`,
+          )
+        }
+        if (typeof manifest?.id !== "string" || typeof manifest?.namespace !== "string") {
+          throw new Error(`Expert squad package manifest ${manifestPath} must declare namespace and id`)
+        }
+        if (manifest.namespace !== namespaceEntry.name || manifest.id !== packageEntry.name) {
+          throw new Error(
+            `Expert squad package manifest ${manifestPath} must match canonical namespace/id ${namespaceEntry.name}/${packageEntry.name}`,
+          )
+        }
+        if (existing.has(manifest.id)) throw new Error(`duplicate expert squad id "${manifest.id}"`)
+        existing.set(manifest.id, {
+          namespace: manifest.namespace,
+          id: manifest.id,
+          targetRoot,
+          replaced: false,
+        })
+      }
+    }
+    return existing
+  }
+
   export async function releasePayloadPackages(input: { projectDirectory: string }): Promise<ReleasePayloadResult> {
     const installed: ImportResult[] = []
     const skipped: ImportResult[] = []
-    const existingPackages = new Map(
-      (await ExpertSquadRegistry.discover(input.projectDirectory)).map((entry) => [entry.id, entry]),
-    )
     let loadOptions: Promise<PackageLoadOptions> | undefined
     const getLoadOptions = () => {
       loadOptions ??= packageLoadOptions(input.projectDirectory)
       return loadOptions
     }
+    const existingPackages = await releaseExistingPackageMap({
+      projectDirectory: input.projectDirectory,
+    })
 
     for (const source of payloadPackageSources) {
-      const existing = existingPackages.get(source.id)
+      const loaded = validatePayloadPackageSource(source)
+      const existing = existingPackages.get(loaded.id)
       if (existing) {
         skipped.push({
           namespace: existing.namespace,
           id: existing.id,
-          targetRoot: existing.root,
+          targetRoot: existing.targetRoot,
           replaced: false,
         })
         continue
@@ -599,6 +704,7 @@ export namespace ExpertSquadPackageManager {
       const { installed: didInstall, ...result } = await installPayloadPackageSource({
         projectDirectory: input.projectDirectory,
         source,
+        loaded,
         getLoadOptions,
       })
       if (didInstall) installed.push(result)

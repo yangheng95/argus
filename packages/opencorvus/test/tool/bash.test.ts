@@ -39,6 +39,27 @@ afterEach(() => {
   mock.restore()
 })
 
+function seedBashRuntimeTask(taskID: string) {
+  Database.use((db) =>
+    db
+      .insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: Instance.project.id,
+        title: "Bash truncation task",
+        request: "Persist truncated bash output",
+        source: "test",
+        time_created: Date.now(),
+        time_updated: Date.now(),
+      })
+      .run(),
+  )
+}
+
+function ctxForTask(taskID: string) {
+  return { ...ctx, extra: { taskID } }
+}
+
 async function startReachablePreviewServer(): Promise<{ url: string; close: () => Promise<void> }> {
   let server: Server | undefined
   server = createServer((_, res) => {
@@ -363,6 +384,10 @@ describe("tool.bash", () => {
 
           const restore = ProcessSupervisor.setFactoryForTest(async () => {
             const stdout = new PassThrough()
+            let resolveExit!: (code: number) => void
+            const exited = new Promise<number>((resolve) => {
+              resolveExit = resolve
+            })
             queueMicrotask(() => {
               stdout.write(`  VITE v6.0.0 ready\n  ➜  Local:   ${preview.url}\n`)
             })
@@ -371,9 +396,11 @@ describe("tool.bash", () => {
               stdin: null,
               stdout,
               stderr: new PassThrough(),
-              exited: new Promise<number>(() => {}),
+              exited,
               terminate: async () => {},
-              dispose: async () => {},
+              dispose: async () => {
+                resolveExit(0)
+              },
               unref: () => {},
             }
           })
@@ -427,14 +454,20 @@ describe("tool.bash", () => {
           )
 
           const stdout = new PassThrough()
+          let resolveExit!: (code: number) => void
+          const exited = new Promise<number>((resolve) => {
+            resolveExit = resolve
+          })
           const restore = ProcessSupervisor.setFactoryForTest(async () => ({
             pid: 9013,
             stdin: null,
             stdout,
             stderr: new PassThrough(),
-            exited: new Promise<number>(() => {}),
+            exited,
             terminate: async () => {},
-            dispose: async () => {},
+            dispose: async () => {
+              resolveExit(0)
+            },
             unref: () => {},
           }))
           try {
@@ -490,14 +523,20 @@ describe("tool.bash", () => {
           )
 
           const port = new URL(preview.url).port
+          let resolveExit!: (code: number) => void
+          const exited = new Promise<number>((resolve) => {
+            resolveExit = resolve
+          })
           const restore = ProcessSupervisor.setFactoryForTest(async () => ({
             pid: 9014,
             stdin: null,
             stdout: new PassThrough(),
             stderr: new PassThrough(),
-            exited: new Promise<number>(() => {}),
+            exited,
             terminate: async () => {},
-            dispose: async () => {},
+            dispose: async () => {
+              resolveExit(0)
+            },
             unref: () => {},
           }))
           try {
@@ -552,6 +591,10 @@ describe("tool.bash", () => {
 
           const restore = ProcessSupervisor.setFactoryForTest(async () => {
             const stdout = new PassThrough()
+            let resolveExit!: (code: number) => void
+            const exited = new Promise<number>((resolve) => {
+              resolveExit = resolve
+            })
             queueMicrotask(() => {
               stdout.write(`Local: ${first.url}\nAuxiliary: ${second.url}\nDocs: https://vite.dev/\n`)
             })
@@ -560,9 +603,11 @@ describe("tool.bash", () => {
               stdin: null,
               stdout,
               stderr: new PassThrough(),
-              exited: new Promise<number>(() => {}),
+              exited,
               terminate: async () => {},
-              dispose: async () => {},
+              dispose: async () => {
+                resolveExit(0)
+              },
               unref: () => {},
             }
           })
@@ -621,6 +666,10 @@ describe("tool.bash", () => {
 
           const restore = ProcessSupervisor.setFactoryForTest(async () => {
             const stdout = new PassThrough()
+            let resolveExit!: (code: number) => void
+            const exited = new Promise<number>((resolve) => {
+              resolveExit = resolve
+            })
             queueMicrotask(() => {
               stdout.write("  VITE v6.0.0 ready\n  ➜  Local:   http://127.0.0.1:9/\n")
             })
@@ -629,9 +678,11 @@ describe("tool.bash", () => {
               stdin: null,
               stdout,
               stderr: new PassThrough(),
-              exited: new Promise<number>(() => {}),
+              exited,
               terminate: async () => {},
-              dispose: async () => {},
+              dispose: async () => {
+                resolveExit(0)
+              },
               unref: () => {},
             }
           })
@@ -1049,6 +1100,8 @@ describe("tool.bash truncation", () => {
     await Instance.provide({
       directory: projectRoot,
       fn: async () => {
+        const taskID = `tsk_bashtrunc_lines_${Date.now()}`
+        seedBashRuntimeTask(taskID)
         // audit-2026-04-29 W2-V31 — Truncate.output now requires
         // the calling agent to have either `task` or `read+search_code`
         // tools so a truncated payload can be re-read (no silent
@@ -1063,7 +1116,7 @@ describe("tool.bash truncation", () => {
             command: `seq 1 ${lineCount}`,
             description: "Generate lines exceeding limit",
           },
-          ctx,
+          ctxForTask(taskID),
         )
         expect((result.metadata as any).truncated).toBe(true)
         expect(result.output).toContain("truncated")
@@ -1076,6 +1129,8 @@ describe("tool.bash truncation", () => {
     await Instance.provide({
       directory: projectRoot,
       fn: async () => {
+        const taskID = `tsk_bashtrunc_bytes_${Date.now()}`
+        seedBashRuntimeTask(taskID)
         const agent = await Agent.get("build")
         const bash = await BashTool.init({ agent })
         const byteCount = Truncate.MAX_BYTES + 10000
@@ -1084,7 +1139,7 @@ describe("tool.bash truncation", () => {
             command: `head -c ${byteCount} /dev/zero | tr '\\0' 'a'`,
             description: "Generate bytes exceeding limit",
           },
-          ctx,
+          ctxForTask(taskID),
         )
         expect((result.metadata as any).truncated).toBe(true)
         expect(result.output).toContain("truncated")
@@ -1117,6 +1172,8 @@ describe("tool.bash truncation", () => {
     await Instance.provide({
       directory: projectRoot,
       fn: async () => {
+        const taskID = `tsk_bashtrunc_file_${Date.now()}`
+        seedBashRuntimeTask(taskID)
         const agent = await Agent.get("build")
         const bash = await BashTool.init({ agent })
         const lineCount = Truncate.MAX_LINES + 100
@@ -1125,7 +1182,7 @@ describe("tool.bash truncation", () => {
             command: `seq 1 ${lineCount}`,
             description: "Generate lines for file check",
           },
-          ctx,
+          ctxForTask(taskID),
         )
         expect((result.metadata as any).truncated).toBe(true)
 

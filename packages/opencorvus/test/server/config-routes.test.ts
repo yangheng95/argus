@@ -21,6 +21,18 @@ async function repoFile(...parts: string[]) {
   return await readFile(path.join(ROOT, ...parts), "utf8")
 }
 
+type RouteTmpdirOptions = Parameters<typeof tmpdir>[0]
+
+async function routeTmpdir(options?: RouteTmpdirOptions) {
+  return await tmpdir({
+    ...options,
+    dispose: async (dir) => {
+      await options?.dispose?.(dir)
+      await Instance.disposeAll()
+    },
+  })
+}
+
 describe("config prompt routes", () => {
   beforeEach(async () => {
     await Instance.disposeAll()
@@ -35,7 +47,7 @@ describe("config prompt routes", () => {
   })
 
   test("GET /config/prompt returns effective system and agent prompts", async () => {
-    await using tmp = await tmpdir({
+    await using tmp = await routeTmpdir({
       config: {
         prompt: {
           core_header: "Custom core header",
@@ -146,7 +158,7 @@ describe("config prompt routes", () => {
   })
 
   test("PATCH /config rejects built-in skill_mountable drift from the canonical role contract", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await routeTmpdir({ git: true })
 
     await Instance.provide({
       directory: tmp.path,
@@ -174,7 +186,7 @@ describe("config prompt routes", () => {
   })
 
   test("GET /expert-squad/catalog returns full active expert-squad catalog", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await routeTmpdir({ git: true })
     for (const id of [
       "algorithm",
       "backend",
@@ -299,7 +311,7 @@ describe("config prompt routes", () => {
         expect(frontendReplicaProfile?.readme.content.length).toBeGreaterThan(0)
         expect(frontendReplicaProfile?.projection_hash).toMatch(/^[a-f0-9]{64}$/)
         expect(frontendReplicaProfile?.projected_agents).toContain("build")
-        expect(frontendReplicaProfile?.capability_projection.scheduler.built_in_tool_ids).toContain("build")
+        expect(frontendReplicaProfile?.capability_projection.scheduler.built_in_tool_ids).toContain("dispatch_agent")
         expect(frontendReplicaProfile?.capability_projection.agents.build.built_in_tool_ids).toContain("read")
         expect(frontendReplicaProfile?.capability_projection.agents.build.built_in_tool_ids).toContain("edit")
         expect(body.squads.find((squad) => squad.id === "frontend-innovate")).toMatchObject({
@@ -319,7 +331,7 @@ describe("config prompt routes", () => {
           capability_profile_id: "general",
         })
         expect(generalProfile?.capability_projection.scheduler.built_in_tool_ids).toContain("select_expert_squad")
-        expect(generalProfile?.capability_projection.scheduler.built_in_tool_ids).toContain("complete_task")
+        expect(generalProfile?.capability_projection.scheduler.built_in_tool_ids).toContain("manage_task")
         expect(body.active_skill_projection.active_squad_id).toBe("backend")
         expect(body.active_skill_projection.projection_hash).toMatch(/^[a-f0-9]{64}$/)
         expect(body.active_skill_projection.projected_agent_ids).toContain("build")
@@ -329,7 +341,7 @@ describe("config prompt routes", () => {
   })
 
   test("GET /expert-squad/catalog does not parse inactive package MCP definitions", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await routeTmpdir({ git: true })
     const inactiveRoot = await writeProjectExpertSquadPackage(tmp.path)
     await Bun.write(path.join(inactiveRoot, "mcp", "broken.jsonc"), "{")
 
@@ -351,18 +363,24 @@ describe("config prompt routes", () => {
             built_in: boolean
             capability_profile_id: string
             agents: Record<string, string>
+            capability_projection: {
+              scheduler: { built_in_tool_ids: string[] }
+              agents: Record<string, { package_tool_refs: string[] }>
+            }
           }>
         }
         expect(body.active.effective).toBe("general")
-        expect(body.squads.find((squad) => squad.id === PROJECT_EXPERT_SQUAD_ID)).toMatchObject({
+        const projectProfile = body.squads.find((squad) => squad.id === PROJECT_EXPERT_SQUAD_ID)
+        expect(projectProfile).toMatchObject({
           built_in: false,
           capability_profile_id: PROJECT_EXPERT_SQUAD_ID,
-          agents: {
-            build: "project build overlay",
-            general: "project general overlay",
-            orchestrator: "project orchestrator overlay",
-          },
+          agents: {},
         })
+        expect(projectProfile?.capability_projection.scheduler.built_in_tool_ids).toContain("dispatch_agent")
+        expect(projectProfile?.capability_projection.scheduler.built_in_tool_ids).toContain("manage_task")
+        expect(projectProfile?.capability_projection.agents.build.package_tool_refs).toEqual([
+          `${PROJECT_EXPERT_SQUAD_ID}/build/build-evidence`,
+        ])
 
         const patchResponse = await app.request("/config", {
           method: "PATCH",
@@ -383,7 +401,7 @@ describe("config prompt routes", () => {
   })
 
   test("GET /expert-squad/catalog returns session-effective project package profile when sessionID is supplied", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await routeTmpdir({ git: true })
     await writeProjectExpertSquadPackage(tmp.path)
 
     await Instance.provide({
@@ -444,11 +462,7 @@ describe("config prompt routes", () => {
           editable: false,
           capability_profile_id: PROJECT_EXPERT_SQUAD_ID,
           projected_agents: ["build", "general"],
-          agents: {
-            build: "project build overlay",
-            general: "project general overlay",
-            orchestrator: "project orchestrator overlay",
-          },
+          agents: {},
         })
         const projectProfile = body.squads.find((squad) => squad.id === PROJECT_EXPERT_SQUAD_ID)
         expect(projectProfile?.projection_hash).toMatch(/^[a-f0-9]{64}$/)
@@ -463,7 +477,7 @@ describe("config prompt routes", () => {
   })
 
   test("GET /expert-squad/catalog active skill projection shares projected agents with skill mounts", async () => {
-    await using tmp = await tmpdir({
+    await using tmp = await routeTmpdir({
       git: true,
       config: {
         prompt_profile: {
@@ -530,7 +544,7 @@ describe("config prompt routes", () => {
   })
 
   test("GET /config/prompt returns session-effective project package prompt when sessionID is supplied", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await routeTmpdir({ git: true })
     await writeProjectExpertSquadPackage(tmp.path)
 
     await Instance.provide({
@@ -574,11 +588,10 @@ describe("config prompt routes", () => {
   })
 
   test("GET /config/prompt rejects session-effective projected worker MCP raw base64 before returning catalog", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await routeTmpdir({ git: true })
     const packageMcpServerRef = `${PROJECT_EXPERT_SQUAD_ID}/build/package-browser`
     await writeProjectExpertSquadPackage(tmp.path, PROJECT_EXPERT_SQUAD_ID, {
       buildPackageMcpServerRefs: [packageMcpServerRef],
-      buildPackageMcpPromptRefs: [`${packageMcpServerRef}/prompt/raw-data-text`],
       packageMcpDefinition: {
         type: "local",
         command: [process.execPath, PACKAGE_MCP_SERVER_PATH],
@@ -615,8 +628,8 @@ describe("config prompt routes", () => {
   })
 
   test("GET /config prompt session-effective routes reject sessions outside the active project", async () => {
-    await using one = await tmpdir({ git: true })
-    await using two = await tmpdir({ git: true })
+    await using one = await routeTmpdir({ git: true })
+    await using two = await routeTmpdir({ git: true })
     const app = Server.App()
     let oneSessionID = ""
     let oneChildWithForeignParentID = ""
@@ -688,7 +701,7 @@ describe("config prompt routes", () => {
   })
 
   test("PATCH /config accepts a repository project frontend automation debug profile and prompt preview uses it", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await routeTmpdir({ git: true })
     await copyRepositoryExpertSquadPackage(tmp.path, "frontend-automation-debug")
 
     await Instance.provide({
@@ -720,14 +733,14 @@ describe("config prompt routes", () => {
         }>
         const build = body.find((item) => item.key === "build")
         expect(build?.active_profile).toBe("frontend-automation-debug")
-        expect(build?.profile_prompt).toContain("focused automation")
-        expect(build?.effective_prompt).toContain("focused automation")
+        expect(build?.profile_prompt).toContain("evidence identifies the responsible layer")
+        expect(build?.effective_prompt).toContain("evidence identifies the responsible layer")
       },
     })
   })
 
   test("PATCH /config accepts a project package prompt profile and prompt preview uses it", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await routeTmpdir({ git: true })
     await writeProjectExpertSquadPackage(tmp.path)
 
     await Instance.provide({
@@ -753,18 +766,30 @@ describe("config prompt routes", () => {
         expect(catalogResponse.status).toBe(200)
         const catalog = (await catalogResponse.json()) as {
           active: { effective: string }
-          squads: Array<{ id: string; built_in: boolean; editable: boolean; agents: Record<string, string> }>
+          squads: Array<{
+            id: string
+            built_in: boolean
+            editable: boolean
+            agents: Record<string, string>
+            capability_projection: {
+              scheduler: { package_tool_refs: string[] }
+              agents: Record<string, { package_tool_refs: string[] }>
+            }
+          }>
         }
         expect(catalog.active.effective).toBe(PROJECT_EXPERT_SQUAD_ID)
-        expect(catalog.squads.find((squad) => squad.id === PROJECT_EXPERT_SQUAD_ID)).toMatchObject({
+        const projectProfile = catalog.squads.find((squad) => squad.id === PROJECT_EXPERT_SQUAD_ID)
+        expect(projectProfile).toMatchObject({
           built_in: false,
           editable: false,
-          agents: {
-            build: "project build overlay",
-            general: "project general overlay",
-            orchestrator: "project orchestrator overlay",
-          },
+          agents: {},
         })
+        expect(projectProfile?.capability_projection.scheduler.package_tool_refs).toEqual([
+          `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/source-evidence`,
+        ])
+        expect(projectProfile?.capability_projection.agents.build.package_tool_refs).toEqual([
+          `${PROJECT_EXPERT_SQUAD_ID}/build/build-evidence`,
+        ])
 
         const previewResponse = await app.request("/config/prompt", {
           headers: {
@@ -796,7 +821,7 @@ describe("config prompt routes", () => {
   })
 
   test("PATCH /config rejects unknown prompt profile before writing", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await routeTmpdir({ git: true })
 
     await Instance.provide({
       directory: tmp.path,

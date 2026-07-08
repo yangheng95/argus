@@ -198,25 +198,48 @@ export namespace SessionShell {
 
     let aborted = false
 
-    const terminate = () => supervisor.terminate()
+    let terminationPromise: Promise<number> | undefined
+    let resolveTerminationRequested: ((promise: Promise<number>) => void) | undefined
+    const terminationRequested = new Promise<Promise<number>>((resolve) => {
+      resolveTerminationRequested = resolve
+    })
+    const requestTermination = (reason: string) => {
+      if (!terminationPromise) {
+        terminationPromise = ProcessSupervisor.terminateAndWaitForExit(supervisor, `session shell ${reason}`)
+        terminationPromise.catch(() => undefined)
+        resolveTerminationRequested?.(terminationPromise)
+      }
+      return terminationPromise
+    }
 
     if (abort.aborted) {
       aborted = true
-      await terminate()
+      await requestTermination("abort")
     }
 
     const abortHandler = () => {
       aborted = true
-      void terminate()
+      requestTermination("abort")
     }
 
     abort.addEventListener("abort", abortHandler, { once: true })
 
+    let primaryError: unknown
     try {
-      await supervisor.exited
+      await Promise.race([supervisor.exited, terminationRequested.then((cleanup) => cleanup)])
+      if (terminationPromise) {
+        await terminationPromise
+      }
+    } catch (error) {
+      primaryError = error
+      throw error
     } finally {
       abort.removeEventListener("abort", abortHandler)
-      await supervisor.dispose()
+      try {
+        await ProcessSupervisor.disposeAndWaitForExit(supervisor, "session shell")
+      } catch (error) {
+        if (!primaryError) throw error
+      }
     }
 
     if (aborted) {

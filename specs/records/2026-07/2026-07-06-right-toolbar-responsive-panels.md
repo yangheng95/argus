@@ -39,7 +39,7 @@ The user reported that every panel opened from the right toolbar is not responsi
 - `AGENTS.md`
 - `specs/README.md`
 - `specs/records/2026-07/README.md`
-- `specs/records/2026-07/路线规划.md`
+- An untracked July planning draft was observed as background user notes only and is not a committed source for this record.
 - `specs/records/2026-07/2026-07-06-dynamic-expert-agent-instance-review-plan.md`
 - `specs/records/2026-07/2026-07-02-right-toolbar-task-scope-panels.md`
 - `specs/records/2026-07/2026-07-05-tool-skill-mcp-vertical-panel-repair.md`

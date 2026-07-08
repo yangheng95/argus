@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import fs from "fs/promises"
 import path from "path"
 import { tmpdir } from "../fixture/fixture"
+import { runIsolatedBunTest } from "../harness/isolated-bun-runner"
 import { Ripgrep } from "../../src/file/ripgrep"
 
 describe("file.ripgrep", () => {
@@ -42,6 +43,21 @@ describe("file.ripgrep", () => {
     const hasHidden = files.includes(path.join(".opencorvus", "thing.json"))
     expect(hasVisible).toBe(true)
     expect(hasHidden).toBe(false)
+  })
+
+  test("files returns an empty list when ripgrep reports no files", async () => {
+    await using tmp = await tmpdir()
+
+    await expect(Array.fromAsync(Ripgrep.files({ cwd: tmp.path }))).resolves.toEqual([])
+  })
+
+  test("files terminates ripgrep when iteration stops early", async () => {
+    await runIsolatedBunTest({
+      suiteName: "ripgrep early stop fixture",
+      isolatedFile: path.resolve(import.meta.dir, "isolated/ripgrep-early-stop.isolated.ts"),
+      temporaryPrefix: "opencorvus-ripgrep-early-stop-",
+      expectedPassCount: 1,
+    })
   })
 
   test("passes shell metacharacters to ripgrep as one pattern argument", async () => {

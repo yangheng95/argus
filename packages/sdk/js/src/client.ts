@@ -1,9 +1,9 @@
 export * from "./gen/types.gen.js"
 
-import { routeRequiresProjectDirectory } from "@opencorvus-ai/transport-protocol"
 import { createClient } from "./gen/client/client.gen.js"
 import { type Config } from "./gen/client/types.gen.js"
 import { OpenCorvusClient } from "./gen/sdk.gen.js"
+import { routeRequiresProjectDirectory } from "./route-policy.js"
 export { OpenCorvusClient }
 
 export type OpenCorvusClientConfig = Config & {

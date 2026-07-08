@@ -9,8 +9,8 @@ import { Config } from "../config/config"
 import path from "path"
 import { lazy } from "@/util/lazy"
 import { withTimeout } from "@/util/timeout"
-import { $ } from "bun"
 import { Flag } from "@/flag/flag"
+import { type FSWatcher, watch } from "node:fs"
 import { readdir } from "fs/promises"
 import { requireRuntimePackage } from "@/runtime/package-require"
 
@@ -44,6 +44,45 @@ export namespace FileWatcher {
     if (evt.type === "delete" || evt.type === "unlink") Bus.publish(Event.Updated, { file: evt.path, event: "unlink" })
   }
 
+  function subscribeFile(file: string): Subscription {
+    const watcher = watch(file, { persistent: false }, () => {
+      publish({ type: "change", path: file })
+    })
+    const onRuntimeError = (error: Error) => {
+      log.warn("native file watcher error", { file, error: errorMessage(error) })
+    }
+    watcher.on("error", onRuntimeError)
+    return {
+      unsubscribe: () => closeNativeFileWatcher(watcher, onRuntimeError),
+    }
+  }
+
+  function closeNativeFileWatcher(watcher: FSWatcher, runtimeErrorListener?: (error: Error) => void): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const cleanup = () => {
+        watcher.off("close", onClose)
+        watcher.off("error", onError)
+        if (runtimeErrorListener) watcher.off("error", runtimeErrorListener)
+      }
+      const onClose = () => {
+        cleanup()
+        resolve()
+      }
+      const onError = (error: Error) => {
+        cleanup()
+        reject(error)
+      }
+      watcher.once("close", onClose)
+      watcher.once("error", onError)
+      try {
+        watcher.close()
+      } catch (error) {
+        cleanup()
+        reject(error)
+      }
+    })
+  }
+
   function isMissingWatchPathError(error: unknown) {
     if (!error || typeof error !== "object") return false
     const code = (error as { code?: unknown }).code
@@ -71,10 +110,38 @@ export namespace FileWatcher {
         backend,
       },
     )
-    const sub = await withTimeout(pending, SUBSCRIBE_TIMEOUT_MS)
+    const sub = await withTimeout(pending, SUBSCRIBE_TIMEOUT_MS).catch((error) => {
+      if (isSubscribeTimeoutError(error)) {
+        void pending.then(
+          async (lateSub) => {
+            try {
+              await lateSub.unsubscribe()
+            } catch (unsubscribeError) {
+              log.warn("parcel watcher late subscription cleanup failed", {
+                dir,
+                backend,
+                error: errorMessage(unsubscribeError),
+              })
+            }
+          },
+          (lateError) => {
+            log.warn("parcel watcher subscription failed after timeout", {
+              dir,
+              backend,
+              error: errorMessage(lateError),
+            })
+          },
+        )
+      }
+      throw error
+    })
     return {
       unsubscribe: () => sub.unsubscribe(),
     }
+  }
+
+  function isSubscribeTimeoutError(error: unknown) {
+    return error instanceof Error && error.message === `Operation timed out after ${SUBSCRIBE_TIMEOUT_MS}ms`
   }
 
   async function subscribeWatchDirectory(
@@ -114,22 +181,6 @@ export namespace FileWatcher {
     }
   }
 
-  async function resolveGitDirectoryForWatch(): Promise<string | undefined> {
-    try {
-      const output = await $`git rev-parse --git-dir`.quiet().nothrow().cwd(Instance.worktree).text()
-      return path.resolve(Instance.worktree, output.trim())
-    } catch (error) {
-      if (isMissingWatchPathError(error)) {
-        log.warn("project directory disappeared before file watcher resolved git directory", {
-          dir: Instance.worktree,
-          error: errorMessage(error),
-        })
-        return undefined
-      }
-      throw error
-    }
-  }
-
   const state = lazyInstanceState(
     async () => {
       log.info("init")
@@ -159,13 +210,11 @@ export namespace FileWatcher {
       }
 
       if (Project.isGitRepo(Instance.directory)) {
-        const vcsDir = await resolveGitDirectoryForWatch()
+        const vcsDir = await Project.localGitDirectory(Instance.worktree)
         if (vcsDir && !cfgIgnores.includes(".git") && !cfgIgnores.includes(vcsDir)) {
           const gitDirContents = await readWatchDirectory(vcsDir, "git")
-          if (gitDirContents) {
-            const ignoreList = gitDirContents.filter((entry) => entry !== "HEAD")
-            const gitSub = await subscribeWatchDirectory(subscribe, vcsDir, ignoreList, "git")
-            if (gitSub) subs.push(gitSub)
+          if (gitDirContents?.includes("HEAD")) {
+            subs.push(subscribeFile(path.join(vcsDir, "HEAD")))
           }
         }
       }
@@ -178,10 +227,10 @@ export namespace FileWatcher {
     },
   )
 
-  export function init() {
+  export async function init() {
     if (Flag.OPENCORVUS_EXPERIMENTAL_DISABLE_FILEWATCHER) {
       return
     }
-    state()
+    await state()
   }
 }

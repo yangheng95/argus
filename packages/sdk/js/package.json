@@ -7,32 +7,34 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "bun test test",
-    "build": "bun ./script/build.ts"
+    "build": "bun ./script/build.ts",
+    "prepack": "bun run build",
+    "prepublishOnly": "bun run build"
   },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./src/index.ts",
-      "default": "./src/index.ts"
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     },
     "./client": {
       "types": "./dist/client.d.ts",
-      "import": "./src/client.ts",
-      "default": "./src/client.ts"
+      "import": "./dist/client.js",
+      "default": "./dist/client.js"
     },
     "./gen/client": {
       "types": "./dist/gen/client/index.d.ts",
-      "default": "./src/gen/client/index.ts"
+      "default": "./dist/gen/client/index.js"
     },
     "./server": {
       "types": "./dist/server.d.ts",
-      "import": "./src/server.ts",
-      "default": "./src/server.ts"
+      "import": "./dist/server.js",
+      "default": "./dist/server.js"
     },
     "./defaults": {
       "types": "./dist/defaults.d.ts",
-      "import": "./src/defaults.ts",
-      "default": "./src/defaults.ts"
+      "import": "./dist/defaults.js",
+      "default": "./dist/defaults.js"
     }
   },
   "files": [
@@ -44,11 +46,5 @@
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "@typescript/native-preview": "catalog:"
-  },
-  "dependencies": {
-    "@opencorvus-ai/transport-protocol": "workspace:*"
-  },
-  "publishConfig": {
-    "directory": "dist"
   }
 }

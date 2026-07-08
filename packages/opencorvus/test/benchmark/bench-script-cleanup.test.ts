@@ -22,8 +22,12 @@ import path from "node:path"
 
 const BENCH_SCRIPT = path.join(import.meta.dir, "..", "..", "script", "benchmark", "overlay-web-benchmark.ts")
 const BENCHMARK_DIR = path.dirname(BENCH_SCRIPT)
+const SNAPSHOT_BENCH_SCRIPT = path.join(BENCHMARK_DIR, "snapshot-benchmark.ts")
+const REWIND_BENCH_SCRIPT = path.join(BENCHMARK_DIR, "rewind-checkpoint-benchmark.ts")
 
 const src = await Bun.file(BENCH_SCRIPT).text()
+const snapshotSrc = await Bun.file(SNAPSHOT_BENCH_SCRIPT).text()
+const rewindSrc = await Bun.file(REWIND_BENCH_SCRIPT).text()
 
 test("legacy spec/planner-max-steps wiring is gone", () => {
   expect(src).not.toMatch(/--spec-max-steps/)
@@ -83,6 +87,42 @@ test("benchmark errors cannot be swallowed as successful no-report exits", () =>
   expect(src).toContain('type: "benchmark_report_failed"')
 })
 
+test("benchmark signal cleanup uses the normal cleanup path", () => {
+  const signalBlock = src.slice(src.indexOf("const shutdown ="), src.indexOf('process.on("SIGTERM"'))
+  const finallyBlock = src.slice(src.indexOf("} finally {"), src.indexOf("async function scaffoldProject"))
+
+  expect(signalBlock).toContain("_runSignalCleanup")
+  expect(signalBlock).toContain("process.exit(code)")
+  expect(signalBlock).not.toContain("Promise.reject")
+  expect(signalBlock).not.toContain("unhandled rejection")
+  expect(finallyBlock).toContain("await runBenchmarkCleanup()")
+})
+
+test("benchmark cleanup surfaces failures and uses supervised orphan disposal", () => {
+  const cleanupBlock = src.slice(
+    src.indexOf("async function runBenchmarkCleanup"),
+    src.indexOf("async function waitForFinal"),
+  )
+  const cleanupHelper = src.slice(src.indexOf("async function cleanup"), src.indexOf("async function waitForFinal"))
+
+  expect(cleanupBlock).toContain("ProcessSupervisor.disposeLiveProcessesUnder(temp.dir)")
+  expect(cleanupBlock).not.toContain("pkill")
+  expect(cleanupBlock).not.toContain("catch(() => undefined)")
+  expect(cleanupHelper).toContain("process.exitCode = 1")
+  expect(cleanupHelper).toContain("[cleanup] ${label}.force")
+})
+
+test("snapshot and rewind benchmarks surface instance cleanup failures", () => {
+  for (const source of [snapshotSrc, rewindSrc]) {
+    expect(source).toContain("const cleanupErrors: string[] = []")
+    expect(source).toContain("await Instance.disposeAll()")
+    expect(source).toContain("[cleanup] instance.disposeAll failed")
+    expect(source).toContain("cleanup_fail=${cleanupErrors.length}")
+    expect(source).toContain("cleanupErrors.length > 0 ? 1 : 0")
+    expect(source).not.toContain("Instance.disposeAll().catch(() => {})")
+  }
+})
+
 test("benchmark path flags tolerate shell-preserved wrapping quotes", () => {
   expect(src).toContain("function stripWrappingQuotes")
   expect(src).toContain('const report = stripWrappingQuotes(flag("--report"))')
@@ -110,10 +150,12 @@ test("benchmark local verification uses shared inactivity timeout", () => {
   expect(src).toContain("idle_timeout_ms=${idleTimeoutMs}")
   expect(src).toContain("Shell.run(cmd, {")
   expect(src).toContain("idleTimeoutMs")
+  expect(src).toContain("function throwIfBenchmarkIdle")
+  expect(src).toContain('throwIfBenchmarkIdle("final task status")')
+  expect(src).toContain('throwIfBenchmarkIdle("architect board")')
   expect(src).toContain('status: result.idleTimedOut ? "idle_timeout" : "completed"')
   expect(src).not.toContain("function assertRecentBenchmarkActivity")
   expect(src).not.toContain("had no benchmark activity")
-  expect(src).not.toContain("Date.now() - lastActivityLogAt")
 })
 
 test("benchmark trace override uses short runtime root instead of legacy trace path", () => {

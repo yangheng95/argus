@@ -121,6 +121,19 @@ test("launchBrowser centralizes browser error collector ownership", () => {
   expect(source).not.toContain("BROWSER_COLLECTOR_OPT_OUT")
 })
 
+test("launchBrowser binds RPC inactivity and lock release to sidecar lifecycle", () => {
+  const source = readFileSync(join(import.meta.dir, "launch.ts"), "utf8")
+
+  expect(source).toContain('this.refreshPendingRpcTimers("stdout")')
+  expect(source).toContain('this.refreshPendingRpcTimers("stderr")')
+  expect(source).toContain("rejectPendingBrowserCalls")
+  expect(source).toContain('this.child!.once("close"')
+  expect(source).toContain('await this.terminateSidecar("browser close")')
+  expect(source).toContain('detached: process.platform !== "win32"')
+  expect(source).toContain('spawn("taskkill.exe", ["/PID", String(pid), "/T", "/F"]')
+  expect(source).not.toContain("this.child?.kill()\n          this.release()")
+})
+
 test("app dialog browser fixture uses the shared collector and explicit unmatched 404s", () => {
   const source = readFileSync(join(import.meta.dir, "browser", "app-dialog-segmented-control.test.ts"), "utf8")
 

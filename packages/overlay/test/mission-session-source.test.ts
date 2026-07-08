@@ -2,17 +2,20 @@ import { expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
-;(globalThis as any).window = globalThis
-;(globalThis as any).location = { protocol: "http:", host: "localhost", origin: "http://localhost", pathname: "/" }
+;(globalThis as typeof globalThis & { window?: unknown }).window = globalThis
+;(globalThis as typeof globalThis & { location?: unknown }).location = {
+  protocol: "http:",
+  host: "localhost",
+  origin: "http://localhost",
+  pathname: "/",
+}
 
-const MISSION_TSX = readFileSync(join(import.meta.dir, "../src/components/Mission.tsx"), "utf8")
-const MISSION_LIST_TSX = readFileSync(join(import.meta.dir, "../src/components/MissionList.tsx"), "utf8")
 const CONVERSATION_TSX = readFileSync(join(import.meta.dir, "../src/components/Conversation.tsx"), "utf8")
 const CONVERSATION_SERVICE = readFileSync(join(import.meta.dir, "../src/services/conversation.ts"), "utf8")
 const TASK_SERVICE = readFileSync(join(import.meta.dir, "../src/services/task.ts"), "utf8")
 const MAIN_TSX = readFileSync(join(import.meta.dir, "../src/main.tsx"), "utf8")
 const CHAT_SERVICE = readFileSync(join(import.meta.dir, "../src/services/chat.ts"), "utf8")
-const CODING_ASSISTANT_SERVICE = readFileSync(join(import.meta.dir, "../src/services/coding-assistant.ts"), "utf8")
+const WORK_LEDGER_TSX = readFileSync(join(import.meta.dir, "../src/components/WorkLedger.tsx"), "utf8")
 
 test("session source hydrates from session conversation and submits to prompt_async", () => {
   expect(CONVERSATION_SERVICE).toContain('const prefix = source.kind === "task" ? "task" : "session"')
@@ -24,8 +27,9 @@ test("session source hydrates from session conversation and submits to prompt_as
   expect(TASK_SERVICE).toContain("`session/${encodeURIComponent(selectedSource.id)}/prompt_async`")
 })
 
-test("Mission session hydrate uses the selected row directory", () => {
-  expect(MISSION_TSX).toContain("openMissionSession(mission.sessionID, mission.directory)")
+test("Mission session hydrate uses the selected Work Ledger row directory", () => {
+  expect(MAIN_TSX).toContain("async function openWorkLedgerMission(row: WorkLedgerMissionRow)")
+  expect(MAIN_TSX).toContain("row.directory")
   expect(CONVERSATION_SERVICE).toContain(
     'if (source.kind === "session") return requireDirectory(trimmed, "hydrateConversation")',
   )
@@ -45,105 +49,41 @@ test("session source cannot page older task conversation history", () => {
   expect(CONVERSATION_TSX).toContain("loadOlderConversationHistory(source)")
 })
 
-test("Mission left activity selects session source and leaves chat rendering to main.tsx", () => {
-  expect(MISSION_TSX).toContain('setBoardStore("selectedSource", source)')
-  expect(MISSION_TSX).toContain("loadConversation(source")
-  expect(MISSION_TSX).toContain("startSSE(source")
+test("Work Ledger selects Mission and Chat sessions while main.tsx renders the shared conversation", () => {
+  expect(WORK_LEDGER_TSX).toContain("onSelectMission")
+  expect(WORK_LEDGER_TSX).toContain("onSelectChat")
+  expect(MAIN_TSX).toContain("async function openWorkLedgerMission")
+  expect(MAIN_TSX).toContain("async function openWorkLedgerChat")
+  expect(MAIN_TSX).toContain('setBoardStore("selectedSource", source)')
+  expect(MAIN_TSX).toContain("loadConversation(source")
+  expect(MAIN_TSX).toContain("startSSE(source")
   expect(MAIN_TSX).toContain("render(() => <Conversation container={chatScroll} />, chatScroll)")
   expect(MAIN_TSX).toContain("<ChatComposer")
-  expect(MISSION_TSX).not.toContain("function MissionConversation")
-  expect(MISSION_TSX).not.toContain("<Conversation container=")
-  expect(MISSION_TSX).not.toContain('composerDraftKey("mission", "session"')
+  expect(MAIN_TSX).not.toContain("<Mission")
+  expect(MAIN_TSX).not.toContain("<CodingAssistantSessionList")
 })
 
-test("composer draft keys are scoped to selected task, assistant session, and Mission launcher", () => {
+test("composer draft keys are scoped to selected task, selected session, and new Mission/Chat modes", () => {
   expect(MAIN_TSX).toContain("const panelComposerDraftKey = () =>")
-  expect(MAIN_TSX).toContain("if (missionSubmitActive())")
   expect(MAIN_TSX).toContain('composerDraftKey("mission", "new", directory)')
-  expect(MAIN_TSX).toContain('composerDraftKey("mission", "ledger", directory)')
-  expect(MAIN_TSX).toContain("canComposeChat() && !missionLedgerActive()")
+  expect(MAIN_TSX).toContain('composerDraftKey("assistant", "new", directory)')
   expect(MAIN_TSX).toContain('composerDraftKey("task", taskID)')
-  expect(MAIN_TSX).toContain('composerDraftKey("task", "new", directory)')
   expect(MAIN_TSX).toContain('composerDraftKey("session", sessionID)')
   expect(MAIN_TSX).toContain("draftKey={panelComposerDraftKey()}")
-  expect(MISSION_TSX).not.toContain("const missionLauncherDraftKey = () =>")
-  expect(MISSION_TSX).not.toContain('composerDraftKey("mission", "new", directory)')
 })
 
-test("Mission launcher and Coding Assistant reuse the main ChatComposer with separate bindings", () => {
-  expect(MISSION_TSX).not.toContain("<ChatComposer")
-  expect(MISSION_TSX).not.toContain("props.onCreateMission()")
-  expect(MISSION_TSX).not.toContain("panelMessage(")
-
+test("new Mission and Chat submissions reuse the main ChatComposer with separate mode bindings", () => {
   expect(MAIN_TSX).toContain("<ChatComposer")
-  expect(MAIN_TSX).toContain('document.getElementById("btnCreateMission")?.addEventListener("click"')
-  expect(MAIN_TSX).toContain("openMissionLauncher()")
-  expect(MAIN_TSX).toContain("draftKey={panelComposerDraftKey()}")
-  expect(MAIN_TSX).toMatch(
-    /placeholder=\{[\s\S]+?missionSubmitActive\(\)[\s\S]+?t\("mission\.launcher\.placeholder"\)[\s\S]+?\}/,
-  )
-  expect(MAIN_TSX).toMatch(/textareaDataUI=\{[\s\S]+?missionSubmitActive\(\)[\s\S]+?"mission-composer-input"[\s\S]+?\}/)
-  expect(MAIN_TSX).toContain("if (missionSubmitActive())")
-  expect(MAIN_TSX).toContain(
-    'const model = typeof appStore.config?.model === "string" ? appStore.config.model : undefined',
-  )
+  expect(MAIN_TSX).toContain("composerMode={composerMode()}")
+  expect(MAIN_TSX).toContain("onComposerModeChange={handleComposerModeChange}")
+  expect(MAIN_TSX).toContain("function missionSubmitActive(): boolean")
+  expect(MAIN_TSX).toContain("function assistantSubmitActive(): boolean")
   expect(MAIN_TSX).toContain("const result = await wakeMission({ text, model, promptProfile })")
   expect(MAIN_TSX).toContain("await openMissionSession(result)")
-  expect(MAIN_TSX).toContain("await panelMessage(text, attachments")
+  expect(MAIN_TSX).toContain("await createCodingAssistantSession({ directory: activeDirectory() })")
+  expect(MAIN_TSX).toContain("await panelMessage(text, attachments, metadata)")
   expect(CHAT_SERVICE).toContain("const sessionID = activeSessionID()")
   expect(CHAT_SERVICE).toContain("`session/${encodeURIComponent(sessionID)}/prompt_async`")
-
-  expect(CODING_ASSISTANT_SERVICE).toContain('const source: BoardSource = { kind: "session", id: sessionID }')
-  expect(CODING_ASSISTANT_SERVICE).toContain('setCodingAssistantStore("selectedSessionID", sessionID)')
-  expect(CODING_ASSISTANT_SERVICE).toContain(
-    'resetWriter({ scrollIntent: "bottom", cause: "coding-assistant-switch" })',
-  )
-  expect(CODING_ASSISTANT_SERVICE).toContain("startSSE(source, 0, { directory })")
-  expect(CODING_ASSISTANT_SERVICE).not.toContain("wakeMission")
-})
-
-test("Mission ledger uses MissionList and not the task list projection", () => {
-  expect(MISSION_TSX).toContain('import { MissionList } from "./MissionList"')
-  expect(MISSION_TSX).toContain("<MissionList")
-  expect(MISSION_TSX).toContain("loadMissions")
-  expect(MISSION_TSX).toContain("activation: props.activationToken ?? 0")
-  expect(MISSION_TSX).toContain("sharedRefresh: props.refreshToken ?? 0")
-  expect(MISSION_TSX).not.toContain('import { TaskList } from "./TaskList"')
-  expect(MISSION_TSX).not.toContain("<TaskList")
-  expect(MISSION_TSX).not.toContain("visibleTasks")
-  expect(MISSION_TSX).not.toContain("function MissionTaskConversation")
-  expect(MISSION_TSX).not.toContain('data-ui="mission-task-conversation"')
-})
-
-test("Mission ledger groups records by project directory", () => {
-  expect(MISSION_LIST_TSX).toContain("const groupedMissions = createMemo")
-  expect(MISSION_LIST_TSX).toContain("mission.directory")
-  expect(MISSION_LIST_TSX).toContain("ProjectLedgerGroup")
-  expect(MISSION_LIST_TSX).toContain("createProjectLedgerGroupCollapseState")
-  expect(MISSION_LIST_TSX).toContain('class="mission-project-group"')
-  expect(MISSION_LIST_TSX).toContain('dataUi="mission-project-group"')
-  expect(MISSION_LIST_TSX).not.toContain('class="project-group-heading"')
-  expect(MISSION_LIST_TSX).not.toContain('class="project-group mission-project-group"')
-  expect(MISSION_LIST_TSX).toContain("<For each={group.items}>")
-})
-
-test("Mission load-more busy state is scoped to the request source", () => {
-  expect(MISSION_TSX).toContain("missionsLoadingMoreSource")
-  expect(MISSION_TSX).toContain("sameMissionSource")
-  expect(MISSION_TSX).toContain("setMissionsLoadingMoreSource(source)")
-  expect(MISSION_TSX).toContain("loadingMore={missionsLoadingMore()}")
-})
-
-test("Mission launcher submits through wakeMission rather than task composition", () => {
-  expect(MAIN_TSX).toContain(
-    'const model = typeof appStore.config?.model === "string" ? appStore.config.model : undefined',
-  )
-  expect(MAIN_TSX).toContain("const result = await wakeMission({ text, model, promptProfile })")
-  expect(MAIN_TSX).toContain("missionSubmitActive()")
-  expect(MAIN_TSX).toContain("await openMissionSession(result)")
-  expect(MISSION_TSX).not.toContain("wakeMission")
-  expect(MISSION_TSX).not.toContain('source: "gateway"')
-  expect(MISSION_TSX).not.toContain("composeTaskText")
 })
 
 test("session empty state does not borrow the first task as Mission context", () => {

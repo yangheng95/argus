@@ -3,6 +3,7 @@ import { and, desc, eq } from "drizzle-orm"
 import { browserPreviewEvidenceIDFromRef, findReadableBrowserPreviewEvidenceByID } from "@/browser-preview/persist"
 import type { PersistedBrowserPreviewEvidence } from "@/browser-preview/persist"
 import { EngineArtifactTable } from "@/engine/engine.sql"
+import { recordEngineArtifact } from "@/engine/artifact"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage/db"
 
@@ -124,7 +125,9 @@ export async function validateVisualFeedbackVerification(input: {
     issues.push(`verification ${verification.id} status=${verification.status}`)
   }
   if (verification.productionBlockerIDs.length > 0) {
-    issues.push(`verification ${verification.id} has production blockers: ${verification.productionBlockerIDs.join(", ")}`)
+    issues.push(
+      `verification ${verification.id} has production blockers: ${verification.productionBlockerIDs.join(", ")}`,
+    )
   }
   if (verification.referenceComparisonEvidenceRefs.length === 0) {
     issues.push(`verification ${verification.id} has no referenceComparisonEvidenceRefs`)
@@ -206,38 +209,32 @@ export function persistVisualFeedbackVerificationArtifact(input: {
   }
   const now = input.now ?? Date.now()
   const id = Identifier.ascending("artifact")
-  Database.use((db) =>
-    db
-      .insert(EngineArtifactTable)
-      .values({
-        id,
-        task_id: input.taskID,
-        run_id: input.runID,
-        goal_run_id: input.goalRunID ?? null,
-        acceptance_id: input.acceptanceID ?? null,
-        kind: "verification-evidence",
-        label: VISUAL_FEEDBACK_VERIFICATION_ARTIFACT_LABEL,
-        payload: {
-          scope: "visual_feedback",
+  recordEngineArtifact({
+    id,
+    taskID: input.taskID,
+    runID: input.runID,
+    goalRunID: input.goalRunID,
+    acceptanceID: input.acceptanceID,
+    kind: "verification-evidence",
+    label: VISUAL_FEEDBACK_VERIFICATION_ARTIFACT_LABEL,
+    payload: {
+      scope: "visual_feedback",
+      status: input.verification.status,
+      verdict: input.verification.status === "passed" ? "accepted" : "rejected",
+      summary: input.verification.summary,
+      checks: [
+        {
+          name: VISUAL_FEEDBACK_VERIFICATION_ARTIFACT_LABEL,
           status: input.verification.status,
-          verdict: input.verification.status === "passed" ? "accepted" : "rejected",
-          summary: input.verification.summary,
-          checks: [
-            {
-              name: VISUAL_FEEDBACK_VERIFICATION_ARTIFACT_LABEL,
-              status: input.verification.status,
-              evidence: summarizeVisualFeedbackVerification(input.verification),
-              scorer_kind: "prebuilt",
-            },
-          ],
-          time_completed: now,
-          visual_feedback_verification: input.verification,
+          evidence: summarizeVisualFeedbackVerification(input.verification),
+          scorer_kind: "prebuilt",
         },
-        time_created: now,
-        time_updated: now,
-      })
-      .run(),
-  )
+      ],
+      time_completed: now,
+      visual_feedback_verification: input.verification,
+    },
+    timeCreated: now,
+  })
   return id
 }
 

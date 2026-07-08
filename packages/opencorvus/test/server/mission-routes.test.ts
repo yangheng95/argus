@@ -6,9 +6,13 @@ import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
 import { ensureMissionSession } from "../../src/mission/session"
 import { Server } from "../../src/server/server"
+import { MissionRoutes } from "../../src/server/routes/mission"
+import { serverErrorResponse } from "../../src/server/error-handler"
 import { Session, SessionStatus } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
 import { SessionTable } from "../../src/session/session.sql"
+import { EngineService } from "../../src/task-api"
+import { createTaskCancellationIncomplete } from "../../src/engine/cancellation-error"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -457,6 +461,129 @@ describe("mission routes", () => {
         expect(
           Database.use((db) => db.select().from(SessionTable).where(eq(SessionTable.id, session.id)).get()),
         ).toBeUndefined()
+      },
+    })
+  })
+
+  test("DELETE /mission/:missionID cancels active Mission child tasks before deleting the Mission session", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = MissionRoutes()
+        const session = await ensureMissionSession({ missionID: "m-delete-active", defaultCwd: tmp.path })
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "mission",
+              title: "Mission active child before delete",
+              request: "active child before delete",
+              metadata: { actor: "mission", mission: { id: session.missionID, session_id: session.id } },
+              time_started: now,
+              time_completed: null,
+              error: null,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
+        const cancelTask = spyOn(EngineService, "cancelTask").mockImplementation(async (cancelledTaskID) => {
+          expect(cancelledTaskID).toBe(taskID)
+          Database.use((db) =>
+            db
+              .update(EngineTaskTable)
+              .set({
+                time_completed: Date.now(),
+                error: "task cancelled",
+                metadata: {
+                  actor: "mission",
+                  mission: { id: session.missionID, session_id: session.id },
+                  cancelled: true,
+                },
+              })
+              .where(eq(EngineTaskTable.id, taskID))
+              .run(),
+          )
+          return true
+        })
+
+        const response = await app.request("/m-delete-active", {
+          method: "DELETE",
+        })
+
+        expect(response.status).toBe(200)
+        expect(await response.json()).toBe(true)
+        expect(cancelTask).toHaveBeenCalledTimes(1)
+        expect(
+          Database.use((db) => db.select().from(SessionTable).where(eq(SessionTable.id, session.id)).get()),
+        ).toBeUndefined()
+        const task = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
+        expect(task?.time_completed).not.toBeNull()
+        expect(task?.error).toBe("task cancelled")
+        expect((task?.metadata as Record<string, unknown> | null)?.cancelled).toBe(true)
+        await Instance.disposeAll()
+      },
+    })
+  })
+
+  test("DELETE /mission/:missionID preserves Mission and task rows when child task cancellation fails", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = MissionRoutes().onError(serverErrorResponse)
+        const session = await ensureMissionSession({ missionID: "m-delete-conflict", defaultCwd: tmp.path })
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "mission",
+              title: "Mission child cancellation conflict",
+              request: "child cancellation conflict",
+              metadata: { actor: "mission", mission: { id: session.missionID, session_id: session.id } },
+              time_started: now,
+              time_completed: null,
+              error: null,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
+        spyOn(EngineService, "cancelTask").mockImplementation(async () => {
+          throw createTaskCancellationIncomplete({
+            taskID,
+            handle: "test.child.cancel",
+            cause: new Error("child cancellation did not settle"),
+          })
+        })
+
+        const response = await app.request("/m-delete-conflict", {
+          method: "DELETE",
+        })
+
+        expect(response.status).toBe(409)
+        expect(await response.json()).toMatchObject({
+          name: "TaskCancellationIncompleteError",
+          data: {
+            handle: "mission.delete",
+          },
+        })
+        expect(
+          Database.use((db) => db.select().from(SessionTable).where(eq(SessionTable.id, session.id)).get())?.id,
+        ).toBe(session.id)
+        expect(
+          Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())?.id,
+        ).toBe(taskID)
+        await Instance.disposeAll()
       },
     })
   })

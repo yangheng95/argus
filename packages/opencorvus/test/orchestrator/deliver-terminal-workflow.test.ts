@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 
-test("orchestrator workflow retires deliver and completes through explicit orchestrator complete_task", async () => {
+test("orchestrator workflow retires deliver and completes through explicit orchestrator manage_task action", async () => {
   const prompt = await Bun.file(new URL("../../src/prompt/core/orchestrator-core.txt", import.meta.url)).text()
   const agent = await Bun.file(new URL("../../src/orchestrator/agent.ts", import.meta.url)).text()
   const workflow = await Bun.file(new URL("../../src/engine/workflow.ts", import.meta.url)).text()
@@ -14,8 +14,8 @@ test("orchestrator workflow retires deliver and completes through explicit orche
   expect(normalizedPrompt).toContain(
     "Workflow tasks complete only when you, the Orchestrator, decide the current durable task evidence satisfies the user request",
   )
-  expect(normalizedPrompt).toContain("call `complete_task` with a concrete completion summary")
-  expect(normalizedPrompt).toContain("Use `integrity` as an optional system-completeness review report")
+  expect(normalizedPrompt).toContain("call `manage_task` action=complete_task with a concrete completion summary")
+  expect(normalizedPrompt).toContain("Non-pass `dispatch_agent` target=integrity returns evidence")
   expect(normalizedPrompt).toContain("Valid next actions include task-level build")
   expect(prompt).not.toContain("Accepted deliveries complete the task inside the tool")
   expect(prompt).not.toContain("Rejected `deliver` returns evidence")
@@ -35,7 +35,7 @@ test("orchestrator workflow retires deliver and completes through explicit orche
 
   expect(tools).not.toContain("deliver: tool")
   expect(tools).not.toContain("publish_acceptance: tool")
-  expect(tools).toContain("complete_task")
+  expect(tools).toContain("manage_task")
   expect(tools).toContain("Pass report persisted")
   expect(tools).not.toContain("Task completed by passing integrity gate")
   expect(tools).not.toContain("requestStopAfterCurrentStep")
@@ -43,7 +43,6 @@ test("orchestrator workflow retires deliver and completes through explicit orche
   expect(tools).not.toContain("stopAfterDispatch")
   // Retirement removed the acceptance-rework auto-wake loop: the host no longer
   // re-dispatches the task loop to queue repair work after a verdict.
-  expect(tools).not.toContain("dispatchTaskLoop({")
   expect(tools).not.toContain("queueAcceptanceReworkWake")
   expect(tools).not.toContain("acceptanceRework")
 })

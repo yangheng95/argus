@@ -146,17 +146,27 @@ import {
   EngineTaskTable,
   type EngineArtifactKind,
 } from "@/engine/engine.sql"
+import { recordEngineArtifact } from "@/engine/artifact"
+import { mergeEngineTaskMetadata, touchEngineTask } from "@/engine/task"
 import {
-  supersedePriorActivePlansForTask,
+  insertEngineSpecSnapshot,
+  supersedeActiveEngineSpecSnapshotsForTask,
+  supersedeEngineSpecSnapshot,
+  updateEngineSpecSnapshotContent,
+} from "@/engine/spec-snapshot"
+import {
   appendGoalToActiveGraph,
   completeGoal,
+  createActivePlanGraph,
   deleteGoal as deleteGoalRow,
   ensureBuildRetryEvidenceForGoal,
   persistTaskFrontendResearchBrief,
   persistTaskResearchBrief,
   recordTaskLevelBuildOutcome,
+  updateGoalContractFields,
   updateGoalWorkspace,
   updateGoalRun,
+  type GoalContractFieldPatch,
 } from "@/engine/persist"
 import {
   findActivePlanForTask,
@@ -383,31 +393,28 @@ const StageContinuationArtifactIDField = z
 
 const RequirementsInputSchema = z
   .object({
-    reason: z.string().optional().describe("Why you decided to analyze requirements"),
+    reason: z.string().min(1).describe("Why you decided to analyze requirements"),
     continuation_artifact_id: StageContinuationArtifactIDField,
   })
   .strict()
 
 const ArchitectInputSchema = z
   .object({
-    reason: z.string().optional().describe("Why you decided to run architect"),
+    reason: z.string().min(1).describe("Why you decided to run architect"),
     continuation_artifact_id: StageContinuationArtifactIDField,
   })
   .strict()
 
 const WorkloadAnalysisInputSchema = z
   .object({
-    reason: z.string().optional().describe("Why you decided to run workload analysis"),
+    reason: z.string().min(1).describe("Why you decided to run workload analysis"),
     continuation_artifact_id: StageContinuationArtifactIDField,
   })
   .strict()
 
 const AnalyzeIntentInputSchema = z
   .object({
-    reason: z
-      .string()
-      .optional()
-      .describe("Why you decided to run intent analysis (first-wake / re-entry / scope change)"),
+    reason: z.string().min(1).describe("Why you decided to run intent analysis (first-wake / re-entry / scope change)"),
     continuation_artifact_id: StageContinuationArtifactIDField,
   })
   .strict()
@@ -418,7 +425,7 @@ const ExploreInputSchema = z
       .string()
       .min(1)
       .describe("The focused repository question the explore subagent must answer with file/symbol evidence."),
-    reason: z.string().optional().describe("Why this repository investigation is needed before the next stage."),
+    reason: z.string().min(1).describe("Why this repository investigation is needed before the next stage."),
   })
   .strict()
 
@@ -1742,6 +1749,7 @@ const DeleteGoalInputSchema = z.object({
 
 const FrontendDesignReasonField = z
   .string()
+  .min(1)
   .describe(
     "Why frontend_design is the right visual implementation-template producer for the current task. Name the requested deliverable, the visual reference source, and why the downstream workflow needs a frontend_design public report/evidence manifest instead of only research notes. For live webpage clones with no non-stale Page Skeleton Blueprint, call frontend_research before frontend_design instead of using frontend_design to discover page information architecture.",
   )
@@ -2029,7 +2037,7 @@ function resolveFactCheckTargetScope(input: {
 
 const IntegrityInputSchema = z
   .object({
-    reason: z.string().optional().describe("Why you decided to run integrity review"),
+    reason: z.string().min(1).describe("Why you decided to run integrity review"),
     continuation_artifact_id: StageContinuationArtifactIDField,
   })
   .strict()
@@ -2102,6 +2110,8 @@ const RetryTaskInputSchema = z
   })
   .strict()
 
+const QueryFailedGoalsInputSchema = z.object({}).strict()
+
 const ManageTaskActionInputSchemas = {
   propose_task: ProposeTaskInputSchema,
   complete_task: CompleteTaskInputSchema,
@@ -2112,6 +2122,7 @@ const ManageTaskActionInputSchemas = {
   modify_goal: ModifyGoalInputSchema,
   complete_goal: CompleteGoalInputSchema,
   delete_goal: DeleteGoalInputSchema,
+  query_failed_goals: QueryFailedGoalsInputSchema,
 } satisfies Record<string, z.ZodObject<any>>
 
 const MANAGE_TASK_ACTION_NAMES = Object.keys(ManageTaskActionInputSchemas) as [
@@ -2140,6 +2151,7 @@ const BuildInputSchema = z
       ),
     reason: z
       .string()
+      .min(1)
       .describe(
         "One sentence explaining why this build is valid now: explicit kind=build, per-goal pipeline execution, post-acceptance whole-task rework, or a conscious direct-build decision for this workflow task.",
       ),
@@ -2187,23 +2199,29 @@ const SchedulerDispatchTargetInputSchemas = {
 
 function dispatchAgentTargetNamesForWorkflow(
   workflow: MiniWorkflow | undefined,
+  projectedTargets?: readonly OrchestratorWorkflowToolName[],
 ): [OrchestratorWorkflowToolName, ...OrchestratorWorkflowToolName[]] {
   const source = workflow?.steps.map((step) => step.tool) ?? ORCHESTRATOR_WORKFLOW_TOOL_NAMES
+  const projectedTargetSet = projectedTargets ? new Set(projectedTargets) : undefined
   const targets: OrchestratorWorkflowToolName[] = []
   for (const toolName of source) {
     if (!Object.hasOwn(SchedulerDispatchTargetInputSchemas, toolName)) continue
+    if (projectedTargetSet && !projectedTargetSet.has(toolName)) continue
     if (!targets.includes(toolName)) targets.push(toolName)
   }
   if (targets.length === 0) {
-    throw new Error("dispatch_agent requires at least one workflow target")
+    throw new Error("dispatch_agent requires at least one workflow target after active capability projection")
   }
   return targets as [OrchestratorWorkflowToolName, ...OrchestratorWorkflowToolName[]]
 }
 
-function dispatchAgentInputSchemaForWorkflow(workflow: MiniWorkflow | undefined) {
+function dispatchAgentInputSchemaForWorkflow(
+  workflow: MiniWorkflow | undefined,
+  projectedTargets?: readonly OrchestratorWorkflowToolName[],
+) {
   return z.discriminatedUnion(
     "target",
-    dispatchAgentTargetNamesForWorkflow(workflow).map((target) =>
+    dispatchAgentTargetNamesForWorkflow(workflow, projectedTargets).map((target) =>
       SchedulerDispatchTargetInputSchemas[target].safeExtend({
         target: z
           .literal(target)
@@ -4985,6 +5003,19 @@ export function computeContractFieldChanges(
   return setValues
 }
 
+function dependencyGraphMutationError(input: {
+  taskID: string
+  action: "add_goal" | "modify_goal"
+}): string | undefined {
+  const graphArtifact = findLatestArchitectContractGraphArtifact(input.taskID)
+  if (!graphArtifact) return undefined
+  return (
+    `Error: ${input.action} refused because depends_on is owned by Architect Contract Graph artifact ` +
+    `${graphArtifact.id}. Dependency edges must be registered through Architect register_dependency_contract ` +
+    "and finalized by submit_architect so engine_goal.depends_on and architect_contract_graph.dependency_contracts stay aligned; database unchanged."
+  )
+}
+
 export function validatePersistedArchitectFidelity(input: {
   task: TaskRow
   goals: Array<{ id: string; owned_paths?: string[] }>
@@ -6091,6 +6122,7 @@ export function createOrchestratorTools(input: {
   agentSessionID: string
   signal?: AbortSignal
   workflow?: import("@/engine/workflow").MiniWorkflow
+  dispatchAgentTargets?: readonly import("@/engine/workflow").OrchestratorWorkflowToolName[]
   workflowState?: import("@/engine/workflow").WorkflowState
   operatorMessage?: {
     text: string
@@ -6381,78 +6413,22 @@ export function createOrchestratorTools(input: {
     const now = Date.now()
     const executor = task.executor
     const sessionID = task.session_id!
-    const planID = Identifier.ascending("plan")
-    const { EnginePlanVersionTable, EnginePlanNodeTable, EngineGoalTable } = await import("@/engine/engine.sql")
+    let planID = ""
 
     Database.transaction((db) => {
-      // Single-active-plan invariant: retire every prior active plan for this
-      // task before inserting the new one. Without this, a second
-      // createExecutionRunRecord call would leave two rows with
-      // status='active' / version=1; findActivePlanForTask's
-      // `ORDER BY version DESC LIMIT 1` then returns whichever rowid wins the
-      // tie (typically the older row, whose goals were re-pointed to the new
-      // plan), and the board loads zero goals.
-      supersedePriorActivePlansForTask(db, { taskID, now })
-      db.insert(EnginePlanVersionTable)
-        .values({
-          id: planID,
-          task_id: taskID,
-          spec_snapshot_id: activeSpec.id,
-          version: 1,
-          status: "active",
-          summary: `${dbGoals.length} goals`,
-          prompt: task.request,
-          metadata: {},
-          time_created: now,
-          time_updated: now,
-        })
-        .run()
-
-      const goalToPlanNode = new Map<string, string>()
-      const planNodeIDs: string[] = []
-      for (const goal of dbGoals) {
-        const pnID = Identifier.ascending("plan_node")
-        planNodeIDs.push(pnID)
-        goalToPlanNode.set(goal.id, pnID)
-      }
-
-      for (const [index, goal] of dbGoals.entries()) {
-        const resolvedDeps = (goal.depends_on ?? []).flatMap((depGoalID: string) => {
-          const pnID = goalToPlanNode.get(depGoalID)
-          if (!pnID) {
-            log.warn("create_run: goal.depends_on references unknown goal ID — dropping", {
-              goalID: goal.id,
-              goalTitle: goal.title,
-              unknownDep: depGoalID,
-            })
-          }
-          return pnID ? [pnID] : []
-        })
-
-        db.insert(EnginePlanNodeTable)
-          .values({
-            id: planNodeIDs[index],
-            task_id: taskID,
-            plan_version_id: planID,
-            kind: "goal",
-            goal_id: goal.id,
-            title: goal.title,
-            brief: renderSpecsAsText((goal.acceptance_specs ?? []) as AcceptanceSpec[]),
-            depends_on_ids: resolvedDeps.length > 0 ? resolvedDeps : undefined,
-            order_index: index,
-            metadata: {},
-            time_created: now,
-            time_updated: now,
-          })
-          .run()
-      }
-
-      for (const goal of dbGoals) {
-        db.update(EngineGoalTable)
-          .set({ plan_version_id: planID, time_updated: now })
-          .where(eq(EngineGoalTable.id, goal.id))
-          .run()
-      }
+      const createdPlan = createActivePlanGraph(db, {
+        taskID,
+        specSnapshotID: activeSpec.id,
+        prompt: task.request,
+        goals: dbGoals.map((goal) => ({
+          id: goal.id,
+          title: goal.title,
+          acceptance_specs: (goal.acceptance_specs ?? []) as AcceptanceSpec[],
+          depends_on: goal.depends_on ?? [],
+        })),
+        now,
+      })
+      planID = createdPlan.planID
     })
 
     const { createRun } = await import("@/engine/writer")
@@ -7375,7 +7351,6 @@ export function createOrchestratorTools(input: {
         remapArchitectContractGraphGoalIDs,
         renderContractGraphForPrompt,
       } = await import("@/architect/contract-graph")
-      const { EngineSpecSnapshotTable } = await import("@/engine/engine.sql")
 
       const result = await ArchitectAgent.coordinate({
         goals: existingGoals.map((g) => ({
@@ -7413,7 +7388,7 @@ export function createOrchestratorTools(input: {
         },
       })
 
-      const newSpecSnapshotID = Identifier.ascending("spec")
+      let newSpecSnapshotID = ""
       const priorSpecSnapshotID = findActiveSpecForTask(task.id)?.id
       const reqLines = requirements.map(
         (r) =>
@@ -7433,19 +7408,15 @@ export function createOrchestratorTools(input: {
       try {
         Database.transaction((db) => {
           const now = Date.now()
-          db.insert(EngineSpecSnapshotTable)
-            .values({
-              id: newSpecSnapshotID,
-              task_id: taskID,
-              version: 2,
-              status: "ready",
-              summary: result.summary,
-              content: `${task.title}\n\n${result.summary}\n\n${result.decompositionAnalysis}`,
-              scope: requirements.map((r) => r.description).join("; "),
-              time_created: now,
-              time_updated: now,
-            })
-            .run()
+          newSpecSnapshotID = insertEngineSpecSnapshot(db, {
+            taskID,
+            version: 2,
+            status: "ready",
+            summary: result.summary,
+            content: `${task.title}\n\n${result.summary}\n\n${result.decompositionAnalysis}`,
+            scope: requirements.map((r) => r.description).join("; "),
+            timeCreated: now,
+          })
 
           if (priorSpecSnapshotID) {
             copyRequirementsToSpecSnapshot(db, {
@@ -7455,10 +7426,7 @@ export function createOrchestratorTools(input: {
               now,
             })
 
-            db.update(EngineSpecSnapshotTable)
-              .set({ status: "superseded", time_updated: now })
-              .where(eq(EngineSpecSnapshotTable.id, priorSpecSnapshotID))
-              .run()
+            supersedeEngineSpecSnapshot(db, { id: priorSpecSnapshotID, timeUpdated: now })
           }
 
           const out = upsertGoalsFromArchitect(db, {
@@ -7568,25 +7536,12 @@ export function createOrchestratorTools(input: {
             "## Architect Contracts",
             ...(mappedContractLines.length > 0 ? mappedContractLines : ["_(none)_"]),
           ].join("\n")
-          db.update(EngineSpecSnapshotTable)
-            .set({ content: mappedSpecContent, time_updated: now })
-            .where(eq(EngineSpecSnapshotTable.id, newSpecSnapshotID))
-            .run()
-          const taskMetadata =
-            task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)
-              ? (task.metadata as Record<string, unknown>)
-              : {}
-
-          db.update(EngineTaskTable)
-            .set({
-              metadata: {
-                ...taskMetadata,
-                architect_fidelity: mappedArchitectFidelity,
-              },
-              time_updated: now,
-            })
-            .where(eq(EngineTaskTable.id, taskID))
-            .run()
+          updateEngineSpecSnapshotContent(db, { id: newSpecSnapshotID, content: mappedSpecContent, timeUpdated: now })
+          mergeEngineTaskMetadata(db, {
+            taskID,
+            metadata: { architect_fidelity: mappedArchitectFidelity },
+            timeUpdated: now,
+          })
 
           Database.effect(() =>
             EngineProtocol.emit(
@@ -7735,9 +7690,8 @@ export function createOrchestratorTools(input: {
       }
 
       const { insertRequirements } = await import("@/engine/persist")
-      const { EngineSpecSnapshotTable } = await import("@/engine/engine.sql")
       const now = Date.now()
-      const specSnapshotID = Identifier.ascending("spec")
+      let specSnapshotID = ""
       const specContent = [
         `# ${task.title}`,
         "",
@@ -7755,25 +7709,16 @@ export function createOrchestratorTools(input: {
 
       try {
         Database.transaction((db) => {
-          db.update(EngineSpecSnapshotTable)
-            .set({ status: "superseded", time_updated: now })
-            .where(
-              and(eq(EngineSpecSnapshotTable.task_id, taskID), sql`${EngineSpecSnapshotTable.status} != 'superseded'`),
-            )
-            .run()
-          db.insert(EngineSpecSnapshotTable)
-            .values({
-              id: specSnapshotID,
-              task_id: taskID,
-              version: 1,
-              status: "ready",
-              summary: result.summary,
-              content: specContent,
-              scope: result.requirements.map((r) => r.description).join("; "),
-              time_created: now,
-              time_updated: now,
-            })
-            .run()
+          supersedeActiveEngineSpecSnapshotsForTask(db, { taskID, timeUpdated: now })
+          specSnapshotID = insertEngineSpecSnapshot(db, {
+            taskID,
+            version: 1,
+            status: "ready",
+            summary: result.summary,
+            content: specContent,
+            scope: result.requirements.map((r) => r.description).join("; "),
+            timeCreated: now,
+          })
 
           if (result.requirements.length > 0) {
             insertRequirements(db, {
@@ -7792,12 +7737,7 @@ export function createOrchestratorTools(input: {
             })
           }
 
-          db.update(EngineTaskTable)
-            .set({
-              time_updated: now,
-            })
-            .where(eq(EngineTaskTable.id, taskID))
-            .run()
+          touchEngineTask(db, { taskID, timeUpdated: now })
           Database.effect(() =>
             EngineProtocol.emit(
               EngineEvent.TaskUpdated,
@@ -10231,23 +10171,17 @@ export function createOrchestratorTools(input: {
           value: resultText,
           reason: reason?.trim() || question.trim(),
         })
-        Database.use((db) => {
-          db.insert(EngineArtifactTable)
-            .values({
-              id: Identifier.ascending("artifact"),
-              task_id: taskID,
-              kind: "exploration",
-              label: "explore",
-              payload: {
-                question: question.trim(),
-                reason: reason?.trim() || null,
-                session_id: exploreResult.sessionID,
-                result: resultText,
-              },
-              time_created: now,
-              time_updated: now,
-            })
-            .run()
+        recordEngineArtifact({
+          taskID,
+          kind: "exploration",
+          label: "explore",
+          payload: {
+            question: question.trim(),
+            reason: reason?.trim() || null,
+            session_id: exploreResult.sessionID,
+            result: resultText,
+          },
+          timeCreated: now,
         })
 
         return SubAgentProtocol.yieldResult({
@@ -10293,6 +10227,10 @@ export function createOrchestratorTools(input: {
             `add_goal: rejected because depends_on references unknown goal id(s): ${unknownDeps.join(", ")}. ` +
             `Use durable engine_goal.id values from the current task snapshot.`
           )
+        }
+        if ((goal.depends_on ?? []).length > 0) {
+          const graphMutationError = dependencyGraphMutationError({ taskID, action: "add_goal" })
+          if (graphMutationError) return graphMutationError
         }
 
         const now = Date.now()
@@ -10397,17 +10335,17 @@ export function createOrchestratorTools(input: {
 
         const changed = Object.keys(setValues)
         const contractChanged = changed.length > 0
+        if (Object.prototype.hasOwnProperty.call(setValues, "depends_on")) {
+          const graphMutationError = dependencyGraphMutationError({ taskID, action: "modify_goal" })
+          if (graphMutationError) return graphMutationError
+        }
         const statusReset =
           contractChanged && (goalStatusByID(goal.id) === "passed" || goalStatusByID(goal.id) === "failed")
 
         if (contractChanged) {
           setValues.time_updated = Date.now()
-          const { EngineGoalTable } = await import("@/engine/engine.sql")
           Database.use((db) => {
-            db.update(EngineGoalTable)
-              .set(setValues as any)
-              .where(eq(EngineGoalTable.id, goalID))
-              .run()
+            updateGoalContractFields(db, { goalID, values: setValues as GoalContractFieldPatch })
           })
         }
 
@@ -10549,7 +10487,7 @@ export function createOrchestratorTools(input: {
       execute: async () => {
         const dbGoals = listGoals(taskID)
         const failed = dbGoals.filter((g) => goalStatusByID(g.id) === "failed")
-        if (failed.length === 0) return "No failed goals."
+        if (failed.length === 0) return withExplicitDecisionEffectMetadata("No failed goals.", "observation")
         const { listGoalRunsForTask, findAcceptanceByGoalRun } = await import("@/engine/store")
         const goalRuns = listGoalRunsForTask(taskID)
         const sections: string[] = [`## Failed Goals (${failed.length})`]
@@ -10602,7 +10540,7 @@ export function createOrchestratorTools(input: {
         }
         const result = sections.join("\n")
         SubAgentProtocol.report(result, "tool:query_failed_goals")
-        return result
+        return withExplicitDecisionEffectMetadata(result, "observation")
       },
     }),
 
@@ -13738,7 +13676,7 @@ export function createOrchestratorTools(input: {
     build: tool({
       description:
         "Implementation dispatcher. Runs the build agent (read / write / edit / bash) in-process to apply " +
-        "one scoped change. Two valid dispatch_agent target=build shapes exist. `dispatch_agent({ target: \"build\", goalID })` is the normal workflow " +
+        'one scoped change. Two valid dispatch_agent target=build shapes exist. `dispatch_agent({ target: "build", goalID })` is the normal workflow ' +
         "shape after architect has registered goals. On retry/rework, omit `request` when persisted " +
         "failure facts already exist; the build retry message is composed from those facts only. " +
         "Retry context recovery is selected from durable prior-session evidence when worktreeUsage is " +
@@ -13746,7 +13684,7 @@ export function createOrchestratorTools(input: {
         "a fresh child session on the same recorded goal worktree. Do not express this through `reason`, " +
         "`request`, or a `freshContext` field. " +
         "Use `request` for a per-goal retry only when you have one exact new operator/error fact that " +
-        "is not already in persisted build, acceptance, or integrity evidence. `dispatch_agent({ target: \"build\", request, directBuildIntent })` without goalID is a task-level " +
+        'is not already in persisted build, acceptance, or integrity evidence. `dispatch_agent({ target: "build", request, directBuildIntent })` without goalID is a task-level ' +
         "direct implementation build. It is supported for explicit `kind=build` tasks, whole-task rework after " +
         "acceptance rejection, and rare operator/orchestrator decisions to bypass goal decomposition for a scoped " +
         "workflow implementation task. It also owns same-task stuck-state repairs that require file edits: " +
@@ -13758,7 +13696,7 @@ export function createOrchestratorTools(input: {
         "builds must declare directBuildIntent='modify_files' for scoped implementation. Repository investigation " +
         "belongs to analyze_intent, requirements, or the registered explore subagent surface; do not route that work " +
         "through dispatch_agent target=build. " +
-        "For `dispatch_agent({ target: \"build\", goalID })`, the tool returns after the child build session and goal_run have started; terminal completion arrives later as goal_run/acceptance/decision-log evidence and a terminal refill wake. " +
+        'For `dispatch_agent({ target: "build", goalID })`, the tool returns after the child build session and goal_run have started; terminal completion arrives later as goal_run/acceptance/decision-log evidence and a terminal refill wake. ' +
         "For task-level direct builds, the tool returns the terminal build report. Build does NOT auto-complete " +
         "workflow tasks. Integrity is an optional final review surface after all blocking implementation work " +
         "are terminal. A post-build pass returns evidence for the Orchestrator completion decision; non-pass integrity returns session-bound review evidence to this same reasoning turn; " +
@@ -15836,7 +15774,7 @@ export function createOrchestratorTools(input: {
     }
   }
 
-  const dispatchAgentInputSchema = dispatchAgentInputSchemaForWorkflow(input.workflow)
+  const dispatchAgentInputSchema = dispatchAgentInputSchemaForWorkflow(input.workflow, input.dispatchAgentTargets)
   const dispatchAgentTool = tool({
     description:
       "Single scheduler agent dispatch tool. Use target to select the worker agent stage, then provide the target-specific fields. " +
@@ -15856,8 +15794,8 @@ export function createOrchestratorTools(input: {
 
   const manageTaskTool = tool({
     description:
-      "Single scheduler task-management tool. Use action to select task or goal lifecycle behavior, then provide action-specific fields. " +
-      "This replaces separate visible lifecycle tools such as propose_task, complete_task, fail_task, cancel_task, retry_task, add_goal, modify_goal, complete_goal, and delete_goal.",
+      "Single scheduler task-management tool. Use action to select task lifecycle, goal lifecycle, or failed-goal diagnostic behavior, then provide action-specific fields. " +
+      "This replaces separate visible lifecycle and goal-diagnostic tools such as propose_task, complete_task, fail_task, cancel_task, retry_task, add_goal, modify_goal, complete_goal, delete_goal, and query_failed_goals.",
     inputSchema: ManageTaskInputSchema,
     execute: async (toolInput, options) => {
       const { action, ...actionInput } = ManageTaskInputSchema.parse(toolInput)

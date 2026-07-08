@@ -114,7 +114,10 @@ test("Tabs primitive styles Kobalte selected, highlighted, and pressed states", 
   const css = readFileSync(TABS_CSS, "utf8")
 
   expect(css).toContain(".oc-tab[data-selected],\n.oc-tab[data-pressed]")
-  expect(css).toContain(".oc-tab[data-highlighted],\n.oc-tab:hover")
+  expect(css).toContain(".oc-tab[data-highlighted]:not(:disabled):not([data-disabled]),")
+  expect(css).toContain(".oc-tab:hover:not(:disabled):not([data-disabled])")
+  expect(css).toContain(".oc-tab:disabled,\n.oc-tab[data-disabled]")
+  expect(css).toContain("opacity: var(--ui-opacity-disabled)")
   expect(css).not.toContain('data-active="true"')
 })
 

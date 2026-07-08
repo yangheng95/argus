@@ -189,6 +189,7 @@ type ManageTaskTestAction =
   | "modify_goal"
   | "complete_goal"
   | "delete_goal"
+  | "query_failed_goals"
 
 async function runDispatchAgentTool(
   tools: OrchestratorTools,
@@ -2679,6 +2680,63 @@ describe("orchestrator tools", () => {
     expect(source).not.toContain(
       'ProjectRuntimePaths.taskAbsolute(Instance.project.worktree, input.taskID, "integrity-feedback")',
     )
+  })
+
+  test("failed goal diagnostics are exposed through manage_task without standalone query_failed_goals", async () => {
+    const now = Date.now()
+    const projectID = "prj_manage_task_query_failed_goals"
+    const taskID = "tsk_manage_task_query_failed_goals"
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: tmp.path,
+          name: "Manage task failed goal diagnostics project",
+          sandboxes: [],
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "Failed goal diagnostics",
+          request: "Inspect failed goal diagnostics through the unified task management tool.",
+          kind: "workflow",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const root = await Session.create({ kind: "root", title: "failed goal diagnostics root" })
+        Database.use((db) =>
+          db
+            .update(EngineTaskTable)
+            .set({ project_id: Instance.project.id, session_id: root.id, time_updated: Date.now() })
+            .where(eq(EngineTaskTable.id, taskID))
+            .run(),
+        )
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: root.id,
+          signal: new AbortController().signal,
+        })
+        expect(Object.keys(tools)).toContain("manage_task")
+        expect(Object.keys(tools)).not.toContain("query_failed_goals")
+
+        const result = await runManageTaskTool(tools, "query_failed_goals", {}, buildToolOptions("query_failed_goals"))
+        expect(toolText(result)).toBe("No failed goals.")
+        expect(toolMetadata(result)[ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY]).toBe("observation")
+      },
+    })
   })
 
   test("select_expert_squad writes only active profile and schedules a visible continuation wake", async () => {
@@ -12047,6 +12105,129 @@ describe("orchestrator tools", () => {
     })
   })
 
+  test("modify_goal refuses depends_on rewrites when an Architect contract graph owns dependency reasons", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_modify_dep_graph_guard_${stamp}`
+    const oldProducerID = `gol_old_producer_${stamp}`
+    const consumerID = `gol_consumer_${stamp}`
+    const replacementProducerID = `gol_replacement_producer_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID: `project_modify_dep_graph_guard_${stamp}`,
+      taskID,
+      goalID: consumerID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "modify dependency graph guard",
+      taskTitle: "modify dependency graph guard",
+      request: "Preserve dependency contract graph authority.",
+      goalTitle: "Consumer goal",
+      goalSlug: "consumer-goal",
+      objective: "Consume the original producer contract.",
+      now,
+    })
+    Database.use((db) => {
+      const specID = `spec_${consumerID}`
+      for (const [id, title, orderIndex] of [
+        [oldProducerID, "Old producer", -2],
+        [replacementProducerID, "Replacement producer", -1],
+      ] as const) {
+        db.insert(EngineGoalTable)
+          .values({
+            id,
+            task_id: taskID,
+            spec_snapshot_id: specID,
+            title,
+            slug: title.toLowerCase().replaceAll(" ", "-"),
+            objective: `${title} objective.`,
+            acceptance_specs: [],
+            owned_paths: [`src/${id}.ts`],
+            depends_on: [],
+            exports: [],
+            imports: [],
+            kind: "feature",
+            requirement_ids: [],
+            priority: "blocking",
+            source: "test",
+            status: "pending",
+            order_index: orderIndex,
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+      }
+      db.update(EngineGoalTable)
+        .set({ depends_on: [oldProducerID], time_updated: now })
+        .where(eq(EngineGoalTable.id, consumerID))
+        .run()
+    })
+    const graphArtifactID = `artifact_contract_graph_${taskID}_${now + 1}`
+    insertArchitectContractGraphArtifact({
+      taskID,
+      now: now + 1,
+      graph: {
+        version: 1,
+        contracts: [
+          {
+            id: "contract_foundation",
+            kind: "static_data",
+            name: "Foundation",
+            producer_goal_id: oldProducerID,
+            consumer_goal_ids: [consumerID],
+            summary: "Original foundation producer consumed by the component goal.",
+            artifact_paths: ["src/foundation.ts"],
+            evidence_refs: [],
+          },
+        ],
+        dependency_contracts: [
+          {
+            from_goal_id: oldProducerID,
+            to_goal_id: consumerID,
+            reason: "contract",
+            contract_ids: ["contract_foundation"],
+            summary: "Consumer uses the original foundation contract.",
+          },
+        ],
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "modify dependency graph guard parent" })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = toolText(
+          await runManageTaskTool(tools, "modify_goal",
+            {
+              goalID: consumerID,
+              updates: { depends_on: [replacementProducerID] },
+              reason: "Replace the producer dependency with the materialized replacement producer.",
+            },
+            buildToolOptions("modify_dep_graph_guard"),
+          ),
+        )
+
+        expect(result).toContain("Error: modify_goal refused")
+        expect(result).toContain(graphArtifactID)
+        expect(result).toContain("register_dependency_contract")
+        expect(findGoal(consumerID)?.depends_on).toEqual([oldProducerID])
+        const graphArtifact = Database.use((db) =>
+          db.select().from(EngineArtifactTable).where(eq(EngineArtifactTable.id, graphArtifactID)).get(),
+        )
+        expect((graphArtifact?.payload as any).dependency_contracts[0].from_goal_id).toBe(oldProducerID)
+      },
+    })
+  })
+
   test("add_goal appends a new operator instruction goal to the active plan", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
@@ -12140,7 +12321,7 @@ describe("orchestrator tools", () => {
                 },
               ],
               owned_paths: ["src/operator-followup.ts"],
-              depends_on: [goalID],
+              depends_on: [],
               priority: "blocking",
               kind: "feature",
               requirement_ids: ["REQ-OPERATOR-FOLLOWUP"],
@@ -12163,7 +12344,7 @@ describe("orchestrator tools", () => {
         const added = goals[1]!
         expect(added.title).toBe("Operator requested follow-up goal")
         expect(added.plan_version_id).toBe(planID)
-        expect(added.depends_on).toEqual([goalID])
+        expect(added.depends_on).toEqual([])
         expect(added.order_index).toBe(1)
         expect(added.acceptance_specs[0]?.goal_id).toBe(added.id)
 
@@ -12177,12 +12358,151 @@ describe("orchestrator tools", () => {
         )
         expect(planNodes).toHaveLength(2)
         expect(planNodes[1]?.goal_id).toBe(added.id)
-        expect(planNodes[1]?.depends_on_ids).toEqual([planNodeID])
+        expect(planNodes[1]?.depends_on_ids ?? null).toBeNull()
 
         const plan = findActivePlanForTask(taskID)
         expect(plan?.summary).toBe("2 goals")
         const decisions = createDecisionLog(taskID).readByPhase("orchestrator")
         expect(decisions.some((entry) => entry.key === `added_goal_${added.id}`)).toBe(true)
+      },
+    })
+  })
+
+  test("add_goal refuses dependency-bearing goals when an Architect contract graph owns dependency reasons", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_add_dep_graph_guard_${stamp}`
+    const producerID = `gol_add_dep_producer_${stamp}`
+    const consumerID = `gol_add_dep_consumer_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID: `project_add_dep_graph_guard_${stamp}`,
+      taskID,
+      goalID: producerID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "add dependency graph guard",
+      taskTitle: "add dependency graph guard",
+      request: "Preserve dependency contract graph authority when appending goals.",
+      goalTitle: "Producer goal",
+      goalSlug: "producer-goal",
+      objective: "Produce the existing contract.",
+      now,
+    })
+    Database.use((db) => {
+      db.insert(EngineGoalTable)
+        .values({
+          id: consumerID,
+          task_id: taskID,
+          spec_snapshot_id: `spec_${producerID}`,
+          title: "Existing consumer",
+          slug: "existing-consumer",
+          objective: "Consume the existing producer.",
+          acceptance_specs: [],
+          owned_paths: ["src/existing-consumer.ts"],
+          depends_on: [producerID],
+          exports: [],
+          imports: [],
+          kind: "feature",
+          requirement_ids: [],
+          priority: "blocking",
+          source: "test",
+          status: "pending",
+          order_index: 1,
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+    })
+    insertArchitectContractGraphArtifact({
+      taskID,
+      now: now + 1,
+      graph: {
+        version: 1,
+        contracts: [
+          {
+            id: "contract_existing_surface",
+            kind: "render_surface",
+            name: "ExistingSurface",
+            producer_goal_id: producerID,
+            consumer_goal_ids: [consumerID],
+            summary: "Existing producer/consumer graph authority.",
+            artifact_paths: ["src/existing.ts"],
+            evidence_refs: [],
+          },
+        ],
+        dependency_contracts: [
+          {
+            from_goal_id: producerID,
+            to_goal_id: consumerID,
+            reason: "contract",
+            contract_ids: ["contract_existing_surface"],
+            summary: "Existing consumer depends on existing producer.",
+          },
+        ],
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "add dependency graph guard parent" })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = toolText(
+          await runManageTaskTool(tools, "add_goal",
+            {
+              goal: {
+                title: "Dependency-bearing follow-up",
+                objective:
+                  "Append a concrete follow-up implementation goal that depends on the existing producer contract and therefore must be registered through the Architect contract graph.",
+                acceptance_specs: [
+                  {
+                    id: "acc-dependent-follow-up",
+                    source_requirement_id: "REQ-dependent-follow-up",
+                    goal_id: "dependent-follow-up",
+                    title: "Dependent follow-up is implemented",
+                    scenario: {
+                      given: ["The existing producer contract is present"],
+                      when: ["The follow-up goal is built"],
+                      then: ["The follow-up consumes the producer contract through a registered dependency"],
+                    },
+                    scorers: [
+                      {
+                        type: "llm_judge",
+                        name: "dependent-follow-up",
+                        criteria: "Confirm the dependent follow-up is implemented against the registered producer contract.",
+                      },
+                    ],
+                    severity: "essential",
+                    trigger: "on_goal",
+                  },
+                ],
+                owned_paths: ["src/follow-up.ts"],
+                depends_on: [producerID],
+                priority: "blocking",
+                kind: "feature",
+                requirement_ids: [],
+              },
+              reason: "Operator requested a dependent follow-up goal.",
+            },
+            buildToolOptions("add_dep_graph_guard"),
+          ),
+        )
+
+        expect(result).toContain("Error: add_goal refused")
+        expect(result).toContain("register_dependency_contract")
+        const goals = Database.use((db) =>
+          db.select().from(EngineGoalTable).where(eq(EngineGoalTable.task_id, taskID)).all(),
+        )
+        expect(goals.map((goal) => goal.title)).not.toContain("Dependency-bearing follow-up")
       },
     })
   })
@@ -15875,7 +16195,12 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await runDispatchAgentTool(tools, "architect", {}, {} as any)
+        const result = await runDispatchAgentTool(
+          tools,
+          "architect",
+          { reason: "Verify missing requirements preflight before architecture." },
+          {} as any,
+        )
 
         expect(toolText(result)).toContain("no active requirements spec snapshot")
         expect(toolText(result)).toContain("requirements")
@@ -16008,7 +16333,12 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await runDispatchAgentTool(tools, "architect", {}, {} as any)
+        const result = await runDispatchAgentTool(
+          tools,
+          "architect",
+          { reason: "Promote requirements into architecture goals." },
+          {} as any,
+        )
         expect(toolText(result)).toContain("Architect decomposition complete")
 
         const activeSpec = findActiveSpecForTask(taskID)

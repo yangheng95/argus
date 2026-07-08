@@ -131,6 +131,7 @@ async function taskDirbarFixtureResponse(req: Request, options: TaskDirbarFixtur
   const staticResponse = await overlayStaticResponse(path)
   if (staticResponse) return staticResponse
   if (path === "/global/health") return send({ version: "1.2.3" }, { status: options.healthStatus?.() ?? 200 })
+  if (path === "/work-ledger") return send({ rows: [], nextCursor: null })
   if (path === "/global/tasks") {
     const tasksStatus = typeof options.tasksStatus === "function" ? options.tasksStatus() : (options.tasksStatus ?? 200)
     const body =
@@ -292,6 +293,7 @@ async function taskDirbarFixtureResponse(req: Request, options: TaskDirbarFixtur
   if (path === "/path") return send({ directory: directory ?? projectDirectory })
   if (path === "/vcs") {
     return send({
+      initialized: true,
       branch: "dev",
       clean: true,
       dirty: false,
@@ -389,6 +391,30 @@ async function saveElementScreenshot(
   return target
 }
 
+async function revealRightToolbar(page: {
+  $eval(selector: string, pageFunction: (node: Element) => { x: number; y: number }): Promise<{ x: number; y: number }>
+  mouse: { move(x: number, y: number, options?: Record<string, unknown>): Promise<void> }
+  waitForFunction(pageFunction: () => boolean): Promise<unknown>
+}) {
+  const point = await page.$eval("#solidRightActivityToolbar", (node) => {
+    const rect = (node as HTMLElement).getBoundingClientRect()
+    return {
+      x: rect.left + rect.width / 2,
+      y: rect.bottom - Math.min(24, Math.max(4, rect.height / 2)),
+    }
+  })
+  await page.mouse.move(point.x, point.y)
+  await page.waitForFunction(() => {
+    const toolbar = document.querySelector<HTMLElement>("#solidRightActivityToolbar .side-activity-toolbar")
+    const trigger = document.querySelector<HTMLElement>('[data-ui="project-runtime-status-dropdown"]')
+    if (!toolbar || !trigger) return false
+    if (getComputedStyle(toolbar).pointerEvents !== "auto") return false
+    const rect = trigger.getBoundingClientRect()
+    const element = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+    return element === trigger || !!element?.closest('[data-ui="project-runtime-status-dropdown"]')
+  })
+}
+
 async function openTasksActivity(page: {
   waitForSelector(selector: string, options?: Record<string, unknown>): Promise<unknown>
   click(selector: string): Promise<unknown>
@@ -413,7 +439,7 @@ function visibleNotificationPredicate(notificationID: string): () => boolean {
 }
 
 test(
-  "cwd breadcrumb buttons are outside the recent-directory menu trigger",
+  "right toolbar runtime status panel merges Git status with worktree controls",
   async () => {
     assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
     assert.equal(typeof globalThis.Bun, "undefined")
@@ -507,31 +533,110 @@ test(
       )
 
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
-      await page.waitForSelector(".task-cwd-dropdown", { visible: true })
-      await page.waitForSelector(".task-dir-step", { visible: true })
-      await page.waitForSelector('[data-ui="cwd-recent-trigger"]', { visible: true })
-      await page.waitForSelector('[data-ui="project-worktree-dropdown"]', { visible: true })
+      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
+      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"][data-vcs-tone="good"]', {
+        visible: true,
+      })
 
-      await page.click('[data-ui="project-worktree-dropdown"]')
-      await page.waitForSelector(".project-worktree-panel", { visible: true })
+      const triggerSemantics = await page.$eval('[data-ui="project-runtime-status-dropdown"]', (node) => {
+        const element = node as HTMLElement
+        return {
+          tag: element.tagName,
+          type: element.getAttribute("type") ?? "",
+          className: element.className,
+          chrome: element.dataset.chrome ?? "",
+          toolbarCompact: element.dataset.toolbarCompact ?? "",
+          vcsTone: element.dataset.vcsTone ?? "",
+          label: element.getAttribute("aria-label") ?? "",
+          title: element.getAttribute("title") ?? "",
+          badge: element.querySelector(".project-runtime-trigger-badge")?.textContent?.trim() ?? "",
+          dotTone: element.querySelector<HTMLElement>(".project-runtime-trigger-dot")?.dataset.tone ?? "",
+          svgCount: element.querySelectorAll("svg").length,
+        }
+      })
+      assert.equal(triggerSemantics.tag, "BUTTON")
+      assert.equal(triggerSemantics.type, "button")
+      assert.match(triggerSemantics.className, /\boc-button\b/)
+      assert.equal(triggerSemantics.chrome, "icon-action")
+      assert.equal(triggerSemantics.toolbarCompact, "true")
+      assert.equal(triggerSemantics.vcsTone, "good")
+      assert.match(triggerSemantics.label, /Project runtime/)
+      assert.equal(triggerSemantics.title, triggerSemantics.label)
+      assert.equal(triggerSemantics.badge, "2")
+      assert.equal(triggerSemantics.dotTone, "good")
+      assert.ok(triggerSemantics.svgCount >= 1, JSON.stringify(triggerSemantics))
+
+      await revealRightToolbar(page)
+      await page.click('[data-ui="project-runtime-status-dropdown"]')
+      await page.waitForSelector(".project-runtime-status-panel", { visible: true })
+      await page.waitForSelector(".project-runtime-git-section[data-tone='good']", { visible: true })
       await page.waitForSelector(".project-worktree-row", { visible: true })
-      const projectWorktreeOpenState = await page.evaluate(() => {
-        const trigger = document.querySelector('[data-ui="project-worktree-dropdown"]') as HTMLElement | null
-        const panel = document.querySelector(".project-worktree-panel") as HTMLElement | null
+
+      const panelState = await page.evaluate(() => {
+        const trigger = document.querySelector('[data-ui="project-runtime-status-dropdown"]') as HTMLElement | null
+        const panel = document.querySelector(".project-runtime-status-panel") as HTMLElement | null
+        const gitSection = document.querySelector(".project-runtime-git-section") as HTMLElement | null
         return {
           panelVisible: !!panel && !panel.hidden,
+          panelRole: panel?.getAttribute("role") ?? "",
           ariaExpanded: trigger?.getAttribute("aria-expanded") ?? "",
           dataExpanded: trigger?.hasAttribute("data-expanded") ?? false,
           dataOpen: trigger?.getAttribute("data-open") ?? null,
+          title: panel?.querySelector(".project-runtime-panel-title")?.textContent?.trim() ?? "",
+          gitTitle: gitSection?.querySelector(".project-runtime-section-title")?.textContent?.trim() ?? "",
+          gitState: gitSection?.querySelector(".project-runtime-git-state")?.textContent?.trim() ?? "",
+          gitRows: [...document.querySelectorAll<HTMLElement>(".project-runtime-git-row")].map((row) =>
+            row.textContent?.trim(),
+          ),
+          worktreeTitle:
+            [...document.querySelectorAll<HTMLElement>(".project-runtime-section-title")]
+              .map((node) => node.textContent?.trim() ?? "")
+              .find((value) => value === "Project worktrees") ?? "",
+          cleanupVisible: !!document.querySelector('[data-ui="project-worktree-cleanup-expired"]'),
+          removeButtons: document.querySelectorAll('[data-ui="project-worktree-remove"]').length,
+          initGitVisible: !!document.querySelector('[data-ui="project-init-git"]'),
         }
       })
-      assert.deepEqual(projectWorktreeOpenState, {
-        panelVisible: true,
-        ariaExpanded: "true",
-        dataExpanded: true,
-        dataOpen: null,
-      })
-      const projectWorktreeRows = await page.evaluate(() => {
+      assert.deepEqual(
+        {
+          panelVisible: panelState.panelVisible,
+          panelRole: panelState.panelRole,
+          ariaExpanded: panelState.ariaExpanded,
+          dataExpanded: panelState.dataExpanded,
+          dataOpen: panelState.dataOpen,
+          title: panelState.title,
+          gitTitle: panelState.gitTitle,
+          gitState: panelState.gitState,
+          worktreeTitle: panelState.worktreeTitle,
+          cleanupVisible: panelState.cleanupVisible,
+          removeButtons: panelState.removeButtons,
+          initGitVisible: panelState.initGitVisible,
+        },
+        {
+          panelVisible: true,
+          panelRole: "menu",
+          ariaExpanded: "true",
+          dataExpanded: true,
+          dataOpen: null,
+          title: "Project runtime",
+          gitTitle: "Git status",
+          gitState: "Working tree clean",
+          worktreeTitle: "Project worktrees",
+          cleanupVisible: true,
+          removeButtons: 2,
+          initGitVisible: false,
+        },
+      )
+      assert.ok(
+        panelState.gitRows.some((row) => row?.includes("Branch") && row.includes("dev")),
+        panelState.gitRows,
+      )
+      assert.ok(
+        panelState.gitRows.every((row) => !row?.includes("Git is not initialized")),
+        panelState.gitRows,
+      )
+
+      const worktreeRows = await page.evaluate(() => {
         return [...document.querySelectorAll<HTMLElement>(".project-worktree-row")].map((row) => {
           const item = row.querySelector<HTMLElement>(".project-worktree-item")
           const path = row.querySelector<HTMLElement>(".project-worktree-path")
@@ -544,444 +649,66 @@ test(
             rowHeight: Math.round(rowRect.height),
             itemHeight: Math.round(itemRect?.height ?? 0),
             pathHeight: Math.round(pathRect?.height ?? 0),
-            gridTemplateAreas: item ? getComputedStyle(item).gridTemplateAreas : "",
+            itemTag: item?.tagName ?? "",
+            itemRole: item?.getAttribute("role") ?? "",
             pathWhiteSpace: path ? getComputedStyle(path).whiteSpace : "",
             branchWhiteSpace: branch ? getComputedStyle(branch).whiteSpace : "",
             stateWhiteSpace: state ? getComputedStyle(state).whiteSpace : "",
+            gridTemplateAreas: item ? getComputedStyle(item).gridTemplateAreas : "",
           }
         })
       })
-      assert.ok(projectWorktreeRows.length >= 2, JSON.stringify(projectWorktreeRows))
-      for (const row of projectWorktreeRows) {
+      assert.ok(worktreeRows.length >= 2, JSON.stringify(worktreeRows))
+      for (const row of worktreeRows) {
         assert.ok(row.rowHeight <= 34, JSON.stringify(row))
         assert.ok(row.itemHeight <= 34, JSON.stringify(row))
         assert.ok(row.pathHeight <= 20, JSON.stringify(row))
+        assert.equal(row.itemTag, "BUTTON")
+        assert.equal(row.itemRole, "menuitem")
         assert.equal(row.gridTemplateAreas, '"name path state branch"')
         assert.equal(row.pathWhiteSpace, "nowrap")
         assert.equal(row.branchWhiteSpace, "nowrap")
         assert.equal(row.stateWhiteSpace, "nowrap")
       }
-      const projectWorktreePanelScreenshot = await saveElementScreenshot(
+
+      await page.hover('[data-ui="project-runtime-status-dropdown"]')
+      const hoverState = await page.$eval('[data-ui="project-runtime-status-dropdown"]', (node) => {
+        const style = getComputedStyle(node as HTMLElement)
+        return {
+          background: style.backgroundColor,
+          color: style.color,
+          expanded: (node as HTMLElement).hasAttribute("data-expanded"),
+        }
+      })
+      assert.notEqual(hoverState.color, "rgba(0, 0, 0, 0)")
+      assert.equal(hoverState.expanded, true)
+
+      const panelScreenshot = await saveElementScreenshot(
         page,
-        ".project-worktree-panel",
-        "task-dirbar-project-worktree-one-line-rows.png",
+        ".project-runtime-status-panel",
+        "task-dirbar-runtime-status-panel-merged.png",
       )
-      assert.ok(projectWorktreePanelScreenshot.endsWith("task-dirbar-project-worktree-one-line-rows.png"))
-      const projectWorktreeScreenshot = await saveScreenshot(page, "task-dirbar-project-worktree-expanded-state.png")
-      assert.ok(projectWorktreeScreenshot.endsWith("task-dirbar-project-worktree-expanded-state.png"))
+      assert.ok(panelScreenshot.endsWith("task-dirbar-runtime-status-panel-merged.png"))
+      const pageScreenshot = await saveScreenshot(page, "task-dirbar-runtime-status-expanded-state.png")
+      assert.ok(pageScreenshot.endsWith("task-dirbar-runtime-status-expanded-state.png"))
+
       await page.keyboard.press("Escape")
-      await page.waitForFunction(() => document.querySelector(".project-worktree-panel") === null)
-
-      const semantics = await page.evaluate(() => {
-        const trigger = document.querySelector<HTMLElement>('[data-ui="cwd-recent-trigger"]')
-        const pathButton = document.querySelector<HTMLElement>(".task-dir-step")
-        const currentNode = document.querySelector<HTMLElement>(".task-dir-node[data-current='true']")
-        return {
-          triggerTag: trigger?.tagName ?? "",
-          triggerType: trigger?.getAttribute("type") ?? "",
-          triggerClass: trigger?.className ?? "",
-          triggerChrome: trigger?.dataset.chrome ?? "",
-          pathButtonTag: pathButton?.tagName ?? "",
-          triggerContainsPathButton: !!trigger && !!pathButton && trigger.contains(pathButton),
-          pathButtonTriggerAncestor: !!pathButton?.closest('[data-ui="cwd-recent-trigger"]'),
-          currentNodeTag: currentNode?.tagName ?? "",
-          currentNodeCurrent: currentNode?.getAttribute("aria-current") ?? "",
-          currentNodeSelected: currentNode?.getAttribute("aria-selected") ?? "",
-          currentNodePressed: currentNode?.getAttribute("aria-pressed") ?? "",
-        }
-      })
-
-      assert.deepEqual(
-        {
-          triggerTag: semantics.triggerTag,
-          triggerType: semantics.triggerType,
-          pathButtonTag: semantics.pathButtonTag,
-          triggerContainsPathButton: semantics.triggerContainsPathButton,
-          pathButtonTriggerAncestor: semantics.pathButtonTriggerAncestor,
-        },
-        {
-          triggerTag: "BUTTON",
-          triggerType: "button",
-          pathButtonTag: "BUTTON",
-          triggerContainsPathButton: false,
-          pathButtonTriggerAncestor: false,
-        },
-      )
-      assert.match(semantics.triggerClass, /\boc-button\b/)
-      assert.equal(semantics.triggerChrome, "icon-action")
-      assert.ok(["BUTTON", "SPAN"].includes(semantics.currentNodeTag), JSON.stringify(semantics))
-      assert.deepEqual(
-        {
-          currentNodeCurrent: semantics.currentNodeCurrent,
-          currentNodeSelected: semantics.currentNodeSelected,
-          currentNodePressed: semantics.currentNodePressed,
-        },
-        {
-          currentNodeCurrent: "location",
-          currentNodeSelected: "",
-          currentNodePressed: "",
-        },
-      )
-
-      const breadcrumbFocusStates: Record<
-        string,
-        {
-          kind: string
-          className: string
-          background: string
-          color: string
-          outlineStyle: string
-          outlineWidth: string
-          outlineColor: string
-        }
-      > = {}
-      let breadcrumbFocusScreenshot = ""
-      await page.evaluate(() => {
-        document.body.setAttribute("tabindex", "-1")
-        document.body.focus()
-        document.body.removeAttribute("tabindex")
-      })
-      for (let attempt = 0; attempt < 80; attempt += 1) {
-        await page.keyboard.press("Tab")
-        const state = await page.evaluate(() => {
-          const active = document.activeElement as HTMLElement | null
-          if (!active) return null
-          const kind = active.matches(".task-dir-step")
-            ? "step"
-            : active.matches(".task-dir-node")
-              ? "node"
-              : active.matches(".task-dir-tool")
-                ? "tool"
-                : ""
-          if (!kind) return null
-          const style = getComputedStyle(active)
-          return {
-            kind,
-            className: active.className,
-            background: style.backgroundColor,
-            color: style.color,
-            outlineStyle: style.outlineStyle,
-            outlineWidth: style.outlineWidth,
-            outlineColor: style.outlineColor,
-          }
-        })
-        if (!state || breadcrumbFocusStates[state.kind]) continue
-        breadcrumbFocusStates[state.kind] = state
-        if (!breadcrumbFocusScreenshot) {
-          breadcrumbFocusScreenshot = await saveElementScreenshot(
-            page,
-            ".task-cwd-dropdown",
-            "task-dirbar-breadcrumb-focus-visible.png",
-          )
-        }
-        if (breadcrumbFocusStates.step && breadcrumbFocusStates.node && breadcrumbFocusStates.tool) break
-      }
-      assert.deepEqual(Object.keys(breadcrumbFocusStates).sort(), ["node", "step", "tool"])
-      for (const state of Object.values(breadcrumbFocusStates)) {
-        assert.notEqual(state.background, "rgba(0, 0, 0, 0)", JSON.stringify(breadcrumbFocusStates))
-        assert.notEqual(state.color, "", JSON.stringify(breadcrumbFocusStates))
-        assert.equal(state.outlineStyle, "solid", JSON.stringify(breadcrumbFocusStates))
-        assert.notEqual(state.outlineWidth, "0px", JSON.stringify(breadcrumbFocusStates))
-        assert.notEqual(state.outlineColor, "rgba(0, 0, 0, 0)", JSON.stringify(breadcrumbFocusStates))
-      }
-      assert.ok(breadcrumbFocusScreenshot.endsWith("task-dirbar-breadcrumb-focus-visible.png"))
-
-      await page.focus(".task-dir-step")
+      await page.waitForFunction(() => document.querySelector(".project-runtime-status-panel") === null)
+      await page.focus('[data-ui="project-runtime-status-dropdown"]')
       await page.keyboard.press("Enter")
-      await new Promise((resolve) => setTimeout(resolve, 150))
-      const afterPathKey = await page.evaluate(() => ({
-        panelPresent: !!document.querySelector(".recent-dir-panel"),
-        triggerExpanded: document.querySelector('[data-ui="cwd-recent-trigger"]')?.getAttribute("aria-expanded") ?? "",
-        triggerDataExpanded:
-          document.querySelector('[data-ui="cwd-recent-trigger"]')?.hasAttribute("data-expanded") ?? false,
-        triggerDataOpen: document.querySelector('[data-ui="cwd-recent-trigger"]')?.getAttribute("data-open") ?? null,
-        shellDataOpen: document.querySelector(".task-cwd-dropdown")?.getAttribute("data-open") ?? null,
+      await page.waitForSelector(".project-runtime-status-panel", { visible: true })
+      await page.keyboard.press("Escape")
+      await page.waitForFunction(() => document.querySelector(".project-runtime-status-panel") === null)
+      const closedState = await page.$eval('[data-ui="project-runtime-status-dropdown"]', (node) => ({
+        ariaExpanded: node.getAttribute("aria-expanded") ?? "",
+        dataExpanded: (node as HTMLElement).hasAttribute("data-expanded"),
       }))
-      assert.deepEqual(afterPathKey, {
-        panelPresent: false,
-        triggerExpanded: "false",
-        triggerDataExpanded: false,
-        triggerDataOpen: null,
-        shellDataOpen: null,
+      assert.deepEqual(closedState, {
+        ariaExpanded: "false",
+        dataExpanded: false,
       })
-
-      await page.focus('[data-ui="cwd-recent-trigger"]')
-      await page.keyboard.press("Enter")
-      await page.waitForSelector(".recent-dir-panel", { visible: true })
-      await page.waitForSelector('[data-ui="cwd-path-input"]', { visible: true })
-      await page.waitForFunction(
-        () =>
-          document.querySelectorAll('.recent-dir-row[data-active="true"] .recent-dir-item[aria-current="location"]')
-            .length >= 1,
-      )
-
-      const openState = await page.evaluate(() => ({
-        panelVisible: !!document.querySelector(".recent-dir-panel"),
-        panelRole: document.querySelector(".recent-dir-panel")?.getAttribute("role") ?? "",
-        panelLabel: document.querySelector(".recent-dir-panel")?.getAttribute("aria-label") ?? "",
-        menuRoleCount: document.querySelectorAll('.recent-dir-panel [role="menu"], .recent-dir-panel [role="menuitem"]')
-          .length,
-        triggerExpanded: document.querySelector('[data-ui="cwd-recent-trigger"]')?.getAttribute("aria-expanded") ?? "",
-        triggerDataExpanded:
-          document.querySelector('[data-ui="cwd-recent-trigger"]')?.hasAttribute("data-expanded") ?? false,
-        triggerDataOpen: document.querySelector('[data-ui="cwd-recent-trigger"]')?.getAttribute("data-open") ?? null,
-        shellDataOpen: document.querySelector(".task-cwd-dropdown")?.getAttribute("data-open") ?? null,
-        recentRows: document.querySelectorAll('.recent-dir-list[data-kind="recent"] .recent-dir-row').length,
-        currentRows: Array.from(document.querySelectorAll<HTMLElement>(".recent-dir-row")).map((row) => {
-          const item = row.querySelector<HTMLElement>(".recent-dir-item")
-          return {
-            title: item?.getAttribute("title") ?? "",
-            active: row.dataset.active ?? "",
-            current: item?.getAttribute("aria-current") ?? "",
-            selected: item?.getAttribute("aria-selected") ?? "",
-            pressed: item?.getAttribute("aria-pressed") ?? "",
-          }
-        }),
-        geometry: (() => {
-          const shell = document.querySelector<HTMLElement>(".task-cwd-dropdown")?.getBoundingClientRect()
-          const panel = document.querySelector<HTMLElement>(".recent-dir-panel")?.getBoundingClientRect()
-          return shell && panel
-            ? {
-                leftDelta: Math.abs(Math.round(shell.left) - Math.round(panel.left)),
-                panelLeft: Math.round(panel.left),
-                shellLeft: Math.round(shell.left),
-                panelWidth: Math.round(panel.width),
-                shellWidth: Math.round(shell.width),
-              }
-            : null
-        })(),
-      }))
-      assert.equal(openState.panelVisible, true)
-      assert.equal(openState.panelRole, "dialog")
-      assert.equal(openState.panelLabel, "Recent")
-      assert.equal(openState.menuRoleCount, 0)
-      assert.equal(openState.triggerExpanded, "true")
-      assert.equal(openState.triggerDataExpanded, true)
-      assert.equal(openState.triggerDataOpen, null)
-      assert.equal(openState.shellDataOpen, null)
-      assert.ok(openState.recentRows >= 3)
-      assert.ok(openState.currentRows.filter((row) => row.active === "true").length >= 1)
-      for (const row of openState.currentRows) {
-        assert.equal(row.current, row.active === "true" ? "location" : "", JSON.stringify(openState.currentRows))
-        assert.equal(row.selected, "")
-        assert.equal(row.pressed, "")
-      }
-      assert.ok(openState.geometry)
-      assert.ok(openState.geometry.leftDelta <= 2, JSON.stringify(openState.geometry))
-      assert.ok(openState.geometry.panelWidth > 240)
-      assert.ok(openState.geometry.panelWidth <= openState.geometry.shellWidth)
-
-      await page.focus('[data-ui="cwd-path-input"]')
-      const pathInputState = await page.$eval('[data-ui="cwd-path-input"]', (node) => {
-        const input = node as HTMLInputElement
-        const styles = getComputedStyle(input)
-        return {
-          active: document.activeElement === input,
-          className: input.className,
-          appearance: styles.appearance,
-          borderTopColor: styles.borderTopColor,
-          backgroundColor: styles.backgroundColor,
-          color: styles.color,
-          boxShadow: styles.boxShadow,
-        }
-      })
-      assert.equal(pathInputState.active, true)
-      assert.match(pathInputState.className, /\bfield-input\b/)
-      assert.equal(pathInputState.appearance, "none")
-      assert.notEqual(pathInputState.borderTopColor, "rgba(0, 0, 0, 0)")
-      assert.notEqual(pathInputState.backgroundColor, "rgba(0, 0, 0, 0)")
-      assert.notEqual(pathInputState.color, "rgba(0, 0, 0, 0)")
-      assert.notEqual(pathInputState.boxShadow, "none")
-      const focusedInputScreenshot = await saveElementScreenshot(
-        page,
-        ".recent-dir-panel",
-        "task-dirbar-recent-path-input-field-input.png",
-      )
-      assert.ok(focusedInputScreenshot.endsWith("task-dirbar-recent-path-input-field-input.png"))
-
-      const tabOrder: Array<{ tag: string; dataUI: string; className: string }> = []
-      for (let index = 0; index < 5; index += 1) {
-        await page.keyboard.press("Tab")
-        tabOrder.push(
-          await page.evaluate(() => {
-            const active = document.activeElement as HTMLElement | null
-            return {
-              tag: active?.tagName ?? "",
-              dataUI: active?.dataset.ui ?? "",
-              className: active?.className ?? "",
-            }
-          }),
-        )
-      }
-      assert.ok(
-        tabOrder.some((item) => item.dataUI === "recent-dir-edit-submit"),
-        JSON.stringify(tabOrder),
-      )
-      assert.ok(
-        tabOrder.some((item) => /\brecent-dir-item\b/.test(item.className)),
-        JSON.stringify(tabOrder),
-      )
-      assert.ok(
-        tabOrder.some((item) => item.dataUI === "recent-dir-remove"),
-        JSON.stringify(tabOrder),
-      )
-
-      await page.focus('.recent-dir-list[data-kind="recent"] .recent-dir-item')
-      await page.waitForSelector('.recent-dir-list[data-kind="recent"] .recent-dir-row:focus-within')
-      const focusedRecentState = await page.$eval(
-        '.recent-dir-list[data-kind="recent"] .recent-dir-row:focus-within',
-        (node) => {
-          const row = node as HTMLElement
-          const item = row.querySelector<HTMLElement>(".recent-dir-item")
-          const remove = row.querySelector<HTMLElement>('[data-ui="recent-dir-remove"]')
-          const rowStyles = getComputedStyle(row)
-          const removeStyles = remove ? getComputedStyle(remove) : null
-          return {
-            active: document.activeElement === item,
-            borderTopColor: rowStyles.borderTopColor,
-            removeOpacity: removeStyles?.opacity ?? "",
-            removePointerEvents: removeStyles?.pointerEvents ?? "",
-          }
-        },
-      )
-      assert.equal(focusedRecentState.active, true)
-      assert.notEqual(focusedRecentState.borderTopColor, "rgba(0, 0, 0, 0)")
-      assert.equal(focusedRecentState.removeOpacity, "1")
-      assert.equal(focusedRecentState.removePointerEvents, "auto")
-      const focusedRecentScreenshot = await saveElementScreenshot(
-        page,
-        ".recent-dir-panel",
-        "task-dirbar-recent-focused-row.png",
-      )
-      assert.ok(focusedRecentScreenshot.endsWith("task-dirbar-recent-focused-row.png"))
-
-      const actionSemantics = await page.evaluate(() => {
-        const submit = document.querySelector<HTMLButtonElement>('[data-ui="recent-dir-edit-submit"]')
-        const remove = document.querySelector<HTMLButtonElement>(
-          '.recent-dir-list[data-kind="recent"] .recent-dir-row:nth-child(2) [data-ui="recent-dir-remove"]',
-        )
-        return {
-          submitTag: submit?.tagName ?? "",
-          submitClass: submit?.className ?? "",
-          submitChrome: submit?.dataset.chrome ?? "",
-          submitSize: submit?.dataset.size ?? "",
-          submitTitle: submit?.getAttribute("title") ?? "",
-          submitLabel: submit?.getAttribute("aria-label") ?? "",
-          removeTag: remove?.tagName ?? "",
-          removeClass: remove?.className ?? "",
-          removeChrome: remove?.dataset.chrome ?? "",
-          removeSize: remove?.dataset.size ?? "",
-          removeTone: remove?.dataset.tone ?? "",
-          removeTitle: remove?.getAttribute("title") ?? "",
-          removeLabel: remove?.getAttribute("aria-label") ?? "",
-        }
-      })
-      assert.match(actionSemantics.submitClass, /\boc-button\b/)
-      assert.match(actionSemantics.removeClass, /\boc-button\b/)
-      assert.deepEqual(
-        {
-          submitTag: actionSemantics.submitTag,
-          submitChrome: actionSemantics.submitChrome,
-          submitSize: actionSemantics.submitSize,
-          submitTitle: actionSemantics.submitTitle,
-          submitLabel: actionSemantics.submitLabel,
-          removeTag: actionSemantics.removeTag,
-          removeChrome: actionSemantics.removeChrome,
-          removeSize: actionSemantics.removeSize,
-          removeTone: actionSemantics.removeTone,
-          removeTitle: actionSemantics.removeTitle,
-          removeLabel: actionSemantics.removeLabel,
-        },
-        {
-          submitTag: "BUTTON",
-          submitChrome: "icon-action",
-          submitSize: "icon",
-          submitTitle: "Save",
-          submitLabel: "Save",
-          removeTag: "BUTTON",
-          removeChrome: "icon-action",
-          removeSize: "icon",
-          removeTone: "danger",
-          removeTitle: "Delete",
-          removeLabel: "Delete",
-        },
-      )
-
-      await page.$eval('[data-ui="cwd-path-input"]', (node) => {
-        const input = node as HTMLInputElement
-        input.value = ""
-        input.dispatchEvent(new InputEvent("input", { bubbles: true }))
-      })
-      await page.waitForFunction(
-        () => document.querySelector<HTMLButtonElement>('[data-ui="recent-dir-edit-submit"]')?.disabled,
-      )
-      const disabledSubmit = await page.$eval('[data-ui="recent-dir-edit-submit"]', (node) => {
-        const element = node as HTMLButtonElement
-        const styles = getComputedStyle(element)
-        return {
-          disabled: element.disabled,
-          opacity: styles.opacity,
-          color: styles.color,
-        }
-      })
-      assert.equal(disabledSubmit.disabled, true)
-      assert.equal(disabledSubmit.opacity, "1")
-      assert.notEqual(disabledSubmit.color, "rgba(0, 0, 0, 0)")
-
-      await page.$eval(
-        '[data-ui="cwd-path-input"]',
-        (node, value) => {
-          const input = node as HTMLInputElement
-          input.value = String(value)
-          input.dispatchEvent(new InputEvent("input", { bubbles: true }))
-        },
-        PROJECT_DIRECTORY,
-      )
-      await page.waitForFunction(
-        () => !document.querySelector<HTMLButtonElement>('[data-ui="recent-dir-edit-submit"]')?.disabled,
-      )
-      await page.focus('[data-ui="recent-dir-edit-submit"]')
-      const submitFocus = await page.$eval('[data-ui="recent-dir-edit-submit"]', (node) => {
-        const element = node as HTMLButtonElement
-        return {
-          active: document.activeElement === element,
-          className: element.className,
-        }
-      })
-      assert.equal(submitFocus.active, true)
-      assert.match(submitFocus.className, /\boc-button\b/)
-
-      const recentRowSelector = '.recent-dir-list[data-kind="recent"] .recent-dir-row:nth-child(2)'
-      await page.hover(recentRowSelector)
-      await new Promise((resolve) => setTimeout(resolve, 260))
-      const removeGeometry = await page.$eval(recentRowSelector, (row) => {
-        const item = row.querySelector<HTMLElement>(".recent-dir-item")!.getBoundingClientRect()
-        const remove = row.querySelector<HTMLElement>('[data-ui="recent-dir-remove"]')!
-        const removeRect = remove.getBoundingClientRect()
-        const styles = getComputedStyle(remove)
-        return {
-          itemRight: item.right,
-          removeLeft: removeRect.left,
-          opacity: styles.opacity,
-          pointerEvents: styles.pointerEvents,
-        }
-      })
-      assert.ok(
-        removeGeometry.itemRight <= removeGeometry.removeLeft,
-        `expected recent directory text to end before remove action: ${removeGeometry.itemRight} <= ${removeGeometry.removeLeft}`,
-      )
-      assert.equal(removeGeometry.opacity, "1")
-      assert.equal(removeGeometry.pointerEvents, "auto")
 
       errors.assertNoUnexpectedErrors()
-
-      const actionScreenshot = await saveElementScreenshot(
-        page,
-        ".recent-dir-panel",
-        "task-dirbar-recent-actions-button-primitive.png",
-      )
-      assert.ok(actionScreenshot.endsWith("task-dirbar-recent-actions-button-primitive.png"))
-      await saveScreenshot(page, "task-dirbar-recent-trigger-keyboard.png")
     } finally {
       await browser.close()
       await server.close()
@@ -2005,19 +1732,20 @@ test(
         await (window as any).applyDirectory(directory, { persist: false })
       }, nextDirectory)
       await waitForWorktreeRequest(nextDirectory)
-      await page.click('[data-ui="project-worktree-dropdown"]')
+      await revealRightToolbar(page)
+      await page.click('[data-ui="project-runtime-status-dropdown"]')
       await page.waitForSelector(`.project-worktree-path[title="${secondWorktree}"]`, { visible: true })
       releaseFirstLoad?.()
       await new Promise((resolve) => setTimeout(resolve, 300))
       const screenshot = await saveElementScreenshot(
         page,
-        ".project-worktree-panel",
+        ".project-runtime-status-panel",
         "task-dirbar-worktree-stale-response-ignored.png",
       )
       assert.ok(screenshot.endsWith("task-dirbar-worktree-stale-response-ignored.png"))
 
       const panelState = await page.$eval(
-        ".project-worktree-panel",
+        ".project-runtime-status-panel",
         (node, input: { firstWorktree: string; secondWorktree: string }) => ({
           staleVisible: !!node.querySelector(`.project-worktree-path[title="${input.firstWorktree}"]`),
           currentVisible: !!node.querySelector(`.project-worktree-path[title="${input.secondWorktree}"]`),
@@ -2119,19 +1847,20 @@ test(
         await (window as any).applyDirectory(directory, { persist: false })
       }, nextDirectory)
       await waitForWorktreeRequest(nextDirectory)
-      await page.click('[data-ui="project-worktree-dropdown"]')
+      await revealRightToolbar(page)
+      await page.click('[data-ui="project-runtime-status-dropdown"]')
       await page.waitForSelector(`.project-worktree-path[title="${secondWorktree}"]`, { visible: true })
       releaseFirstLoad?.()
       await new Promise((resolve) => setTimeout(resolve, 300))
       const screenshot = await saveElementScreenshot(
         page,
-        ".project-worktree-panel",
+        ".project-runtime-status-panel",
         "task-dirbar-worktree-stale-failure-ignored.png",
       )
       assert.ok(screenshot.endsWith("task-dirbar-worktree-stale-failure-ignored.png"))
 
       const panelState = await page.$eval(
-        ".project-worktree-panel",
+        ".project-runtime-status-panel",
         (node, input: { secondWorktree: string; staleError: string }) => ({
           currentVisible: !!node.querySelector(`.project-worktree-path[title="${input.secondWorktree}"]`),
           staleErrorVisible: (node.textContent ?? "").includes(input.staleError),
@@ -2259,8 +1988,9 @@ test(
       )
 
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
-      await page.waitForSelector('[data-ui="project-worktree-dropdown"]', { visible: true })
-      await page.click('[data-ui="project-worktree-dropdown"]')
+      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
+      await revealRightToolbar(page)
+      await page.click('[data-ui="project-runtime-status-dropdown"]')
       await page.waitForSelector(`.project-worktree-path[title="${staleWorktree}"]`, { visible: true })
       await page.click('[data-ui="project-worktree-remove"]')
       await page.waitForSelector("#appDialogBody", { visible: true })
@@ -2274,7 +2004,7 @@ test(
 
       const screenshot = await saveElementScreenshot(
         page,
-        ".project-worktree-panel",
+        ".project-runtime-status-panel",
         "task-dirbar-worktree-delete-confirmation-directory-switch.png",
       )
       assert.ok(screenshot.endsWith("task-dirbar-worktree-delete-confirmation-directory-switch.png"))
@@ -2395,8 +2125,9 @@ test(
       )
 
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
-      await page.waitForSelector('[data-ui="project-worktree-dropdown"]', { visible: true })
-      await page.click('[data-ui="project-worktree-dropdown"]')
+      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
+      await revealRightToolbar(page)
+      await page.click('[data-ui="project-runtime-status-dropdown"]')
       await page.waitForSelector(`.project-worktree-path[title="${staleWorktree}"]`, { visible: true })
       await page.click('[data-ui="project-worktree-cleanup-expired"]')
       await page.waitForSelector("#appDialogBody", { visible: true })
@@ -2410,7 +2141,7 @@ test(
 
       const screenshot = await saveElementScreenshot(
         page,
-        ".project-worktree-panel",
+        ".project-runtime-status-panel",
         "task-dirbar-worktree-cleanup-confirmation-directory-switch.png",
       )
       assert.ok(screenshot.endsWith("task-dirbar-worktree-cleanup-confirmation-directory-switch.png"))
@@ -2541,8 +2272,9 @@ test(
       )
 
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
-      await page.waitForSelector('[data-ui="project-worktree-dropdown"]', { visible: true })
-      await page.click('[data-ui="project-worktree-dropdown"]')
+      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
+      await revealRightToolbar(page)
+      await page.click('[data-ui="project-runtime-status-dropdown"]')
       await page.waitForSelector(`.project-worktree-path[title="${staleWorktree}"]`, { visible: true })
       await page.click('[data-ui="project-worktree-remove"]')
       await page.waitForSelector("#appDialogBody", { visible: true })
@@ -2559,7 +2291,7 @@ test(
 
       assert.deepEqual(deleteCalls, [staleWorktree])
       const panelState = await page.$eval(
-        ".project-worktree-panel",
+        ".project-runtime-status-panel",
         (node, input: { currentWorktree: string }) => ({
           currentVisible: !!node.querySelector(`.project-worktree-path[title="${input.currentWorktree}"]`),
           wrongError: (node.textContent ?? "").includes("project B reload should not run"),
@@ -2571,7 +2303,7 @@ test(
       assert.equal(panelState.wrongError, false, panelState.text)
       const screenshot = await saveElementScreenshot(
         page,
-        ".project-worktree-panel",
+        ".project-runtime-status-panel",
         "task-dirbar-worktree-delete-inflight-directory-switch.png",
       )
       assert.ok(screenshot.endsWith("task-dirbar-worktree-delete-inflight-directory-switch.png"))
@@ -2703,8 +2435,9 @@ test(
       )
 
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
-      await page.waitForSelector('[data-ui="project-worktree-dropdown"]', { visible: true })
-      await page.click('[data-ui="project-worktree-dropdown"]')
+      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
+      await revealRightToolbar(page)
+      await page.click('[data-ui="project-runtime-status-dropdown"]')
       await page.waitForSelector(`.project-worktree-path[title="${staleWorktree}"]`, { visible: true })
       await page.click('[data-ui="project-worktree-cleanup-expired"]')
       await page.waitForSelector("#appDialogBody", { visible: true })
@@ -2721,7 +2454,7 @@ test(
 
       assert.deepEqual(deleteCalls, [staleWorktree])
       const panelState = await page.$eval(
-        ".project-worktree-panel",
+        ".project-runtime-status-panel",
         (node, input: { currentWorktree: string }) => ({
           currentVisible: !!node.querySelector(`.project-worktree-path[title="${input.currentWorktree}"]`),
           wrongError: (node.textContent ?? "").includes("project B reload should not run"),
@@ -2733,7 +2466,7 @@ test(
       assert.equal(panelState.wrongError, false, panelState.text)
       const screenshot = await saveElementScreenshot(
         page,
-        ".project-worktree-panel",
+        ".project-runtime-status-panel",
         "task-dirbar-worktree-cleanup-inflight-directory-switch.png",
       )
       assert.ok(screenshot.endsWith("task-dirbar-worktree-cleanup-inflight-directory-switch.png"))
@@ -2857,8 +2590,9 @@ test(
       )
 
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
-      await page.waitForSelector('[data-ui="project-worktree-dropdown"]', { visible: true })
-      await page.click('[data-ui="project-worktree-dropdown"]')
+      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
+      await revealRightToolbar(page)
+      await page.click('[data-ui="project-runtime-status-dropdown"]')
       await page.waitForSelector(`.project-worktree-path[title="${staleWorktree}"]`, { visible: true })
       await page.click('[data-ui="project-worktree-cleanup-expired"]')
       await page.waitForSelector("#appDialogBody", { visible: true })
@@ -2870,7 +2604,7 @@ test(
       }, nextDirectory)
       await page.waitForSelector(`.project-worktree-path[title="${currentWorktree}"]`, { visible: true })
 
-      const panelState = await page.$eval(".project-worktree-panel", (node) => {
+      const panelState = await page.$eval(".project-runtime-status-panel", (node) => {
         const cleanup = node.querySelector<HTMLButtonElement>('[data-ui="project-worktree-cleanup-expired"]')
         const remove = node.querySelector<HTMLButtonElement>('[data-ui="project-worktree-remove"]')
         return {
@@ -2887,7 +2621,7 @@ test(
       assert.equal(panelState.removeDisabled, false, panelState.text)
       const screenshot = await saveElementScreenshot(
         page,
-        ".project-worktree-panel",
+        ".project-runtime-status-panel",
         "task-dirbar-cleanup-busy-directory-scoped.png",
       )
       assert.ok(screenshot.endsWith("task-dirbar-cleanup-busy-directory-scoped.png"))
@@ -2979,9 +2713,10 @@ test(
       )
 
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
-      await page.waitForSelector('[data-ui="project-worktree-dropdown"]', { visible: true })
-      await page.click('[data-ui="project-worktree-dropdown"]')
-      await page.waitForSelector(".project-worktree-panel", { visible: true })
+      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
+      await revealRightToolbar(page)
+      await page.click('[data-ui="project-runtime-status-dropdown"]')
+      await page.waitForSelector(".project-runtime-status-panel", { visible: true })
       await page.waitForSelector('[data-ui="project-worktree-remove"]', { visible: true })
       await page.click('[data-ui="project-worktree-remove"]')
       await page.waitForSelector("#appDialogBody", { visible: true })
@@ -2997,7 +2732,7 @@ test(
       assert.notEqual(errorState.color, "rgba(0, 0, 0, 0)")
       const screenshot = await saveElementScreenshot(
         page,
-        ".project-worktree-panel",
+        ".project-runtime-status-panel",
         "task-dirbar-worktree-delete-failure-visible.png",
       )
       assert.ok(screenshot.endsWith("task-dirbar-worktree-delete-failure-visible.png"))
@@ -3112,9 +2847,10 @@ test(
       )
 
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
-      await page.waitForSelector('[data-ui="project-worktree-dropdown"]', { visible: true })
-      await page.click('[data-ui="project-worktree-dropdown"]')
-      await page.waitForSelector(".project-worktree-panel", { visible: true })
+      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
+      await revealRightToolbar(page)
+      await page.click('[data-ui="project-runtime-status-dropdown"]')
+      await page.waitForSelector(".project-runtime-status-panel", { visible: true })
       await page.waitForSelector('[data-ui="project-worktree-cleanup-expired"]', { visible: true })
       await page.click('[data-ui="project-worktree-cleanup-expired"]')
       await page.waitForSelector("#appDialogBody", { visible: true })
@@ -3127,7 +2863,7 @@ test(
           ),
       )
 
-      const panelState = await page.$eval(".project-worktree-panel", (node) => ({
+      const panelState = await page.$eval(".project-runtime-status-panel", (node) => ({
         text: node.textContent ?? "",
         firstPresent: !!node.querySelector(
           '.project-worktree-path[title="D:/overlay/workspace/app/.opencorvus/r/w/old-a/worktree"]',
@@ -3145,7 +2881,7 @@ test(
 
       const screenshot = await saveElementScreenshot(
         page,
-        ".project-worktree-panel",
+        ".project-runtime-status-panel",
         "task-dirbar-worktree-cleanup-partial-failure-visible.png",
       )
       assert.ok(screenshot.endsWith("task-dirbar-worktree-cleanup-partial-failure-visible.png"))
@@ -3251,9 +2987,10 @@ test(
       )
 
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
-      await page.waitForSelector('[data-ui="project-worktree-dropdown"]', { visible: true })
-      await page.click('[data-ui="project-worktree-dropdown"]')
-      await page.waitForSelector(".project-worktree-panel", { visible: true })
+      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
+      await revealRightToolbar(page)
+      await page.click('[data-ui="project-runtime-status-dropdown"]')
+      await page.waitForSelector(".project-runtime-status-panel", { visible: true })
       await page.waitForSelector('[data-ui="project-worktree-remove"]', { visible: true })
       await page.click('[data-ui="project-worktree-remove"]')
       await page.waitForSelector("#appDialogBody", { visible: true })
@@ -3270,7 +3007,7 @@ test(
       assert.notEqual(errorState.color, "rgba(0, 0, 0, 0)")
       const screenshot = await saveElementScreenshot(
         page,
-        ".project-worktree-panel",
+        ".project-runtime-status-panel",
         "task-dirbar-worktree-delete-board-reload-failure-visible.png",
       )
       assert.ok(screenshot.endsWith("task-dirbar-worktree-delete-board-reload-failure-visible.png"))
@@ -3349,9 +3086,10 @@ test(
       )
 
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
-      await page.waitForSelector('[data-ui="project-worktree-dropdown"]', { visible: true })
-      await page.click('[data-ui="project-worktree-dropdown"]')
-      await page.waitForSelector(".project-worktree-panel", { visible: true })
+      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
+      await revealRightToolbar(page)
+      await page.click('[data-ui="project-runtime-status-dropdown"]')
+      await page.waitForSelector(".project-runtime-status-panel", { visible: true })
       await page.waitForSelector(`.project-worktree-path[title="${firstWorktree}"]`, { visible: true })
       await page.waitForSelector(`.project-worktree-path[title="${secondWorktree}"]`, { visible: true })
       await page.click('[data-ui="project-worktree-remove"]')
@@ -3361,7 +3099,7 @@ test(
       await page.waitForSelector('[data-ui="project-worktree-load-error"]', { visible: true })
 
       const panelState = await page.$eval(
-        ".project-worktree-panel",
+        ".project-runtime-status-panel",
         (node, input: { firstWorktree: string; secondWorktree: string }) => ({
           firstVisible: !!node.querySelector(`.project-worktree-path[title="${input.firstWorktree}"]`),
           secondVisible: !!node.querySelector(`.project-worktree-path[title="${input.secondWorktree}"]`),
@@ -3377,7 +3115,7 @@ test(
       assert.match(panelState.loadError, /worktree list reload unavailable after delete/)
       const screenshot = await saveElementScreenshot(
         page,
-        ".project-worktree-panel",
+        ".project-runtime-status-panel",
         "task-dirbar-worktree-delete-list-reload-failure-keeps-remaining.png",
       )
       assert.ok(screenshot.endsWith("task-dirbar-worktree-delete-list-reload-failure-keeps-remaining.png"))
@@ -3483,9 +3221,10 @@ test(
       )
 
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
-      await page.waitForSelector('[data-ui="project-worktree-dropdown"]', { visible: true })
-      await page.click('[data-ui="project-worktree-dropdown"]')
-      await page.waitForSelector(".project-worktree-panel", { visible: true })
+      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
+      await revealRightToolbar(page)
+      await page.click('[data-ui="project-runtime-status-dropdown"]')
+      await page.waitForSelector(".project-runtime-status-panel", { visible: true })
       await page.waitForSelector('[data-ui="project-worktree-cleanup-expired"]', { visible: true })
       await page.click('[data-ui="project-worktree-cleanup-expired"]')
       await page.waitForSelector("#appDialogBody", { visible: true })
@@ -3502,7 +3241,7 @@ test(
       assert.notEqual(errorState.color, "rgba(0, 0, 0, 0)")
       const screenshot = await saveElementScreenshot(
         page,
-        ".project-worktree-panel",
+        ".project-runtime-status-panel",
         "task-dirbar-worktree-cleanup-board-reload-failure-visible.png",
       )
       assert.ok(screenshot.endsWith("task-dirbar-worktree-cleanup-board-reload-failure-visible.png"))

@@ -306,7 +306,7 @@ describe("core prompt hygiene", () => {
     expect(orchestratorFlat).toContain("Treat the active architect goal graph as sealed")
     expect(orchestratorFlat).toContain("`owned_paths` are collaboration responsibilities, not a file sandbox")
     expect(orchestrator).toContain("Frequent Architect re-runs are a planning-quality indicator")
-    expect(orchestratorFlat).toContain("Use `modify_goal` instead of reopening the entire graph")
+    expect(orchestratorFlat).toContain("Use `manage_task` action=modify_goal instead of reopening the entire graph")
     expect(orchestratorFlat).toContain("try the smallest same-graph repair")
     expect(orchestratorFlat).toContain(
       "Re-enter Architect only when the evidence shows a genuinely new prerequisite goal",
@@ -362,7 +362,7 @@ describe("core prompt hygiene", () => {
     expect(workflow).toContain("integrity 是 session-bound review report")
     expect(workflow).toContain("acceptance_specs / traceability / source-reference coverage / cross-goal contracts")
     expect(workflow).toContain("最终 review")
-    expect(workflow).toContain("materialization/source handoff")
+    expect(workflow).toContain("source-backed frontend_research_brief/webpage_contract")
     expect(workflow).not.toContain("独占网页证据工具")
   })
 
@@ -411,7 +411,7 @@ describe("core prompt hygiene", () => {
     // The MUST-NOT block calls out bash explicitly so the LLM cannot claim the
     // command surface overrides role ownership.
     expect(flat).toContain("use `bash` to produce the deliverable")
-    expect(flat).toContain("substitute for requirements / architect / build")
+    expect(flat).toContain("substitute for `dispatch_agent` worker targets")
 
     // Tool Selection entry must point back to the runtime repair section.
     expect(flat).toContain("`bash`: full runtime repair command shell")
@@ -437,7 +437,7 @@ describe("core prompt hygiene", () => {
     expect(flat).toContain("required agent/tool surface")
     expect(flat).toContain("Do not ignore or route around missing tools")
     expect(flat).toContain("use `bash` for command-side runtime/toolchain diagnosis and repair")
-    expect(flat).toContain("dispatch `build` when files, scripts, dependencies, package metadata")
+    expect(flat).toContain("dispatch `dispatch_agent` target=build when files, scripts, dependencies, package")
     expect(flat).toContain("dynamic port selection, or tool configuration")
     expect(flat).toContain("use `explore` for repository architecture/source facts")
     expect(flat).toContain("runtime/toolchain blockers that are repaired by command-side materialization")
@@ -1081,11 +1081,12 @@ describe("core prompt hygiene", () => {
     expect(text).not.toContain("Direct build is supported:")
     const normalized = text.replace(/\s+/g, " ")
     expect(normalized).not.toContain('`build({ request, directBuildIntent: "modify_files" })` is still supported')
+    expect(normalized).not.toContain('`dispatch_agent` target=build with request/directBuildIntent="modify_files" is still supported')
     expect(normalized).toContain("The system delivers a project through the specialist agent team declared by the current scheduler workflow")
     expect(normalized).toContain("Bypassing the current workflow is prohibited in principle")
-    expect(normalized).toContain("you MUST NOT jump straight to `build({ request })`")
+    expect(normalized).toContain("you MUST NOT jump straight to `dispatch_agent` target=build with request")
     expect(normalized).toContain(
-      'Direct `build({ request, directBuildIntent: "modify_files" })` is the narrow exception',
+      'Direct `dispatch_agent` target=build with request/directBuildIntent="modify_files" is the narrow exception',
     )
     expect(normalized).toContain("explicit `kind=build` tasks")
     expect(normalized).toContain("Build is an implementation tool, never a repository-investigation tool")
@@ -1098,7 +1099,7 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("failed visual review as repair evidence")
     expect(normalized).toContain("unresolved module-mapping blockers require an explicit same-task repair")
     expect(normalized).toContain(
-      "same-task repair, question, `fail_task`, or evidence-anchored `propose_task` decision",
+      "same-task repair, question, `manage_task` action=fail_task, or evidence-anchored `manage_task` action=propose_task decision",
     )
     expect(normalized).not.toContain("static mock charts must become real chart implementations")
     expect(normalized).not.toContain("visual_feedback_verification_failed_attempts=1")
@@ -1128,15 +1129,15 @@ describe("core prompt hygiene", () => {
     const normalized = text.replace(/\s+/g, " ")
     const toolsNormalized = toolsSource.replace(/\s+/g, " ")
     expect(normalized).toContain(
-      "When both `requirements` and `architect` are visible in the current workflow",
+      "When both requirements and architect are declared in the current workflow",
     )
-    expect(normalized).toContain("a successful `requirements` result normally makes `architect` the next planning owner")
+    expect(normalized).toContain("a successful requirements result normally makes architect the next planning owner")
     expect(normalized).toContain(
-      "Before any execution has begun, call `requirements` again only when a real operator message changed scope",
+      "Before any execution has begun, dispatch requirements again only when a real operator message changed scope",
     )
-    expect(normalized).toContain("Once any goal/build execution has begun, never call `requirements` again in this task")
+    expect(normalized).toContain("Once any goal/build execution has begun, never dispatch requirements again in this task")
     expect(normalized).toContain(
-      "when the active REQ snapshot omitted load-bearing request constraints, use `propose_task`",
+      "when the active REQ snapshot omitted load-bearing request constraints, use `manage_task` action=propose_task",
     )
     expect(normalized).toContain("Do not label the next goal stale and restart requirements")
     expect(normalized).not.toContain("Do not call `requirements` again unless an operator message changed scope")
@@ -1154,7 +1155,7 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("Integrity is an adversarial review report producer")
     expect(normalized).toContain("no separate final acceptance object")
     expect(normalized).toContain("The host no longer runs a host-owned final acceptance object")
-    expect(normalized).toContain("Non-pass `integrity` returns evidence for the next orchestrator decision")
+    expect(normalized).toContain("Non-pass `dispatch_agent` target=integrity returns evidence for the next orchestrator decision")
     expect(normalized).toContain("After post-build non-pass integrity, do not end the wake with plain text")
     expect(normalized).toContain("do not passively report and leave the task active")
     expect(normalized).not.toContain("or report the current result when no responsible repair exists inside this task")
@@ -1164,10 +1165,10 @@ describe("core prompt hygiene", () => {
     expect(normalized).not.toContain("report blockers and wait")
     expect(sourceNormalized).not.toContain("report the current result")
     expect(normalized).toContain("When the evidence shows no responsible repair inside this task")
-    expect(normalized).toContain("the explicit action is `fail_task` with the evidence or `question`")
+    expect(normalized).toContain("the explicit action is `manage_task` action=fail_task with the evidence or `question`")
     expect(normalized).toContain("Valid next actions include task-level build")
     expect(normalized).toContain(
-      'Minor / localized integrity issues -> call `build({ request, directBuildIntent: "modify_files" })`',
+      'Minor / localized integrity issues -> call `dispatch_agent` target=build with request/directBuildIntent="modify_files"',
     )
     expect(normalized).toContain(
       "Do not re-run requirements, architect, frontend_design, or the whole workflow for import typos",
@@ -1178,12 +1179,12 @@ describe("core prompt hygiene", () => {
       "First occurrence, when the missing or distorted capability is still inside the current task contract -> use the lightest valid repair",
     )
     expect(normalized).toContain(
-      '`build({ request, directBuildIntent: "modify_files" })` with the exact fidelity delta as the request',
+      '`dispatch_agent` target=build with request/directBuildIntent="modify_files" and the exact fidelity delta as the request',
     )
     expect(normalized).toContain("If the same fidelity shortfall repeats after that build retry")
-    expect(normalized).toContain("use `modify_goal` or `architect` when the current task needs a corrected/new goal")
+    expect(normalized).toContain("use `manage_task` action=modify_goal or `dispatch_agent` target=architect when the current task needs a corrected/new goal")
     expect(normalized).toContain(
-      "Use `propose_task` when the repeated fidelity gap has become a separate follow-up scope",
+      "Use `manage_task` action=propose_task when the repeated fidelity gap has become a separate follow-up scope",
     )
   })
 
@@ -1211,8 +1212,8 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("execution evidence, artifact state, integrity history, or the obvious product path")
     expect(normalized).toContain("If visual QA reports unresolved_code_module_problems")
     expect(normalized).toContain("cite the registered evidence refs in `evidence_anchor`")
-    expect(normalized).toContain("Supplemental features, deeper implementation detail")
-    expect(normalized).toContain("project improvement suggestions")
+    expect(normalized).toContain("follow-up features, implementation-depth passes")
+    expect(normalized).toContain("project-hardening suggestions")
     expect(normalized).toContain("specific evidence-anchored problem")
     expect(normalized).toContain("concrete evidence anchor")
     expect(normalized).toContain("refuse to create a child task")
@@ -1221,7 +1222,7 @@ describe("core prompt hygiene", () => {
 
   test("orchestrator runtime prompt does not hard-code workflow topology", async () => {
     const source = await readSource("agent/agent.ts")
-    expect(source).toContain("current scheduler-projected workflow tools")
+    expect(source).toContain("dispatch worker agents through `dispatch_agent`")
     expect(source).not.toContain(
       "explicit workflow tools such as `requirements`, `frontend_design`, `visual_qa`, `architect`, `build`, `integrity`, and `refine`",
     )
@@ -1250,7 +1251,7 @@ describe("core prompt hygiene", () => {
     expect(normalizedOrchestrator).toContain("currently declared responsible agents")
     expect(normalizedOrchestrator).toContain("scheduler-projected visual review tool")
     expect(normalizedOrchestrator).toContain("system-completeness review are peer report-only evidence producers")
-    expect(orchestrator).not.toContain("requirements, architect, build, visual_qa, or integrity")
+    expect(orchestrator).not.toContain("move through requirements, architect, build, visual_qa, and integrity")
     expect(orchestrator).not.toContain("move through requirements, architect, build, visual_qa, and integrity")
     expect(orchestrator).not.toContain("call `visual_qa` once near task completion")
     expect(orchestrator).not.toContain("Use `integrity` as an optional system-completeness review report")
@@ -1264,17 +1265,17 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain(
       "Never claim that a task, follow-up task, run, goal attempt, tool result, file change, checkpoint, push, review, or session exists unless the current task record or a just-returned tool result proves it",
     )
-    expect(normalized).toContain("If the next action is to create follow-up work, call `propose_task`")
+    expect(normalized).toContain("If the next action is to create follow-up work, call `manage_task` action=propose_task")
     expect(normalized).toContain("do not say it was created in plain text")
     expect(normalized).toContain(
       "If the current workflow task has pending goals, no active build/run, no terminal integrity verdict, and no external blocker, a status-only response is wrong",
     )
-    expect(normalized).toContain("dispatch `build({ goalID })` for the first eligible pending goal")
+    expect(normalized).toContain("dispatch `dispatch_agent` target=build with goalID")
     expect(normalized).toContain(
       "After a successful declared `architect` result has created pending goals and no build attempt exists yet",
     )
     expect(normalized).toContain("do not re-run `architect` just because implementation has not started")
-    expect(normalized).toContain("dispatch `build({ goalID })` for the first eligible pending goal")
+    expect(normalized).toContain("dispatch the current workflow's implementation owner for the first eligible pending goal")
     expect(normalized).toContain("On terminal goal refill wakes, use the current task snapshot")
     expect(normalized).not.toContain("Read context on terminal goal refill wakes")
     expect(normalized).toContain("Do not call `wait` for live build completion")
@@ -1327,7 +1328,7 @@ describe("core prompt hygiene", () => {
       "Workflow tasks complete only when you, the Orchestrator, decide the current durable task evidence satisfies the user request",
     )
     expect(normalized).toContain("There is no `deliver` or `publish_acceptance` tool")
-    expect(normalized).toContain("call `complete_task` with a concrete completion summary")
+    expect(normalized).toContain("call `manage_task` action=complete_task with a concrete completion summary")
     expect(normalized).toContain("none of them is a host-side completion lock")
     expect(normalized).toContain("`completed`, `failed`, and `cancelled` are terminal for self-wakes")
     expect(normalized).toContain(
@@ -1365,9 +1366,9 @@ describe("core prompt hygiene", () => {
     expect(normalized).not.toContain("Typical shape")
     expect(normalized).not.toContain("UI replication from visual reference` in `Kind: workflow` → `analyze_intent`")
     expect(normalized).not.toContain("verification` goals are integration checks; they stay pending until **deliver**")
-    expect(normalized).toContain("Dispatch them with `build({ goalID })` like every other goal")
+    expect(normalized).toContain("Dispatch them with `dispatch_agent` target=build and goalID")
     expect(normalized).toContain(
-      "every verification/integration goal still needed for evidence is terminal before `integrity`",
+      "every verification/integration goal still needed for evidence is terminal before `dispatch_agent` target=integrity",
     )
   })
 
@@ -1428,7 +1429,7 @@ describe("core prompt hygiene", () => {
   test("orchestrator prompt documents ordered context recovery instead of freshContext", async () => {
     const text = await readPrompt("orchestrator")
     const normalized = text.replace(/\s+/g, " ")
-    expect(normalized).toContain("Per-goal retry/continuation -> use `build({ goalID })`")
+    expect(normalized).toContain("Per-goal retry/continuation -> use `dispatch_agent` target=build with goalID")
     expect(normalized).toContain("resume it first")
     expect(normalized).toContain("build reuses the prior session")
     expect(normalized).toContain("fresh runtime contract")

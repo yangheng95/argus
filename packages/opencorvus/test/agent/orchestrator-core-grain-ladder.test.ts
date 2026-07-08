@@ -18,10 +18,10 @@ describe("orchestrator-core workflow backtracking prohibition", () => {
     const normalized = text.replace(/\s+/g, " ")
     expect(normalized).toContain("Workflow tasks do not go backward in place")
     expect(normalized).toContain("do not rewind to earlier requirements / plan / executor stages inside the same task")
-    expect(normalized).toContain("Use same-task repair tools when the current contract is still valid")
-    expect(normalized).toContain("`modify_goal` for point contract repair")
-    expect(normalized).toContain("`architect` for graph repair")
-    expect(normalized).toContain("targeted `build` for implementation repair")
+    expect(normalized).toContain("Use same-task repair actions when the current contract is still valid")
+    expect(normalized).toContain("`manage_task` action=modify_goal for point contract repair")
+    expect(normalized).toContain("`dispatch_agent` target=architect")
+    expect(normalized).toContain("targeted `dispatch_agent` target=build for implementation")
   })
 
   test("routes fundamentally wrong workflow contracts to a new inheriting task", async () => {
@@ -29,8 +29,8 @@ describe("orchestrator-core workflow backtracking prohibition", () => {
     const normalized = text.replace(/\s+/g, " ")
     expect(normalized).toContain("active workflow contract is fundamentally wrong")
     expect(normalized).toContain("cannot be repaired inside the current task")
-    expect(normalized).toContain("create a separate inheriting workflow task with `propose_task`")
-    expect(normalized).toContain("choose `fail_task` or `question` when the blocker is terminal or external")
+    expect(normalized).toContain("create a separate inheriting workflow task with `manage_task` action=propose_task")
+    expect(normalized).toContain("choose `manage_task` action=fail_task or `question` when the blocker is terminal or external")
   })
 
   test("does NOT advertise the prior single-line repair ladder", async () => {
@@ -61,7 +61,7 @@ describe("orchestrator-core workflow-bypass prohibition", () => {
   test("prohibits jumping straight to direct build on a fresh workflow task", async () => {
     const text = await Bun.file(promptPath).text()
     expect(text).toContain("Bypassing the current workflow is prohibited in principle")
-    expect(text).toMatch(/MUST NOT jump straight to `build\(\{ request \}\)`/)
+    expect(text).toContain("MUST NOT jump straight to `dispatch_agent` target=build with request")
     expect(text).toContain("current workflow declares upstream evidence or goal-graph stages")
     expect(text).toContain("task simplicity belongs to")
     const norm = text.replace(/\s+/g, " ")
@@ -71,9 +71,9 @@ describe("orchestrator-core workflow-bypass prohibition", () => {
 
   test("direct build is the narrow exception: kind=build or post-review fix", async () => {
     const text = await Bun.file(promptPath).text()
-    expect(text).toMatch(/Direct `build\(\{ request, directBuildIntent: "modify_files" \}\)` is the narrow\nexception/)
+    expect(text).toContain('Direct `dispatch_agent` target=build with request/directBuildIntent="modify_files" is the narrow')
     expect(text).toContain("explicit `kind=build` tasks")
-    expect(text).toContain("subsequent, concretely-scoped problem fix after a `build`/`integrity`")
+    expect(text).toContain("subsequent, concretely-scoped problem fix after a Build/Integrity")
   })
 
   test("does NOT advertise the prior permissive direct-build copy", async () => {

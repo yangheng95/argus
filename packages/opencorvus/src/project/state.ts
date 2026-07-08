@@ -22,15 +22,22 @@ export namespace State {
     if (entries.size === 0) recordsByKey.delete(key)
   }
 
+  async function resolveEntryState(key: string, init: unknown, entry: Entry) {
+    const label = typeof init === "function" ? init.name : String(init)
+    return Promise.resolve(entry.state).catch((error) => {
+      log.error("Error while resolving state during disposal:", { error, key, init: label })
+      throw error
+    })
+  }
+
   async function disposeEntry(key: string, init: unknown, entry: Entry) {
+    const state = await resolveEntryState(key, init, entry)
     if (!entry.dispose) return
     const label = typeof init === "function" ? init.name : String(init)
-    await Promise.resolve(entry.state)
-      .then((state) => entry.dispose!(state))
-      .catch((error) => {
-        log.error("Error while disposing state:", { error, key, init: label })
-        throw error
-      })
+    await entry.dispose(state).catch((error) => {
+      log.error("Error while disposing state:", { error, key, init: label })
+      throw error
+    })
   }
 
   async function disposeTargets(targets: EntryTarget[]) {
@@ -71,10 +78,6 @@ export namespace State {
       const entries = recordsByKey.get(key)
       const entry = entries?.get(init)
       if (!entries || !entry) return
-      if (!entry.dispose) {
-        removeEntry(key, init, entry)
-        return
-      }
       await disposeTargets([{ key, init, entry }])
     }
     fn.resetAll = async () => {
@@ -82,10 +85,6 @@ export namespace State {
       for (const [key, entries] of recordsByKey) {
         const entry = entries.get(init)
         if (!entry) continue
-        if (!entry.dispose) {
-          removeEntry(key, init, entry)
-          continue
-        }
         targets.push({ key, init, entry })
       }
       await disposeTargets(targets)
@@ -112,10 +111,6 @@ export namespace State {
 
     const targets: EntryTarget[] = []
     for (const [init, entry] of entries) {
-      if (!entry.dispose) {
-        removeEntry(key, init, entry)
-        continue
-      }
       targets.push({ key, init, entry })
     }
 

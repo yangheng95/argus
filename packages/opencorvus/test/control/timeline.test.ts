@@ -174,6 +174,55 @@ describe("control timeline", () => {
     })
   })
 
+  test("deleteProjectMessages removes only one project's control timeline rows", async () => {
+    await using projectA = await tmpdir({ git: true })
+    await using projectB = await tmpdir({ git: true })
+    const sharedTaskID = Identifier.ascending("task")
+    let projectAID = ""
+
+    await Instance.provide({
+      directory: projectA.path,
+      fn: async () => {
+        projectAID = Instance.project.id
+        ControlTimeline.append({
+          taskID: sharedTaskID,
+          surface: "panel",
+          source: "test",
+          entries: [{ role: "user", text: "project A control row" }],
+        })
+      },
+    })
+
+    await Instance.provide({
+      directory: projectB.path,
+      fn: async () => {
+        ControlTimeline.append({
+          taskID: sharedTaskID,
+          surface: "panel",
+          source: "test",
+          entries: [{ role: "user", text: "project B control row" }],
+        })
+      },
+    })
+
+    ControlTimeline.deleteProjectMessages({ projectID: projectAID })
+
+    await Instance.provide({
+      directory: projectA.path,
+      fn: async () => {
+        expect(ControlTimeline.list({ taskID: sharedTaskID })).toEqual([])
+      },
+    })
+    await Instance.provide({
+      directory: projectB.path,
+      fn: async () => {
+        expect(ControlTimeline.list({ taskID: sharedTaskID }).map((item) => item.parts[0]?.text)).toEqual([
+          "project B control row",
+        ])
+      },
+    })
+  })
+
   test("persistent panel control sessions are scoped to the active project", async () => {
     mock.module("@/agent/model", () => ({
       resolveAgentModelRef: async () => ({

@@ -8,6 +8,7 @@ import {
 } from "./host-transport"
 
 export interface BrowserPreviewNativeSyncInput {
+  scopeKey: string
   url: string
   bounds: BrowserPreviewNativeBounds
 }
@@ -25,12 +26,15 @@ export function browserPreviewNativeSurfaceAvailable(): boolean {
 
 export async function syncBrowserPreviewNativeSurface(input: BrowserPreviewNativeSyncInput): Promise<void> {
   assertBrowserPreviewNativeSurfaceAvailable()
-  await getHostTransport().native({ kind: "browserPreview.sync", url: input.url, bounds: input.bounds })
+  await getHostTransport().native({
+    kind: "browserPreview.sync",
+    scopeKey: input.scopeKey,
+    url: input.url,
+    bounds: input.bounds,
+  })
 }
 
-export async function navigateBrowserPreviewNativeSurface(
-  action: BrowserPreviewNativeNavigationAction,
-): Promise<void> {
+export async function navigateBrowserPreviewNativeSurface(action: BrowserPreviewNativeNavigationAction): Promise<void> {
   assertBrowserPreviewNativeSurfaceAvailable()
   await getHostTransport().native({ kind: "browserPreview.navigate", action })
 }

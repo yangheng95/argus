@@ -795,7 +795,10 @@ export namespace Config {
     .object({
       model: ModelId.nullable().optional(),
       prompt: z.record(z.string(), z.string().nullable()).nullable().optional(),
-      prompt_profile: z.lazy(() => PromptProfileOverlaySchema).nullable().optional(),
+      prompt_profile: z
+        .lazy(() => PromptProfileOverlaySchema)
+        .nullable()
+        .optional(),
       agent: z.record(z.string(), OverlayAgent.nullable()).nullable().optional(),
     })
     .strict()
@@ -1323,7 +1326,7 @@ export namespace Config {
           (data) => {
             if (!data) return true
             if (typeof data === "boolean") return true
-            const serverIds = new Set(Object.values(LSPServer).map((s) => s.id))
+            const serverIds = new Set(LSPServer.builtInServers().map((server) => server.id))
 
             return Object.entries(data).every(([id, config]) => {
               if (config.disabled) return true
@@ -1583,7 +1586,9 @@ export namespace Config {
             .int()
             .positive()
             .optional()
-            .describe("Timeout in milliseconds for model context protocol (MCP) requests"),
+            .describe(
+              "Timeout in milliseconds for model context protocol (MCP) requests. Defaults to 30000 (30 seconds).",
+            ),
           memory: z
             .object({
               enabled: z.boolean().optional().describe("Enable persistent memory store"),

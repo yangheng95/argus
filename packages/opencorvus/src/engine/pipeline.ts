@@ -6,13 +6,14 @@
  * fixed state machine.
  */
 import z from "zod"
-import { Identifier } from "@/id/id"
 import { Database } from "@/storage/db"
 import { Log } from "@/util/log"
 import { budgetRow } from "./helpers"
 import { CreateTaskInput, Event } from "./model"
-import { EngineChannelBindingTable, EngineProgressSnapshotTable, EngineTaskTable } from "./engine.sql"
 import { EngineProtocol } from "./protocol"
+import { insertEngineChannelBinding } from "./channel-binding"
+import { insertEngineProgressSnapshot } from "./progress"
+import { insertEngineTask } from "./task"
 import { TaskGlobalProjectBindingError } from "./task-project-error"
 import type { RunRow } from "./store"
 
@@ -100,52 +101,42 @@ export function persistQueuedTask(input: {
   const summary = input.queue ? "Task queued" : "Task started"
   const source = input.queue ? "pipeline.queued" : "pipeline.direct"
   Database.transaction((db) => {
-    db.insert(EngineTaskTable)
-      .values({
-        id: input.taskID,
-        project_id: input.projectID,
-        session_id: input.sessionID,
-        request_id: input.requestID,
-        source: input.source ?? "api",
-        title: input.title,
-        request: input.request,
-        attachments: input.attachments?.length ? input.attachments : undefined,
-        executor: input.executor,
-        kind: input.kind ?? "workflow",
-        priority: input.priority ?? "normal",
-        queue_order: initialQueueOrder(input.priority, input.now),
-        budget: budgetRow(input.budget),
-        metadata: input.metadata,
-        time_started: input.queue ? null : input.now,
-        time_created: input.now,
-        time_updated: input.now,
-      })
-      .run()
+    insertEngineTask(db, {
+      taskID: input.taskID,
+      projectID: input.projectID,
+      sessionID: input.sessionID,
+      requestID: input.requestID,
+      source: input.source ?? "api",
+      title: input.title,
+      request: input.request,
+      attachments: input.attachments?.length ? input.attachments : undefined,
+      executor: input.executor,
+      kind: input.kind ?? "workflow",
+      priority: input.priority ?? "normal",
+      queueOrder: initialQueueOrder(input.priority, input.now),
+      budget: budgetRow(input.budget),
+      metadata: input.metadata,
+      timeStarted: input.queue ? null : input.now,
+      timeCreated: input.now,
+      timeUpdated: input.now,
+    })
     if (input.channelBinding) {
-      db.insert(EngineChannelBindingTable)
-        .values({
-          id: Identifier.ascending("binding"),
-          task_id: input.taskID,
-          platform: input.channelBinding.platform,
-          channel: input.channelBinding.channel,
-          thread: input.channelBinding.thread,
-          payload: input.channelBinding.payload ?? {},
-          time_created: input.now,
-          time_updated: input.now,
-        })
-        .run()
-    }
-    db.insert(EngineProgressSnapshotTable)
-      .values({
-        id: Identifier.ascending("progress"),
-        task_id: input.taskID,
-        status: progressStatus,
-        summary,
-        payload: { sessionID: input.sessionID, queue: input.queue },
-        time_created: input.now,
-        time_updated: input.now,
+      insertEngineChannelBinding(db, {
+        taskID: input.taskID,
+        platform: input.channelBinding.platform,
+        channel: input.channelBinding.channel,
+        thread: input.channelBinding.thread,
+        payload: input.channelBinding.payload ?? {},
+        timeCreated: input.now,
       })
-      .run()
+    }
+    insertEngineProgressSnapshot(db, {
+      taskID: input.taskID,
+      status: progressStatus,
+      summary,
+      payload: { sessionID: input.sessionID, queue: input.queue },
+      timeCreated: input.now,
+    })
     Database.effect(() =>
       EngineProtocol.emit(
         Event.TaskCreated,

@@ -210,6 +210,17 @@ export const PanelCapabilityRegistry = list(
     },
   }),
   item({
+    action: "wake_mission",
+    description:
+      "Start a new Mission from the right-sidebar Chat when the request clearly needs durable multi-step workflow orchestration. Returns a receipt to the caller Chat when the Mission reaches a terminal status.",
+    kind: "mutation",
+    surfaces: [RIGHT_SIDEBAR_SURFACE],
+    params: {
+      title: z.string().trim().min(1).max(80).optional().describe("Short Mission title shown in the Work Ledger."),
+      request: z.string().trim().min(1).max(32_000).describe("Full workflow request to hand to Mission."),
+    },
+  }),
+  item({
     action: "send_task_message",
     description: "Send a follow-up message to an existing task.",
     kind: "mutation",

@@ -22,7 +22,7 @@ Orchestrator lifecycle 决策只从这条 artifact-centric 路径读取证据摘
 | `acceptance/visual-feedback-verification.ts` | 写入和校验 `label="visual-feedback-verification"` 的 visual acceptance artifact；它绑定 task / run / preview target 和 Browser Preview visual evidence refs |
 | `acceptance/checks/**`    | deterministic checks、runtime readiness、walkthrough、project evidence manifest                                                         |
 | `acceptance/arbiter.ts`   | functional acceptance arbitration; it reports evidence verdicts and is not the workflow acceptance authority                            |
-| `orchestrator/tools.ts`   | 消费 evidence 摘要、decision-log 记录和 workflow 投影，用 `complete_task` / `fail_task` 写入最终 lifecycle 决策                         |
+| `orchestrator/tools.ts`   | 消费 evidence 摘要、decision-log 记录和 workflow 投影，用 `manage_task action=complete_task` / `manage_task action=fail_task` 写入最终 lifecycle 决策                         |
 
 ## 存储契约
 
@@ -76,7 +76,7 @@ Visual QA tool result 同步暴露当前 rendered visual feedback verification �
 `visual_feedback_verification_status` 和
 `visual_feedback_verification_failed_attempts`。Orchestrator prompt 消费这些事实：
 首次失败表示应把当前 comparison / annotation / diagnostic 反馈交回 Build；同一 task
-连续第二次失败表示当前视觉目标未达成，应 `fail_task`，不能把该 verdict 交给
+连续第二次失败表示当前视觉目标未达成，应 `manage_task action=fail_task`，不能把该 verdict 交给
 Integrity 重判或让 Build 盲修。失败次数字段是 decision-log / verification artifact
 的事实投影，不是新的 host gate 或 Integrity verdict。
 

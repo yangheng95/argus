@@ -11,19 +11,14 @@ import {
   listGlobalMissionSessions,
 } from "@/mission/session"
 import { MissionID } from "@/mission/schema"
-import { listMissionTasks, listTaskRows } from "@/engine/store"
+import { MissionRecord, missionRecord, missionStatusRecord } from "@/mission/projection"
+import { listMissionTasks } from "@/engine/store"
 import { deriveTaskStatus } from "@/engine/task-status"
 import { PromptProfileResolver } from "@/expert-squad/prompt-profile-resolver"
 import { Config } from "@/config/config"
-import {
-  MissionStatusSnapshot,
-  StatusSnapshotState,
-  missionStatusSnapshot,
-  statusFromTaskLifecycle,
-  taskStatusDetailFromBoard,
-} from "@/status/task-status-snapshot"
-import { compileBoard } from "@/workbench/board"
-import { Session, SessionStatus } from "@/session"
+import { EffectiveConfig } from "@/config/effective"
+import { MissionStatusSnapshot } from "@/status/task-status-snapshot"
+import { Session } from "@/session"
 import { SessionWake } from "@/session/wake"
 import { enrichStandaloneSessionTranscript } from "@/protocol/session-mirror"
 import { Provider } from "@/provider/provider"
@@ -57,44 +52,6 @@ const MissionWakeResult = z.object({
   created: z.boolean(),
 })
 
-const MissionTaskStatus = z.enum(["queued", "active", "completed", "failed", "cancelled"])
-
-const MissionTaskProjection = z.object({
-  id: z.string(),
-  title: z.string(),
-  status: MissionTaskStatus,
-  executionStatus: StatusSnapshotState,
-  priority: z.enum(["critical", "high", "normal", "low"]),
-  source: z.string(),
-  directory: z.string(),
-  created: z.number(),
-  updated: z.number(),
-  started: z.number().optional(),
-  completed: z.number().optional(),
-})
-
-const MissionTaskStats = z.object({
-  total: z.number(),
-  queued: z.number(),
-  active: z.number(),
-  completed: z.number(),
-  failed: z.number(),
-  cancelled: z.number(),
-})
-
-const MissionRecord = z.object({
-  missionID: MissionID,
-  sessionID: z.string(),
-  title: z.string(),
-  directory: z.string(),
-  created: z.number(),
-  updated: z.number(),
-  archived: z.number().optional(),
-  interruptible: z.boolean(),
-  tasks: MissionTaskProjection.array(),
-  taskStats: MissionTaskStats,
-})
-
 const MissionListQuery = z
   .object({
     directory: z.string().optional(),
@@ -122,76 +79,50 @@ const ProjectArchiveUnsupportedProjectResponse = z.object({
 })
 
 type MissionSessionRecord = Awaited<ReturnType<typeof getMissionSessionByDirectory>>
-type MissionTaskProjectionValue = z.infer<typeof MissionTaskProjection>
 
 function missionRouteSession(missionID: string): Promise<MissionSessionRecord> {
   return getMissionSessionByDirectory({ missionID, directory: Instance.directory })
 }
 
-function missionTaskStats(tasks: MissionTaskProjectionValue[]): z.infer<typeof MissionTaskStats> {
-  return tasks.reduce(
-    (stats, task) => {
-      stats.total += 1
-      stats[task.status] += 1
-      return stats
-    },
-    { total: 0, queued: 0, active: 0, completed: 0, failed: 0, cancelled: 0 },
-  )
-}
-
-function projectMissionTasks(session: MissionSessionRecord): MissionTaskProjectionValue[] {
-  return listTaskRows(
-    listMissionTasks({ projectID: session.projectID, missionID: session.missionID, sessionID: session.id }),
-  ).map(({ task, directory }) => {
-    const lifecycleStatus = deriveTaskStatus(task)
-    return MissionTaskProjection.parse({
-      id: task.id,
-      title: task.title,
-      status: lifecycleStatus,
-      executionStatus: statusFromTaskLifecycle(lifecycleStatus),
-      priority: task.priority,
-      source: task.source,
-      directory,
-      created: task.time_created,
-      updated: task.time_updated,
-      started: task.time_started ?? undefined,
-      completed: task.time_completed ?? undefined,
-    })
-  })
-}
-
-function missionRecord(session: MissionSessionRecord): z.infer<typeof MissionRecord> {
-  const tasks = projectMissionTasks(session)
-  const status = SessionStatus.get(session.id)
-  return MissionRecord.parse({
-    missionID: session.missionID,
-    sessionID: session.id,
-    title: session.title,
-    directory: session.directory,
-    created: session.time.created,
-    updated: session.time.updated,
-    archived: session.time.archived,
-    interruptible: status.type === "streaming" || status.type === "retry",
-    tasks,
-    taskStats: missionTaskStats(tasks),
-  })
-}
-
-function missionStatusRecord(session: MissionSessionRecord): z.infer<typeof MissionStatusSnapshot> {
-  const tasks = listTaskRows(
-    listMissionTasks({ projectID: session.projectID, missionID: session.missionID, sessionID: session.id }),
-  ).map(({ task }) => taskStatusDetailFromBoard(compileBoard({ taskID: task.id })))
-  return missionStatusSnapshot({
-    missionID: session.missionID,
-    sessionID: session.id,
-    title: session.title,
-    directory: session.directory,
-    tasks,
-  })
-}
-
 async function missionTranscript(sessionID: string) {
   return enrichStandaloneSessionTranscript(await Session.messages({ sessionID })).filter(conversationMessageHasDisplay)
+}
+
+async function closeMissionExecution(session: MissionSessionRecord, handle: "mission.abort" | "mission.delete") {
+  const childTasks = listMissionTasks({
+    projectID: session.projectID,
+    missionID: session.missionID,
+    sessionID: session.id,
+  }).filter((task) => {
+    const status = deriveTaskStatus(task)
+    return status === "queued" || status === "active"
+  })
+  const failures: string[] = []
+  for (const task of childTasks) {
+    try {
+      await EngineService.cancelTask(task.id)
+    } catch (error) {
+      failures.push(`task ${task.id}: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+  try {
+    cancelSessionPromptInScope({
+      session,
+      handle,
+    })
+    await awaitSessionPromptFinishedInScope({
+      session,
+      handle,
+    })
+  } catch (error) {
+    failures.push(`mission ${session.missionID}: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  if (failures.length > 0) {
+    throw createTaskCancellationIncomplete({
+      handle,
+      cause: new Error(failures.join("; ")),
+    })
+  }
 }
 
 export function MissionRoutes() {
@@ -353,40 +284,7 @@ export function MissionRoutes() {
       validator("param", MissionParam),
       async (c) => {
         const session = await missionRouteSession(c.req.valid("param").missionID)
-        const childTasks = listMissionTasks({
-          projectID: session.projectID,
-          missionID: session.missionID,
-          sessionID: session.id,
-        }).filter((task) => {
-          const status = deriveTaskStatus(task)
-          return status === "queued" || status === "active"
-        })
-        const failures: string[] = []
-        for (const task of childTasks) {
-          try {
-            await EngineService.cancelTask(task.id)
-          } catch (error) {
-            failures.push(`task ${task.id}: ${error instanceof Error ? error.message : String(error)}`)
-          }
-        }
-        try {
-          cancelSessionPromptInScope({
-            session,
-            handle: "mission.abort",
-          })
-          await awaitSessionPromptFinishedInScope({
-            session,
-            handle: "mission.abort",
-          })
-        } catch (error) {
-          failures.push(`mission ${session.missionID}: ${error instanceof Error ? error.message : String(error)}`)
-        }
-        if (failures.length > 0) {
-          throw createTaskCancellationIncomplete({
-            handle: "mission.abort",
-            cause: new Error(failures.join("; ")),
-          })
-        }
+        await closeMissionExecution(session, "mission.abort")
         return c.json(true)
       },
     )
@@ -401,12 +299,13 @@ export function MissionRoutes() {
             description: "Mission deleted",
             content: { "application/json": { schema: resolver(z.boolean()) } },
           },
-          ...errors(404),
+          ...errors(404, 409),
         },
       }),
       validator("param", MissionParam),
       async (c) => {
         const session = await missionRouteSession(c.req.valid("param").missionID)
+        await closeMissionExecution(session, "mission.delete")
         await EngineService.deleteSession(session.id, { projectID: session.projectID })
         return c.json(true)
       },
@@ -454,22 +353,35 @@ export function MissionRoutes() {
           missionID,
           defaultCwd: Instance.directory,
         })
+        let previousPromptProfileActive: string | undefined
         if (input.promptProfile) {
+          previousPromptProfileActive = (await EffectiveConfig.effective({ sessionID: session.id })).prompt_profile
+            .active
           await Session.mergeConfigOverlay({
             sessionID: session.id,
             patch: { prompt_profile: { active: input.promptProfile } },
           })
         }
-        await SessionWake.wake({
-          sessionID: session.id,
-          prompt: input.text,
-          agent: "mission",
-          model: input.model ? Provider.parseModel(input.model) : undefined,
-          reason: {
-            source: "mission.operator",
-            missionID,
-          },
-        })
+        try {
+          await SessionWake.wake({
+            sessionID: session.id,
+            prompt: input.text,
+            agent: "mission",
+            model: input.model ? Provider.parseModel(input.model) : undefined,
+            reason: {
+              source: "mission.operator",
+              missionID,
+            },
+          })
+        } catch (error) {
+          if (previousPromptProfileActive) {
+            await Session.mergeConfigOverlay({
+              sessionID: session.id,
+              patch: { prompt_profile: { active: previousPromptProfileActive } },
+            })
+          }
+          throw error
+        }
         return c.json(
           MissionWakeResult.parse({
             missionID,

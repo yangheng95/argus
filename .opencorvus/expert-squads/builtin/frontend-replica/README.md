@@ -26,6 +26,8 @@ Do not call a replica task expert-grade when it ships source-row prose, screensh
 
 The Orchestrator keeps visible selection and scheduling in the root session. Role agents consume only their own system prompt overlay from this package plus the shared OpenCorvus base prompt.
 
+Mission owns page-family task topology for this package. A single source page can be one engine task with Architect-owned component goals. A multi-page, page-family, or subpage clone must first dispatch a serial template/source-baseline task, then dispatch independent page/subpage tasks after the template task is terminal. Those page/subpage tasks may run in parallel only when they cite the template artifact paths and own disjoint source surfaces, files, and acceptance evidence.
+
 Package prompt overlays:
 
 - coding: agents/coding/system.md

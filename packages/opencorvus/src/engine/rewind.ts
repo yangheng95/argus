@@ -20,6 +20,7 @@ import { EngineGoalTable, EngineTaskTable, type EngineGoalRunStatus } from "./en
 import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
 import { updateGoalRun } from "./persist"
+import { clearEngineTaskRewindCursor, setEngineTaskRewindCursor } from "./task"
 import { findTask, listGoalRunsForTask, type GoalRunRow } from "./store"
 import { isTerminalGoalRunStatus } from "./catalog"
 
@@ -216,16 +217,13 @@ export async function rewindTask(raw: RewindTaskInput): Promise<RewindTaskResult
   const anchorEventID = input.anchor.kind === "cursorTime" ? input.anchor.anchorEventID : input.anchor.messageID
 
   Database.use((db) =>
-    db
-      .update(EngineTaskTable)
-      .set({
-        rewind_cursor_time: cursorTime,
-        rewind_cursor_event_id: anchorEventID ?? null,
-        rewind_count: nextCount,
-        time_updated: now,
-      })
-      .where(eq(EngineTaskTable.id, input.taskID))
-      .run(),
+    setEngineTaskRewindCursor(db, {
+      taskID: input.taskID,
+      cursorTime,
+      anchorEventID,
+      rewindCount: nextCount,
+      timeUpdated: now,
+    }),
   )
 
   log.info("task rewound", {
@@ -271,17 +269,7 @@ export async function clearRewindCursor(taskID: string): Promise<void> {
   if (task.rewind_cursor_time == null) return
 
   const now = Date.now()
-  Database.use((db) =>
-    db
-      .update(EngineTaskTable)
-      .set({
-        rewind_cursor_time: null,
-        rewind_cursor_event_id: null,
-        time_updated: now,
-      })
-      .where(eq(EngineTaskTable.id, taskID))
-      .run(),
-  )
+  Database.use((db) => clearEngineTaskRewindCursor(db, { taskID, timeUpdated: now }))
   log.info("task rewind cursor cleared", { taskID })
   await EngineProtocol.emit(
     Event.TaskRewound,

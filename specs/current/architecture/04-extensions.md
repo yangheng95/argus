@@ -40,7 +40,7 @@
 **调用链**：
 
 ```
-Orchestrator build tool → build/agent.ts (`build.worktreeUsage` 由 LLM 选择 managed_worktree / current_project；省略时 goal 默认 managed worktree、task-level implementation build 默认当前 caller-owned workDir) →
+Orchestrator `dispatch_agent target=build` → build/agent.ts (`worktreeUsage` 由 LLM 选择 managed_worktree / current_project；省略时 goal 默认 managed worktree、task-level implementation build 默认当前 caller-owned workDir) →
    ExecutorRegistry.requireCoding() → external coding executor → diff evidence
    + goal/runner.ts::cleanupGoalWorkspace 在 worktree 生命周期末端回收
 ```

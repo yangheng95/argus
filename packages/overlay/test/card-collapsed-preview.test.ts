@@ -4,6 +4,8 @@ import {
   collectLatestActivityText,
   collectTodoSummary,
   collectActivityCounts,
+  defaultExpandedForNode,
+  stepHeaderNodeWithBuildPhase,
 } from "../src/utils/card-tree"
 import { cardTreeStore } from "../src/store/card-tree"
 
@@ -188,6 +190,90 @@ describe("collectLatestActivityText", () => {
       parts: [{ type: "tool", tool: "bash", state: { input: { command: "rg --files" } } }],
     }
     expect(collectLatestActivityText(node)).toBe("Implement /api/data")
+  })
+})
+
+describe("defaultExpandedForNode conversation cards", () => {
+  test("finished assistant conversation cards default collapsed while running cards stay open", () => {
+    for (const status of ["completed", "error", "skipped", "idle"]) {
+      expect(
+        defaultExpandedForNode({
+          id: `assistant-${status}`,
+          kind: "agent",
+          role: "assistant",
+          title: "Assistant",
+          status,
+          parts: [{ type: "text", text: "done" }],
+          time: 1,
+        } as any),
+      ).toBe(false)
+      expect(
+        defaultExpandedForNode({
+          id: `message-${status}`,
+          kind: "message",
+          role: "assistant",
+          title: "Assistant",
+          status,
+          parts: [{ type: "text", text: "done" }],
+          time: 1,
+        } as any),
+      ).toBe(false)
+    }
+
+    expect(
+      defaultExpandedForNode({
+        id: "assistant-running",
+        kind: "agent",
+        role: "assistant",
+        title: "Assistant",
+        status: "running",
+        parts: [{ type: "text", text: "streaming" }],
+        time: 1,
+      } as any),
+    ).toBe(true)
+  })
+
+  test("user-authored messages remain expanded after completion", () => {
+    expect(
+      defaultExpandedForNode({
+        id: "user-completed",
+        kind: "message",
+        role: "user",
+        title: "User",
+        status: "completed",
+        parts: [{ type: "text", text: "original request" }],
+        time: 1,
+      } as any),
+    ).toBe(true)
+  })
+})
+
+describe("stepHeaderNodeWithBuildPhase", () => {
+  test("forwards absorbed build phase agent summary to the collapsed step header", () => {
+    const step: any = {
+      id: "step:goal_summary:build",
+      kind: "step",
+      title: "Build summary",
+      status: "running",
+      time: 1,
+      childIDs: ["step:goal_summary:build:phase:build"],
+    }
+    const phase: any = {
+      id: "step:goal_summary:build:phase:build",
+      kind: "phase",
+      phaseID: "build",
+      title: "Build",
+      status: "completed",
+      time: 2,
+      agentSummary: {
+        text: "I implemented the UI and verified the screenshot.",
+        source: "session_status",
+      },
+    }
+    ;(cardTreeStore.cards as any)[step.id] = step
+    ;(cardTreeStore.cards as any)[phase.id] = phase
+
+    expect(stepHeaderNodeWithBuildPhase(step).agentSummary).toEqual(phase.agentSummary)
   })
 })
 

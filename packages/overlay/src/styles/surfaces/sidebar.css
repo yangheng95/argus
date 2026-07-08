@@ -927,10 +927,6 @@
 }
 
 .project-group-actions {
-  position: absolute;
-  inset-inline-end: calc(2px * var(--ui-scale));
-  top: 50%;
-  transform: translateY(-50%);
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -956,6 +952,7 @@
 .project-group[data-project-actions="true"]:focus-within .project-group-count,
 .project-group[data-project-actions="true"]:focus-within .project-group-chevron {
   opacity: var(--ui-opacity-hidden);
+  pointer-events: none;
 }
 
 .project-group .oc-button[data-ui="project-group-toggle"] {

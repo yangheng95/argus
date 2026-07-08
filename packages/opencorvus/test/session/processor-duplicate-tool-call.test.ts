@@ -1083,6 +1083,187 @@ test("session processor throws when a clean finish leaves an open tool part", as
   )
 })
 
+test("session processor discards partial tool input before an activity retry in the same assistant message", async () => {
+  spyOn(Config, "get").mockResolvedValue({ experimental: {} } as Awaited<ReturnType<typeof Config.get>>)
+  spyOn(EngineConfig, "get").mockResolvedValue({
+    activity: { session_llm_idle_ms: 60 },
+  } as Awaited<ReturnType<typeof EngineConfig.get>>)
+  const statuses: Array<Parameters<typeof SessionStatus.set>[1]> = []
+  spyOn(SessionStatus, "set").mockImplementation(((_sessionID, status) => {
+    statuses.push(status)
+  }) as typeof SessionStatus.set)
+  spyOn(Bus, "publish").mockResolvedValue(undefined as never)
+  spyOn(Session, "updateMessage").mockResolvedValue(undefined as never)
+  spyOn(SessionSummary, "summarize").mockImplementation(() => {})
+  spyOn(SessionCompaction, "isOverflow").mockResolvedValue(false)
+  spyOn(Snapshot, "track").mockResolvedValue("snap_activity_retry_cleanup")
+
+  const store = new Map<string, Message.Part>()
+  spyOn(Session, "updatePart").mockImplementation(async (part) => {
+    store.set(part.id, part as Message.Part)
+    return part as never
+  })
+  spyOn(Session, "removePart").mockImplementation((async (input) => {
+    if (!store.delete(input.partID)) throw new Error(`missing part ${input.partID}`)
+    return input.partID
+  }) as typeof Session.removePart)
+  spyOn(Message, "parts").mockImplementation((async (messageID: string) =>
+    [...store.values()].filter((p) => p.messageID === messageID)) as typeof Message.parts)
+
+  let streamCalls = 0
+  spyOn(LLM, "stream").mockImplementation(async () => {
+    streamCalls++
+    if (streamCalls === 1) {
+      return {
+        fullStream: stalledAfter([
+          { type: "tool-input-start", toolCallId: "call_abandoned_submit", toolName: "submit_architect" },
+        ]),
+      } as Awaited<ReturnType<typeof LLM.stream>>
+    }
+    return {
+      fullStream: streamOf([
+        { type: "tool-input-start", toolCallId: "call_final_submit", toolName: "submit_architect" },
+        {
+          type: "tool-call",
+          toolCallId: "call_final_submit",
+          toolName: "submit_architect",
+          input: { summary: "done", decomposition_analysis: "safe decomposition" },
+        },
+        {
+          type: "tool-result",
+          toolCallId: "call_final_submit",
+          toolName: "submit_architect",
+          input: { summary: "done", decomposition_analysis: "safe decomposition" },
+          output: {
+            output: "PASS: Architect output finalized.",
+            title: "submit_architect",
+            metadata: {},
+          },
+        },
+        { type: "finish", finishReason: "tool-calls" },
+      ]),
+    } as Awaited<ReturnType<typeof LLM.stream>>
+  })
+
+  const assistantMessage = {
+    id: "msg_activity_retry_cleanup",
+    sessionID: "ses_activity_retry_cleanup",
+    role: "assistant",
+    agent: "architect",
+    parentID: "msg_parent",
+    cost: 0,
+    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    time: { created: Date.now() },
+  } as Message.Assistant
+  const model = {
+    providerID: "test-provider",
+    id: "test-model",
+    api: { npm: "@ai-sdk/openai" },
+  } as Provider.Model
+  const processor = SessionProcessor.create({
+    assistantMessage,
+    sessionID: assistantMessage.sessionID,
+    model,
+    abort: new AbortController().signal,
+  })
+
+  await expect(processor.process({} as LLM.StreamInput)).resolves.toBe("continue")
+  expect(streamCalls).toBe(2)
+  expect(statuses.some((status) => status.type === "retry")).toBe(true)
+
+  const parts = [...store.values()]
+  expect(parts.some((p) => p.type === "tool" && p.callID === "call_abandoned_submit")).toBe(false)
+  const finalPart = parts.find((p): p is Message.ToolPart => p.type === "tool" && p.callID === "call_final_submit")
+  expect(finalPart?.state.status).toBe("completed")
+
+  const modelMessages = await Message.toModelMessages([{ info: assistantMessage, parts }], model)
+  expect(JSON.stringify(modelMessages)).not.toContain("call_abandoned_submit")
+  expect(JSON.stringify(modelMessages)).toContain("call_final_submit")
+})
+
+test("session processor does not retry the same assistant message after tool execution starts", async () => {
+  spyOn(Config, "get").mockResolvedValue({ experimental: {} } as Awaited<ReturnType<typeof Config.get>>)
+  spyOn(EngineConfig, "get").mockResolvedValue({
+    activity: { session_llm_idle_ms: 60 },
+  } as Awaited<ReturnType<typeof EngineConfig.get>>)
+  const statuses: Array<Parameters<typeof SessionStatus.set>[1]> = []
+  spyOn(SessionStatus, "set").mockImplementation(((_sessionID, status) => {
+    statuses.push(status)
+  }) as typeof SessionStatus.set)
+  spyOn(Bus, "publish").mockResolvedValue(undefined as never)
+  spyOn(Session, "updateMessage").mockResolvedValue(undefined as never)
+  spyOn(SessionSummary, "summarize").mockImplementation(() => {})
+  spyOn(SessionCompaction, "isOverflow").mockResolvedValue(false)
+  spyOn(Snapshot, "track").mockResolvedValue("snap_activity_retry_unsafe")
+
+  const store = new Map<string, Message.Part>()
+  spyOn(Session, "updatePart").mockImplementation(async (part) => {
+    store.set(part.id, part as Message.Part)
+    return part as never
+  })
+  spyOn(Message, "parts").mockImplementation((async (messageID: string) =>
+    [...store.values()].filter((p) => p.messageID === messageID)) as typeof Message.parts)
+
+  let streamCalls = 0
+  spyOn(LLM, "stream").mockImplementation(async () => {
+    streamCalls++
+    return {
+      fullStream: streamOf([
+        {
+          type: "tool-call",
+          toolCallId: "call_started_tool",
+          toolName: "register_goal",
+          input: { id: "G1" },
+        },
+        { type: "error", error: new Error("transient stream dropped after tool execution started") },
+      ]),
+    } as Awaited<ReturnType<typeof LLM.stream>>
+  })
+
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const session = await Session.create({ kind: "assistant", title: "activity retry unsafe fixture" })
+      const assistantMessage = {
+        id: "msg_activity_retry_unsafe",
+        sessionID: session.id,
+        role: "assistant",
+        agent: "architect",
+        parentID: "msg_parent",
+        cost: 0,
+        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+        time: { created: Date.now() },
+      } as Message.Assistant
+      const processor = SessionProcessor.create({
+        assistantMessage,
+        sessionID: assistantMessage.sessionID,
+        model: {
+          providerID: "test-provider",
+          id: "test-model",
+          api: { npm: "@ai-sdk/openai" },
+        } as Provider.Model,
+        abort: new AbortController().signal,
+      })
+
+      await expect(processor.process({} as LLM.StreamInput)).resolves.toBe("stop")
+      expect(streamCalls).toBe(1)
+      expect(statuses.some((status) => status.type === "retry")).toBe(false)
+
+      const part = [...store.values()].find(
+        (p): p is Message.ToolPart => p.type === "tool" && p.callID === "call_started_tool",
+      )
+      expect(part?.state.status).toBe("error")
+      expect(part?.state.status === "error" ? part.state.failure.originSite : "").toBe(
+        "session.processor.catch",
+      )
+      expect(JSON.stringify(part?.state.status === "error" ? part.state.failure : {})).toContain(
+        "ProcessorUnsafeRetryError",
+      )
+    },
+  })
+})
+
 test("session processor stamps open tool parts with the real activity abort cause", async () => {
   spyOn(Config, "get").mockResolvedValue({ experimental: {} } as Awaited<ReturnType<typeof Config.get>>)
   spyOn(EngineConfig, "get").mockResolvedValue({

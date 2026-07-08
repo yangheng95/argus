@@ -2,18 +2,23 @@ import { dynamicTool, type Tool, jsonSchema, type JSONSchema7 } from "ai"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js"
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
+import { getDefaultEnvironment, type StdioServerParameters } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js"
 import {
   type CallToolResult,
   CallToolResultSchema,
   GetPromptResultSchema,
   type GetPromptRequest,
+  type JSONRPCMessage,
   ReadResourceResultSchema,
   type ReadResourceRequest,
   type Tool as MCPToolDef,
   ToolListChangedNotificationSchema,
 } from "@modelcontextprotocol/sdk/types.js"
+import { ReadBuffer, serializeMessage } from "@modelcontextprotocol/sdk/shared/stdio.js"
+import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js"
+import { AsyncLocalStorage } from "node:async_hooks"
+import { PassThrough, type Stream } from "node:stream"
 import { Config } from "../config/config"
 import { Log } from "../util/log"
 import { NamedError } from "@opencorvus-ai/util/error"
@@ -33,10 +38,12 @@ import { ServeRuntimeMemoryMetrics } from "@/runtime/memory-metrics"
 import type { RequestOptions } from "@modelcontextprotocol/sdk/shared/protocol.js"
 import { browserMcpBridgeEnvironment } from "./browser/proxy-env"
 import { Env } from "@/runtime/env"
+import { ProcessSupervisor } from "@/shell/process-supervisor"
 
 export namespace MCP {
   const log = Log.create({ service: "mcp" })
   const DEFAULT_TIMEOUT = 30_000
+  const STDIO_GRACEFUL_CLOSE_TIMEOUT_MS = 5_000
 
   ServeRuntimeMemoryMetrics.register({
     id: "host-mcp",
@@ -99,15 +106,14 @@ export namespace MCP {
   const ProjectionPromptPayloadSchema = z
     .object({
       description: z.unknown().optional(),
-      messages: z
-        .array(
-          z
-            .object({
-              role: z.unknown(),
-              content: z.unknown(),
-            })
-            .passthrough(),
-        ),
+      messages: z.array(
+        z
+          .object({
+            role: z.unknown(),
+            content: z.unknown(),
+          })
+          .passthrough(),
+      ),
     })
     .passthrough()
   export type ProjectionPromptPayload = z.infer<typeof ProjectionPromptPayloadSchema>
@@ -221,6 +227,7 @@ export namespace MCP {
     key: string
     mcp: Config.Mcp
     cwd: string
+    globalTimeout?: number
   }
 
   export interface ScopedToolInput extends ScopedConnectionInput {
@@ -250,9 +257,8 @@ export namespace MCP {
   }
 
   export async function scopedToolInfo(input: ScopedToolInput): Promise<MCPToolDef> {
-    return withScopedClient(input, async (client, timeout) => {
-      const result = await client.listTools(undefined, mcpRequestOptions(timeout))
-      const mcpTool = result.tools.find((item) => item.name === input.toolName)
+    return withScopedClient(input, async (_client, _timeout, connection) => {
+      const mcpTool = connection.tools.find((item) => item.name === input.toolName)
       if (!mcpTool) throw new Error(`Scoped MCP server ${input.key} does not expose tool ${input.toolName}`)
       return mcpTool
     })
@@ -261,17 +267,20 @@ export namespace MCP {
   export async function callScopedTool(
     input: ScopedToolInput & { args: Record<string, unknown> },
   ): Promise<CallToolResult> {
-    return withScopedClient(input, async (client, timeout) =>
-      CallToolResultSchema.parse(
-        await client.callTool(
-          {
-            name: input.toolName,
-            arguments: input.args,
-          },
-          undefined,
-          mcpRequestOptions(timeout),
+    return withScopedClient(
+      input,
+      async (client, timeout) =>
+        CallToolResultSchema.parse(
+          await client.callTool(
+            {
+              name: input.toolName,
+              arguments: input.args,
+            },
+            undefined,
+            mcpRequestOptions(timeout),
+          ),
         ),
-      ),
+      { skipToolListVerification: true },
     )
   }
 
@@ -290,40 +299,48 @@ export namespace MCP {
   }
 
   export async function scopedPromptInfo(input: ScopedPromptInput): Promise<PromptInfo> {
-    return withScopedClient(input, async (client, timeout) => scopedPromptInfoFromClient(client, timeout, input))
+    return withScopedClient(input, async (client, timeout) => scopedPromptInfoFromClient(client, timeout, input), {
+      skipToolListVerification: true,
+    })
   }
 
   export async function getScopedPrompt(
     input: ScopedPromptInput & { args?: Record<string, string> },
   ): Promise<GetPromptResult> {
-    return withScopedClient(input, async (client, timeout) =>
-      GetPromptResultSchema.parse(
-        await client.getPrompt(
-          {
-            name: input.promptName,
-            arguments: input.args,
-          },
-          mcpRequestOptions(timeout),
+    return withScopedClient(
+      input,
+      async (client, timeout) =>
+        GetPromptResultSchema.parse(
+          await client.getPrompt(
+            {
+              name: input.promptName,
+              arguments: input.args,
+            },
+            mcpRequestOptions(timeout),
+          ),
         ),
-      ),
+      { skipToolListVerification: true },
     )
   }
 
   export async function getScopedPromptProjectionPayload(
     input: ScopedPromptInput & { args?: Record<string, string> },
   ): Promise<ProjectionPromptPayload> {
-    return withScopedClient(input, async (client, timeout) =>
-      client.request(
-        {
-          method: "prompts/get",
-          params: {
-            name: input.promptName,
-            arguments: input.args,
-          },
-        } satisfies GetPromptRequest,
-        ProjectionPromptPayloadSchema,
-        mcpRequestOptions(timeout),
-      ),
+    return withScopedClient(
+      input,
+      async (client, timeout) =>
+        client.request(
+          {
+            method: "prompts/get",
+            params: {
+              name: input.promptName,
+              arguments: input.args,
+            },
+          } satisfies GetPromptRequest,
+          ProjectionPromptPayloadSchema,
+          mcpRequestOptions(timeout),
+        ),
+      { skipToolListVerification: true },
     )
   }
 
@@ -342,55 +359,200 @@ export namespace MCP {
   }
 
   export async function scopedResourceInfo(input: ScopedResourceInput): Promise<ResourceInfo> {
-    return withScopedClient(input, async (client, timeout) => scopedResourceInfoFromClient(client, timeout, input))
+    return withScopedClient(input, async (client, timeout) => scopedResourceInfoFromClient(client, timeout, input), {
+      skipToolListVerification: true,
+    })
   }
 
   export async function readScopedResource(input: ScopedResourceInput): Promise<ReadResourceResult> {
-    return withScopedClient(input, async (client, timeout) => {
-      const resource = await scopedResourceInfoFromClient(client, timeout, input)
-      return ReadResourceResultSchema.parse(
-        await client.readResource(
-          {
-            uri: resource.uri,
-          },
-          mcpRequestOptions(timeout),
-        ),
-      )
-    })
+    return withScopedClient(
+      input,
+      async (client, timeout) => {
+        const resource = await scopedResourceInfoFromClient(client, timeout, input)
+        return ReadResourceResultSchema.parse(
+          await client.readResource(
+            {
+              uri: resource.uri,
+            },
+            mcpRequestOptions(timeout),
+          ),
+        )
+      },
+      { skipToolListVerification: true },
+    )
   }
 
-  export async function readScopedResourceProjectionPayload(input: ScopedResourceInput): Promise<ProjectionResourcePayload> {
-    return withScopedClient(input, async (client, timeout) => {
-      const resource = await scopedResourceInfoFromClient(client, timeout, input)
-      return client.request(
-        {
-          method: "resources/read",
-          params: {
-            uri: resource.uri,
-          },
-        } satisfies ReadResourceRequest,
-        ProjectionResourcePayloadSchema,
-        mcpRequestOptions(timeout),
-      )
-    })
+  export async function readScopedResourceProjectionPayload(
+    input: ScopedResourceInput,
+  ): Promise<ProjectionResourcePayload> {
+    return withScopedClient(
+      input,
+      async (client, timeout) => {
+        const resource = await scopedResourceInfoFromClient(client, timeout, input)
+        return client.request(
+          {
+            method: "resources/read",
+            params: {
+              uri: resource.uri,
+            },
+          } satisfies ReadResourceRequest,
+          ProjectionResourcePayloadSchema,
+          mcpRequestOptions(timeout),
+        )
+      },
+      { skipToolListVerification: true },
+    )
   }
 
   async function withScopedClient<T>(
     input: ScopedConnectionInput,
-    run: (client: MCPClient, timeout: number) => Promise<T>,
+    run: (client: MCPClient, timeout: number, connection: McpConnection) => Promise<T>,
+    options: Pick<CreateOptions, "skipToolListVerification"> = {},
   ): Promise<T> {
-    const result = await createSafely(input.key, input.mcp, { cwd: input.cwd, authKey: false })
+    const poolKey = scopedLocalPoolKey(input, options)
+    const pool = scopedLocalConnectionPoolStorage.getStore()
+    if (poolKey && pool) {
+      const pooled = await acquireScopedLocalConnection(pool, poolKey, input, options)
+      try {
+        const timeout = effectiveTimeout(input.mcp, input.globalTimeout)
+        return await run(pooled.connection.client, timeout, pooled.connection)
+      } finally {
+        releaseScopedLocalConnection(pooled.entry)
+      }
+    }
+    const result = await createSafely(input.key, input.mcp, {
+      cwd: input.cwd,
+      authKey: false,
+      globalTimeout: input.globalTimeout,
+      ...options,
+    })
     if (!result.mcpConnection) {
       const status = result.status
       const detail = "error" in status ? `: ${status.error}` : `: ${status.status}`
       throw new Error(`Scoped MCP server ${input.key} did not connect${detail}`)
     }
     try {
-      const timeout = effectiveTimeout(input.mcp)
-      return await run(result.mcpConnection.client, timeout)
+      const timeout = effectiveTimeout(input.mcp, input.globalTimeout)
+      return await run(result.mcpConnection.client, timeout, result.mcpConnection)
     } finally {
       await closeConnection(input.key, result.mcpConnection)
     }
+  }
+
+  type ScopedLocalPoolEntry = {
+    connecting: Promise<McpConnection>
+    connection?: McpConnection
+    active: number
+  }
+
+  type ScopedLocalPoolLease = {
+    entry: ScopedLocalPoolEntry
+    connection: McpConnection
+  }
+
+  const scopedLocalConnectionPoolStorage = new AsyncLocalStorage<Map<string, ScopedLocalPoolEntry>>()
+
+  export async function withScopedConnectionPool<T>(run: () => Promise<T>): Promise<T> {
+    if (scopedLocalConnectionPoolStorage.getStore()) return run()
+    const pool = new Map<string, ScopedLocalPoolEntry>()
+    let runResult: T | undefined
+    let runError: unknown
+    try {
+      runResult = await scopedLocalConnectionPoolStorage.run(pool, run)
+    } catch (error) {
+      runError = error
+    }
+    let closeError: unknown
+    try {
+      await closeScopedLocalConnectionPool(pool)
+    } catch (error) {
+      closeError = error
+    }
+    if (runError && closeError) {
+      throw new AggregateError([runError, closeError], "Scoped MCP projection failed and connection cleanup failed.")
+    }
+    if (runError) throw runError
+    if (closeError) throw closeError
+    return runResult as T
+  }
+
+  async function closeScopedLocalConnectionPool(pool: Map<string, ScopedLocalPoolEntry>): Promise<void> {
+    const entries = [...pool.values()]
+    pool.clear()
+    const connectionResults = await Promise.allSettled(
+      entries.map(async (entry) => entry.connection ?? (await entry.connecting)),
+    )
+    const closeResults = await Promise.allSettled(
+      connectionResults
+        .filter((result): result is PromiseFulfilledResult<McpConnection> => result.status === "fulfilled")
+        .map((result) => closeConnection(result.value.key, result.value)),
+    )
+    const errors = [...connectionResults, ...closeResults].flatMap((result) =>
+      result.status === "rejected" ? [result.reason] : [],
+    )
+    if (errors.length > 0) throw new AggregateError(errors, "Failed to close scoped MCP projection connections.")
+  }
+
+  function scopedLocalPoolKey(
+    input: ScopedConnectionInput,
+    options: Pick<CreateOptions, "skipToolListVerification">,
+  ): string | undefined {
+    if (input.mcp.type !== "local" || options.skipToolListVerification !== true) return undefined
+    return JSON.stringify({
+      command: input.mcp.command,
+      cwd: input.cwd,
+      environment: input.mcp.environment ?? {},
+      globalTimeout: input.globalTimeout,
+      timeout: input.mcp.timeout,
+    })
+  }
+
+  async function acquireScopedLocalConnection(
+    pool: Map<string, ScopedLocalPoolEntry>,
+    poolKey: string,
+    input: ScopedConnectionInput,
+    options: Pick<CreateOptions, "skipToolListVerification">,
+  ): Promise<ScopedLocalPoolLease> {
+    const existing = pool.get(poolKey)
+    if (existing) {
+      existing.active++
+      const connection = existing.connection ?? (await existing.connecting)
+      existing.connection = connection
+      connection.lastUsedAt = Date.now()
+      return { entry: existing, connection }
+    }
+    const connecting = createSafely(input.key, input.mcp, {
+      cwd: input.cwd,
+      authKey: false,
+      globalTimeout: input.globalTimeout,
+      ...options,
+    }).then((result) => {
+      if (!result.mcpConnection) {
+        const status = result.status
+        const detail = "error" in status ? `: ${status.error}` : `: ${status.status}`
+        throw new Error(`Scoped MCP server ${input.key} did not connect${detail}`)
+      }
+      return result.mcpConnection
+    })
+    const entry: ScopedLocalPoolEntry = {
+      connecting,
+      active: 1,
+    }
+    pool.set(poolKey, entry)
+    try {
+      const connection = await connecting
+      entry.connection = connection
+      connection.lastUsedAt = Date.now()
+      return { entry, connection }
+    } catch (error) {
+      if (pool.get(poolKey) === entry) pool.delete(poolKey)
+      throw error
+    }
+  }
+
+  function releaseScopedLocalConnection(entry: ScopedLocalPoolEntry) {
+    entry.active--
+    if (entry.connection) entry.connection.lastUsedAt = Date.now()
   }
 
   const pendingOAuthFlows = new Set<string>()
@@ -463,14 +625,19 @@ export namespace MCP {
     return effectiveTimeout(isMcpConfigured(entry) ? entry : undefined, cfg.experimental?.mcp_timeout)
   }
 
-  export function createRemoteTransport(mcp: RemoteMcpConfig, authProvider?: McpOAuthProvider, requestInit?: RequestInit) {
+  export function createRemoteTransport(
+    mcp: RemoteMcpConfig,
+    authProvider?: McpOAuthProvider,
+    requestInit?: RequestInit,
+  ) {
     const headers = new Headers(requestInit?.headers)
     let hasHeaders = requestInit?.headers !== undefined
     for (const [name, value] of Object.entries(mcp.headers ?? {})) {
       headers.set(name, value)
       hasHeaders = true
     }
-    const mergedRequestInit = requestInit || hasHeaders ? { ...requestInit, ...(hasHeaders ? { headers } : {}) } : undefined
+    const mergedRequestInit =
+      requestInit || hasHeaders ? { ...requestInit, ...(hasHeaders ? { headers } : {}) } : undefined
     const options = {
       authProvider,
       requestInit: mergedRequestInit,
@@ -490,6 +657,165 @@ export namespace MCP {
     return unsupportedRemoteTransport(mcp.transport)
   }
 
+  function supervisorStreamClosed(stream: NodeJS.ReadableStream | NodeJS.WritableStream | null): boolean {
+    if (!stream) return true
+    const state = stream as {
+      closed?: boolean
+      destroyed?: boolean
+    }
+    return Boolean(state.closed || state.destroyed)
+  }
+
+  async function waitForSupervisorStreamClose(
+    stream: NodeJS.ReadableStream | NodeJS.WritableStream | null,
+    label: string,
+  ) {
+    if (supervisorStreamClosed(stream)) return
+    await ProcessSupervisor.awaitWithTimeout(
+      new Promise<void>((resolve) => {
+        stream?.once("close", () => resolve())
+      }),
+      ProcessSupervisor.TERMINATION_EXIT_TIMEOUT_MS,
+      `${label} did not close after process exit`,
+    )
+  }
+
+  class SupervisedStdioClientTransport implements Transport {
+    private readBuffer = new ReadBuffer()
+    private handle?: ProcessSupervisor.Handle
+    private lastHandle?: ProcessSupervisor.Handle
+    private closePromise?: Promise<void>
+    private exitObserved?: Promise<void>
+    private stderrStream: PassThrough | Stream | null = null
+
+    onclose?: () => void
+    onerror?: (error: Error) => void
+    onmessage?: (message: JSONRPCMessage) => void
+
+    constructor(private readonly server: StdioServerParameters) {
+      if (server.stderr === "pipe" || server.stderr === "overlapped") {
+        this.stderrStream = new PassThrough()
+      } else if (server.stderr && typeof server.stderr === "object") {
+        this.stderrStream = server.stderr
+      }
+    }
+
+    get stderr(): Stream | null {
+      return this.stderrStream
+    }
+
+    get pid(): number | null {
+      return this.handle?.pid ?? null
+    }
+
+    async start(): Promise<void> {
+      if (this.handle) throw new Error("SupervisedStdioClientTransport already started.")
+      const handle = await ProcessSupervisor.spawnCommand({
+        executable: this.server.command,
+        args: this.server.args ?? [],
+        cwd: this.server.cwd,
+        env: {
+          ...getDefaultEnvironment(),
+          ...this.server.env,
+        },
+        stdin: "pipe",
+      })
+      this.handle = handle
+      this.lastHandle = handle
+      handle.stdout?.on("data", (chunk: Buffer) => {
+        this.readBuffer.append(chunk)
+        this.processReadBuffer()
+      })
+      handle.stdout?.on("error", (error) => {
+        this.onerror?.(error)
+      })
+      handle.stderr?.on("data", (chunk: Buffer) => {
+        if (writableSupervisorStream(this.stderrStream)) {
+          this.stderrStream.write(chunk)
+        } else if (this.server.stderr === undefined || this.server.stderr === "inherit") {
+          process.stderr.write(chunk)
+        }
+      })
+      handle.stderr?.on("error", (error) => {
+        this.onerror?.(error)
+      })
+      this.exitObserved = handle.exited
+        .then(
+          () => undefined,
+          (error) => {
+            this.onerror?.(error instanceof Error ? error : new Error(String(error)))
+          },
+        )
+        .finally(() => {
+          if (this.handle === handle) this.handle = undefined
+          if (this.stderrStream instanceof PassThrough) this.stderrStream.end()
+          this.onclose?.()
+        })
+    }
+
+    private processReadBuffer() {
+      while (true) {
+        try {
+          const message = this.readBuffer.readMessage()
+          if (message === null) break
+          this.onmessage?.(message)
+        } catch (error) {
+          this.onerror?.(error instanceof Error ? error : new Error(String(error)))
+        }
+      }
+    }
+
+    async close(): Promise<void> {
+      this.closePromise ??= this.closeOnce()
+      await this.closePromise
+    }
+
+    private async closeOnce(): Promise<void> {
+      const handle = this.handle ?? this.lastHandle
+      this.handle = undefined
+      this.readBuffer.clear()
+      if (!handle) return
+      try {
+        handle.stdin?.end()
+      } catch {
+        // The MCP process may have already exited after a startup failure.
+      }
+      const exitedGracefully = await ProcessSupervisor.awaitWithTimeout(
+        handle.exited.then(() => true),
+        STDIO_GRACEFUL_CLOSE_TIMEOUT_MS,
+        `MCP stdio process ${handle.pid} did not exit after stdin close`,
+      ).catch(() => false)
+      let disposed = false
+      if (!exitedGracefully) {
+        await ProcessSupervisor.disposeAndWaitForExit(handle, `MCP stdio process ${handle.pid}`)
+        disposed = true
+      }
+      await this.exitObserved
+      if (!disposed) {
+        await ProcessSupervisor.disposeAndWaitForExit(handle, `MCP stdio process ${handle.pid}`)
+      }
+      await Promise.all([
+        waitForSupervisorStreamClose(handle.stdin, `MCP stdio process ${handle.pid} stdin`),
+        waitForSupervisorStreamClose(handle.stdout, `MCP stdio process ${handle.pid} stdout`),
+        waitForSupervisorStreamClose(handle.stderr, `MCP stdio process ${handle.pid} stderr`),
+      ])
+      await settleClosedProcessHandle()
+    }
+
+    send(message: JSONRPCMessage): Promise<void> {
+      return new Promise((resolve) => {
+        const stdin = this.handle?.stdin
+        if (!stdin) throw new Error("Not connected")
+        const payload = serializeMessage(message)
+        if (stdin.write(payload)) {
+          resolve()
+        } else {
+          stdin.once("drain", resolve)
+        }
+      })
+    }
+  }
+
   type McpState = {
     status: Record<string, Status>
     clients: Record<string, MCPClient>
@@ -498,11 +824,38 @@ export namespace MCP {
   }
 
   type ClosableTransport = { close: () => Promise<void> | void }
+  type StdioStream = {
+    closed?: boolean
+    destroyed?: boolean
+    once(event: "close", listener: () => void): unknown
+  }
+  type WritableSupervisorStream = Stream & {
+    write(chunk: Buffer): boolean
+  }
+  function writableSupervisorStream(stream: PassThrough | Stream | null): stream is WritableSupervisorStream {
+    return !!stream && typeof (stream as WritableSupervisorStream).write === "function"
+  }
+  type StdioChildProcess = {
+    pid?: number
+    exitCode: number | null
+    signalCode?: NodeJS.Signals | null
+    stdin?: StdioStream | null
+    stdout?: StdioStream | null
+    stderr?: StdioStream | null
+    once(event: "close", listener: () => void): unknown
+  }
+  type ClosableTransportWithStdioProcess = ClosableTransport & {
+    _process?: StdioChildProcess
+    __opencorvusProcessToClose?: StdioChildProcess
+    start?: () => Promise<void>
+  }
+  const closedStdioProcesses = new WeakSet<StdioChildProcess>()
 
   type McpConnection = {
     key: string
     type: Config.Mcp["type"]
     client: MCPClient
+    tools: MCPToolDef[]
     transport?: ClosableTransport
     command?: string[]
     cwd?: string
@@ -515,18 +868,143 @@ export namespace MCP {
     cwd?: string
     authKey?: string | false
     globalTimeout?: number
+    skipToolListVerification?: boolean
+  }
+
+  function stdioProcessForTransport(transport: ClosableTransport): StdioChildProcess | undefined {
+    const tracked = transport as ClosableTransportWithStdioProcess
+    return tracked.__opencorvusProcessToClose ?? tracked._process
+  }
+
+  function stdioProcessHasExited(processToClose: StdioChildProcess | undefined) {
+    return !processToClose || processToClose.exitCode !== null || processToClose.signalCode !== null
+  }
+
+  function stdioProcessHasClosed(processToClose: StdioChildProcess | undefined) {
+    return !processToClose || closedStdioProcesses.has(processToClose)
+  }
+
+  function trackStdioProcessClose(processToClose: StdioChildProcess | undefined) {
+    if (!processToClose || stdioProcessHasClosed(processToClose)) return
+    processToClose.once("close", () => {
+      closedStdioProcesses.add(processToClose)
+    })
+  }
+
+  function trackStdioTransportProcess<T extends ClosableTransport>(transport: T): T {
+    const tracked = transport as ClosableTransportWithStdioProcess
+    const originalStart = tracked.start?.bind(transport)
+    if (originalStart) {
+      tracked.start = async () => {
+        try {
+          await originalStart()
+        } finally {
+          if (tracked._process) {
+            tracked.__opencorvusProcessToClose = tracked._process
+            trackStdioProcessClose(tracked._process)
+          }
+        }
+      }
+    }
+    const originalClose = tracked.close.bind(transport)
+    let closePromise: Promise<void> | undefined
+    tracked.close = async () => {
+      if (tracked._process) tracked.__opencorvusProcessToClose = tracked._process
+      closePromise ??= Promise.resolve(originalClose())
+      await closePromise
+    }
+    return transport
+  }
+
+  async function terminateStdioProcessTree(processToClose: StdioChildProcess | undefined, label: string) {
+    if (!processToClose?.pid || stdioProcessHasExited(processToClose)) return
+    await ProcessSupervisor.terminateProcessTree(processToClose.pid, `${label} process tree ${processToClose.pid}`)
+  }
+
+  async function waitForStdioProcessClose(processToClose: StdioChildProcess | undefined): Promise<boolean> {
+    if (stdioProcessHasClosed(processToClose)) return true
+    try {
+      await ProcessSupervisor.awaitWithTimeout(
+        new Promise<void>((resolve) => {
+          processToClose?.once("close", () => resolve())
+        }),
+        ProcessSupervisor.TERMINATION_EXIT_TIMEOUT_MS,
+        `MCP stdio process ${processToClose?.pid ?? "unknown"} did not close after transport cleanup`,
+      )
+      return true
+    } catch {
+      return stdioProcessHasClosed(processToClose)
+    }
+  }
+
+  async function waitForStdioStreamClose(stream: StdioStream | null | undefined) {
+    if (stream && !stream.closed && !stream.destroyed) {
+      await ProcessSupervisor.awaitWithTimeout(
+        new Promise<void>((resolve) => {
+          stream.once("close", () => resolve())
+        }),
+        ProcessSupervisor.TERMINATION_EXIT_TIMEOUT_MS,
+        "MCP stdio stream did not close after transport cleanup",
+      )
+    }
+  }
+
+  async function waitForStdioStreamsClosed(processToClose: StdioChildProcess | undefined) {
+    if (!processToClose) return
+    await Promise.all([
+      waitForStdioStreamClose(processToClose.stdin),
+      waitForStdioStreamClose(processToClose.stdout),
+      waitForStdioStreamClose(processToClose.stderr),
+    ])
+  }
+
+  async function settleClosedProcessHandle() {
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+  }
+
+  async function closeTransport(
+    name: string,
+    transport: ClosableTransport,
+    processToClose: StdioChildProcess | undefined = stdioProcessForTransport(transport),
+  ) {
+    await Promise.resolve(transport.close()).catch((error) => {
+      log.error("Failed to close MCP transport", { name, error })
+    })
+    const processAfterClose = processToClose ?? stdioProcessForTransport(transport)
+    const processClosedAfterClose = await waitForStdioProcessClose(processAfterClose)
+    if (!processClosedAfterClose && !stdioProcessHasExited(processAfterClose)) {
+      await terminateStdioProcessTree(processAfterClose, "MCP stdio transport")
+    }
+    const processClosedAfterTerminate = await waitForStdioProcessClose(processAfterClose)
+    if (!processClosedAfterTerminate) {
+      throw new Error(`MCP stdio process ${processAfterClose?.pid ?? "unknown"} did not close after transport cleanup`)
+    }
+    await waitForStdioStreamsClosed(processAfterClose)
+    await settleClosedProcessHandle()
   }
 
   async function closeConnection(name: string, connection: McpConnection | undefined) {
     if (!connection) return
+    const processToClose = connection.transport ? stdioProcessForTransport(connection.transport) : undefined
     await connection.client.close().catch((error) => {
       log.error("Failed to close MCP client", { name, error })
     })
     if (connection.transport) {
-      await Promise.resolve(connection.transport.close()).catch((error) => {
-        log.error("Failed to close MCP transport", { name, error })
-      })
+      await closeTransport(name, connection.transport, processToClose)
     }
+  }
+
+  async function closeClientAndTransport(
+    name: string,
+    client: Client | undefined,
+    transport: ClosableTransport | undefined,
+  ) {
+    const processToClose = transport ? stdioProcessForTransport(transport) : undefined
+    await client?.close().catch((error) => {
+      log.error("Failed to close MCP client", { name, error })
+    })
+    if (transport) await closeTransport(name, transport, processToClose)
   }
 
   async function createSafely(key: string, mcp: Config.Mcp, options: CreateOptions = {}) {
@@ -580,10 +1058,15 @@ export namespace MCP {
       return snapshot
     },
     async (state) => {
-      await Promise.all(
-        objectValues(state.connections).map((connection) => closeConnection(connection.key, connection)),
-      )
+      const connecting = objectValues(state.connecting).filter((item): item is Promise<void> => Boolean(item))
+      const settledConnections = await Promise.allSettled(connecting)
+      for (const key of Object.keys(state.connecting)) delete state.connecting[key]
+      await Promise.all(objectValues(state.connections).map((connection) => closeConnection(connection.key, connection)))
+      for (const key of Object.keys(state.connections)) delete state.connections[key]
+      for (const key of Object.keys(state.clients)) delete state.clients[key]
       pendingOAuthFlows.clear()
+      const connectionError = settledConnections.find((result): result is PromiseRejectedResult => result.status === "rejected")
+      if (connectionError) throw connectionError.reason
     },
   )
 
@@ -799,7 +1282,11 @@ export namespace MCP {
       // OAuth is enabled by default for remote servers unless explicitly disabled with oauth: false
       const oauthDisabled = mcp.oauth === false
       const oauthConfig = typeof mcp.oauth === "object" ? mcp.oauth : undefined
-      const authKey = oauthDisabled ? undefined : options.authKey === false ? undefined : (options.authKey ?? mcpAuthKey(key))
+      const authKey = oauthDisabled
+        ? undefined
+        : options.authKey === false
+          ? undefined
+          : (options.authKey ?? mcpAuthKey(key))
       let authProvider: McpOAuthProvider | undefined
 
       if (authKey) {
@@ -865,27 +1352,9 @@ export namespace MCP {
               reason: "needs_auth",
             }).catch((e) => log.debug("failed to publish MCP auth notice", { error: e }))
           }
-          await client?.close().catch((closeError) => {
-            log.error("Failed to close auth-required remote MCP client", { key, transport: transportName, error: closeError })
-          })
-          await transport.close().catch((closeError) => {
-            log.error("Failed to close auth-required remote MCP transport", {
-              key,
-              transport: transportName,
-              error: closeError,
-            })
-          })
+          await closeClientAndTransport(key, client, transport)
         } else {
-          await client?.close().catch((closeError) => {
-            log.error("Failed to close failed remote MCP client", { key, transport: transportName, error: closeError })
-          })
-          await transport.close().catch((closeError) => {
-            log.error("Failed to close failed remote MCP transport", {
-              key,
-              transport: transportName,
-              error: closeError,
-            })
-          })
+          await closeClientAndTransport(key, client, transport)
 
           log.debug("transport connection failed", {
             key,
@@ -906,7 +1375,7 @@ export namespace MCP {
       const cwd = options.cwd ?? Instance.directory
       connectionCwd = cwd
       const env = await localMcpEnvironment(key, cmd, mcp)
-      const transport = new StdioClientTransport({
+      const transport = new SupervisedStdioClientTransport({
         stderr: "pipe",
         command: cmd,
         args,
@@ -947,12 +1416,7 @@ export namespace MCP {
           status: "failed" as const,
           error: detail ? `${message}\n${detail}` : message,
         }
-        await client?.close().catch((closeError) => {
-          log.error("Failed to close failed local MCP client", { key, error: closeError })
-        })
-        await transport.close().catch((closeError) => {
-          log.error("Failed to close failed local MCP transport", { key, error: closeError })
-        })
+        await closeClientAndTransport(key, client, transport)
       }
     }
 
@@ -973,24 +1437,17 @@ export namespace MCP {
 
     let result: Awaited<ReturnType<Client["listTools"]>> | undefined
     let listToolsError = ""
-    try {
-      result = await mcpClient.listTools(undefined, mcpRequestOptions(requestTimeout))
-    } catch (err) {
-      listToolsError = errorMessage(err)
-      log.error("failed to get tools from client", { key, error: listToolsError })
-    }
-    if (!result) {
-      const failureMessage = listToolsError || "MCP listTools returned no result"
-      await mcpClient.close().catch((error) => {
-        log.error("Failed to close MCP client", {
-          error,
-        })
-      })
-      if (mcpTransport) {
-        await Promise.resolve(mcpTransport.close()).catch((error) => {
-          log.error("Failed to close MCP transport", { key, error })
-        })
+    if (!options.skipToolListVerification) {
+      try {
+        result = await mcpClient.listTools(undefined, mcpRequestOptions(requestTimeout))
+      } catch (err) {
+        listToolsError = errorMessage(err)
+        log.error("failed to get tools from client", { key, error: listToolsError })
       }
+    }
+    if (!result && !options.skipToolListVerification) {
+      const failureMessage = listToolsError || "MCP listTools returned no result"
+      await closeClientAndTransport(key, mcpClient, mcpTransport)
       status = {
         status: "failed",
         error: failureMessage,
@@ -1005,11 +1462,13 @@ export namespace MCP {
       }
     }
 
-    log.info("create() successfully created client", { key, toolCount: result.tools.length })
+    const tools = result?.tools ?? []
+    log.info("create() successfully created client", { key, toolCount: tools.length })
     const mcpConnection: McpConnection = {
       key,
       type: mcp.type,
       client: mcpClient,
+      tools,
       transport: mcpTransport,
       command: mcp.type === "local" ? mcp.command : undefined,
       cwd: connectionCwd,
@@ -1210,10 +1669,13 @@ export namespace MCP {
     }
 
     try {
-      return await client.getPrompt({
-        name: name,
-        arguments: args,
-      }, mcpRequestOptions(timeout))
+      return await client.getPrompt(
+        {
+          name: name,
+          arguments: args,
+        },
+        mcpRequestOptions(timeout),
+      )
     } catch (error) {
       log.error("failed to get prompt from MCP server", {
         clientName,
@@ -1237,9 +1699,12 @@ export namespace MCP {
     }
 
     try {
-      return await client.readResource({
-        uri: resourceUri,
-      }, mcpRequestOptions(timeout))
+      return await client.readResource(
+        {
+          uri: resourceUri,
+        },
+        mcpRequestOptions(timeout),
+      )
     } catch (error) {
       log.error("failed to read resource from MCP server", {
         clientName: clientName,
@@ -1303,11 +1768,7 @@ export namespace MCP {
       },
     )
 
-    const { name: transportName, transport } = createRemoteTransport(
-      mcpConfig,
-      authProvider,
-      mcpFetchRequestInit(authTimeout),
-    )
+    const { transport } = createRemoteTransport(mcpConfig, authProvider, mcpFetchRequestInit(authTimeout))
     let client: Client | undefined
     let retainOAuthState = false
 
@@ -1332,12 +1793,7 @@ export namespace MCP {
         pendingOAuthFlows.delete(authKey)
         await McpAuth.clearOAuthState(authKey)
       }
-      await client?.close().catch((closeError) => {
-        log.error("Failed to close OAuth probe MCP client", { mcpName, transport: transportName, error: closeError })
-      })
-      await transport.close().catch((closeError) => {
-        log.error("Failed to close OAuth probe MCP transport", { mcpName, transport: transportName, error: closeError })
-      })
+      await closeClientAndTransport(mcpName, client, transport)
     }
   }
 
@@ -1473,11 +1929,7 @@ export namespace MCP {
       },
     )
     const authTimeout = effectiveTimeout(mcpConfig, cfg.experimental?.mcp_timeout)
-    const { name: transportName, transport } = createRemoteTransport(
-      mcpConfig,
-      authProvider,
-      mcpFetchRequestInit(authTimeout),
-    )
+    const { transport } = createRemoteTransport(mcpConfig, authProvider, mcpFetchRequestInit(authTimeout))
 
     try {
       // Call finishAuth on the transport
@@ -1501,9 +1953,7 @@ export namespace MCP {
       throw error
     } finally {
       pendingOAuthFlows.delete(authKey)
-      await transport.close().catch((closeError) => {
-        log.error("Failed to close OAuth finish MCP transport", { mcpName, transport: transportName, error: closeError })
-      })
+      await closeTransport(mcpName, transport)
     }
   }
 

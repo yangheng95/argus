@@ -13,6 +13,7 @@ import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { WorkerTurnDescriptor } from "../../src/agent/worker-turn-descriptor"
 import { AgentRuntimeMetadata } from "../../src/session/agent-runtime-metadata"
 import type { SessionKind } from "../../src/session/session.sql"
+import { SessionStatus } from "../../src/session/status"
 import {
   copyRepositoryExpertSquadPackage,
   PROJECT_EXPERT_SQUAD_ID,
@@ -93,20 +94,23 @@ test(
       buildReport: () => ({ summary: "ok", detail: "ok" }),
     }
 
+    let terminalStatus: SessionStatus.Info | undefined
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        await runAgentSession({
+        const out = await runAgentSession({
           kind: "build",
           core: BUILD_CORE,
           sessionTitle: "test build",
           toolKit,
           buildUserPrompt: () => "implement the request",
         })
+        terminalStatus = SessionStatus.get(out.session.id)
       },
     })
 
     expect(promptCalls).toHaveLength(1)
+    expect(terminalStatus).toEqual({ type: "terminal", reason: "completed", summary: "ok" })
     expect(promptCalls[0].agent).toBe("build")
     expect(promptCalls[0].systemMode).toBe("complete")
     expect(promptCalls[0].system.startsWith(BUILD_CORE)).toBe(true)

@@ -49,23 +49,31 @@ export async function withBrowserInactivityTimeout<T>(
     clearTimer()
     rejectInactive?.(new Error(`${label} browser error before idle: ${source}`))
   }
-  page.on("console", (payload) => reset(activityLabel("console", payload)))
-  page.on("response", (payload) => {
+  const onConsole = (payload: unknown) => reset(activityLabel("console", payload))
+  const onResponse = (payload: unknown) => {
     const response = payload as { status?: () => number }
     if (typeof response.status === "function" && response.status() >= 400) {
       fail(activityLabel("response", payload))
       return
     }
     reset(activityLabel("response", payload))
-  })
-  page.on("requestfailed", (payload) => fail(activityLabel("requestfailed", payload)))
-  page.on("pageerror", (payload) => fail(activityLabel("pageerror", payload)))
+  }
+  const onRequestFailed = (payload: unknown) => fail(activityLabel("requestfailed", payload))
+  const onPageError = (payload: unknown) => fail(activityLabel("pageerror", payload))
+  page.on("console", onConsole)
+  page.on("response", onResponse)
+  page.on("requestfailed", onRequestFailed)
+  page.on("pageerror", onPageError)
   reset("start")
   try {
     return await Promise.race([action(), inactive])
   } finally {
     settled = true
     clearTimer()
+    page.off("console", onConsole)
+    page.off("response", onResponse)
+    page.off("requestfailed", onRequestFailed)
+    page.off("pageerror", onPageError)
   }
 }
 

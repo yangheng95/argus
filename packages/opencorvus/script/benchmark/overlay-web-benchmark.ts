@@ -20,6 +20,7 @@ diagWrite(`diag_log=${DIAG_LOG}`)
 // before the normal finally block can run.
 let _emergencyReportPath = ""
 let _emergencyWritten = false
+let _runSignalCleanup: ((code: number, signal: string) => Promise<void>) | undefined
 
 process.on("exit", (code) => {
   diagWrite(`process.exit event — code=${code}`)
@@ -56,25 +57,26 @@ process.on("exit", (code) => {
 // every interrupted bench. A flag prevents double cleanup when the OS
 // signals us during natural shutdown.
 let _shuttingDown = false
+let _benchmarkCleanupStarted = false
 const shutdown = (signal: string) => {
   if (_shuttingDown) return
   _shuttingDown = true
   diagWrite(`${signal} received PID=${process.pid}`)
   diagWrite(`stack:\n${new Error(signal.toLowerCase() + "-trace").stack}`)
-  // Surface as an unhandled rejection so the main try/catch/finally block
-  // unwinds through its cleanup() chain. Default Node behavior on SIGTERM
-  // is exit-without-finally; we override here. Exit code follows
+  // Run the same explicit cleanup path used by the main finally block.
+  // Default Node behavior on SIGTERM is exit-without-finally; we override here.
+  // Exit code follows
   // shell convention (130 for SIGINT, 143 for SIGTERM, 129 for SIGHUP).
   const code = signal === "SIGINT" ? 130 : signal === "SIGHUP" ? 129 : 143
   process.exitCode = code
-  // Give the running async chain ~3s to settle through finally; if it
-  // still hasn't exited (stuck git subprocess, hung LLM stream), force-
-  // exit so we don't dangle indefinitely.
-  setTimeout(() => process.exit(code), 3_000).unref()
-  // Trigger an AbortError up the chain by throwing an unhandled rejection.
-  // Many awaited paths catch and absorb; the main try/catch will catch
-  // the throw and run finally with cleanup.
-  Promise.reject(new Error(`shutdown: ${signal}`))
+  const forceExit = setTimeout(() => process.exit(code), 10_000)
+  forceExit.unref()
+  const cleanup = _runSignalCleanup
+  if (!cleanup) return
+  void cleanup(code, signal).finally(() => {
+    clearTimeout(forceExit)
+    process.exit(code)
+  })
 }
 process.on("SIGTERM", () => shutdown("SIGTERM"))
 process.on("SIGINT", () => shutdown("SIGINT"))
@@ -93,6 +95,7 @@ import path from "node:path"
 import puppeteer, { type Page } from "puppeteer-core"
 import { BrowserRuntime } from "../../src/browser/runtime"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
+import { ProcessSupervisor } from "../../src/shell/process-supervisor"
 import { Shell } from "../../src/shell/shell"
 import { decodePNG, nonWhiteDensity, uniqueColorBucketCount } from "../../src/util/pixel-stats"
 import { parseSSE } from "../../src/util/sse"
@@ -513,6 +516,11 @@ const marks = {
   completedAt: 0,
 }
 let taskID = ""
+_runSignalCleanup = async (code, signal) => {
+  diagWrite(`running benchmark cleanup for ${signal}`)
+  process.exitCode = code
+  await runBenchmarkCleanup()
+}
 const defaultReportDir = path.resolve(import.meta.dir, "../../../..", ".scratch", "benchmark-runs")
 const reportFile = report
   ? path.resolve(report)
@@ -627,12 +635,23 @@ function logLine(value: string) {
 function activityLine(value: string) {
   lastActivityLogAt = Date.now()
   lastLogAt = lastActivityLogAt
+  lastActivityLine = value
   console.log(value)
 }
 
 function errorLine(value: string) {
   lastLogAt = Date.now()
   console.error(value)
+}
+
+function throwIfBenchmarkIdle(waitingFor: string) {
+  const idleMs = Date.now() - lastActivityLogAt
+  if (idleMs <= idleTimeoutMs) return
+  throw new Error(
+    `[overlay-benchmark] inactive for ${idleTimeoutMs}ms while waiting for ${waitingFor}; last_activity=${
+      lastActivityLine || "benchmark start"
+    }`,
+  )
 }
 
 function formatEventLine(
@@ -1170,49 +1189,7 @@ try {
   errorLine(`events: ${eventFile}`)
   errorLine(`events_ndjson: ${eventLogFile}`)
 } finally {
-  await cleanup("events.stop", () => eventStream.stop())
-  await flushed.catch(() => undefined)
-  if (taskID) {
-    await cleanup("task.cancel", () =>
-      api(`/task/${taskID}/cancel`, {
-        method: "POST",
-      }).catch(() => undefined),
-    )
-  }
-  await cleanup("page.close", () => page.close().catch(() => undefined))
-  await cleanup(
-    "browser.close",
-    () => browser.close().catch(() => undefined),
-    () => browser.process()?.kill("SIGKILL"),
-  )
-  await cleanup("server.stop", () => server.stop(true))
-  await cleanup("instance.disposeAll", () => Instance.disposeAll().catch(() => undefined))
-  // Kill any orphaned processes that executors left behind in the workspace
-  // (e.g. test scripts with setInterval that never exit on their own).
-  if (temp.dir) {
-    await cleanup("orphan.kill", async () => {
-      try {
-        await Bun.spawn(["pkill", "-9", "-f", temp.dir], { stdout: "pipe", stderr: "pipe" }).exited
-      } catch {
-        /* best effort — pkill not available on all platforms */
-      }
-    })
-  }
-  if (!keep && temp.dir) {
-    // Rescue the trace dir before wiping the workspace. Default trace dir is
-    // under `<temp.dir>/.opencorvus/r/trace`, which would otherwise die
-    // with the workspace and make every benchmark run lose its agent traces.
-    const traceDir = process.env.OPENCORVUS_AGENT_TRACE_DIR
-    if (traceDir && traceDir.startsWith(temp.dir)) {
-      const stamp = Date.now()
-      const survivor = path.join(process.cwd(), `overlay-web-benchmark-trace-${stamp}`)
-      await cleanup("trace.preserve", () => fs.rename(traceDir, survivor).catch(() => undefined))
-      logLine(`[overlay-benchmark] trace preserved at ${survivor}`)
-    }
-    await cleanup("temp.dir", () => fs.rm(temp.dir, { recursive: true, force: true }).catch(() => undefined))
-  }
-  if (!keep && temp.home)
-    await cleanup("temp.home", () => fs.rm(temp.home, { recursive: true, force: true }).catch(() => undefined))
+  await runBenchmarkCleanup()
   process.exit(process.exitCode ?? 0)
 }
 
@@ -1835,12 +1812,56 @@ async function launchBrowser() {
   })
 }
 
+async function runBenchmarkCleanup() {
+  if (_benchmarkCleanupStarted) return
+  _benchmarkCleanupStarted = true
+  await cleanup("events.stop", () => eventStream.stop())
+  await cleanup("events.flush", () => flushed)
+  if (taskID) {
+    await cleanup("task.cancel", () =>
+      api(`/task/${taskID}/cancel`, {
+        method: "POST",
+      }),
+    )
+  }
+  await cleanup("page.close", () => page.close())
+  await cleanup(
+    "browser.close",
+    () => browser.close(),
+    () => browser.process()?.kill("SIGKILL"),
+  )
+  await cleanup("server.stop", () => server.stop(true))
+  await cleanup("instance.disposeAll", () => Instance.disposeAll())
+  if (temp.dir) {
+    await cleanup("orphan.dispose", () => ProcessSupervisor.disposeLiveProcessesUnder(temp.dir))
+  }
+  if (!keep && temp.dir) {
+    // Rescue the trace dir before wiping the workspace. Default trace dir is
+    // under `<temp.dir>/.opencorvus/r/trace`, which would otherwise die
+    // with the workspace and make every benchmark run lose its agent traces.
+    const traceDir = process.env.OPENCORVUS_AGENT_TRACE_DIR
+    if (traceDir && traceDir.startsWith(temp.dir)) {
+      const stamp = Date.now()
+      const survivor = path.join(process.cwd(), `overlay-web-benchmark-trace-${stamp}`)
+      await cleanup("trace.preserve", () => fs.rename(traceDir, survivor))
+      logLine(`[overlay-benchmark] trace preserved at ${survivor}`)
+    }
+    await cleanup("temp.dir", () => fs.rm(temp.dir, { recursive: true, force: true }))
+  }
+  if (!keep && temp.home) await cleanup("temp.home", () => fs.rm(temp.home, { recursive: true, force: true }))
+}
+
 async function cleanup(label: string, run: () => Promise<unknown>, force?: () => void | Promise<void>) {
   try {
     await run()
   } catch (error) {
+    if (!process.exitCode || process.exitCode === 0) process.exitCode = 1
     errorLine(`[cleanup] ${label}: ${String(error)}`)
-    await force?.()
+    try {
+      await force?.()
+    } catch (forceError) {
+      errorLine(`[cleanup] ${label}.force: ${String(forceError)}`)
+    }
   }
 }
 
@@ -1868,6 +1889,7 @@ async function waitForFinal(taskID: string, api: (pathname: string, init?: Reque
           logLine(
             `[overlay-benchmark] warn: progress poll error (${(e as any)?.name ?? "Error"}: ${(e as any)?.message}), retrying in 2s`,
           )
+          throwIfBenchmarkIdle("final task status")
           await Bun.sleep(2_000)
           continue
         }
@@ -1895,8 +1917,10 @@ async function waitForFinal(taskID: string, api: (pathname: string, init?: Reque
         )
       }
       if (terminalReached) {
+        throwIfBenchmarkIdle("final task status")
         await Bun.sleep(250)
       } else {
+        throwIfBenchmarkIdle("final task status")
         await Promise.race([Bun.sleep(2_000), terminalPromise])
       }
     }
@@ -1929,6 +1953,7 @@ async function waitForArchitectBoard(taskID: string, api: (pathname: string, ini
     }
     if (currentBoard?.architect && goalCount >= 2) return currentBoard
     if (FINAL.has(status)) return currentBoard
+    throwIfBenchmarkIdle("architect board")
     await Bun.sleep(2_000)
   }
 }

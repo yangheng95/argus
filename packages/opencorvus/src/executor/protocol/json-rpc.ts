@@ -2,6 +2,9 @@ import { createInterface } from "readline"
 import { Process } from "@/util/process"
 import { normalizeExecutableArgv } from "@/util/command"
 import { withStreamActivity, type StreamActivityMonitor } from "@/util/stream-activity"
+import { ProcessSupervisor } from "@/shell/process-supervisor"
+
+const PROCESS_EXIT_TIMEOUT_MS = 5_000
 
 type RequestID = string | number
 
@@ -61,6 +64,7 @@ export const JsonRpcLineTransport = {
     let wake: (() => void) | undefined
     let nextID = 0
     let closed = false
+    let processTermination: Promise<number | void> | undefined
     let requestActivityMonitor: StreamActivityMonitor | undefined
 
     const clearRequestActivityMonitor = () => {
@@ -80,8 +84,10 @@ export const JsonRpcLineTransport = {
     const failTransport = (error: unknown) => {
       if (closed) return
       closed = true
-      reader.close()
-      proc.kill("SIGTERM")
+      void terminateProcess().catch((terminationError) => {
+        failAll(terminationError)
+        wake?.()
+      })
       failAll(error)
       wake?.()
     }
@@ -129,6 +135,20 @@ export const JsonRpcLineTransport = {
       crlfDelay: Infinity,
     })
 
+    const terminateProcess = () => {
+      reader.close()
+      processTermination ??= proc
+        .terminate()
+        .then(() =>
+          ProcessSupervisor.awaitWithTimeout(
+            proc.exited,
+            PROCESS_EXIT_TIMEOUT_MS,
+            `JSON-RPC process did not exit after cleanup: ${command.join(" ")}`,
+          ),
+        )
+      return processTermination
+    }
+
     proc.stdout.on("data", observeRequestActivity)
     proc.stderr.on("data", observeRequestActivity)
     ;(async () => {
@@ -172,6 +192,12 @@ export const JsonRpcLineTransport = {
       } catch (error) {
         failAll(error)
       } finally {
+        if (!closed) {
+          void terminateProcess().catch((error) => {
+            failAll(error)
+            wake?.()
+          })
+        }
         closed = true
         proc.stdout?.off("data", observeRequestActivity)
         proc.stderr?.off("data", observeRequestActivity)
@@ -269,11 +295,14 @@ export const JsonRpcLineTransport = {
         }
       },
       async close() {
-        if (closed) return
+        if (closed) {
+          await processTermination
+          return
+        }
         closed = true
-        reader.close()
-        proc.kill("SIGTERM")
+        const terminated = terminateProcess()
         failAll(new Error(`JSON-RPC transport closed: ${command.join(" ")}`))
+        await terminated
       },
     }
   },

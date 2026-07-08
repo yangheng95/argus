@@ -1,19 +1,3 @@
-// Regression for iter34 of the design-language audit.
-//
-// User feedback (2026-05-03): "把cwd控件改成左/右对齐，调整结构".
-//
-// Pre-iter34 the task-bar's cwd cluster was a flex column —
-// the breadcrumb + caret on row 1, the vcs badge + execution
-// workspace label on row 2. Both rows left-aligned.
-//
-// iter34 redesign: flip `.task-cwd` from column to row so the
-// dropdown sits on the left edge and the vcs info sits on the
-// right edge.
-//
-// 2026-06-09: project worktree management returned to this row as a
-// compact dropdown. Per-goal worktree detail remains on GoalWorkflowGroup;
-// this test covers the cwd row chrome only.
-
 import { describe, expect, test } from "bun:test"
 import { readFileSync, readdirSync, statSync } from "node:fs"
 import path from "node:path"
@@ -21,8 +5,13 @@ import path from "node:path"
 const STYLES_ROOT = path.resolve(import.meta.dir, "..", "src", "styles")
 const OVERLAY_ROOT = path.resolve(import.meta.dir, "..", "src")
 const INDEX_HTML = readFileSync(path.join(OVERLAY_ROOT, "index.html"), "utf8")
+const APP = readFileSync(path.join(OVERLAY_ROOT, "components", "App.tsx"), "utf8")
+const MAIN = readFileSync(path.join(OVERLAY_ROOT, "main.tsx"), "utf8")
 const TASK_DIR_BAR = readFileSync(path.join(OVERLAY_ROOT, "components", "TaskDirBar.tsx"), "utf8")
-const DOM_UTILS = readFileSync(path.join(OVERLAY_ROOT, "utils", "dom-utils.ts"), "utf8")
+const PROJECT_LEDGER_GROUP = readFileSync(path.join(OVERLAY_ROOT, "components", "ProjectLedgerGroup.tsx"), "utf8")
+const WORK_LEDGER = readFileSync(path.join(OVERLAY_ROOT, "components", "WorkLedger.tsx"), "utf8")
+const SIDEBAR_STYLES = readFileSync(path.join(OVERLAY_ROOT, "styles", "surfaces", "sidebar.css"), "utf8")
+const ACTIVITY_STYLES = readFileSync(path.join(OVERLAY_ROOT, "styles", "surfaces", "activity.css"), "utf8")
 
 function walkCss(dir: string): string[] {
   const out: string[] = []
@@ -34,379 +23,121 @@ function walkCss(dir: string): string[] {
   return out
 }
 
-// Concatenate all surface + cascade + primitive CSS files (styles.css was
-// dissolved 2026-05-04 into this decomposed architecture). Comments are
-// stripped first so a /* ... */ block immediately preceding a rule does
-// not get folded into the rule's selector head when we split on }.
 function stripCssComments(input: string): string {
   return input.replace(/\/\*[\s\S]*?\*\//g, "")
 }
+
 const STYLES = stripCssComments(
   walkCss(STYLES_ROOT)
-    .map((f) => readFileSync(f, "utf8"))
+    .map((file) => readFileSync(file, "utf8"))
     .join("\n"),
 )
 
-function soloRuleBody(selector: string): string {
-  for (const chunk of STYLES.split("}")) {
-    const openIdx = chunk.indexOf("{")
-    if (openIdx < 0) continue
-    const raw = chunk.slice(0, openIdx)
-    const head = raw.trim()
-    if (head !== selector) continue
-    const lastNewline = raw.lastIndexOf("\n")
-    const lastLine = raw.slice(lastNewline + 1)
-    if (lastLine !== lastLine.trimStart()) continue
-    return chunk.slice(openIdx + 1)
-  }
-  throw new Error(`solo ${selector} not found`)
-}
-
-function selectorRuleBody(selector: string): string {
-  for (const chunk of STYLES.split("}")) {
-    const openIdx = chunk.indexOf("{")
-    if (openIdx < 0) continue
-    const selectors = chunk
-      .slice(0, openIdx)
-      .split(",")
-      .map((item) => item.trim())
-    if (selectors.includes(selector)) return chunk.slice(openIdx + 1)
-  }
-  throw new Error(`selector ${selector} not found`)
-}
-
-describe("task-cwd cluster lays out left/right (dropdown left, workspace info right)", () => {
-  test(".task-cwd is flex row with space-between justification", () => {
-    const body = soloRuleBody(".task-cwd")
-    expect(body).toMatch(/flex-direction:\s*row/)
-    expect(body).toMatch(/justify-content:\s*space-between/)
-    expect(body).toMatch(/align-items:\s*center/)
+describe("opened project management ownership", () => {
+  test("old top cwd project bar is retired instead of hidden", () => {
+    expect(INDEX_HTML).not.toContain("solidProjectDirectoryBarMount")
+    expect(INDEX_HTML).not.toContain("workbench-project-bar")
+    expect(APP).not.toContain("ProjectDirectoryBar")
+    expect(TASK_DIR_BAR).not.toContain("export function ProjectDirectoryBar")
+    expect(TASK_DIR_BAR).not.toContain("TaskDirContent")
+    expect(STYLES).not.toContain(".task-cwd-dropdown")
+    expect(STYLES).not.toContain("cwd-recent-trigger")
+    expect(STYLES).not.toContain("task-cwd-caret")
   })
 
-  test(".task-cwd does NOT lay out as a column anymore (the pre-iter34 stack)", () => {
-    const body = soloRuleBody(".task-cwd")
-    expect(body).not.toMatch(/flex-direction:\s*column/)
-  })
-
-  test(".task-cwd-dropdown can shrink so long breadcrumbs ellipsize before pushing the right cluster off-screen", () => {
-    const body = soloRuleBody(".task-cwd-dropdown")
-    expect(body).toMatch(/flex:\s*1\s+1\s+auto/)
-    expect(body).toMatch(/min-width:\s*0/)
-    const shell = soloRuleBody(".task-dir-shell")
-    expect(shell).toMatch(/box-sizing:\s*border-box/)
-    expect(shell).toMatch(/height:\s*calc\(24px \* var\(--ui-scale\)\)/)
-  })
-
-  test("project directory bar owns cwd dropdown and branch badge from one Solid mount", () => {
-    expect(INDEX_HTML.match(/solidProjectDirectoryBarMount/g)?.length).toBe(1)
-    expect(INDEX_HTML).toMatch(/<div id="solidProjectDirectoryBarMount"><\/div>/)
-    expect(TASK_DIR_BAR).toMatch(/export function ProjectDirectoryBar\(\)/)
-    expect(TASK_DIR_BAR).toMatch(/<TaskDirContent \/>/)
-    expect(TASK_DIR_BAR).toMatch(/<ProjectWorktreeDropdown \/>/)
-    expect(TASK_DIR_BAR).toMatch(/<InitGitButton \/>/)
-    expect(TASK_DIR_BAR).toMatch(/<VcsBadge \/>/)
-    expect(TASK_DIR_BAR).toMatch(/export function ProjectWorktreeDropdown\(\)/)
-    expect(TASK_DIR_BAR).toMatch(/export function InitGitButton\(\)/)
-    expect(TASK_DIR_BAR).toMatch(/export function VcsBadge\(\)/)
-    expect(INDEX_HTML).not.toMatch(/solidTaskDirMount/)
-    expect(INDEX_HTML).not.toMatch(/solidTaskVcsMount/)
-  })
-
-  test("project worktree dropdown is a compact sibling in the cwd row", () => {
-    const taskCluster = soloRuleBody(".task-project-cluster")
-    expect(taskCluster).toMatch(/display:\s*flex/)
-    expect(taskCluster).toMatch(/align-items:\s*center/)
-    const button = soloRuleBody('.oc-button[data-ui="project-worktree-dropdown"]')
-    expect(button).toMatch(/--oc-button-height:\s*calc\(24px \* var\(--ui-scale\)\)/)
-    expect(button).toMatch(/flex-shrink:\s*0/)
-    expect(soloRuleBody(".oc-button")).toMatch(/display:\s*inline-flex/)
-    expect(TASK_DIR_BAR).toContain('import { Button } from "./ui/Button"')
-    expect(TASK_DIR_BAR).toContain('data-ui="project-worktree-dropdown"')
-    expect(TASK_DIR_BAR).toContain('size="sm"')
-    expect(TASK_DIR_BAR).not.toContain('class="project-worktree-dropdown"')
-    expect(TASK_DIR_BAR).toContain('class="project-worktree-panel"')
-    expect(TASK_DIR_BAR).toContain('data-ui="project-worktree-remove"')
-    expect(TASK_DIR_BAR).toContain('data-chrome="icon-action"')
-    expect(TASK_DIR_BAR).toMatch(/<Button[\s\S]*data-ui="project-worktree-remove"/)
-    expect(TASK_DIR_BAR).not.toContain('class="project-worktree-remove"')
-    expect(TASK_DIR_BAR).toContain('data-kind="active"')
-    expect(TASK_DIR_BAR).toContain('data-kind="expired"')
-    expect(TASK_DIR_BAR).toContain('t("worktree.active")')
-    expect(TASK_DIR_BAR).toContain('t("worktree.expired")')
-    expect(TASK_DIR_BAR).toMatch(/<DropdownMenu\.Trigger\s+as=\{Button\}/)
-    expect(TASK_DIR_BAR).not.toMatch(
-      /<DropdownMenu\.Trigger[\s\S]*data-ui="project-worktree-dropdown"[\s\S]*data-open=/,
+  test("Work Ledger project groups manage already-opened projects without cwd switching controls", () => {
+    expect(WORK_LEDGER).toContain("ProjectLedgerGroup")
+    expect(PROJECT_LEDGER_GROUP).not.toContain("ProjectDirectoryControl")
+    expect(PROJECT_LEDGER_GROUP).not.toContain("canUseProjectDirectory")
+    expect(PROJECT_LEDGER_GROUP).toContain(
+      "const hasProjectActions = () => canCopyProject() || canRenameProject() || canDeleteProject()",
     )
-    expect(TASK_DIR_BAR).toContain('<DropdownMenu.Content class="project-worktree-panel">')
-    expect(TASK_DIR_BAR).toContain("<DropdownMenu.Item")
-    expect(TASK_DIR_BAR).toContain('placement="bottom-end"')
-    expect(TASK_DIR_BAR).toContain("fitViewport")
-    expect(TASK_DIR_BAR).not.toContain("active_short")
-    expect(TASK_DIR_BAR).not.toContain("expired_short")
-    expect(TASK_DIR_BAR).toContain(
-      'const visibleWorktrees = createMemo(() => worktrees().filter((item) => item.status !== "primary"))',
-    )
-    expect(TASK_DIR_BAR).toContain("compactPath(item.directory)")
-    expect(TASK_DIR_BAR).toContain('compactBranch(item.branch ?? "")')
-    expect(TASK_DIR_BAR).toContain("if (!projectDirectory)")
+    expect(PROJECT_LEDGER_GROUP).toContain('data-ui="project-group-toggle"')
+    expect(PROJECT_LEDGER_GROUP).toContain('data-ui="project-group-copy"')
+    expect(PROJECT_LEDGER_GROUP).toContain('data-ui="project-group-rename"')
+    expect(PROJECT_LEDGER_GROUP).toContain('data-ui="project-group-delete"')
+    expect(PROJECT_LEDGER_GROUP).not.toContain("project-group-directory-control")
+    expect(SIDEBAR_STYLES).not.toContain("project-directory-control")
+    expect(SIDEBAR_STYLES).not.toContain("project-group-directory-control")
+  })
+
+  test("cwd recent/detected-project popup implementation is removed", () => {
+    expect(TASK_DIR_BAR).not.toContain("export interface ProjectDirectoryControlProps")
+    expect(TASK_DIR_BAR).not.toContain("export function ProjectDirectoryControl")
+    expect(TASK_DIR_BAR).not.toContain('import * as Popover from "@kobalte/core/popover"')
+    expect(TASK_DIR_BAR).not.toContain("<Popover.Root")
+    expect(TASK_DIR_BAR).not.toContain("pathBreadcrumb(dir()")
+    expect(TASK_DIR_BAR).not.toContain("loadWorkspaceOnboardingDiscovery")
+    expect(TASK_DIR_BAR).not.toContain("browseDirectory")
+    expect(TASK_DIR_BAR).not.toContain("setDirectory")
+    expect(TASK_DIR_BAR).not.toContain("loadRecentDirectories")
+    expect(TASK_DIR_BAR).not.toContain("removeRecentDirectory")
+    expect(TASK_DIR_BAR).not.toContain('data-ui="cwd-path-input"')
+    expect(TASK_DIR_BAR).not.toContain('data-ui="recent-dir-edit-submit"')
+    expect(TASK_DIR_BAR).not.toContain('data-ui="recent-dir-remove"')
+    expect(STYLES).not.toContain("recent-dir-panel")
+    expect(STYLES).not.toContain("recent-dir-row")
+    expect(STYLES).not.toContain("recent-dir-current-path")
+  })
+})
+
+describe("project runtime controls in the right toolbar", () => {
+  test("right activity toolbar trailing slot owns worktree and git controls", () => {
+    expect(MAIN).toContain('import { ProjectRuntimeToolbarActions } from "./components/TaskDirBar"')
+    expect(MAIN).toContain("trailing={<ProjectRuntimeToolbarActions />}")
+    expect(TASK_DIR_BAR).toContain("export function ProjectRuntimeToolbarActions()")
+    expect(TASK_DIR_BAR).toContain("export function ProjectRuntimeStatusDropdown()")
+    expect(TASK_DIR_BAR).toContain("<ProjectRuntimeStatusDropdown />")
+    expect(TASK_DIR_BAR).not.toContain("<ProjectWorktreeDropdown compact />")
+    expect(TASK_DIR_BAR).not.toContain("<InitGitButton compact />")
+    expect(TASK_DIR_BAR).not.toContain("<VcsBadge compact />")
+    expect(ACTIVITY_STYLES).toContain(".project-runtime-toolbar-actions")
+    expect(ACTIVITY_STYLES).toContain('.project-runtime-toolbar-actions .oc-button[data-toolbar-compact="true"]')
+    expect(ACTIVITY_STYLES).toContain('data-ui="project-runtime-status-dropdown"')
+    expect(ACTIVITY_STYLES).toContain(".project-runtime-trigger-badge")
+    expect(ACTIVITY_STYLES).toContain(".project-runtime-trigger-dot")
+    expect(ACTIVITY_STYLES).not.toContain(".vcs-badge-compact")
+  })
+
+  test("runtime dropdown keeps Kobalte ownership for worktree actions and Git status", () => {
+    expect(TASK_DIR_BAR).toContain('import * as DropdownMenu from "@kobalte/core/dropdown-menu"')
+    expect(TASK_DIR_BAR).toContain("export function ProjectRuntimeStatusDropdown")
+    expect(TASK_DIR_BAR).toContain('placement="left-start"')
+    expect(TASK_DIR_BAR).toContain('data-ui="project-runtime-status-dropdown"')
+    expect(TASK_DIR_BAR).toContain('data-toolbar-compact="true"')
+    expect(TASK_DIR_BAR).toContain("data-vcs-tone={gitTone()}")
     expect(TASK_DIR_BAR).toContain("loadProjectWorktrees(projectDirectory)")
     expect(TASK_DIR_BAR).toContain("deleteProjectWorktree(projectDirectory, item.directory)")
     expect(TASK_DIR_BAR).toContain("deleteProjectWorktrees(projectDirectory, directories)")
-    expect(TASK_DIR_BAR).toContain("cleanupExpiredBusyFor(projectDirectory)")
-    expect(TASK_DIR_BAR).toContain("removableExpiredWorktrees")
     expect(TASK_DIR_BAR).toContain('data-ui="project-worktree-cleanup-expired"')
-    expect(TASK_DIR_BAR).toContain('tone="neutral"')
-    expect(TASK_DIR_BAR).toContain('data-busy={cleanupExpiredBusy() ? "true" : "false"}')
-    expect(TASK_DIR_BAR).toContain("disabled={!canCleanupExpired()}")
-    expect(TASK_DIR_BAR).toContain("onClick={(event) => void cleanupExpiredWorktrees(event)}")
-    expect(TASK_DIR_BAR).toContain('t("worktree.cleanup_expired_confirm"')
-    expect(TASK_DIR_BAR).not.toContain(
-      '<span class="project-worktree-cleanup-hint">{t("worktree.cleanup_expired")}</span>',
-    )
-    expect(TASK_DIR_BAR).not.toContain("const panelMinWidth")
-    expect(TASK_DIR_BAR).not.toContain("const panelViewportGap")
-    expect(TASK_DIR_BAR).not.toContain("setPanelStyle")
-    expect(TASK_DIR_BAR).not.toContain("dropdownRef")
-    const row = soloRuleBody(".project-worktree-item")
-    expect(row).toMatch(/grid-template-columns:/)
-    expect(row).toMatch(/min-height:\s*calc\(28px \* var\(--ui-scale\)\)/)
-    expect(row).toContain("grid-template-areas:")
-    expect(row).toContain('"name path state branch"')
-    expect(row).toMatch(/row-gap:\s*0/)
-    expect(row).not.toContain('"path path path"')
-    const highlightedRow = selectorRuleBody(".project-worktree-item[data-highlighted]")
-    expect(highlightedRow).toMatch(/background:\s*var\(--subtle-3\)/)
-    expect(highlightedRow).toMatch(/color:\s*var\(--text-strong\)/)
-    const openButton = selectorRuleBody('.oc-button[data-ui="project-worktree-dropdown"][data-expanded]')
-    expect(openButton).toMatch(/--oc-button-bg:\s*var\(--oc-control-bg-hover\)/)
-    expect(STYLES).not.toContain('.oc-button[data-ui="project-worktree-dropdown"][data-open="true"]')
-    const highlightedBranch = selectorRuleBody(".project-worktree-item[data-highlighted] .project-worktree-branch")
-    expect(highlightedBranch).toMatch(/color:\s*var\(--text-strong\)/)
-    const highlightedState = selectorRuleBody(
-      ".project-worktree-row .project-worktree-item[data-highlighted] .project-worktree-state",
-    )
-    expect(highlightedState).toMatch(/color:\s*var\(--text-strong\)/)
-    const remove = soloRuleBody('.project-worktree-row .oc-button[data-ui="project-worktree-remove"]')
-    expect(remove).toMatch(/--oc-button-height:\s*calc\(24px \* var\(--ui-scale\)\)/)
-    expect(remove).toMatch(/--oc-button-shadow:\s*none/)
-    const cleanup = soloRuleBody('.project-worktree-panel-head .oc-button[data-ui="project-worktree-cleanup-expired"]')
-    expect(cleanup).toMatch(/--oc-button-height:\s*calc\(24px \* var\(--ui-scale\)\)/)
-    expect(cleanup).toMatch(/--oc-button-bg:\s*color-mix\(in srgb, var\(--warn\) 8%, var\(--menu-panel-bg\)\)/)
-    const cleanupSpin = selectorRuleBody(
-      '.project-worktree-panel-head .oc-button[data-ui="project-worktree-cleanup-expired"][data-busy="true"] svg',
-    )
-    expect(cleanupSpin).toMatch(/animation:\s*oc-spin var\(--ui-duration-loop-spin\) linear infinite/)
-    expect(STYLES).toContain(
-      '.project-worktree-row\n  .oc-button[data-size="icon"][data-variant="ghost"][data-chrome="icon-action"][data-ui="project-worktree-remove"]:disabled',
-    )
-    expect(STYLES).not.toContain(".project-worktree-remove")
-    expect(remove).not.toMatch(/outline:\s*none/)
-    expect(STYLES).not.toContain(".project-worktree-main")
+    expect(TASK_DIR_BAR).toContain('<DropdownMenu.Content class="project-runtime-status-panel">')
+    expect(TASK_DIR_BAR).toContain("<DropdownMenu.Item")
+    expect(TASK_DIR_BAR).toContain("fitViewport")
+    expect(TASK_DIR_BAR).toContain("project-runtime-git-section")
+    expect(TASK_DIR_BAR).toContain('t("project_runtime.git_title")')
+    expect(TASK_DIR_BAR).toContain("boardStore.vcs as ProjectVcsInfo | null")
+    expect(TASK_DIR_BAR).toContain('name="git-worktree"')
+    expect(TASK_DIR_BAR).toContain('name="git-branch"')
+    expect(TASK_DIR_BAR).toContain('name="git-commit"')
+    expect(TASK_DIR_BAR).toContain('name="git-compare"')
+    expect(TASK_DIR_BAR).toContain('"git-branch-plus"')
+    expect(TASK_DIR_BAR).toContain("await initGitCurrent()")
+    expect(TASK_DIR_BAR).not.toContain('data-ui="project-vcs-badge"')
+    expect(TASK_DIR_BAR).not.toContain("vcs-badge")
   })
 
-  test("init git CTA is a compact explicit project action in the cwd row", () => {
-    const button = soloRuleBody('.oc-button[data-ui="project-init-git"]')
-    expect(button).toMatch(/--oc-button-height:\s*calc\(24px \* var\(--ui-scale\)\)/)
-    expect(button).toMatch(/flex-shrink:\s*0/)
+  test("git init and VCS status are inside the merged runtime panel", () => {
     expect(TASK_DIR_BAR).toContain('import { canInitGit, initGitCurrent } from "../utils/git"')
-    expect(TASK_DIR_BAR).toContain("const visible = createMemo(() => canInitGit())")
+    expect(TASK_DIR_BAR).not.toContain("export function VcsBadge")
+    expect(TASK_DIR_BAR).not.toContain("export function InitGitButton")
+    expect(TASK_DIR_BAR).not.toContain("const visible = createMemo(() => canInitGit())")
     expect(TASK_DIR_BAR).toContain("await initGitCurrent()")
     expect(TASK_DIR_BAR).toContain('data-ui="project-init-git"')
-    expect(TASK_DIR_BAR).toContain('title={t("git.init")}')
-    expect(TASK_DIR_BAR).toContain('aria-label={t("git.init")}')
-    expect(TASK_DIR_BAR).toContain('<Icon name="github" size={14} />')
-    expect(TASK_DIR_BAR.indexOf("<TaskDirContent />")).toBeLessThan(TASK_DIR_BAR.indexOf("<InitGitButton />"))
-    expect(TASK_DIR_BAR.indexOf("<InitGitButton />")).toBeLessThan(TASK_DIR_BAR.indexOf("<VcsBadge />"))
-    expect(TASK_DIR_BAR).not.toContain("git init")
-    const label = soloRuleBody(".project-init-git-label")
-    expect(label).toMatch(/text-overflow:\s*ellipsis/)
-    expect(label).toMatch(/white-space:\s*nowrap/)
-  })
-
-  test("recent directory popup uses Popover dialog semantics for editable content", () => {
-    expect(TASK_DIR_BAR).toContain('import * as DropdownMenu from "@kobalte/core/dropdown-menu"')
-    expect(TASK_DIR_BAR).toContain('import * as Popover from "@kobalte/core/popover"')
-    expect(TASK_DIR_BAR).toContain("<Popover.Root")
-    expect(TASK_DIR_BAR).toContain("<Popover.Portal")
-    expect(TASK_DIR_BAR).toContain("<Popover.Content")
-    expect(TASK_DIR_BAR).toContain("<Popover.Trigger")
-    expect(TASK_DIR_BAR).toContain("as={Button}")
-    expect(TASK_DIR_BAR).toContain("anchorRef={() => cwdShellRef}")
-    expect(TASK_DIR_BAR).toContain("syncRecentPanelGeometry()")
-    expect(TASK_DIR_BAR).toContain('style={{ width: recentPanelInlineSize(), "max-width": recentPanelInlineSize() }}')
-    expect(TASK_DIR_BAR).not.toContain('<DropdownMenu.Content class="recent-dir-panel">')
-    expect(TASK_DIR_BAR).not.toMatch(/<DropdownMenu\.Item[\s\S]*class="recent-dir-item"/)
-    expect(TASK_DIR_BAR).not.toContain("onSelect={() => void chooseRecentDirectory")
-  })
-
-  test("recent directory trigger is separate from native breadcrumb path buttons", () => {
-    expect(TASK_DIR_BAR).toMatch(
-      /<div[\s\S]*ref=\{\(element\) => \{[\s\S]*cwdShellRef = element[\s\S]*class="task-dir-shell task-cwd-dropdown"/,
-    )
-    expect(TASK_DIR_BAR).toContain('class="task-dir-menu-actions"')
-    expect(TASK_DIR_BAR).toMatch(/<Popover\.Trigger[\s\S]*as=\{Button\}[\s\S]*data-ui="cwd-recent-trigger"/)
-    expect(TASK_DIR_BAR).toContain('data-chrome="icon-action"')
-    expect(TASK_DIR_BAR).toContain('data-ui="cwd-recent-trigger"')
-    expect(TASK_DIR_BAR).toContain('aria-haspopup="dialog"')
-    expect(TASK_DIR_BAR).not.toContain("data-open={open()")
-    expect(TASK_DIR_BAR).not.toContain("aria-expanded={open()}")
-    expect(TASK_DIR_BAR).not.toContain('aria-controls={open() ? "cwd-recent-panel" : undefined}')
-    expect(TASK_DIR_BAR).not.toContain("onClick={() => setRecentPanelOpen(!open())}")
-    expect(TASK_DIR_BAR).toContain('<Icon name="caret-down" size={12} class="task-cwd-caret" />')
-    expect(TASK_DIR_BAR).not.toContain('class="task-dir-recent-trigger"')
-    expect(TASK_DIR_BAR).not.toContain(">▾<")
-    expect(TASK_DIR_BAR).toContain("let cwdShellRef: HTMLElement | undefined")
-    expect(TASK_DIR_BAR).toContain("anchorRef={() => cwdShellRef}")
-    expect(TASK_DIR_BAR).not.toContain("setCwdShellRef")
-    expect(TASK_DIR_BAR).not.toContain('as="div"')
-    expect(TASK_DIR_BAR).not.toMatch(/<Button[\s\S]*innerHTML=\{breadcrumbHtml\(\)\}[\s\S]*<\/Button>/)
-    expect(STYLES).toContain('.task-cwd-dropdown:has(.oc-button[data-ui="cwd-recent-trigger"][data-expanded])')
-    expect(STYLES).toContain('.task-dir-menu-actions .oc-button[data-ui="cwd-recent-trigger"][data-expanded]')
-    expect(STYLES).not.toContain('.task-cwd-dropdown[data-open="true"]')
-    expect(STYLES).not.toContain('.oc-button[data-ui="cwd-recent-trigger"][data-open="true"]')
-  })
-
-  test("breadcrumb path action buttons expose tokenized focus-visible chrome", () => {
-    const toolFocusChrome = selectorRuleBody(".task-dir-tool:focus-visible")
-    expect(toolFocusChrome).toMatch(/background:\s*var\(--subtle-3\)/)
-    expect(toolFocusChrome).toMatch(/color:\s*var\(--text-strong\)/)
-    const toolFocusOutline = soloRuleBody(".task-dir-tool:focus-visible")
-    expect(toolFocusOutline).toMatch(/outline:\s*var\(--oc-border-width\) solid var\(--accent\)/)
-    expect(toolFocusOutline).toMatch(/outline-offset:\s*calc\(1px \* var\(--ui-scale\)\)/)
-
-    const dangerToolFocusChrome = selectorRuleBody(".task-dir-tool.danger:focus-visible")
-    expect(dangerToolFocusChrome).toMatch(/background:\s*color-mix\(in srgb,\s*var\(--bad\) 12%,\s*transparent\)/)
-    expect(dangerToolFocusChrome).toMatch(/color:\s*var\(--bad\)/)
-    expect(soloRuleBody(".task-dir-tool.danger:focus-visible")).toMatch(/outline-color:\s*var\(--bad\)/)
-
-    const nodeFocusChrome = selectorRuleBody(".task-dir-node:focus-visible")
-    expect(nodeFocusChrome).toMatch(/background:\s*var\(--subtle-3\)/)
-    const nodeFocusOutline = soloRuleBody(".task-dir-node:focus-visible")
-    expect(nodeFocusOutline).toMatch(/outline:\s*var\(--oc-border-width\) solid var\(--accent\)/)
-    expect(nodeFocusOutline).toMatch(/outline-offset:\s*calc\(1px \* var\(--ui-scale\)\)/)
-
-    const stepFocusChrome = selectorRuleBody(".task-dir-step:focus-visible")
-    expect(stepFocusChrome).toMatch(/background:\s*var\(--accent-dim\)/)
-    expect(stepFocusChrome).toMatch(/color:\s*var\(--accent\)/)
-    const stepFocusOutline = soloRuleBody(".task-dir-step:focus-visible")
-    expect(stepFocusOutline).toMatch(/outline:\s*var\(--oc-border-width\) solid var\(--accent\)/)
-    expect(stepFocusOutline).toMatch(/outline-offset:\s*calc\(1px \* var\(--ui-scale\)\)/)
-  })
-
-  test("cwd popup owns editable path entry and discovered OpenCorvus projects", () => {
-    expect(TASK_DIR_BAR).toContain("loadWorkspaceOnboardingDiscovery")
-    expect(TASK_DIR_BAR).toContain('class="recent-dir-edit-form"')
-    expect(TASK_DIR_BAR).toMatch(/<input[\s\S]*class="field-input"[\s\S]*data-ui="cwd-path-input"/)
-    expect(TASK_DIR_BAR.match(/class="recent-dir-item"/g)?.length).toBe(2)
-    expect(TASK_DIR_BAR.match(/data-ui="recent-dir-item"/g)?.length).toBe(2)
-    expect(TASK_DIR_BAR).toMatch(/<Button[\s\S]*class="recent-dir-item"[\s\S]*data-ui="recent-dir-item"/)
-    expect(TASK_DIR_BAR).not.toMatch(/<button[\s\S]*class="recent-dir-item"/)
-    expect(TASK_DIR_BAR).toMatch(/<Button[\s\S]*data-ui="recent-dir-edit-submit"/)
-    expect(TASK_DIR_BAR).toMatch(/<Button[\s\S]*data-ui="recent-dir-remove"/)
-    expect(TASK_DIR_BAR).toContain('data-chrome="icon-action"')
-    expect(TASK_DIR_BAR).toContain('aria-label={t("common.save")}')
-    expect(TASK_DIR_BAR).toContain('aria-label={t("common.delete")}')
-    expect(TASK_DIR_BAR).not.toContain('class="recent-dir-edit-submit"')
-    expect(TASK_DIR_BAR).not.toContain('class="recent-dir-remove"')
-    expect(TASK_DIR_BAR).toContain("setPathDraft(event.currentTarget.value)")
-    expect(TASK_DIR_BAR).toContain('t("cwd.path_label")')
-    expect(TASK_DIR_BAR).toContain('t("cwd.detected_projects")')
-    expect(TASK_DIR_BAR).toContain('class="recent-dir-section" data-kind="discovered"')
-    expect(TASK_DIR_BAR).toContain('class="recent-dir-list" data-kind="discovered" role="list"')
-    expect(TASK_DIR_BAR).toContain("setDirectory(next)")
-    expect(TASK_DIR_BAR).toContain("chooseRecentDirectory(project.directory)")
-    expect(STYLES).not.toContain(".recent-dir-edit-label input")
-    expect(STYLES).not.toContain(".recent-dir-edit-label input:focus")
-    const panelShell = soloRuleBody(".recent-dir-panel-shell")
-    expect(panelShell).toMatch(/max-height:\s*inherit/)
-    expect(panelShell).toMatch(/min-height:\s*0/)
-    expect(panelShell).toMatch(/overflow:\s*hidden/)
-    const discoveredSection = soloRuleBody('.recent-dir-section[data-kind="discovered"]')
-    expect(discoveredSection).toMatch(/flex:\s*1\s+1\s+auto/)
-    expect(discoveredSection).toMatch(/overflow:\s*hidden/)
-    const list = soloRuleBody(".recent-dir-list")
-    expect(list).toMatch(/flex:\s*0\s+1\s+auto/)
-    expect(list).toMatch(/min-height:\s*0/)
-    expect(list).toMatch(/overflow-y:\s*auto/)
-    const discoveredList = soloRuleBody('.recent-dir-list[data-kind="discovered"]')
-    expect(discoveredList).toMatch(/scrollbar-width:\s*auto/)
-    expect(discoveredList).toMatch(/scrollbar-color:\s*var\(--scrollbar-thumb\)\s+var\(--session-scrollbar-track\)/)
-    const pathInput = soloRuleBody(".recent-dir-edit-label .field-input")
-    expect(pathInput).toMatch(/height:\s*calc\(30px \* var\(--ui-scale\)\)/)
-    expect(pathInput).toMatch(/padding:\s*0 calc\(8px \* var\(--ui-scale\)\)/)
-    expect(pathInput).not.toMatch(/\bborder(?:-color)?:/)
-    expect(pathInput).not.toMatch(/\bbackground:/)
-    expect(pathInput).not.toMatch(/\bcolor:/)
-    expect(pathInput).not.toMatch(/\boutline:/)
-    const submit = soloRuleBody('.recent-dir-edit-form .oc-button[data-ui="recent-dir-edit-submit"]')
-    expect(submit).toMatch(/--oc-button-height:\s*calc\(30px \* var\(--ui-scale\)\)/)
-    expect(submit).toMatch(/min-width:\s*calc\(30px \* var\(--ui-scale\)\)/)
-    const rowMain = soloRuleBody('.recent-dir-row > .oc-button[data-ui="recent-dir-item"].recent-dir-item')
-    expect(rowMain).toMatch(/--oc-button-height:\s*auto/)
-    expect(rowMain).toMatch(/--oc-button-padding-y:\s*calc\(8px \* var\(--ui-scale\)\)/)
-    expect(rowMain).toMatch(/--oc-button-color:\s*var\(--text-soft\)/)
-    expect(STYLES).toMatch(
-      /\.recent-dir-edit-form\s+\.oc-button\[data-size="icon"\]\[data-variant="ghost"\]\[data-chrome="icon-action"\]\[data-ui="recent-dir-edit-submit"\]:disabled\s*\{[^}]*opacity:\s*var\(--ui-opacity-full\)/,
-    )
-    const remove = soloRuleBody('.recent-dir-row .oc-button[data-ui="recent-dir-remove"]')
-    expect(remove).toMatch(/--oc-button-height:\s*calc\(22px \* var\(--ui-scale\)\)/)
-    expect(remove).toMatch(/opacity:\s*var\(--ui-opacity-hidden\)/)
-    expect(remove).toMatch(/pointer-events:\s*none/)
-    const itemFocus = soloRuleBody(".recent-dir-item:focus-visible")
-    expect(itemFocus).toMatch(/outline:\s*var\(--oc-border-width\) solid var\(--accent\)/)
-    expect(itemFocus).toMatch(/outline-offset:\s*calc\(1px \* var\(--ui-scale\)\)/)
-    const focusRow = selectorRuleBody(".recent-dir-row:focus-within")
-    expect(focusRow).toMatch(/border-color:\s*color-mix\(in srgb,\s*var\(--accent\) 22%,\s*var\(--border\)\)/)
-    const focusSlot = selectorRuleBody('.recent-dir-row:has(.oc-button[data-ui="recent-dir-remove"]):focus-within')
-    expect(focusSlot).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)\s+var\(--recent-dir-remove-slot-width\)/)
-    const focusItem = selectorRuleBody(".recent-dir-row:focus-within .recent-dir-item")
-    expect(focusItem).toMatch(/--oc-button-color:\s*var\(--text-strong\)/)
-    const focusRemove = selectorRuleBody('.recent-dir-row:focus-within .oc-button[data-ui="recent-dir-remove"]')
-    expect(focusRemove).toMatch(/opacity:\s*var\(--ui-opacity-full\)/)
-    expect(focusRemove).toMatch(/pointer-events:\s*auto/)
-    expect(STYLES).not.toContain("recent-dir-item[data-highlighted]")
-    expect(STYLES).not.toContain(".recent-dir-edit-submit")
-    expect(STYLES).not.toContain(".recent-dir-remove {")
-  })
-
-  test("cwd popup surfaces project discovery failures as a visible state", () => {
-    const syncStart = TASK_DIR_BAR.indexOf("async function syncDiscoveredProjects")
-    const syncEnd = TASK_DIR_BAR.indexOf("function syncPanelData")
-    const syncSource = TASK_DIR_BAR.slice(syncStart, syncEnd)
-
-    expect(syncSource).toContain("loadWorkspaceOnboardingDiscovery")
-    expect(syncSource).toContain('discovery.status === "ready"')
-    expect(syncSource).toContain("setDiscoveryError(discovery.message)")
-    expect(syncSource).not.toContain("catch")
-    expect(TASK_DIR_BAR).toContain('data-testid="cwd-discovery-error"')
-    expect(TASK_DIR_BAR).toContain('class="recent-dir-discovery-error"')
-    expect(TASK_DIR_BAR).toContain('role="status"')
-    const error = soloRuleBody(".recent-dir-discovery-error")
-    expect(error).toMatch(/grid-template-columns:\s*auto minmax\(0,\s*1fr\)/)
-    expect(error).toMatch(/var\(--bad\)/)
-    expect(soloRuleBody(".recent-dir-discovery-error span")).toMatch(/overflow-wrap:\s*anywhere/)
-  })
-
-  test("cwd popup mirrors current location state onto focusable row buttons", () => {
-    expect(TASK_DIR_BAR.match(/aria-current=\{isActive\(\) \? "location" : undefined\}/g)?.length).toBe(2)
-    expect(TASK_DIR_BAR).toContain(
-      '<div class="recent-dir-row" data-active={isActive() ? "true" : "false"} role="listitem">',
-    )
-    expect(TASK_DIR_BAR).toMatch(
-      /<Button[\s\S]*data-ui="recent-dir-item"[\s\S]*aria-current=\{isActive\(\) \? "location" : undefined\}/,
-    )
-    expect(TASK_DIR_BAR).not.toContain("aria-selected={isActive()")
-    expect(TASK_DIR_BAR).not.toContain("aria-pressed={isActive()")
-  })
-
-  test("path breadcrumb markup does not nest a second task-dir shell", () => {
-    expect(DOM_UTILS).not.toMatch(/<span class="task-dir-shell"/)
-    expect(DOM_UTILS).toMatch(/<span class="task-dir-path">/)
-  })
-
-  test("path breadcrumb mirrors current location onto the current node", () => {
-    expect(DOM_UTILS).toContain('data-current="true" aria-current="location"')
-    expect(DOM_UTILS).not.toContain('aria-selected="')
-    expect(DOM_UTILS).not.toContain('aria-pressed="')
+    expect(TASK_DIR_BAR).toContain("canInitGit()")
+    expect(TASK_DIR_BAR).toContain("const vcs = createMemo(projectVcsInfo)")
+    expect(TASK_DIR_BAR).toContain("boardStore.vcs as ProjectVcsInfo | null")
+    expect(TASK_DIR_BAR).not.toContain('data-toolbar-compact={props.compact ? "true" : undefined}')
+    expect(TASK_DIR_BAR).not.toContain('data-ui="project-vcs-badge"')
+    expect(TASK_DIR_BAR).not.toContain('class={props.compact ? "vcs-badge vcs-badge-compact" : "vcs-badge"}')
   })
 })

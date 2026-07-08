@@ -1,6 +1,9 @@
 import { spawn as launch, type ChildProcess } from "child_process"
 import { buffer } from "node:stream/consumers"
 import { normalizeExecutableArgv } from "./command"
+import { ProcessSupervisor } from "@/shell/process-supervisor"
+
+const PROCESS_CLOSE_TIMEOUT_MS = 5_000
 
 export namespace Process {
   export type Stdio = "inherit" | "pipe" | "ignore"
@@ -12,8 +15,6 @@ export namespace Process {
     stdout?: Stdio
     stderr?: Stdio
     abort?: AbortSignal
-    kill?: NodeJS.Signals | number
-    timeout?: number
   }
 
   export interface RunOptions extends Omit<Options, "stdout" | "stderr"> {
@@ -47,7 +48,10 @@ export namespace Process {
     }
   }
 
-  export type Child = ChildProcess & { exited: Promise<number> }
+  export type Child = ChildProcess & {
+    exited: Promise<number>
+    terminate(): Promise<void>
+  }
 
   export function spawn(cmd: string[], opts: Options = {}): Child {
     if (cmd.length === 0) throw new Error("Command is required")
@@ -58,30 +62,57 @@ export namespace Process {
       cwd: opts.cwd,
       env: opts.env === null ? {} : opts.env ? { ...process.env, ...opts.env } : undefined,
       stdio: [opts.stdin ?? "ignore", opts.stdout ?? "ignore", opts.stderr ?? "ignore"],
+      detached: process.platform !== "win32",
     })
 
+    let termination: Promise<void> | undefined
+    let rejectExited: ((error: Error) => void) | undefined
     let closed = false
-    let timer: ReturnType<typeof setTimeout> | undefined
+    let exited: Promise<number>
 
-    const abort = () => {
-      if (closed) return
-      if (proc.exitCode !== null || proc.signalCode !== null) return
-      closed = true
-
-      proc.kill(opts.kill ?? "SIGTERM")
-
-      const ms = opts.timeout ?? 5_000
-      if (ms <= 0) return
-      timer = setTimeout(() => proc.kill("SIGKILL"), ms)
+    const terminate = () => {
+      if (termination) return termination
+      if (!proc.pid) throw new Error(`Process tree termination requires a process id: ${command.join(" ")}`)
+      const cleanup =
+        process.platform === "win32"
+          ? ProcessSupervisor.terminateProcessTree(proc.pid, `process tree ${command.join(" ")}`)
+          : ProcessSupervisor.terminateProcessGroup(proc.pid, `process group ${command.join(" ")}`)
+      termination = cleanup
+        .then(() =>
+          ProcessSupervisor.awaitWithTimeout(
+            exited,
+            PROCESS_CLOSE_TIMEOUT_MS,
+            `Process did not close after tree cleanup: ${command.join(" ")}`,
+          ),
+        )
+        .then(() => undefined)
+        .catch((error) => {
+          const failure = error instanceof Error ? error : new Error(String(error))
+          if (!closed) rejectExited?.(failure)
+          throw failure
+        })
+      return termination
     }
 
-    const exited = new Promise<number>((resolve, reject) => {
+    const abort = () => {
+      try {
+        void terminate().catch(() => undefined)
+      } catch {
+        // The owning caller observes termination failures through explicit terminate() calls.
+      }
+    }
+
+    exited = new Promise<number>((resolve, reject) => {
+      rejectExited = (error) => {
+        done()
+        reject(error)
+      }
       const done = () => {
         opts.abort?.removeEventListener("abort", abort)
-        if (timer) clearTimeout(timer)
       }
 
-      proc.once("exit", (code, signal) => {
+      proc.once("close", (code, signal) => {
+        closed = true
         done()
         resolve(code ?? (signal ? 1 : 0))
       })
@@ -99,25 +130,62 @@ export namespace Process {
 
     const child = proc as Child
     child.exited = exited
+    child.terminate = terminate
     return child
   }
 
   export async function run(cmd: string[], opts: RunOptions = {}): Promise<Result> {
     const command = normalizeExecutableArgv(cmd)
-    const proc = spawn(cmd, {
+    const handle = await ProcessSupervisor.spawnCommand({
+      executable: command[0]!,
+      args: command.slice(1),
       cwd: opts.cwd,
-      env: opts.env,
-      stdin: opts.stdin,
-      abort: opts.abort,
-      kill: opts.kill,
-      timeout: opts.timeout,
-      stdout: "pipe",
-      stderr: "pipe",
+      env: opts.env === null ? {} : opts.env ? { ...process.env, ...opts.env } : undefined,
+      stdin: opts.stdin === "pipe" ? "pipe" : "ignore",
     })
 
-    if (!proc.stdout || !proc.stderr) throw new Error("Process output not available")
+    if (!handle.stdout || !handle.stderr) throw new Error("Process output not available")
 
-    const [code, stdout, stderr] = await Promise.all([proc.exited, buffer(proc.stdout), buffer(proc.stderr)])
+    let terminationPromise: Promise<number> | undefined
+    let resolveTerminationRequested: ((promise: Promise<number>) => void) | undefined
+    const terminationRequested = new Promise<Promise<number>>((resolve) => {
+      resolveTerminationRequested = resolve
+    })
+    const requestTermination = () => {
+      if (!terminationPromise) {
+        terminationPromise = ProcessSupervisor.terminateAndWaitForExit(handle, `Process.run ${command.join(" ")}`)
+        terminationPromise.catch(() => undefined)
+        resolveTerminationRequested?.(terminationPromise)
+      }
+      return terminationPromise
+    }
+    const abort = () => {
+      requestTermination()
+    }
+
+    if (opts.abort) {
+      opts.abort.addEventListener("abort", abort, { once: true })
+      if (opts.abort.aborted) abort()
+    }
+
+    let code: number
+    let stdout: Buffer
+    let stderr: Buffer
+    const stdoutBuffered = buffer(handle.stdout)
+    const stderrBuffered = buffer(handle.stderr)
+    const processCompleted = Promise.all([handle.exited, stdoutBuffered, stderrBuffered])
+    const terminationCompleted = terminationRequested.then(async (cleanup) => {
+      const terminatedCode = await cleanup
+      const [terminatedStdout, terminatedStderr] = await Promise.all([stdoutBuffered, stderrBuffered])
+      return [terminatedCode, terminatedStdout, terminatedStderr] as const
+    })
+    try {
+      ;[code, stdout, stderr] = await Promise.race([processCompleted, terminationCompleted])
+      if (terminationPromise) code = await terminationPromise
+    } finally {
+      opts.abort?.removeEventListener("abort", abort)
+      await ProcessSupervisor.disposeAndWaitForExit(handle, "Process.run")
+    }
     const out = {
       code,
       stdout,

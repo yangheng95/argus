@@ -60,12 +60,14 @@ describe("expert squad settings surface", () => {
     expect(expertSquadPanel).toContain("exportExpertSquadArchive")
     expect(expertSquadPanel).toContain("setProjectExpertSquadActive")
     expect(expertSquadPanel).toContain("setSessionExpertSquadActive")
-    expect(expertSquadPanel).toContain("catalog()?.active.session_override")
+    expect(expertSquadPanel).toContain("scopedCatalog()?.active.session_override")
     expect(expertSquadPanel).toContain("squad.display_label")
     expect(expertSquadPanel).toContain("squad.readme.content")
     expect(expertSquadPanel).toContain("squad.selector")
     expect(expertSquadPanel).toContain("selector_instructions_title")
     expect(expertSquadPanel).toContain("squad.capability_projection.scheduler")
+    expect(expertSquadPanel).toContain("squad.capability_projection.agents")
+    expect(expertSquadPanel).toContain('data-ui="expert-squad-agent-capability-projection"')
     expect(chatComposer).toContain("option.display_label")
   })
 
@@ -108,6 +110,7 @@ describe("expert squad settings surface", () => {
       "expert_squad.cleared_session_override",
       "expert_squad.inherits_project",
       "expert_squad.readme_title",
+      "expert_squad.agent_capability_projection",
       "expert_squad.selector_title",
       "expert_squad.selector_instructions_title",
       "expert_squad.capability_projection",

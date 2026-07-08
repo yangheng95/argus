@@ -1,8 +1,11 @@
-import { and, Database, eq, isNull } from "@/storage/db"
+import { Database, eq } from "@/storage/db"
 import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
 import { progressStatus } from "./helpers"
-import { EngineArtifactTable, EngineProgressSnapshotTable, EngineTaskTable } from "./engine.sql"
+import { EngineArtifactTable, EngineTaskTable } from "./engine.sql"
+import { insertEngineArtifact } from "./artifact"
+import { insertEngineProgressSnapshot } from "./progress"
+import { touchEngineTask, updateEngineTaskState } from "./task"
 import { findActiveRunForTask, findRun, requireRun, requireTask, type RunRow, type TaskRow } from "./store"
 import { deriveTaskStatus } from "./task-status"
 import { doesRunStatusImplyStarted, isLiveRunStatus, isTerminalRunStatus } from "./catalog"
@@ -173,19 +176,12 @@ async function applyTaskUpdate(
   let updated: TaskRow | undefined
   let existingTerminal: TaskRow | undefined
   Database.transaction((db) => {
-    updated = db
-      .update(EngineTaskTable)
-      .set({
-        ...resolved,
-        time_updated: now,
-      })
-      .where(
-        terminalIntent
-          ? and(eq(EngineTaskTable.id, row.id), isNull(EngineTaskTable.time_completed))
-          : eq(EngineTaskTable.id, row.id),
-      )
-      .returning()
-      .get()
+    updated = updateEngineTaskState(db, {
+      taskID: row.id,
+      values: resolved,
+      timeUpdated: now,
+      onlyWhenIncomplete: terminalIntent,
+    })
     if (!updated) {
       const current = db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, row.id)).get()
       if (terminalIntent && current?.time_completed != null) {
@@ -195,20 +191,16 @@ async function applyTaskUpdate(
       throw new Error(`task ${row.id} not found during updateTask`)
     }
     const nextStatus = deriveTaskStatus(updated)
-    db.insert(EngineProgressSnapshotTable)
-      .values({
-        id: Identifier.ascending("progress"),
-        task_id: row.id,
-        status: progressStatus(nextStatus),
-        summary,
-        payload: {
-          status: nextStatus,
-          error: nextError,
-        },
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
+    insertEngineProgressSnapshot(db, {
+      taskID: row.id,
+      status: progressStatus(nextStatus),
+      summary,
+      payload: {
+        status: nextStatus,
+        error: nextError,
+      },
+      timeCreated: now,
+    })
     const prevStatus = deriveTaskStatus(row)
     Database.effect(async () => {
       await EngineProtocol.emit(
@@ -367,22 +359,19 @@ export async function updateRun(row: RunRow, values: Partial<RunRow>, summary: s
     time_completed: isTerminalRunStatus(nextStatus) && values.time_completed === undefined ? now : nextCompleted,
   }
   Database.transaction((db) => {
-    db.insert(EngineArtifactTable)
-      .values({
-        id: Identifier.ascending("run"),
-        task_id: row.task_id,
-        run_id: row.id,
-        kind: "run",
-        label: `run-${nextStatus}`,
-        payload: mergedPayload,
-        time_created: effectiveNow,
-        time_updated: effectiveNow,
-      })
-      .run()
+    insertEngineArtifact(db, {
+      id: Identifier.ascending("run"),
+      taskID: row.task_id,
+      runID: row.id,
+      kind: "run",
+      label: `run-${nextStatus}`,
+      payload: mergedPayload,
+      timeCreated: effectiveNow,
+    })
     // Phase-6-f-3: task.active_run_id deleted — derive via
     // findActiveRunForTask(taskID) from the run artifact stream. Keep the
     // time_updated bump so task listings refresh on run writes.
-    db.update(EngineTaskTable).set({ time_updated: effectiveNow }).where(eq(EngineTaskTable.id, row.task_id)).run()
+    touchEngineTask(db, { taskID: row.task_id, timeUpdated: effectiveNow })
     Database.effect(() =>
       EngineProtocol.emit(
         Event.RunUpdated,

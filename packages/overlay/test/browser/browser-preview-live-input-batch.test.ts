@@ -123,9 +123,15 @@ async function nativeCommands(page: OverlayPage): Promise<NativeCommandRecord[]>
 const expertSquadCatalog = expertSquadCatalogFixture({
   active: "default",
   projectActive: "default",
-  defaultProfile: "general",
+  defaultSquad: "general",
   targets: [{ id: "build", label: "Build", description: "Build agent prompt.", editable: true, built_in_only: false }],
-  profiles: [
+  squads: [
+    {
+      id: "general",
+      label: "General",
+      description: "General implementation profile.",
+      built_in: true,
+    },
     {
       id: "default",
       label: "Default",
@@ -148,6 +154,10 @@ test("browser preview native surface owns browser navigation without PNG live ro
   const errors: string[] = []
   const unexpectedRequests: string[] = []
   const captureBodies: unknown[] = []
+  let releaseNativeCapture: (() => void) | undefined
+  const nativeCaptureGate = new Promise<void>((resolve) => {
+    releaseNativeCapture = resolve
+  })
   let serverOrigin = ""
   const previewUrl = () => `${serverOrigin}/preview/native-surface`
   const viewports = [
@@ -278,7 +288,28 @@ test("browser preview native surface owns browser navigation without PNG live ro
       })
     if (path === `/task/${taskID}/browser-preview/capture` && req.method === "POST") {
       captureBodies.push(await req.json())
-      return json({ message: "native surface test must not auto-capture evidence" }, { status: 500 })
+      await nativeCaptureGate
+      return json({
+        status: "failed",
+        projectRoot,
+        target: {
+          id: targetID,
+          taskID,
+          latestEvidenceIDs: {},
+          kind: "task-url",
+          status: "ready",
+          projectRoot,
+          url: previewUrl(),
+          viewports,
+          diagnostics: ["Resolved native browser preview target."],
+          candidates: [],
+          source: "task-artifact",
+        },
+        viewports,
+        captures: {},
+        evidenceIDs: {},
+        diagnostics: ["native capture failed after loading assertion"],
+      })
     }
     if (path.includes("/browser-preview/live/")) {
       unexpectedRequests.push(`${req.method} ${path}`)
@@ -323,6 +354,12 @@ test("browser preview native surface owns browser navigation without PNG live ro
             if (command === "overlay_open_url") return true
             if (command.startsWith("overlay_browser_preview_")) {
               nativeCommands.push({ command, args })
+              if (
+                (window as any).__browserPreviewFailNativeNavigate &&
+                command === "overlay_browser_preview_navigate"
+              ) {
+                throw new Error("native navigation unavailable")
+              }
               return true
             }
             return null
@@ -445,13 +482,74 @@ test("browser preview native surface owns browser navigation without PNG live ro
     const screenshot = await panel.screenshot()
     writeFileSync(SCREENSHOT_PATH, screenshot)
     const metadata = await sharp(screenshot).metadata()
-    const stats = await sharp(screenshot).stats()
     assert.ok((metadata.width || 0) >= 360, `panel screenshot width should be meaningful: ${metadata.width}`)
     assert.ok((metadata.height || 0) >= 520, `panel screenshot height should show the tall native surface: ${metadata.height}`)
-    const colorRange = stats.channels.slice(0, 3).reduce((total, channel) => total + channel.max - channel.min, 0)
-    assert.ok(colorRange > 80, `native preview screenshot should be nonblank, color range ${colorRange}`)
+    const surfaceScreenshot = await page.screenshot({
+      clip: {
+        x: nativeLayout.surface.x,
+        y: nativeLayout.surface.y,
+        width: nativeLayout.surface.width,
+        height: nativeLayout.surface.height,
+      },
+    })
+    writeFileSync(
+      fileURLToPath(new URL("../../.scratch/browser-preview-native-surface-crop.png", import.meta.url)),
+      surfaceScreenshot,
+    )
+    const surfaceMetadata = await sharp(surfaceScreenshot).metadata()
+    assert.ok(
+      Math.abs((surfaceMetadata.width || 0) - nativeLayout.surface.width) <= 2,
+      `native surface crop width should match sync bounds: ${JSON.stringify({ surfaceMetadata, nativeLayout })}`,
+    )
+    assert.ok(
+      Math.abs((surfaceMetadata.height || 0) - nativeLayout.surface.height) <= 2,
+      `native surface crop height should match sync bounds: ${JSON.stringify({ surfaceMetadata, nativeLayout })}`,
+    )
 
     assert.equal(captureBodies.length, 0, "opening native live preview must not auto-capture evidence")
+
+    await page.evaluate(() => {
+      ;(window as any).__browserPreviewFailNativeNavigate = true
+    })
+    await page.click('[aria-label="Reload the current preview page."]')
+    await waitForPageState(
+      page,
+      () =>
+        document
+          .querySelector<HTMLElement>('[data-ui="browser-preview-native-error"]')
+          ?.textContent?.includes("native navigation unavailable") === true,
+      "native preview navigation error",
+      () => ({ errors, requestLog, nativeCommands: [] }),
+    )
+    await page.click(".browser-preview-capture-button")
+    await waitForPageState(
+      page,
+      () => {
+        const stage = document.querySelector<HTMLElement>(".browser-preview-stage")
+        const loading = stage?.querySelector<HTMLElement>('[data-ui="browser-preview-capture-loading"]')
+        const nativeError = stage?.querySelector<HTMLElement>('[data-ui="browser-preview-native-error"]')
+        return loading?.dataset.status === "loading" && !nativeError
+      },
+      "capture loading replaces stale native preview error",
+      () => ({ errors, requestLog, nativeCommands: [] }),
+    )
+    const nativeErrorCapturePanel = await page.$(".browser-preview-panel")
+    assert.ok(nativeErrorCapturePanel)
+    writeFileSync(
+      fileURLToPath(new URL("../../.scratch/browser-preview-native-error-capture-loading.png", import.meta.url)),
+      await nativeErrorCapturePanel.screenshot(),
+    )
+    releaseNativeCapture?.()
+    await waitForPageState(
+      page,
+      () =>
+        document
+          .querySelector<HTMLElement>('[data-ui="browser-preview-evidence"]')
+          ?.textContent?.includes("native capture failed after loading assertion") === true,
+      "native capture failure settles after loading assertion",
+      () => ({ errors, requestLog, nativeCommands: [] }),
+    )
+    assert.deepEqual(captureBodies, [{ targetID, viewportIDs: ["desktop", "tablet", "mobile"] }])
     assert.deepEqual(
       requestLog.filter((entry) => entry.includes("/browser-preview/live/")),
       [],
@@ -460,6 +558,7 @@ test("browser preview native surface owns browser navigation without PNG live ro
     assert.deepEqual(unexpectedRequests, [])
     assert.equal(errors.length, 0, errors.join("\n"))
   } finally {
+    releaseNativeCapture?.()
     await browser.close().catch(() => undefined)
     await server.close()
   }

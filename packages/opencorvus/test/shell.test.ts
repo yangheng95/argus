@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test"
-import { spawnSync } from "child_process"
 import fs from "fs/promises"
 import os from "os"
 import path from "path"
@@ -25,12 +24,9 @@ async function waitForProcessExit(pid: number, timeoutMs = 5000) {
   return !isProcessRunning(pid)
 }
 
-function killProcessTreeForTest(pid: number | undefined) {
+function killProcessForTest(pid: number | undefined) {
   if (!pid || !isProcessRunning(pid)) return
-  spawnSync("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
-    stdio: "ignore",
-    windowsHide: true,
-  })
+  process.kill(pid, "SIGKILL")
 }
 
 describe("shell selection", () => {
@@ -147,6 +143,60 @@ describe("shell process supervisor contract", () => {
       expect(result.timedOut).toBe(true)
       expect(terminateCalls).toBe(1)
       expect(disposeCalls).toBe(1)
+    } finally {
+      clearInterval(keepAlive)
+      restore()
+    }
+  })
+
+  test("run timeout fails when supervised cleanup completes without process exit", async () => {
+    let terminateCalls = 0
+    let disposeCalls = 0
+    const keepAlive = setInterval(() => {}, 10)
+    const restore = ProcessSupervisor.setFactoryForTest(async () => ({
+      pid: 129,
+      stdin: null,
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+      exited: new Promise<number>(() => {}),
+      terminate: async () => {
+        terminateCalls++
+        clearInterval(keepAlive)
+      },
+      dispose: async () => {
+        disposeCalls++
+      },
+      unref: () => {},
+    }))
+    try {
+      await expect(Shell.run("stubborn", { timeoutMs: 1 })).rejects.toThrow(
+        "cleanup completed but process did not exit",
+      )
+      expect(terminateCalls).toBe(1)
+      expect(disposeCalls).toBe(1)
+    } finally {
+      clearInterval(keepAlive)
+      restore()
+    }
+  })
+
+  test("run timeout reports supervised cleanup failures", async () => {
+    const keepAlive = setInterval(() => {}, 10)
+    const restore = ProcessSupervisor.setFactoryForTest(async () => ({
+      pid: 130,
+      stdin: null,
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+      exited: new Promise<number>(() => {}),
+      terminate: async () => {
+        clearInterval(keepAlive)
+        throw new Error("synthetic terminate failure")
+      },
+      dispose: async () => {},
+      unref: () => {},
+    }))
+    try {
+      await expect(Shell.run("cleanup-fails", { timeoutMs: 1 })).rejects.toThrow("synthetic terminate failure")
     } finally {
       clearInterval(keepAlive)
       restore()
@@ -305,6 +355,43 @@ describe("shell process supervisor contract", () => {
     }
   })
 
+  test("disposes supervised handles under a workspace after the root process exits", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-supervisor-exited-live-"))
+    const workspace = path.join(root, "worktree")
+    await fs.mkdir(workspace, { recursive: true })
+
+    let disposed = 0
+    const restore = ProcessSupervisor.setFactoryForTest(async () => ({
+      pid: 13_000,
+      stdin: null,
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+      exited: Promise.resolve(0),
+      terminate: async () => {},
+      dispose: async () => {
+        disposed++
+      },
+      unref: () => {},
+    }))
+
+    let handle: ProcessSupervisor.Handle | undefined
+    try {
+      handle = await ProcessSupervisor.spawnShell({ command: "serve", shell: "sh", cwd: workspace })
+      await handle.exited
+      await Bun.sleep(0)
+
+      const result = await ProcessSupervisor.disposeLiveProcessesUnder(workspace)
+
+      expect(result.disposed).toBe(1)
+      expect(result.pids).toEqual([handle.pid])
+      expect(disposed).toBe(1)
+    } finally {
+      await handle?.dispose().catch(() => {})
+      restore()
+      await fs.rm(root, { recursive: true, force: true })
+    }
+  })
+
   test("shell cleanup no longer invokes taskkill or shell killTree", async () => {
     const shellSource = await Bun.file(new URL("../src/shell/shell.ts", import.meta.url)).text()
     expect(shellSource).not.toContain("taskkill")
@@ -319,14 +406,21 @@ describe("shell process supervisor contract", () => {
     }
   })
 
-  test("windows helper absence does not make shell commands unavailable", async () => {
+  test("windows shell supervisor does not keep a root-only helper-missing path", async () => {
+    const supervisorSource = await Bun.file(new URL("../src/shell/process-supervisor.ts", import.meta.url)).text()
+    const shellSource = await Bun.file(new URL("../src/shell/shell.ts", import.meta.url)).text()
+    expect(supervisorSource).not.toContain("spawnWindowsManagedShell")
+    expect(supervisorSource).not.toContain("return spawnWindowsManagedShell")
+    expect(shellSource).toContain("requireProcessTreeCleanup: true")
+  })
+
+  test("windows helper absence rejects foreground shell commands instead of downgrading cleanup", async () => {
     if (process.platform !== "win32") return
     const restore = ProcessSupervisor.setWindowsHelperResolverForTest(async () => undefined)
     try {
-      const result = await Shell.run("echo supervisor-fallback-ok", { timeoutMs: 10_000 })
-      expect(result.exitCode).toBe(0)
-      expect(result.stdout).toContain("supervisor-fallback-ok")
-      expect(result.stderr).not.toContain("Windows process supervisor helper is unavailable")
+      await expect(Shell.run("echo missing-foreground-helper", { timeoutMs: 10_000 })).rejects.toThrow(
+        "Windows process supervisor helper is required for process-tree cleanup",
+      )
     } finally {
       restore()
     }
@@ -344,56 +438,231 @@ describe("shell process supervisor contract", () => {
     }
   })
 
-  test("windows helper dispose terminates the reported child process tree", async () => {
+  test("windows helper startup failure removes the request directory", async () => {
     if (process.platform !== "win32") return
 
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-supervisor-test-"))
-    const cwd = path.join(root, "cwd")
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-supervisor-startup-failure-"))
     const helperCmd = path.join(root, "helper.cmd")
     const helperJs = path.join(root, "helper.js")
-    const childJs = path.join(root, "child.js")
-    await fs.mkdir(cwd)
-    await fs.writeFile(childJs, "setInterval(() => {}, 1000)\n", "utf8")
+    const requestPathRecord = path.join(root, "request-path.txt")
     await fs.writeFile(
       helperJs,
       [
         'const fs = require("fs")',
-        'const path = require("path")',
-        'const { spawn } = require("child_process")',
         'const requestIndex = process.argv.indexOf("--request")',
         "if (requestIndex < 0) process.exit(2)",
-        'const request = JSON.parse(fs.readFileSync(process.argv[requestIndex + 1], "utf8"))',
-        'const child = spawn(process.execPath, [path.join(__dirname, "child.js")], {',
-        "  cwd: request.cwd,",
-        '  stdio: "ignore",',
-        "  windowsHide: true,",
-        "})",
-        "child.unref()",
-        'fs.writeFileSync(request.pid_file, String(child.pid), "utf8")',
-        "setInterval(() => {}, 1000)",
+        `fs.writeFileSync(${JSON.stringify(requestPathRecord)}, process.argv[requestIndex + 1], "utf8")`,
+        "process.exit(3)",
         "",
       ].join("\n"),
       "utf8",
     )
     await fs.writeFile(helperCmd, `@echo off\r\n"${process.execPath}" "${helperJs}" %*\r\n`, "utf8")
 
-    let childPid: number | undefined
     const restore = ProcessSupervisor.setWindowsHelperResolverForTest(async () => helperCmd)
     try {
-      const handle = await ProcessSupervisor.spawnShell({
-        command: "ignored-by-fake-helper",
-        shell: process.env.COMSPEC ?? "cmd.exe",
-        cwd,
-      })
-      childPid = handle.pid
-      expect(isProcessRunning(childPid)).toBe(true)
-
-      await handle.dispose()
-
-      expect(await waitForProcessExit(childPid)).toBe(true)
+      await expect(
+        ProcessSupervisor.spawnShell({
+          command: "helper-exits-before-pid",
+          shell: process.env.COMSPEC ?? "cmd.exe",
+          cwd: root,
+        }),
+      ).rejects.toThrow("Windows process supervisor exited before starting command")
+      const requestPath = await fs.readFile(requestPathRecord, "utf8")
+      await expect(fs.stat(path.dirname(requestPath))).rejects.toMatchObject({ code: "ENOENT" })
     } finally {
       restore()
-      killProcessTreeForTest(childPid)
+      await fs.rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("windows supervised request cleanup uses helper job ownership instead of reported pid kill-tree", async () => {
+    const supervisorSource = await Bun.file(new URL("../src/shell/process-supervisor.ts", import.meta.url)).text()
+    expect(supervisorSource).toContain("await helperHandle.terminate()")
+    expect(supervisorSource).not.toContain("Windows supervised process tree")
+    expect(supervisorSource).not.toContain("await terminateProcessTree(pid")
+  })
+
+  test("windows helper command mode launches executable args without shell command", async () => {
+    if (process.platform !== "win32") return
+
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-supervisor-command-"))
+    const cwd = path.join(root, "cwd")
+    const helperCmd = path.join(root, "helper.cmd")
+    const helperJs = path.join(root, "helper.js")
+    const childJs = path.join(root, "child.js")
+    const requestRecord = path.join(root, "request.json")
+    await fs.mkdir(cwd)
+    await fs.writeFile(childJs, "process.exit(7)\n", "utf8")
+    await fs.writeFile(
+      helperJs,
+      [
+        'const fs = require("fs")',
+        'const { spawn } = require("child_process")',
+        'if (process.argv[2] === "--kill-tree") process.exit(11)',
+        'const requestIndex = process.argv.indexOf("--request")',
+        "if (requestIndex < 0) process.exit(2)",
+        'const request = JSON.parse(fs.readFileSync(process.argv[requestIndex + 1], "utf8"))',
+        `fs.writeFileSync(${JSON.stringify(requestRecord)}, JSON.stringify(request), "utf8")`,
+        "if (request.kind !== 'command') process.exit(3)",
+        "if (Object.prototype.hasOwnProperty.call(request, 'command')) process.exit(4)",
+        "if (Object.prototype.hasOwnProperty.call(request, 'shell')) process.exit(5)",
+        "const child = spawn(request.executable, request.args, {",
+        "  cwd: request.cwd,",
+        '  stdio: ["ignore", "inherit", "inherit"],',
+        "  windowsHide: true,",
+        "})",
+        'fs.writeFileSync(request.pid_file, String(child.pid), "utf8")',
+        "child.on('exit', (code, signal) => process.exit(code ?? (signal ? 1 : 0)))",
+        "",
+      ].join("\n"),
+      "utf8",
+    )
+    await fs.writeFile(helperCmd, `@echo off\r\n"${process.execPath}" "${helperJs}" %*\r\n`, "utf8")
+
+    const restore = ProcessSupervisor.setWindowsHelperResolverForTest(async () => helperCmd)
+    try {
+      const handle = await ProcessSupervisor.spawnCommand({
+        executable: process.execPath,
+        args: [childJs],
+        cwd,
+      })
+      expect(await handle.exited).toBe(7)
+      await handle.dispose()
+      const request = JSON.parse(await fs.readFile(requestRecord, "utf8")) as {
+        kind: string
+        executable: string
+        args: string[]
+        cwd: string
+      }
+      expect(request.kind).toBe("command")
+      expect(request.executable).toBe(process.execPath)
+      expect(request.args).toEqual([childJs])
+      expect(request.cwd).toBe(cwd)
+    } finally {
+      restore()
+      await fs.rm(root, { recursive: true, force: true })
+    }
+  }, 20_000)
+
+  test("windows helper command mode resolves bare executables before the helper request", async () => {
+    if (process.platform !== "win32") return
+
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-supervisor-command-path-"))
+    const cwd = path.join(root, "cwd")
+    const helperCmd = path.join(root, "helper.cmd")
+    const helperJs = path.join(root, "helper.js")
+    const childJs = path.join(root, "child.js")
+    const requestRecord = path.join(root, "request.json")
+    await fs.mkdir(cwd)
+    await fs.writeFile(childJs, "process.exit(9)\n", "utf8")
+    await fs.writeFile(
+      helperJs,
+      [
+        'const fs = require("fs")',
+        'const { spawn } = require("child_process")',
+        'if (process.argv[2] === "--kill-tree") process.exit(11)',
+        'const requestIndex = process.argv.indexOf("--request")',
+        "if (requestIndex < 0) process.exit(2)",
+        'const request = JSON.parse(fs.readFileSync(process.argv[requestIndex + 1], "utf8"))',
+        `fs.writeFileSync(${JSON.stringify(requestRecord)}, JSON.stringify(request), "utf8")`,
+        "if (request.kind !== 'command') process.exit(3)",
+        "const child = spawn(request.executable, request.args, {",
+        "  cwd: request.cwd,",
+        "  env: request.env,",
+        '  stdio: ["ignore", "inherit", "inherit"],',
+        "  windowsHide: true,",
+        "})",
+        'fs.writeFileSync(request.pid_file, String(child.pid), "utf8")',
+        "child.on('exit', (code, signal) => process.exit(code ?? (signal ? 1 : 0)))",
+        "",
+      ].join("\n"),
+      "utf8",
+    )
+    await fs.writeFile(helperCmd, `@echo off\r\n"${process.execPath}" "${helperJs}" %*\r\n`, "utf8")
+
+    const executableDir = path.dirname(process.execPath)
+    const restore = ProcessSupervisor.setWindowsHelperResolverForTest(async () => helperCmd)
+    try {
+      const handle = await ProcessSupervisor.spawnCommand({
+        executable: path.basename(process.execPath),
+        args: [childJs],
+        cwd,
+        env: {
+          ...process.env,
+          PATH: executableDir,
+          Path: executableDir,
+        },
+      })
+      expect(await handle.exited).toBe(9)
+      await handle.dispose()
+      const request = JSON.parse(await fs.readFile(requestRecord, "utf8")) as {
+        kind: string
+        executable: string
+        args: string[]
+        cwd: string
+      }
+      expect(request.kind).toBe("command")
+      expect(request.executable).toBe(process.execPath)
+      expect(request.args).toEqual([childJs])
+      expect(request.cwd).toBe(cwd)
+    } finally {
+      restore()
+      await fs.rm(root, { recursive: true, force: true })
+    }
+  }, 20_000)
+
+  test("windows helper command mode waits briefly for pid files after fast helper exit", async () => {
+    if (process.platform !== "win32") return
+
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-supervisor-command-pid-race-"))
+    const helperCmd = path.join(root, "helper.cmd")
+    const helperJs = path.join(root, "helper.js")
+    const writerJs = path.join(root, "writer.js")
+    await fs.writeFile(
+      writerJs,
+      [
+        'const fs = require("fs")',
+        "setTimeout(() => {",
+        "  fs.writeFileSync(process.argv[2], String(process.pid), 'utf8')",
+        "}, 100)",
+        "",
+      ].join("\n"),
+      "utf8",
+    )
+    await fs.writeFile(
+      helperJs,
+      [
+        'const { spawn } = require("child_process")',
+        'const fs = require("fs")',
+        'if (process.argv[2] === "--kill-tree") process.exit(0)',
+        'const requestIndex = process.argv.indexOf("--request")',
+        "if (requestIndex < 0) process.exit(2)",
+        'const request = JSON.parse(fs.readFileSync(process.argv[requestIndex + 1], "utf8"))',
+        `const writer = spawn(${JSON.stringify(process.execPath)}, [${JSON.stringify(writerJs)}, request.pid_file], {`,
+        "  detached: true,",
+        "  stdio: 'ignore',",
+        "  windowsHide: true,",
+        "})",
+        "writer.unref()",
+        "process.exit(7)",
+        "",
+      ].join("\n"),
+      "utf8",
+    )
+    await fs.writeFile(helperCmd, `@echo off\r\n"${process.execPath}" "${helperJs}" %*\r\n`, "utf8")
+
+    const restore = ProcessSupervisor.setWindowsHelperResolverForTest(async () => helperCmd)
+    try {
+      const handle = await ProcessSupervisor.spawnCommand({
+        executable: process.execPath,
+        args: ["--version"],
+      })
+      expect(handle.pid).toBeGreaterThan(0)
+      expect(await handle.exited).toBe(7)
+      await handle.dispose()
+    } finally {
+      restore()
       await fs.rm(root, { recursive: true, force: true })
     }
   }, 20_000)

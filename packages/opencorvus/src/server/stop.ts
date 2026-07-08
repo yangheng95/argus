@@ -7,11 +7,16 @@ export async function stopServerWithTimeout(input: {
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
     await Promise.race([
-      Promise.resolve().then(input.stop).catch(input.onStopError),
-      new Promise<void>((resolve) => {
+      Promise.resolve()
+        .then(input.stop)
+        .catch((error) => {
+          input.onStopError(error)
+          throw error
+        }),
+      new Promise<never>((_resolve, reject) => {
         timer = setTimeout(() => {
           input.onTimeout()
-          resolve()
+          reject(new Error(`Server stop timed out after ${input.timeoutMilliseconds}ms`))
         }, input.timeoutMilliseconds)
       }),
     ])

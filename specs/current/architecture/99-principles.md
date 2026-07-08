@@ -27,7 +27,7 @@
 
 - 简单任务：Orchestrator 直接 execute，跳过 requirements + plan
 - 失败处理：Orchestrator 读 evidence 推理，不是 `if bug→re-exec`
-- 动态调整：Orchestrator 随时 `add_goal` / `modify_goal`
+- 动态调整：Orchestrator 随时通过 `manage_task action=add_goal` / `manage_task action=modify_goal`
 
 ### 5. Requirements 必须穷尽提取
 

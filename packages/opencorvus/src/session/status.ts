@@ -56,6 +56,7 @@ export namespace SessionStatus {
       z.object({
         type: z.literal("terminal"),
         reason: z.enum(["completed", "error", "aborted", "artifact_missing"]),
+        summary: z.string().min(1).optional(),
         error: z.string().optional(),
       }),
     ])

@@ -4,7 +4,7 @@ import { join } from "node:path"
 
 const BASE_CSS = readFileSync(join(import.meta.dir, "../src/styles/cascade/base.css"), "utf8")
 
-const LIVE_SCROLLERS = ["#chatScroll", "#taskListPanel", ".mission-ledger-list", ".coding-assistant-ledger-list"]
+const LIVE_SCROLLERS = ["#chatScroll", "#workLedgerPanel"]
 
 function normalize(input: string): string {
   return input.replace(/\s+/g, " ").trim()

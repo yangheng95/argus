@@ -2,7 +2,7 @@
 
 Use this skill when the task is a frontend replica task: webpage clone, reference-screenshot port, reference-page recreation, design-system rewrite that must preserve source structure, or a UI task whose acceptance depends on source URL/screenshot/DOM evidence.
 
-Vocabulary: CSS means Cascading Style Sheets; DOM means Document Object Model; QA means Quality Assurance; UI means User Interface; URL means Uniform Resource Locator.
+Vocabulary: CSS means Cascading Style Sheets; DOM means Document Object Model; MCP means Model Context Protocol; QA means Quality Assurance; UI means User Interface; URL means Uniform Resource Locator.
 
 ## First action
 
@@ -33,6 +33,14 @@ Do not accept source-row prose, screenshot-only commentary, no project diff, sca
 - Do not use implementation work without source URL, screenshot, DOM, or computed-style evidence to invent a new page structure when source evidence exists.
 - After an agent has already produced its task-scope artifact, consume the persisted artifact instead of calling that same agent again for another angle. Exceptions are explicit retry of a failed/incomplete call, Build implementation or repair, Visual QA review or re-review, and Integrity review or re-review after repair.
 - Do not re-run Requirements, Architect, `frontend_research`, or the whole workflow as a convenience loop after their valid artifacts exist. If evidence proves a prior artifact invalid, name the invalid artifact and exact evidence, then perform a scoped retry/correction rather than restarting the workflow.
+
+## Mission task topology
+
+- Single-page replica requests may be one Mission-owned engine task whose Architect decomposes the page into one source-backed component or region per goal.
+- Multi-page, page-family, or subpage replica missions are task-level fan-out work. First create one serial template/source-baseline task that owns shared project scaffold, source evidence package, visual token system, reusable primitives, and implementation contract.
+- Dispatch page or subpage tasks only after the template/source-baseline task is terminal. Each page/subpage request must cite the template artifact paths and define disjoint source surface, file ownership, and acceptance evidence.
+- Page/subpage tasks may run in parallel only when no task depends on a sibling task's output, artifact, decision, implementation, or owned files. Otherwise keep dependent work in Mission frontier/handoff until the prerequisite is terminal.
+- Do not compress a page family into one workflow task and compensate by repeatedly calling `frontend_research`. `subpage_research_tasks`, uncovered anchors, and sibling page packets are Mission frontier items for later page/subpage tasks unless the current task's research artifact itself is proven invalid.
 
 ## Source authority
 
@@ -84,8 +92,8 @@ Do not accept source-row prose, screenshot-only commentary, no project diff, sca
 
 ## Browser preview evidence ownership
 
-- The current workflow implementation owner owns changed-region module binding proof for implemented desktop replica regions: when source/reference evidence and local implementation regions exist, it must call `browser_preview_reference_regions` and inspect the single returned source/local module comparison attachment.
-- Visual QA owns independent final rendered parity review as source-to-target review: it must use Browser MCP screenshot/observe tools for ordinary screenshots and browser operations, call `browser_preview_reference_regions` only for one module source-binding comparison, and call `browser_preview_compare_scroll_slices` only for supporting page-slice `visual_diff` evidence.
+- The current workflow implementation owner owns changed-region rendered proof for implemented desktop replica regions with generic Browser MCP screenshots, observe output, console/network diagnostics, and explicit changed-file/source-region citations.
+- Visual QA owns final module source-binding and rendered parity review as source-to-target review: it must use Browser MCP screenshot/observe tools for ordinary screenshots and browser operations, call `browser_preview_reference_regions` only for one module source-binding comparison, and call `browser_preview_compare_scroll_slices` only for supporting page-slice `visual_diff` evidence.
 - `browser_preview_reference_regions` is for concrete component or module regions, not first-viewport slices, whole-page screenshots, body/main/app roots, or page-shell locators. It does not run a second `reference-comparison` pass and does not auto-call slice or screenshot tools on bind failure. First-viewport and screen-by-screen checks use `browser_preview_compare_scroll_slices` with aligned `scrollY` and `sliceHeight`.
 - Every returned comparison artifact must be inspected with `comparison_guidance`: LEFT is the source/reference image, RIGHT is the rendered/local implementation, and the checklist covers layout alignment, region order, icons/assets, colors, spacing/density, typography, content hallucinations or omissions, component family drift, chart/table/map geometry, state visuals, layering, scoped desktop viewport drift, and placeholder/fake UI.
 - Orchestrator must preserve that ownership when selecting this expert squad; do not shift these browser preview proof calls to Requirements, Architect, Integrity, or unowned review prose.

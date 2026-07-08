@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { readFileSync, readdirSync, statSync } from "node:fs"
 import path from "node:path"
-import { createDecisionLog } from "../../src/decision-log"
+import { createDecisionLog, deleteDecisionLogsForTasks } from "../../src/decision-log"
 import { DecisionLogTable } from "../../src/decision-log/schema"
 import { Database } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
@@ -132,6 +132,28 @@ describe("DecisionLog deterministic ordering", () => {
 
     expect(log.read().map((entry) => entry.value)).toEqual(["first value", "second value"])
     expect(log.readByKey("same_key")?.value).toBe("second value")
+  })
+
+  test("deleteDecisionLogsForTasks removes only selected task entries", () => {
+    const taskA = "tsk_decision_log_delete_a"
+    const taskB = "tsk_decision_log_delete_b"
+    createDecisionLog(taskA).append({
+      phase: "execute",
+      key: "cleanup",
+      value: "delete",
+      reason: "project cleanup",
+    })
+    createDecisionLog(taskB).append({
+      phase: "execute",
+      key: "keep",
+      value: "keep",
+      reason: "unrelated task",
+    })
+
+    deleteDecisionLogsForTasks([taskA])
+
+    expect(createDecisionLog(taskA).read()).toEqual([])
+    expect(createDecisionLog(taskB).read().map((entry) => entry.key)).toEqual(["keep"])
   })
 })
 

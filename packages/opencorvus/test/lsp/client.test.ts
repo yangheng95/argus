@@ -94,6 +94,17 @@ describe("LSPClient interop", () => {
     await Instance.disposeAll()
   })
 
+  test("built-in server listing excludes namespace helper functions", () => {
+    const servers = LSPServer.builtInServers()
+
+    expect(servers.length).toBeGreaterThan(0)
+    expect(servers.map((server) => server.id)).toContain("typescript")
+    expect(servers.every((server) => typeof server.id === "string")).toBe(true)
+    expect(servers.every((server) => typeof server.root === "function")).toBe(true)
+    expect(servers.every((server) => typeof server.spawn === "function")).toBe(true)
+    expect(servers).not.toContain(LSPServer.spawnStdio)
+  })
+
   test("handles workspace/workspaceFolders request", async () => {
     const handle = spawnFakeServer() as any
 
@@ -356,20 +367,24 @@ describe("LSPClient interop", () => {
       const closed = path.join(tmp.path, "lsp-closed.tmp")
       const file = path.join(tmp.path, "file.idle")
 
-      await Instance.provide({
-        directory: tmp.path,
-        fn: async () => {
-          await LSP.touchFile(file, false)
-          expect(await waitForFile(started)).toBe(true)
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            await LSP.touchFile(file, false)
+            expect(await waitForFile(started)).toBe(true)
 
-          await Bun.sleep(20)
-          await LSP.touchFile(file, false)
+            await Bun.sleep(20)
+            await LSP.touchFile(file, false)
 
-          expect(await waitForFile(closed, 1000)).toBe(true)
-          const status = await LSP.status()
-          expect(status.filter((item) => item.id === "slow" && item.status === "connected")).toHaveLength(1)
-        },
-      })
+            expect(await waitForFile(closed, 1000)).toBe(true)
+            const status = await LSP.status()
+            expect(status.filter((item) => item.id === "slow" && item.status === "connected")).toHaveLength(1)
+          },
+        })
+      } finally {
+        await Instance.disposeAll()
+      }
     } finally {
       restore()
     }

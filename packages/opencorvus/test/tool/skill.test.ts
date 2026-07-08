@@ -708,7 +708,7 @@ Use this skill.
     }
   })
 
-  test("visual-qa can load acceptance skills without reopening webpage extraction skills", async () => {
+  test("visual-qa can load preview acceptance skills without reopening edit-only skills", async () => {
     await using tmp = await tmpdir({
       git: true,
       config: { prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } },
@@ -720,14 +720,12 @@ Use this skill.
 name: visual-acceptance
 description: Visual QA acceptance workflow. QA means Quality Assurance.
 required_tools:
-  - browser_preview_reference_regions
-  - browser_preview_compare_scroll_slices
+  - browser_preview
 agents:
   - visual-qa
 mounted_agents:
   - visual-qa
   - frontend-design
-  - build
 ---
 
 # Visual Acceptance
@@ -741,18 +739,18 @@ Use rendered evidence to inspect the implemented interface.
           path.join(extractionSkillDir, "SKILL.md"),
           `---
 name: visual-extraction
-description: Frontend design extraction workflow.
+description: Visual QA workflow requiring edit tooling.
 required_tools:
-  - webpage_extract
+  - edit
+agents:
+  - visual-qa
 mounted_agents:
   - visual-qa
-  - frontend-design
-  - build
 ---
 
 # Visual Extraction
 
-Collect source webpage evidence.
+This should stay unavailable to visual QA because edit is not available.
 `,
         )
       },
@@ -787,6 +785,10 @@ Collect source webpage evidence.
           const visualQaResult = await visualQaSkill.execute({ query: "visual" }, ctx)
           expect(visualQaResult.output).toContain("<name>visual-acceptance</name>")
           expect(visualQaResult.output).not.toContain("<name>visual-extraction</name>")
+          const visualQaSurface = await SkillMount.resolve({ agent: visualQa, config })
+          expect(visualQaSurface.skills.find((skill) => skill.name === "visual-extraction")?.reason).toBe(
+            "missing_required_tool",
+          )
           await expect(visualQaSkill.execute({ name: "visual-extraction" }, ctx)).rejects.toThrow(
             'Skill "visual-extraction" not found or not allowed',
           )
@@ -796,7 +798,7 @@ Collect source webpage evidence.
 
           const frontendDesignResult = await frontendDesignSkill.execute({ query: "visual" }, ctx)
           expect(frontendDesignResult.output).not.toContain("<name>visual-acceptance</name>")
-          expect(frontendDesignResult.output).toContain("<name>visual-extraction</name>")
+          expect(frontendDesignResult.output).not.toContain("<name>visual-extraction</name>")
 
           const buildResult = await buildSkill.execute({ query: "visual" }, ctx)
           expect(buildResult.output).not.toContain("<name>visual-acceptance</name>")
@@ -838,9 +840,9 @@ Use browser preview evidence to audit the delivered surface.
           path.join(blockedSkillDir, "SKILL.md"),
           `---
 name: integrity-extraction
-description: Workflow requiring unavailable extraction tooling.
+description: Workflow requiring unavailable read tooling.
 required_tools:
-  - webpage_extract
+  - read
 mounted_agents:
   - integrity
 ---

@@ -4,6 +4,8 @@ Date: 2026-07-03
 
 Status: dynamic expert-squad package loading, active README Orchestrator append, runtime capability projection, scoped MCP tool/prompt/resource projection, built-in `general`-only source boundary, overlay prompt-profile fixture cleanup, API documentation sync, browser-preview fixture contract correction, expert-squad Git ignore completeness repair, and focused validation landed.
 
+Supersession note: Package-layout statements in this record that use `.opencorvus/expert-squads/<id>` are superseded by `2026-07-06-expert-squad-namespaced-source-layout.md`; current project and repository package roots are `.opencorvus/expert-squads/<namespace>/<id>/`.
+
 Glossary:
 
 - API means Application Programming Interface.

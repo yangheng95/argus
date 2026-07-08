@@ -11,6 +11,7 @@ import { prepareModelImageInput } from "@/session/model-image-input"
 import { decodeDataUrlBase64Bytes, decodeRawBase64Payload } from "@/session/text-mime"
 import { normalizeVendorMessages } from "./vendor-messages"
 import { GLM_EVALUATION_TEMPERATURE, THINKING_MODEL_TOP_P } from "./sampling"
+import { requiresOpenAIStrictToolSchema } from "./strict-tool-schema"
 
 type Modality = NonNullable<ModelsDev.Model["modalities"]>["input"][number]
 
@@ -1144,13 +1145,6 @@ export namespace ProviderTransform {
     }
 
     return schema as JSONSchema7
-  }
-
-  function requiresOpenAIStrictToolSchema(model: Provider.Model): boolean {
-    if (model.api.npm === "@ai-sdk/openai" || model.api.npm === "@ai-sdk/azure") return true
-    if (model.api.npm !== "@ai-sdk/openai-compatible") return false
-    const id = `${model.id} ${model.api.id}`.toLowerCase()
-    return /(^|[\/\s])gpt-[\w.-]+/.test(id)
   }
 
   function normalizeOpenAIStrictToolSchema(schema: JSONSchema7): JSONSchema7 {

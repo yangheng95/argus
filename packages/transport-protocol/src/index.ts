@@ -62,6 +62,7 @@ export const PROJECT_DIRECTORY_BYPASS_PATHS = [
   "/favicon.ico",
   "/global/tasks",
   "/mission",
+  "/work-ledger",
 ] as const
 
 export const PROJECT_DIRECTORY_BYPASS_PREFIXES = ["/global/", "/auth/", "/ui/", "/log/", "/attachment/"] as const
@@ -210,7 +211,7 @@ export type BrowserPreviewNativeNavigationAction = (typeof BROWSER_PREVIEW_NATIV
 export type NativeCommand =
   | { kind: "open-url"; url: string }
   | { kind: "open-path"; path: string }
-  | { kind: "browserPreview.sync"; url: string; bounds: BrowserPreviewNativeBounds }
+  | { kind: "browserPreview.sync"; scopeKey: string; url: string; bounds: BrowserPreviewNativeBounds }
   | { kind: "browserPreview.navigate"; action: BrowserPreviewNativeNavigationAction }
   | { kind: "browserPreview.close" }
   | { kind: "browserPreview.selection.setEnabled"; enabled: boolean }
@@ -451,7 +452,11 @@ export function isNativeCommand(value: unknown): value is NativeCommand {
     case "open-path":
       return typeof obj["path"] === "string"
     case "browserPreview.sync":
-      return typeof obj["url"] === "string" && isBrowserPreviewNativeBounds(obj["bounds"])
+      return (
+        typeof obj["scopeKey"] === "string" &&
+        typeof obj["url"] === "string" &&
+        isBrowserPreviewNativeBounds(obj["bounds"])
+      )
     case "browserPreview.navigate":
       return (BROWSER_PREVIEW_NATIVE_NAVIGATION_ACTIONS as readonly string[]).includes(obj["action"] as string)
     case "browserPreview.close":

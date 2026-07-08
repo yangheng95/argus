@@ -170,15 +170,9 @@ test(
       assertPresent(await page.$(".workspace-command-dock .workspace-layout-controls"))
       assertPresent(await page.$('.workspace-command-dock [data-ui="workspace-terminal-open"]'))
       assertPresent(await page.$('.workspace-command-dock [data-terminal-icon="powershell"] svg'))
-      assertPresent(await page.$(".workspace-command-dock .workspace-coding-cli-launchers"))
-      assertPresent(await page.$('.workspace-command-dock [data-ui="workspace-coding-cli-open-default"]'))
-      assertPresent(await page.$('.workspace-command-dock [data-ui="workspace-coding-cli-menu"]'))
-      await page.waitForFunction(() => {
-        const button = document.querySelector<HTMLButtonElement>(
-          '.workspace-command-dock [data-ui="workspace-coding-cli-open-default"]',
-        )
-        return !!button && !button.disabled
-      })
+      assertAbsent(await page.$(".workspace-command-dock .workspace-coding-cli-launchers"))
+      assertAbsent(await page.$('.workspace-command-dock [data-ui="workspace-coding-cli-open-default"]'))
+      assertAbsent(await page.$('.workspace-command-dock [data-ui="workspace-coding-cli-menu"]'))
       assertAbsent(await page.$('.workspace-command-dock [data-ui="workspace-left-panel-toggle"]'))
       assertAbsent(await page.$('.workspace-command-dock [data-ui="workspace-right-panel-toggle"]'))
       assertAbsent(await page.$('.pane-edge-controls [data-ui="workspace-left-panel-toggle"]'))
@@ -213,19 +207,15 @@ test(
         return {
           terminal: measure(".workspace-command-dock .workspace-layout-controls"),
           editor: measure(".workspace-command-dock .workspace-editor-launchers"),
-          codingCli: measure(".workspace-command-dock .workspace-coding-cli-launchers"),
         }
       })
       assert.deepEqual(launcherDimensions.terminal, launcherDimensions.editor)
-      assert.deepEqual(launcherDimensions.terminal, launcherDimensions.codingCli)
       const launcherPrimitives = await page.evaluate(() => {
         const selectors = [
           '[data-ui="workspace-terminal-open"]',
           '[data-ui="workspace-terminal-menu"]',
           '[data-ui="workspace-editor-open-default"]',
           '[data-ui="workspace-editor-menu"]',
-          '[data-ui="workspace-coding-cli-open-default"]',
-          '[data-ui="workspace-coding-cli-menu"]',
         ]
         return selectors.map((selector) => {
           const node = document.querySelector<HTMLElement>(`.workspace-command-dock ${selector}`)
@@ -244,7 +234,7 @@ test(
           }
         })
       })
-      assert.equal(launcherPrimitives.length, 6)
+      assert.equal(launcherPrimitives.length, 4)
       for (const state of launcherPrimitives) {
         assert.equal(state.button, true, state.selector)
         assert.equal(state.primitive, true, state.selector)
@@ -291,6 +281,11 @@ test(
         profileID: "powershell",
       })
       assertAbsent(await page.$(".workspace-terminal"))
+      await page.evaluate(() => {
+        for (const closeButton of document.querySelectorAll<HTMLButtonElement>('[data-ui="app-notification-close"]')) {
+          closeButton.click()
+        }
+      })
       await page.click('.workspace-command-dock [data-ui="workspace-editor-menu"]')
       const editorMenuState = await page.evaluate(() => {
         const button = document.querySelector<HTMLElement>('.workspace-command-dock [data-ui="workspace-editor-menu"]')
@@ -373,16 +368,7 @@ test(
       )
       await page.keyboard.press("Escape")
 
-      await page.click('[data-ui="workspace-coding-cli-open-default"]')
-      for (let i = 0; i < 40 && codingCliOpenBodies.length === 0; i++) {
-        await sleep(50)
-      }
-      assert.equal(codingCliOpenBodies.length, 1)
-      assertPartialObject(codingCliOpenBodies[0], {
-        cliID: "codex",
-        terminalProfileID: "powershell",
-        cwd: "D:/overlay/workspace/app",
-      })
+      assert.equal(codingCliOpenBodies.length, 0)
 
       await page.click(".workspace-command-dock [data-ui='workspace-terminal-menu']")
       await page.click('[data-terminal-profile="cmd"]')
@@ -395,129 +381,8 @@ test(
         profileID: "cmd",
       })
 
-      await page.click(".workspace-command-dock [data-ui='workspace-coding-cli-menu']")
-      const cliMenuState = await page.evaluate(() => {
-        const button = document.querySelector<HTMLElement>(
-          ".workspace-command-dock [data-ui='workspace-coding-cli-menu']",
-        )
-        const menu = document.querySelector<HTMLElement>(".workspace-coding-cli-menu")
-        if (!button || !menu) throw new Error("Missing coding CLI dropdown")
-        const buttonRect = button.getBoundingClientRect()
-        const menuRect = menu.getBoundingClientRect()
-        return {
-          expanded: button.getAttribute("aria-expanded"),
-          dataExpanded: button.hasAttribute("data-expanded"),
-          dataOpen: button.getAttribute("data-open"),
-          hidden: menu.hidden,
-          portaled: !menu.closest(".workspace-command-dock"),
-          topBelowButton: Math.round(menuRect.top) >= Math.round(buttonRect.bottom),
-          rightAligned: Math.abs(Math.round(menuRect.right) - Math.round(buttonRect.right)) <= 1,
-        }
-      })
-      assert.equal(cliMenuState.expanded, "true")
-      assert.equal(cliMenuState.dataExpanded, true)
-      assert.equal(cliMenuState.dataOpen, null)
-      assert.equal(cliMenuState.hidden, false)
-      assert.equal(cliMenuState.portaled, true)
-      assert.equal(cliMenuState.topBelowButton, true)
-      assert.equal(cliMenuState.rightAligned, true)
-      const cliIconPaint = await page.evaluate(() => {
-        const surfaceProbe = document.createElement("span")
-        surfaceProbe.style.color = "var(--surface)"
-        document.body.append(surfaceProbe)
-        const surfaceColor = getComputedStyle(surfaceProbe).color
-        surfaceProbe.remove()
-        const entries = ["codex", "claude-code", "gemini", "glm"].map((cliID) => {
-          const wrapper = document.querySelector<HTMLElement>(
-            `[data-coding-cli="${cliID}"] .workspace-coding-cli-option-icon`,
-          )
-          if (!wrapper) throw new Error(`Missing Coding CLI icon wrapper for ${cliID}`)
-          const svg = wrapper.querySelector<SVGElement>("svg")
-          if (!svg) throw new Error(`Missing Coding CLI SVG for ${cliID}`)
-          const rect = svg.getBoundingClientRect()
-          return [
-            cliID,
-            {
-              wrapperColor: getComputedStyle(wrapper).color,
-              fills: Array.from(svg.querySelectorAll<SVGElement>("path, polygon")).map(
-                (node) => getComputedStyle(node).fill,
-              ),
-              width: Math.round(rect.width),
-              height: Math.round(rect.height),
-            },
-          ] as const
-        })
-        return { surfaceColor, icons: Object.fromEntries(entries) }
-      })
-      assert.equal(cliIconPaint.icons["codex"].fills[0], cliIconPaint.icons["codex"].wrapperColor)
-      assert.equal(cliIconPaint.icons["claude-code"].fills[0], cliIconPaint.icons["claude-code"].wrapperColor)
-      assert.equal(cliIconPaint.icons["gemini"].fills[0], cliIconPaint.icons["gemini"].wrapperColor)
-      assert.equal(cliIconPaint.icons["glm"].fills[0], cliIconPaint.icons["glm"].wrapperColor)
-      assert.equal(cliIconPaint.icons["glm"].fills[1], cliIconPaint.surfaceColor)
-      assert.equal(cliIconPaint.icons["glm"].fills[2], cliIconPaint.surfaceColor)
-      assert.equal(cliIconPaint.icons["glm"].fills[3], cliIconPaint.surfaceColor)
-      for (const [cliID, icon] of Object.entries(cliIconPaint.icons)) {
-        assert.ok(icon.width >= 14, cliID)
-        assert.ok(icon.height >= 14, cliID)
-      }
-      const cliMenuClip = await page.$eval(".workspace-coding-cli-menu", (node) => {
-        const rect = (node as HTMLElement).getBoundingClientRect()
-        return {
-          x: Math.max(0, rect.x - 4),
-          y: Math.max(0, rect.y - 4),
-          width: rect.width + 8,
-          height: rect.height + 8,
-        }
-      })
-      const cliMenuScreenshot = await page.screenshot({ clip: cliMenuClip })
-      assert.ok(cliMenuScreenshot.length > 0)
-      writeFileSync(resolve(".scratch/coding-cli-icon-token-source.png"), cliMenuScreenshot)
-      await page.evaluate(() => {
-        for (const tokenHost of [document.documentElement, document.body]) {
-          tokenHost.style.setProperty("--oc-brand-claude-code", "rgb(10, 120, 130)")
-          tokenHost.style.setProperty("--oc-brand-gemini", "rgb(120, 10, 130)")
-          tokenHost.style.setProperty("--text-strong", "rgb(20, 30, 40)")
-        }
-      })
-      const overriddenCliIconPaint = await page.evaluate(() => {
-        const read = (cliID: string) => {
-          const wrapper = document.querySelector<HTMLElement>(
-            `[data-coding-cli="${cliID}"] .workspace-coding-cli-option-icon`,
-          )
-          if (!wrapper) throw new Error(`Missing overridden Coding CLI icon wrapper for ${cliID}`)
-          const path = wrapper.querySelector<SVGElement>("svg path")
-          if (!path) throw new Error(`Missing overridden Coding CLI path for ${cliID}`)
-          return { wrapperColor: getComputedStyle(wrapper).color, fill: getComputedStyle(path).fill }
-        }
-        return {
-          claudeCode: read("claude-code"),
-          gemini: read("gemini"),
-          glm: read("glm"),
-        }
-      })
-      assert.deepEqual(overriddenCliIconPaint.claudeCode, {
-        wrapperColor: "rgb(10, 120, 130)",
-        fill: "rgb(10, 120, 130)",
-      })
-      assert.deepEqual(overriddenCliIconPaint.gemini, {
-        wrapperColor: "rgb(120, 10, 130)",
-        fill: "rgb(120, 10, 130)",
-      })
-      assert.deepEqual(overriddenCliIconPaint.glm, {
-        wrapperColor: "rgb(20, 30, 40)",
-        fill: "rgb(20, 30, 40)",
-      })
-      assertPresent(await page.$('[data-coding-cli="codex"] svg'))
-      await page.click('[data-coding-cli="claude-code"]')
-      for (let i = 0; i < 40 && codingCliOpenBodies.length < 2; i++) {
-        await sleep(50)
-      }
-      assert.equal(codingCliOpenBodies.length, 2)
-      assertPartialObject(codingCliOpenBodies[1], {
-        cliID: "claude-code",
-        terminalProfileID: "cmd",
-        cwd: "D:/overlay/workspace/app",
-      })
+      assert.equal(await page.$(".workspace-coding-cli-menu"), null)
+      assert.equal(await page.$("[data-coding-cli]"), null)
 
       await page.click('[data-menu-trigger="workspace"]')
       await page.waitForSelector(".titlebar-menubar-recent-item")
