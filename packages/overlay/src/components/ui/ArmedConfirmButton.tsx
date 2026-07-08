@@ -42,8 +42,12 @@ export function ArmedConfirmButton(props: ArmedConfirmButtonProps): JSX.Element 
       }}
       onBlur={confirm.disarm}
     >
-      {local.children}
-      {local.confirmChildren}
+      <span class="oc-armed-confirm-slot" data-confirm-slot="default" aria-hidden={confirm.armed() ? "true" : undefined}>
+        {local.children}
+      </span>
+      <span class="oc-armed-confirm-slot" data-confirm-slot="confirm" aria-hidden={confirm.armed() ? undefined : "true"}>
+        {local.confirmChildren}
+      </span>
       <span id={descriptionID()} class="oc-armed-confirm-status" role="status" aria-live="polite">
         {confirm.armed() ? local.armedDescription : ""}
       </span>

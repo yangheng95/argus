@@ -14,6 +14,7 @@ const CODING_ASSISTANT_SESSION_LIST_SOURCE = join(
   "CodingAssistantSessionList.tsx",
 )
 const ARMED_CONFIRM_BUTTON_SOURCE = join(import.meta.dir, "..", "src", "components", "ui", "ArmedConfirmButton.tsx")
+const BUTTON_CSS_SOURCE = join(import.meta.dir, "..", "src", "styles", "primitives", "button.css")
 
 describe("useArmedConfirm — behaviour", () => {
   test("starts disarmed", () => {
@@ -70,6 +71,7 @@ describe("useArmedConfirm — adoption", () => {
   const missionListSource = readFileSync(MISSION_LIST_SOURCE, "utf8")
   const codingAssistantSessionListSource = readFileSync(CODING_ASSISTANT_SESSION_LIST_SOURCE, "utf8")
   const armedConfirmButtonSource = readFileSync(ARMED_CONFIRM_BUTTON_SOURCE, "utf8")
+  const buttonCssSource = readFileSync(BUTTON_CSS_SOURCE, "utf8")
 
   test("destructive ledger actions route through ArmedConfirmButton", () => {
     expect(armedConfirmButtonSource).toContain('from "../../solid/armed-confirm"')
@@ -90,5 +92,17 @@ describe("useArmedConfirm — adoption", () => {
       expect(source).not.toContain("confirmAbort.confirm")
       expect(source).not.toContain("confirmStop.confirm")
     }
+  })
+
+  test("ArmedConfirmButton owns one visible icon state at a time", () => {
+    expect(armedConfirmButtonSource).toContain('class="oc-armed-confirm-slot"')
+    expect(armedConfirmButtonSource).toContain('data-confirm-slot="default"')
+    expect(armedConfirmButtonSource).toContain('data-confirm-slot="confirm"')
+    expect(armedConfirmButtonSource).toContain('aria-hidden={confirm.armed() ? "true" : undefined}')
+    expect(armedConfirmButtonSource).toContain('aria-hidden={confirm.armed() ? undefined : "true"}')
+
+    expect(buttonCssSource).toContain('.oc-armed-confirm-slot[data-confirm-slot="confirm"]')
+    expect(buttonCssSource).toContain('.oc-button[data-confirm="true"] > .oc-armed-confirm-slot[data-confirm-slot="default"]')
+    expect(buttonCssSource).toContain('.oc-button[data-confirm="true"] > .oc-armed-confirm-slot[data-confirm-slot="confirm"]')
   })
 })

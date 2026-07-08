@@ -139,6 +139,31 @@
   flex: 0 0 auto;
 }
 
+.oc-armed-confirm-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.oc-armed-confirm-slot[data-confirm-slot="confirm"] {
+  display: none;
+}
+
+.oc-button[data-confirm="true"] > .oc-armed-confirm-slot[data-confirm-slot="default"] {
+  display: none;
+}
+
+.oc-button[data-confirm="true"] > .oc-armed-confirm-slot[data-confirm-slot="confirm"] {
+  display: inline-flex;
+}
+
+.oc-armed-confirm-slot > svg {
+  width: var(--oc-density-chip-height);
+  height: var(--oc-density-chip-height);
+  flex: 0 0 auto;
+}
+
 .oc-armed-confirm-status {
   position: absolute;
   width: calc(1px * var(--ui-scale));
