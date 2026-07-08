@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto"
 import { and, Database, desc, eq } from "@/storage/db"
 import { EngineArtifactTable } from "@/engine/engine.sql"
+import { insertEngineArtifact } from "@/engine/artifact"
 import { Event as EngineEvent } from "@/engine/model"
 import { EngineProtocol } from "@/engine/protocol"
 import { Identifier } from "@/id/id"
@@ -308,49 +309,40 @@ export function persistAcceptanceEvidenceManifest(input: { manifest: AcceptanceE
   }
   Database.use((db) => {
     if (input.manifest.surfaceManifest) {
-      db.insert(EngineArtifactTable)
-        .values({
-          id: input.manifest.surfaceManifest.id,
-          task_id: input.manifest.taskId!,
-          run_id: input.manifest.runId!,
-          acceptance_id: input.manifest.acceptanceId!,
-          kind: "acceptance_surface_manifest",
-          label: "acceptance-surface-manifest",
-          payload: input.manifest.surfaceManifest,
-          time_created: input.manifest.surfaceManifest.timeCreated,
-          time_updated: input.manifest.surfaceManifest.timeCreated,
-        })
-        .run()
+      insertEngineArtifact(db, {
+        id: input.manifest.surfaceManifest.id,
+        taskID: input.manifest.taskId!,
+        runID: input.manifest.runId!,
+        acceptanceID: input.manifest.acceptanceId!,
+        kind: "acceptance_surface_manifest",
+        label: "acceptance-surface-manifest",
+        payload: input.manifest.surfaceManifest,
+        timeCreated: input.manifest.surfaceManifest.timeCreated,
+      })
     }
     for (const review of input.manifest.specialistReviews ?? []) {
-      db.insert(EngineArtifactTable)
-        .values({
-          id: review.id,
-          task_id: review.taskId,
-          run_id: review.runId,
-          goal_run_id: review.goalRunId,
-          acceptance_id: review.acceptanceId,
-          kind: "acceptance_specialist_review",
-          label: `acceptance-specialist-review:${review.reviewer}`,
-          payload: review,
-          time_created: review.timeCreated,
-          time_updated: review.timeCreated,
-        })
-        .run()
-    }
-    db.insert(EngineArtifactTable)
-      .values({
-        id: input.manifest.id,
-        task_id: input.manifest.taskId!,
-        run_id: input.manifest.runId!,
-        acceptance_id: input.manifest.acceptanceId!,
-        kind: "acceptance_evidence_manifest",
-        label: "acceptance-evidence-manifest",
-        payload: input.manifest,
-        time_created: input.manifest.timeCreated,
-        time_updated: input.manifest.timeCreated,
+      insertEngineArtifact(db, {
+        id: review.id,
+        taskID: review.taskId,
+        runID: review.runId,
+        goalRunID: review.goalRunId,
+        acceptanceID: review.acceptanceId,
+        kind: "acceptance_specialist_review",
+        label: `acceptance-specialist-review:${review.reviewer}`,
+        payload: review,
+        timeCreated: review.timeCreated,
       })
-      .run()
+    }
+    insertEngineArtifact(db, {
+      id: input.manifest.id,
+      taskID: input.manifest.taskId!,
+      runID: input.manifest.runId!,
+      acceptanceID: input.manifest.acceptanceId!,
+      kind: "acceptance_evidence_manifest",
+      label: "acceptance-evidence-manifest",
+      payload: input.manifest,
+      timeCreated: input.manifest.timeCreated,
+    })
   })
   void EngineProtocol.emit(
     EngineEvent.AcceptanceEvidenceUpdated,

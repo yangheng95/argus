@@ -1,6 +1,7 @@
 import { Identifier } from "@/id/id"
 import { Database, and, desc, eq } from "@/storage/db"
 import { EngineArtifactTable } from "@/engine/engine.sql"
+import { recordEngineArtifact } from "@/engine/artifact"
 import z from "zod"
 
 export const AcceptanceSpecialistReviewer = z.enum([
@@ -96,23 +97,17 @@ export function validateAcceptanceSpecialistReview(input: unknown): AcceptanceSp
 
 export function persistAcceptanceSpecialistReview(input: { review: AcceptanceSpecialistReview }) {
   const review = validateAcceptanceSpecialistReview(input.review)
-  Database.use((db) =>
-    db
-      .insert(EngineArtifactTable)
-      .values({
-        id: review.id,
-        task_id: review.taskId,
-        run_id: review.runId,
-        acceptance_id: review.acceptanceId,
-        goal_run_id: review.goalRunId,
-        kind: "acceptance_specialist_review",
-        label: `acceptance-specialist-review:${review.reviewer}`,
-        payload: review,
-        time_created: review.timeCreated,
-        time_updated: review.timeCreated,
-      })
-      .run(),
-  )
+  recordEngineArtifact({
+    id: review.id,
+    taskID: review.taskId,
+    runID: review.runId,
+    acceptanceID: review.acceptanceId,
+    goalRunID: review.goalRunId,
+    kind: "acceptance_specialist_review",
+    label: `acceptance-specialist-review:${review.reviewer}`,
+    payload: review,
+    timeCreated: review.timeCreated,
+  })
 }
 
 export function requiredReviewersForSurfaces(input: {

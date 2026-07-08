@@ -4,6 +4,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import z from "zod"
 import { EngineArtifactTable } from "@/engine/engine.sql"
+import { recordEngineArtifact, updateEngineArtifact } from "@/engine/artifact"
 import { Event } from "@/engine/model"
 import { EngineProtocol } from "@/engine/protocol"
 import { requireTask } from "@/engine/store"
@@ -11,7 +12,10 @@ import { deriveTaskStatus } from "@/engine/task-status"
 import { Identifier } from "@/id/id"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Database } from "@/storage/db"
-import { BrowserPreviewCropIntent, type BrowserPreviewCropIntent as BrowserPreviewCropIntentValue } from "./region-schema"
+import {
+  BrowserPreviewCropIntent,
+  type BrowserPreviewCropIntent as BrowserPreviewCropIntentValue,
+} from "./region-schema"
 import { BrowserPreviewViewport, normalizeBrowserPreviewViewports } from "./viewport"
 import { NamedError } from "@opencorvus-ai/util/error"
 
@@ -122,17 +126,12 @@ export function persistBrowserPreviewTarget(input: {
     viewports,
   }
   if (existing) {
-    Database.use((db) =>
-      db
-        .update(EngineArtifactTable)
-        .set({
-          time_updated: now,
-          label: "active",
-          payload,
-        })
-        .where(eq(EngineArtifactTable.id, existing.id))
-        .run(),
-    )
+    updateEngineArtifact({
+      id: existing.id,
+      label: "active",
+      payload,
+      timeUpdated: now,
+    })
     const persisted: PersistedBrowserPreviewTarget = {
       ...existing,
       viewports,
@@ -149,23 +148,14 @@ export function persistBrowserPreviewTarget(input: {
     ).then(() => persisted)
   }
   const id = Identifier.ascending("artifact")
-  Database.use((db) =>
-    db
-      .insert(EngineArtifactTable)
-      .values({
-        id,
-        task_id: input.taskID,
-        run_id: null,
-        goal_run_id: null,
-        acceptance_id: null,
-        kind: BROWSER_PREVIEW_TARGET_KIND,
-        label: "active",
-        payload,
-        time_created: now,
-        time_updated: now,
-      })
-      .run(),
-  )
+  recordEngineArtifact({
+    id,
+    taskID: input.taskID,
+    kind: BROWSER_PREVIEW_TARGET_KIND,
+    label: "active",
+    payload,
+    timeCreated: now,
+  })
   const persisted: PersistedBrowserPreviewTarget = {
     id,
     taskID: input.taskID,
@@ -194,16 +184,11 @@ export function promoteBrowserPreviewTarget(input: {
   const existing = findBrowserPreviewTargetByID(input)
   if (!existing) return Promise.resolve(undefined)
   const now = Math.max(input.now ?? Date.now(), existing.timeUpdated + 1)
-  Database.use((db) =>
-    db
-      .update(EngineArtifactTable)
-      .set({
-        time_updated: now,
-        label: "active",
-      })
-      .where(eq(EngineArtifactTable.id, existing.id))
-      .run(),
-  )
+  updateEngineArtifact({
+    id: existing.id,
+    label: "active",
+    timeUpdated: now,
+  })
   const persisted: PersistedBrowserPreviewTarget = {
     ...existing,
     timeUpdated: now,
@@ -497,42 +482,36 @@ export function persistBrowserPreviewEvidence(input: {
       throw new Error(`passed scroll-slice-comparison evidence requires artifact path(s): ${missing.join(", ")}`)
     }
   }
-  Database.use((db) =>
-    db
-      .insert(EngineArtifactTable)
-      .values({
-        id,
-        task_id: input.taskID,
-        run_id: input.runID ?? null,
-        goal_run_id: input.goalRunID ?? null,
-        acceptance_id: input.acceptanceID ?? null,
-        kind: BROWSER_PREVIEW_EVIDENCE_KIND,
-        label: "capture",
-        payload: {
-          target_id: input.targetID,
-          viewport_id: input.viewportID,
-          operation_kind: operationKind,
-          ...(input.regionID ? { region_id: input.regionID } : {}),
-          ...(input.stateID ? { state_id: input.stateID } : {}),
-          ...(input.cropIntent ? { crop_intent: input.cropIntent } : {}),
-          ...(input.manifestPath
-            ? { manifest_path: toBrowserPreviewRuntimeRelativePath(projectRoot, input.taskID, input.manifestPath) }
-            : {}),
-          ...(artifactPaths ? { artifact_paths: artifactPaths } : {}),
-          status,
-          summary: input.summary,
-          capture:
-            input.capture === undefined
-              ? null
-              : normalizeBrowserPreviewRuntimePathRefs(projectRoot, input.taskID, input.capture),
-          diagnostics: input.diagnostics,
-          time_completed: now,
-        },
-        time_created: now,
-        time_updated: now,
-      })
-      .run(),
-  )
+  recordEngineArtifact({
+    id,
+    taskID: input.taskID,
+    runID: input.runID,
+    goalRunID: input.goalRunID,
+    acceptanceID: input.acceptanceID,
+    kind: BROWSER_PREVIEW_EVIDENCE_KIND,
+    label: "capture",
+    payload: {
+      target_id: input.targetID,
+      viewport_id: input.viewportID,
+      operation_kind: operationKind,
+      ...(input.regionID ? { region_id: input.regionID } : {}),
+      ...(input.stateID ? { state_id: input.stateID } : {}),
+      ...(input.cropIntent ? { crop_intent: input.cropIntent } : {}),
+      ...(input.manifestPath
+        ? { manifest_path: toBrowserPreviewRuntimeRelativePath(projectRoot, input.taskID, input.manifestPath) }
+        : {}),
+      ...(artifactPaths ? { artifact_paths: artifactPaths } : {}),
+      status,
+      summary: input.summary,
+      capture:
+        input.capture === undefined
+          ? null
+          : normalizeBrowserPreviewRuntimePathRefs(projectRoot, input.taskID, input.capture),
+      diagnostics: input.diagnostics,
+      time_completed: now,
+    },
+    timeCreated: now,
+  })
   return id
 }
 

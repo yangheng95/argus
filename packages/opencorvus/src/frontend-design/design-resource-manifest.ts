@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { EngineArtifactTable } from "@/engine/engine.sql"
+import { recordEngineArtifact } from "@/engine/artifact"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage/db"
 
@@ -247,21 +248,13 @@ export function recordDesignResourceManifest(input: {
 }): string {
   const now = input.now ?? Date.now()
   const id = Identifier.ascending("artifact")
-  Database.use((db) =>
-    db
-      .insert(EngineArtifactTable)
-      .values({
-        id,
-        task_id: input.taskID,
-        run_id: null,
-        goal_run_id: null,
-        kind: "design_resource_manifest",
-        label: "frontend_design-resource-manifest",
-        payload: input.manifest as unknown as Record<string, unknown>,
-        time_created: now,
-        time_updated: now,
-      })
-      .run(),
-  )
+  recordEngineArtifact({
+    id,
+    taskID: input.taskID,
+    kind: "design_resource_manifest",
+    label: "frontend_design-resource-manifest",
+    payload: input.manifest as unknown as Record<string, unknown>,
+    timeCreated: now,
+  })
   return id
 }

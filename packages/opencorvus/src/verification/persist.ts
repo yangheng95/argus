@@ -24,6 +24,7 @@ import {
   type EngineEvaluationStatus,
   type EngineEvaluationVerdict,
 } from "@/engine/engine.sql"
+import { recordEngineArtifact } from "@/engine/artifact"
 
 /** Artifact-table kind + label pair that marks a row as verification evidence. */
 const ARTIFACT_KIND = "verification-evidence" as const
@@ -124,23 +125,17 @@ export function persistEvidence(input: PersistEvidenceInput): VerificationEviden
     checks: input.checks ?? [],
     time_completed: input.timeCompleted ?? null,
   }
-  Database.use((db) =>
-    db
-      .insert(EngineArtifactTable)
-      .values({
-        id,
-        task_id: input.taskID,
-        run_id: input.runID,
-        goal_run_id: input.goalRunID ?? null,
-        acceptance_id: input.acceptanceID ?? null,
-        kind: ARTIFACT_KIND,
-        label: labelForScope(input.scope),
-        payload,
-        time_created: now,
-        time_updated: now,
-      })
-      .run(),
-  )
+  recordEngineArtifact({
+    id,
+    taskID: input.taskID,
+    runID: input.runID,
+    goalRunID: input.goalRunID,
+    acceptanceID: input.acceptanceID,
+    kind: ARTIFACT_KIND,
+    label: labelForScope(input.scope),
+    payload,
+    timeCreated: now,
+  })
   return {
     id,
     taskID: input.taskID,

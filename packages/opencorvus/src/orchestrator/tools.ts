@@ -146,6 +146,7 @@ import {
   EngineTaskTable,
   type EngineArtifactKind,
 } from "@/engine/engine.sql"
+import { recordEngineArtifact } from "@/engine/artifact"
 import {
   supersedePriorActivePlansForTask,
   appendGoalToActiveGraph,
@@ -404,10 +405,7 @@ const WorkloadAnalysisInputSchema = z
 
 const AnalyzeIntentInputSchema = z
   .object({
-    reason: z
-      .string()
-      .min(1)
-      .describe("Why you decided to run intent analysis (first-wake / re-entry / scope change)"),
+    reason: z.string().min(1).describe("Why you decided to run intent analysis (first-wake / re-entry / scope change)"),
     continuation_artifact_id: StageContinuationArtifactIDField,
   })
   .strict()
@@ -4996,7 +4994,10 @@ export function computeContractFieldChanges(
   return setValues
 }
 
-function dependencyGraphMutationError(input: { taskID: string; action: "add_goal" | "modify_goal" }): string | undefined {
+function dependencyGraphMutationError(input: {
+  taskID: string
+  action: "add_goal" | "modify_goal"
+}): string | undefined {
   const graphArtifact = findLatestArchitectContractGraphArtifact(input.taskID)
   if (!graphArtifact) return undefined
   return (
@@ -10253,23 +10254,17 @@ export function createOrchestratorTools(input: {
           value: resultText,
           reason: reason?.trim() || question.trim(),
         })
-        Database.use((db) => {
-          db.insert(EngineArtifactTable)
-            .values({
-              id: Identifier.ascending("artifact"),
-              task_id: taskID,
-              kind: "exploration",
-              label: "explore",
-              payload: {
-                question: question.trim(),
-                reason: reason?.trim() || null,
-                session_id: exploreResult.sessionID,
-                result: resultText,
-              },
-              time_created: now,
-              time_updated: now,
-            })
-            .run()
+        recordEngineArtifact({
+          taskID,
+          kind: "exploration",
+          label: "explore",
+          payload: {
+            question: question.trim(),
+            reason: reason?.trim() || null,
+            session_id: exploreResult.sessionID,
+            result: resultText,
+          },
+          timeCreated: now,
         })
 
         return SubAgentProtocol.yieldResult({
@@ -13768,7 +13763,7 @@ export function createOrchestratorTools(input: {
     build: tool({
       description:
         "Implementation dispatcher. Runs the build agent (read / write / edit / bash) in-process to apply " +
-        "one scoped change. Two valid dispatch_agent target=build shapes exist. `dispatch_agent({ target: \"build\", goalID })` is the normal workflow " +
+        'one scoped change. Two valid dispatch_agent target=build shapes exist. `dispatch_agent({ target: "build", goalID })` is the normal workflow ' +
         "shape after architect has registered goals. On retry/rework, omit `request` when persisted " +
         "failure facts already exist; the build retry message is composed from those facts only. " +
         "Retry context recovery is selected from durable prior-session evidence when worktreeUsage is " +
@@ -13776,7 +13771,7 @@ export function createOrchestratorTools(input: {
         "a fresh child session on the same recorded goal worktree. Do not express this through `reason`, " +
         "`request`, or a `freshContext` field. " +
         "Use `request` for a per-goal retry only when you have one exact new operator/error fact that " +
-        "is not already in persisted build, acceptance, or integrity evidence. `dispatch_agent({ target: \"build\", request, directBuildIntent })` without goalID is a task-level " +
+        'is not already in persisted build, acceptance, or integrity evidence. `dispatch_agent({ target: "build", request, directBuildIntent })` without goalID is a task-level ' +
         "direct implementation build. It is supported for explicit `kind=build` tasks, whole-task rework after " +
         "acceptance rejection, and rare operator/orchestrator decisions to bypass goal decomposition for a scoped " +
         "workflow implementation task. It also owns same-task stuck-state repairs that require file edits: " +
@@ -13788,7 +13783,7 @@ export function createOrchestratorTools(input: {
         "builds must declare directBuildIntent='modify_files' for scoped implementation. Repository investigation " +
         "belongs to analyze_intent, requirements, or the registered explore subagent surface; do not route that work " +
         "through dispatch_agent target=build. " +
-        "For `dispatch_agent({ target: \"build\", goalID })`, the tool returns after the child build session and goal_run have started; terminal completion arrives later as goal_run/acceptance/decision-log evidence and a terminal refill wake. " +
+        'For `dispatch_agent({ target: "build", goalID })`, the tool returns after the child build session and goal_run have started; terminal completion arrives later as goal_run/acceptance/decision-log evidence and a terminal refill wake. ' +
         "For task-level direct builds, the tool returns the terminal build report. Build does NOT auto-complete " +
         "workflow tasks. Integrity is an optional final review surface after all blocking implementation work " +
         "are terminal. A post-build pass returns evidence for the Orchestrator completion decision; non-pass integrity returns session-bound review evidence to this same reasoning turn; " +
