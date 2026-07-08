@@ -136,6 +136,13 @@ describe("ExpertSquadRegistry", () => {
     expect(loaded.readmeContent).toBe("# Frontend Replica")
   })
 
+  test("rejects package manifests without release version metadata", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, { version: undefined })
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/version/)
+  })
+
   test("reads display prefix from README front matter without adding it to prompt content", async () => {
     await using tmp = await tmpdir()
     const packageRoot = await writeValidPackage(tmp.path)

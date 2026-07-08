@@ -121,7 +121,7 @@ export namespace ExpertSquadRegistry {
       id: ID,
       label: z.string().min(1),
       description: z.string().optional(),
-      version: z.string().min(1).optional(),
+      version: z.string().min(1),
       readme: z.literal("README.md"),
       selector: Selector.optional(),
       capability_projection: CapabilityProjection,
@@ -177,7 +177,7 @@ export namespace ExpertSquadRegistry {
     readmePath: string
     label: string
     description?: string
-    version?: string
+    version: string
     displayPrefix?: string
     selector?: SelectorMetadata
     selectorInstructions?: string
@@ -231,7 +231,7 @@ export namespace ExpertSquadRegistry {
     id: string
     label: string
     description?: string
-    version?: string
+    version: string
     displayPrefix?: string
     selector?: SelectorMetadata
     manifest: Manifest

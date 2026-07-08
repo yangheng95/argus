@@ -31,7 +31,7 @@ export {
 export type ExpertSquadCatalogPackage = {
   namespace: string
   id: string
-  version?: string
+  version: string
   displayPrefix?: string
   selector?: ExpertSquadRegistry.SelectorMetadata
   selectorInstructions?: string

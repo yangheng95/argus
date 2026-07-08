@@ -43,7 +43,7 @@ export const ExpertSquadCatalogSelectorSchema = z
   .strict()
 
 export const ExpertSquadCatalogSummarySchema = PromptProfileCatalogProfileSchema.extend({
-  version: z.string().optional(),
+  version: z.string(),
   display_prefix: z.string().optional(),
   display_label: z.string(),
   source: ExpertSquadCatalogSourceSchema,
