@@ -1,12 +1,15 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import {
+  claimNextEngineTaskForCwd,
+  claimQueuedEngineTaskForCwd,
   deleteEngineTask,
   deleteEngineTasksForProjectSessions,
   insertEngineTask,
   mergeEngineTaskMetadata,
   setEngineTaskBudget,
   setEngineTaskMetadata,
+  setEngineTaskQueueOrder,
   setEngineTaskTitle,
   touchEngineTask,
 } from "../../src/engine/task"
@@ -179,6 +182,70 @@ describe("engine task writer", () => {
         Database.transaction((db) => deleteEngineTask(db, { taskID }))
         row = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
         expect(row).toBeUndefined()
+      },
+    })
+  })
+
+  test("updates queued task order and claims queued tasks through the task writer", async () => {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const firstRoot = await Session.create({ kind: "root", title: "claim first" })
+        const secondRoot = await Session.create({ kind: "root", title: "claim second" })
+        const firstTaskID = Identifier.ascending("task")
+        const secondTaskID = Identifier.ascending("task")
+        const now = Date.now()
+        Database.transaction((db) => {
+          deleteEngineTask(db, { taskID })
+          insertEngineTask(db, {
+            taskID: firstTaskID,
+            projectID: Instance.project.id,
+            sessionID: firstRoot.id,
+            source: "test",
+            title: "first claim task",
+            request: "Verify queue claim.",
+            executor: "codex",
+            kind: "workflow",
+            priority: "normal",
+            queueOrder: 0,
+            metadata: {},
+            timeStarted: null,
+            timeCreated: now,
+            timeUpdated: now,
+          })
+          insertEngineTask(db, {
+            taskID: secondTaskID,
+            projectID: Instance.project.id,
+            sessionID: secondRoot.id,
+            source: "test",
+            title: "second claim task",
+            request: "Verify queue claim.",
+            executor: "codex",
+            kind: "workflow",
+            priority: "normal",
+            queueOrder: 1,
+            metadata: {},
+            timeStarted: null,
+            timeCreated: now + 1,
+            timeUpdated: now + 1,
+          })
+          setEngineTaskQueueOrder(db, { taskID: secondTaskID, queueOrder: 0, timeUpdated: now + 2 })
+          setEngineTaskQueueOrder(db, { taskID: firstTaskID, queueOrder: 1, timeUpdated: now + 2 })
+        })
+
+        const firstClaim = Database.transaction((db) =>
+          claimNextEngineTaskForCwd(db, { cwd: tmp.path, timeStarted: now + 3 }),
+        )
+        expect(firstClaim).toMatchObject({
+          id: secondTaskID,
+          time_started: now + 3,
+          time_updated: now + 3,
+        })
+
+        const blockedClaim = Database.transaction((db) =>
+          claimQueuedEngineTaskForCwd(db, { taskID: firstTaskID, cwd: tmp.path, timeStarted: now + 4 }),
+        )
+        expect(blockedClaim).toBeUndefined()
       },
     })
   })

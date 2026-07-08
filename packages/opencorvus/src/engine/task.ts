@@ -1,7 +1,8 @@
-import { Database, and, eq, inArray } from "@/storage/db"
+import { Database, and, eq, inArray, sql } from "@/storage/db"
 import { EngineTaskTable, type EngineMetadata } from "./engine.sql"
 
 type EngineTaskInsert = typeof EngineTaskTable.$inferInsert
+type EngineTaskSelect = typeof EngineTaskTable.$inferSelect
 
 export function insertEngineTask(
   db: Database.TxOrDb,
@@ -64,6 +65,90 @@ export function setEngineTaskBudget(
 
 export function setEngineTaskTitle(db: Database.TxOrDb, input: { taskID: string; title: string }): void {
   db.update(EngineTaskTable).set({ title: input.title }).where(eq(EngineTaskTable.id, input.taskID)).run()
+}
+
+export function setEngineTaskQueueOrder(
+  db: Database.TxOrDb,
+  input: { taskID: string; queueOrder: number; timeUpdated: number },
+): void {
+  db.update(EngineTaskTable)
+    .set({ queue_order: input.queueOrder, time_updated: input.timeUpdated })
+    .where(eq(EngineTaskTable.id, input.taskID))
+    .run()
+}
+
+export function claimNextEngineTaskForCwd(
+  db: Database.TxOrDb,
+  input: { cwd: string; timeStarted: number },
+): EngineTaskSelect | undefined {
+  return db
+    .update(EngineTaskTable)
+    .set({
+      time_started: input.timeStarted,
+      time_updated: input.timeStarted,
+    })
+    .where(
+      sql`${EngineTaskTable.id} = (
+        SELECT t.id
+        FROM engine_task t
+        LEFT JOIN session s ON s.id = t.session_id
+        LEFT JOIN project p ON p.id = t.project_id
+        WHERE t.time_started IS NULL AND t.time_completed IS NULL
+          AND COALESCE(s.directory, p.worktree) = ${input.cwd}
+          AND NOT EXISTS (
+            SELECT 1
+            FROM engine_task t2
+            LEFT JOIN session s2 ON s2.id = t2.session_id
+            LEFT JOIN project p2 ON p2.id = t2.project_id
+            WHERE t2.time_started IS NOT NULL AND t2.time_completed IS NULL
+              AND COALESCE(json_extract(t2.metadata, '$.interrupted'), 0) != 1
+              AND COALESCE(s2.directory, p2.worktree) = ${input.cwd}
+          )
+        ORDER BY
+          CASE t.priority WHEN 'critical' THEN 0 ELSE 1 END,
+          t.queue_order,
+          t.time_created,
+          t.id
+        LIMIT 1
+      )`,
+    )
+    .returning()
+    .get()
+}
+
+export function claimQueuedEngineTaskForCwd(
+  db: Database.TxOrDb,
+  input: { taskID: string; cwd: string; timeStarted: number },
+): EngineTaskSelect | undefined {
+  return db
+    .update(EngineTaskTable)
+    .set({
+      time_started: input.timeStarted,
+      time_updated: input.timeStarted,
+    })
+    .where(
+      sql`${EngineTaskTable.id} = (
+        SELECT t.id
+        FROM engine_task t
+        LEFT JOIN session s ON s.id = t.session_id
+        LEFT JOIN project p ON p.id = t.project_id
+        WHERE t.id = ${input.taskID}
+          AND t.time_started IS NULL AND t.time_completed IS NULL
+          AND COALESCE(s.directory, p.worktree) = ${input.cwd}
+          AND NOT EXISTS (
+            SELECT 1
+            FROM engine_task t2
+            LEFT JOIN session s2 ON s2.id = t2.session_id
+            LEFT JOIN project p2 ON p2.id = t2.project_id
+            WHERE t2.time_started IS NOT NULL AND t2.time_completed IS NULL
+              AND COALESCE(json_extract(t2.metadata, '$.interrupted'), 0) != 1
+              AND COALESCE(s2.directory, p2.worktree) = ${input.cwd}
+          )
+        LIMIT 1
+      )`,
+    )
+    .returning()
+    .get()
 }
 
 export function deleteEngineTask(db: Database.TxOrDb, input: { taskID: string }): void {

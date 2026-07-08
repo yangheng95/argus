@@ -392,3 +392,35 @@ Phase 12 verification:
 - `rg -n 'db\\.(insert|update|delete)\\(EngineTaskTable|\\.(insert|update|delete)\\(EngineTaskTable' packages/opencorvus/src -g '*.ts'` no longer reports `task-api/index.ts`; remaining production writes are `engine/queue.ts`, `engine/rewind.ts`, `engine/state.ts`, and the intended `engine/task.ts` writer.
 - `bun test --timeout 60000 packages/opencorvus/test/engine/task-writer.test.ts`
 - `bun test --timeout 60000 packages/opencorvus/test/task-api/delete-task-breadcrumb.test.ts`
+
+## Phase 13 Task Queue Claim Boundary
+
+`engine/queue.ts` directly updated `EngineTaskTable` for directory queue
+reordering and two claim paths: claim the next queued task for a cwd and claim
+a specified queued task when the cwd is idle. These writes are queue-specific
+but still mutate the task row, so the table mutation belongs in the low-level
+task writer while `queue.ts` remains the owner of queue orchestration, progress
+snapshots, event emission, and task loop launch.
+
+Phase 13 acceptance criteria:
+
+- `engine/queue.ts` no longer directly writes `EngineTaskTable`.
+- Queue reorder preserves exact queue order and timestamp updates.
+- `claimNextForCwd` preserves the existing SQLite single-statement claim,
+  active-sibling exclusion, priority/order sorting, and returned row semantics.
+- `claimQueuedTaskForCwd` preserves specified-task claim conditions, cwd
+  matching, active-sibling exclusion, and returned row semantics.
+- Progress snapshots and `TaskUpdated` events remain in `engine/queue.ts`.
+- Focused writer and queue tests cover queue order, claim order, active sibling
+  blocking, explicit queued-task start, and interrupted active sibling behavior.
+
+Phase 13 verification:
+
+- `rg -n 'db\\.(insert|update|delete)\\(EngineTaskTable|\\.(insert|update|delete)\\(EngineTaskTable' packages/opencorvus/src -g '*.ts'` no longer reports `engine/queue.ts`; remaining production writes are `engine/rewind.ts`, `engine/state.ts`, and the intended `engine/task.ts` writer.
+- `bun test --timeout 60000 packages/opencorvus/test/engine/task-writer.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/engine/queue.test.ts -t "reorder"`
+- `bun test --timeout 60000 packages/opencorvus/test/engine/queue.test.ts -t "claim"`
+
+Additional verification attempt not counted as passing evidence:
+
+- `bun test --timeout 60000 packages/opencorvus/test/server/task-queue-routes.test.ts` printed the file header and then produced no further output for roughly 150 seconds. The process also did not respond to the configured test timeout, so the matching Bun process for that test command was stopped. This is recorded as a test-runner hang and is not counted as Phase 13 passing evidence.

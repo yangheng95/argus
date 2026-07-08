@@ -20,6 +20,7 @@ import { Log } from "@/util/log"
 import { EngineArtifactTable, EngineTaskTable } from "./engine.sql"
 import { recordEngineArtifact, updateEngineArtifact, updateEngineArtifactsWhere } from "./artifact"
 import { insertEngineProgressSnapshot } from "./progress"
+import { claimNextEngineTaskForCwd, claimQueuedEngineTaskForCwd, setEngineTaskQueueOrder } from "./task"
 import { findActiveRunForTask, findTask, type TaskRow } from "./store"
 import { deriveTaskStatus, isTaskActive, isTaskQueued, isTaskTerminal } from "./task-status"
 import type { OrchestratorEvent } from "@/orchestrator/agent"
@@ -405,10 +406,7 @@ export function reorderQueuedTasksForCwd(input: {
     }
 
     for (const [index, taskID] of orderedTaskIDs.entries()) {
-      db.update(EngineTaskTable)
-        .set({ queue_order: index, time_updated: now })
-        .where(eq(EngineTaskTable.id, taskID))
-        .run()
+      setEngineTaskQueueOrder(db, { taskID, queueOrder: index, timeUpdated: now })
     }
     const next = orderedTaskIDs.map((id, index) => ({ id, queueOrder: index, timeUpdated: now }))
     return {
@@ -604,39 +602,7 @@ export function claimNextForCwd(cwd: string, now = Date.now()): TaskRow | undefi
   // Terminal = time_completed IS NOT NULL.
   let result: TaskRow | undefined
   Database.transaction((db) => {
-    result = db
-      .update(EngineTaskTable)
-      .set({
-        time_started: now,
-        time_updated: now,
-      })
-      .where(
-        sql`${EngineTaskTable.id} = (
-          SELECT t.id
-          FROM engine_task t
-          LEFT JOIN session s ON s.id = t.session_id
-          LEFT JOIN project p ON p.id = t.project_id
-          WHERE t.time_started IS NULL AND t.time_completed IS NULL
-            AND COALESCE(s.directory, p.worktree) = ${cwd}
-            AND NOT EXISTS (
-              SELECT 1
-              FROM engine_task t2
-              LEFT JOIN session s2 ON s2.id = t2.session_id
-              LEFT JOIN project p2 ON p2.id = t2.project_id
-              WHERE t2.time_started IS NOT NULL AND t2.time_completed IS NULL
-                AND COALESCE(json_extract(t2.metadata, '$.interrupted'), 0) != 1
-                AND COALESCE(s2.directory, p2.worktree) = ${cwd}
-            )
-          ORDER BY
-            CASE t.priority WHEN 'critical' THEN 0 ELSE 1 END,
-            t.queue_order,
-            t.time_created,
-            t.id
-          LIMIT 1
-        )`,
-      )
-      .returning()
-      .get()
+    result = claimNextEngineTaskForCwd(db, { cwd, timeStarted: now })
     if (!result) return
     insertEngineProgressSnapshot(db, {
       taskID: result.id,
@@ -660,35 +626,7 @@ export function claimQueuedTaskForCwd(taskID: string, cwd: string, now = Date.no
   if (!taskID || !cwd) return undefined
   let result: TaskRow | undefined
   Database.transaction((db) => {
-    result = db
-      .update(EngineTaskTable)
-      .set({
-        time_started: now,
-        time_updated: now,
-      })
-      .where(
-        sql`${EngineTaskTable.id} = (
-          SELECT t.id
-          FROM engine_task t
-          LEFT JOIN session s ON s.id = t.session_id
-          LEFT JOIN project p ON p.id = t.project_id
-          WHERE t.id = ${taskID}
-            AND t.time_started IS NULL AND t.time_completed IS NULL
-            AND COALESCE(s.directory, p.worktree) = ${cwd}
-            AND NOT EXISTS (
-              SELECT 1
-              FROM engine_task t2
-              LEFT JOIN session s2 ON s2.id = t2.session_id
-              LEFT JOIN project p2 ON p2.id = t2.project_id
-              WHERE t2.time_started IS NOT NULL AND t2.time_completed IS NULL
-                AND COALESCE(json_extract(t2.metadata, '$.interrupted'), 0) != 1
-                AND COALESCE(s2.directory, p2.worktree) = ${cwd}
-            )
-          LIMIT 1
-        )`,
-      )
-      .returning()
-      .get()
+    result = claimQueuedEngineTaskForCwd(db, { taskID, cwd, timeStarted: now })
     if (!result) return
     insertEngineProgressSnapshot(db, {
       taskID: result.id,
