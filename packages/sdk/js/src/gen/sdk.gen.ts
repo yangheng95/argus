@@ -433,6 +433,8 @@ import type {
   ToolListResponses,
   VcsDiffResponses,
   VcsGetResponses,
+  WorkLedgerListErrors,
+  WorkLedgerListResponses,
   WorktreeCreateErrors,
   WorktreeCreateInput,
   WorktreeCreateResponses,
@@ -3112,6 +3114,17 @@ export class Control2 extends HeyApiClient {
             thread?: string
             /**
              * Short task title shown in the project board.
+             */
+            title?: string
+          }
+        | {
+            action: "wake_mission"
+            /**
+             * Full workflow request to hand to Mission.
+             */
+            request: string
+            /**
+             * Short Mission title shown in the Work Ledger.
              */
             title?: string
           }
@@ -9971,6 +9984,44 @@ export class Vcs extends HeyApiClient {
   }
 }
 
+export class WorkLedger extends HeyApiClient {
+  /**
+   * List Work Ledger rows
+   *
+   * Return one unified Mission, Task, and Chat ledger projection. Mission-owned tasks are nested under their Mission row and excluded from top-level Task rows.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      search?: string
+      limit?: number
+      cursorUpdated?: number
+      cursorRowKey?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "search" },
+            { in: "query", key: "limit" },
+            { in: "query", key: "cursorUpdated" },
+            { in: "query", key: "cursorRowKey" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<WorkLedgerListResponses, WorkLedgerListErrors, ThrowOnError>({
+      url: "/work-ledger",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class OpenCorvusClient extends HeyApiClient {
   public static readonly __registry = new HeyApiRegistry<OpenCorvusClient>()
 
@@ -10202,5 +10253,10 @@ export class OpenCorvusClient extends HeyApiClient {
   private _vcs?: Vcs
   get vcs(): Vcs {
     return (this._vcs ??= new Vcs({ client: this.client }))
+  }
+
+  private _workLedger?: WorkLedger
+  get workLedger(): WorkLedger {
+    return (this._workLedger ??= new WorkLedger({ client: this.client }))
   }
 }

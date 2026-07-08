@@ -388,6 +388,7 @@ describe("route directory policy", () => {
       "/auth/login",
       "/ui/index.html",
       "/mission",
+      "/work-ledger",
       "/attachment/project/shot.png",
       `/attachment/project/shot.png?variant=${SCREENSHOT_BROWSER_THUMBNAIL_VARIANT}`,
       "/task/abc",

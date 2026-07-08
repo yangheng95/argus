@@ -17165,6 +17165,7 @@
                           "projected_agents",
                           "virtual_agents",
                           "capability_projection",
+                          "version",
                           "display_label",
                           "source",
                           "readme",
@@ -20455,6 +20456,31 @@
                       },
                       "title": {
                         "description": "Short task title shown in the project board.",
+                        "maxLength": 80,
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "action",
+                      "request"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "properties": {
+                      "action": {
+                        "const": "wake_mission",
+                        "type": "string"
+                      },
+                      "request": {
+                        "description": "Full workflow request to hand to Mission.",
+                        "maxLength": 32000,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "title": {
+                        "description": "Short Mission title shown in the Work Ledger.",
                         "maxLength": 80,
                         "minLength": 1,
                         "type": "string"
@@ -60054,6 +60080,399 @@
           {
             "lang": "js",
             "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.vcs.diff({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/work-ledger": {
+      "get": {
+        "description": "Return one unified Mission, Task, and Chat ledger projection. Mission-owned tasks are nested under their Mission row and excluded from top-level Task rows.",
+        "operationId": "workLedger.list",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursorUpdated",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursorRowKey",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "nextCursor": {
+                      "anyOf": [
+                        {
+                          "properties": {
+                            "rowKey": {
+                              "type": "string"
+                            },
+                            "updated": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "updated",
+                            "rowKey"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "rows": {
+                      "items": {
+                        "anyOf": [
+                          {
+                            "properties": {
+                              "archived": {
+                                "type": "number"
+                              },
+                              "created": {
+                                "type": "number"
+                              },
+                              "directory": {
+                                "type": "string"
+                              },
+                              "id": {
+                                "maxLength": 64,
+                                "minLength": 1,
+                                "pattern": "^[a-z0-9-]+$",
+                                "type": "string"
+                              },
+                              "interruptible": {
+                                "type": "boolean"
+                              },
+                              "kind": {
+                                "const": "mission",
+                                "type": "string"
+                              },
+                              "missionID": {
+                                "maxLength": 64,
+                                "minLength": 1,
+                                "pattern": "^[a-z0-9-]+$",
+                                "type": "string"
+                              },
+                              "sessionID": {
+                                "type": "string"
+                              },
+                              "taskStats": {
+                                "properties": {
+                                  "active": {
+                                    "type": "number"
+                                  },
+                                  "cancelled": {
+                                    "type": "number"
+                                  },
+                                  "completed": {
+                                    "type": "number"
+                                  },
+                                  "failed": {
+                                    "type": "number"
+                                  },
+                                  "queued": {
+                                    "type": "number"
+                                  },
+                                  "total": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "total",
+                                  "queued",
+                                  "active",
+                                  "completed",
+                                  "failed",
+                                  "cancelled"
+                                ],
+                                "type": "object"
+                              },
+                              "tasks": {
+                                "items": {
+                                  "properties": {
+                                    "created": {
+                                      "type": "number"
+                                    },
+                                    "directory": {
+                                      "type": "string"
+                                    },
+                                    "executionStatus": {
+                                      "enum": [
+                                        "success",
+                                        "failed",
+                                        "running"
+                                      ],
+                                      "type": "string"
+                                    },
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "kind": {
+                                      "const": "task",
+                                      "type": "string"
+                                    },
+                                    "lifecycleStatus": {
+                                      "enum": [
+                                        "queued",
+                                        "active",
+                                        "completed",
+                                        "failed",
+                                        "cancelled"
+                                      ],
+                                      "type": "string"
+                                    },
+                                    "missionID": {
+                                      "maxLength": 64,
+                                      "minLength": 1,
+                                      "pattern": "^[a-z0-9-]+$",
+                                      "type": "string"
+                                    },
+                                    "missionSessionID": {
+                                      "type": "string"
+                                    },
+                                    "priority": {
+                                      "enum": [
+                                        "critical",
+                                        "high",
+                                        "normal",
+                                        "low"
+                                      ],
+                                      "type": "string"
+                                    },
+                                    "source": {
+                                      "type": "string"
+                                    },
+                                    "title": {
+                                      "type": "string"
+                                    },
+                                    "updated": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "id",
+                                    "title",
+                                    "directory",
+                                    "created",
+                                    "updated",
+                                    "lifecycleStatus",
+                                    "executionStatus",
+                                    "priority",
+                                    "source"
+                                  ],
+                                  "type": "object"
+                                },
+                                "type": "array"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "updated": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "id",
+                              "missionID",
+                              "sessionID",
+                              "title",
+                              "directory",
+                              "created",
+                              "updated",
+                              "interruptible",
+                              "taskStats",
+                              "tasks"
+                            ],
+                            "type": "object"
+                          },
+                          {
+                            "properties": {
+                              "created": {
+                                "type": "number"
+                              },
+                              "directory": {
+                                "type": "string"
+                              },
+                              "executionStatus": {
+                                "enum": [
+                                  "success",
+                                  "failed",
+                                  "running"
+                                ],
+                                "type": "string"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "const": "task",
+                                "type": "string"
+                              },
+                              "lifecycleStatus": {
+                                "enum": [
+                                  "queued",
+                                  "active",
+                                  "completed",
+                                  "failed",
+                                  "cancelled"
+                                ],
+                                "type": "string"
+                              },
+                              "missionID": {
+                                "maxLength": 64,
+                                "minLength": 1,
+                                "pattern": "^[a-z0-9-]+$",
+                                "type": "string"
+                              },
+                              "missionSessionID": {
+                                "type": "string"
+                              },
+                              "priority": {
+                                "enum": [
+                                  "critical",
+                                  "high",
+                                  "normal",
+                                  "low"
+                                ],
+                                "type": "string"
+                              },
+                              "source": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "updated": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "id",
+                              "title",
+                              "directory",
+                              "created",
+                              "updated",
+                              "lifecycleStatus",
+                              "executionStatus",
+                              "priority",
+                              "source"
+                            ],
+                            "type": "object"
+                          },
+                          {
+                            "properties": {
+                              "created": {
+                                "type": "number"
+                              },
+                              "directory": {
+                                "type": "string"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "const": "chat",
+                                "type": "string"
+                              },
+                              "sessionID": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "enum": [
+                                  "active",
+                                  "idle",
+                                  "terminal"
+                                ],
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "updated": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "id",
+                              "sessionID",
+                              "title",
+                              "directory",
+                              "created",
+                              "updated",
+                              "status"
+                            ],
+                            "type": "object"
+                          }
+                        ]
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "rows",
+                    "nextCursor"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Work Ledger rows"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            },
+            "description": "Bad request"
+          }
+        },
+        "summary": "List Work Ledger rows",
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.workLedger.list({\n  ...\n})"
           }
         ]
       }

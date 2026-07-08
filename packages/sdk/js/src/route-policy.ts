@@ -15,6 +15,7 @@ export const PROJECT_DIRECTORY_BYPASS_PATHS = [
   "/favicon.ico",
   "/global/tasks",
   "/mission",
+  "/work-ledger",
 ] as const
 
 export const PROJECT_DIRECTORY_BYPASS_PREFIXES = ["/global/", "/auth/", "/ui/", "/log/", "/attachment/"] as const

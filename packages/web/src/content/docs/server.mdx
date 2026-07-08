@@ -40,7 +40,7 @@ Most HTTP routes are split into focused modules under `packages/opencorvus/src/s
 | `orchestrator.ts` | `panel.ts`    | `permission.ts` |
 | `plugin.ts`   | `project.ts`     | `provider.ts`   |
 | `pty.ts`      | `question.ts`    | `session.ts`    |
-| `skill.ts`    | `terminal.ts`    |                 |
+| `skill.ts`    | `terminal.ts`    | `work-ledger.ts` |
 
 Each module owns a related slice of the API (e.g. `permission.ts` exposes `/permission/*`, `mcp.ts` exposes `/mcp/*`).
 `QuickNoteRoutes` is the mounted feature route outside that folder: it lives in `packages/opencorvus/src/quicknote/routes.ts` and is mounted by `app.ts` under `/api/v1/notes`.

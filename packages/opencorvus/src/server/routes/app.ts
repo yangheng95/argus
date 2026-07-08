@@ -36,6 +36,7 @@ import { TerminalRoutes } from "./terminal"
 import { AttachmentRoutes } from "./attachment"
 import { GatewayRoutes } from "./gateway"
 import { MissionRoutes } from "./mission"
+import { WorkLedgerRoutes } from "./work-ledger"
 import { BrowserPreviewRoutes } from "./browser-preview"
 import { PluginRoutes } from "./plugin"
 import { QuickNoteRoutes } from "@/quicknote/routes"
@@ -130,6 +131,7 @@ export function AppRoutes(root: Hono) {
     .route("/coding", CodingRoutes())
     .route("/gateway", GatewayRoutes())
     .route("/mission", MissionRoutes())
+    .route("/work-ledger", WorkLedgerRoutes())
     .route("/api/v1", QuickNoteRoutes())
     .route("/", BrowserPreviewRoutes())
     .post(

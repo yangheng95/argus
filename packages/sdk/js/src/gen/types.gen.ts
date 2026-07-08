@@ -6052,7 +6052,7 @@ export type ExpertSquadCatalogResponses = {
             readme_path: string
             root: string
           }
-      version?: string
+      version: string
       virtual_agents: Array<{
         base_role: string
         description?: string
@@ -7279,6 +7279,17 @@ export type GatewayControlActionData = {
         thread?: string
         /**
          * Short task title shown in the project board.
+         */
+        title?: string
+      }
+    | {
+        action: "wake_mission"
+        /**
+         * Full workflow request to hand to Mission.
+         */
+        request: string
+        /**
+         * Short Mission title shown in the Work Ledger.
          */
         title?: string
       }
@@ -9579,6 +9590,28 @@ export type MissionDeleteErrors = {
           [key: string]: unknown
         }
         name: "LogFileNotFoundError"
+      }
+  /**
+   * Conflict
+   */
+  409:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "ReplyTargetEnvelopeMissingError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "AgentSessionPendingCoordinationError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "TaskCancellationIncompleteError"
       }
 }
 
@@ -20165,3 +20198,99 @@ export type VcsDiffResponses = {
 }
 
 export type VcsDiffResponse = VcsDiffResponses[keyof VcsDiffResponses]
+
+export type WorkLedgerListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    search?: string
+    limit?: number
+    cursorUpdated?: number
+    cursorRowKey?: string
+  }
+  url: "/work-ledger"
+}
+
+export type WorkLedgerListErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type WorkLedgerListError = WorkLedgerListErrors[keyof WorkLedgerListErrors]
+
+export type WorkLedgerListResponses = {
+  /**
+   * Work Ledger rows
+   */
+  200: {
+    nextCursor: {
+      rowKey: string
+      updated: number
+    } | null
+    rows: Array<
+      | {
+          archived?: number
+          created: number
+          directory: string
+          id: string
+          interruptible: boolean
+          kind: "mission"
+          missionID: string
+          sessionID: string
+          taskStats: {
+            active: number
+            cancelled: number
+            completed: number
+            failed: number
+            queued: number
+            total: number
+          }
+          tasks: Array<{
+            created: number
+            directory: string
+            executionStatus: "success" | "failed" | "running"
+            id: string
+            kind: "task"
+            lifecycleStatus: "queued" | "active" | "completed" | "failed" | "cancelled"
+            missionID?: string
+            missionSessionID?: string
+            priority: "critical" | "high" | "normal" | "low"
+            source: string
+            title: string
+            updated: number
+          }>
+          title: string
+          updated: number
+        }
+      | {
+          created: number
+          directory: string
+          executionStatus: "success" | "failed" | "running"
+          id: string
+          kind: "task"
+          lifecycleStatus: "queued" | "active" | "completed" | "failed" | "cancelled"
+          missionID?: string
+          missionSessionID?: string
+          priority: "critical" | "high" | "normal" | "low"
+          source: string
+          title: string
+          updated: number
+        }
+      | {
+          created: number
+          directory: string
+          id: string
+          kind: "chat"
+          sessionID: string
+          status: "active" | "idle" | "terminal"
+          title: string
+          updated: number
+        }
+    >
+  }
+}
+
+export type WorkLedgerListResponse = WorkLedgerListResponses[keyof WorkLedgerListResponses]

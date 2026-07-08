@@ -40,7 +40,7 @@ opencorvus serve --hostname 127.0.0.1 --port 7878
 | `orchestrator.ts` | `panel.ts`    | `permission.ts` |
 | `plugin.ts`   | `project.ts`     | `provider.ts`   |
 | `pty.ts`      | `question.ts`    | `session.ts`    |
-| `skill.ts`    | `terminal.ts`    |                 |
+| `skill.ts`    | `terminal.ts`    | `work-ledger.ts` |
 
 每个模块负责一段相关 API（例如 `permission.ts` 暴露 `/permission/*`，`mcp.ts` 暴露 `/mcp/*`）。
 `QuickNoteRoutes` 是挂载在该目录外的功能路由：源码位于 `packages/opencorvus/src/quicknote/routes.ts`，由 `app.ts` 挂载到 `/api/v1/notes`。
