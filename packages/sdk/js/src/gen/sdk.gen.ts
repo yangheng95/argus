@@ -3735,301 +3735,6 @@ export class Mysql extends HeyApiClient {
    */
   public import<ThrowOnError extends boolean = false>(
     parameters: {
-<<<<<<< HEAD
-      taskID: string
-      evidenceID: string
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "taskID" },
-            { in: "path", key: "evidenceID" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<
-      BrowserPreviewReadTaskEvidenceResponses,
-      BrowserPreviewReadTaskEvidenceErrors,
-      ThrowOnError
-    >({
-      url: "/task/{taskID}/browser-preview/evidence/{evidenceID}",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Read browser preview evidence screenshot
-   *
-   * Return the persisted Playwright PNG screenshot for task-scoped browser preview evidence.
-   */
-  public readTaskEvidenceCapture<ThrowOnError extends boolean = false>(
-    parameters: {
-      taskID: string
-      evidenceID: string
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "taskID" },
-            { in: "path", key: "evidenceID" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<
-      BrowserPreviewReadTaskEvidenceCaptureResponses,
-      BrowserPreviewReadTaskEvidenceCaptureErrors,
-      ThrowOnError
-    >({
-      url: "/task/{taskID}/browser-preview/evidence/{evidenceID}/capture.png",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Read browser preview region comparison artifact
-   *
-   * Return a persisted source, implementation, side-by-side, or diff PNG for region comparison evidence.
-   */
-  public readTaskEvidenceArtifact<ThrowOnError extends boolean = false>(
-    parameters: {
-      taskID: string
-      evidenceID: string
-      artifactName: "source" | "implementation" | "side-by-side" | "diff"
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "taskID" },
-            { in: "path", key: "evidenceID" },
-            { in: "path", key: "artifactName" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<
-      BrowserPreviewReadTaskEvidenceArtifactResponses,
-      BrowserPreviewReadTaskEvidenceArtifactErrors,
-      ThrowOnError
-    >({
-      url: "/task/{taskID}/browser-preview/evidence/{evidenceID}/artifact/{artifactName}",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Save task browser preview target
-   *
-   * Persist a user-entered URL as the task browser preview target.
-   */
-  public saveTaskTarget<ThrowOnError extends boolean = false>(
-    parameters: {
-      taskID: string
-      directory?: string
-      url: string
-      viewports: Array<{
-        id: "desktop" | "tablet" | "mobile"
-        labelKey: string
-        width: number
-        height: number
-      }>
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "taskID" },
-            { in: "query", key: "directory" },
-            { in: "body", key: "url" },
-            { in: "body", key: "viewports" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<
-      BrowserPreviewSaveTaskTargetResponses,
-      BrowserPreviewSaveTaskTargetErrors,
-      ThrowOnError
-    >({
-      url: "/task/{taskID}/browser-preview/target",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Select task browser preview target
-   *
-   * Promote an existing task browser preview target artifact as the task preview target.
-   */
-  public selectTaskTarget<ThrowOnError extends boolean = false>(
-    parameters: {
-      taskID: string
-      directory?: string
-      targetID: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "taskID" },
-            { in: "query", key: "directory" },
-            { in: "body", key: "targetID" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).put<
-      BrowserPreviewSelectTaskTargetResponses,
-      BrowserPreviewSelectTaskTargetErrors,
-      ThrowOnError
-    >({
-      url: "/task/{taskID}/browser-preview/target",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Capture browser preview verification evidence
-   *
-   * Capture Playwright-backed screenshot evidence for the task-scoped browser preview target and persist the evidence artifact.
-   */
-  public captureTaskTarget<ThrowOnError extends boolean = false>(
-    parameters: {
-      taskID: string
-      directory?: string
-      targetID: string
-      viewportIDs: Array<"desktop" | "tablet" | "mobile">
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "taskID" },
-            { in: "query", key: "directory" },
-            { in: "body", key: "targetID" },
-            { in: "body", key: "viewportIDs" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<
-      BrowserPreviewCaptureTaskTargetResponses,
-      BrowserPreviewCaptureTaskTargetErrors,
-      ThrowOnError
-    >({
-      url: "/task/{taskID}/browser-preview/capture",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Compare browser preview regions against source visual evidence
-   *
-   * Capture task-scoped local regions from the persisted preview target and persist source/local side-by-side comparison artifacts.
-   */
-  public compareTaskTargetRegions<ThrowOnError extends boolean = false>(
-    parameters: {
-      taskID: string
-      directory?: string
-      targetID: string
-      viewportIDs: Array<"desktop" | "tablet" | "mobile">
-      inlineBindings: Array<{
-        region_id: string
-        viewport_id: "desktop" | "tablet" | "mobile"
-        state_id?: string
-        region_scope: "page-section" | "card" | "content" | "title" | "chart" | "table" | "control" | "navigation"
-        crop_intent: "full-region" | "content-well"
-        source: {
-          reference_artifact_id: "reference.png" | "web-clone-source/reference.png"
-          bbox: {
-            x: number
-            y: number
-            width: number
-            height: number
-          }
-          semantic_role: string
-          text_anchors?: Array<string>
-          source_refs?: Array<string>
-        }
-        implementation: {
-          route?: string
-          locator:
-            | {
-                kind: "test-id"
-                value: string
-              }
-            | {
-                kind: "data-oc-region"
-                value: string
-              }
-            | {
-                kind: "role"
-                role: string
-                name: string
-              }
-            | {
-                kind: "selector"
-                value: string
-                owner_file: string
-              }
-          component_files?: Array<string>
-        }
-        acceptance_refs?: Array<string>
-      }>
-      output?: {
-        include_fullpage_overview?: boolean
-        include_side_by_side?: boolean
-        include_diff?: boolean
-=======
       snapshot: {
         format: "opencorvus.mysql-transfer.v1"
         schemaFingerprint: string
@@ -4040,7 +3745,6 @@ export class Mysql extends HeyApiClient {
             [key: string]: unknown
           }>
         }>
->>>>>>> v0.0.2beta
       }
     },
     options?: Options<never, ThrowOnError>,
@@ -10126,6 +9830,54 @@ export class BrowserPreview extends HeyApiClient {
       url: "/task/{taskID}/browser-preview/evidence/{evidenceID}/capture.png",
       ...options,
       ...params,
+    })
+  }
+
+  /**
+   * Save task browser preview target
+   *
+   * Persist a user-entered URL as the task browser preview target.
+   */
+  public saveTaskTarget<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+      url: string
+      viewports: Array<{
+        height: number
+        id: "desktop" | "tablet" | "mobile"
+        labelKey: string
+        width: number
+      }>
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "url" },
+            { in: "body", key: "viewports" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      BrowserPreviewSaveTaskTargetResponses,
+      BrowserPreviewSaveTaskTargetErrors,
+      ThrowOnError
+    >({
+      url: "/task/{taskID}/browser-preview/target",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 
