@@ -36,6 +36,11 @@ import {
   overlayServerDistName,
   overlayServerFileName,
 } from "./artifact-names"
+import {
+  discoverOverlayUiSourceFiles,
+  renderEmbeddedOverlayUiModule,
+  resolveEmbeddedOverlayUiModulePath,
+} from "../../../script/package-linux-binary"
 
 const dir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const repo = path.resolve(dir, "../..")
@@ -147,7 +152,22 @@ if (skipTauri) {
   process.exit(0)
 }
 
-// ── Step 3: Remove stale opencorvus binary ──
+// ── Step 3: Regenerate embedded overlay UI module ──
+//
+// The opencorvus server embeds the freshly built dist-vite/ assets via
+// overlay-ui-embedded.generated.ts. Vite emits content-hashed filenames, so the
+// generated module must be rewritten after every Vite build — otherwise the SDK
+// rebuild below (which runs opencorvus's generate-openapi) imports the previous
+// build's asset hashes and fails with "Cannot find module".
+step("Regenerate embedded overlay UI module")
+{
+  const modulePath = resolveEmbeddedOverlayUiModulePath(repo)
+  const embeddedFiles = await discoverOverlayUiSourceFiles(repo)
+  await fs.writeFile(modulePath, renderEmbeddedOverlayUiModule(modulePath, embeddedFiles))
+  console.log(`regenerated ${modulePath} (${embeddedFiles.length} files)`)
+}
+
+// ── Step 4: Remove stale opencorvus binary ──
 //
 // The overlay embeds the opencorvus sidecar payload at build time via OPENCORVUS_EMBED_PATH.
 // If we skip this step, a stale binary from a previous build is reused — the Tauri

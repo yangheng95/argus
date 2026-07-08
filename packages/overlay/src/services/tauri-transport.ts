@@ -504,6 +504,10 @@ export function createTauriTransport(kind: Extract<HostKind, "tauri" | "browser"
           return invokeTauri("overlay_browser_preview_navigate", { action: command.action })
         case "browserPreview.close":
           return invokeTauri("overlay_browser_preview_close")
+        case "browserPreview.selection.setEnabled":
+          return invokeTauri("overlay_browser_preview_selection_set_enabled", { enabled: command.enabled })
+        case "browserPreview.selection.take":
+          return invokeTauri("overlay_browser_preview_selection_take")
         case "settings.load":
           return invokeTauri("overlay_settings_load")
         case "settings.save":

@@ -25,6 +25,8 @@ import type {
   BrowserPreviewReadTaskEvidenceCaptureResponses,
   BrowserPreviewReadTaskEvidenceErrors,
   BrowserPreviewReadTaskEvidenceResponses,
+  BrowserPreviewSaveTaskTargetErrors,
+  BrowserPreviewSaveTaskTargetResponses,
   BrowserPreviewSelectTaskTargetErrors,
   BrowserPreviewSelectTaskTargetResponses,
   BrowserPreviewTaskTargetErrors,
@@ -6218,6 +6220,54 @@ export class BrowserPreview extends HeyApiClient {
       url: "/task/{taskID}/browser-preview/evidence/{evidenceID}/artifact/{artifactName}",
       ...options,
       ...params,
+    })
+  }
+
+  /**
+   * Save task browser preview target
+   *
+   * Persist a user-entered URL as the task browser preview target.
+   */
+  public saveTaskTarget<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+      url: string
+      viewports: Array<{
+        id: "desktop" | "tablet" | "mobile"
+        labelKey: string
+        width: number
+        height: number
+      }>
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "url" },
+            { in: "body", key: "viewports" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      BrowserPreviewSaveTaskTargetResponses,
+      BrowserPreviewSaveTaskTargetErrors,
+      ThrowOnError
+    >({
+      url: "/task/{taskID}/browser-preview/target",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 

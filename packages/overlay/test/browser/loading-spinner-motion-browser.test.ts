@@ -190,22 +190,18 @@ test("loading spinners animate through shared motion tokens and stop for reduced
     })
     const previewLoadingStatus = await page.evaluate(() => {
       const stage = document.querySelector<HTMLElement>('.browser-preview-empty[data-status="loading"]')
-      const status = document.querySelector<HTMLElement>('.browser-preview-status[data-status="loading"]')
+      const progress = document.querySelector<HTMLElement>('[data-ui="browser-preview-progress"]')
       return {
         stageRole: stage?.getAttribute("role") ?? "",
         stageLive: stage?.getAttribute("aria-live") ?? "",
         stageText: stage?.textContent?.trim() ?? "",
-        statusRole: status?.getAttribute("role") ?? "",
-        statusLive: status?.getAttribute("aria-live") ?? "",
-        statusText: status?.textContent?.trim() ?? "",
+        hasChromeProgress: Boolean(progress),
       }
     })
     assert.equal(previewLoadingStatus.stageRole, "status")
     assert.equal(previewLoadingStatus.stageLive, "polite")
     assert.equal(previewLoadingStatus.stageText, browserPreviewLoadingText)
-    assert.equal(previewLoadingStatus.statusRole, "status")
-    assert.equal(previewLoadingStatus.statusLive, "polite")
-    assert.equal(previewLoadingStatus.statusText, browserPreviewLoadingText)
+    assert.equal(previewLoadingStatus.hasChromeProgress, true)
 
     await page.waitForSelector('.app-notifications[data-surface="toast"]', { state: "attached", timeout: 15_000 })
     await page.evaluate(() => {

@@ -1,5 +1,6 @@
 # July 2026 Records
 
+- [2026-07-08-browser-preview-dom-selection-sync.md](2026-07-08-browser-preview-dom-selection-sync.md) records the plan to sync OpenMirror-style browser preview DOM selection into OpenCorvus by keeping hit-testing inside the native guest webview, removing iframe/point-based selection, and aligning native command protocol coverage.
 - [2026-07-07-frontend-innovate-html-design-ground-truth.md](2026-07-07-frontend-innovate-html-design-ground-truth.md) records the plan to give frontend-innovate a registry-owned workflow with `frontend_design`, redefine that agent as competitor-informed HTML redesign owner, and make the rendered HTML design draft the downstream ground truth.
 - [2026-07-07-frontend-replica-frontend-design-disconnect.md](2026-07-07-frontend-replica-frontend-design-disconnect.md) records the frontend-replica workflow disconnect that removes `frontend_design` from the built-in pipeline and active dispatch target while preserving the frontend-design agent/tool/handoff surfaces.
 - [2026-07-07-unified-scheduler-dispatch-tool.md](2026-07-07-unified-scheduler-dispatch-tool.md) records the plan to collapse visible Orchestrator scheduler stage tools into one parameterized dispatch tool while keeping workflow stage identity as scheduler data.

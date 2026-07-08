@@ -172,6 +172,38 @@ export interface BrowserPreviewNativeBounds {
   height: number
 }
 
+export interface BrowserPreviewNativeSelection {
+  x: number
+  y: number
+  width: number
+  height: number
+  label: string
+  tagName?: string
+  selector?: string
+  jsPath?: string
+  domPath?: string
+  textPreview?: string
+  role?: string
+  accessibleName?: string
+  pageUrl?: string
+  pageTitle?: string
+  sourceHint?: string
+  computedColor?: string
+  computedFont?: string
+  capturedAt?: number
+}
+
+/**
+ * Discriminated result returned by `browserPreview.selection.take`.
+ * - `kind: "waiting"` — no selection yet, keep polling.
+ * - `kind: "captured"` — user clicked a node; host consumes `selection` and exits mode.
+ * - `kind: "canceled"` — user pressed Escape in the native webview; host exits mode.
+ */
+export type BrowserPreviewNativeSelectionResult =
+  | { kind: "waiting" }
+  | { kind: "captured"; selection: BrowserPreviewNativeSelection }
+  | { kind: "canceled" }
+
 export const BROWSER_PREVIEW_NATIVE_NAVIGATION_ACTIONS = ["back", "forward", "reload"] as const
 export type BrowserPreviewNativeNavigationAction = (typeof BROWSER_PREVIEW_NATIVE_NAVIGATION_ACTIONS)[number]
 
@@ -181,6 +213,8 @@ export type NativeCommand =
   | { kind: "browserPreview.sync"; url: string; bounds: BrowserPreviewNativeBounds }
   | { kind: "browserPreview.navigate"; action: BrowserPreviewNativeNavigationAction }
   | { kind: "browserPreview.close" }
+  | { kind: "browserPreview.selection.setEnabled"; enabled: boolean }
+  | { kind: "browserPreview.selection.take" }
   | { kind: "settings.load" }
   | { kind: "settings.save"; payload: unknown }
   | { kind: "config.write-file"; path: string; content: string }
@@ -421,6 +455,10 @@ export function isNativeCommand(value: unknown): value is NativeCommand {
     case "browserPreview.navigate":
       return (BROWSER_PREVIEW_NATIVE_NAVIGATION_ACTIONS as readonly string[]).includes(obj["action"] as string)
     case "browserPreview.close":
+      return true
+    case "browserPreview.selection.setEnabled":
+      return typeof obj["enabled"] === "boolean"
+    case "browserPreview.selection.take":
       return true
     case "settings.load":
       return true

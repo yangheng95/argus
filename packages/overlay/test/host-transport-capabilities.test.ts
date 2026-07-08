@@ -34,6 +34,8 @@ const NATIVE_COMMAND_KINDS: NativeCommandKind[] = [
   "browserPreview.sync",
   "browserPreview.navigate",
   "browserPreview.close",
+  "browserPreview.selection.setEnabled",
+  "browserPreview.selection.take",
   "settings.load",
   "settings.save",
   "config.write-file",

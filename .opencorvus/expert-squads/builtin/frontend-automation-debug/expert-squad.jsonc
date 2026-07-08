@@ -14,17 +14,6 @@
     "scheduler": {
       "role_base": true,
       "built_in_tool_ids": [
-        "analyze_intent",
-        "requirements",
-        "architect",
-        "frontend_research",
-        "frontend_design",
-        "workload_analysis",
-        "build",
-        "visual_qa",
-        "integrity",
-        "fact_check",
-        "explore",
         "add_goal",
         "modify_goal",
         "complete_goal",
@@ -32,7 +21,9 @@
         "propose_task",
         "refine",
         "browser_preview",
-        "bash"
+        "bash",
+        "dispatch_agent",
+        "manage_task"
       ]
     },
     "agents": {

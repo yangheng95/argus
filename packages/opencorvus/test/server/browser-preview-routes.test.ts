@@ -14,10 +14,13 @@ import {
 } from "../../src/browser-preview/persist"
 import { Database } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
-import { persistTestBrowserPreviewTarget as persistBrowserPreviewTarget } from "../fixture/browser-preview"
+import {
+  TEST_BROWSER_PREVIEW_VIEWPORTS,
+  persistTestBrowserPreviewTarget,
+  persistTestBrowserPreviewTarget as persistBrowserPreviewTarget,
+} from "../fixture/browser-preview"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
-import { persistTestBrowserPreviewTarget } from "../fixture/browser-preview"
 
 Log.init({ print: false })
 
@@ -376,6 +379,35 @@ describe("browser preview routes", () => {
       expect(response.status).toBe(400)
       const body = await response.json()
       expect(JSON.stringify(body)).toContain("targetID")
+    },
+    { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
+    "POST /task/:taskID/browser-preview/target saves a user-entered URL target",
+    async () => {
+      await using tmp = await tmpdir()
+      const taskID = await seedTask(tmp.path)
+      const app = Server.App()
+
+      const response = await app.request(`/task/${taskID}/browser-preview/target`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-opencorvus-directory": tmp.path,
+        },
+        body: JSON.stringify({
+          url: "localhost:5173/app",
+          viewports: TEST_BROWSER_PREVIEW_VIEWPORTS,
+        }),
+      })
+
+      expect(response.status).toBe(200)
+      const body = (await response.json()) as { id?: string; status: string; url?: string; diagnostics?: string[] }
+      expect(body.id).toBeTruthy()
+      expect(body.status).toBe("ready")
+      expect(body.url).toBe("http://localhost:5173/app")
+      expect(body.diagnostics?.join("\n")).toContain("Saved task browser preview target")
     },
     { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
   )

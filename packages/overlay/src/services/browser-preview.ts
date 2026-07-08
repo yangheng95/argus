@@ -107,6 +107,21 @@ export async function selectTaskBrowserPreviewTarget(input: {
   })) as BrowserPreviewTarget
 }
 
+export async function saveTaskBrowserPreviewTarget(input: {
+  taskID: string
+  directory: string
+  url: string
+  viewports: BrowserPreviewViewport[]
+  signal?: AbortSignal
+}): Promise<BrowserPreviewTarget> {
+  return (await apiJson(taskBrowserPreviewPath(input.taskID, input.directory, "/target"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url: input.url, viewports: input.viewports }),
+    signal: input.signal,
+  })) as BrowserPreviewTarget
+}
+
 export async function captureTaskBrowserPreviewEvidence(input: {
   taskID: string
   directory: string

@@ -209,6 +209,30 @@ describe("isWebviewMessage", () => {
       isWebviewMessage({
         protocol: PROTOCOL_VERSION,
         type: "native.request",
+        id: "preview-selection-enable",
+        command: { kind: "browserPreview.selection.setEnabled", enabled: true },
+      }),
+    ).toBe(true)
+    expect(
+      isWebviewMessage({
+        protocol: PROTOCOL_VERSION,
+        type: "native.request",
+        id: "preview-selection-take",
+        command: { kind: "browserPreview.selection.take" },
+      }),
+    ).toBe(true)
+    expect(
+      isWebviewMessage({
+        protocol: PROTOCOL_VERSION,
+        type: "native.request",
+        id: "preview-selection-invalid-enabled",
+        command: { kind: "browserPreview.selection.setEnabled", enabled: "true" },
+      }),
+    ).toBe(false)
+    expect(
+      isWebviewMessage({
+        protocol: PROTOCOL_VERSION,
+        type: "native.request",
         id: "preview-invalid-action",
         command: { kind: "browserPreview.navigate", action: "stop" },
       }),

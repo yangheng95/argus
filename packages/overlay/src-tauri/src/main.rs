@@ -40,6 +40,220 @@ const TRAY_ID: &str = "main-tray";
 const TRAY_TOOLTIP_DEFAULT: &str = "OpenCorvus";
 const TRAY_TOOLTIP_ALERT: &str = "OpenCorvus - Action required";
 const BROWSER_PREVIEW_WEBVIEW_LABEL: &str = "browser-preview-live-webview";
+// Injected into the browser-preview child webview (all frames, document start).
+// Mirrors the reference open-mirror-app model: the element picker runs INSIDE
+// the guest page (real DOM hit-testing) and reports the selected node rect +
+// label back to the Rust host over the built-in Tauri IPC bridge. The overlay
+// then pulls the latest selection via `overlay_browser_preview_selection_take`
+// and renders its existing selection box / comment popover. This replaces the
+// old "hide native, capture on a host iframe overlay" approach which never
+// received clicks because the native child webview stayed on top (WebView2).
+const BROWSER_PREVIEW_SELECTION_RUNTIME: &str = r###"
+(function () {
+  if (window.__OPENCORVUS_PREVIEW_SELECTION__) return;
+  var state = { enabled: false, hover: null };
+  var ROOT_ID = "__opencorvus_preview_selection_root__";
+  var root = null;
+  var outline = null;
+  var hud = null;
+
+  function px(value) { return Math.max(0, Math.round(value)) + "px"; }
+  function text(value) { return value == null ? "" : String(value); }
+  function trimText(value, max) {
+    var normalized = text(value).replace(/\s+/g, " ").trim();
+    return normalized.length > max ? normalized.slice(0, max - 1) + "…" : normalized;
+  }
+  function safeInvoke(command, payload) {
+    try {
+      var internals = window.__TAURI_INTERNALS__;
+      if (internals && typeof internals.invoke === "function") internals.invoke(command, payload);
+    } catch (err) {}
+  }
+  function ensureRoot() {
+    if (root && root.isConnected) return root;
+    root = document.getElementById(ROOT_ID);
+    if (!root) {
+      root = document.createElement("div");
+      root.id = ROOT_ID;
+      root.style.cssText = "position:fixed;inset:0;z-index:2147483647;pointer-events:none;font-family:Arial,sans-serif;";
+      document.documentElement.appendChild(root);
+    }
+    outline = document.createElement("div");
+    outline.style.cssText = "position:fixed;box-sizing:border-box;border:2px solid #2f7cff;background:rgba(47,124,255,.055);box-shadow:0 0 0 4px rgba(47,124,255,.16),0 18px 48px rgba(47,124,255,.22);border-radius:12px;display:none;";
+    hud = document.createElement("div");
+    hud.style.cssText = "position:fixed;display:none;min-width:280px;max-width:min(560px,calc(100vw - 24px));box-sizing:border-box;border-radius:24px;background:rgba(31,40,64,.97);color:#fff;padding:18px 28px;box-shadow:0 18px 44px rgba(0,0,0,.38);font-size:14px;line-height:1.7;";
+    root.replaceChildren(outline, hud);
+    return root;
+  }
+  function clearVisuals() {
+    if (outline) outline.style.display = "none";
+    if (hud) hud.style.display = "none";
+  }
+  function cleanup() {
+    clearVisuals();
+    state.hover = null;
+    document.documentElement.style.cursor = "";
+    document.documentElement.style.userSelect = "";
+  }
+  function cssEscapeIdent(value) {
+    if (window.CSS && typeof window.CSS.escape === "function") return window.CSS.escape(value);
+    return String(value).replace(/[^a-zA-Z0-9_-]/g, "\\$&");
+  }
+  function elementIndex(el) {
+    var index = 1;
+    var previous = el.previousElementSibling;
+    while (previous) {
+      if (previous.tagName === el.tagName) index += 1;
+      previous = previous.previousElementSibling;
+    }
+    return index;
+  }
+  function selectorFor(el) {
+    if (!el || el.nodeType !== 1) return null;
+    if (el.id) return el.tagName.toLowerCase() + "#" + cssEscapeIdent(el.id);
+    var part = el.tagName.toLowerCase();
+    var cls = typeof el.className === "string" ? el.className.trim().split(/\s+/).filter(Boolean)[0] : "";
+    if (cls) part += "." + cssEscapeIdent(cls);
+    if (el.parentElement && Array.prototype.filter.call(el.parentElement.children, function (child) { return child.tagName === el.tagName; }).length > 1) {
+      part += ":nth-of-type(" + elementIndex(el) + ")";
+    }
+    return part;
+  }
+  function buildDomPath(el) {
+    var parts = [];
+    var current = el;
+    while (current && current.nodeType === 1 && current !== document.documentElement) {
+      parts.unshift(selectorFor(current));
+      current = current.parentElement;
+      if (parts.length >= 6) break;
+    }
+    return parts.filter(Boolean).join(" > ");
+  }
+  function buildJsPath(el) {
+    var parts = [];
+    var current = el;
+    while (current && current.nodeType === 1 && current !== document.documentElement) {
+      var parent = current.parentElement;
+      if (!parent) break;
+      var index = Array.prototype.indexOf.call(parent.children, current);
+      parts.unshift("children[" + index + "]");
+      current = parent;
+      if (parts.length >= 8) break;
+    }
+    return "document.documentElement." + parts.join(".");
+  }
+  function accessibleName(el) {
+    return el.getAttribute("aria-label") || el.getAttribute("alt") || el.getAttribute("title") || trimText(el.textContent, 80) || null;
+  }
+  function describe(el) {
+    var tag = el.tagName ? el.tagName.toLowerCase() : "element";
+    if (el.id) return tag + "#" + el.id;
+    var cls = typeof el.className === "string" ? el.className.trim().split(/\s+/)[0] : "";
+    return cls ? tag + "." + cls : tag;
+  }
+  function buildSelection(el, anchorPoint) {
+    var rect = el.getBoundingClientRect();
+    var computed = window.getComputedStyle ? window.getComputedStyle(el) : null;
+    var font = computed ? [computed.fontSize, computed.fontFamily].filter(Boolean).join(" ") : null;
+    return {
+      x: Math.round(rect.left),
+      y: Math.round(rect.top),
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+      label: describe(el),
+      tagName: el.tagName ? el.tagName.toLowerCase() : null,
+      selector: selectorFor(el),
+      jsPath: buildJsPath(el),
+      domPath: buildDomPath(el),
+      textPreview: trimText(el.textContent, 140),
+      role: el.getAttribute("role"),
+      accessibleName: accessibleName(el),
+      pageUrl: location.href,
+      pageTitle: document.title || null,
+      sourceHint: el.getAttribute("data-source-location") || el.getAttribute("data-source") || el.getAttribute("data-oc-source") || null,
+      computedColor: computed ? computed.color : null,
+      computedFont: font,
+      anchorX: anchorPoint ? Math.round(anchorPoint.x) : null,
+      anchorY: anchorPoint ? Math.round(anchorPoint.y) : null,
+      capturedAt: Date.now()
+    };
+  }
+  function selectableFromPoint(x, y) {
+    var list = document.elementsFromPoint ? document.elementsFromPoint(x, y) : [document.elementFromPoint(x, y)];
+    for (var i = 0; i < list.length; i += 1) {
+      var el = list[i];
+      if (!el || el === root || (root && root.contains(el))) continue;
+      if (el === document.documentElement || el === document.body) continue;
+      if (el.getBoundingClientRect) return el;
+    }
+    return null;
+  }
+  function renderHover(selection) {
+    ensureRoot();
+    if (!outline || !hud || !selection) return;
+    outline.style.display = "block";
+    outline.style.left = px(selection.x);
+    outline.style.top = px(selection.y);
+    outline.style.width = px(selection.width);
+    outline.style.height = px(selection.height);
+    var left = Math.min(Math.max(12, selection.x + 28), Math.max(12, window.innerWidth - 572));
+    var below = selection.y + selection.height + 14;
+    var top = below + 160 < window.innerHeight ? below : Math.max(12, selection.y - 180);
+    hud.style.display = "block";
+    hud.style.left = px(left);
+    hud.style.top = px(top);
+    hud.innerHTML = "<div style='display:flex;justify-content:space-between;gap:24px;font-weight:700;font-size:18px;margin-bottom:12px'><span>" + selection.label + "</span><span>" + selection.width + "×" + selection.height + "</span></div>" +
+      "<div style='display:grid;grid-template-columns:72px minmax(0,1fr);gap:6px 20px;color:#b8c0d4'><span>颜色</span><code style='color:white;font:600 13px ui-monospace,Menlo,monospace'>" + (selection.computedColor || "—") + "</code><span>字体</span><code style='color:white;font:600 13px ui-monospace,Menlo,monospace'>" + (selection.computedFont || "—") + "</code><span>来源</span><code style='color:white;font:600 12px ui-monospace,Menlo,monospace;white-space:normal'>" + (selection.sourceHint || selection.domPath || "DOM") + "</code></div>";
+  }
+  function onPointerMove(evt) {
+    if (!state.enabled) return;
+    var el = selectableFromPoint(evt.clientX, evt.clientY);
+    if (!el) { clearVisuals(); state.hover = null; return; }
+    var selection = buildSelection(el, { x: evt.clientX, y: evt.clientY });
+    state.hover = selection;
+    renderHover(selection);
+  }
+  function onPointerDown(evt) {
+    if (!state.enabled) return;
+    evt.preventDefault();
+    evt.stopPropagation();
+  }
+  function onClick(evt) {
+    if (!state.enabled) return;
+    evt.preventDefault();
+    evt.stopPropagation();
+    var el = selectableFromPoint(evt.clientX, evt.clientY);
+    if (!el) return;
+    var selection = buildSelection(el, { x: evt.clientX, y: evt.clientY });
+    state.enabled = false;
+    cleanup();
+    safeInvoke("overlay_browser_preview_selection_report", { selection: selection });
+  }
+  function onKeyDown(evt) {
+    if (!state.enabled || evt.key !== "Escape") return;
+    evt.preventDefault();
+    evt.stopPropagation();
+    state.enabled = false;
+    cleanup();
+    safeInvoke("overlay_browser_preview_selection_cancel", {});
+  }
+  function setEnabled(value) {
+    state.enabled = !!value;
+    if (state.enabled) {
+      ensureRoot();
+      document.documentElement.style.cursor = "crosshair";
+      document.documentElement.style.userSelect = "none";
+    } else {
+      cleanup();
+    }
+  }
+  window.addEventListener("pointermove", onPointerMove, true);
+  window.addEventListener("pointerdown", onPointerDown, true);
+  window.addEventListener("click", onClick, true);
+  window.addEventListener("keydown", onKeyDown, true);
+  window.__OPENCORVUS_PREVIEW_SELECTION__ = { setEnabled: setEnabled };
+})();
+"###;
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 const OVERLAY_WINDOW_WIDTH_FRACTION: f64 = 0.80;
@@ -654,6 +868,97 @@ struct BrowserPreviewBounds {
     height: f64,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BrowserPreviewSelection {
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    label: String,
+    tag_name: Option<String>,
+    selector: Option<String>,
+    js_path: Option<String>,
+    dom_path: Option<String>,
+    text_preview: Option<String>,
+    role: Option<String>,
+    accessible_name: Option<String>,
+    page_url: Option<String>,
+    page_title: Option<String>,
+    source_hint: Option<String>,
+    computed_color: Option<String>,
+    computed_font: Option<String>,
+    anchor_x: Option<f64>,
+    anchor_y: Option<f64>,
+    captured_at: Option<f64>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+enum BrowserPreviewSelectionResult {
+    Captured { selection: BrowserPreviewSelection },
+    Canceled,
+}
+
+static BROWSER_PREVIEW_SELECTION: OnceLock<Mutex<Option<BrowserPreviewSelectionResult>>> = OnceLock::new();
+
+fn browser_preview_selection_store() -> &'static Mutex<Option<BrowserPreviewSelectionResult>> {
+    BROWSER_PREVIEW_SELECTION.get_or_init(|| Mutex::new(None))
+}
+
+fn clean_browser_preview_selection_text(input: Option<String>) -> Option<String> {
+    input
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .map(|value| value.chars().take(500).collect())
+}
+
+fn clean_browser_preview_selection_number(input: Option<f64>) -> Option<f64> {
+    input.filter(|value| value.is_finite())
+}
+
+fn validate_browser_preview_selection(
+    selection: BrowserPreviewSelection,
+) -> Result<BrowserPreviewSelection, String> {
+    if !selection.x.is_finite()
+        || !selection.y.is_finite()
+        || !selection.width.is_finite()
+        || !selection.height.is_finite()
+        || selection.width <= 0.0
+        || selection.height <= 0.0
+    {
+        return Err(
+            "browser preview selection must contain finite x/y and positive width/height".to_string(),
+        );
+    }
+    let label = selection.label.trim().to_string();
+    if label.is_empty() {
+        return Err("browser preview selection label must not be empty".to_string());
+    }
+    Ok(BrowserPreviewSelection {
+        x: selection.x,
+        y: selection.y,
+        width: selection.width,
+        height: selection.height,
+        label: label.chars().take(200).collect(),
+        tag_name: clean_browser_preview_selection_text(selection.tag_name),
+        selector: clean_browser_preview_selection_text(selection.selector),
+        js_path: clean_browser_preview_selection_text(selection.js_path),
+        dom_path: clean_browser_preview_selection_text(selection.dom_path),
+        text_preview: clean_browser_preview_selection_text(selection.text_preview),
+        role: clean_browser_preview_selection_text(selection.role),
+        accessible_name: clean_browser_preview_selection_text(selection.accessible_name),
+        page_url: clean_browser_preview_selection_text(selection.page_url),
+        page_title: clean_browser_preview_selection_text(selection.page_title),
+        source_hint: clean_browser_preview_selection_text(selection.source_hint),
+        computed_color: clean_browser_preview_selection_text(selection.computed_color),
+        computed_font: clean_browser_preview_selection_text(selection.computed_font),
+        anchor_x: clean_browser_preview_selection_number(selection.anchor_x),
+        anchor_y: clean_browser_preview_selection_number(selection.anchor_y),
+        captured_at: clean_browser_preview_selection_number(selection.captured_at),
+    })
+}
+
 fn validate_browser_preview_bounds(
     bounds: BrowserPreviewBounds,
 ) -> Result<BrowserPreviewBounds, String> {
@@ -712,6 +1017,7 @@ async fn overlay_browser_preview_sync<R: Runtime>(
         BROWSER_PREVIEW_WEBVIEW_LABEL,
         tauri::WebviewUrl::External(target_url),
     )
+    .initialization_script_for_all_frames(BROWSER_PREVIEW_SELECTION_RUNTIME)
     .on_new_window(|_, _| tauri::webview::NewWindowResponse::Deny);
     let webview = window
         .add_child(builder, position, size)
@@ -760,6 +1066,71 @@ fn overlay_browser_preview_close<R: Runtime>(app: AppHandle<R>) -> Result<bool, 
         return Ok(true);
     }
     Ok(false)
+}
+
+fn browser_preview_selection_set_enabled_script(enabled: bool) -> String {
+    format!(
+        "window.__OPENCORVUS_PREVIEW_SELECTION__ && window.__OPENCORVUS_PREVIEW_SELECTION__.setEnabled({});",
+        if enabled { "true" } else { "false" }
+    )
+}
+
+// Toggle the in-guest element picker inside the browser-preview child webview.
+// Enabling arms the injected runtime's click capture; disabling clears it. This
+// keeps element selection inside the native webview (like open-mirror-app),
+// instead of trying to route clicks through a host overlay that the native
+// child webview would occlude.
+#[tauri::command]
+fn overlay_browser_preview_selection_set_enabled<R: Runtime>(
+    app: AppHandle<R>,
+    enabled: bool,
+) -> Result<bool, String> {
+    let webview = app
+        .get_webview(BROWSER_PREVIEW_WEBVIEW_LABEL)
+        .ok_or_else(|| "browser preview webview is not mounted".to_string())?;
+    if !enabled {
+        *browser_preview_selection_store()
+            .lock()
+            .map_err(|err| err.to_string())? = None;
+    }
+    webview
+        .eval(browser_preview_selection_set_enabled_script(enabled))
+        .map_err(|err| err.to_string())?;
+    Ok(true)
+}
+
+// Called by the injected guest runtime over the built-in Tauri IPC bridge when
+// the user clicks a node in selection mode. Stores the resolved node rect,
+// DOM path, page metadata, and optional source hint for the overlay to pull via
+// `overlay_browser_preview_selection_take`.
+#[tauri::command]
+fn overlay_browser_preview_selection_report(
+    selection: BrowserPreviewSelection,
+) -> Result<bool, String> {
+    let selection = validate_browser_preview_selection(selection)?;
+    *browser_preview_selection_store()
+        .lock()
+        .map_err(|err| err.to_string())? = Some(BrowserPreviewSelectionResult::Captured { selection });
+    Ok(true)
+}
+
+// Called by the injected guest runtime when Escape cancels picker mode.
+#[tauri::command]
+fn overlay_browser_preview_selection_cancel() -> Result<bool, String> {
+    *browser_preview_selection_store()
+        .lock()
+        .map_err(|err| err.to_string())? = Some(BrowserPreviewSelectionResult::Canceled);
+    Ok(true)
+}
+
+// Pull-and-clear the latest guest selection state. The overlay polls this after
+// entering selection mode; returns None until the user picks a node or cancels.
+#[tauri::command]
+fn overlay_browser_preview_selection_take() -> Result<Option<BrowserPreviewSelectionResult>, String> {
+    let mut guard = browser_preview_selection_store()
+        .lock()
+        .map_err(|err| err.to_string())?;
+    Ok(guard.take())
 }
 
 #[tauri::command]
@@ -1735,6 +2106,10 @@ fn main() {
         overlay_browser_preview_sync,
         overlay_browser_preview_navigate,
         overlay_browser_preview_close,
+        overlay_browser_preview_selection_set_enabled,
+        overlay_browser_preview_selection_report,
+        overlay_browser_preview_selection_cancel,
+        overlay_browser_preview_selection_take,
         overlay_pick_dir,
         overlay_pick_files,
         overlay_attention_set,
@@ -1756,6 +2131,10 @@ fn main() {
         overlay_browser_preview_sync,
         overlay_browser_preview_navigate,
         overlay_browser_preview_close,
+        overlay_browser_preview_selection_set_enabled,
+        overlay_browser_preview_selection_report,
+        overlay_browser_preview_selection_cancel,
+        overlay_browser_preview_selection_take,
         overlay_pick_dir,
         overlay_pick_files,
         overlay_attention_set,

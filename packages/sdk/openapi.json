@@ -21922,6 +21922,299 @@
             "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.browserPreview.selectTaskTarget({\n  ...\n})"
           }
         ]
+      },
+      "post": {
+        "operationId": "browserPreview.saveTaskTarget",
+        "summary": "Save task browser preview target",
+        "description": "Persist a user-entered URL as the task browser preview target.",
+        "responses": {
+          "200": {
+            "description": "Persisted browser preview target",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "taskID": {
+                      "type": "string"
+                    },
+                    "latestEvidenceIDs": {
+                      "type": "object",
+                      "properties": {
+                        "desktop": {
+                          "type": "string"
+                        },
+                        "tablet": {
+                          "type": "string"
+                        },
+                        "mobile": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "task-url",
+                        "missing",
+                        "failed"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ready",
+                        "missing",
+                        "failed"
+                      ]
+                    },
+                    "projectRoot": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "viewports": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "enum": [
+                              "desktop",
+                              "tablet",
+                              "mobile"
+                            ]
+                          },
+                          "labelKey": {
+                            "type": "string"
+                          },
+                          "width": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "height": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "labelKey",
+                          "width",
+                          "height"
+                        ]
+                      }
+                    },
+                    "diagnostics": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "candidates": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "source": {
+                            "type": "string",
+                            "const": "task-artifact"
+                          },
+                          "selected": {
+                            "type": "boolean"
+                          },
+                          "timeUpdated": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "url",
+                          "source",
+                          "selected",
+                          "timeUpdated"
+                        ]
+                      }
+                    },
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "task-artifact",
+                        "none"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "status",
+                    "projectRoot",
+                    "viewports",
+                    "diagnostics",
+                    "candidates",
+                    "source"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "const": "NotFoundError"
+                        },
+                        "data": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "data"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "const": "LogFileNotFoundError"
+                        },
+                        "data": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "data"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "taskID",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "viewports": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "enum": [
+                            "desktop",
+                            "tablet",
+                            "mobile"
+                          ]
+                        },
+                        "labelKey": {
+                          "type": "string"
+                        },
+                        "width": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "height": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "labelKey",
+                        "width",
+                        "height"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "url",
+                  "viewports"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.browserPreview.saveTaskTarget({\n  ...\n})"
+          }
+        ]
       }
     },
     "/task/{taskID}/browser-preview/capture": {
