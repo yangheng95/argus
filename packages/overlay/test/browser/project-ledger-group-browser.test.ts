@@ -93,6 +93,46 @@ const sessions = [codingAssistantSession(1), codingAssistantSession(2)]
 const tasksByID = new Map(tasks.map((item) => [item.task.id, item]))
 const sessionsByID = new Map(sessions.map((session) => [session.id, session]))
 
+function workLedgerRows(): any[] {
+  return [
+    ...tasks.map((item) => ({
+      kind: "task",
+      id: item.task.id,
+      title: item.task.title,
+      directory: item.task.directory,
+      created: item.task.time.created,
+      updated: item.task.time.updated,
+      lifecycleStatus: item.task.status,
+      executionStatus: "queued",
+      priority: item.task.priority,
+      source: "task",
+    })),
+    ...missions.map((item) => ({
+      kind: "mission",
+      id: item.sessionID,
+      missionID: item.missionID,
+      sessionID: item.sessionID,
+      title: item.title,
+      directory: item.directory,
+      created: item.created,
+      updated: item.updated,
+      interruptible: item.interruptible,
+      taskStats: item.taskStats,
+      tasks: [],
+    })),
+    ...sessions.map((item) => ({
+      kind: "chat",
+      id: item.id,
+      sessionID: item.id,
+      title: item.title,
+      directory: item.directory,
+      created: item.time.created,
+      updated: item.time.updated,
+      status: "idle",
+    })),
+  ]
+}
+
 function boardForTask(item: any): any {
   return {
     task: item.task,
@@ -118,7 +158,6 @@ async function saveElementScreenshot(page: OverlayPage, selector: string, filena
 async function verifyProjectGroup(
   page: OverlayPage,
   input: {
-    activity: "tasks" | "mission" | "assistant"
     groupSelector: string
     expectedCount: string
     expectedName?: string
@@ -127,7 +166,6 @@ async function verifyProjectGroup(
     requestLog?: string[]
   },
 ) {
-  await page.click(`[data-ui="side-activity-button"][data-side="left"][data-activity="${input.activity}"]`)
   try {
     await page.waitForSelector(`${input.groupSelector} [data-ui="project-group-toggle"]`, {
       visible: true,
@@ -136,16 +174,13 @@ async function verifyProjectGroup(
   } catch (error) {
     const diagnostics = await page.evaluate(
       (requestLog) => ({
-        selectedLeftActivity: (window as any).selectedLeftPanelActivity?.(),
-        taskCount: ((window as any).boardStore?.tasks || []).length,
-        tasksLoaded: (window as any).boardStore?.tasksLoaded,
-        tasksError: (window as any).boardStore?.tasksError,
-        leftPanels: Array.from(document.querySelectorAll<HTMLElement>("[id^='leftPanel']")).map((item) => ({
-          id: item.id,
-          active: item.dataset.active || "",
-          groupCount: item.querySelectorAll(".project-group").length,
-          text: item.textContent?.replace(/\s+/g, " ").trim().slice(0, 240) || "",
-        })),
+        workLedgerText:
+          document.querySelector<HTMLElement>('[data-ui="work-ledger"]')?.textContent?.replace(/\s+/g, " ").trim() ||
+          "",
+        groupCount: document.querySelectorAll('[data-ui="work-ledger-project-group"]').length,
+        rowKinds: Array.from(document.querySelectorAll<HTMLElement>('[data-ui="work-ledger-row"]')).map(
+          (item) => item.dataset.kind || "",
+        ),
         requestLog,
       }),
       input.requestLog || [],
@@ -158,6 +193,7 @@ async function verifyProjectGroup(
   const openState = await page.$eval(input.groupSelector, (node) => {
     const group = node as HTMLElement
     const heading = group.querySelector<HTMLButtonElement>('[data-ui="project-group-toggle"]')
+    const newChatButton = group.querySelector<HTMLButtonElement>('[data-ui="project-group-new-chat"]')
     const copyButton = group.querySelector<HTMLButtonElement>('[data-ui="project-group-copy"]')
     const renameButton = group.querySelector<HTMLButtonElement>('[data-ui="project-group-rename"]')
     const deleteButton = group.querySelector<HTMLButtonElement>('[data-ui="project-group-delete"]')
@@ -170,9 +206,13 @@ async function verifyProjectGroup(
     const chevronStyle = chevron ? window.getComputedStyle(chevron) : null
     const headingControls = heading?.getAttribute("aria-controls") ?? ""
     const headingRect = heading?.getBoundingClientRect()
+    const countRect = count?.getBoundingClientRect()
+    const chevronRect = chevron?.getBoundingClientRect()
+    const newChatRect = newChatButton?.getBoundingClientRect()
     const copyRect = copyButton?.getBoundingClientRect()
     const renameRect = renameButton?.getBoundingClientRect()
     const deleteRect = deleteButton?.getBoundingClientRect()
+    const newChatIconRect = newChatButton?.querySelector("svg")?.getBoundingClientRect()
     const copyIconRect = copyButton?.querySelector("svg")?.getBoundingClientRect()
     const renameIconRect = renameButton?.querySelector("svg")?.getBoundingClientRect()
     const deleteIconRect = deleteButton?.querySelector("svg")?.getBoundingClientRect()
@@ -190,6 +230,22 @@ async function verifyProjectGroup(
       actionsOpacity: actionStyle?.opacity ?? "",
       actionsVisibility: actionStyle?.visibility ?? "",
       actionsPointerEvents: actionStyle?.pointerEvents ?? "",
+      newChatExists: !!newChatButton,
+      newChatInsideActions: !!actions?.contains(newChatButton),
+      newChatInsideToggle: !!heading?.querySelector('[data-ui="project-group-new-chat"]'),
+      newChatTag: newChatButton?.tagName ?? "",
+      newChatVariant: newChatButton?.dataset.variant ?? "",
+      newChatSize: newChatButton?.dataset.size ?? "",
+      newChatTone: newChatButton?.dataset.tone ?? "",
+      newChatChrome: newChatButton?.dataset.chrome ?? "",
+      newChatLabel: newChatButton?.getAttribute("aria-label") ?? "",
+      newChatWidth: newChatRect?.width ?? 0,
+      newChatHeight: newChatRect?.height ?? 0,
+      newChatIconWidth: newChatIconRect?.width ?? 0,
+      newChatIconHeight: newChatIconRect?.height ?? 0,
+      newChatAfterCount:
+        !!countRect && !!chevronRect && !!newChatRect && newChatRect.left >= Math.max(countRect.right, chevronRect.right) - 0.5,
+      newChatNearHeaderEnd: !!headingRect && !!newChatRect && newChatRect.left >= headingRect.right - 70,
       copyExists: !!copyButton,
       copyInsideActions: !!actions?.contains(copyButton),
       copyInsideToggle: !!heading?.querySelector('[data-ui="project-group-copy"]'),
@@ -260,58 +316,38 @@ async function verifyProjectGroup(
   assert.equal(openState.headingTone, "neutral")
   assert.equal(openState.actionsExists, true)
   assert.equal(openState.projectActions, input.expectedProjectActions ? "true" : "")
-  assert.equal(openState.copyExists, input.expectedProjectActions)
+  assert.equal(openState.newChatExists, input.expectedProjectActions)
+  assert.equal(openState.newChatInsideToggle, false)
+  assert.equal(openState.copyExists, false)
   assert.equal(openState.copyInsideToggle, false)
-  assert.equal(openState.renameExists, input.expectedProjectActions)
+  assert.equal(openState.renameExists, false)
   assert.equal(openState.renameInsideToggle, false)
-  assert.equal(openState.deleteExists, input.expectedProjectActions)
+  assert.equal(openState.deleteExists, false)
   assert.equal(openState.deleteInsideToggle, false)
   if (input.expectedProjectActions) {
-    assert.equal(openState.copyTag, "BUTTON")
-    assert.equal(openState.actionsOpacity, "0")
-    assert.equal(openState.actionsVisibility, "hidden")
-    assert.equal(openState.actionsPointerEvents, "none")
-    assert.equal(openState.copyInsideActions, true)
-    assert.equal(openState.copyVariant, "ghost")
-    assert.equal(openState.copySize, "icon")
-    assert.equal(openState.copyTone, "neutral")
-    assert.equal(openState.copyChrome, "icon-action")
-    assert.match(openState.copyLabel, /Copy project directory/)
-    assert.ok(openState.copyWidth <= 20, `copy width should be compact, got ${openState.copyWidth}`)
-    assert.ok(openState.copyHeight <= 20, `copy height should be compact, got ${openState.copyHeight}`)
-    assert.ok(Math.abs(openState.copyWidth - openState.copyHeight) <= 0.5)
-    assert.ok(openState.copyIconWidth <= 11, `copy icon should be compact, got ${openState.copyIconWidth}`)
-    assert.ok(openState.copyIconHeight <= 11, `copy icon should be compact, got ${openState.copyIconHeight}`)
-    assert.equal(openState.copyNearHeaderEnd, true)
-    assert.equal(openState.renameTag, "BUTTON")
-    assert.equal(openState.renameInsideActions, true)
-    assert.equal(openState.renameVariant, "ghost")
-    assert.equal(openState.renameSize, "icon")
-    assert.equal(openState.renameTone, "neutral")
-    assert.equal(openState.renameChrome, "icon-action")
-    assert.match(openState.renameLabel, /Rename project/)
-    assert.ok(openState.renameWidth <= 20, `rename width should be compact, got ${openState.renameWidth}`)
-    assert.ok(openState.renameHeight <= 20, `rename height should be compact, got ${openState.renameHeight}`)
-    assert.ok(Math.abs(openState.renameWidth - openState.renameHeight) <= 0.5)
-    assert.ok(openState.renameIconWidth <= 11, `rename icon should be compact, got ${openState.renameIconWidth}`)
-    assert.ok(openState.renameIconHeight <= 11, `rename icon should be compact, got ${openState.renameIconHeight}`)
-    assert.equal(openState.renameAfterCopy, true)
-    assert.equal(openState.deleteTag, "BUTTON")
-    assert.equal(openState.deleteInsideActions, true)
-    assert.equal(openState.deleteClass, "oc-button")
-    assert.equal(openState.deleteVariant, "ghost")
-    assert.equal(openState.deleteSize, "icon")
-    assert.equal(openState.deleteTone, "danger")
-    assert.equal(openState.deleteChrome, "icon-action")
-    assert.match(openState.deleteLabel, /Delete this project/)
-    assert.equal(openState.deletePressed, "false")
-    assert.equal(openState.deleteVisible, true)
-    assert.ok(openState.deleteWidth <= 20, `delete width should be compact, got ${openState.deleteWidth}`)
-    assert.ok(openState.deleteHeight <= 20, `delete height should be compact, got ${openState.deleteHeight}`)
-    assert.ok(Math.abs(openState.deleteWidth - openState.deleteHeight) <= 0.5)
-    assert.ok(openState.deleteIconWidth <= 11, `delete icon should be compact, got ${openState.deleteIconWidth}`)
-    assert.ok(openState.deleteIconHeight <= 11, `delete icon should be compact, got ${openState.deleteIconHeight}`)
-    assert.equal(openState.deleteAfterRename, true)
+    assert.ok(Number(openState.actionsOpacity) > 0.95)
+    assert.equal(openState.actionsVisibility, "visible")
+    assert.equal(openState.actionsPointerEvents, "auto")
+    assert.equal(openState.newChatTag, "BUTTON")
+    assert.equal(openState.newChatInsideActions, true)
+    assert.equal(openState.newChatVariant, "ghost")
+    assert.equal(openState.newChatSize, "icon")
+    assert.equal(openState.newChatTone, "neutral")
+    assert.equal(openState.newChatChrome, "icon-action")
+    assert.match(openState.newChatLabel, /New chat/)
+    assert.ok(openState.newChatWidth <= 20, `new chat width should be compact, got ${openState.newChatWidth}`)
+    assert.ok(openState.newChatHeight <= 20, `new chat height should be compact, got ${openState.newChatHeight}`)
+    assert.ok(Math.abs(openState.newChatWidth - openState.newChatHeight) <= 0.5)
+    assert.ok(
+      openState.newChatIconWidth >= 12,
+      `new chat icon should use text rhythm, got ${openState.newChatIconWidth}`,
+    )
+    assert.ok(
+      openState.newChatIconHeight >= 12,
+      `new chat icon should use text rhythm, got ${openState.newChatIconHeight}`,
+    )
+    assert.equal(openState.newChatAfterCount, true)
+    assert.equal(openState.newChatNearHeaderEnd, true)
   }
   assert.equal(openState.headingExpanded, "true")
   assert.ok(openState.headingControls.length > 0)
@@ -356,15 +392,24 @@ async function verifyProjectGroup(
     assert.ok(Number(hoverState.actionsOpacity) > 0.95)
     assert.equal(hoverState.actionsVisibility, "visible")
     assert.equal(hoverState.actionsPointerEvents, "auto")
-    assert.ok(Number(hoverState.countOpacity) < 0.05)
-    assert.ok(Number(hoverState.chevronOpacity) < 0.05)
+    assert.ok(Number(hoverState.countOpacity) > 0.95)
+    assert.ok(Number(hoverState.chevronOpacity) > 0.95)
     await page.mouse.move(0, 0)
     await page.waitForFunction(
       (selector) => {
         const actions = document.querySelector<HTMLElement>(`${selector} .project-group-actions`)
-        if (!actions) return false
-        const style = window.getComputedStyle(actions)
-        return style.visibility === "hidden" && Number(style.opacity) < 0.05
+        const count = document.querySelector<HTMLElement>(`${selector} .project-group-count`)
+        const chevron = document.querySelector<HTMLElement>(`${selector} .project-group-chevron`)
+        if (!actions || !count || !chevron) return false
+        const actionsStyle = window.getComputedStyle(actions)
+        const countStyle = window.getComputedStyle(count)
+        const chevronStyle = window.getComputedStyle(chevron)
+        return (
+          actionsStyle.visibility === "visible" &&
+          Number(actionsStyle.opacity) > 0.95 &&
+          Number(countStyle.opacity) > 0.95 &&
+          Number(chevronStyle.opacity) > 0.95
+        )
       },
       { timeout: 5_000 },
       input.groupSelector,
@@ -428,9 +473,18 @@ async function verifyProjectGroup(
     await page.waitForFunction(
       (selector) => {
         const actions = document.querySelector<HTMLElement>(`${selector} .project-group-actions`)
-        if (!actions) return false
-        const style = window.getComputedStyle(actions)
-        return style.visibility === "hidden" && Number(style.opacity) < 0.05
+        const count = document.querySelector<HTMLElement>(`${selector} .project-group-count`)
+        const chevron = document.querySelector<HTMLElement>(`${selector} .project-group-chevron`)
+        if (!actions || !count || !chevron) return false
+        const actionsStyle = window.getComputedStyle(actions)
+        const countStyle = window.getComputedStyle(count)
+        const chevronStyle = window.getComputedStyle(chevron)
+        return (
+          actionsStyle.visibility === "visible" &&
+          Number(actionsStyle.opacity) > 0.95 &&
+          Number(countStyle.opacity) > 0.95 &&
+          Number(chevronStyle.opacity) > 0.95
+        )
       },
       { timeout: 5_000 },
       input.groupSelector,
@@ -440,7 +494,7 @@ async function verifyProjectGroup(
 }
 
 test(
-  "project ledger grouping is shared across Task, Mission, and Coding Assistant ledgers",
+  "unified Work Ledger project grouping includes Task, Mission, and Coding Assistant rows",
   { timeout: 90_000 },
   async () => {
     assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
@@ -462,6 +516,7 @@ test(
         return json({ root: "D:/ledger", defaultDirectory: PROJECT_DIR, projects: [] })
       }
       if (path === "/global/tasks") return json({ tasks })
+      if (path === "/work-ledger") return json({ rows: workLedgerRows(), nextCursor: null })
       if (path === "/mission") return json(missions)
       if (path === "/coding/sessions") return json({ sessions, nextCursor: null })
       if (path === "/log") return json({})
@@ -582,7 +637,7 @@ test(
           headers: { "content-type": "text/event-stream", "cache-control": "no-cache" },
         })
       }
-      if (path === "/task/events" || /^\/task\/[^/]+\/events$/.test(path)) {
+      if (path === "/work-ledger/events" || path === "/task/events" || /^\/task\/[^/]+\/events$/.test(path)) {
         return new Response(new ReadableStream(), {
           headers: { "content-type": "text/event-stream", "cache-control": "no-cache" },
         })
@@ -627,38 +682,20 @@ test(
       await page.waitForFunction(() => document.querySelector("#connBadge")?.getAttribute("data-status") === "online")
 
       await verifyProjectGroup(page, {
-        activity: "tasks",
-        groupSelector: "#leftPanelTasks .project-group",
-        expectedCount: "2",
-        expectedName: PROJECT_NAME,
+        groupSelector: '[data-ui="work-ledger-project-group"]',
+        expectedCount: "6",
+        expectedName: "workspace",
         expectedProjectActions: true,
-        screenshot: "project-ledger-group-tasks.png",
-        requestLog,
-      })
-      await verifyProjectGroup(page, {
-        activity: "mission",
-        groupSelector: '[data-ui="mission-project-group"]',
-        expectedCount: "2",
-        expectedProjectActions: false,
-        screenshot: "project-ledger-group-mission.png",
-        requestLog,
-      })
-      await verifyProjectGroup(page, {
-        activity: "assistant",
-        groupSelector: '[data-ui="coding-assistant-project-group"]',
-        expectedCount: "2",
-        expectedProjectActions: false,
-        screenshot: "project-ledger-group-coding-assistant.png",
+        screenshot: "project-ledger-group-work-ledger.png",
         requestLog,
       })
       await page.setViewport({ width: 390, height: 720 })
       await verifyProjectGroup(page, {
-        activity: "tasks",
-        groupSelector: "#leftPanelTasks .project-group",
-        expectedCount: "2",
-        expectedName: PROJECT_NAME,
+        groupSelector: '[data-ui="work-ledger-project-group"]',
+        expectedCount: "6",
+        expectedName: "workspace",
         expectedProjectActions: true,
-        screenshot: "project-ledger-group-tasks-mobile.png",
+        screenshot: "project-ledger-group-work-ledger-mobile.png",
         requestLog,
       })
 

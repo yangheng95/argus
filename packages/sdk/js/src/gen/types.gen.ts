@@ -16879,6 +16879,91 @@ export type BrowserPreviewReadTaskEvidenceCaptureResponses = {
 export type BrowserPreviewReadTaskEvidenceCaptureResponse =
   BrowserPreviewReadTaskEvidenceCaptureResponses[keyof BrowserPreviewReadTaskEvidenceCaptureResponses]
 
+export type BrowserPreviewSaveTaskTargetData = {
+  body: {
+    url: string
+    viewports: Array<{
+      height: number
+      id: "desktop" | "tablet" | "mobile"
+      labelKey: string
+      width: number
+    }>
+  }
+  path: {
+    taskID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/task/{taskID}/browser-preview/target"
+}
+
+export type BrowserPreviewSaveTaskTargetErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "NotFoundError"
+      }
+    | {
+        data: {
+          [key: string]: unknown
+        }
+        name: "LogFileNotFoundError"
+      }
+}
+
+export type BrowserPreviewSaveTaskTargetError =
+  BrowserPreviewSaveTaskTargetErrors[keyof BrowserPreviewSaveTaskTargetErrors]
+
+export type BrowserPreviewSaveTaskTargetResponses = {
+  /**
+   * Persisted browser preview target
+   */
+  200: {
+    candidates: Array<{
+      id: string
+      selected: boolean
+      source: "task-artifact"
+      timeUpdated: number
+      url: string
+    }>
+    diagnostics: Array<string>
+    id?: string
+    kind: "task-url" | "missing" | "failed"
+    latestEvidenceIDs?: {
+      desktop?: string
+      mobile?: string
+      tablet?: string
+    }
+    projectRoot: string
+    source: "task-artifact" | "none"
+    status: "ready" | "missing" | "failed"
+    taskID?: string
+    url?: string
+    viewports: Array<{
+      height: number
+      id: "desktop" | "tablet" | "mobile"
+      labelKey: string
+      width: number
+    }>
+  }
+}
+
+export type BrowserPreviewSaveTaskTargetResponse =
+  BrowserPreviewSaveTaskTargetResponses[keyof BrowserPreviewSaveTaskTargetResponses]
+
 export type BrowserPreviewSelectTaskTargetData = {
   body: {
     targetID: string

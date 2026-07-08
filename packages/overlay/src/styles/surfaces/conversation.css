@@ -6,7 +6,6 @@
    card contract so ordinary agent bubbles and structured execution
    cards cannot drift into separate widths. */
 .chat-scroll {
-  --conversation-message-lane-width: calc(920px * var(--ui-scale));
   --conversation-card-inline-size: 100%;
   --conversation-user-card-inline-size: min(72%, calc(720px * var(--ui-scale)));
   --conversation-system-card-inline-size: min(86%, calc(760px * var(--ui-scale)));
@@ -32,18 +31,44 @@
 }
 
 .conversation-body {
+  --conversation-agent-rail-width: calc(46px * var(--ui-scale));
+  --conversation-agent-rail-tick-height: calc(14px * var(--ui-scale));
+  --conversation-agent-rail-tick-gap: calc(5px * var(--ui-scale));
+  --conversation-message-lane-width: calc(1040px * var(--ui-scale));
+
   flex: 1 1 auto;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, var(--conversation-message-lane-width)) minmax(0, 1fr);
   min-height: 0;
   min-width: 0;
   background: var(--chat-canvas);
 }
 
+.conversation-body:has(.conversation-agent-rail-host:not(:empty)) {
+  grid-template-columns:
+    minmax(0, 1fr)
+    var(--conversation-agent-rail-width)
+    minmax(0, var(--conversation-message-lane-width))
+    var(--conversation-agent-rail-width)
+    minmax(0, 1fr);
+}
+
+.conversation-body:has(.conversation-agent-rail-host:not(:empty))::after {
+  content: "";
+  grid-column: 4;
+  grid-row: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
 .conversation-agent-rail-host {
-  flex: 0 0 calc(46px * var(--ui-scale));
-  width: calc(46px * var(--ui-scale));
-  max-width: calc(46px * var(--ui-scale));
-  min-width: calc(46px * var(--ui-scale));
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: end;
+  width: var(--conversation-agent-rail-width);
+  max-width: var(--conversation-agent-rail-width);
+  min-width: var(--conversation-agent-rail-width);
+  min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   overflow: hidden;
@@ -58,12 +83,22 @@
 
 .conversation-scroll-shell {
   position: relative;
-  flex: 1 1 auto;
+  grid-column: 2;
+  grid-row: 1;
+  width: 100%;
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
+}
+
+.conversation-body:has(.conversation-agent-rail-host:not(:empty)) .conversation-agent-rail-host {
+  grid-column: 2;
+}
+
+.conversation-body:has(.conversation-agent-rail-host:not(:empty)) .conversation-scroll-shell {
+  grid-column: 3;
 }
 
 .conversation-scroll-bottom {
@@ -135,7 +170,7 @@
   flex-direction: column;
   flex-wrap: nowrap;
   align-items: center;
-  row-gap: calc(5px * var(--ui-scale));
+  row-gap: var(--conversation-agent-rail-tick-gap);
   padding: calc(2px * var(--ui-scale)) 0;
   scrollbar-width: none;
   touch-action: pan-y;
@@ -151,7 +186,8 @@
   flex: 0 0 auto;
   width: calc(30px * var(--ui-scale));
   display: grid;
-  grid-auto-rows: calc(12px * var(--ui-scale));
+  grid-auto-rows: var(--conversation-agent-rail-tick-height);
+  gap: var(--conversation-agent-rail-tick-gap);
   align-items: center;
   justify-items: start;
   min-width: 0;
@@ -166,12 +202,12 @@
   justify-items: start;
   width: 100%;
   min-width: 0;
-  min-height: calc(12px * var(--ui-scale));
+  min-height: var(--conversation-agent-rail-tick-height);
   padding: 0;
 }
 
 .conversation-agent-rail .oc-button[data-ui="conversation-agent-rail-locate"] {
-  --oc-button-height: calc(14px * var(--ui-scale));
+  --oc-button-height: var(--conversation-agent-rail-tick-height);
   --oc-button-padding-x: 0;
   --oc-button-bg: transparent;
   --oc-button-border: var(--oc-border-width) solid transparent;
@@ -1664,11 +1700,9 @@
 
 @container chat-workbench (width < 760px) {
   /* breakpoint: --ui-breakpoint-md */
-  .conversation-agent-rail-host {
-    flex-basis: calc(34px * var(--ui-scale));
-    width: calc(34px * var(--ui-scale));
-    min-width: calc(34px * var(--ui-scale));
-    max-width: calc(34px * var(--ui-scale));
+  .conversation-body {
+    --conversation-agent-rail-width: calc(34px * var(--ui-scale));
+    --conversation-agent-rail-tick-gap: calc(4px * var(--ui-scale));
   }
 
   .conversation-agent-rail {

@@ -94,22 +94,14 @@ async function waitForPageState(
 }
 
 async function openBrowserPreviewFromTask(page: OverlayPage, taskID: string, diagnostics: () => unknown) {
-  await page.waitForSelector(
-    '#solidLeftActivityToolbar [data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]',
-    { visible: true },
-  )
-  await page.click(
-    '#solidLeftActivityToolbar [data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]',
-  )
-  await waitForPageState(
-    page,
-    () => document.querySelector<HTMLElement>("#leftPanelTasks")?.dataset.active === "true",
-    "task rail open",
-    diagnostics,
-  )
-  const taskRow = `.task-row-main[data-task-id="${taskID}"]`
+  const taskRow = `[data-row-key="task:${taskID}"] [data-ui="ledger-row-main"]`
   await page.waitForSelector(taskRow, { visible: true })
   await page.click(taskRow)
+  await page.waitForSelector('[data-ui="chat-header-right-toolbar-toggle"]', { visible: true, timeout: 15_000 })
+  const toolbarOpen = await page.evaluate(
+    () => document.querySelector<HTMLElement>("#solidRightActivityToolbar")?.dataset.visible === "true",
+  )
+  if (!toolbarOpen) await page.click('[data-ui="chat-header-right-toolbar-toggle"]')
   await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="browser"]', {
     visible: true,
   })
@@ -117,7 +109,59 @@ async function openBrowserPreviewFromTask(page: OverlayPage, taskID: string, dia
 }
 
 async function nativeCommands(page: OverlayPage): Promise<NativeCommandRecord[]> {
-  return await page.evaluate(() => ((window as any).__browserPreviewNativeCommands || []) as NativeCommandRecord[])
+  return await page.evaluate(() =>
+    (((window as any).__browserPreviewNativeCommands || []) as NativeCommandRecord[]).map((entry) => {
+      const args = (entry.args || {}) as Record<string, unknown>
+      const bounds = args.bounds as Record<string, unknown> | undefined
+      return {
+        command: String(entry.command || ""),
+        args: {
+          ...(typeof args.action === "string" ? { action: args.action } : {}),
+          ...(typeof args.url === "string" ? { url: args.url } : {}),
+          ...(typeof args.scopeKey === "string" ? { scopeKey: args.scopeKey } : {}),
+          ...(bounds && typeof bounds === "object"
+            ? {
+                bounds: {
+                  x: typeof bounds.x === "number" ? bounds.x : 0,
+                  y: typeof bounds.y === "number" ? bounds.y : 0,
+                  width: typeof bounds.width === "number" ? bounds.width : 0,
+                  height: typeof bounds.height === "number" ? bounds.height : 0,
+                },
+              }
+            : {}),
+        },
+      }
+    }),
+  )
+}
+
+function nativeSyncCommands(commands: NativeCommandRecord[]): NativeCommandRecord[] {
+  return commands.filter((entry) => entry.command === "overlay_browser_preview_sync")
+}
+
+async function waitForNativeSyncCountAbove(page: OverlayPage, count: number, label: string) {
+  let lastSignature = ""
+  let lastActivity = Date.now()
+  for (;;) {
+    const commands = await nativeCommands(page)
+    if (nativeSyncCommands(commands).length > count) return commands
+    const signature = JSON.stringify(commands)
+    if (signature !== lastSignature) {
+      lastSignature = signature
+      lastActivity = Date.now()
+    }
+    if (Date.now() - lastActivity > 6_000) {
+      assert.fail(`No additional native preview sync while waiting for ${label}\n${lastSignature}`)
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+}
+
+async function elementRect(page: OverlayPage, selector: string) {
+  return await page.$eval(selector, (node: HTMLElement) => {
+    const rect = node.getBoundingClientRect()
+    return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+  })
 }
 
 const expertSquadCatalog = expertSquadCatalogFixture({
@@ -153,11 +197,6 @@ test("browser preview native surface owns browser navigation without PNG live ro
   const requestLog: string[] = []
   const errors: string[] = []
   const unexpectedRequests: string[] = []
-  const captureBodies: unknown[] = []
-  let releaseNativeCapture: (() => void) | undefined
-  const nativeCaptureGate = new Promise<void>((resolve) => {
-    releaseNativeCapture = resolve
-  })
   let serverOrigin = ""
   const previewUrl = () => `${serverOrigin}/preview/native-surface`
   const viewports = [
@@ -207,6 +246,24 @@ test("browser preview native surface owns browser navigation without PNG live ro
     if (path === "/coding/cli/profiles" || path === "/terminal/profiles") return json({ profiles: [] })
     if (path === `/task/${taskID}/operator-model-context`) return json({ selected: null, candidates: [] })
     if (path === "/global/tasks") return json({ tasks: [{ task, updated_at: now - 1_000 }] })
+    if (path === "/work-ledger")
+      return json({
+        rows: [
+          {
+            kind: "task",
+            id: taskID,
+            title: task.title,
+            directory: task.directory,
+            created: task.time.created,
+            updated: task.time.updated,
+            lifecycleStatus: task.status,
+            executionStatus: "active",
+            priority: "normal",
+            source: "browser-preview-native-surface-test",
+          },
+        ],
+        nextCursor: null,
+      })
     if (path === "/path") return json({ directory: projectRoot })
     if (path === "/vcs")
       return json({
@@ -262,7 +319,12 @@ test("browser preview native surface owns browser navigation without PNG live ro
     if (path === `/task/${taskID}/transcript`) return json([])
     if (path === `/task/${taskID}/trace`)
       return json({ events: [], traceDir: `${projectRoot}/.opencorvus/trace`, enabled: true })
-    if (path === "/task/events" || path === `/task/${taskID}/events` || path === `/task/${taskID}/conversation/events`)
+    if (
+      path === "/work-ledger/events" ||
+      path === "/task/events" ||
+      path === `/task/${taskID}/events` ||
+      path === `/task/${taskID}/conversation/events`
+    )
       return eventStream()
     if (path === `/task/${taskID}/browser-preview`)
       return json({
@@ -286,31 +348,6 @@ test("browser preview native surface owns browser navigation without PNG live ro
         ],
         source: "task-artifact",
       })
-    if (path === `/task/${taskID}/browser-preview/capture` && req.method === "POST") {
-      captureBodies.push(await req.json())
-      await nativeCaptureGate
-      return json({
-        status: "failed",
-        projectRoot,
-        target: {
-          id: targetID,
-          taskID,
-          latestEvidenceIDs: {},
-          kind: "task-url",
-          status: "ready",
-          projectRoot,
-          url: previewUrl(),
-          viewports,
-          diagnostics: ["Resolved native browser preview target."],
-          candidates: [],
-          source: "task-artifact",
-        },
-        viewports,
-        captures: {},
-        evidenceIDs: {},
-        diagnostics: ["native capture failed after loading assertion"],
-      })
-    }
     if (path.includes("/browser-preview/live/")) {
       unexpectedRequests.push(`${req.method} ${path}`)
       return json({ message: "PNG live preview route is retired" }, { status: 410 })
@@ -354,11 +391,8 @@ test("browser preview native surface owns browser navigation without PNG live ro
             if (command === "overlay_open_url") return true
             if (command.startsWith("overlay_browser_preview_")) {
               nativeCommands.push({ command, args })
-              if (
-                (window as any).__browserPreviewFailNativeNavigate &&
-                command === "overlay_browser_preview_navigate"
-              ) {
-                throw new Error("native navigation unavailable")
+              if ((window as any).__browserPreviewFailNativeSync && command === "overlay_browser_preview_sync") {
+                throw new Error("native sync unavailable")
               }
               return true
             }
@@ -408,42 +442,33 @@ test("browser preview native surface owns browser navigation without PNG live ro
       () => ({ errors, requestLog, nativeCommands: [] }),
     )
 
-    const nativeLayout = await page.evaluate(() => {
-      const surface = document.querySelector<HTMLElement>('[data-ui="browser-preview-native-surface"]')
-      const stage = document.querySelector<HTMLElement>(".browser-preview-stage")
-      const controls = document.querySelector<HTMLElement>('[data-ui="browser-preview-navigation-controls"]')
-      const sync = ((window as any).__browserPreviewNativeCommands || []).find(
-        (entry: NativeCommandRecord) => entry.command === "overlay_browser_preview_sync",
-      )
-      const surfaceRect = surface?.getBoundingClientRect()
-      const stageRect = stage?.getBoundingClientRect()
-      const controlsRect = controls?.getBoundingClientRect()
-      return {
-        surface: surfaceRect
-          ? { x: surfaceRect.x, y: surfaceRect.y, width: surfaceRect.width, height: surfaceRect.height }
-          : null,
-        stage: stageRect ? { x: stageRect.x, y: stageRect.y, width: stageRect.width, height: stageRect.height } : null,
-        controls: controlsRect
-          ? { x: controlsRect.x, y: controlsRect.y, width: controlsRect.width, height: controlsRect.height }
-          : null,
-        sync,
-        backDisabled: (document.querySelector('[aria-label="Go back in the preview browser."]') as HTMLButtonElement)
-          ?.disabled,
-        forwardDisabled: (
-          document.querySelector('[aria-label="Go forward in the preview browser."]') as HTMLButtonElement
-        )?.disabled,
-        reloadDisabled: (
-          document.querySelector('[aria-label="Reload the current preview page."]') as HTMLButtonElement
-        )?.disabled,
-      }
-    })
-    assert.ok(nativeLayout.surface, `native surface missing: ${JSON.stringify(nativeLayout)}`)
-    assert.ok(nativeLayout.stage, `preview stage missing: ${JSON.stringify(nativeLayout)}`)
-    assert.ok(nativeLayout.controls, `navigation controls missing: ${JSON.stringify(nativeLayout)}`)
-    assert.ok(nativeLayout.sync, `native sync command missing: ${JSON.stringify(await nativeCommands(page))}`)
-    const syncArgs = nativeLayout.sync.args as { url?: unknown; bounds?: { width?: number; height?: number } }
+    const nativeLayout = {
+      surface: await elementRect(page, '[data-ui="browser-preview-native-surface"]'),
+      stage: await elementRect(page, ".browser-preview-stage"),
+      chrome: await elementRect(page, '[data-ui="browser-preview-chrome"]'),
+      toolbar: await elementRect(page, '[data-ui="browser-preview-toolbar"]'),
+      address: await elementRect(page, '[data-ui="browser-preview-address-form"]'),
+      input: await elementRect(page, '[data-ui="browser-preview-address-input"]'),
+      reload: await elementRect(page, '[aria-label="Reload the current preview page."]'),
+      selection: await elementRect(page, '[aria-label="Select a node in the live preview."]'),
+      addressValue: await page.$eval(
+        '[data-ui="browser-preview-address-input"]',
+        (node: HTMLInputElement) => node.value,
+      ),
+      reloadDisabled: await page.$eval(
+        '[aria-label="Reload the current preview page."]',
+        (node: HTMLButtonElement) => node.disabled,
+      ),
+      selectionDisabled: await page.$eval(
+        '[aria-label="Select a node in the live preview."]',
+        (node: HTMLButtonElement) => node.disabled,
+      ),
+    }
+    const syncCommand = (await nativeCommands(page)).find((entry) => entry.command === "overlay_browser_preview_sync")
+    assert.ok(syncCommand, `native sync command missing: ${JSON.stringify(await nativeCommands(page))}`)
+    const syncArgs = syncCommand.args as { url?: unknown; bounds?: { width?: number; height?: number } }
     assert.equal(syncArgs.url, previewUrl())
-    assert.ok(syncArgs.bounds, `sync bounds missing: ${JSON.stringify(nativeLayout.sync)}`)
+    assert.ok(syncArgs.bounds, `sync bounds missing: ${JSON.stringify(syncCommand)}`)
     assert.ok((syncArgs.bounds.width || 0) >= nativeLayout.surface.width - 2)
     assert.ok((syncArgs.bounds.height || 0) >= nativeLayout.surface.height - 2)
     assert.ok(
@@ -451,31 +476,22 @@ test("browser preview native surface owns browser navigation without PNG live ro
       `native preview should use panel height instead of a short viewport PNG ratio: ${JSON.stringify(nativeLayout)}`,
     )
     assert.ok(
-      nativeLayout.surface.y >= nativeLayout.controls.y + nativeLayout.controls.height,
-      `native surface must not overlap browser controls: ${JSON.stringify(nativeLayout)}`,
+      nativeLayout.surface.y >= nativeLayout.chrome.y + nativeLayout.chrome.height,
+      `native surface must not overlap browser chrome: ${JSON.stringify(nativeLayout)}`,
     )
-    assert.equal(nativeLayout.backDisabled, false)
-    assert.equal(nativeLayout.forwardDisabled, false)
+    assert.ok(nativeLayout.chrome.height <= 42, `browser chrome should stay on shared header height: ${JSON.stringify(nativeLayout)}`)
+    assert.ok(nativeLayout.toolbar.height <= nativeLayout.chrome.height + 1, JSON.stringify(nativeLayout))
+    assert.ok(nativeLayout.input.height <= nativeLayout.chrome.height, JSON.stringify(nativeLayout))
+    assert.ok(nativeLayout.reload.height <= nativeLayout.chrome.height, JSON.stringify(nativeLayout))
+    assert.ok(nativeLayout.selection.height <= nativeLayout.chrome.height, JSON.stringify(nativeLayout))
+    assert.equal(nativeLayout.addressValue, previewUrl())
     assert.equal(nativeLayout.reloadDisabled, false)
+    assert.equal(nativeLayout.selectionDisabled, false)
 
-    await page.click('[aria-label="Go back in the preview browser."]')
-    await page.click('[aria-label="Go forward in the preview browser."]')
+    const syncCountBeforeReload = nativeSyncCommands(await nativeCommands(page)).length
     await page.click('[aria-label="Reload the current preview page."]')
-    await waitForPageState(
-      page,
-      () => {
-        const actions = ((window as any).__browserPreviewNativeCommands || [])
-          .filter((entry: NativeCommandRecord) => entry.command === "overlay_browser_preview_navigate")
-          .map((entry: NativeCommandRecord) => entry.args.action)
-        return actions.includes("back") && actions.includes("forward") && actions.includes("reload")
-      },
-      "native browser navigation commands",
-      () => ({ errors, requestLog, nativeCommands: [] }),
-    )
-    const actions = (await nativeCommands(page))
-      .filter((entry) => entry.command === "overlay_browser_preview_navigate")
-      .map((entry) => entry.args.action)
-    assert.deepEqual(actions.slice(-3), ["back", "forward", "reload"])
+    const reloadCommands = await waitForNativeSyncCountAbove(page, syncCountBeforeReload, "native browser reload sync")
+    assert.ok(nativeSyncCommands(reloadCommands).length > syncCountBeforeReload)
 
     const panel = await page.$(".browser-preview-panel")
     assert.ok(panel)
@@ -506,10 +522,14 @@ test("browser preview native surface owns browser navigation without PNG live ro
       `native surface crop height should match sync bounds: ${JSON.stringify({ surfaceMetadata, nativeLayout })}`,
     )
 
-    assert.equal(captureBodies.length, 0, "opening native live preview must not auto-capture evidence")
+    assert.deepEqual(
+      requestLog.filter((entry) => entry.includes("/browser-preview/capture")),
+      [],
+      "opening and reloading native live preview must not auto-capture evidence",
+    )
 
     await page.evaluate(() => {
-      ;(window as any).__browserPreviewFailNativeNavigate = true
+      ;(window as any).__browserPreviewFailNativeSync = true
     })
     await page.click('[aria-label="Reload the current preview page."]')
     await waitForPageState(
@@ -517,39 +537,16 @@ test("browser preview native surface owns browser navigation without PNG live ro
       () =>
         document
           .querySelector<HTMLElement>('[data-ui="browser-preview-native-error"]')
-          ?.textContent?.includes("native navigation unavailable") === true,
-      "native preview navigation error",
+          ?.textContent?.includes("native sync unavailable") === true,
+      "native preview sync error",
       () => ({ errors, requestLog, nativeCommands: [] }),
     )
-    await page.click(".browser-preview-capture-button")
-    await waitForPageState(
-      page,
-      () => {
-        const stage = document.querySelector<HTMLElement>(".browser-preview-stage")
-        const loading = stage?.querySelector<HTMLElement>('[data-ui="browser-preview-capture-loading"]')
-        const nativeError = stage?.querySelector<HTMLElement>('[data-ui="browser-preview-native-error"]')
-        return loading?.dataset.status === "loading" && !nativeError
-      },
-      "capture loading replaces stale native preview error",
-      () => ({ errors, requestLog, nativeCommands: [] }),
-    )
-    const nativeErrorCapturePanel = await page.$(".browser-preview-panel")
-    assert.ok(nativeErrorCapturePanel)
+    const nativeErrorPanel = await page.$(".browser-preview-panel")
+    assert.ok(nativeErrorPanel)
     writeFileSync(
-      fileURLToPath(new URL("../../.scratch/browser-preview-native-error-capture-loading.png", import.meta.url)),
-      await nativeErrorCapturePanel.screenshot(),
+      fileURLToPath(new URL("../../.scratch/browser-preview-native-error.png", import.meta.url)),
+      await nativeErrorPanel.screenshot(),
     )
-    releaseNativeCapture?.()
-    await waitForPageState(
-      page,
-      () =>
-        document
-          .querySelector<HTMLElement>('[data-ui="browser-preview-evidence"]')
-          ?.textContent?.includes("native capture failed after loading assertion") === true,
-      "native capture failure settles after loading assertion",
-      () => ({ errors, requestLog, nativeCommands: [] }),
-    )
-    assert.deepEqual(captureBodies, [{ targetID, viewportIDs: ["desktop", "tablet", "mobile"] }])
     assert.deepEqual(
       requestLog.filter((entry) => entry.includes("/browser-preview/live/")),
       [],
@@ -558,7 +555,6 @@ test("browser preview native surface owns browser navigation without PNG live ro
     assert.deepEqual(unexpectedRequests, [])
     assert.equal(errors.length, 0, errors.join("\n"))
   } finally {
-    releaseNativeCapture?.()
     await browser.close().catch(() => undefined)
     await server.close()
   }

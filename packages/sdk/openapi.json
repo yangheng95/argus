@@ -48425,6 +48425,299 @@
       }
     },
     "/task/{taskID}/browser-preview/target": {
+      "post": {
+        "description": "Persist a user-entered URL as the task browser preview target.",
+        "operationId": "browserPreview.saveTaskTarget",
+        "parameters": [
+          {
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "in": "query",
+            "name": "directory",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "taskID",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "url": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "viewports": {
+                    "items": {
+                      "properties": {
+                        "height": {
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991,
+                          "type": "integer"
+                        },
+                        "id": {
+                          "enum": [
+                            "desktop",
+                            "tablet",
+                            "mobile"
+                          ],
+                          "type": "string"
+                        },
+                        "labelKey": {
+                          "type": "string"
+                        },
+                        "width": {
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "labelKey",
+                        "width",
+                        "height"
+                      ],
+                      "type": "object"
+                    },
+                    "minItems": 1,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "url",
+                  "viewports"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "candidates": {
+                      "items": {
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "selected": {
+                            "type": "boolean"
+                          },
+                          "source": {
+                            "const": "task-artifact",
+                            "type": "string"
+                          },
+                          "timeUpdated": {
+                            "type": "number"
+                          },
+                          "url": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "url",
+                          "source",
+                          "selected",
+                          "timeUpdated"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "diagnostics": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "enum": [
+                        "task-url",
+                        "missing",
+                        "failed"
+                      ],
+                      "type": "string"
+                    },
+                    "latestEvidenceIDs": {
+                      "properties": {
+                        "desktop": {
+                          "type": "string"
+                        },
+                        "mobile": {
+                          "type": "string"
+                        },
+                        "tablet": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "projectRoot": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "enum": [
+                        "task-artifact",
+                        "none"
+                      ],
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "ready",
+                        "missing",
+                        "failed"
+                      ],
+                      "type": "string"
+                    },
+                    "taskID": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "viewports": {
+                      "items": {
+                        "properties": {
+                          "height": {
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991,
+                            "type": "integer"
+                          },
+                          "id": {
+                            "enum": [
+                              "desktop",
+                              "tablet",
+                              "mobile"
+                            ],
+                            "type": "string"
+                          },
+                          "labelKey": {
+                            "type": "string"
+                          },
+                          "width": {
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991,
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "labelKey",
+                          "width",
+                          "height"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "status",
+                    "projectRoot",
+                    "viewports",
+                    "diagnostics",
+                    "candidates",
+                    "source"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Persisted browser preview target"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "properties": {
+                        "data": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "name": {
+                          "const": "NotFoundError",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "data"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "name": {
+                          "const": "LogFileNotFoundError",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "data"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Not found"
+          }
+        },
+        "summary": "Save task browser preview target",
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.browserPreview.saveTaskTarget({\n  ...\n})"
+          }
+        ]
+      },
       "put": {
         "description": "Promote an existing task browser preview target artifact as the task preview target.",
         "operationId": "browserPreview.selectTaskTarget",

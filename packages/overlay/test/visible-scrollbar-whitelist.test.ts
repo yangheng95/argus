@@ -4,8 +4,6 @@ import { join } from "node:path"
 
 const BASE_CSS = readFileSync(join(import.meta.dir, "../src/styles/cascade/base.css"), "utf8")
 
-const LIVE_SCROLLERS = ["#chatScroll", "#workLedgerPanel"]
-
 function normalize(input: string): string {
   return input.replace(/\s+/g, " ").trim()
 }
@@ -22,21 +20,60 @@ function group(...selectors: string[]): string {
 }
 
 describe("visible scrollbar whitelist", () => {
-  test("primary live scroll containers share one visible scrollbar source", () => {
-    const baseGroup = group(...LIVE_SCROLLERS)
-    const scrollbarGroup = group(...LIVE_SCROLLERS.map((selector) => `${selector}::-webkit-scrollbar`))
-    const trackGroup = group(...LIVE_SCROLLERS.map((selector) => `${selector}::-webkit-scrollbar-track`))
-    const thumbGroup = group(...LIVE_SCROLLERS.map((selector) => `${selector}::-webkit-scrollbar-thumb`))
-    const hoverGroup = group(...LIVE_SCROLLERS.map((selector) => `${selector}::-webkit-scrollbar-thumb:hover`))
-
-    expect(ruleBodyForSelectorGroup(baseGroup)).toContain("scrollbar-width: auto")
-    expect(ruleBodyForSelectorGroup(baseGroup)).toContain(
+  test("work ledger keeps the always-visible primary scrollbar source", () => {
+    expect(ruleBodyForSelectorGroup("#workLedgerPanel")).toContain("scrollbar-width: auto")
+    expect(ruleBodyForSelectorGroup("#workLedgerPanel")).toContain(
       "scrollbar-color: var(--scrollbar-thumb) var(--session-scrollbar-track)",
     )
-    expect(ruleBodyForSelectorGroup(scrollbarGroup)).toContain("width: var(--session-scrollbar-size)")
-    expect(ruleBodyForSelectorGroup(trackGroup)).toContain("background: var(--session-scrollbar-track)")
-    expect(ruleBodyForSelectorGroup(thumbGroup)).toContain("background: var(--scrollbar-thumb)")
-    expect(ruleBodyForSelectorGroup(hoverGroup)).toContain("background: var(--scrollbar-thumb-hover)")
+    expect(ruleBodyForSelectorGroup(group("#chatScroll::-webkit-scrollbar", "#workLedgerPanel::-webkit-scrollbar"))).toContain(
+      "width: var(--session-scrollbar-size)",
+    )
+    expect(ruleBodyForSelectorGroup("#workLedgerPanel::-webkit-scrollbar-track")).toContain(
+      "background: var(--session-scrollbar-track)",
+    )
+    expect(ruleBodyForSelectorGroup("#workLedgerPanel::-webkit-scrollbar-thumb")).toContain(
+      "background: var(--scrollbar-thumb)",
+    )
+    expect(ruleBodyForSelectorGroup("#workLedgerPanel::-webkit-scrollbar-thumb:hover")).toContain(
+      "background: var(--scrollbar-thumb-hover)",
+    )
+  })
+
+  test("chat transcript scrollbar is visually revealed by hover or focus", () => {
+    expect(ruleBodyForSelectorGroup("#chatScroll")).toContain("scrollbar-width: auto")
+    expect(ruleBodyForSelectorGroup("#chatScroll")).toContain("scrollbar-color: transparent transparent")
+    expect(ruleBodyForSelectorGroup(group("#chatScroll:hover", "#chatScroll:focus", "#chatScroll:focus-within"))).toContain(
+      "scrollbar-color: var(--scrollbar-thumb) var(--session-scrollbar-track)",
+    )
+    expect(ruleBodyForSelectorGroup("#chatScroll::-webkit-scrollbar-track")).toContain("background: transparent")
+    expect(ruleBodyForSelectorGroup("#chatScroll::-webkit-scrollbar-thumb")).toContain("background: transparent")
+    expect(
+      ruleBodyForSelectorGroup(
+        group(
+          "#chatScroll:hover::-webkit-scrollbar-track",
+          "#chatScroll:focus::-webkit-scrollbar-track",
+          "#chatScroll:focus-within::-webkit-scrollbar-track",
+        ),
+      ),
+    ).toContain("background: var(--session-scrollbar-track)")
+    expect(
+      ruleBodyForSelectorGroup(
+        group(
+          "#chatScroll:hover::-webkit-scrollbar-thumb",
+          "#chatScroll:focus::-webkit-scrollbar-thumb",
+          "#chatScroll:focus-within::-webkit-scrollbar-thumb",
+        ),
+      ),
+    ).toContain("background: var(--scrollbar-thumb)")
+    expect(
+      ruleBodyForSelectorGroup(
+        group(
+          "#chatScroll:hover::-webkit-scrollbar-thumb:hover",
+          "#chatScroll:focus::-webkit-scrollbar-thumb:hover",
+          "#chatScroll:focus-within::-webkit-scrollbar-thumb:hover",
+        ),
+      ),
+    ).toContain("background: var(--scrollbar-thumb-hover)")
   })
 
   test("retired Mission conversation scrollbar selector is not reintroduced", () => {

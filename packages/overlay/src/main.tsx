@@ -1389,6 +1389,7 @@ if (browserPreviewEl) {
         refreshKey={() => `${boardStore.boardUpdatedAt}:${browserPreviewLinkRefresh()}`}
         scrollElement={() => document.querySelector<HTMLElement>(".center-workbench-body")}
         taskID={() => activeTaskID() || undefined}
+        onCommentDraft={(text) => setPendingSuggestion(text)}
         onReady={() => openRightActivity("browser")}
       />
     ),

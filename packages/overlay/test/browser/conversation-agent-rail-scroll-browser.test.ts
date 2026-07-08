@@ -314,7 +314,7 @@ test("ConversationAgentRail renders left stacked history, tooltip summaries, and
   try {
     const page = await browser.newPage()
     const errors = installBrowserErrorCollector(page)
-    await page.setViewport({ width: 1280, height: 760 })
+    await page.setViewport({ width: 1600, height: 760 })
     await page.evaluateOnNewDocument(
       (seed: { serverUrl: string; taskID: string }) => {
         localStorage.setItem("oc_locale", "en-US")
@@ -349,14 +349,18 @@ test("ConversationAgentRail renders left stacked history, tooltip summaries, and
       const scrollShell = document.querySelector<HTMLElement>(".conversation-scroll-shell")
       const chatScroll = document.querySelector<HTMLElement>("#chatScroll")
       const body = document.querySelector<HTMLElement>("#conversationBody")
+      const composer = document.querySelector<HTMLElement>(".chat-composer-stack")
       const hostStyle = getComputedStyle(host)
       const lanesStyle = lanes ? getComputedStyle(lanes) : null
       const scrollRect = scrollShell?.getBoundingClientRect()
       const chatScrollRect = chatScroll?.getBoundingClientRect()
       const bodyRect = body?.getBoundingClientRect()
+      const composerRect = composer?.getBoundingClientRect()
+      const bodyStyle = body ? getComputedStyle(body) : null
       return {
         viewportWidth: window.innerWidth,
         documentWidth: document.documentElement.scrollWidth,
+        bodyGridColumns: bodyStyle?.gridTemplateColumns || "",
         host: {
           left: hostRect.left,
           right: hostRect.right,
@@ -384,6 +388,12 @@ test("ConversationAgentRail renders left stacked history, tooltip summaries, and
           width: chatScrollRect?.width || 0,
           height: chatScrollRect?.height || 0,
         },
+        composer: {
+          left: composerRect?.left || 0,
+          right: composerRect?.right || 0,
+          width: composerRect?.width || 0,
+          height: composerRect?.height || 0,
+        },
         railButtons: rail?.querySelectorAll('.oc-button[data-ui="conversation-agent-rail-locate"]').length || 0,
         lanes: lanes
           ? {
@@ -406,16 +416,32 @@ test("ConversationAgentRail renders left stacked history, tooltip summaries, and
       `left rail must sit before the message scroll shell: ${JSON.stringify(geometry)}`,
     )
     assert.ok(
-      geometry.chatScroll.width < geometry.scrollShell.width,
-      `message scroll lane should shrink inside the message pane: ${JSON.stringify(geometry)}`,
+      geometry.host.left > geometry.body.left + 20,
+      `left rail should belong to the centered message group, not the viewport-left edge: ${JSON.stringify(geometry)}`,
+    )
+    assert.ok(
+      Math.abs(geometry.chatScroll.width - geometry.scrollShell.width) <= 1.5,
+      `message scroll lane should own the centered shell width: ${JSON.stringify(geometry)}`,
     )
     assert.ok(
       Math.abs(
         geometry.chatScroll.left +
           geometry.chatScroll.width / 2 -
-          (geometry.scrollShell.left + geometry.scrollShell.width / 2),
+          (geometry.body.left + geometry.body.right) / 2,
       ) <= 1.5,
-      `message scroll lane should stay centered inside the message pane: ${JSON.stringify(geometry)}`,
+      `message scroll lane should stay centered on the full message pane axis: ${JSON.stringify(geometry)}`,
+    )
+    assert.ok(
+      Math.abs(
+        geometry.chatScroll.left +
+          geometry.chatScroll.width / 2 -
+          (geometry.composer.left + geometry.composer.width / 2),
+      ) <= 1.5,
+      `message scroll lane should share the composer center axis: ${JSON.stringify(geometry)}`,
+    )
+    assert.ok(
+      geometry.bodyGridColumns.split(" ").length >= 5,
+      `rail content should activate the centered rail/message/mirror grid: ${JSON.stringify(geometry)}`,
     )
     assert.ok(geometry.host.height >= geometry.scrollShell.height - 4, `left rail should fill message pane height: ${JSON.stringify(geometry)}`)
     assert.equal(geometry.lanes?.overflowX, "hidden")

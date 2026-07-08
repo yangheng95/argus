@@ -75,6 +75,18 @@ test("loading spinners animate through shared motion tokens and stop for reduced
     },
     interactions: [],
   }
+  const workLedgerTask = {
+    kind: "task",
+    id: taskID,
+    title: task.title,
+    directory: task.directory,
+    created: task.time.created,
+    updated: task.time.updated,
+    lifecycleStatus: "active",
+    executionStatus: "running",
+    priority: "normal",
+    source: "test",
+  }
   let releasePreviewTarget: ((response: Response) => void) | undefined
   const previewTargetHold = new Promise<Response>((resolve) => {
     releasePreviewTarget = resolve
@@ -91,6 +103,7 @@ test("loading spinners animate through shared motion tokens and stop for reduced
     if (path === "/global/projects/discover")
       return send({ root: "D:/overlay", defaultDirectory: projectRoot, projects: [] })
     if (path === "/global/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
+    if (path === "/work-ledger") return send({ rows: [workLedgerTask], nextCursor: null })
     if (path === "/mission") return send([])
     if (path === "/executor")
       return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
@@ -119,6 +132,8 @@ test("loading spinners animate through shared motion tokens and stop for reduced
     if (path === "/config") return send({ model: "opencorvus/gpt-5-nano" })
     if (path === "/channel") return send([])
     if (path === "/skill/installed" || path === "/skill" || path === "/skill/market") return send([])
+    if (path === "/skill/mounts")
+      return send({ scope: "project", skills: [], agents: [], matrix: [], project_mounts: { agents: {} }, unmounted_count: 0 })
     if (path === "/skill/directories")
       return send({
         global_config: "D:/skills/config",
@@ -146,6 +161,7 @@ test("loading spinners animate through shared motion tokens and stop for reduced
       return send({ events: [], eventReplay: { cursor: 0, latestSequence: 0 } })
     if (path === `/task/${taskID}/transcript`) return send([])
     if (path === `/task/${taskID}/trace`) return send({ events: [], traceDir: `${projectRoot}/.opencorvus/trace` })
+    if (path === "/work-ledger/events") return eventStream()
     if (path === "/task/events" || path === `/task/${taskID}/events`) return eventStream()
     if (path === "/panel/knowledge/memory" || path === "/panel/knowledge/preference") return send([])
     if (path === "/log" && req.method === "POST") return send({ ok: true })
@@ -163,7 +179,7 @@ test("loading spinners animate through shared motion tokens and stop for reduced
     page.on("response", (response: any) => {
       if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`)
     })
-    await page.setViewport({ width: 1280, height: 860 })
+    await page.setViewport({ width: 1440, height: 860 })
     await page.evaluateOnNewDocument(
       (seed: { serverUrl: string; taskID: string; projectRoot: string }) => {
         localStorage.setItem("oc_locale", "en-US")
@@ -178,7 +194,16 @@ test("loading spinners animate through shared motion tokens and stop for reduced
     )
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
-    await page.waitForSelector(`.task-row-main[data-task-id="${taskID}"]`, { state: "attached", timeout: 15_000 })
+    const taskRowSelector = `[data-row-key="task:${taskID}"] [data-ui="ledger-row-main"]`
+    await page.waitForSelector(taskRowSelector, { state: "attached", timeout: 15_000 })
+    await page.click(taskRowSelector)
+    await page.waitForSelector('[data-ui="chat-header-right-toolbar-toggle"]', { visible: true, timeout: 15_000 })
+    const toolbarOpen = await page.$eval("#solidRightActivityToolbar", (node: HTMLElement) => node.dataset.open === "true")
+    if (!toolbarOpen) await page.click('[data-ui="chat-header-right-toolbar-toggle"]')
+    await page.waitForFunction(
+      () => document.querySelector<HTMLElement>("#solidRightActivityToolbar")?.dataset.open === "true",
+      { timeout: 15_000 },
+    )
     await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="browser"]', {
       visible: true,
       timeout: 15_000,
@@ -190,22 +215,18 @@ test("loading spinners animate through shared motion tokens and stop for reduced
     })
     const previewLoadingStatus = await page.evaluate(() => {
       const stage = document.querySelector<HTMLElement>('.browser-preview-empty[data-status="loading"]')
-      const status = document.querySelector<HTMLElement>('.browser-preview-status[data-status="loading"]')
+      const progress = document.querySelector<HTMLElement>('[data-ui="browser-preview-progress"]')
       return {
         stageRole: stage?.getAttribute("role") ?? "",
         stageLive: stage?.getAttribute("aria-live") ?? "",
         stageText: stage?.textContent?.trim() ?? "",
-        statusRole: status?.getAttribute("role") ?? "",
-        statusLive: status?.getAttribute("aria-live") ?? "",
-        statusText: status?.textContent?.trim() ?? "",
+        hasChromeProgress: Boolean(progress),
       }
     })
     assert.equal(previewLoadingStatus.stageRole, "status")
     assert.equal(previewLoadingStatus.stageLive, "polite")
     assert.equal(previewLoadingStatus.stageText, browserPreviewLoadingText)
-    assert.equal(previewLoadingStatus.statusRole, "status")
-    assert.equal(previewLoadingStatus.statusLive, "polite")
-    assert.equal(previewLoadingStatus.statusText, browserPreviewLoadingText)
+    assert.equal(previewLoadingStatus.hasChromeProgress, true)
 
     await page.waitForSelector('.app-notifications[data-surface="toast"]', { state: "attached", timeout: 15_000 })
     await page.evaluate(() => {

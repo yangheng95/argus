@@ -9,6 +9,7 @@ import {
   findReadableBrowserPreviewEvidenceArtifactPath,
   findReadableBrowserPreviewEvidenceCapturePath,
   findBrowserPreviewTargetByID,
+  persistBrowserPreviewTarget,
   promoteBrowserPreviewTarget,
   PersistedBrowserPreviewEvidence,
   resolveRuntimeRelativePath,
@@ -16,11 +17,12 @@ import {
 } from "../../browser-preview/persist"
 import {
   BrowserPreviewTarget,
+  normalizeBrowserPreviewUrl,
   resolveBrowserPreviewTarget,
   taskBrowserPreviewTarget,
 } from "../../browser-preview/target"
 import { BrowserPreviewVerification, verifyBrowserPreview } from "../../browser-preview/verification"
-import { BrowserPreviewViewportID } from "../../browser-preview/viewport"
+import { BrowserPreviewViewport, BrowserPreviewViewportID } from "../../browser-preview/viewport"
 import {
   BrowserPreviewRegionComparisonRequest,
   BrowserPreviewRegionComparisonResult,
@@ -41,6 +43,13 @@ const BrowserPreviewCaptureRequest = z
 const BrowserPreviewTargetSelectionRequest = z
   .object({
     targetID: z.string().min(1),
+  })
+  .strict()
+
+const BrowserPreviewTargetSaveRequest = z
+  .object({
+    url: z.string().min(1),
+    viewports: BrowserPreviewViewport.array().min(1),
   })
   .strict()
 
@@ -244,6 +253,45 @@ export const BrowserPreviewRoutes = lazy(() =>
             url: persisted.url,
             viewports: persisted.viewports,
             diagnostics: [`Selected task browser preview target ${persisted.id}.`],
+          }) satisfies BrowserPreviewTarget,
+        )
+      },
+    )
+    .post(
+      "/task/:taskID/browser-preview/target",
+      describeRoute({
+        summary: "Save task browser preview target",
+        description: "Persist a user-entered URL as the task browser preview target.",
+        operationId: "browserPreview.saveTaskTarget",
+        responses: {
+          200: {
+            description: "Persisted browser preview target",
+            content: {
+              "application/json": {
+                schema: resolver(BrowserPreviewTarget),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", z.object({ taskID: z.string().min(1) })),
+      validator("json", BrowserPreviewTargetSaveRequest),
+      async (c) => {
+        const { taskID } = c.req.valid("param")
+        const body = c.req.valid("json")
+        const url = normalizeBrowserPreviewUrl(body.url)
+        if (!url) throw new HTTPException(400, { message: "Browser preview target URL must be http(s)." })
+        const projectRoot = browserPreviewTaskEvidenceRoot(taskID)
+        const persisted = await persistBrowserPreviewTarget({ taskID, url, viewports: body.viewports })
+        return c.json(
+          taskBrowserPreviewTarget({
+            id: persisted.id,
+            taskID,
+            projectRoot,
+            url: persisted.url,
+            viewports: persisted.viewports,
+            diagnostics: [`Saved task browser preview target ${persisted.id}.`],
           }) satisfies BrowserPreviewTarget,
         )
       },

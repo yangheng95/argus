@@ -357,6 +357,37 @@ function HexinBudgetInline(props: { response: HexinBudgetResponse | undefined; l
   )
 }
 
+function createHexinBudgetState(model: () => string, taskID: () => string) {
+  const [refreshTick, setRefreshTick] = createSignal(0)
+  const baseKey = createMemo(() => {
+    if (!appStore.connected) return null
+    const parts = splitModelID(model())
+    if (parts.provider !== "hexin" || !parts.name) return null
+    const directory = activeDirectory().trim()
+    if (!directory) return null
+    return encodeHexinBudgetBaseKey({
+      directory,
+      model: parts.name,
+      providerAuthRefresh: appStore.providerAuthRefreshRevision,
+      refresh: sessionConfigRefreshToken(),
+      taskID: taskID(),
+    })
+  })
+  createEffect(() => {
+    if (!baseKey()) return
+    const timer = window.setInterval(() => setRefreshTick((value) => value + 1), HEXIN_BUDGET_REFRESH_MS)
+    onCleanup(() => window.clearInterval(timer))
+  })
+  const key = createMemo(() => {
+    const current = baseKey()
+    return current ? encodeHexinBudgetKey({ ...parseHexinBudgetBaseKey(current), tick: refreshTick() }) : null
+  })
+  const [budget] = createResource(key, async (currentKey) => {
+    return await getHexinBudget({ directory: parseHexinBudgetKey(currentKey).directory })
+  })
+  return { key, budget }
+}
+
 export function ExecutorSelector() {
   // Two independent disclosures — opening one closes the other so the
   // popover stack never overlaps.
@@ -397,33 +428,7 @@ export function ExecutorSelector() {
     }
     return projectModelFromConfig()
   })
-  const [hexinBudgetRefreshTick, setHexinBudgetRefreshTick] = createSignal(0)
-  const hexinBudgetBaseKey = createMemo(() => {
-    if (!appStore.connected) return null
-    const parts = splitModelID(openCorvusModel())
-    if (parts.provider !== "hexin" || !parts.name) return null
-    const directory = activeDirectory().trim()
-    if (!directory) return null
-    return encodeHexinBudgetBaseKey({
-      directory,
-      model: parts.name,
-      providerAuthRefresh: appStore.providerAuthRefreshRevision,
-      refresh: sessionConfigRefreshToken(),
-      taskID: taskID(),
-    })
-  })
-  createEffect(() => {
-    if (!hexinBudgetBaseKey()) return
-    const timer = window.setInterval(() => setHexinBudgetRefreshTick((value) => value + 1), HEXIN_BUDGET_REFRESH_MS)
-    onCleanup(() => window.clearInterval(timer))
-  })
-  const hexinBudgetKey = createMemo(() => {
-    const key = hexinBudgetBaseKey()
-    return key ? encodeHexinBudgetKey({ ...parseHexinBudgetBaseKey(key), tick: hexinBudgetRefreshTick() }) : null
-  })
-  const [hexinBudget] = createResource(hexinBudgetKey, async (key) => {
-    return await getHexinBudget({ directory: parseHexinBudgetKey(key).directory })
-  })
+  const hexinBudget = createHexinBudgetState(openCorvusModel, taskID)
   const openCorvusModelPlaceholder = createMemo(() => {
     if (!hasSelectedTask()) return t("agent_models.option_not_set")
     if (taskOperatorContext.error) return t("common.error")
@@ -612,8 +617,12 @@ export function ExecutorSelector() {
             model: openCorvusModelLabel(),
           })}
           meta={
-            <Show when={hexinBudgetKey()}>
-              <HexinBudgetInline response={hexinBudget()} loading={hexinBudget.loading} error={hexinBudget.error} />
+            <Show when={hexinBudget.key()}>
+              <HexinBudgetInline
+                response={hexinBudget.budget()}
+                loading={hexinBudget.budget.loading}
+                error={hexinBudget.budget.error}
+              />
             </Show>
           }
         >
@@ -797,6 +806,7 @@ export function ComposerModelSelector() {
     return t("agent_models.option_not_set")
   })
   const modelLabel = createMemo(() => selectedModel() || modelPlaceholder())
+  const hexinBudget = createHexinBudgetState(selectedModel, taskID)
   const groups = createMemo(mirrorProviderGroups)
   const contextError = createMemo(() => (hasSelectedTask() ? taskOperatorContext.error : null))
   const contextLoading = createMemo(() => hasSelectedTask() && taskOperatorContext.loading && !contextError())
@@ -899,8 +909,17 @@ export function ComposerModelSelector() {
           title={t("executor.mirror_chip_title", { model: modelLabel() })}
           aria-label={t("executor.mirror_chip_aria", { model: modelLabel() })}
         >
-          <span class="composer-model-selector-value" title={modelLabel()}>
-            {modelLabel()}
+          <span class="composer-model-selector-copy">
+            <span class="composer-model-selector-value" title={modelLabel()}>
+              {modelLabel()}
+            </span>
+            <Show when={hexinBudget.key()}>
+              <HexinBudgetInline
+                response={hexinBudget.budget()}
+                loading={hexinBudget.budget.loading}
+                error={hexinBudget.budget.error}
+              />
+            </Show>
           </span>
         </Popover.Trigger>
       </div>

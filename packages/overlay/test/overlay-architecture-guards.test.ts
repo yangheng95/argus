@@ -2766,11 +2766,17 @@ describe("overlay architecture guards", () => {
 
     const stackBody = soloRuleBody(surface, ".conversation-agent-rail__stack")
     expect(stackBody).toContain("display: grid")
-    expect(stackBody).toContain("grid-auto-rows: calc(12px * var(--ui-scale))")
+    expect(stackBody).toContain("grid-auto-rows: var(--conversation-agent-rail-tick-height)")
+    expect(stackBody).toContain("gap: var(--conversation-agent-rail-tick-gap)")
 
     const rowBody = soloRuleBody(surface, ".conversation-agent-rail__row")
     expect(rowBody).toContain("display: grid")
     expect(rowBody).toContain("grid-template-columns: minmax(0, 1fr)")
+    expect(rowBody).toContain("min-height: var(--conversation-agent-rail-tick-height)")
+    expect(surface).toContain("--conversation-message-lane-width: calc(1040px * var(--ui-scale))")
+    expect(surface).toContain("--conversation-agent-rail-width: calc(46px * var(--ui-scale))")
+    expect(surface).toContain(".conversation-body:has(.conversation-agent-rail-host:not(:empty))")
+    expect(surface).toContain(".conversation-body:has(.conversation-agent-rail-host:not(:empty))::after")
     expect(surface).toContain(".conversation-agent-rail-tooltip")
     expect(surface).toContain(".conversation-agent-rail__tick-line")
     expect(surface).not.toContain("conversation-agent-rail__run")

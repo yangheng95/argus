@@ -127,9 +127,10 @@ a {
  * on every overflow:auto" is visual noise — most containers
  * (dialogs, inspector cards, executor menus, markdown blocks) only
  * need the *ability* to scroll on overflow, not the gutter. Below,
- * `#chatScroll` and `#workLedgerPanel` opt back into a visible scrollbar because
+ * `#chatScroll` and `#workLedgerPanel` opt back into scrollbar geometry because
  * they are the primary content lists where the gutter doubles as a position
- * indicator. New opt-ins use the same id-or-class override pattern, not a
+ * indicator. The transcript keeps that geometry visually quiet until hover or
+ * keyboard focus. New opt-ins use the same id-or-class override pattern, not a
  * global toggle. */
 * {
   scrollbar-width: none;
@@ -139,9 +140,19 @@ a {
   height: 0;
 }
 
-#chatScroll,
 #workLedgerPanel {
   scrollbar-width: auto;
+  scrollbar-color: var(--scrollbar-thumb) var(--session-scrollbar-track);
+}
+
+#chatScroll {
+  scrollbar-width: auto;
+  scrollbar-color: transparent transparent;
+}
+
+#chatScroll:hover,
+#chatScroll:focus,
+#chatScroll:focus-within {
   scrollbar-color: var(--scrollbar-thumb) var(--session-scrollbar-track);
 }
 
@@ -150,13 +161,11 @@ a {
   width: var(--session-scrollbar-size);
 }
 
-#chatScroll::-webkit-scrollbar-track,
 #workLedgerPanel::-webkit-scrollbar-track {
   background: var(--session-scrollbar-track);
   border-radius: var(--oc-radius-pill);
 }
 
-#chatScroll::-webkit-scrollbar-thumb,
 #workLedgerPanel::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
   border-radius: var(--oc-radius-pill);
@@ -164,11 +173,40 @@ a {
   background-clip: padding-box;
 }
 
-#chatScroll::-webkit-scrollbar-thumb:hover,
 #workLedgerPanel::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-thumb-hover);
   border: calc(2px * var(--ui-scale)) solid transparent;
   background-clip: padding-box;
+}
+
+#chatScroll::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: var(--oc-radius-pill);
+}
+
+#chatScroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: var(--oc-radius-pill);
+  border: calc(2px * var(--ui-scale)) solid transparent;
+  background-clip: padding-box;
+}
+
+#chatScroll:hover::-webkit-scrollbar-track,
+#chatScroll:focus::-webkit-scrollbar-track,
+#chatScroll:focus-within::-webkit-scrollbar-track {
+  background: var(--session-scrollbar-track);
+}
+
+#chatScroll:hover::-webkit-scrollbar-thumb,
+#chatScroll:focus::-webkit-scrollbar-thumb,
+#chatScroll:focus-within::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+}
+
+#chatScroll:hover::-webkit-scrollbar-thumb:hover,
+#chatScroll:focus::-webkit-scrollbar-thumb:hover,
+#chatScroll:focus-within::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
 }
 
 .hidden {

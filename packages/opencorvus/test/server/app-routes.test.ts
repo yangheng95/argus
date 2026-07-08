@@ -131,6 +131,7 @@ describe("app routes", () => {
       paths["/task/{taskID}/browser-preview/evidence/{evidenceID}/capture.png"]?.get,
       paths["/task/{taskID}/browser-preview/evidence/{evidenceID}/artifact/{artifactName}"]?.get,
       paths["/task/{taskID}/browser-preview/target"]?.put,
+      paths["/task/{taskID}/browser-preview/target"]?.post,
       paths["/task/{taskID}/browser-preview/capture"]?.post,
       paths["/task/{taskID}/browser-preview/compare"]?.post,
       paths["/experimental/task-plan"]?.get,
@@ -204,6 +205,18 @@ describe("app routes", () => {
     expect(schema?.properties?.targetID?.type).toBe("string")
     expect(schema?.required).toContain("targetID")
     expect(schema?.properties).not.toHaveProperty("url")
+  })
+
+  test("Server.openapi marks saved preview target request body required", async () => {
+    const spec = await Server.openapi()
+    const requestBody = spec.paths?.["/task/{taskID}/browser-preview/target"]?.post?.requestBody
+    const schema = requestBody?.content?.["application/json"]?.schema
+
+    expect(requestBody?.required).toBe(true)
+    expect(schema?.properties?.url?.type).toBe("string")
+    expect(schema?.properties?.viewports?.type).toBe("array")
+    expect(schema?.required).toContain("url")
+    expect(schema?.required).toContain("viewports")
   })
 
   test("Server.openapi repeatedly documents provider list with published model statuses only", async () => {

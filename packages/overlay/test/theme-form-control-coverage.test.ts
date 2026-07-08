@@ -139,20 +139,18 @@ describe("shared Kobalte select popup colors", () => {
     expect(expertSquadDescriptionBlock).not.toMatch(/color\s*:/)
   })
 
-  test("browser preview candidate dropdown uses the shared select popup colors", () => {
-    expect(browserPreviewPanel).toContain("<SelectControl<BrowserPreviewCandidate>")
-    expect(browserPreviewPanel).toContain('contentClass="browser-preview-candidate-content"')
-    expect(browserPreviewPanel).toContain('listboxClass="browser-preview-candidate-listbox"')
-    expect(browserPreviewPanel).toContain('optionClass="browser-preview-candidate-option"')
-    expect(browserPreviewPanel).toContain('indicatorClass="browser-preview-candidate-indicator"')
+  test("browser preview no longer keeps a candidate SelectControl surface", () => {
+    expect(browserPreviewPanel).toContain('data-ui="browser-preview-address-input"')
+    expect(browserPreviewPanel).not.toContain("<SelectControl<BrowserPreviewCandidate>")
+    expect(browserPreviewPanel).not.toContain('contentClass="browser-preview-candidate-content"')
+    expect(browserPreviewPanel).not.toContain('listboxClass="browser-preview-candidate-listbox"')
+    expect(browserPreviewPanel).not.toContain('optionClass="browser-preview-candidate-option"')
+    expect(browserPreviewPanel).not.toContain('indicatorClass="browser-preview-candidate-indicator"')
 
-    const candidateContentBlock = inspectorCss.match(/\.browser-preview-candidate-content\s*{[^}]*}/)?.[0] ?? ""
-    const candidateOptionBlock = inspectorCss.match(/\.browser-preview-candidate-option\s*{[^}]*}/)?.[0] ?? ""
-
-    expect(candidateContentBlock).not.toMatch(/background\s*:/)
-    expect(candidateContentBlock).not.toMatch(/color\s*:/)
-    expect(candidateOptionBlock).not.toMatch(/color\s*:/)
-    expect(candidateOptionBlock).not.toMatch(/background\s*:/)
+    expect(inspectorCss).not.toContain(".browser-preview-candidate-content")
+    expect(inspectorCss).not.toContain(".browser-preview-candidate-listbox")
+    expect(inspectorCss).not.toContain(".browser-preview-candidate-option")
+    expect(inspectorCss).not.toContain(".browser-preview-candidate-indicator")
   })
 
   test("log viewer level dropdown uses the shared Select trigger chrome", () => {

@@ -43,7 +43,7 @@ describe("composer shell stays tighter than the surrounding canvas", () => {
   test("composer stack width, input minimum height, and radius are explicit", () => {
     expect(COMPOSER).toMatch(/\.chat-composer-stack\s*\{[^}]*--chat-composer-inline-gutter:/)
     expect(COMPOSER).toContain("--chat-composer-inline-gutter: calc(28px * var(--ui-scale));")
-    expect(COMPOSER).toContain("--chat-composer-max-width: calc(880px * var(--ui-scale));")
+    expect(COMPOSER).toContain("--chat-composer-max-width: calc(1040px * var(--ui-scale));")
     expect(COMPOSER).toContain("--chat-composer-min-height: calc(96px * var(--ui-scale));")
     expect(COMPOSER).toContain(
       "width: min(var(--chat-composer-max-width), calc(100% - var(--chat-composer-inline-gutter)));",
@@ -102,8 +102,9 @@ describe("composer shell stays tighter than the surrounding canvas", () => {
 
   test("bottom dropdown triggers render as short buttons without visible arrows", () => {
     expect(COMPOSER).toMatch(
-      /\.composer-mode-select-wrap,\s*\.expert-squad-select-wrap,\s*\.composer-model-selector\s*\{[\s\S]*?max-width:\s*calc\(188px \* var\(--ui-scale\)\);/,
+      /\.composer-mode-select-wrap,\s*\.expert-squad-select-wrap\s*\{[\s\S]*?max-width:\s*calc\(188px \* var\(--ui-scale\)\);/,
     )
+    expect(COMPOSER).toMatch(/\.composer-model-selector\s*\{[\s\S]*?max-width:\s*calc\(276px \* var\(--ui-scale\)\);/)
     expect(COMPOSER).toMatch(
       /\.composer-mode-select-trigger\.oc-select-trigger,\s*\.expert-squad-select-trigger\.oc-select-trigger,\s*\.composer-model-selector \.oc-button\[data-ui="composer-model-selector-trigger"\]\s*\{[\s\S]*?width:\s*auto;/,
     )

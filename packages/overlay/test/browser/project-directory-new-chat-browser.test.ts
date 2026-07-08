@@ -243,7 +243,6 @@ test(
       await page.waitForFunction(() => document.querySelector("#connBadge")?.getAttribute("data-status") === "online")
       const groupSelector = '[data-ui="work-ledger-project-group"]'
       await page.waitForSelector(`${groupSelector} [data-ui="project-group-toggle"]`, { visible: true })
-      await page.hover(`${groupSelector} .project-group-head`)
       await page.waitForFunction(
         (selector) => {
           const button = document.querySelector<HTMLElement>(`${selector} [data-ui="project-group-new-chat"]`)
@@ -263,39 +262,47 @@ test(
         groupSelector,
       )
 
-      const hoverState = await page.$eval(groupSelector, (node) => {
-        const group = node as HTMLElement
-        const toggle = group.querySelector<HTMLElement>('[data-ui="project-group-toggle"]')
-        const button = group.querySelector<HTMLElement>('[data-ui="project-group-new-chat"]')
-        const actions = group.querySelector<HTMLElement>(".project-group-actions")
-        const count = group.querySelector<HTMLElement>(".project-group-count")
-        const chevron = group.querySelector<HTMLElement>(".project-group-chevron")
-        const actionsStyle = actions ? window.getComputedStyle(actions) : null
-        const countStyle = count ? window.getComputedStyle(count) : null
-        const chevronStyle = chevron ? window.getComputedStyle(chevron) : null
-        const buttonRect = button?.getBoundingClientRect()
-        return {
-          collapsed: group.dataset.collapsed ?? "",
-          buttonTag: button?.tagName ?? "",
-          buttonLabel: button?.getAttribute("aria-label") ?? "",
-          buttonTitle: button?.getAttribute("title") ?? "",
-          buttonInsideToggle: !!toggle?.contains(button),
-          buttonWidth: buttonRect?.width ?? 0,
-          buttonHeight: buttonRect?.height ?? 0,
-          actionsOpacity: actionsStyle?.opacity ?? "",
-          actionsPointerEvents: actionsStyle?.pointerEvents ?? "",
-          countOpacity: countStyle?.opacity ?? "",
-          chevronOpacity: chevronStyle?.opacity ?? "",
-        }
-      })
+      const readProjectActionState = async () =>
+        await page.$eval(groupSelector, (node) => {
+          const group = node as HTMLElement
+          const toggle = group.querySelector<HTMLElement>('[data-ui="project-group-toggle"]')
+          const button = group.querySelector<HTMLElement>('[data-ui="project-group-new-chat"]')
+          const actions = group.querySelector<HTMLElement>(".project-group-actions")
+          const count = group.querySelector<HTMLElement>(".project-group-count")
+          const chevron = group.querySelector<HTMLElement>(".project-group-chevron")
+          const actionsStyle = actions ? window.getComputedStyle(actions) : null
+          const countStyle = count ? window.getComputedStyle(count) : null
+          const chevronStyle = chevron ? window.getComputedStyle(chevron) : null
+          const buttonRect = button?.getBoundingClientRect()
+          const iconRect = button?.querySelector("svg")?.getBoundingClientRect()
+          const name = group.querySelector<HTMLElement>(".project-group-name")
+          const nameStyle = name ? window.getComputedStyle(name) : null
+          return {
+            collapsed: group.dataset.collapsed ?? "",
+            buttonTag: button?.tagName ?? "",
+            buttonLabel: button?.getAttribute("aria-label") ?? "",
+            buttonTitle: button?.getAttribute("title") ?? "",
+            buttonInsideToggle: !!toggle?.contains(button),
+            buttonWidth: buttonRect?.width ?? 0,
+            buttonHeight: buttonRect?.height ?? 0,
+            iconWidth: iconRect?.width ?? 0,
+            iconHeight: iconRect?.height ?? 0,
+            nameFontSize: nameStyle ? Number.parseFloat(nameStyle.fontSize) : 0,
+            actionsOpacity: actionsStyle?.opacity ?? "",
+            actionsPointerEvents: actionsStyle?.pointerEvents ?? "",
+            countOpacity: countStyle?.opacity ?? "",
+            chevronOpacity: chevronStyle?.opacity ?? "",
+          }
+        })
+      const defaultState = await readProjectActionState()
       assert.deepEqual(
         {
-          collapsed: hoverState.collapsed,
-          buttonTag: hoverState.buttonTag,
-          buttonLabel: hoverState.buttonLabel,
-          buttonTitle: hoverState.buttonTitle,
-          buttonInsideToggle: hoverState.buttonInsideToggle,
-          actionsPointerEvents: hoverState.actionsPointerEvents,
+          collapsed: defaultState.collapsed,
+          buttonTag: defaultState.buttonTag,
+          buttonLabel: defaultState.buttonLabel,
+          buttonTitle: defaultState.buttonTitle,
+          buttonInsideToggle: defaultState.buttonInsideToggle,
+          actionsPointerEvents: defaultState.actionsPointerEvents,
         },
         {
           collapsed: "",
@@ -306,11 +313,25 @@ test(
           actionsPointerEvents: "auto",
         },
       )
-      assert.ok(hoverState.buttonWidth <= 20, `new-chat button should be compact, got ${hoverState.buttonWidth}`)
-      assert.ok(hoverState.buttonHeight <= 20, `new-chat button should be compact, got ${hoverState.buttonHeight}`)
+      assert.ok(defaultState.buttonWidth <= 20, `new-chat button should be compact, got ${defaultState.buttonWidth}`)
+      assert.ok(defaultState.buttonHeight <= 20, `new-chat button should be compact, got ${defaultState.buttonHeight}`)
+      assert.ok(
+        Math.abs(defaultState.iconWidth - defaultState.nameFontSize) <= 1,
+        `new-chat icon should match body text size, got icon=${defaultState.iconWidth} font=${defaultState.nameFontSize}`,
+      )
+      assert.ok(
+        Math.abs(defaultState.iconHeight - defaultState.nameFontSize) <= 1,
+        `new-chat icon should match body text size, got icon=${defaultState.iconHeight} font=${defaultState.nameFontSize}`,
+      )
+      assert.ok(Number(defaultState.actionsOpacity) > 0.95)
+      assert.ok(Number(defaultState.countOpacity) > 0.95)
+      assert.ok(Number(defaultState.chevronOpacity) > 0.95)
+      await saveElementScreenshot(page, groupSelector, "project-directory-new-chat-default.png")
+      await page.hover(`${groupSelector} .project-group-head`)
+      const hoverState = await readProjectActionState()
       assert.ok(Number(hoverState.actionsOpacity) > 0.95)
-      assert.ok(Number(hoverState.countOpacity) < 0.05)
-      assert.ok(Number(hoverState.chevronOpacity) < 0.05)
+      assert.ok(Number(hoverState.countOpacity) > 0.95)
+      assert.ok(Number(hoverState.chevronOpacity) > 0.95)
       await saveElementScreenshot(page, groupSelector, "project-directory-new-chat-hover.png")
 
       const workLedgerRequestCountBeforeClick = requestLog.filter((entry) => entry.startsWith("GET /work-ledger")).length

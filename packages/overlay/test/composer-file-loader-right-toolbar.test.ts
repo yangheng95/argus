@@ -131,8 +131,12 @@ test("message panel titlebar restores the IDE project launcher and keeps chat st
   const zh = read("src/i18n/zh-CN.json")
 
   expect(html).toContain('class="chat-header-actions"')
+  expect(html.indexOf('id="chatUsage"')).toBeLessThan(html.indexOf('id="solidChatHeaderEditorLaunchers"'))
   expect(html).toContain('id="solidChatHeaderEditorLaunchers"')
   expect(html).toContain('id="solidChatHeaderRightToolbarToggle"')
+  expect(html.indexOf('id="solidChatHeaderEditorLaunchers"')).toBeLessThan(
+    html.indexOf('id="solidChatHeaderRightToolbarToggle"'),
+  )
   expect(html).not.toContain('id="solidTitlebarEditorLaunchers"')
   expect(html).not.toContain('id="solidTitlebarRightToolbarToggle"')
   expect(app).toContain("<WorkspaceEditorLaunchers />")

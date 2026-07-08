@@ -2,7 +2,7 @@
    the rounded input shell. */
 .chat-composer-stack {
   --chat-composer-inline-gutter: calc(28px * var(--ui-scale));
-  --chat-composer-max-width: calc(880px * var(--ui-scale));
+  --chat-composer-max-width: calc(1040px * var(--ui-scale));
   --chat-composer-min-height: calc(96px * var(--ui-scale));
   --chat-textarea-height: calc(48px * var(--ui-scale));
   --chat-composer-action-size: max(var(--ui-chat-send-size), calc(34px * var(--ui-scale)));
@@ -404,7 +404,6 @@
   position: relative;
   display: flex;
   min-width: 0;
-  max-width: calc(188px * var(--ui-scale));
   flex: 0 1 auto;
   align-items: center;
   min-height: calc(26px * var(--ui-scale));
@@ -416,6 +415,15 @@
     background var(--ui-duration-fast),
     box-shadow var(--ui-duration-fast),
     color var(--ui-duration-fast);
+}
+
+.composer-mode-select-wrap,
+.expert-squad-select-wrap {
+  max-width: calc(188px * var(--ui-scale));
+}
+
+.composer-model-selector {
+  max-width: calc(276px * var(--ui-scale));
 }
 
 .composer-mode-select-wrap:hover,
@@ -474,13 +482,19 @@
 }
 
 .composer-mode-select-copy,
-.expert-squad-select-copy {
+.expert-squad-select-copy,
+.composer-model-selector-copy {
   display: flex;
   flex-direction: row;
   align-items: center;
   gap: 0;
   min-width: 0;
   flex: 1 1 auto;
+}
+
+.composer-model-selector-copy {
+  gap: calc(5px * var(--ui-scale));
+  max-width: 100%;
 }
 
 .composer-mode-select-label,
@@ -504,6 +518,17 @@
   line-height: 1.15;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.composer-model-selector-value {
+  flex: 1 1 auto;
+}
+
+.composer-model-selector .executor-budget-inline {
+  flex: 0 1 auto;
+  max-width: calc(120px * var(--ui-scale));
+  padding-inline-start: calc(5px * var(--ui-scale));
+  border-inline-start: var(--oc-border-width) solid color-mix(in srgb, var(--border) 64%, transparent);
 }
 
 .composer-mode-select-caret,

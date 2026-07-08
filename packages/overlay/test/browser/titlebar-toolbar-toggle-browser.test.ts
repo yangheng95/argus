@@ -9,6 +9,7 @@ import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { installBrowserErrorCollector } from "./error-collector.ts"
 import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { testMessageOrderKey, testPartOrderKey, testSessionOrderKey } from "../fixtures/timeline-order.ts"
 
 await ensureOverlayDist()
 
@@ -16,6 +17,7 @@ const TASK_ID = "task_chat_header_toolbar"
 const PROJECT_ROOT = "D:/overlay/workspace/app"
 const STARTED_AT = Date.now() - 95_000
 const COMPLETED_AT = Date.now()
+const USAGE_MESSAGE_AT = STARTED_AT + 1_000
 const EXPERT_SQUAD_CATALOG = generalExpertSquadCatalog()
 
 function route(url: URL) {
@@ -65,12 +67,64 @@ function boardPayload(snapshotVersion: string) {
 }
 
 function conversationPayload() {
+  const usageMessage = {
+    info: {
+      id: "msg_chat_header_usage",
+      sessionID: "session_chat_header_toolbar",
+      orderKey: testMessageOrderKey("msg_chat_header_usage", USAGE_MESSAGE_AT),
+      channel: "assistant",
+      role: "assistant",
+      resolvedRole: "assistant",
+      agent: "assistant",
+      parentSessionID: null,
+      time: { created: USAGE_MESSAGE_AT },
+      providerID: "openai",
+      modelID: "gpt-5",
+      tokens: { input: 1_200_000, output: 800_000, reasoning: 0, total: 2_000_000, cache: { read: 0, write: 0 } },
+      cost: 1.23,
+    },
+    parts: [
+      {
+        id: "part_chat_header_usage",
+        orderKey: testPartOrderKey("part_chat_header_usage", USAGE_MESSAGE_AT + 1),
+        messageID: "msg_chat_header_usage",
+        sessionID: "session_chat_header_toolbar",
+        type: "text",
+        text: "Usage-bearing header layout fixture.",
+      },
+    ],
+  }
   return {
     board: boardPayload(`${TASK_ID}:conversation`),
-    transcript: [],
+    transcript: [usageMessage],
     timeline: [],
     events: [],
-    view: { topLevelSessionIDs: [], sessions: [], messages: [] },
+    view: {
+      topLevelSessionIDs: ["session_chat_header_toolbar"],
+      sessions: [
+        {
+          sessionID: "session_chat_header_toolbar",
+          stage: "assistant",
+          orderKey: testSessionOrderKey("session_chat_header_toolbar", USAGE_MESSAGE_AT),
+          messageIDs: ["msg_chat_header_usage"],
+          lastDisplayMessageID: "msg_chat_header_usage",
+          firstMessageTime: USAGE_MESSAGE_AT,
+          lastMessageTime: USAGE_MESSAGE_AT,
+          status: "completed",
+          placement: "top_level",
+        },
+      ],
+      messages: [
+        {
+          messageID: "msg_chat_header_usage",
+          sessionID: "session_chat_header_toolbar",
+          stage: "assistant",
+          orderKey: testMessageOrderKey("msg_chat_header_usage", USAGE_MESSAGE_AT),
+          time: USAGE_MESSAGE_AT,
+          placement: "top_level",
+        },
+      ],
+    },
     agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
     eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100, sinceTimestamp: null },
     history: {
@@ -206,6 +260,7 @@ async function pageDiagnostics(page: any) {
           .filter((name) => name.includes("/assets/") || name.includes("/i18n/"))
           .slice(0, 20),
         titlebar: rect(".titlebar"),
+        usage: rect("#chatUsage"),
         editor: rect('[data-ui="workspace-editor-open-default"]'),
         toggle: rect('[data-ui="chat-header-right-toolbar-toggle"]'),
         rightToolbar: rect("#solidRightActivityToolbar"),
@@ -277,18 +332,29 @@ test("message panel titlebar opens right toolbar without hover and keeps runtime
     await page.waitForSelector('[data-ui="workspace-editor-open-default"]', { visible: true })
     await page.evaluate((taskID, directory) => (window as any).selectTask(taskID, { directory }), TASK_ID, PROJECT_ROOT)
     await page.waitForSelector("#taskStatus .elapsed", { visible: true })
+    await page.waitForFunction(() => (document.getElementById("chatUsage")?.textContent || "").trim().length > 0)
 
     const closed = await page.evaluate(() => {
       const mount = document.querySelector<HTMLElement>("#solidRightActivityToolbar")!
       const toolbar = mount.querySelector<HTMLElement>(".side-activity-toolbar")!
       const editor = document.querySelector<HTMLElement>('[data-ui="workspace-editor-open-default"]')!
+      const usage = document.querySelector<HTMLElement>("#chatUsage")!
+      const toggle = document.querySelector<HTMLElement>('[data-ui="chat-header-right-toolbar-toggle"]')!
       const titlebar = document.querySelector<HTMLElement>(".titlebar")!
       const chatHeader = document.querySelector<HTMLElement>(".chat-header")!
+      const usageRect = usage.getBoundingClientRect()
+      const editorRect = editor.getBoundingClientRect()
+      const toggleRect = toggle.getBoundingClientRect()
       return {
         mountOpen: mount.dataset.open || "",
         width: mount.getBoundingClientRect().width,
         pointerEvents: getComputedStyle(toolbar).pointerEvents,
         visibility: getComputedStyle(toolbar).visibility,
+        usageText: usage.textContent?.trim() || "",
+        usageRight: usageRect.right,
+        editorLeft: editorRect.left,
+        editorRight: editorRect.right,
+        toggleLeft: toggleRect.left,
         editorText: editor.textContent?.trim() || "",
         titlebarText: titlebar.textContent?.trim() || "",
         chatHeaderText: chatHeader.textContent?.trim() || "",
@@ -298,6 +364,9 @@ test("message panel titlebar opens right toolbar without hover and keeps runtime
     assert.ok(closed.width <= 1, JSON.stringify(closed))
     assert.equal(closed.pointerEvents, "none")
     assert.equal(closed.visibility, "hidden")
+    assert.equal(closed.usageText, "2.0m tok · $1.23")
+    assert.ok(closed.usageRight <= closed.editorLeft, JSON.stringify(closed))
+    assert.ok(closed.editorRight <= closed.toggleLeft, JSON.stringify(closed))
     assert.equal(closed.editorText.includes("Open in"), true)
     assert.equal(closed.titlebarText.includes("Open in"), false)
     assert.equal(closed.chatHeaderText.includes("Open in"), true)

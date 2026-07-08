@@ -5,6 +5,7 @@ import {
   loadTaskBrowserPreviewEvidenceCaptureObjectUrl,
   loadTaskBrowserPreviewEvidence,
   loadTaskBrowserPreviewTarget,
+  saveTaskBrowserPreviewTarget,
   selectTaskBrowserPreviewTarget,
   type BrowserPreviewEvidence,
   type BrowserPreviewTarget,
@@ -115,6 +116,33 @@ test("browser preview service selects an existing backend target by ID", async (
     kind: "json",
     value: {
       targetID: "art_previewtarget000000000001",
+    },
+  })
+})
+
+test("browser preview service saves a user-entered URL through the task-scoped target route", async () => {
+  let captured: TransportRequest | undefined
+  __setHostTransportForTest(
+    fakePreviewTransport((req) => {
+      captured = req
+    }),
+  )
+
+  await saveTaskBrowserPreviewTarget({
+    taskID: TASK_ID,
+    directory: SAVED_DIRECTORY,
+    url: "localhost:5173/app",
+    viewports: [{ id: "desktop", labelKey: "browser_preview.viewport.desktop", width: 1280, height: 800 }],
+  })
+
+  expect(captured?.path).toBe(`task/${TASK_ID}/browser-preview/target`)
+  expect(captured?.method).toBe("POST")
+  expect(captured?.query?.directory).toBe(SAVED_DIRECTORY)
+  expect(captured?.body).toEqual({
+    kind: "json",
+    value: {
+      url: "localhost:5173/app",
+      viewports: [{ id: "desktop", labelKey: "browser_preview.viewport.desktop", width: 1280, height: 800 }],
     },
   })
 })

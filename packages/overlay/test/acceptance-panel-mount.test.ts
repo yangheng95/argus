@@ -493,7 +493,7 @@ test("redesign-required i18n keys exist in both locales; the legacy lifecycle ke
     "acceptance.inflight.hint",
     "browser_preview.title",
     "browser_preview.url_label",
-    "browser_preview.capture",
+    "browser_preview.capture_title",
     "browser_preview.capture_loading",
     "browser_preview.viewport.desktop",
     "coding_assistant.title",

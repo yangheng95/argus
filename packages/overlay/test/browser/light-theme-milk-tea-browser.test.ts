@@ -114,7 +114,7 @@ test("light theme renders warm milk-tea surfaces instead of pure white", async (
                           <span class="project-group-icon">▣</span>
                           <span class="project-group-copy">
                             <span class="project-group-name">opecorvus</span>
-                            <span class="project-group-parent">C:/Users/chuan</span>
+                            <span class="project-group-parent">C:/Projects</span>
                           </span>
                           <span class="project-group-count">3</span>
                         </button>

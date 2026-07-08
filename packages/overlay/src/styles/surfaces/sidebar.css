@@ -959,27 +959,12 @@
   justify-content: flex-end;
   gap: calc(1px * var(--ui-scale));
   min-width: 0;
-  opacity: var(--ui-opacity-hidden);
-  visibility: hidden;
-  pointer-events: none;
-  transition:
-    opacity var(--ui-duration-base),
-    visibility var(--ui-duration-base);
-}
-
-.project-group[data-project-actions="true"]:hover .project-group-actions,
-.project-group[data-project-actions="true"]:focus-within .project-group-actions {
   opacity: var(--ui-opacity-full);
   visibility: visible;
   pointer-events: auto;
-}
-
-.project-group[data-project-actions="true"]:hover .project-group-count,
-.project-group[data-project-actions="true"]:hover .project-group-chevron,
-.project-group[data-project-actions="true"]:focus-within .project-group-count,
-.project-group[data-project-actions="true"]:focus-within .project-group-chevron {
-  opacity: var(--ui-opacity-hidden);
-  pointer-events: none;
+  transition:
+    opacity var(--ui-duration-base),
+    visibility var(--ui-duration-base);
 }
 
 .project-group .oc-button[data-ui="project-group-toggle"] {
@@ -1014,6 +999,7 @@
 .project-group .oc-button[data-ui="project-group-copy"],
 .project-group .oc-button[data-ui="project-group-rename"],
 .project-group .oc-button[data-ui="project-group-delete"] {
+  --project-group-action-icon-size: calc(10px * var(--ui-scale));
   --oc-button-height: calc(18px * var(--ui-scale));
   --oc-button-padding-x: 0;
   --oc-button-border: 0 solid transparent;
@@ -1033,8 +1019,12 @@
 .project-group .oc-button[data-ui="project-group-copy"] > svg,
 .project-group .oc-button[data-ui="project-group-rename"] > svg,
 .project-group-delete-icon > svg {
-  width: calc(10px * var(--ui-scale));
-  height: calc(10px * var(--ui-scale));
+  width: var(--project-group-action-icon-size);
+  height: var(--project-group-action-icon-size);
+}
+
+.project-group .oc-button[data-ui="project-group-new-chat"] {
+  --project-group-action-icon-size: var(--ui-font-body);
 }
 
 .project-group .oc-button[data-ui="project-group-new-chat"]:hover,

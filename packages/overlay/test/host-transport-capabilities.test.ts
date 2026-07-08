@@ -34,6 +34,8 @@ const NATIVE_COMMAND_KINDS: NativeCommandKind[] = [
   "browserPreview.sync",
   "browserPreview.navigate",
   "browserPreview.close",
+  "browserPreview.selection.setEnabled",
+  "browserPreview.selection.take",
   "settings.load",
   "settings.save",
   "config.write-file",
@@ -95,11 +97,8 @@ describe("HostTransport capability contract", () => {
     const windowControls = read("src/components/WindowControls.tsx")
     const editorLaunchers = read("src/components/WorkspaceEditorLaunchers.tsx")
 
-    expect(taskDirBar).toContain("const nativeCommands = getHostTransport().capabilities.nativeCommands")
-    expect(taskDirBar).toContain('browseDirectory: nativeCommands["workspace.pickDir"]')
-    expect(taskDirBar).toContain('openDirectory: nativeCommands["open-path"]')
-    expect(taskDirBar).toContain('if (!nativeCommands["workspace.pickDir"]) return')
-    expect(taskDirBar).toContain('if (!nativeCommands["open-path"]) return')
+    expect(taskDirBar).toContain('from "../services/workspace"')
+    expect(taskDirBar).not.toContain("getHostTransport().kind")
 
     expect(channelsPanel).toContain("const nativeCommands = getHostTransport().capabilities.nativeCommands")
     expect(channelsPanel).toContain('nativeCommands["open-url"]')

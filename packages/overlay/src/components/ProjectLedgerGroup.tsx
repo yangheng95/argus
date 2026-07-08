@@ -166,7 +166,7 @@ export function ProjectLedgerGroup(props: ProjectLedgerGroupProps) {
                 runProjectAction(`new-chat:${props.directory}`, () => props.onCreateChat?.(props.directory))
               }}
             >
-              <Icon name="message-add" size={10} />
+              <Icon name="plus" size={14} />
             </Button>
           </Show>
           <Show when={canCopyProject()}>

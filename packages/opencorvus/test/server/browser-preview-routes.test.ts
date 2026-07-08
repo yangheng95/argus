@@ -14,10 +14,13 @@ import {
 } from "../../src/browser-preview/persist"
 import { Database } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
-import { persistTestBrowserPreviewTarget as persistBrowserPreviewTarget } from "../fixture/browser-preview"
+import {
+  TEST_BROWSER_PREVIEW_VIEWPORTS,
+  persistTestBrowserPreviewTarget,
+  persistTestBrowserPreviewTarget as persistBrowserPreviewTarget,
+} from "../fixture/browser-preview"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
-import { persistTestBrowserPreviewTarget } from "../fixture/browser-preview"
 
 Log.init({ print: false })
 
@@ -376,6 +379,35 @@ describe("browser preview routes", () => {
       expect(response.status).toBe(400)
       const body = await response.json()
       expect(JSON.stringify(body)).toContain("targetID")
+    },
+    { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
+    "POST /task/:taskID/browser-preview/target saves a user-entered URL target",
+    async () => {
+      await using tmp = await tmpdir()
+      const taskID = await seedTask(tmp.path)
+      const app = Server.App()
+
+      const response = await app.request(`/task/${taskID}/browser-preview/target`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-opencorvus-directory": tmp.path,
+        },
+        body: JSON.stringify({
+          url: "localhost:5173/app",
+          viewports: TEST_BROWSER_PREVIEW_VIEWPORTS,
+        }),
+      })
+
+      expect(response.status).toBe(200)
+      const body = (await response.json()) as { id?: string; status: string; url?: string; diagnostics?: string[] }
+      expect(body.id).toBeTruthy()
+      expect(body.status).toBe("ready")
+      expect(body.url).toBe("http://localhost:5173/app")
+      expect(body.diagnostics?.join("\n")).toContain("Saved task browser preview target")
     },
     { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
   )
@@ -879,75 +911,83 @@ describe("browser preview routes", () => {
     expect(body.name).toBe("DirectoryRequiredError")
   })
 
-  test("GET /task/:taskID/browser-preview rejects task IDs from another project directory", async () => {
-    await using first = await tmpdir()
-    await using second = await tmpdir()
-    const taskID = await seedTask(second.path)
-    await persistTestBrowserPreviewTarget({ taskID, url: "https://preview.example/foreign-task" })
-    const app = Server.App()
+  test(
+    "GET /task/:taskID/browser-preview rejects task IDs from another project directory",
+    async () => {
+      await using first = await tmpdir()
+      await using second = await tmpdir()
+      const taskID = await seedTask(second.path)
+      await persistTestBrowserPreviewTarget({ taskID, url: "https://preview.example/foreign-task" })
+      const app = Server.App()
 
-    const response = await app.request(`/task/${taskID}/browser-preview`, {
-      headers: {
-        "x-opencorvus-directory": first.path,
-      },
-    })
+      const response = await app.request(`/task/${taskID}/browser-preview`, {
+        headers: {
+          "x-opencorvus-directory": first.path,
+        },
+      })
 
-    expect(response.status).toBe(404)
-    expect((await response.json()) as { name?: string }).toMatchObject({ name: "NotFoundError" })
-  })
-
-  test("browser preview task subroutes reject task IDs from another project directory", async () => {
-    await using first = await tmpdir()
-    await using second = await tmpdir()
-    const taskID = await seedTask(second.path)
-    const target = await persistTestBrowserPreviewTarget({ taskID, url: "https://preview.example/foreign-task" })
-    const screenshotPath = await browserPreviewArtifactPath(second.path, taskID, "foreign-desktop.png")
-    await fs.writeFile(screenshotPath, "foreign-browser-preview-screenshot")
-    const evidenceID = persistBrowserPreviewEvidence({
-      projectRoot: second.path,
-      taskID,
-      targetID: target.id,
-      viewportID: "desktop",
-      operationKind: "preview-capture",
-      status: "passed",
-      summary: "foreign project evidence",
-      capture: {
-        captured: true,
-        passed: true,
-        path: screenshotPath,
-        sha: sha16("foreign-browser-preview-screenshot"),
-      },
-      diagnostics: ["foreign project evidence"],
-    })
-    const app = Server.App()
-    const headers = {
-      "content-type": "application/json",
-      "x-opencorvus-directory": first.path,
-    }
-
-    const requests = [
-      () => app.request(`/task/${taskID}/browser-preview/evidence/${evidenceID}`, { headers }),
-      () => app.request(`/task/${taskID}/browser-preview/evidence/${evidenceID}/capture.png`, { headers }),
-      () =>
-        app.request(`/task/${taskID}/browser-preview/target`, {
-          method: "PUT",
-          headers,
-          body: JSON.stringify({ targetID: target.id }),
-        }),
-      () =>
-        app.request(`/task/${taskID}/browser-preview/capture`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ targetID: target.id, viewportIDs: ["desktop"] }),
-        }),
-    ]
-
-    for (const request of requests) {
-      const response = await request()
       expect(response.status).toBe(404)
       expect((await response.json()) as { name?: string }).toMatchObject({ name: "NotFoundError" })
-    }
-  })
+    },
+    { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
+    "browser preview task subroutes reject task IDs from another project directory",
+    async () => {
+      await using first = await tmpdir()
+      await using second = await tmpdir()
+      const taskID = await seedTask(second.path)
+      const target = await persistTestBrowserPreviewTarget({ taskID, url: "https://preview.example/foreign-task" })
+      const screenshotPath = await browserPreviewArtifactPath(second.path, taskID, "foreign-desktop.png")
+      await fs.writeFile(screenshotPath, "foreign-browser-preview-screenshot")
+      const evidenceID = persistBrowserPreviewEvidence({
+        projectRoot: second.path,
+        taskID,
+        targetID: target.id,
+        viewportID: "desktop",
+        operationKind: "preview-capture",
+        status: "passed",
+        summary: "foreign project evidence",
+        capture: {
+          captured: true,
+          passed: true,
+          path: screenshotPath,
+          sha: sha16("foreign-browser-preview-screenshot"),
+        },
+        diagnostics: ["foreign project evidence"],
+      })
+      const app = Server.App()
+      const headers = {
+        "content-type": "application/json",
+        "x-opencorvus-directory": first.path,
+      }
+
+      const requests = [
+        () => app.request(`/task/${taskID}/browser-preview/evidence/${evidenceID}`, { headers }),
+        () => app.request(`/task/${taskID}/browser-preview/evidence/${evidenceID}/capture.png`, { headers }),
+        () =>
+          app.request(`/task/${taskID}/browser-preview/target`, {
+            method: "PUT",
+            headers,
+            body: JSON.stringify({ targetID: target.id }),
+          }),
+        () =>
+          app.request(`/task/${taskID}/browser-preview/capture`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ targetID: target.id, viewportIDs: ["desktop"] }),
+          }),
+      ]
+
+      for (const request of requests) {
+        const response = await request()
+        expect(response.status).toBe(404)
+        expect((await response.json()) as { name?: string }).toMatchObject({ name: "NotFoundError" })
+      }
+    },
+    { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
+  )
 
   test(
     "POST /task/:taskID/browser-preview/capture requires an explicit targetID",
@@ -1139,33 +1179,37 @@ describe("browser preview routes", () => {
     { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
   )
 
-  test("retired browser preview PNG live routes are not mounted", async () => {
-    await using tmp = await tmpdir()
-    const taskID = await seedTask(tmp.path)
-    const app = Server.App()
-    const headers = {
-      "content-type": "application/json",
-      "x-opencorvus-directory": tmp.path,
-    }
+  test(
+    "retired browser preview PNG live routes are not mounted",
+    async () => {
+      await using tmp = await tmpdir()
+      const taskID = await seedTask(tmp.path)
+      const app = Server.App()
+      const headers = {
+        "content-type": "application/json",
+        "x-opencorvus-directory": tmp.path,
+      }
 
-    const snapshot = await app.request(`/task/${taskID}/browser-preview/live/snapshot`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ targetID: "art_previewtarget_missing", viewportID: "desktop" }),
-    })
-    const input = await app.request(`/task/${taskID}/browser-preview/live/input`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        targetID: "art_previewtarget_missing",
-        viewportID: "desktop",
-        inputs: [{ kind: "click", x: 1, y: 1 }],
-      }),
-    })
+      const snapshot = await app.request(`/task/${taskID}/browser-preview/live/snapshot`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ targetID: "art_previewtarget_missing", viewportID: "desktop" }),
+      })
+      const input = await app.request(`/task/${taskID}/browser-preview/live/input`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          targetID: "art_previewtarget_missing",
+          viewportID: "desktop",
+          inputs: [{ kind: "click", x: 1, y: 1 }],
+        }),
+      })
 
-    expect(snapshot.status).toBe(404)
-    expect(input.status).toBe(404)
-  })
+      expect(snapshot.status).toBe(404)
+      expect(input.status).toBe(404)
+    },
+    { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
+  )
 
   test(
     "POST /task/:taskID/browser-preview/capture rejects unknown target IDs before verification",

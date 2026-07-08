@@ -93,8 +93,13 @@ test(
                         </button>
                       </div>
                       <div class="composer-model-selector" data-ui="composer-model-selector">
-                        <button class="oc-button" data-variant="outline" data-size="sm" data-tone="neutral" data-ui="composer-model-selector-trigger" type="button" aria-label="OpenCorvus model: gpt-5">
-                          <span class="composer-model-selector-value">gpt-5</span>
+                        <button class="oc-button" data-variant="outline" data-size="sm" data-tone="neutral" data-ui="composer-model-selector-trigger" type="button" aria-label="OpenCorvus model: hexin/kimi-k2.7-code">
+                          <span class="composer-model-selector-copy">
+                            <span class="composer-model-selector-value">hexin/kimi-k2.7-code</span>
+                            <span class="executor-budget-inline" data-ui="executor-hexin-budget" data-loading="false" data-over-budget="false" data-low-budget="true" role="status" aria-live="polite" aria-label="Remaining 19.99 / 4,435.30 · spent 4,415.31">
+                              <span class="executor-budget-value">Hexin 19.99 / 4,435.30</span>
+                            </span>
+                          </span>
                         </button>
                       </div>
                     </div>
@@ -195,6 +200,7 @@ test(
         const modeValue = document.querySelector<HTMLElement>('[data-case="ready"] .composer-mode-select-value')
         const expertValue = document.querySelector<HTMLElement>('[data-case="ready"] .expert-squad-select-value')
         const modelValue = document.querySelector<HTMLElement>('[data-case="ready"] .composer-model-selector-value')
+        const modelBudget = document.querySelector<HTMLElement>('[data-case="ready"] [data-ui="executor-hexin-budget"]')
         const modeCaret = document.querySelector<HTMLElement>('[data-case="ready"] .composer-mode-select-caret')
         const expertCaret = document.querySelector<HTMLElement>('[data-case="ready"] .expert-squad-select-caret')
         const loaders = document.querySelector<HTMLElement>('[data-case="ready"] .composer-attachment-loaders')
@@ -217,6 +223,7 @@ test(
           !modeValue ||
           !expertValue ||
           !modelValue ||
+          !modelBudget ||
           !modeCaret ||
           !expertCaret ||
           !loaders ||
@@ -238,12 +245,14 @@ test(
         const modeSelectBox = modeSelect.getBoundingClientRect()
         const expertSelectBox = expertSelect.getBoundingClientRect()
         const modelSelectBox = modelSelect.getBoundingClientRect()
+        const modelBudgetBox = modelBudget.getBoundingClientRect()
         const modeSelectStyle = getComputedStyle(modeSelect)
         const expertSelectStyle = getComputedStyle(expertSelect)
         const modelSelectStyle = getComputedStyle(modelSelect)
         const modeValueStyle = getComputedStyle(modeValue)
         const expertValueStyle = getComputedStyle(expertValue)
         const modelValueStyle = getComputedStyle(modelValue)
+        const modelBudgetStyle = getComputedStyle(modelBudget)
         const modeCaretStyle = getComputedStyle(modeCaret)
         const expertCaretStyle = getComputedStyle(expertCaret)
         const loadersBox = loaders.getBoundingClientRect()
@@ -274,6 +283,12 @@ test(
           modeSelectWidth: Math.round(modeSelectBox.width),
           expertSelectWidth: Math.round(expertSelectBox.width),
           modelSelectWidth: Math.round(modelSelectBox.width),
+          modelBudgetText: modelBudget.textContent?.trim() ?? "",
+          modelBudgetParentIsModelSelector: modelBudget.closest(".composer-model-selector") === modelSelect,
+          modelBudgetLeftInsideSelector: Math.round((modelBudgetBox.left - modelSelectBox.left) * 100) / 100,
+          modelBudgetRightInsideSelector: Math.round((modelSelectBox.right - modelBudgetBox.right) * 100) / 100,
+          modelBudgetDisplay: modelBudgetStyle.display,
+          modelBudgetBorderInlineStart: modelBudgetStyle.borderInlineStartStyle,
           modeSelectLeftInsideMetaLeft: Math.round((modeSelectBox.left - metaLeftBox.left) * 100) / 100,
           expertAfterMode: Math.round((expertSelectBox.left - modeSelectBox.right) * 100) / 100,
           modelAfterExpert: Math.round((modelSelectBox.left - expertSelectBox.right) * 100) / 100,
@@ -336,7 +351,13 @@ test(
       assert.ok(metrics.metaLeftInsideForm >= 13)
       assert.ok(metrics.modeSelectWidth >= 42 && metrics.modeSelectWidth <= 92)
       assert.ok(metrics.expertSelectWidth >= 80 && metrics.expertSelectWidth <= 188)
-      assert.ok(metrics.modelSelectWidth >= 48 && metrics.modelSelectWidth <= 188)
+      assert.ok(metrics.modelSelectWidth >= 160 && metrics.modelSelectWidth <= 276)
+      assert.ok(metrics.modelBudgetText.includes("Hexin 19.99"), metrics.modelBudgetText)
+      assert.equal(metrics.modelBudgetParentIsModelSelector, true)
+      assert.ok(metrics.modelBudgetLeftInsideSelector >= 0)
+      assert.ok(metrics.modelBudgetRightInsideSelector >= 0)
+      assert.ok(["flex", "inline-flex"].includes(metrics.modelBudgetDisplay), metrics.modelBudgetDisplay)
+      assert.notEqual(metrics.modelBudgetBorderInlineStart, "none")
       assert.ok(metrics.modeSelectLeftInsideMetaLeft <= 1)
       assert.ok(metrics.expertAfterMode >= 4 && metrics.expertAfterMode <= 7)
       assert.ok(metrics.modelAfterExpert >= 4 && metrics.modelAfterExpert <= 7)
