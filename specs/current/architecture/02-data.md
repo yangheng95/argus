@@ -66,8 +66,14 @@ attempt bookkeeping 只能通过这个 persistence writer 变更 goal row。`eng
 的唯一直接表写入文件是 `engine/task.ts`；task creation、metadata/touch、
 budget/title edits、physical delete、queue reorder/claim、lifecycle state updates、
 run bump 和 rewind cursor mutation 都只能通过这个 task writer 变更 task row。
+`engine_requirement` 的唯一直接表写入文件是 `engine/persist.ts`；requirements
+追溯记录只能通过这个 persistence writer 创建。
 其他 `engine_*` 表的写入仍必须停留在已声明的 engine-owned writer/service 内，
 禁止跨域模块直接写。
+
+Metrics 域沿用 `engine_*` 表名承载评分流水，但写入边界归属 metrics store：
+`engine_metric_spec`、`engine_metric_result` 和 `engine_iteration` 的唯一直接表写入文件
+是 `metrics/store.ts`。任务、agent、engine 或 UI 层不得直接写这些 metrics 表。
 
 ## session 域（5 表）
 

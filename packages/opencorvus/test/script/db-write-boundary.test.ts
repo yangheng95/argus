@@ -28,9 +28,13 @@ const approvedWriters: Record<string, string> = {
   EngineChannelBindingTable: "packages/opencorvus/src/engine/channel-binding.ts",
   EngineGoalTable: "packages/opencorvus/src/engine/persist.ts",
   EngineInteractionRequestTable: "packages/opencorvus/src/engine/interaction-request.ts",
+  EngineIterationTable: "packages/opencorvus/src/metrics/store.ts",
+  EngineMetricResultTable: "packages/opencorvus/src/metrics/store.ts",
+  EngineMetricSpecTable: "packages/opencorvus/src/metrics/store.ts",
   EnginePlanNodeTable: "packages/opencorvus/src/engine/persist.ts",
   EnginePlanVersionTable: "packages/opencorvus/src/engine/persist.ts",
   EngineProgressSnapshotTable: "packages/opencorvus/src/engine/progress.ts",
+  EngineRequirementTable: "packages/opencorvus/src/engine/persist.ts",
   EngineSpecSnapshotTable: "packages/opencorvus/src/engine/spec-snapshot.ts",
   EngineTaskTable: "packages/opencorvus/src/engine/task.ts",
 }
@@ -88,5 +92,21 @@ describe("database write boundary", () => {
 
   test("only the engine task writer directly writes EngineTaskTable", () => {
     expect(directWriteViolations("EngineTaskTable")).toEqual([])
+  })
+
+  test("only the engine persistence writer directly writes EngineRequirementTable", () => {
+    expect(directWriteViolations("EngineRequirementTable")).toEqual([])
+  })
+
+  test("only the metrics store directly writes EngineMetricSpecTable", () => {
+    expect(directWriteViolations("EngineMetricSpecTable")).toEqual([])
+  })
+
+  test("only the metrics store directly writes EngineMetricResultTable", () => {
+    expect(directWriteViolations("EngineMetricResultTable")).toEqual([])
+  })
+
+  test("only the metrics store directly writes EngineIterationTable", () => {
+    expect(directWriteViolations("EngineIterationTable")).toEqual([])
   })
 })

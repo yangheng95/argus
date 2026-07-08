@@ -476,3 +476,36 @@ Phase 15 verification:
 - `bun test --timeout 60000 packages/opencorvus/test/engine/task-writer.test.ts`
 - `bun test --timeout 60000 packages/opencorvus/test/engine/rewind-clear.test.ts packages/opencorvus/test/engine/rewind-multi-step.test.ts`
 - `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
+
+## Phase 16 Requirement And Metrics Static Boundary
+
+The remaining broad `Engine*Table` production writes after Phase 15 were already
+single-writer shaped:
+
+- `EngineRequirementTable` is written only from `engine/persist.ts`.
+- `EngineMetricSpecTable`, `EngineMetricResultTable`, and
+  `EngineIterationTable` are written only from `metrics/store.ts`.
+
+This phase does not move business code because moving already-converged writes
+would add churn without improving the boundary. It registers those single
+writers in the static database write-boundary test and documents the boundary in
+`specs/current/architecture/02-data.md`.
+
+Phase 16 acceptance criteria:
+
+- Production source direct `EngineRequirementTable` writes exist only in
+  `engine/persist.ts`.
+- Production source direct `EngineMetricSpecTable`, `EngineMetricResultTable`,
+  and `EngineIterationTable` writes exist only in `metrics/store.ts`.
+- The static database write-boundary test rejects future direct writes to those
+  tables outside their declared writer files.
+- The architecture data document states the requirement and metrics writer
+  ownership explicitly.
+
+Phase 16 verification:
+
+- `rg -n '\\.(insert|update|delete)\\s*\\(\\s*Engine[A-Za-z0-9_]*Table\\b|db\\.(insert|update|delete)\\s*\\(\\s*Engine[A-Za-z0-9_]*Table\\b' packages/opencorvus/src -g '*.ts'`
+- `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `git diff --check`
