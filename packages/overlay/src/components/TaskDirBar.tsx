@@ -45,13 +45,61 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-export interface ProjectWorktreeDropdownProps {
-  compact?: boolean
+// VCS (Version Control System) metadata projected by GET /vcs into boardStore.
+interface ProjectVcsInfo {
+  initialized?: boolean
+  branch?: string
+  commit?: string
+  clean?: boolean
+  dirty?: boolean
+  staged?: number
+  modified?: number
+  untracked?: number
+  conflicts?: number
+  ahead?: number
+  behind?: number
 }
 
-export function ProjectWorktreeDropdown(props: ProjectWorktreeDropdownProps = {}) {
+type ProjectVcsTone = "neutral" | "good" | "warn" | "bad"
+
+function projectVcsInfo(): ProjectVcsInfo | null {
+  return boardStore.vcs as ProjectVcsInfo | null
+}
+
+function vcsToneFor(value: ProjectVcsInfo | null): ProjectVcsTone {
+  if (!value) return "neutral"
+  if (!value.initialized) return "neutral"
+  if ((value.conflicts ?? 0) > 0) return "bad"
+  if (value.dirty) return "warn"
+  return "good"
+}
+
+function vcsCountsFor(value: ProjectVcsInfo | null): string {
+  if (!value?.initialized) return ""
+  const parts: string[] = []
+  if ((value.staged ?? 0) > 0) parts.push(`+${value.staged}`)
+  if ((value.modified ?? 0) > 0) parts.push(`~${value.modified}`)
+  if ((value.untracked ?? 0) > 0) parts.push(`?${value.untracked}`)
+  if ((value.conflicts ?? 0) > 0) parts.push(`!${value.conflicts}`)
+  return parts.join(" ")
+}
+
+function vcsArrowsFor(value: ProjectVcsInfo | null): string {
+  if (!value?.initialized) return ""
+  const ahead = value.ahead ?? 0
+  const behind = value.behind ?? 0
+  if (ahead === 0 && behind === 0) return ""
+  return `${ahead > 0 ? `↑${ahead}` : ""}${behind > 0 ? `↓${behind}` : ""}`
+}
+
+function compactCommit(value: string): string {
+  return value.length <= 10 ? value : value.slice(0, 10)
+}
+
+export function ProjectRuntimeStatusDropdown() {
   const dir = createMemo(directoryMemo)
   const [open, setOpen] = createSignal(false)
+  const [gitBusy, setGitBusy] = createSignal(false)
   const [worktrees, setWorktrees] = createSignal<ProjectWorktreeInfo[]>([])
   const [worktreeDirectory, setWorktreeDirectory] = createSignal("")
   const [error, setError] = createSignal("")
@@ -64,6 +112,28 @@ export function ProjectWorktreeDropdown(props: ProjectWorktreeDropdownProps = {}
   const removableExpiredWorktrees = createMemo(() => expiredWorktrees().filter((item) => item.removable))
   const cleanupExpiredBusy = createMemo(() => cleanupExpiredBusyFor(worktreeDirectory()))
   const canCleanupExpired = createMemo(() => removableExpiredWorktrees().length > 0 && !cleanupExpiredBusy())
+  const vcs = createMemo(projectVcsInfo)
+  const gitTone = createMemo(() => vcsToneFor(vcs()))
+  const gitCounts = createMemo(() => vcsCountsFor(vcs()))
+  const gitArrows = createMemo(() => vcsArrowsFor(vcs()))
+  const gitStatusLabel = createMemo(() => {
+    const value = vcs()
+    if (!value) return t("project_runtime.git_unavailable")
+    if (!value.initialized) return t("project_runtime.git_uninitialized")
+    return value.dirty ? t("vcs.dirty") : t("vcs.clean")
+  })
+  const triggerBadge = createMemo(() => {
+    const total = activeWorktrees().length + expiredWorktrees().length
+    return total > 0 ? String(total) : ""
+  })
+  const triggerBadgeKind = createMemo(() => (expiredWorktrees().length > 0 ? "expired" : "active"))
+  const triggerTitle = createMemo(() =>
+    t("project_runtime.summary", {
+      active: activeWorktrees().length,
+      expired: expiredWorktrees().length,
+      git: gitStatusLabel(),
+    }),
+  )
 
   function setDeleting(directories: string[], deleting: boolean): void {
     setDeletingWorktrees((current) => {
@@ -103,10 +173,6 @@ export function ProjectWorktreeDropdown(props: ProjectWorktreeDropdownProps = {}
     }
   }
 
-  function closePanel(): void {
-    setOpen(false)
-  }
-
   function ownsWorktreeOperation(projectDirectory: string): boolean {
     return dir().trim() === projectDirectory && worktreeDirectory() === projectDirectory
   }
@@ -116,9 +182,22 @@ export function ProjectWorktreeDropdown(props: ProjectWorktreeDropdownProps = {}
     return directory.length > 0 && cleanupExpiredOperationDirectory() === directory
   }
 
-  function setWorktreePanelOpen(nextOpen: boolean): void {
+  function setRuntimePanelOpen(nextOpen: boolean): void {
     setOpen(nextOpen)
     if (nextOpen) void syncWorktrees()
+  }
+
+  async function handleInitGit(event: MouseEvent): Promise<void> {
+    event.stopPropagation()
+    if (!canInitGit() || gitBusy()) return
+    setGitBusy(true)
+    try {
+      await initGitCurrent()
+    } catch (err) {
+      AppLog.error("ui", "Failed to initialize git repository", { error: errorMessage(err) })
+    } finally {
+      setGitBusy(false)
+    }
   }
 
   async function removeWorktree(item: ProjectWorktreeInfo, event: MouseEvent): Promise<void> {
@@ -236,43 +315,36 @@ export function ProjectWorktreeDropdown(props: ProjectWorktreeDropdownProps = {}
   })
 
   return (
-    <DropdownMenu.Root
-      open={open()}
-      onOpenChange={setWorktreePanelOpen}
-      placement={props.compact ? "left-start" : "bottom-end"}
-      gutter={6}
-      fitViewport
-    >
+    <DropdownMenu.Root open={open()} onOpenChange={setRuntimePanelOpen} placement="left-start" gutter={6} fitViewport>
       <DropdownMenu.Trigger
         as={Button}
         type="button"
-        variant={props.compact ? "ghost" : "outline"}
-        size={props.compact ? "icon" : "sm"}
+        variant="ghost"
+        size="icon"
         tone="neutral"
-        data-chrome={props.compact ? "icon-action" : undefined}
-        data-ui="project-worktree-dropdown"
-        data-toolbar-compact={props.compact ? "true" : undefined}
-        title={t("worktree.summary", { active: activeWorktrees().length, expired: expiredWorktrees().length })}
-        aria-label={t("worktree.summary", { active: activeWorktrees().length, expired: expiredWorktrees().length })}
+        data-chrome="icon-action"
+        data-ui="project-runtime-status-dropdown"
+        data-toolbar-compact="true"
+        data-vcs-tone={gitTone()}
+        title={triggerTitle()}
+        aria-label={triggerTitle()}
       >
-        <Icon name="folder-open" size={props.compact ? 16 : 14} />
-        <Show when={!props.compact}>
-          <span class="project-worktree-count" data-kind="active">
-            {t("worktree.active")} {activeWorktrees().length}
+        <Icon name="git-worktree" size={16} />
+        <Show when={triggerBadge()}>
+          <span class="project-runtime-trigger-badge" data-kind={triggerBadgeKind()}>
+            {triggerBadge()}
           </span>
-          <Show when={expiredWorktrees().length > 0}>
-            <span class="project-worktree-count" data-kind="expired">
-              {t("worktree.expired")} {expiredWorktrees().length}
-            </span>
-          </Show>
-          <Icon name="caret-down" size={12} class="project-worktree-caret" />
         </Show>
+        <span class="project-runtime-trigger-dot" data-tone={gitTone()} aria-hidden="true" />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content class="project-worktree-panel">
-          <div class="project-worktree-panel-shell">
-            <div class="project-worktree-panel-head">
-              <div class="project-worktree-panel-title">{t("worktree.title")}</div>
+        <DropdownMenu.Content class="project-runtime-status-panel">
+          <div class="project-runtime-panel-shell">
+            <div class="project-runtime-panel-head">
+              <div class="project-runtime-panel-title">
+                <Icon name="git-worktree" size={15} />
+                <span>{t("project_runtime.title")}</span>
+              </div>
               <span class="project-worktree-head-count" data-kind="active">
                 {t("worktree.active")} {activeWorktrees().length}
               </span>
@@ -297,6 +369,73 @@ export function ProjectWorktreeDropdown(props: ProjectWorktreeDropdownProps = {}
                 </Button>
               </Show>
             </div>
+            <div class="project-runtime-git-section" data-tone={gitTone()}>
+              <div class="project-runtime-section-head">
+                <span class="project-runtime-section-title">
+                  <Icon name="git-branch" size={14} />
+                  <span>{t("project_runtime.git_title")}</span>
+                </span>
+                <span class="project-runtime-git-state">{gitStatusLabel()}</span>
+              </div>
+              <Show
+                when={vcs()?.initialized}
+                fallback={
+                  <div class="project-runtime-git-empty" data-state={vcs() === null ? "unavailable" : "uninitialized"}>
+                    <span>{gitStatusLabel()}</span>
+                    <Show when={canInitGit()}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="mini"
+                        tone="accent"
+                        data-ui="project-init-git"
+                        data-busy={gitBusy() ? "true" : "false"}
+                        disabled={gitBusy()}
+                        title={t("git.init")}
+                        aria-label={t("git.init")}
+                        onClick={(event) => void handleInitGit(event)}
+                      >
+                        <Icon name={gitBusy() ? "refresh" : "git-branch-plus"} size={12} />
+                        <span>{gitBusy() ? t("common.loading") : t("git.init")}</span>
+                      </Button>
+                    </Show>
+                  </div>
+                }
+              >
+                <div class="project-runtime-git-grid">
+                  <div class="project-runtime-git-row">
+                    <Icon name="git-branch" size={13} />
+                    <span class="project-runtime-git-label">{t("chat.git.branch")}</span>
+                    <span class="project-runtime-git-value" title={vcs()?.branch ?? ""}>
+                      {vcs()?.branch ?? ""}
+                    </span>
+                  </div>
+                  <Show when={vcs()?.commit}>
+                    <div class="project-runtime-git-row">
+                      <Icon name="git-commit" size={13} />
+                      <span class="project-runtime-git-label">{t("chat.git.commit")}</span>
+                      <span class="project-runtime-git-value" title={vcs()?.commit ?? ""}>
+                        {compactCommit(vcs()?.commit ?? "")}
+                      </span>
+                    </div>
+                  </Show>
+                  <Show when={gitCounts()}>
+                    <div class="project-runtime-git-row">
+                      <Icon name="files" size={13} />
+                      <span class="project-runtime-git-label">{t("project_runtime.git_changes")}</span>
+                      <span class="project-runtime-git-value">{gitCounts()}</span>
+                    </div>
+                  </Show>
+                  <Show when={gitArrows()}>
+                    <div class="project-runtime-git-row">
+                      <Icon name="git-compare" size={13} />
+                      <span class="project-runtime-git-label">{t("project_runtime.git_remote")}</span>
+                      <span class="project-runtime-git-value">{gitArrows()}</span>
+                    </div>
+                  </Show>
+                </div>
+              </Show>
+            </div>
             <Show when={operationError()}>
               <div class="project-worktree-error" data-ui="project-worktree-operation-error" role="status">
                 <Icon name="status-failed" size={14} />
@@ -309,6 +448,12 @@ export function ProjectWorktreeDropdown(props: ProjectWorktreeDropdownProps = {}
                 <span>{error()}</span>
               </div>
             </Show>
+            <div class="project-runtime-section-head">
+              <span class="project-runtime-section-title">
+                <Icon name="git-worktree" size={14} />
+                <span>{t("worktree.title")}</span>
+              </span>
+            </div>
             <Show
               when={visibleWorktrees().length > 0}
               fallback={<div class="project-worktree-empty">{error() || t("worktree.empty")}</div>}
@@ -329,7 +474,8 @@ export function ProjectWorktreeDropdown(props: ProjectWorktreeDropdownProps = {}
                         <span class="project-worktree-state">{worktreeStateLabel(item)}</span>
                         <Show when={item.branch}>
                           <span class="project-worktree-branch" title={item.branch}>
-                            ⎇ {compactBranch(item.branch ?? "")}
+                            <Icon name="git-branch" size={11} class="project-worktree-branch-icon" />
+                            {compactBranch(item.branch ?? "")}
                           </span>
                         </Show>
                         <span class="project-worktree-path" title={item.directory}>
@@ -375,146 +521,10 @@ export function ProjectWorktreeDropdown(props: ProjectWorktreeDropdownProps = {}
   )
 }
 
-export interface InitGitButtonProps {
-  compact?: boolean
-}
-
-export function InitGitButton(props: InitGitButtonProps = {}) {
-  const [busy, setBusy] = createSignal(false)
-  const visible = createMemo(() => canInitGit())
-
-  async function handleInitGit(): Promise<void> {
-    if (!visible() || busy()) return
-    setBusy(true)
-    try {
-      await initGitCurrent()
-    } catch (error) {
-      AppLog.error("ui", "Failed to initialize git repository", { error: String(error) })
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <Show when={visible()}>
-      <Button
-        type="button"
-        variant={props.compact ? "ghost" : "outline"}
-        size={props.compact ? "icon" : "sm"}
-        tone="accent"
-        data-chrome={props.compact ? "icon-action" : undefined}
-        data-ui="project-init-git"
-        data-toolbar-compact={props.compact ? "true" : undefined}
-        disabled={busy()}
-        title={t("git.init")}
-        aria-label={t("git.init")}
-        onClick={() => void handleInitGit()}
-      >
-        <Icon name="github" size={props.compact ? 16 : 14} />
-        <Show when={!props.compact}>
-          <span class="project-init-git-label">{busy() ? t("common.loading") : t("git.init")}</span>
-        </Show>
-      </Button>
-    </Show>
-  )
-}
-
-// VcsBadge — surfaces the current branch + dirty/ahead/behind count in the
-// project runtime toolbar. Pulls from boardStore.vcs (populated by
-// services/meta.ts via GET /vcs). Renders nothing when vcs.initialized is false
-// so non-git projects stay silent. The underlying signals refresh every time
-// meta.ts polls so the badge tracks branch switches without extra wiring.
-export interface VcsBadgeProps {
-  compact?: boolean
-}
-
-export function VcsBadge(props: VcsBadgeProps = {}) {
-  const vcs = createMemo(
-    () =>
-      boardStore.vcs as null | {
-        initialized?: boolean
-        branch?: string
-        commit?: string
-        clean?: boolean
-        dirty?: boolean
-        staged?: number
-        modified?: number
-        untracked?: number
-        conflicts?: number
-        ahead?: number
-        behind?: number
-      },
-  )
-  const v = createMemo(() => vcs())
-  const show = createMemo(() => !!v()?.initialized && !!v()?.branch)
-  const tone = createMemo(() => {
-    const x = v()
-    if (!x) return "neutral"
-    if ((x.conflicts ?? 0) > 0) return "bad"
-    if (x.dirty) return "warn"
-    return "good"
-  })
-  const counts = createMemo(() => {
-    const x = v()
-    if (!x) return null
-    const parts: string[] = []
-    if ((x.staged ?? 0) > 0) parts.push(`+${x.staged}`)
-    if ((x.modified ?? 0) > 0) parts.push(`~${x.modified}`)
-    if ((x.untracked ?? 0) > 0) parts.push(`?${x.untracked}`)
-    if ((x.conflicts ?? 0) > 0) parts.push(`!${x.conflicts}`)
-    return parts.length > 0 ? parts.join(" ") : ""
-  })
-  const arrows = createMemo(() => {
-    const x = v()
-    if (!x) return ""
-    const ahead = x.ahead ?? 0
-    const behind = x.behind ?? 0
-    if (ahead === 0 && behind === 0) return ""
-    return `${ahead > 0 ? `↑${ahead}` : ""}${behind > 0 ? `↓${behind}` : ""}`
-  })
-  const title = createMemo(() => {
-    const x = v()
-    if (!x) return ""
-    const lines = [
-      `${t("chat.git.branch")}: ${x.branch ?? "—"}`,
-      x.commit ? `${t("chat.git.commit")}: ${x.commit}` : "",
-      x.dirty ? `${t("vcs.dirty")}` : `${t("vcs.clean")}`,
-      counts() ? counts() : "",
-      arrows() ? arrows() : "",
-    ].filter(Boolean)
-    return lines.join("\n")
-  })
-
-  return (
-    <span
-      class={props.compact ? "vcs-badge vcs-badge-compact" : "vcs-badge"}
-      data-ui="project-vcs-badge"
-      data-tone={tone()}
-      hidden={!show()}
-      title={title()}
-    >
-      <span class="vcs-badge-icon" aria-hidden="true">
-        ⎇
-      </span>
-      <Show when={!props.compact}>
-        <span class="vcs-badge-branch">{v()?.branch ?? ""}</span>
-        <Show when={counts()}>
-          <span class="vcs-badge-counts">{counts()}</span>
-        </Show>
-        <Show when={arrows()}>
-          <span class="vcs-badge-arrows">{arrows()}</span>
-        </Show>
-      </Show>
-    </span>
-  )
-}
-
 export function ProjectRuntimeToolbarActions() {
   return (
     <div class="project-runtime-toolbar-actions" data-ui="project-runtime-toolbar-actions">
-      <ProjectWorktreeDropdown compact />
-      <InitGitButton compact />
-      <VcsBadge compact />
+      <ProjectRuntimeStatusDropdown />
     </div>
   )
 }

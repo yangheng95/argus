@@ -40,13 +40,31 @@
 }
 
 #solidRightActivityToolbar {
-  border-left: var(--oc-border-width) solid color-mix(in srgb, var(--border) 72%, transparent);
+  --right-toolbar-hover-target-width: calc(10px * var(--ui-scale));
+
+  position: relative;
+  z-index: var(--ui-z-raised);
+  flex: 0 0 var(--right-toolbar-hover-target-width);
+  width: var(--right-toolbar-hover-target-width);
+  min-width: var(--right-toolbar-hover-target-width);
+  margin-left: calc(var(--right-toolbar-hover-target-width) * -1);
+  overflow: visible;
+  border-left: 0 solid transparent;
   background: transparent;
   pointer-events: auto;
-  transition: background var(--ui-duration-fast);
+  transition:
+    flex-basis var(--ui-duration-fast) var(--ui-timing-standard),
+    width var(--ui-duration-fast) var(--ui-timing-standard),
+    min-width var(--ui-duration-fast) var(--ui-timing-standard),
+    margin-left var(--ui-duration-fast) var(--ui-timing-standard),
+    background var(--ui-duration-fast) var(--ui-timing-standard),
+    border-color var(--ui-duration-fast) var(--ui-timing-standard);
 }
 
 #solidRightActivityToolbar .side-activity-toolbar {
+  position: absolute;
+  inset: 0;
+  width: var(--ui-collapsed-pane-width);
   opacity: 0;
   pointer-events: none;
   transform: translateX(calc(8px * var(--ui-scale)));
@@ -57,6 +75,11 @@
 
 #solidRightActivityToolbar:hover,
 #solidRightActivityToolbar:focus-within {
+  flex-basis: var(--ui-collapsed-pane-width);
+  width: var(--ui-collapsed-pane-width);
+  min-width: var(--ui-collapsed-pane-width);
+  margin-left: 0;
+  border-left: var(--oc-border-width) solid color-mix(in srgb, var(--border) 72%, transparent);
   background: var(--surface-inset);
 }
 
@@ -157,8 +180,7 @@
   pointer-events: none;
 }
 
-.project-runtime-toolbar-actions .oc-button[data-toolbar-compact="true"],
-.project-runtime-toolbar-actions .vcs-badge-compact {
+.project-runtime-toolbar-actions .oc-button[data-toolbar-compact="true"] {
   width: calc(38px * var(--ui-scale));
   height: calc(36px * var(--ui-scale));
   min-width: calc(38px * var(--ui-scale));
@@ -178,6 +200,8 @@
   --oc-button-bg: transparent;
   --oc-button-color: var(--text-muted);
   --oc-button-shadow: none;
+
+  position: relative;
 }
 
 .project-runtime-toolbar-actions .oc-button[data-toolbar-compact="true"]:hover,
@@ -190,20 +214,74 @@
   outline: none;
 }
 
-.project-runtime-toolbar-actions .vcs-badge-compact {
+.project-runtime-toolbar-actions
+  .oc-button[data-ui="project-runtime-status-dropdown"][data-vcs-tone="good"]:not(:hover):not(:focus-visible):not(
+    [data-expanded]
+  ) {
+  --oc-button-color: var(--good);
+}
+
+.project-runtime-toolbar-actions
+  .oc-button[data-ui="project-runtime-status-dropdown"][data-vcs-tone="warn"]:not(:hover):not(:focus-visible):not(
+    [data-expanded]
+  ) {
+  --oc-button-color: var(--warn);
+}
+
+.project-runtime-toolbar-actions
+  .oc-button[data-ui="project-runtime-status-dropdown"][data-vcs-tone="bad"]:not(:hover):not(:focus-visible):not(
+    [data-expanded]
+  ) {
+  --oc-button-color: var(--bad);
+}
+
+.project-runtime-trigger-badge {
+  position: absolute;
+  top: calc(3px * var(--ui-scale));
+  right: calc(3px * var(--ui-scale));
+  min-width: calc(14px * var(--ui-scale));
+  height: calc(14px * var(--ui-scale));
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
-  font-size: var(--ui-font-control);
+  padding: 0 calc(3px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 44%, transparent);
+  border-radius: var(--oc-radius-pill);
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  color: var(--accent);
+  font-size: var(--ui-font-tiny);
+  font-weight: var(--ui-font-weight-strong);
+  line-height: 1;
+  pointer-events: none;
 }
 
-.project-runtime-toolbar-actions .vcs-badge-compact[hidden] {
-  display: none;
+.project-runtime-trigger-badge[data-kind="expired"] {
+  border-color: color-mix(in srgb, var(--warn) 48%, transparent);
+  background: color-mix(in srgb, var(--warn) 18%, var(--surface));
+  color: var(--warn);
 }
 
-.project-runtime-toolbar-actions .vcs-badge-compact .vcs-badge-icon {
-  opacity: var(--ui-opacity-full);
+.project-runtime-trigger-dot {
+  position: absolute;
+  right: calc(6px * var(--ui-scale));
+  bottom: calc(5px * var(--ui-scale));
+  width: calc(6px * var(--ui-scale));
+  height: calc(6px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: var(--text-muted);
+  pointer-events: none;
+}
+
+.project-runtime-trigger-dot[data-tone="good"] {
+  background: var(--good);
+}
+
+.project-runtime-trigger-dot[data-tone="warn"] {
+  background: var(--warn);
+}
+
+.project-runtime-trigger-dot[data-tone="bad"] {
+  background: var(--bad);
 }
 
 .side-activity-body {

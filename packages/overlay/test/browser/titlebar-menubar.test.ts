@@ -1361,7 +1361,7 @@ test(
       assert.equal(initial.rightPaneResizerExists, false)
 
       const projectChromeHeights = await page.evaluate(() => {
-        const selectors = [".task-cwd-dropdown", '[data-ui="project-worktree-dropdown"]']
+        const selectors = [".task-cwd-dropdown", '[data-ui="project-runtime-status-dropdown"]']
         return selectors.map((selector) => {
           const node = document.querySelector<HTMLElement>(selector)
           if (!node) return { selector, missing: true, height: 0 }

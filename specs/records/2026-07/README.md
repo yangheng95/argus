@@ -1,6 +1,7 @@
 # July 2026 Records
 
 - [2026-07-08-db-write-boundary-refactor.md](2026-07-08-db-write-boundary-refactor.md) records the new worktree and first database write-boundary refactor slice that centralizes `engine_artifact` writes behind an engine-owned writer and adds a production architecture regression against scattered direct artifact writes.
+- [2026-07-08-right-toolbar-runtime-status-panel-merge.md](2026-07-08-right-toolbar-runtime-status-panel-merge.md) records the right-bottom Overlay runtime UI merge that makes Worktree management and Git status share one Kobalte panel and replaces the visible glyphs through the single Icon registry.
 - [2026-07-08-chat-default-mission-forwarding-receipt.md](2026-07-08-chat-default-mission-forwarding-receipt.md) records the Chat-default overlay change, right-sidebar `wake_mission` panel action, and Mission terminal receipt bridge back to the caller Chat session.
 - [2026-07-08-cwd-project-control-right-toolbar.md](2026-07-08-cwd-project-control-right-toolbar.md) records the corrected Overlay ownership shift that removes cwd/recent/detected-project switching controls, keeps Work Ledger focused on already-opened project groups, removes the old top cwd bar mount, and moves project worktree/Git runtime controls into the right activity toolbar.
 - [2026-07-08-composer-file-loader-right-toolbar-hover.md](2026-07-08-composer-file-loader-right-toolbar-hover.md) records the Overlay composer file-loader component and right-toolbar hover reveal implementation, preserving the existing attachment pipeline and pane sizing ownership.

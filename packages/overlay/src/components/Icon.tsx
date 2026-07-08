@@ -27,7 +27,12 @@ import {
   ExternalLink,
   FileText,
   Folder,
+  FolderGit2,
   FolderOpen,
+  GitBranch,
+  GitBranchPlus,
+  GitCommitHorizontal,
+  GitCompareArrows,
   Globe,
   GripVertical,
   Images,
@@ -120,6 +125,12 @@ export type IconName =
   // Empty-state / cwd
   | "folder"
   | "folder-open"
+  | "project-add"
+  | "git-worktree"
+  | "git-branch"
+  | "git-branch-plus"
+  | "git-commit"
+  | "git-compare"
   // Section header set (right-rail, was Board.SECTION_ICONS)
   | "overview"
   | "spec"
@@ -221,6 +232,11 @@ const LUCIDE_ICON_MAP: Partial<Record<IconName, LucideIconRecord>> = {
   "terminal-bash": { component: Shell },
   folder: { component: Folder },
   "folder-open": { component: FolderOpen },
+  "git-worktree": { component: FolderGit2 },
+  "git-branch": { component: GitBranch },
+  "git-branch-plus": { component: GitBranchPlus },
+  "git-commit": { component: GitCommitHorizontal },
+  "git-compare": { component: GitCompareArrows },
   attach: { component: Paperclip },
   "web-search": { component: Globe },
   "expert-squad": { component: BrainCircuit },
@@ -263,6 +279,16 @@ const LUCIDE_ICON_MAP: Partial<Record<IconName, LucideIconRecord>> = {
 }
 
 const CUSTOM_ICON_PATHS: Partial<Record<IconName, IconRecord>> = {
+  "project-add": {
+    body: () => (
+      <>
+        <path d="M2.6 6V4.9c0-.9.7-1.5 1.5-1.5h2.1c.4 0 .8.2 1.1.5l.8.9h3.8c.8 0 1.5.7 1.5 1.5V6" />
+        <path d="M2.6 6.4h10.8v5.1c0 .8-.7 1.5-1.5 1.5H4.1c-.8 0-1.5-.7-1.5-1.5V6.4Z" />
+        <path d="M8 8.2v3.2M6.4 9.8h3.2" />
+      </>
+    ),
+    strokeWidth: 1.45,
+  },
   "editor-vscode": {
     body: (idPrefix) => (
       <>

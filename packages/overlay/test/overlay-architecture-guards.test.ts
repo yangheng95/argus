@@ -783,28 +783,40 @@ describe("overlay architecture guards", () => {
   test("project runtime controls are owned by surfaces CSS without cwd selector popups", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const conversationSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"))
+    const activitySurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/activity.css"))
 
     for (const className of [
       "task-dir",
-      "vcs-badge",
-      "vcs-badge-icon",
-      "vcs-badge-branch",
       "task-dir-actions",
       "task-dir-path",
       "task-dir-tool",
       "task-dir-node",
       "task-dir-step",
       "task-dir-empty",
+      "project-runtime-status-panel",
+      "project-runtime-panel-shell",
+      "project-runtime-panel-head",
+      "project-runtime-panel-title",
+      "project-runtime-git-section",
     ]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(conversationSurface).toMatch(new RegExp(`(^|\\n)\\.${className}(?:\\s|,|\\{)`))
     }
 
-    for (const tone of ["good", "warn", "bad"]) {
-      expect(conversationSurface).toMatch(new RegExp(`\\.vcs-badge\\[data-tone="${tone}"\\]\\s*\\{`))
+    for (const className of ["project-runtime-trigger-badge", "project-runtime-trigger-dot"]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(activitySurface).toMatch(new RegExp(`(^|\\n)\\.${className}(?:\\s|,|\\{)`))
     }
-    expect(conversationSurface).toMatch(/\.oc-button\[data-ui="project-worktree-dropdown"\]\[data-expanded\]\s*\{/)
-    expect(conversationSurface).not.toContain('.oc-button[data-ui="project-worktree-dropdown"][data-open="true"]')
+
+    for (const tone of ["good", "warn", "bad"]) {
+      expect(conversationSurface).toMatch(new RegExp(`\\.project-runtime-git-section\\[data-tone="${tone}"\\]\\s*\\{`))
+    }
+    expect(conversationSurface).toMatch(
+      /\.oc-button\[data-ui="project-runtime-status-dropdown"\]\[data-expanded\]\s*\{/,
+    )
+    expect(conversationSurface).not.toContain('.oc-button[data-ui="project-runtime-status-dropdown"][data-open="true"]')
+    expect(conversationSurface).not.toContain("project-vcs-badge")
+    expect(conversationSurface).not.toContain("vcs-badge")
     expect(conversationSurface).not.toContain("recent-dir-current-path")
     expect(conversationSurface).not.toContain("recent-dir-panel")
     expect(conversationSurface).not.toContain("recent-dir-row")
@@ -2117,6 +2129,7 @@ describe("overlay architecture guards", () => {
     const composerSource = readText(join(OVERLAY_ROOT, "src/components/ChatComposer.tsx"))
 
     for (const className of [
+      "chat-composer-stack",
       "chat-attachments",
       "chat-attachment-item",
       "chat-attachment-thumb",
@@ -2135,6 +2148,12 @@ describe("overlay architecture guards", () => {
     expect(composerSurface).not.toMatch(/(^|\n)\.chat-compose-meta-left\s+a(?:\s|\.|:|\{|,|\[)/)
 
     expect(composerSource).toContain('data-ui="chat-attachment-remove"')
+    const composerStackIdx = composerSource.indexOf('class="chat-composer-stack"')
+    const attachmentsIdx = composerSource.indexOf('id="chatAttachments"')
+    const formIdx = composerSource.indexOf("<form", composerStackIdx)
+    expect(composerStackIdx).toBeGreaterThanOrEqual(0)
+    expect(attachmentsIdx).toBeGreaterThan(composerStackIdx)
+    expect(formIdx).toBeGreaterThan(attachmentsIdx)
     expect(composerSource).not.toContain('class="chat-attachment-remove"')
     expect(composerSurface).toMatch(/\.chat-attachment-item\s+\.oc-button\[data-ui="chat-attachment-remove"\]\s*\{/)
     expect(composerSurface).not.toMatch(/(^|\n)\.chat-attachment-remove(?:\s|:|\{|,|\[)/)
@@ -2588,11 +2607,17 @@ describe("overlay architecture guards", () => {
     }
 
     const composerSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css")))
+    const stackBody = soloRuleBody(composerSurface, ".chat-composer-stack")
     const body = soloRuleBody(composerSurface, ".chat-input")
+    expect(stackBody).toContain(
+      "width: min(var(--chat-composer-max-width), calc(100% - var(--chat-composer-inline-gutter)))",
+    )
     expect(body).toContain("margin: 0")
-    expect(body).toContain("padding: calc(6px * var(--ui-scale))")
-    expect(body).toContain("gap: calc(4px * var(--ui-scale))")
-    expect(body).toContain("border-radius: var(--oc-radius-none)")
+    expect(body).toContain(
+      "padding: calc(12px * var(--ui-scale)) calc(14px * var(--ui-scale)) calc(10px * var(--ui-scale))",
+    )
+    expect(body).toContain("gap: calc(8px * var(--ui-scale))")
+    expect(body).toContain("border-radius: var(--oc-radius-xl)")
   })
 
   test("panel shell padding is canonical, not theme scoped", () => {
