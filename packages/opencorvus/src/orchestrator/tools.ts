@@ -148,6 +148,12 @@ import {
 } from "@/engine/engine.sql"
 import { recordEngineArtifact } from "@/engine/artifact"
 import {
+  insertEngineSpecSnapshot,
+  supersedeActiveEngineSpecSnapshotsForTask,
+  supersedeEngineSpecSnapshot,
+  updateEngineSpecSnapshotContent,
+} from "@/engine/spec-snapshot"
+import {
   supersedePriorActivePlansForTask,
   appendGoalToActiveGraph,
   completeGoal,
@@ -7398,7 +7404,6 @@ export function createOrchestratorTools(input: {
         remapArchitectContractGraphGoalIDs,
         renderContractGraphForPrompt,
       } = await import("@/architect/contract-graph")
-      const { EngineSpecSnapshotTable } = await import("@/engine/engine.sql")
 
       const result = await ArchitectAgent.coordinate({
         goals: existingGoals.map((g) => ({
@@ -7436,7 +7441,7 @@ export function createOrchestratorTools(input: {
         },
       })
 
-      const newSpecSnapshotID = Identifier.ascending("spec")
+      let newSpecSnapshotID = ""
       const priorSpecSnapshotID = findActiveSpecForTask(task.id)?.id
       const reqLines = requirements.map(
         (r) =>
@@ -7456,19 +7461,15 @@ export function createOrchestratorTools(input: {
       try {
         Database.transaction((db) => {
           const now = Date.now()
-          db.insert(EngineSpecSnapshotTable)
-            .values({
-              id: newSpecSnapshotID,
-              task_id: taskID,
-              version: 2,
-              status: "ready",
-              summary: result.summary,
-              content: `${task.title}\n\n${result.summary}\n\n${result.decompositionAnalysis}`,
-              scope: requirements.map((r) => r.description).join("; "),
-              time_created: now,
-              time_updated: now,
-            })
-            .run()
+          newSpecSnapshotID = insertEngineSpecSnapshot(db, {
+            taskID,
+            version: 2,
+            status: "ready",
+            summary: result.summary,
+            content: `${task.title}\n\n${result.summary}\n\n${result.decompositionAnalysis}`,
+            scope: requirements.map((r) => r.description).join("; "),
+            timeCreated: now,
+          })
 
           if (priorSpecSnapshotID) {
             copyRequirementsToSpecSnapshot(db, {
@@ -7478,10 +7479,7 @@ export function createOrchestratorTools(input: {
               now,
             })
 
-            db.update(EngineSpecSnapshotTable)
-              .set({ status: "superseded", time_updated: now })
-              .where(eq(EngineSpecSnapshotTable.id, priorSpecSnapshotID))
-              .run()
+            supersedeEngineSpecSnapshot(db, { id: priorSpecSnapshotID, timeUpdated: now })
           }
 
           const out = upsertGoalsFromArchitect(db, {
@@ -7591,10 +7589,7 @@ export function createOrchestratorTools(input: {
             "## Architect Contracts",
             ...(mappedContractLines.length > 0 ? mappedContractLines : ["_(none)_"]),
           ].join("\n")
-          db.update(EngineSpecSnapshotTable)
-            .set({ content: mappedSpecContent, time_updated: now })
-            .where(eq(EngineSpecSnapshotTable.id, newSpecSnapshotID))
-            .run()
+          updateEngineSpecSnapshotContent(db, { id: newSpecSnapshotID, content: mappedSpecContent, timeUpdated: now })
           const taskMetadata =
             task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)
               ? (task.metadata as Record<string, unknown>)
@@ -7758,9 +7753,8 @@ export function createOrchestratorTools(input: {
       }
 
       const { insertRequirements } = await import("@/engine/persist")
-      const { EngineSpecSnapshotTable } = await import("@/engine/engine.sql")
       const now = Date.now()
-      const specSnapshotID = Identifier.ascending("spec")
+      let specSnapshotID = ""
       const specContent = [
         `# ${task.title}`,
         "",
@@ -7778,25 +7772,16 @@ export function createOrchestratorTools(input: {
 
       try {
         Database.transaction((db) => {
-          db.update(EngineSpecSnapshotTable)
-            .set({ status: "superseded", time_updated: now })
-            .where(
-              and(eq(EngineSpecSnapshotTable.task_id, taskID), sql`${EngineSpecSnapshotTable.status} != 'superseded'`),
-            )
-            .run()
-          db.insert(EngineSpecSnapshotTable)
-            .values({
-              id: specSnapshotID,
-              task_id: taskID,
-              version: 1,
-              status: "ready",
-              summary: result.summary,
-              content: specContent,
-              scope: result.requirements.map((r) => r.description).join("; "),
-              time_created: now,
-              time_updated: now,
-            })
-            .run()
+          supersedeActiveEngineSpecSnapshotsForTask(db, { taskID, timeUpdated: now })
+          specSnapshotID = insertEngineSpecSnapshot(db, {
+            taskID,
+            version: 1,
+            status: "ready",
+            summary: result.summary,
+            content: specContent,
+            scope: result.requirements.map((r) => r.description).join("; "),
+            timeCreated: now,
+          })
 
           if (result.requirements.length > 0) {
             insertRequirements(db, {

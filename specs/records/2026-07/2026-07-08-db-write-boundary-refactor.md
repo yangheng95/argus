@@ -175,3 +175,35 @@ Phase 5 verification:
 - `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
 - `bun test --timeout 60000 packages/opencorvus/test/engine/prepare-project-non-git.test.ts packages/opencorvus/test/engine/task-global-project-forbidden.test.ts`
 - `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts`
+
+## Phase 6 Spec Snapshot Boundary
+
+The next clear cross-domain write boundary is `engine_spec_snapshot`. It is an
+engine-domain specification snapshot table, but production source currently
+creates and mutates it directly inside `orchestrator/tools.ts`.
+
+Phase 6 grep evidence:
+
+- `rg -n "db\\.(insert|update|delete)\\(EngineSpecSnapshotTable|\\.(insert|update|delete)\\(EngineSpecSnapshotTable" packages/opencorvus/src -g "*.ts"` reports direct writes only in `orchestrator/tools.ts`.
+- Architect persistence creates a version 2 snapshot, optionally copies requirements from the prior active spec, supersedes the prior active spec by id, and then updates the new snapshot content after goal ID remapping.
+- Requirements persistence supersedes all active snapshots for the task and creates a version 1 snapshot in the same transaction.
+
+Phase 6 acceptance criteria:
+
+- Production source direct writes to `EngineSpecSnapshotTable` exist only in the spec snapshot writer.
+- Architect and requirements persistence keep their existing transaction placement, IDs returned to callers, version/status/content/scope/timestamp semantics, and later reads via `findActiveSpecForTask`.
+- The static database write-boundary test rejects future direct `EngineSpecSnapshotTable` writes outside the writer.
+- Existing requirements/architect persistence tests keep passing without frontend/API contract changes.
+
+Phase 6 verification:
+
+- `rg -n 'db\\.(insert|update|delete)\\(EngineSpecSnapshotTable|\\.(insert|update|delete)\\(EngineSpecSnapshotTable' packages/opencorvus/src -g '*.ts'` reports only `engine/spec-snapshot.ts`.
+- `rg -n 'Identifier\\.ascending\\("spec"\\)' packages/opencorvus/src -g '*.ts'` reports only `engine/spec-snapshot.ts`.
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun test --timeout 60000 packages/opencorvus/test/engine/spec-snapshot.test.ts`
+- `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/orchestrator/tools.test.ts -t "requirements persists a spec snapshot through the shared stage dispatcher"`
+- `bun test --timeout 60000 packages/opencorvus/test/orchestrator/tools.test.ts -t "architect promotion keeps requirements attached to the active spec"`
+- `bun test --timeout 60000 packages/opencorvus/test/orchestrator/tools.test.ts -t "architect does not start without an active requirements spec snapshot"`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts`
+- `git diff --check`

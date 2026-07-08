@@ -55,7 +55,9 @@ claim、git note 和 operator note 都只能通过这个 writer 记录 progress 
 interaction request 和 operator protocol interaction resolution 都只能通过这个
 writer 创建或解析 interaction row。`engine_channel_binding` 的唯一直接表写入文件
 是 `engine/channel-binding.ts`；task creation 和 task cancellation / removal 只能通过
-这个 writer 创建或删除 channel binding row。其他 `engine_*` 表的写入仍必须停留在
+这个 writer 创建或删除 channel binding row。`engine_spec_snapshot` 的唯一直接表写入文件是
+`engine/spec-snapshot.ts`；requirements 和 architect 阶段只能通过这个 writer 创建、
+supersede 或更新 spec snapshot row。其他 `engine_*` 表的写入仍必须停留在
 `task-api/index.ts` 和 engine 生命周期 writer/service 内，禁止跨域模块直接写。
 
 ## session 域（5 表）

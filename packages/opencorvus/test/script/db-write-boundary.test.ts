@@ -28,6 +28,7 @@ const approvedWriters: Record<string, string> = {
   EngineChannelBindingTable: "packages/opencorvus/src/engine/channel-binding.ts",
   EngineInteractionRequestTable: "packages/opencorvus/src/engine/interaction-request.ts",
   EngineProgressSnapshotTable: "packages/opencorvus/src/engine/progress.ts",
+  EngineSpecSnapshotTable: "packages/opencorvus/src/engine/spec-snapshot.ts",
 }
 
 function directWriteViolations(tableName: string): string[] {
@@ -63,5 +64,9 @@ describe("database write boundary", () => {
 
   test("only the engine channel binding writer directly writes EngineChannelBindingTable", () => {
     expect(directWriteViolations("EngineChannelBindingTable")).toEqual([])
+  })
+
+  test("only the engine spec snapshot writer directly writes EngineSpecSnapshotTable", () => {
+    expect(directWriteViolations("EngineSpecSnapshotTable")).toEqual([])
   })
 })
