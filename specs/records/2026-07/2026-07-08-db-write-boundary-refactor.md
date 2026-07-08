@@ -338,3 +338,57 @@ Phase 10 verification:
 Additional verification attempt not counted as passing evidence:
 
 - `bun test --timeout 60000 packages/opencorvus/test/engine/git-checkpoint-scenarios.test.ts` failed in the existing scenario 1 expectation: expected baseline mode `recorded_head`, received `created_commit`. This failure is in baseline dirty/commit classification, not in the task metadata writer call, and remains outside the Phase 10 accepted verification set.
+
+## Phase 11 Task Creation Boundary
+
+`engine/pipeline.ts::persistQueuedTask` was the remaining task creation path
+that directly inserted `EngineTaskTable`. This phase moves the insert into
+`engine/task.ts::insertEngineTask` while preserving `persistQueuedTask` as the
+owner of queue/direct-start semantics, channel binding creation, progress
+snapshot creation, and task-created/task-updated event emission.
+
+Phase 11 acceptance criteria:
+
+- `engine/pipeline.ts` no longer directly writes `EngineTaskTable`.
+- Task creation preserves project/session/request/source/title/request,
+  attachments, executor, kind, priority, queue order, budget, metadata, and
+  timestamp fields.
+- Existing channel binding, progress snapshot, and event emission placement is
+  unchanged.
+- A focused task writer test covers inserted row shape.
+
+Phase 11 verification:
+
+- `rg -n 'db\\.(insert|update|delete)\\(EngineTaskTable|\\.(insert|update|delete)\\(EngineTaskTable' packages/opencorvus/src -g '*.ts'` no longer reports `engine/pipeline.ts`.
+- `bun test --timeout 60000 packages/opencorvus/test/engine/task-writer.test.ts`
+
+## Phase 12 Task API Edit And Delete Boundary
+
+`task-api/index.ts` still directly wrote `EngineTaskTable` for physical task
+deletion, delete-session task cleanup, task budget edits, and task title edits.
+Those API functions own authorization, cancellation, settlement, breadcrumbing,
+session removal, vacuum scheduling, and event publication; they do not need to
+own table mutation mechanics.
+
+This phase moves those row mutations into `engine/task.ts` as task writer
+operations and leaves the API orchestration behavior in place.
+
+Phase 12 acceptance criteria:
+
+- `task-api/index.ts` no longer directly inserts, updates, or deletes
+  `EngineTaskTable`.
+- `deleteTask` preserves cancellation, settlement, physical-delete breadcrumb,
+  session removal, cascade delete, and incremental vacuum scheduling.
+- `deleteSession(..., { deleteTasks: true })` preserves task cancellation,
+  settlement, breadcrumbs, scoped deletion by project and session IDs, and
+  incremental vacuum scheduling.
+- `updateTaskBudget` and `updateTaskTitle` preserve project scoping and
+  `TaskUpdated` events.
+- Focused writer tests cover editable fields, single task delete, and scoped
+  project/session delete.
+
+Phase 12 verification:
+
+- `rg -n 'db\\.(insert|update|delete)\\(EngineTaskTable|\\.(insert|update|delete)\\(EngineTaskTable' packages/opencorvus/src -g '*.ts'` no longer reports `task-api/index.ts`; remaining production writes are `engine/queue.ts`, `engine/rewind.ts`, `engine/state.ts`, and the intended `engine/task.ts` writer.
+- `bun test --timeout 60000 packages/opencorvus/test/engine/task-writer.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/task-api/delete-task-breadcrumb.test.ts`

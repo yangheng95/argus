@@ -53,6 +53,12 @@ import { deleteEngineChannelBindingsForTask } from "@/engine/channel-binding"
 import { resolveEngineInteractionRequest } from "@/engine/interaction-request"
 import { insertEngineProgressSnapshot } from "@/engine/progress"
 import {
+  deleteEngineTask,
+  deleteEngineTasksForProjectSessions,
+  setEngineTaskBudget,
+  setEngineTaskTitle,
+} from "@/engine/task"
+import {
   Budget,
   CreateTaskInput,
   Event,
@@ -2209,7 +2215,7 @@ export namespace EngineService {
     // tasks/sessions in the same project still reference. Whole-project
     // reclaim is owned by ProjectGC (rm of `snapshot/<id>`).
     Database.use((db) => {
-      db.delete(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).run()
+      deleteEngineTask(db, { taskID })
       Database.effect(() => Database.incrementalVacuum())
     })
     return true
@@ -2218,7 +2224,7 @@ export namespace EngineService {
   export async function updateTaskBudget(taskID: string, budget: z.input<typeof Budget> | null) {
     const task = requireTaskInCurrentProject(taskID)
     const parsed = budget ? budgetRow(budget) : null
-    Database.use((db) => db.update(EngineTaskTable).set({ budget: parsed }).where(eq(EngineTaskTable.id, taskID)).run())
+    Database.use((db) => setEngineTaskBudget(db, { taskID, budget: parsed }))
     await Bus.publish(Event.TaskUpdated, {
       taskID,
       status: deriveTaskStatus(task),
@@ -2229,7 +2235,7 @@ export namespace EngineService {
 
   export async function updateTaskTitle(taskID: string, title: string) {
     const task = requireTaskInCurrentProject(taskID)
-    Database.use((db) => db.update(EngineTaskTable).set({ title }).where(eq(EngineTaskTable.id, taskID)).run())
+    Database.use((db) => setEngineTaskTitle(db, { taskID, title }))
     await Bus.publish(Event.TaskUpdated, {
       taskID,
       status: deriveTaskStatus(task),
@@ -2686,9 +2692,7 @@ export namespace EngineService {
         })
       }
       Database.use((db) => {
-        db.delete(EngineTaskTable)
-          .where(and(eq(EngineTaskTable.project_id, root.projectID), inArray(EngineTaskTable.session_id, ids)))
-          .run()
+        deleteEngineTasksForProjectSessions(db, { projectID: root.projectID, sessionIDs: ids })
         Database.effect(() => Database.incrementalVacuum())
       })
     }
