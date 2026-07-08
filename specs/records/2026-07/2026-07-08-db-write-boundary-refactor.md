@@ -714,3 +714,36 @@ Phase 21 verification:
 - `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/db-write-boundary.test.ts`
 - `bun run --cwd packages/opencorvus typecheck`
 - `git diff --check`
+
+## Phase 22 Complete Direct-Write Registry Guard
+
+The Phase 21 matrix was empty for multi-writer tables, but the static test still
+had a blind spot: it asserted the approved boundary for selected tables only.
+A future change could introduce a new directly written table and forget to add
+it to `approvedWriters`, allowing unreviewed DB write ownership to enter the
+codebase without a failing test.
+
+This phase expands `db-write-boundary.test.ts` from a selected-table guard into
+a complete production direct-write registry. It inventories every production
+`.insert(Table)` / `.update(Table)` / `.delete(Table)` occurrence under
+`packages/opencorvus/src`, requires every table to be present in
+`approvedWriters`, and asserts the actual write files equal the approved single
+writer.
+
+Phase 22 acceptance criteria:
+
+- Every production directly written table is listed in `approvedWriters`.
+- Every listed table has exactly one direct production writer file.
+- Adding a new unregistered direct table write fails
+  `db-write-boundary.test.ts`.
+- Adding a second direct writer for any registered table fails
+  `db-write-boundary.test.ts`.
+- The architecture data document describes this registry as the durable
+  enforcement mechanism.
+
+Phase 22 verification:
+
+- `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `git diff --check`

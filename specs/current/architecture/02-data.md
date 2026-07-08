@@ -131,6 +131,11 @@ writer API，不能直接删除其它领域表。
 Project GC（Garbage Collection，垃圾回收）可以编排项目生命周期，但必须调用
 `Project.deleteRows` 等项目领域 API，不能直接写 `ProjectTable`。
 
+生产代码的直接表写入 registry 由
+`packages/opencorvus/test/script/db-write-boundary.test.ts` 强制维护：每个出现
+`.insert(Table)` / `.update(Table)` / `.delete(Table)` 的表都必须登记唯一 writer 文件。
+新增直接写表或第二个写文件会让该测试失败，不能用未登记表绕过分层边界。
+
 ## Project Storage Namespace
 
 `project.id` / `project_id` 是后端 storage namespace，不是用户可见项目数。
