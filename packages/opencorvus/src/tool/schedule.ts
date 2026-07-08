@@ -1,10 +1,8 @@
 import z from "zod"
 import { Tool } from "./tool"
-import { Database, and, eq } from "@/storage/db"
-import { CronJobTable } from "@/scheduler/cron.sql"
-import { EventJobTable } from "@/scheduler/event.sql"
 import { Cron } from "@/scheduler/cron"
-import { Identifier } from "@/id/id"
+import { CronService } from "@/scheduler/cron-service"
+import { EventService } from "@/scheduler/event-service"
 import { Instance } from "@/project/instance"
 
 const MatchSchema = z.record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
@@ -76,44 +74,30 @@ export const ScheduleTool = Tool.define("schedule", {
         }
 
         const oneShot = params.oneShot ?? parsed.type === "interval"
-        const now = Date.now()
-        const nextRun = Cron.nextRun(parsed, now)
-        const id = Identifier.ascending("cron")
-        Database.use((db) =>
-          db
-            .insert(CronJobTable)
-            .values({
-              id,
-              project_id: projectID,
-              name: params.name,
-              expression: params.schedule,
-              prompt: params.prompt,
-              agent: "default",
-              enabled: true,
-              one_shot: oneShot,
-              next_run: nextRun,
-            })
-            .run(),
-        )
+        const job = await CronService.create({
+          projectId: projectID,
+          name: params.name,
+          expression: params.schedule,
+          prompt: params.prompt,
+          oneShot,
+        })
 
         return {
           title: `Scheduled: ${params.name}`,
           output: JSON.stringify({
-            jobId: id,
+            jobId: job.id,
             name: params.name,
             schedule: params.schedule,
             description: Cron.describe(parsed),
             oneShot,
-            nextRun: new Date(nextRun).toISOString(),
+            nextRun: new Date(job.nextRun).toISOString(),
           }),
           metadata: {},
         }
       }
 
       case "list": {
-        const jobs = Database.use((db) =>
-          db.select().from(CronJobTable).where(eq(CronJobTable.project_id, projectID)).all(),
-        )
+        const jobs = CronService.list(projectID)
         return {
           title: `${jobs.length} scheduled tasks`,
           output: JSON.stringify({
@@ -123,11 +107,11 @@ export const ScheduleTool = Tool.define("schedule", {
               schedule: j.expression,
               prompt: j.prompt.slice(0, 200),
               enabled: j.enabled,
-              oneShot: j.one_shot,
-              lastRun: j.last_run ? new Date(j.last_run).toISOString() : null,
-              nextRun: new Date(j.next_run).toISOString(),
-              failureCount: j.failure_count,
-              lastError: j.last_error,
+              oneShot: j.oneShot,
+              lastRun: j.lastRun ? new Date(j.lastRun).toISOString() : null,
+              nextRun: new Date(j.nextRun).toISOString(),
+              failureCount: j.failureCount,
+              lastError: j.lastError,
             })),
           }),
           metadata: {},
@@ -135,13 +119,7 @@ export const ScheduleTool = Tool.define("schedule", {
       }
 
       case "cancel": {
-        const job = Database.use((db) =>
-          db
-            .select()
-            .from(CronJobTable)
-            .where(and(eq(CronJobTable.id, params.jobId), eq(CronJobTable.project_id, projectID)))
-            .get(),
-        )
+        const job = CronService.list(projectID).find((entry) => entry.id === params.jobId)
         if (!job) {
           return {
             title: "Not found",
@@ -150,12 +128,7 @@ export const ScheduleTool = Tool.define("schedule", {
           }
         }
 
-        Database.use((db) =>
-          db
-            .delete(CronJobTable)
-            .where(and(eq(CronJobTable.id, params.jobId), eq(CronJobTable.project_id, projectID)))
-            .run(),
-        )
+        CronService.remove(params.jobId, projectID)
         return {
           title: `Cancelled: ${job.name}`,
           output: JSON.stringify({ cancelled: true, jobId: params.jobId, name: job.name }),
@@ -164,32 +137,22 @@ export const ScheduleTool = Tool.define("schedule", {
       }
 
       case "create_event": {
-        const id = Identifier.ascending("cron")
         const cooldownMs = params.cooldownMs ?? 0
         const oneShot = params.oneShot
-
-        Database.use((db) =>
-          db
-            .insert(EventJobTable)
-            .values({
-              id,
-              project_id: projectID,
-              name: params.name,
-              event_type: params.eventType,
-              match_json: params.match,
-              prompt: params.prompt,
-              agent: "default",
-              enabled: true,
-              one_shot: oneShot,
-              cooldown_ms: cooldownMs,
-            })
-            .run(),
-        )
+        const job = await EventService.create({
+          projectId: projectID,
+          name: params.name,
+          eventType: params.eventType,
+          prompt: params.prompt,
+          match: params.match,
+          oneShot,
+          cooldownMs,
+        })
 
         return {
           title: `Event task created: ${params.name}`,
           output: JSON.stringify({
-            jobId: id,
+            jobId: job.id,
             name: params.name,
             eventType: params.eventType,
             oneShot,
@@ -201,23 +164,21 @@ export const ScheduleTool = Tool.define("schedule", {
       }
 
       case "list_event": {
-        const jobs = Database.use((db) =>
-          db.select().from(EventJobTable).where(eq(EventJobTable.project_id, projectID)).all(),
-        )
+        const jobs = EventService.list(projectID)
         return {
           title: `${jobs.length} event tasks`,
           output: JSON.stringify({
             jobs: jobs.map((j) => ({
               id: j.id,
               name: j.name,
-              eventType: j.event_type,
-              match: j.match_json ?? {},
+              eventType: j.eventType,
+              match: j.match,
               prompt: j.prompt.slice(0, 200),
               enabled: j.enabled,
-              oneShot: j.one_shot,
-              cooldownMs: j.cooldown_ms,
-              lastRun: j.last_run ? new Date(j.last_run).toISOString() : null,
-              lastEvent: j.last_event ?? null,
+              oneShot: j.oneShot,
+              cooldownMs: j.cooldownMs,
+              lastRun: j.lastRun ? new Date(j.lastRun).toISOString() : null,
+              lastEvent: j.lastEvent ?? null,
             })),
           }),
           metadata: {},
@@ -225,13 +186,7 @@ export const ScheduleTool = Tool.define("schedule", {
       }
 
       case "cancel_event": {
-        const job = Database.use((db) =>
-          db
-            .select()
-            .from(EventJobTable)
-            .where(and(eq(EventJobTable.id, params.jobId), eq(EventJobTable.project_id, projectID)))
-            .get(),
-        )
+        const job = EventService.list(projectID).find((entry) => entry.id === params.jobId)
         if (!job) {
           return {
             title: "Not found",
@@ -240,12 +195,7 @@ export const ScheduleTool = Tool.define("schedule", {
           }
         }
 
-        Database.use((db) =>
-          db
-            .delete(EventJobTable)
-            .where(and(eq(EventJobTable.id, params.jobId), eq(EventJobTable.project_id, projectID)))
-            .run(),
-        )
+        EventService.remove(params.jobId, projectID)
         return {
           title: `Cancelled event task: ${job.name}`,
           output: JSON.stringify({ cancelled: true, jobId: params.jobId, name: job.name }),

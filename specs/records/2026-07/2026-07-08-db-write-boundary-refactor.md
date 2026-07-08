@@ -509,3 +509,39 @@ Phase 16 verification:
 - `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/db-write-boundary.test.ts`
 - `bun run --cwd packages/opencorvus typecheck`
 - `git diff --check`
+
+## Phase 17 Schedule Tool To Scheduler Service Boundary
+
+The full production DB write inventory showed that `CronJobTable` and
+`EventJobTable` had two direct production writers each: the scheduler services
+and `tool/schedule.ts`. The tool layer should own permission prompting and tool
+result formatting, but it should not construct scheduler table rows or delete
+jobs directly.
+
+This phase routes ScheduleTool create/list/cancel operations through
+`CronService` and `EventService`, preserving existing tool output shape and
+project-scoped behavior. It then registers `CronJobTable` and `EventJobTable`
+in the static write-boundary test.
+
+Phase 17 acceptance criteria:
+
+- `tool/schedule.ts` no longer imports or directly writes `CronJobTable` or
+  `EventJobTable`.
+- ScheduleTool cron create/list/cancel still returns the same observable output
+  fields and removes only the current project's job.
+- ScheduleTool event create/list/cancel still returns the same observable output
+  fields and removes only the current project's job.
+- Production source direct `CronJobTable` writes exist only in
+  `scheduler/cron-service.ts`.
+- Production source direct `EventJobTable` writes exist only in
+  `scheduler/event-service.ts`.
+- The architecture data document states scheduler job table writer ownership.
+
+Phase 17 verification:
+
+- `rg -n '\\.(insert|update|delete)\\s*\\(\\s*(CronJobTable|EventJobTable)\\b|db\\.(insert|update|delete)\\s*\\(\\s*(CronJobTable|EventJobTable)\\b' packages/opencorvus/src -g '*.ts'`
+- `bun test packages/opencorvus/test/tool/schedule.test.ts`
+- `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `git diff --check`

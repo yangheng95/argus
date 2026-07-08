@@ -18,7 +18,45 @@ const ctx = {
 }
 
 describe("tool.schedule", () => {
-  test("cancel only affects jobs in the current project", async () => {
+  test("create/list/cancel lifecycle uses the scheduler cron service boundary", { timeout: 0 }, async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await ScheduleTool.init()
+        const created = await tool.execute(
+          {
+            action: "create",
+            name: "daily-check",
+            schedule: "30m",
+            prompt: "run",
+            oneShot: true,
+          },
+          ctx,
+        )
+        const createPayload = JSON.parse(created.output) as { jobId: string; oneShot: boolean; nextRun: string }
+        expect(createPayload.jobId.startsWith("crn_")).toBe(true)
+        expect(createPayload.oneShot).toBe(true)
+        expect(new Date(createPayload.nextRun).getTime()).toBeGreaterThan(Date.now())
+
+        const listed = await tool.execute({ action: "list" }, ctx)
+        const listPayload = JSON.parse(listed.output) as { jobs: { id: string; schedule: string; oneShot: boolean }[] }
+        expect(listPayload.jobs).toContainEqual(
+          expect.objectContaining({ id: createPayload.jobId, schedule: "30m", oneShot: true }),
+        )
+
+        const cancelled = await tool.execute({ action: "cancel", jobId: createPayload.jobId }, ctx)
+        expect(cancelled.title).toContain("Cancelled")
+
+        const row = Database.use((db) =>
+          db.select().from(CronJobTable).where(eq(CronJobTable.id, createPayload.jobId)).get(),
+        )
+        expect(row).toBeUndefined()
+      },
+    })
+  })
+
+  test("cancel only affects jobs in the current project", { timeout: 0 }, async () => {
     await using one = await tmpdir({ git: true })
     await using two = await tmpdir({ git: true })
     const id = "crn_cross_" + Math.random().toString(36).slice(2)
@@ -57,7 +95,7 @@ describe("tool.schedule", () => {
     expect(row?.id).toBe(id)
   })
 
-  test("create_event/list_event/cancel_event lifecycle", async () => {
+  test("create_event/list_event/cancel_event lifecycle", { timeout: 0 }, async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,

@@ -24,6 +24,7 @@ function projectPath(file: string): string {
 }
 
 const approvedWriters: Record<string, string> = {
+  CronJobTable: "packages/opencorvus/src/scheduler/cron-service.ts",
   EngineArtifactTable: "packages/opencorvus/src/engine/artifact.ts",
   EngineChannelBindingTable: "packages/opencorvus/src/engine/channel-binding.ts",
   EngineGoalTable: "packages/opencorvus/src/engine/persist.ts",
@@ -37,6 +38,7 @@ const approvedWriters: Record<string, string> = {
   EngineRequirementTable: "packages/opencorvus/src/engine/persist.ts",
   EngineSpecSnapshotTable: "packages/opencorvus/src/engine/spec-snapshot.ts",
   EngineTaskTable: "packages/opencorvus/src/engine/task.ts",
+  EventJobTable: "packages/opencorvus/src/scheduler/event-service.ts",
 }
 
 function directWriteViolations(tableName: string): string[] {
@@ -108,5 +110,13 @@ describe("database write boundary", () => {
 
   test("only the metrics store directly writes EngineIterationTable", () => {
     expect(directWriteViolations("EngineIterationTable")).toEqual([])
+  })
+
+  test("only the scheduler cron service directly writes CronJobTable", () => {
+    expect(directWriteViolations("CronJobTable")).toEqual([])
+  })
+
+  test("only the scheduler event service directly writes EventJobTable", () => {
+    expect(directWriteViolations("EventJobTable")).toEqual([])
   })
 })
