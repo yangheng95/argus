@@ -1182,7 +1182,9 @@ describe("core prompt hygiene", () => {
       '`dispatch_agent` target=build with request/directBuildIntent="modify_files" and the exact fidelity delta as the request',
     )
     expect(normalized).toContain("If the same fidelity shortfall repeats after that build retry")
-    expect(normalized).toContain("use `manage_task` action=modify_goal or `dispatch_agent` target=architect when the current task needs a corrected/new goal")
+    expect(normalized).toContain(
+      "`manage_task` action=modify_goal or `dispatch_agent` target=architect mode=structural_reentry when evidence proves a persisted architect artifact is invalid and names it",
+    )
     expect(normalized).toContain(
       "Use `manage_task` action=propose_task when the repeated fidelity gap has become a separate follow-up scope",
     )

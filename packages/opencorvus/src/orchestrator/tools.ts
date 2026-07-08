@@ -192,7 +192,6 @@ import {
   getGoalRetryCount,
   listGoals,
   listGoalsForPlan,
-  findBuildOutcomeByGoalRun,
   listGoalRunsByGoal,
   listGoalRunsForTask,
   requireRun,
@@ -219,6 +218,7 @@ import {
   type OrchestratorToolOwnershipPayload,
   type OrchestratorToolOwnershipRow,
 } from "@/engine/tool-ownership"
+import { deriveGoalEvidenceState, renderGoalEvidenceStateForDependency } from "@/engine/goal-evidence"
 import { Ownership } from "@/engine/ownership"
 import {
   completeAgentCoordinationAction,
@@ -400,8 +400,34 @@ const RequirementsInputSchema = z
 
 const ArchitectInputSchema = z
   .object({
+    mode: z
+      .enum(["initial_decomposition", "structural_reentry"])
+      .describe(
+        "initial_decomposition for the first Architect pass on a requirements snapshot; structural_reentry only when a persisted architect artifact is proven invalid and named.",
+      ),
     reason: z.string().min(1).describe("Why you decided to run architect"),
     continuation_artifact_id: StageContinuationArtifactIDField,
+    invalid_architect_artifact_id: z
+      .string()
+      .optional()
+      .describe("Required for mode=structural_reentry: the persisted architect artifact proven invalid."),
+    defect_kind: z
+      .enum([
+        "contract_graph_inconsistent",
+        "missing_required_goal",
+        "wrong_decomposition_boundary",
+        "invalid_dependency_contract",
+      ])
+      .optional()
+      .describe("Required for mode=structural_reentry: the structural defect type."),
+    evidence_refs: z
+      .array(z.string().min(1))
+      .optional()
+      .describe("Required for mode=structural_reentry: durable evidence refs proving the persisted architect artifact is invalid."),
+    why_build_or_modify_goal_cannot_repair: z
+      .string()
+      .optional()
+      .describe("Required for mode=structural_reentry: why build retry or manage_task action=modify_goal cannot repair this defect."),
   })
   .strict()
 
@@ -411,6 +437,37 @@ const WorkloadAnalysisInputSchema = z
     continuation_artifact_id: StageContinuationArtifactIDField,
   })
   .strict()
+
+type ArchitectToolInput = z.infer<typeof ArchitectInputSchema>
+
+function architectStructuralReentryContractError(input: ArchitectToolInput): string | undefined {
+  if (input.mode === "initial_decomposition") {
+    const structuralFields = [
+      input.invalid_architect_artifact_id,
+      input.defect_kind,
+      input.evidence_refs,
+      input.why_build_or_modify_goal_cannot_repair,
+    ].filter((value) => value !== undefined)
+    if (structuralFields.length > 0) {
+      return "architect: initial_decomposition must not include structural_reentry fields."
+    }
+    return undefined
+  }
+
+  if (!input.invalid_architect_artifact_id?.trim()) {
+    return "architect: structural_reentry requires invalid_architect_artifact_id naming the persisted architect artifact."
+  }
+  if (!input.defect_kind) {
+    return "architect: structural_reentry requires defect_kind."
+  }
+  if (!input.evidence_refs || input.evidence_refs.length === 0) {
+    return "architect: structural_reentry requires evidence_refs proving the persisted architect artifact is invalid."
+  }
+  if (!input.why_build_or_modify_goal_cannot_repair?.trim()) {
+    return "architect: structural_reentry requires why_build_or_modify_goal_cannot_repair."
+  }
+  return undefined
+}
 
 const AnalyzeIntentInputSchema = z
   .object({
@@ -1412,7 +1469,7 @@ type IntegrityReviewOutcome =
        *  read_context, acceptance upstream context) renders the same complete
        *  text instead of a count summary. The orchestrator LLM reads this
        *  markdown and decides manage_task action=modify_goal /
-       *  dispatch_agent target=build / dispatch_agent target=architect /
+       *  dispatch_agent target=build / dispatch_agent target=architect mode=structural_reentry /
        *  manage_task action=fail_task
        *  itself; nothing in code routes/supersedes from the outcome. */
       markdown: string
@@ -6211,20 +6268,6 @@ export function createOrchestratorTools(input: {
     return { cleaned, recoveredTerminalFailure }
   }
 
-  function goalDependencyDispatchState(goalID: string): string {
-    const status = goalStatusByID(goalID)
-    const rows = listGoalRunsByGoal(goalID)
-    const supersededIDs = new Set(rows.flatMap((row) => (row.supersede_of ? [row.supersede_of] : [])))
-    const tip = rows.find((row) => !supersededIDs.has(row.id))
-    if (tip?.superseded_reason) return `needs_redispatch(${tip.superseded_reason}; status=${status})`
-    const buildOutcome = tip ? findBuildOutcomeByGoalRun(tip.id) : undefined
-    if (buildOutcome && buildOutcome.outcome_kind !== "delivered") {
-      const reason = buildOutcome.no_diff_reason ?? buildOutcome.error ?? "build_attempt_not_delivered"
-      return `${buildOutcome.outcome_kind}(${reason}; status=${status})`
-    }
-    return status
-  }
-
   async function publishArtifactExportResult(input: {
     acceptanceID: string
     runID: string
@@ -6557,7 +6600,7 @@ export function createOrchestratorTools(input: {
               `Pre-build integrity passed; this is review evidence, not a terminal lifecycle decision.`
             : `Integrity verdict: ${outcome.verdict} — ${outcome.perDimension.join(", ")}. ` +
               `Nothing in code supersedes goals, opens new attempts, blocks the run, or mutates the graph based on this verdict. ` +
-              `Read the full markdown below and choose manage_task action=modify_goal / dispatch_agent target=build with goalID / dispatch_agent target=architect / manage_task action=fail_task explicitly.`
+              `Read the full markdown below and choose manage_task action=modify_goal / dispatch_agent target=build with goalID / dispatch_agent target=architect mode=structural_reentry with invalid_architect_artifact_id+evidence_refs / manage_task action=fail_task explicitly.`
       return SubAgentProtocol.yieldResult({
         headline,
         fields: [
@@ -6596,7 +6639,7 @@ export function createOrchestratorTools(input: {
     if (!activeSpec) {
       return {
         status: "blocked",
-        headline: "integrity: no active spec snapshot — call dispatch_agent target=architect first.",
+        headline: "integrity: no active spec snapshot — call dispatch_agent target=architect mode=initial_decomposition first.",
         pointer: `task ${taskID}`,
       }
     }
@@ -6604,7 +6647,7 @@ export function createOrchestratorTools(input: {
     if (dbGoals.length === 0) {
       return {
         status: "blocked",
-        headline: "integrity: no goals on the active spec snapshot — call dispatch_agent target=architect first.",
+        headline: "integrity: no goals on the active spec snapshot — call dispatch_agent target=architect mode=initial_decomposition first.",
         pointer: `spec ${activeSpec.id}`,
       }
     }
@@ -6987,7 +7030,7 @@ export function createOrchestratorTools(input: {
     // engine_artifact for one-shot fidelity; this row is the cumulative
     // signal the orchestrator LLM needs to spot recurring issues across
     // multiple post-build reviews — same issues reappearing means the
-    // current goal graph cannot absorb them and dispatch_agent target=architect /
+    // current goal graph cannot absorb them and dispatch_agent target=architect mode=structural_reentry /
     // manage_task action=fail_task
     // becomes the cheaper repair (per orchestrator-core.txt's repair ladder).
     if (!artifactMissing) {
@@ -7105,7 +7148,7 @@ export function createOrchestratorTools(input: {
   // CLAUDE.md rule 13 (no state-machine flow control). The orchestrator LLM
   // now reads the full review markdown returned in the build tool result
   // and chooses manage_task(action=modify_goal) / dispatch_agent(target=build)
-  // / dispatch_agent(target=architect) / manage_task(action=fail_task) /
+  // / dispatch_agent target=architect mode=structural_reentry / manage_task(action=fail_task) /
   // dispatch_agent(target=integrity) itself.
 
   // Agents that need to ask the user a question do so directly via
@@ -7575,7 +7618,7 @@ export function createOrchestratorTools(input: {
           headline:
             `Architect decomposition complete: ${persisted.length} goals, ${result.contractGraph.contracts.length} contracts.` +
             (deletedIDs.length > 0 ? ` Removed ${deletedIDs.length} prior goal(s).` : "") +
-            ` Eligible per-goal builds are now visible; read each build report and worktree facts, then decide manage_task action=modify_goal / dispatch_agent target=build / dispatch_agent target=architect / dispatch_agent target=integrity / manage_task action=fail_task explicitly from current evidence.`,
+            ` Eligible per-goal builds are now visible; read each build report and worktree facts, then decide manage_task action=modify_goal / dispatch_agent target=build / dispatch_agent target=architect mode=structural_reentry only with named invalid architect artifact evidence / dispatch_agent target=integrity / manage_task action=fail_task explicitly from current evidence.`,
           summary: result.summary,
           fields: [
             ["goals", persisted.map((g) => `${g.id} ${g.title}`)],
@@ -9262,20 +9305,32 @@ export function createOrchestratorTools(input: {
         "`requirements` first.\n" +
         "SKIP WHEN: the work fits one goal (the build agent's own todo list is " +
         "enough); every fix lives inside one file or one symbol's call sites.\n" +
-        "Re-run on integrity non-pass or explicit structural restart when evidence " +
-        "points at structural / coverage problems. During an active run, do not " +
-        "re-run architect merely to widen owned_paths or bless ordinary shared-file " +
-        "edits; build sessions may edit outside responsibility paths when needed " +
+        "Use mode=initial_decomposition for the first Architect pass. During an active run, use mode=structural_reentry only when durable evidence proves a persisted architect artifact is invalid; name invalid_architect_artifact_id, defect_kind, evidence_refs, and why build or modify_goal cannot repair it. Do not " +
+        "re-run architect merely to widen owned_paths, bless ordinary shared-file " +
+        "edits, or fix a non-delivered producer; build sessions may edit outside responsibility paths when needed " +
         "and must explain every touched file in files_changed[]. For contract-level " +
         "point fixes prefer `manage_task` action=modify_goal. Frontend evidence tools are available candidates when the full task context " +
         "needs visual/reference material for architecture.",
       inputSchema: ArchitectInputSchema,
-      execute: async ({ reason, continuation_artifact_id }) => {
+      execute: async (input) => {
+        const contractError = architectStructuralReentryContractError(input)
+        if (contractError) return contractError
         const task = requireTask(taskID)
+        const reason =
+          input.mode === "structural_reentry"
+            ? [
+                input.reason,
+                `Mode: structural_reentry`,
+                `Invalid architect artifact: ${input.invalid_architect_artifact_id}`,
+                `Defect kind: ${input.defect_kind}`,
+                `Evidence refs: ${(input.evidence_refs ?? []).join(", ")}`,
+                `Why build/modify_goal cannot repair: ${input.why_build_or_modify_goal_cannot_repair}`,
+              ].join("\n")
+            : input.reason
         const dispatch = await dispatchArchitectStage({
           task,
           reason,
-          continuationArtifactID: continuation_artifact_id,
+          continuationArtifactID: input.continuation_artifact_id,
         })
         return dispatch.result
       },
@@ -9310,9 +9365,9 @@ export function createOrchestratorTools(input: {
         "anti-underestimation brief. Requires architect goals on the active spec snapshot.\n" +
         "SKIP WHEN: the goal set is trivial (one obvious goal). Advisory — the workflow can proceed " +
         "without it.\n" +
-        "AFTER it returns: goals flagged with `decomposition_concern` are evidence for an architect " +
-        "re-size — prefer `manage_task` action=modify_goal for single-field fixes, re-enter `dispatch_agent` target=architect only for genuinely " +
-        "new structure (a split). Briefs feed the next per-goal `build` automatically.",
+        "AFTER it returns: goals flagged with `decomposition_concern` are evidence for point repair or structural re-entry. " +
+        "Prefer `manage_task` action=modify_goal for single-field fixes; use `dispatch_agent` target=architect mode=structural_reentry only for a genuinely " +
+        "invalid persisted architecture artifact with evidence_refs. Briefs feed the next per-goal `build` automatically.",
       inputSchema: WorkloadAnalysisInputSchema,
       execute: async ({ reason, continuation_artifact_id }) => {
         const task = requireTask(taskID)
@@ -9463,7 +9518,7 @@ export function createOrchestratorTools(input: {
           return SubAgentProtocol.yieldResult({
             headline:
               `Workload analysis complete: ${result.briefs.length} goals analyzed, ${flagged.length} flagged with decomposition_concern. ` +
-              "For flagged goals consider Architect re-sizing (manage_task action=modify_goal for single-field fixes / dispatch_agent target=architect for a split); " +
+              "For flagged goals consider manage_task action=modify_goal for single-field fixes, or dispatch_agent target=architect mode=structural_reentry only when a persisted architect artifact is invalid and named; " +
               "otherwise dispatch per-goal build — each build now carries its workload brief.",
             summary: result.summary,
             fields: [
@@ -9563,7 +9618,7 @@ export function createOrchestratorTools(input: {
         "are persisted as evidence only: this review never rewrites requirements, " +
         "never upserts goals, and the host never auto-supersedes attempts or " +
         "auto-routes findings — you read the markdown and choose manage_task action=modify_goal / " +
-        "dispatch_agent target=build with goalID / dispatch_agent target=architect / manage_task action=fail_task explicitly. Goal builds record " +
+        "dispatch_agent target=build with goalID / dispatch_agent target=architect mode=structural_reentry with named invalid artifact evidence / manage_task action=fail_task explicitly. Goal builds record " +
         "build reports as review input.\n\n" +
         "USE WHEN: architect just produced a non-trivial goal graph (≥3 goals, OR " +
         "cross-goal contracts, OR foundational decisions architect derived rather " +
@@ -10205,10 +10260,10 @@ export function createOrchestratorTools(input: {
         "Append one new executable goal to the current workflow graph when the latest operator message " +
         "or current task evidence adds a concrete in-scope surface that is not covered by any existing goal. " +
         "Use this action instead of manage_task action=modify_goal when the work is a new capability/surface, and instead of " +
-        "dispatch_agent target=architect when the existing graph boundary is still valid and only one well-scoped goal is missing. " +
+        "dispatch_agent target=architect mode=structural_reentry when the existing graph boundary is still valid and only one well-scoped goal is missing. " +
         "Do not use for broad re-decomposition, vague scope expansion, or follow-up work outside the current " +
-        "task contract — use dispatch_agent target=architect, `question`, or manage_task action=propose_task from evidence in those cases. " +
-        "After this returns, dispatch_agent target=build with goalID when dependencies are satisfied.",
+        "task contract — use dispatch_agent target=architect mode=structural_reentry only with named invalid artifact evidence, `question`, or manage_task action=propose_task from evidence in those cases. " +
+        "After this returns, dispatch_agent target=build with goalID when dependencies are evidence-satisfied.",
       inputSchema: AddGoalInputSchema,
       execute: async ({ goal, reason }) => {
         const task = requireTask(taskID)
@@ -10293,7 +10348,7 @@ export function createOrchestratorTools(input: {
             ["plan_node_id", added.planNodeID ?? "(no active plan node yet)"],
             ["depends_on", (goal.depends_on ?? []).join(", ") || "(none)"],
           ],
-          pointer: `current task snapshot; then dispatch_agent target=build with goalID="${added.id}" when dependencies are passed`,
+          pointer: `current task snapshot; then dispatch_agent target=build with goalID="${added.id}" when dependencies are evidence-satisfied`,
         })
       },
     }),
@@ -10632,7 +10687,7 @@ export function createOrchestratorTools(input: {
           // requirements / intent decisions out of the latest-N window.
           // Surface the latest 5 review summaries — enough to spot a
           // recurring issue across consecutive reviews (the cumulative
-          // signal that drives dispatch_agent target=architect /
+          // signal that drives dispatch_agent target=architect mode=structural_reentry /
           // manage_task action=fail_task per
           // orchestrator-core.txt's repair ladder).
           const reviewSection = log.phasePromptSection("review", "Architecture review history", { limit: 5 })
@@ -13239,7 +13294,7 @@ export function createOrchestratorTools(input: {
       description:
         "Abort a specific live-owned child agent session when explicit cancellation evidence requires it. " +
         "Missing root build ownership is not child lifecycle evidence and must not be used to cancel a running build. " +
-        "After cancellation, explicitly re-dispatch the SAME goal or stage under the SAME contract before escalating to manage_task action=modify_goal, dispatch_agent target=architect, manage_task action=propose_task, manage_task action=fail_task, or question. " +
+        "After cancellation, explicitly re-dispatch the SAME goal or stage under the SAME contract before escalating to manage_task action=modify_goal, dispatch_agent target=architect mode=structural_reentry with named invalid artifact evidence, manage_task action=propose_task, manage_task action=fail_task, or question. " +
         "You may pass session_id directly, goal_id for the latest live attempt, or goal_run_id directly. " +
         "Do not use this to answer a pending A2A coordination request; use respond_agent_coordination decision='cancel_worker' so the cancellation is bound to request/response/action artifacts.",
       inputSchema: z
@@ -13563,7 +13618,7 @@ export function createOrchestratorTools(input: {
         "creating directly by default and asking the user first only when auto-confirm is disabled. Do not call generic `task` or control-plane `panel`. " +
         "Independent child tasks may run in parallel when their scopes do not depend on each other's output, artifact state, decisions, or owned files. Dependent follow-up work must queue or wait for its prerequisite instead of starting in parallel. Use it when execution evidence, artifact state, integrity history, visual QA evidence, or operator scope change proves separate inheriting work is required. " +
         "A proposed task must solve a very specific evidence-anchored problem: submit `evidence_anchor` with one concrete entity, the observed problem, an anchor kind such as code_module/document/artifact/expert_squad/benchmark/toolchain, and current-task evidence refs proving it. Refuse generic follow-up work that has no structured evidence anchor; it cannot be solved by creating a child task. " +
-        "Workflow tasks do not rewind earlier stages in place: when the active workflow contract is fundamentally wrong and cannot be repaired by manage_task action=modify_goal, dispatch_agent target=architect, or dispatch_agent target=build inside the current task, create a new inheriting workflow task instead of rerunning requirements/plan/executor. " +
+        "Workflow tasks do not rewind earlier stages in place: when the active workflow contract is fundamentally wrong and cannot be repaired by manage_task action=modify_goal, dispatch_agent target=architect mode=structural_reentry with named invalid artifact evidence, or dispatch_agent target=build inside the current task, create a new inheriting workflow task instead of rerunning requirements/plan/executor. " +
         "Use it when failed visual_qa evidence reports unresolved_code_module_problems for unrepairable production blockers and the scheduler decides the problem belongs in separate inheriting work. " +
         "It is also the right path when reviewers keep demanding a capability the original user request never authorised, and adding it inside the current task would expand scope beyond what the user agreed to.",
       inputSchema: ProposeTaskInputSchema,
@@ -13804,14 +13859,17 @@ export function createOrchestratorTools(input: {
             )
           }
           const dependencyBlockers = (Array.isArray(goal.depends_on) ? (goal.depends_on as string[]) : [])
-            .map((depID) => ({ depID, status: goalDependencyDispatchState(depID) }))
-            .filter((dep) => dep.status !== "passed")
+            .map((depID) => {
+              const evidence = deriveGoalEvidenceState(depID)
+              return { depID, evidence, status: renderGoalEvidenceStateForDependency(evidence) }
+            })
+            .filter((dep) => !dep.evidence.dependency_ready)
           if (dependencyBlockers.length > 0) {
             if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
             return (
-              `build: goal ${attachedGoalID} is blocked by unfinished dependencies: ` +
+              `build: goal ${attachedGoalID} is blocked by unsatisfied dependency evidence: ` +
               dependencyBlockers.map((dep) => `${dep.depID}=${dep.status}`).join(", ") +
-              `. Re-read collaboration_closure and dispatch only goals whose dependencies are passed.`
+              `. Re-read collaboration_closure and dispatch only goals whose dependencies are evidence-satisfied.`
             )
           }
         }
@@ -15127,7 +15185,7 @@ export function createOrchestratorTools(input: {
               `${factBlock}\n\n` +
               `### Next step\n` +
               `Read the build report and the worktree facts above. Cross-check the LLM's files_changed/commit_ref against the worktree facts; if they disagree, factor that into your next call. ` +
-              `When terminal goal refill facts appear, choose dispatch_agent target=build with goalID / manage_task action=modify_goal / dispatch_agent target=architect / manage_task action=propose_task / manage_task action=fail_task / question from the build evidence and task context; route product, dependency, git-worktree, port, and toolchain blockers to the responsible same-task owner instead of passively waiting for sibling builds. ` +
+              `When terminal goal refill facts appear, choose dispatch_agent target=build with goalID / manage_task action=modify_goal / dispatch_agent target=architect mode=structural_reentry with named invalid artifact evidence / manage_task action=propose_task / manage_task action=fail_task / question from the build evidence and task context; route product, dependency, git-worktree, port, and toolchain blockers to the responsible same-task owner instead of passively waiting for sibling builds. ` +
               `For frontend/browser-visible work, run dispatch_agent target=visual_qa only once near task completion after all blocking implementation work is terminal and before the Orchestrator lifecycle decision. If visual_qa returns effective_accepted=false with unresolved_code_module_problems, decide whether to repair in the current task or call manage_task action=propose_task from that evidence only at terminal handoff. ` +
               `Call dispatch_agent target=integrity as a review report after all blocking implementation work is terminal when adversarial system review evidence is needed; visual_qa and integrity are peer review agents, not replacements for each other. Use Integrity's report as evidence, then decide explicitly whether to repair, ask, fail, propose follow-up, or call manage_task action=complete_task with a completion summary. Before completing the task, use integrity earlier only when integrated evidence raises a real question about requirement mining or system integrity.`
             )
@@ -15168,7 +15226,7 @@ export function createOrchestratorTools(input: {
               `### Next step\n` +
               `This build is now running asynchronously. Do not call wait for sibling builds to finish before reacting to terminal goal refill facts. ` +
               `If no next dispatchable, failed, or refill facts exist, stop this wake; terminal goal refill will wake the next decision. ` +
-              `When a goal reaches terminal status, the next task snapshot will surface refill evidence and ordered dispatchable goals; choose dispatch_agent target=build with goalID / manage_task action=modify_goal / dispatch_agent target=architect / manage_task action=propose_task / manage_task action=fail_task / question from those facts. ` +
+              `When a goal reaches terminal status, the next task snapshot will surface refill evidence and ordered evidence-dispatchable goals; choose dispatch_agent target=build with goalID / manage_task action=modify_goal / dispatch_agent target=architect mode=structural_reentry with named invalid artifact evidence / manage_task action=propose_task / manage_task action=fail_task / question from those facts. ` +
               `Call dispatch_agent target=integrity only after all blocking implementation work is terminal.`
             )
           }

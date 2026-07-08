@@ -10,6 +10,7 @@ import { selectedTaskDirectory } from "../store/board"
 import { toolToCardNode } from "../utils/tool-card-node"
 import { t } from "../utils/i18n"
 import { isBoundaryMessagePart, isCardRenderableMessagePartType } from "../utils/message-part"
+import { Icon } from "./Icon"
 
 function unsupportedPartFallback(part: any) {
   const type = String(part?.type || "")
@@ -68,8 +69,10 @@ export function CardParts(props: { parts: any[]; depth: number; streaming?: bool
           </Match>
           <Match when={part?.type === "patch" && (part.files || []).length > 0}>
             <div class="msg-patch">
-              {"\u2699 " +
-                (part.files || []).map((f: string) => shortRelativePath(f, selectedTaskDirectory())).join(", ")}
+              <Icon name="edit" size={13} class="msg-patch__icon" />
+              <span class="msg-patch__text">
+                {(part.files || []).map((f: string) => shortRelativePath(f, selectedTaskDirectory())).join(", ")}
+              </span>
             </div>
           </Match>
           <Match when={part?.type === "file"}>
@@ -84,7 +87,9 @@ export function CardParts(props: { parts: any[]; depth: number; streaming?: bool
           </Match>
           <Match when={part?.type === "subtask"}>
             <div class="msg-tool">
-              <span class="tool-icon">{"\u2192"}</span>
+              <span class="tool-icon" aria-hidden="true">
+                <Icon name="nav-forward" size={13} />
+              </span>
               <span class="tool-name">{t("card.subtask")}</span>
               <span class="tool-detail" title={part.description || part.prompt || ""}>
                 {part.description || part.prompt || ""}

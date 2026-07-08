@@ -2,7 +2,6 @@ import { createMemo, createResource, For, Show } from "solid-js"
 import { DiffView, changeStatusLabel } from "./DiffView"
 import {
   describeToolCall,
-  displayToolIcon,
   displayToolDetail,
   toolStatusLabel,
   toolNameKey,
@@ -17,6 +16,7 @@ import { toolFileChangesFromState, type ToolFileChange } from "../utils/file-cha
 import { STREAMING_ACTIVE_TEXT_LIMIT, visibleStreamingText } from "./text-part-model"
 import { fetchResourceAsObjectUrl, peekResourceObjectUrl, resolveResourceUrl } from "../services/api"
 import { PreviewableImage } from "./ImagePreview"
+import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
 import { t, tc } from "../utils/i18n"
 
@@ -357,7 +357,9 @@ export function InlineToolPart(props: { part: any; mode?: "inline" | "block" | "
     <>
       <Show when={showChip()}>
         <div class="msg-tool" data-status={status()}>
-          <span class="tool-icon">{icon()}</span>
+          <span class="tool-icon" aria-hidden="true">
+            <Icon name={icon()} size={13} />
+          </span>
           <span class="tool-name">{toolName()}</span>
           <Show when={detail()}>
             <span class="tool-detail" title={detail()}>

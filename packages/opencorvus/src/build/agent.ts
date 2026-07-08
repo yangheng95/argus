@@ -2143,7 +2143,7 @@ function makeExternalFailedBuildResult(input: {
     contract_restatement:
       "External executor failed while working against the persisted build prompt contract. Inspect the build user prompt, goal/request section, and failure evidence for the detailed req/goal scope.",
     followup_workload_guidance:
-      "For follow-up agents: treat this failed external run as a workload-underestimation risk. Re-read the build prompt, workload brief, source evidence, failed merge or verification output, and consider workload_analysis / Architect re-sizing before another implementation pass.",
+      "For follow-up agents: treat this failed external run as a workload-underestimation risk. Re-read the build prompt, workload brief, source evidence, failed merge or verification output, and consider workload_analysis before another implementation pass. Architect structural re-entry is only valid when durable evidence names an invalid persisted architect artifact and explains why build/modify_goal cannot repair it.",
     consumed_visual_qa_annotation_refs: [],
     consumed_visual_qa_diagnostic_refs: [],
     consumed_visual_feedback_comparison_refs: [],
@@ -3169,7 +3169,7 @@ function renderBuildTerminalReportContract(): string {
     "",
     "When you call `report_build_result`, include:",
     "- `contract_restatement`: a detailed restatement of the effective req/goal contract you handled, including the user request or goal objective, relevant acceptance specs, requirement ids, important source evidence, and scoped non-goals.",
-    "- `followup_workload_guidance`: an explicit note for subsequent agents about where task complexity may still be hidden, what evidence must be read deeper, and whether workload_analysis or Architect re-sizing should be revisited before more implementation.",
+    "- `followup_workload_guidance`: an explicit note for subsequent agents about where task complexity may still be hidden, what evidence must be read deeper, whether workload_analysis should be revisited before more implementation, and whether durable evidence names an invalid persisted architect artifact that requires structural re-entry.",
     "- `reference_comparison_evidence_refs`: optional supporting visual evidence refs when you actually produced task-scoped region comparison artifacts. If you could not produce them, explain the remaining visual gap or blocker in the report instead of inventing refs.",
     "- `consumed_visual_qa_annotation_refs`: every Visual QA annotated screenshot url from the Build Evidence Pack that you inspected and used for repair. When such evidence is present, passed reports without these refs are rejected.",
     "- `consumed_visual_qa_diagnostic_refs`: every Visual QA diagnostic url from the Build Evidence Pack that you inspected and used for repair, such as layout-geometry manifests. When such evidence is present, passed reports without these refs are rejected.",
@@ -3330,7 +3330,7 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     )
     lines.push("")
     lines.push(
-      "**File Change Report**: Before reporting success, list every project file you changed in `files_changed[]` with a concrete summary and reason. The host compares this list to the git diff; unexplained or phantom files fail collaboration review.",
+      "**File Change Report**: Before reporting delivered file changes, list every project file you changed in `files_changed[]` with a concrete summary and reason. The host compares this list to the git diff; unexplained or phantom files fail collaboration review.",
     )
     lines.push("")
     lines.push(renderBuildTerminalReportContract())
@@ -3365,7 +3365,7 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     "",
     "# File Change Report",
     "",
-    "Before reporting success, list every project file you changed in `files_changed[]` with a concrete summary and reason. The host compares this list to the git diff; unexplained or phantom files fail collaboration review.",
+    "Before reporting delivered file changes, list every project file you changed in `files_changed[]` with a concrete summary and reason. The host compares this list to the git diff; unexplained or phantom files fail collaboration review.",
     "",
     renderBuildTerminalReportContract(),
   ].join("\n")

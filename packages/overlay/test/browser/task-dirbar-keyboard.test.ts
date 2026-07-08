@@ -132,6 +132,7 @@ async function taskDirbarFixtureResponse(req: Request, options: TaskDirbarFixtur
   if (staticResponse) return staticResponse
   if (path === "/global/health") return send({ version: "1.2.3" }, { status: options.healthStatus?.() ?? 200 })
   if (path === "/work-ledger") return send({ rows: [], nextCursor: null })
+  if (path === "/work-ledger/events") return eventStream()
   if (path === "/global/tasks") {
     const tasksStatus = typeof options.tasksStatus === "function" ? options.tasksStatus() : (options.tasksStatus ?? 200)
     const body =
@@ -392,22 +393,20 @@ async function saveElementScreenshot(
 }
 
 async function revealRightToolbar(page: {
-  $eval(selector: string, pageFunction: (node: Element) => { x: number; y: number }): Promise<{ x: number; y: number }>
-  mouse: { move(x: number, y: number, options?: Record<string, unknown>): Promise<void> }
+  waitForSelector(selector: string, options?: Record<string, unknown>): Promise<unknown>
+  $eval(selector: string, pageFunction: (node: Element) => boolean): Promise<boolean>
+  click(selector: string): Promise<unknown>
   waitForFunction(pageFunction: () => boolean): Promise<unknown>
 }) {
-  const point = await page.$eval("#solidRightActivityToolbar", (node) => {
-    const rect = (node as HTMLElement).getBoundingClientRect()
-    return {
-      x: rect.left + rect.width / 2,
-      y: rect.bottom - Math.min(24, Math.max(4, rect.height / 2)),
-    }
-  })
-  await page.mouse.move(point.x, point.y)
+  await page.waitForSelector('[data-ui="chat-header-right-toolbar-toggle"]', { visible: true })
+  const open = await page.$eval("#solidRightActivityToolbar", (node) => (node as HTMLElement).dataset.open === "true")
+  if (!open) await page.click('[data-ui="chat-header-right-toolbar-toggle"]')
   await page.waitForFunction(() => {
+    const mount = document.querySelector<HTMLElement>("#solidRightActivityToolbar")
     const toolbar = document.querySelector<HTMLElement>("#solidRightActivityToolbar .side-activity-toolbar")
     const trigger = document.querySelector<HTMLElement>('[data-ui="project-runtime-status-dropdown"]')
-    if (!toolbar || !trigger) return false
+    if (!mount || !toolbar || !trigger) return false
+    if (mount.dataset.open !== "true") return false
     if (getComputedStyle(toolbar).pointerEvents !== "auto") return false
     const rect = trigger.getBoundingClientRect()
     const element = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
@@ -533,6 +532,7 @@ test(
       )
 
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
+      await revealRightToolbar(page)
       await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
       await page.waitForSelector('[data-ui="project-runtime-status-dropdown"][data-vcs-tone="good"]', {
         visible: true,
@@ -566,7 +566,6 @@ test(
       assert.equal(triggerSemantics.dotTone, "good")
       assert.ok(triggerSemantics.svgCount >= 1, JSON.stringify(triggerSemantics))
 
-      await revealRightToolbar(page)
       await page.click('[data-ui="project-runtime-status-dropdown"]')
       await page.waitForSelector(".project-runtime-status-panel", { visible: true })
       await page.waitForSelector(".project-runtime-git-section[data-tone='good']", { visible: true })
@@ -1988,8 +1987,8 @@ test(
       )
 
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
-      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
       await revealRightToolbar(page)
+      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
       await page.click('[data-ui="project-runtime-status-dropdown"]')
       await page.waitForSelector(`.project-worktree-path[title="${staleWorktree}"]`, { visible: true })
       await page.click('[data-ui="project-worktree-remove"]')
@@ -2125,8 +2124,8 @@ test(
       )
 
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
-      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
       await revealRightToolbar(page)
+      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
       await page.click('[data-ui="project-runtime-status-dropdown"]')
       await page.waitForSelector(`.project-worktree-path[title="${staleWorktree}"]`, { visible: true })
       await page.click('[data-ui="project-worktree-cleanup-expired"]')
@@ -2272,8 +2271,8 @@ test(
       )
 
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
-      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
       await revealRightToolbar(page)
+      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
       await page.click('[data-ui="project-runtime-status-dropdown"]')
       await page.waitForSelector(`.project-worktree-path[title="${staleWorktree}"]`, { visible: true })
       await page.click('[data-ui="project-worktree-remove"]')
@@ -2435,8 +2434,8 @@ test(
       )
 
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
-      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
       await revealRightToolbar(page)
+      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
       await page.click('[data-ui="project-runtime-status-dropdown"]')
       await page.waitForSelector(`.project-worktree-path[title="${staleWorktree}"]`, { visible: true })
       await page.click('[data-ui="project-worktree-cleanup-expired"]')
@@ -2590,8 +2589,8 @@ test(
       )
 
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
-      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
       await revealRightToolbar(page)
+      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
       await page.click('[data-ui="project-runtime-status-dropdown"]')
       await page.waitForSelector(`.project-worktree-path[title="${staleWorktree}"]`, { visible: true })
       await page.click('[data-ui="project-worktree-cleanup-expired"]')
@@ -2713,8 +2712,8 @@ test(
       )
 
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
-      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
       await revealRightToolbar(page)
+      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
       await page.click('[data-ui="project-runtime-status-dropdown"]')
       await page.waitForSelector(".project-runtime-status-panel", { visible: true })
       await page.waitForSelector('[data-ui="project-worktree-remove"]', { visible: true })
@@ -2847,8 +2846,8 @@ test(
       )
 
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
-      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
       await revealRightToolbar(page)
+      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
       await page.click('[data-ui="project-runtime-status-dropdown"]')
       await page.waitForSelector(".project-runtime-status-panel", { visible: true })
       await page.waitForSelector('[data-ui="project-worktree-cleanup-expired"]', { visible: true })
@@ -2987,8 +2986,8 @@ test(
       )
 
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
-      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
       await revealRightToolbar(page)
+      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
       await page.click('[data-ui="project-runtime-status-dropdown"]')
       await page.waitForSelector(".project-runtime-status-panel", { visible: true })
       await page.waitForSelector('[data-ui="project-worktree-remove"]', { visible: true })
@@ -3086,8 +3085,8 @@ test(
       )
 
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
-      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
       await revealRightToolbar(page)
+      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
       await page.click('[data-ui="project-runtime-status-dropdown"]')
       await page.waitForSelector(".project-runtime-status-panel", { visible: true })
       await page.waitForSelector(`.project-worktree-path[title="${firstWorktree}"]`, { visible: true })
@@ -3221,8 +3220,8 @@ test(
       )
 
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
-      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
       await revealRightToolbar(page)
+      await page.waitForSelector('[data-ui="project-runtime-status-dropdown"]', { visible: true })
       await page.click('[data-ui="project-runtime-status-dropdown"]')
       await page.waitForSelector(".project-runtime-status-panel", { visible: true })
       await page.waitForSelector('[data-ui="project-worktree-cleanup-expired"]', { visible: true })

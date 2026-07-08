@@ -1337,6 +1337,8 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
         summary: outcome.summary || undefined,
         error: outcome.error ?? undefined,
         noDiffReason: outcome.no_diff_reason ?? undefined,
+        evidenceContractStatus: outcome.evidence_contract_status,
+        deliveryEvidenceRefs: outcome.delivery_evidence_refs,
         changedFiles: outcome.changed_files,
         commitRef: outcome.commit_ref ?? undefined,
         publishedCommitRef: outcome.published_commit_ref ?? undefined,

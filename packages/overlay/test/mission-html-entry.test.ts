@@ -20,6 +20,7 @@ test("index.html exposes Mission through the unified Work Ledger instead of a Mi
   expect(workPanelIndex).toBeGreaterThan(sidebarIndex)
   expect(workLedgerIndex).toBeGreaterThan(workPanelIndex)
   expect(HTML).toContain('data-i18n="work_ledger.title"')
+  expect(HTML).toContain('id="solidLeftPanelActions"')
   expect(HTML).toContain('href="styles/surfaces/work-ledger.css"')
   expect(HTML).toContain('href="styles/surfaces/mission.css"')
   expect(HTML).not.toContain('id="solidLeftActivityToolbar"')

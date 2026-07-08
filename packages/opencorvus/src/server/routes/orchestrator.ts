@@ -142,7 +142,7 @@ const TASK_LIST_PROJECTION_EVENT_PREFIXES = [
   "workflow.",
 ] as const
 
-function isTaskListProjectionEventType(type: string) {
+export function isTaskListProjectionEventType(type: string) {
   const normalized = type.replace(/^engine\./, "")
   return (
     TASK_LIST_PROJECTION_EVENT_TYPES.has(normalized) ||

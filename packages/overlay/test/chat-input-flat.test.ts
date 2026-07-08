@@ -58,7 +58,7 @@ describe(".chat-input is a single-source canonical rule", () => {
     const body = soloRuleBody(".chat-input")
     // border-radius must route through the canonical radius token set.
     // Raw px values are forbidden (radius-coverage test guards this globally).
-    expect(body).toMatch(/border-radius:\s*var\(--oc-radius-(?:none|soft|large|pill)\)/)
+    expect(body).toMatch(/border-radius:\s*var\(--oc-radius-(?:none|soft|large|xl|pill)\)/)
   })
 
   test("the canonical has a single border declaration (no !important duplication)", () => {

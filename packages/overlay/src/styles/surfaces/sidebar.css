@@ -38,6 +38,33 @@
   display: none;
 }
 
+.sidebar-header-actions .oc-button[data-ui="left-panel-open-project"] {
+  --oc-button-height: calc(24px * var(--ui-scale));
+  --oc-button-padding-x: 0;
+  --oc-button-bg: color-mix(in srgb, var(--surface-inset) 64%, transparent);
+  --oc-button-color: var(--text-soft);
+  --oc-button-shadow: inset 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--border) 78%, transparent);
+
+  width: calc(24px * var(--ui-scale));
+  min-width: calc(24px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+}
+
+.sidebar-header-actions .oc-button[data-ui="left-panel-open-project"]:hover,
+.sidebar-header-actions .oc-button[data-ui="left-panel-open-project"]:focus-visible {
+  --oc-button-bg: color-mix(in srgb, var(--accent) 12%, var(--surface-inset));
+  --oc-button-color: var(--text-strong);
+  --oc-button-shadow:
+    inset 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--accent) 32%, var(--border)),
+    0 calc(4px * var(--ui-scale)) calc(10px * var(--ui-scale))
+      color-mix(in srgb, var(--ui-shadow-tone) 16%, transparent);
+}
+
+.sidebar-header-actions .oc-button[data-ui="left-panel-open-project"] > svg {
+  width: calc(15px * var(--ui-scale));
+  height: calc(15px * var(--ui-scale));
+}
+
 /* Sidebar body: scrollable region beneath the header that holds the
    task list panel + group clusters. The 8px padding + 6px gap values
    below fold the late overrides at the styles.css tail (canonical was
@@ -998,7 +1025,7 @@
   min-width: calc(18px * var(--ui-scale));
   height: calc(18px * var(--ui-scale));
   min-height: calc(18px * var(--ui-scale));
-  border-radius: calc(3px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
   flex: 0 0 auto;
 }
 

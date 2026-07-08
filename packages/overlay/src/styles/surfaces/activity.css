@@ -40,18 +40,16 @@
 }
 
 #solidRightActivityToolbar {
-  --right-toolbar-hover-target-width: calc(10px * var(--ui-scale));
-
   position: relative;
   z-index: var(--ui-z-raised);
-  flex: 0 0 var(--right-toolbar-hover-target-width);
-  width: var(--right-toolbar-hover-target-width);
-  min-width: var(--right-toolbar-hover-target-width);
-  margin-left: calc(var(--right-toolbar-hover-target-width) * -1);
+  flex: 0 0 0;
+  width: 0;
+  min-width: 0;
+  margin-left: 0;
   overflow: visible;
   border-left: 0 solid transparent;
   background: transparent;
-  pointer-events: auto;
+  pointer-events: none;
   transition:
     flex-basis var(--ui-duration-fast) var(--ui-timing-standard),
     width var(--ui-duration-fast) var(--ui-timing-standard),
@@ -66,28 +64,34 @@
   inset: 0;
   width: var(--ui-collapsed-pane-width);
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
   transform: translateX(calc(8px * var(--ui-scale)));
   transition:
     opacity var(--ui-duration-fast),
-    transform var(--ui-duration-fast);
+    transform var(--ui-duration-fast),
+    visibility 0s linear var(--ui-duration-fast);
 }
 
-#solidRightActivityToolbar:hover,
-#solidRightActivityToolbar:focus-within {
+#solidRightActivityToolbar[data-open="true"] {
   flex-basis: var(--ui-collapsed-pane-width);
   width: var(--ui-collapsed-pane-width);
   min-width: var(--ui-collapsed-pane-width);
   margin-left: 0;
   border-left: var(--oc-border-width) solid color-mix(in srgb, var(--border) 72%, transparent);
   background: var(--surface-inset);
+  pointer-events: auto;
 }
 
-#solidRightActivityToolbar:hover .side-activity-toolbar,
-#solidRightActivityToolbar:focus-within .side-activity-toolbar {
+#solidRightActivityToolbar[data-open="true"] .side-activity-toolbar {
   opacity: var(--ui-opacity-full);
+  visibility: visible;
   pointer-events: auto;
   transform: translateX(0);
+  transition:
+    opacity var(--ui-duration-fast),
+    transform var(--ui-duration-fast),
+    visibility 0s;
 }
 
 .side-activity-toolbar {
@@ -122,8 +126,8 @@
 
 .side-activity-toolbar [data-ui="side-activity-button"] {
   position: relative;
-  width: calc(38px * var(--ui-scale));
-  height: calc(36px * var(--ui-scale));
+  width: var(--ui-collapsed-pane-width);
+  height: var(--ui-collapsed-pane-width);
   border-radius: 0;
   color: var(--text-muted);
 }
@@ -181,10 +185,10 @@
 }
 
 .project-runtime-toolbar-actions .oc-button[data-toolbar-compact="true"] {
-  width: calc(38px * var(--ui-scale));
-  height: calc(36px * var(--ui-scale));
-  min-width: calc(38px * var(--ui-scale));
-  min-height: calc(36px * var(--ui-scale));
+  width: var(--ui-collapsed-pane-width);
+  height: var(--ui-collapsed-pane-width);
+  min-width: var(--ui-collapsed-pane-width);
+  min-height: var(--ui-collapsed-pane-width);
   border: 0 solid transparent;
   border-radius: 0;
   box-shadow: none;
@@ -193,7 +197,7 @@
 }
 
 .project-runtime-toolbar-actions .oc-button[data-toolbar-compact="true"] {
-  --oc-button-height: calc(36px * var(--ui-scale));
+  --oc-button-height: var(--ui-collapsed-pane-width);
   --oc-button-padding-x: 0;
   --oc-button-gap: 0;
   --oc-button-border: 0 solid transparent;

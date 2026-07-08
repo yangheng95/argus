@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import path from "node:path"
 import { buildRetryFeedbackPrompt, buildUserPrompt } from "../../src/build/agent"
 import { textContextPacket, type AgentContextPacket } from "../../src/agent/context-packet"
 import {
@@ -8,6 +9,9 @@ import {
   type BuildVisualHandoffContextData,
 } from "../../src/build/prompt-context"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
+
+const repoRoot = path.resolve(import.meta.dir, "../../../..")
+const buildAgentSourcePath = path.join(repoRoot, "packages/opencorvus/src/build/agent.ts")
 
 function packet(
   source: string,
@@ -58,6 +62,14 @@ function packets(input: {
 }
 
 describe("build agent prompt context", () => {
+  test("build agent text does not advertise Architect re-sizing as generic follow-up", async () => {
+    const source = await Bun.file(buildAgentSourcePath).text()
+
+    expect(source).not.toContain("Architect re-sizing")
+    expect(source).toContain("Architect structural re-entry is only valid when durable evidence names an invalid persisted architect artifact")
+    expect(source).not.toContain("Before reporting success")
+  })
+
   test("request-path build receives canonical acceptance feedback", () => {
     const prompt = buildUserPrompt(
       {
@@ -293,6 +305,9 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("## Terminal Report Contract")
     expect(prompt).toContain("contract_restatement")
     expect(prompt).toContain("followup_workload_guidance")
+    expect(prompt).toContain("durable evidence names an invalid persisted architect artifact")
+    expect(prompt).not.toContain("Architect re-sizing")
+    expect(prompt).not.toContain("Before reporting success")
     expect(prompt).toContain("Weak follow-up models")
     expect(prompt.indexOf("## Requirements / PRD Coverage Contract")).toBeLessThan(
       prompt.indexOf("# Goal: Replica tabs"),
@@ -324,6 +339,9 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("## Terminal Report Contract")
     expect(prompt).toContain("detailed restatement of the effective req/goal contract")
     expect(prompt).toContain("where task complexity may still be hidden")
+    expect(prompt).toContain("durable evidence names an invalid persisted architect artifact")
+    expect(prompt).not.toContain("Architect re-sizing")
+    expect(prompt).not.toContain("Before reporting success")
     expect(prompt.indexOf("## Requirements / PRD Coverage Contract")).toBeLessThan(prompt.indexOf("# Request"))
   })
 

@@ -1485,7 +1485,7 @@ test("integrity progress no longer writes elapsed string into subtitle", () => {
   expect(afterRetry.time).toBe(1_776_000_001_000)
 })
 
-test("integrity reasoning chunks append byte-identical text without changing the rendered part shape", () => {
+test("integrity reasoning chunks append text and keep event orderKey on the rendered part", () => {
   resetWriter()
   setBoardStore("board", {
     task: {
@@ -1514,10 +1514,11 @@ test("integrity reasoning chunks append byte-identical text without changing the
     },
   })
 
+  const chunkOrderKey = eventOrderKey("review.stream.chunk", 1_776_000_001_100)
   for (const delta of ["plan ", "then ", "verify"]) {
     applyEvent({
       type: "review.stream.chunk",
-      orderKey: eventOrderKey("review.stream.chunk", 1_776_000_001_100),
+      orderKey: chunkOrderKey,
       emittedAt: 1_776_000_001_100,
       properties: {
         taskID: TASK_ID,
@@ -1537,6 +1538,7 @@ test("integrity reasoning chunks append byte-identical text without changing the
   expect(part).toEqual({
     type: "reasoning",
     partID: `review:integrity:${INTEGRITY_SID}:reasoning:1`,
+    orderKey: chunkOrderKey,
     text: "plan then verify",
   })
   expect(String(part?.text || "")).toBe("plan then verify")

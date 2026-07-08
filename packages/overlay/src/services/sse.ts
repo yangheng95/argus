@@ -171,13 +171,18 @@ function dispatchNotificationDetails(errorDetails: string, event: any): string {
 }
 
 function logMalformedSsePayload(input: {
-  stream: "selected-task" | "task-list"
+  stream: "selected-task" | "task-list" | "work-ledger"
   data: string
   error: unknown
   taskID?: string
   directory?: string
 }): void {
-  const where = input.stream === "selected-task" ? `task ${input.taskID || "<unknown>"}` : "task list"
+  const where =
+    input.stream === "selected-task"
+      ? `task ${input.taskID || "<unknown>"}`
+      : input.stream === "work-ledger"
+        ? "work ledger"
+        : "task list"
   AppLog.error("sse", `malformed ${input.stream} SSE payload`, {
     stream: input.stream,
     taskID: input.taskID,
@@ -466,8 +471,16 @@ export function stopSSE() {
 let taskListHandle: StreamHandle | null = null
 let taskListRetryTimer: any = null
 let taskListRefreshTimer: VisibilityInterval | null = null
+let workLedgerHandle: StreamHandle | null = null
+let workLedgerRetryTimer: any = null
+let workLedgerChangeHandler: ((event: any) => void) | null = null
 
 export const TASK_LIST_REFRESH_INTERVAL_MS = 30_000
+
+export function setWorkLedgerChangeHandler(handler: ((event: any) => void) | null): void {
+  workLedgerChangeHandler = handler
+  if (!handler) stopWorkLedgerSSE()
+}
 
 function taskListDirectory(): string {
   return (settingsStore.directory || "").trim()
@@ -489,11 +502,72 @@ function stopTaskListRefreshTimer() {
   taskListRefreshTimer = null
 }
 
+function startWorkLedgerSSE(directory: string) {
+  stopWorkLedgerSSE()
+  if (!workLedgerChangeHandler) return
+  const transport = getHostTransport()
+  const handle = transport.openStream(
+    { path: "work-ledger/events", query: { directory } },
+    {
+      onEvent: (data) => {
+        let event: any
+        try {
+          event = JSON.parse(data)
+        } catch (error) {
+          logMalformedSsePayload({ stream: "work-ledger", directory, data, error })
+          return
+        }
+        if (event.type === "work-ledger.heartbeat" || event.type === "work-ledger.connected") return
+        if (event.type !== "work-ledger.changed") return
+        try {
+          workLedgerChangeHandler?.(event)
+        } catch (err) {
+          const errorDetails = boundedErrorDetails(err)
+          AppLog.error("sse", "work ledger change handler failed", {
+            eventType: event?.type || "<unknown>",
+            error: errorDetails,
+            event: dispatchEventDiagnostic(event),
+            notificationID: "work-ledger-sse:dispatch-error",
+            notificationTitle: "Work Ledger event failed to render",
+            notificationMessage: "A Work Ledger change event threw while refreshing the sidebar.",
+            notificationDetails: dispatchNotificationDetails(errorDetails, event),
+          })
+        }
+      },
+      onClose: (_reason) => {
+        if (handle !== workLedgerHandle) return
+        workLedgerHandle = null
+        if (workLedgerRetryTimer) clearTimeout(workLedgerRetryTimer)
+        workLedgerRetryTimer = setTimeout(() => {
+          workLedgerRetryTimer = null
+          startWorkLedgerSSE(directory)
+        }, 3000)
+      },
+      onError: () => {
+        if (handle !== workLedgerHandle) return
+        handle.close()
+      },
+    },
+  )
+  workLedgerHandle = handle
+}
+
+function stopWorkLedgerSSE() {
+  if (workLedgerRetryTimer) {
+    clearTimeout(workLedgerRetryTimer)
+    workLedgerRetryTimer = null
+  }
+  const handle = workLedgerHandle
+  workLedgerHandle = null
+  if (handle) handle.close()
+}
+
 export function startTaskListSSE() {
   stopTaskListSSE()
   startTaskListRefreshTimer()
   const directory = taskListDirectory()
   if (!directory) return
+  startWorkLedgerSSE(directory)
   const transport = getHostTransport()
   const handle = transport.openStream(
     { path: "task/events", query: { directory } },
@@ -556,6 +630,7 @@ export function startTaskListSSE() {
 }
 
 export function stopTaskListSSE() {
+  stopWorkLedgerSSE()
   stopTaskListRefreshTimer()
   if (taskListRetryTimer) {
     clearTimeout(taskListRetryTimer)

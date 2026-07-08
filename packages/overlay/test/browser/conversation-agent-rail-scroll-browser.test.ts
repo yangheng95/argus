@@ -13,7 +13,6 @@ import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
 await ensureOverlayDist()
 
 const TASK_ID = "tsk_conversation_agent_rail_scroll"
-const ASSISTANT_SESSION_ID = "ses_conversation_agent_rail_assistant"
 const ABSORBED_SESSION_ID = "ses_agent_rail_absorbed"
 const ABSORBED_FIRST_MESSAGE_ID = "msg_agent_rail_absorbed_first"
 const ABSORBED_LAST_MESSAGE_ID = "msg_agent_rail_absorbed_last"
@@ -21,12 +20,8 @@ const ABSORBED_FIRST_CARD_ID = `build:session:${ABSORBED_SESSION_ID}:message:${A
 const ABSORBED_LAST_CARD_ID = `build:session:${ABSORBED_SESSION_ID}:message:${ABSORBED_LAST_MESSAGE_ID}`
 const PROJECT_ROOT = "D:/overlay/workspace/conversation-agent-rail-scroll"
 const T0 = 1_776_100_000_000
-const SCREENSHOT_PATH = resolve(".scratch", "conversation-agent-rail-scroll-browser", "rail-after-drag.png")
-const ASSISTANT_SCREENSHOT_PATH = resolve(
-  ".scratch",
-  "conversation-agent-rail-scroll-browser",
-  "rail-coding-assistant.png",
-)
+const RAIL_SCREENSHOT_PATH = resolve(".scratch", "conversation-agent-rail-scroll-browser", "left-rail.png")
+const TOOLTIP_SCREENSHOT_PATH = resolve(".scratch", "conversation-agent-rail-scroll-browser", "left-rail-tooltip.png")
 const CHAT_PANE_SCREENSHOT_PATH = resolve(
   ".scratch",
   "conversation-agent-rail-scroll-browser",
@@ -99,7 +94,8 @@ function absorbedMessage(messageID: string, partID: string, created: number, tex
 }
 
 function message(index: number) {
-  const stage = ["requirements", "architect", "frontend-design", "build", "visual-qa", "integrity"][index % 6]!
+  const stages = ["requirements", "architect", "build", "build", "visual-qa", "integrity", "build", "build"]
+  const stage = stages[index % stages.length]!
   const sessionID = `ses_agent_rail_${index.toString().padStart(2, "0")}`
   const messageID = `msg_agent_rail_${index.toString().padStart(2, "0")}`
   const partID = `part_${messageID}`
@@ -125,52 +121,38 @@ function message(index: number) {
         messageID,
         sessionID,
         type: "text",
-        text: `Agent rail scroll fixture turn ${index}`,
+        text: `Agent rail left fixture turn ${index}`,
       },
     ],
   }
 }
 
-const assistantSession = {
-  id: ASSISTANT_SESSION_ID,
-  kind: "coding-assistant",
-  title: "Agent rail assistant",
-  directory: PROJECT_ROOT,
-  time: { created: T0 + 9_000, updated: T0 + 9_500 },
-}
-
-const assistantMessage = {
-  info: {
-    id: "msg_agent_rail_assistant",
-    sessionID: ASSISTANT_SESSION_ID,
-    orderKey: testMessageOrderKey("msg_agent_rail_assistant", T0 + 9_250),
-    channel: "assistant",
-    role: "assistant",
-    resolvedRole: "assistant",
-    agent: "assistant",
-    time: { created: T0 + 9_250 },
-    providerID: "openai",
-    modelID: "gpt-5-mini",
-  },
-  parts: [
-    {
-      id: "part_msg_agent_rail_assistant",
-      orderKey: testPartOrderKey("part_msg_agent_rail_assistant", T0 + 9_251),
-      messageID: "msg_agent_rail_assistant",
-      sessionID: ASSISTANT_SESSION_ID,
-      type: "text",
-      text: "Coding assistant session rail fixture message.",
+function sessionForMessage(item: ReturnType<typeof message>) {
+  return {
+    sessionID: item.info.sessionID,
+    stage: item.info.resolvedRole,
+    parentSessionID: item.info.parentSessionID,
+    orderKey: testSessionOrderKey(item.info.sessionID, item.info.time.created),
+    messageIDs: [item.info.id],
+    lastDisplayMessageID: item.info.id,
+    firstMessageTime: item.info.time.created,
+    lastMessageTime: item.info.time.created,
+    status: "completed",
+    displaySummary: {
+      text: `Completed ${item.info.resolvedRole} execution for ${item.info.id}.`,
+      source: "session_status",
     },
-  ],
+    placement: "top_level",
+  }
 }
 
-test("ConversationAgentRail keeps horizontal drag scrolling after primitive button migration", async () => {
+test("ConversationAgentRail renders left stacked history, tooltip summaries, and locate behavior", async () => {
   assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
   assert.equal(typeof globalThis.Bun, "undefined")
 
   const task = {
     id: TASK_ID,
-    title: "Conversation agent rail scroll",
+    title: "Conversation agent rail left history",
     directory: PROJECT_ROOT,
     status: "active",
     sessionID: "ses_root",
@@ -178,13 +160,13 @@ test("ConversationAgentRail keeps horizontal drag scrolling after primitive butt
     time: { created: T0 - 1_000, started: T0 - 500, updated: T0 + 3_000 },
   }
   const board = {
-    snapshotVersion: "conversation-agent-rail-scroll-board",
+    snapshotVersion: "conversation-agent-rail-left-board",
     lastSequence: 0,
     task,
     run: { executor: "opencorvus", phase: "assistant", status: "active" },
     overview: {
-      headline: "Conversation agent rail scroll",
-      summary: "Fixture board for rail drag-scroll validation.",
+      headline: "Conversation agent rail left",
+      summary: "Fixture board for left rail stack and tooltip validation.",
       controls: {},
     },
     requirements: [],
@@ -217,22 +199,14 @@ test("ConversationAgentRail keeps horizontal drag scrolling after primitive butt
     lastDisplayMessageID: ABSORBED_LAST_MESSAGE_ID,
     firstMessageTime: T0 + 25,
     lastMessageTime: T0 + 50,
+    status: "completed",
+    displaySummary: {
+      text: "Completed absorbed build execution and merged continuation output.",
+      source: "session_status",
+    },
     placement: "top_level",
   }
-  const sessions = [
-    absorbedSession,
-    ...scrollTranscript.map((item) => ({
-      sessionID: item.info.sessionID,
-      stage: item.info.resolvedRole,
-      parentSessionID: item.info.parentSessionID,
-      orderKey: testSessionOrderKey(item.info.sessionID, item.info.time.created),
-      messageIDs: [item.info.id],
-      lastDisplayMessageID: item.info.id,
-      firstMessageTime: item.info.time.created,
-      lastMessageTime: item.info.time.created,
-      placement: "top_level",
-    })),
-  ]
+  const sessions = [absorbedSession, ...scrollTranscript.map(sessionForMessage)]
   const messages = transcript.map((item) => ({
     messageID: item.info.id,
     sessionID: item.info.sessionID,
@@ -242,7 +216,6 @@ test("ConversationAgentRail keeps horizontal drag scrolling after primitive butt
     time: item.info.time.created,
     placement: "top_level",
   }))
-  const agentMessages = messages.filter((item) => item.sessionID !== ABSORBED_SESSION_ID)
   const conversation = {
     lastSequence: 0,
     messageWatermark: T0 + 3_200,
@@ -253,50 +226,8 @@ test("ConversationAgentRail keeps horizontal drag scrolling after primitive butt
     eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100, sinceTimestamp: null },
     history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 160 },
     view: { sessions, messages, topLevelSessionIDs: sessions.map((item) => item.sessionID) },
-    agentView: { sessions, messages: agentMessages, topLevelSessionIDs: sessions.map((item) => item.sessionID) },
+    agentView: { sessions, messages, topLevelSessionIDs: sessions.map((item) => item.sessionID) },
   }
-  const assistantView = {
-    sessions: [
-      {
-        sessionID: ASSISTANT_SESSION_ID,
-        stage: "assistant",
-        orderKey: testSessionOrderKey(ASSISTANT_SESSION_ID, T0 + 9_250),
-        messageIDs: ["msg_agent_rail_assistant"],
-        lastDisplayMessageID: "msg_agent_rail_assistant",
-        firstMessageTime: T0 + 9_250,
-        lastMessageTime: T0 + 9_250,
-        placement: "top_level",
-      },
-    ],
-    messages: [
-      {
-        messageID: "msg_agent_rail_assistant",
-        sessionID: ASSISTANT_SESSION_ID,
-        stage: "assistant",
-        orderKey: testMessageOrderKey("msg_agent_rail_assistant", T0 + 9_250),
-        time: T0 + 9_250,
-        placement: "top_level",
-      },
-    ],
-    topLevelSessionIDs: [ASSISTANT_SESSION_ID],
-  }
-  const assistantConversation = {
-    messageWatermark: T0 + 9_500,
-    board: {
-      kind: "session",
-      sessionID: ASSISTANT_SESSION_ID,
-      status: "active",
-      title: "Agent rail assistant",
-      directory: PROJECT_ROOT,
-    },
-    transcript: [assistantMessage],
-    timeline: [],
-    events: [],
-    view: assistantView,
-    agentView: assistantView,
-    history: { oldestTimestamp: T0 + 9_250, oldestMessageID: "msg_agent_rail_assistant", hasMore: false, limit: 1 },
-  }
-
   const server = await startBrowserFixture(async (req) => {
     const url = new URL(req.url)
     const path = route(url)
@@ -304,16 +235,16 @@ test("ConversationAgentRail keeps horizontal drag scrolling after primitive butt
     const staticResponse = await overlayStaticResponse(path)
     if (staticResponse) return staticResponse
     if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
-    if (path === "/global/health") return json({ version: "conversation-agent-rail-scroll" })
+    if (path === "/global/health") return json({ version: "conversation-agent-rail-left" })
     if (path === "/mission") return json([])
     if (path === "/global/projects/discover")
       return json({ root: "D:/overlay", defaultDirectory: PROJECT_ROOT, projects: [] })
     if (path === "/project/current/worktrees") return json([])
     if (path === "/coding/cli/profiles" || path === "/terminal/profiles") return json([])
-    if (path === "/coding/sessions") return json({ sessions: [assistantSession], nextCursor: null })
-    if (path === `/coding/session/${ASSISTANT_SESSION_ID}` && req.method === "GET")
-      return json({ session: assistantSession })
+    if (path === "/coding/sessions") return json({ sessions: [], nextCursor: null })
     if (path === "/global/tasks") return json({ tasks: [{ task, updated_at: T0 + 3_000 }] })
+    if (path === "/work-ledger") return json({ rows: [], nextCursor: null })
+    if (path === "/work-ledger/events") return eventStream()
     if (path === "/path") return json({ directory: PROJECT_ROOT })
     if (path === "/vcs")
       return json({
@@ -331,8 +262,7 @@ test("ConversationAgentRail keeps horizontal drag scrolling after primitive butt
     if (path === "/provider/auth") return json({})
     if (path === "/config/providers") return json({ providers: [], default: {} })
     if (path === "/config/prompt") return json([])
-    if (path === "/expert-squad/catalog")
-      return json(generalExpertSquadCatalog())
+    if (path === "/expert-squad/catalog") return json(generalExpertSquadCatalog())
     if (path === "/config") return json({ model: "openai/gpt-5-mini" })
     if (path === "/channel") return json([])
     if (path === "/executor") return json([])
@@ -357,7 +287,7 @@ test("ConversationAgentRail keeps horizontal drag scrolling after primitive butt
     if (path === "/panel/knowledge/memory" || path === "/panel/knowledge/preference") return json([])
     if (path === "/session") return json([])
     if (path === "/control/timeline") return json([])
-    if (path === `/task/${TASK_ID}/board`) return json(board, { headers: { etag: '"conversation-agent-rail-scroll"' } })
+    if (path === `/task/${TASK_ID}/board`) return json(board, { headers: { etag: '"conversation-agent-rail-left"' } })
     if (path === `/task/${TASK_ID}/conversation`) return json(conversation)
     if (path === `/task/${TASK_ID}/conversation/events`)
       return json({ events: [], eventReplay: { cursor: 0, latestSequence: 0 } })
@@ -376,8 +306,6 @@ test("ConversationAgentRail keeps horizontal drag scrolling after primitive butt
     if (path === `/task/${TASK_ID}/transcript`) return json(transcript)
     if (path === `/task/${TASK_ID}/trace`) return json({ events: [], traceDir: `${PROJECT_ROOT}/.opencorvus/trace` })
     if (path === "/task/events" || path === `/task/${TASK_ID}/events`) return eventStream()
-    if (path === `/session/${ASSISTANT_SESSION_ID}/conversation`) return json(assistantConversation)
-    if (path === `/session/${ASSISTANT_SESSION_ID}/events`) return eventStream()
     if (path === "/log" && req.method === "POST") return json({ ok: true })
     return text(`unhandled ${req.method} ${url.pathname}${url.search}`, { status: 404 })
   })
@@ -386,7 +314,7 @@ test("ConversationAgentRail keeps horizontal drag scrolling after primitive butt
   try {
     const page = await browser.newPage()
     const errors = installBrowserErrorCollector(page)
-    await page.setViewport({ width: 520, height: 760 })
+    await page.setViewport({ width: 1280, height: 760 })
     await page.evaluateOnNewDocument(
       (seed: { serverUrl: string; taskID: string }) => {
         localStorage.setItem("oc_locale", "en-US")
@@ -414,87 +342,134 @@ test("ConversationAgentRail keeps horizontal drag scrolling after primitive butt
     })
     errors.assertNoUnexpectedErrors()
 
-    const geometry = await page.$eval(".conversation-agent-rail__lanes", (el: HTMLElement) => {
-      const rect = el.getBoundingClientRect()
-      const laneStyle = getComputedStyle(el)
-      const host = document.querySelector<HTMLElement>(".conversation-agent-rail-host")
+    const geometry = await page.$eval(".conversation-agent-rail-host", (host: HTMLElement) => {
+      const hostRect = host.getBoundingClientRect()
       const rail = document.querySelector<HTMLElement>(".conversation-agent-rail")
-      const childLane = document.querySelector<HTMLElement>(".conversation-agent-rail__lane")
-      const hostStyle = host ? getComputedStyle(host) : null
-      const railStyle = rail ? getComputedStyle(rail) : null
-      const childLaneStyle = childLane ? getComputedStyle(childLane) : null
-      const ancestors = [
-        "#chatMessagePane",
-        "#chatContentFrame",
-        "#chatSection",
-        "#centerWorkbenchWorkflow",
-        "#centerWorkbench",
-        "#conversationWorkspace",
-        "#workspaceMain",
-      ].map((selector) => {
-        const node = document.querySelector<HTMLElement>(selector)
-        const box = node?.getBoundingClientRect()
-        return {
-          selector,
-          width: Math.round(box?.width || 0),
-          scrollWidth: node?.scrollWidth || 0,
-          clientWidth: node?.clientWidth || 0,
-          overflowX: node ? getComputedStyle(node).overflowX : "",
-        }
-      })
+      const lanes = document.querySelector<HTMLElement>(".conversation-agent-rail__lanes")
+      const scrollShell = document.querySelector<HTMLElement>(".conversation-scroll-shell")
+      const chatScroll = document.querySelector<HTMLElement>("#chatScroll")
+      const body = document.querySelector<HTMLElement>("#conversationBody")
+      const hostStyle = getComputedStyle(host)
+      const lanesStyle = lanes ? getComputedStyle(lanes) : null
+      const scrollRect = scrollShell?.getBoundingClientRect()
+      const chatScrollRect = chatScroll?.getBoundingClientRect()
+      const bodyRect = body?.getBoundingClientRect()
       return {
         viewportWidth: window.innerWidth,
         documentWidth: document.documentElement.scrollWidth,
-        left: rect.left,
-        top: rect.top,
-        right: rect.right,
-        bottom: rect.bottom,
-        width: rect.width,
-        height: rect.height,
-        clientWidth: el.clientWidth,
-        scrollWidth: el.scrollWidth,
-        scrollLeft: el.scrollLeft,
-        styles: {
-          host: host
-            ? {
-                width: Math.round(host.getBoundingClientRect().width),
-                flex: hostStyle?.flex,
-                display: hostStyle?.display,
-                maxWidth: hostStyle?.maxWidth,
-                overflowX: hostStyle?.overflowX,
-              }
-            : null,
-          rail: rail
-            ? {
-                width: Math.round(rail.getBoundingClientRect().width),
-                flex: railStyle?.flex,
-                display: railStyle?.display,
-                maxWidth: railStyle?.maxWidth,
-                overflowX: railStyle?.overflowX,
-              }
-            : null,
-          lanes: {
-            flex: laneStyle.flex,
-            width: laneStyle.width,
-            maxWidth: laneStyle.maxWidth,
-            minWidth: laneStyle.minWidth,
-            overflowX: laneStyle.overflowX,
-          },
-          childLane: childLane
-            ? {
-                width: Math.round(childLane.getBoundingClientRect().width),
-                flex: childLaneStyle?.flex,
-                maxWidth: childLaneStyle?.maxWidth,
-              }
-            : null,
+        host: {
+          left: hostRect.left,
+          right: hostRect.right,
+          top: hostRect.top,
+          bottom: hostRect.bottom,
+          width: hostRect.width,
+          height: hostRect.height,
+          flex: hostStyle.flex,
+          borderRightWidth: hostStyle.borderRightWidth,
         },
-        ancestors,
+        body: {
+          left: bodyRect?.left || 0,
+          right: bodyRect?.right || 0,
+          height: bodyRect?.height || 0,
+        },
+        scrollShell: {
+          left: scrollRect?.left || 0,
+          right: scrollRect?.right || 0,
+          width: scrollRect?.width || 0,
+          height: scrollRect?.height || 0,
+        },
+        chatScroll: {
+          left: chatScrollRect?.left || 0,
+          right: chatScrollRect?.right || 0,
+          width: chatScrollRect?.width || 0,
+          height: chatScrollRect?.height || 0,
+        },
+        railButtons: rail?.querySelectorAll('.oc-button[data-ui="conversation-agent-rail-locate"]').length || 0,
+        lanes: lanes
+          ? {
+              scrollTop: lanes.scrollTop,
+              scrollHeight: lanes.scrollHeight,
+              scrollWidth: lanes.scrollWidth,
+              clientHeight: lanes.clientHeight,
+              clientWidth: lanes.clientWidth,
+              overflowX: lanesStyle?.overflowX || "",
+              overflowY: lanesStyle?.overflowY || "",
+              flexDirection: lanesStyle?.flexDirection || "",
+            }
+          : null,
       }
     })
+    assert.ok(geometry.host.width >= 34 && geometry.host.width <= 54, `left rail width should stay compact: ${JSON.stringify(geometry)}`)
+    assert.equal(geometry.host.borderRightWidth, "0px")
     assert.ok(
-      geometry.scrollWidth > geometry.clientWidth + 120,
-      `rail should overflow horizontally: ${JSON.stringify(geometry)}`,
+      geometry.host.right <= geometry.scrollShell.left + 1,
+      `left rail must sit before the message scroll shell: ${JSON.stringify(geometry)}`,
     )
+    assert.ok(
+      geometry.chatScroll.width < geometry.scrollShell.width,
+      `message scroll lane should shrink inside the message pane: ${JSON.stringify(geometry)}`,
+    )
+    assert.ok(
+      Math.abs(
+        geometry.chatScroll.left +
+          geometry.chatScroll.width / 2 -
+          (geometry.scrollShell.left + geometry.scrollShell.width / 2),
+      ) <= 1.5,
+      `message scroll lane should stay centered inside the message pane: ${JSON.stringify(geometry)}`,
+    )
+    assert.ok(geometry.host.height >= geometry.scrollShell.height - 4, `left rail should fill message pane height: ${JSON.stringify(geometry)}`)
+    assert.equal(geometry.lanes?.overflowX, "hidden")
+    assert.equal(geometry.lanes?.overflowY, "auto")
+    assert.equal(geometry.lanes?.flexDirection, "column")
+    assert.ok(
+      (geometry.lanes?.scrollWidth || 0) <= (geometry.lanes?.clientWidth || 0) + 1,
+      `left rail lanes must not have their own x overflow: ${JSON.stringify(geometry)}`,
+    )
+    assert.ok(geometry.railButtons > 40, `fixture should render many rail ticks: ${JSON.stringify(geometry)}`)
+
+    const stackGeometry = await page.$$eval(".conversation-agent-rail__stack[data-agent='build'][data-count='2']", (stacks) => {
+      return stacks.map((stack) => {
+        const buttons = Array.from(stack.querySelectorAll<HTMLElement>('.oc-button[data-ui="conversation-agent-rail-locate"]'))
+        const centers = buttons.map((button) => {
+          const rect = button.getBoundingClientRect()
+          return rect.left + rect.width / 2
+        })
+        return {
+          count: buttons.length,
+          min: Math.min(...centers),
+          max: Math.max(...centers),
+        }
+      })
+    })
+    assert.ok(stackGeometry.length > 0, "adjacent build sessions should render shared stack groups")
+    for (const stack of stackGeometry) {
+      assert.equal(stack.count, 2)
+      assert.ok(stack.max - stack.min <= 1, `same-agent stack should keep one horizontal lane: ${JSON.stringify(stackGeometry)}`)
+    }
+
+    const tooltipButtonSelector =
+      '.conversation-agent-rail .oc-button[data-ui="conversation-agent-rail-locate"][data-session-id="ses_agent_rail_02"]'
+    await page.hover(tooltipButtonSelector)
+    await page.waitForSelector(".conversation-agent-rail-tooltip", { visible: true, timeout: 15_000 })
+    const tooltipText = await page.$eval(".conversation-agent-rail-tooltip", (element: HTMLElement) => element.textContent || "")
+    assert.match(tooltipText, /Agent: build/)
+    assert.match(tooltipText, /Status: Completed/)
+    assert.match(tooltipText, /Summary: Completed build execution for msg_agent_rail_02\./)
+    const tooltip = await page.$(".conversation-agent-rail-tooltip")
+    assert.ok(tooltip, "agent rail tooltip should exist for screenshot review")
+    mkdirSync(dirname(TOOLTIP_SCREENSHOT_PATH), { recursive: true })
+    writeFileSync(TOOLTIP_SCREENSHOT_PATH, await tooltip.screenshot({}))
+
+    const lanesScroll = await page.$eval(".conversation-agent-rail__lanes", (el: HTMLElement) => {
+      el.scrollTop = 9999
+      return {
+        scrollTop: el.scrollTop,
+        scrollHeight: el.scrollHeight,
+        clientHeight: el.clientHeight,
+      }
+    })
+    assert.ok(lanesScroll.scrollHeight > lanesScroll.clientHeight, `left rail should scroll vertically when history is long: ${JSON.stringify(lanesScroll)}`)
+    assert.ok(lanesScroll.scrollTop > 0, `left rail vertical scrollTop should move: ${JSON.stringify(lanesScroll)}`)
 
     await page.evaluate(() => {
       ;(window as any).__agentRailClickCount = 0
@@ -579,169 +554,12 @@ test("ConversationAgentRail keeps horizontal drag scrolling after primitive butt
     assert.ok(chatPane, "chat pane should exist for full rail/card screenshot review")
     mkdirSync(dirname(CHAT_PANE_SCREENSHOT_PATH), { recursive: true })
     writeFileSync(CHAT_PANE_SCREENSHOT_PATH, await chatPane.screenshot({}))
-
-    const dragStart = await page.$$eval(
-      '.conversation-agent-rail .oc-button[data-ui="conversation-agent-rail-locate"]',
-      (buttons) => {
-        const lanes = document.querySelector<HTMLElement>(".conversation-agent-rail__lanes")
-        if (!lanes) return null
-        const railRect = lanes.getBoundingClientRect()
-        const visible = buttons
-          .map((button) => {
-            const rect = button.getBoundingClientRect()
-            return {
-              button,
-              x: rect.left + rect.width / 2,
-              y: rect.top + rect.height / 2,
-              left: rect.left,
-              right: rect.right,
-              top: rect.top,
-              bottom: rect.bottom,
-            }
-          })
-          .filter((rect) => {
-            if (rect.left < railRect.left || rect.right > Math.min(railRect.right - 8, window.innerWidth - 8))
-              return false
-            if (rect.top < 0 || rect.bottom > window.innerHeight) return false
-            const hit = document.elementFromPoint(rect.x, rect.y)
-            return (
-              hit instanceof Element &&
-              hit.closest('.oc-button[data-ui="conversation-agent-rail-locate"]') === rect.button
-            )
-          })
-        const target = visible.at(-1)
-        return target ? { x: target.x, y: target.y } : null
-      },
-    )
-    assert.ok(dragStart, "drag must start on a visible rail locate button")
-    const startX = Math.round(dragStart.x)
-    const y = Math.round(dragStart.y)
-    await page.$eval(".conversation-agent-rail__lanes", (el: HTMLElement) => {
-      el.scrollLeft = 0
-      delete el.dataset.dragging
-    })
-    await page.mouse.move(startX, y)
-    await page.mouse.down()
-    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
-    await page.mouse.move(startX - 64, Math.round(geometry.top - 32))
-    const escapeDragDuringMove = await page.$eval(".conversation-agent-rail__lanes", (el: HTMLElement) => ({
-      scrollLeft: el.scrollLeft,
-      dragging: el.dataset.dragging || "",
-    }))
-    await page.mouse.up()
-    const escapeDragAfter = await page.$eval(".conversation-agent-rail__lanes", (el: HTMLElement) => ({
-      scrollLeft: el.scrollLeft,
-      dragging: el.dataset.dragging || "",
-    }))
-    assert.equal(
-      escapeDragDuringMove.dragging,
-      "true",
-      `first move outside rail must still set data-dragging: ${JSON.stringify(escapeDragDuringMove)}`,
-    )
-    assert.ok(
-      escapeDragDuringMove.scrollLeft > 20,
-      `first move outside rail must still scroll: ${JSON.stringify(escapeDragDuringMove)}`,
-    )
-    assert.equal(escapeDragAfter.dragging, "", "escape drag must clear data-dragging after pointerup")
-
-    await page.$eval(".conversation-agent-rail__lanes", (el: HTMLElement) => {
-      el.scrollLeft = 0
-      delete el.dataset.dragging
-    })
-    await page.mouse.move(startX, y)
-    await page.mouse.down()
-    await page.mouse.move(startX - 18, y)
-    const draggingDuringMove = await page.$eval(
-      ".conversation-agent-rail__lanes",
-      (el: HTMLElement) => el.dataset.dragging,
-    )
-    await page.mouse.move(startX - 260, y)
-    await page.mouse.up()
-
-    const afterDrag = await page.$eval(".conversation-agent-rail__lanes", (el: HTMLElement) => ({
-      scrollLeft: el.scrollLeft,
-      dragging: el.dataset.dragging || "",
-    }))
-    assert.equal(draggingDuringMove, "true", "drag must set data-dragging while active")
-    assert.equal(afterDrag.dragging, "", "drag must clear data-dragging after pointerup")
-    assert.ok(afterDrag.scrollLeft > 80, `drag should move the rail horizontally: ${JSON.stringify(afterDrag)}`)
-
     const rail = await page.$(".conversation-agent-rail")
     assert.ok(rail, "agent rail should exist for screenshot review")
-    mkdirSync(dirname(SCREENSHOT_PATH), { recursive: true })
-    writeFileSync(SCREENSHOT_PATH, await rail.screenshot({}))
+    mkdirSync(dirname(RAIL_SCREENSHOT_PATH), { recursive: true })
+    writeFileSync(RAIL_SCREENSHOT_PATH, await rail.screenshot({}))
 
-    await page.click('.oc-button[data-ui="side-activity-button"][data-side="left"][data-activity="assistant"]')
-    await page.waitForSelector(`[data-ui="coding-assistant-row"][data-session-id="${ASSISTANT_SESSION_ID}"]`, {
-      visible: true,
-      timeout: 15_000,
-    })
-    await page.waitForSelector(
-      `[data-ui="coding-assistant-row"][data-session-id="${ASSISTANT_SESSION_ID}"][data-active="true"]`,
-      {
-        visible: true,
-        timeout: 15_000,
-      },
-    )
-    await page.waitForFunction(
-      () => {
-        const rail = document.querySelector<HTMLElement>(".conversation-agent-rail")
-        if (!rail) return false
-        const rect = rail.getBoundingClientRect()
-        return (
-          rect.width > 0 &&
-          rect.height > 0 &&
-          rail.querySelectorAll('.oc-button[data-ui="conversation-agent-rail-locate"]').length > 0
-        )
-      },
-      { timeout: 15_000 },
-    )
-    const assistantRailState = await page.$eval(".conversation-agent-rail", (el: HTMLElement) => {
-      const rect = el.getBoundingClientRect()
-      const ancestors = [
-        ".conversation-agent-rail-host",
-        "#chatMessagePane",
-        "#chatContentFrame",
-        "#chatSection",
-        "#centerWorkbenchWorkflow",
-        "#centerWorkbench",
-        "#conversationWorkspace",
-        "#workspaceMain",
-      ].map((selector) => {
-        const node = document.querySelector<HTMLElement>(selector)
-        const box = node?.getBoundingClientRect()
-        const style = node ? getComputedStyle(node) : null
-        return {
-          selector,
-          dataOpen: node?.dataset.open || "",
-          dataActive: node?.dataset.active || "",
-          dataWorkbenchView: node?.dataset.workbenchView || "",
-          display: style?.display || "",
-          overflowX: style?.overflowX || "",
-          overflowY: style?.overflowY || "",
-          width: Math.round(box?.width || 0),
-          height: Math.round(box?.height || 0),
-        }
-      })
-      return {
-        buttons: el.querySelectorAll('.oc-button[data-ui="conversation-agent-rail-locate"]').length,
-        width: Math.round(rect.width),
-        height: Math.round(rect.height),
-        ancestors,
-      }
-    })
-    assert.ok(
-      assistantRailState.buttons > 0,
-      `coding assistant rail should have buttons: ${JSON.stringify(assistantRailState)}`,
-    )
-    assert.ok(
-      assistantRailState.width > 0 && assistantRailState.height > 0,
-      `coding assistant rail should be visible: ${JSON.stringify(assistantRailState)}`,
-    )
     errors.assertNoUnexpectedErrors()
-    const assistantRail = await page.$(".conversation-agent-rail")
-    assert.ok(assistantRail, "coding assistant agent rail should exist for screenshot review")
-    writeFileSync(ASSISTANT_SCREENSHOT_PATH, await assistantRail.screenshot({}))
   } finally {
     await browser.close()
     await server.close()

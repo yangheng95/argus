@@ -27,6 +27,7 @@ import { FRONTEND_DESIGN_COMPLETION_KEYS, frontendDesignArtifactPaths } from "@/
 import { renderUserRequestSection } from "@/intent/request-prompt"
 import { readIterationHistory as readHistory } from "@/metrics/store"
 import { deriveGoalStatus } from "./goal-status"
+import { deriveGoalEvidenceState, renderGoalEvidenceStateForDependency } from "./goal-evidence"
 import { isGoalRunOrphaned, isRunOrphan } from "./orphan"
 import {
   isAbortedGoalRunStatus,
@@ -380,10 +381,13 @@ export interface FrontendDesignHandoffDesc {
 export interface CollaborationClosureDesc {
   execution_started: boolean
   attempts_count: number
-  passed_goal_ids: string[]
+  evidence_satisfied_goal_ids: string[]
   failed_goal_ids: string[]
-  dispatchable_goal_ids: string[]
-  blocked_goals: Array<{ goal_id: string; blocked_by: Array<{ goal_id: string; status: string }> }>
+  evidence_dispatchable_goal_ids: string[]
+  blocked_goals: Array<{
+    goal_id: string
+    blocked_by: Array<{ goal_id: string; status: string; evidence_status: string; reason: string }>
+  }>
 }
 
 function describeResearchBriefArtifact(input: {
@@ -657,7 +661,10 @@ function buildCollaborationClosure(goals: GoalDesc[]): CollaborationClosureDesc 
   if (goals.length === 0) return undefined
 
   const attemptsCount = goals.reduce((sum, goal) => sum + goal.attempt_count, 0)
-  const passed = new Set(goals.filter((goal) => goal.is_terminal_ok).map((goal) => goal.id))
+  const evidenceByID = new Map(goals.map((goal) => [goal.id, deriveGoalEvidenceState(goal.id)]))
+  const evidenceSatisfied = new Set(
+    goals.filter((goal) => evidenceByID.get(goal.id)?.dependency_ready).map((goal) => goal.id),
+  )
   const failedGoalIDs = goals.filter((goal) => goal.is_terminal_fail).map((goal) => goal.id)
   const byID = new Map(goals.map((goal) => [goal.id, goal]))
   const dispatchableGoalIDs: string[] = []
@@ -668,10 +675,16 @@ function buildCollaborationClosure(goals: GoalDesc[]): CollaborationClosureDesc 
     if (!mayDispatch) continue
 
     const blockers = goal.depends_on
-      .filter((depID) => !passed.has(depID))
+      .filter((depID) => !evidenceSatisfied.has(depID))
       .map((depID) => {
         const dep = byID.get(depID)
-        return { goal_id: depID, status: dep ? describeDerivedState(dep) : "missing" }
+        const evidence = evidenceByID.get(depID)
+        return {
+          goal_id: depID,
+          status: dep ? describeDerivedState(dep) : "missing",
+          evidence_status: evidence?.evidence_status ?? "missing",
+          reason: evidence ? renderGoalEvidenceStateForDependency(evidence) : "missing dependency goal",
+        }
       })
 
     if (blockers.length > 0) {
@@ -684,9 +697,9 @@ function buildCollaborationClosure(goals: GoalDesc[]): CollaborationClosureDesc 
   return {
     execution_started: attemptsCount > 0,
     attempts_count: attemptsCount,
-    passed_goal_ids: [...passed],
+    evidence_satisfied_goal_ids: [...evidenceSatisfied],
     failed_goal_ids: failedGoalIDs,
-    dispatchable_goal_ids: dispatchableGoalIDs,
+    evidence_dispatchable_goal_ids: dispatchableGoalIDs,
     blocked_goals: blockedGoals,
   }
 }
@@ -919,9 +932,9 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
   const recentTerminalGoalRefills = describeTerminalGoalRefillNotifications(task.id)
   const taskCronWaits = describeTaskCronWaits(task.id, task.time_started ?? task.time_created)
 
-  // Bootstrap-first signal. Single source — derived from goal status and
-  // surfaced as collaboration context. This is not a dispatch gate.
-  const activeBootstrap = goalRows.find((g) => g.kind === "bootstrap" && goalStatusByID(g.id) !== "passed")
+  // Bootstrap-first signal. Single source — derived from goal evidence
+  // readiness and surfaced as collaboration context. This is not a dispatch gate.
+  const activeBootstrap = goalRows.find((g) => g.kind === "bootstrap" && !deriveGoalEvidenceState(g.id).dependency_ready)
   const collaborationClosure = buildCollaborationClosure(goals)
 
   return {
@@ -1084,15 +1097,15 @@ export function renderCollaborationClosure(desc: CollaborationClosureDesc | unde
       "The active goal graph has entered execution. Treat it as the shared collaboration contract, not a scratchpad to re-plan for ordinary shared-file edits.",
     )
     lines.push(
-      "Ordinary collaboration drift belongs in Build `files_changed[]` reports and, when the written contract needs a point correction, `manage_task` action=modify_goal. Architect re-entry through `dispatch_agent` target=architect is structural re-planning and needs acceptance/reference-coverage evidence or an explicit upstream restart.",
+      "Ordinary collaboration drift belongs in Build `files_changed[]` reports and, when the written contract needs a point correction, `manage_task` action=modify_goal. Architect structural re-entry uses `dispatch_agent` target=architect mode=structural_reentry and requires invalid_architect_artifact_id, defect_kind, evidence_refs, and why build/modify_goal cannot repair it.",
     )
   } else {
     lines.push("Execution has not started yet; this is still the planning window.")
   }
 
-  if (desc.passed_goal_ids.length > 0) {
+  if (desc.evidence_satisfied_goal_ids.length > 0) {
     lines.push(
-      `Passed goals: ${desc.passed_goal_ids.map((id) => `${id} (${titleByID.get(id) ?? "untitled"})`).join(", ")}`,
+      `Evidence-satisfied goals: ${desc.evidence_satisfied_goal_ids.map((id) => `${id} (${titleByID.get(id) ?? "untitled"})`).join(", ")}`,
     )
   }
 
@@ -1102,23 +1115,25 @@ export function renderCollaborationClosure(desc: CollaborationClosureDesc | unde
       lines.push(`- ${goalID}: ${titleByID.get(goalID) ?? "untitled"}`)
     }
     lines.push(
-      "Failed goals stay inside the current collaboration closure. Use `manage_task` action=query_failed_goals, then route repair through `dispatch_agent` target=build with goalID/request, `manage_task` action=modify_goal, or `dispatch_agent` target=architect according to the proven owner; ask the operator only for external, destructive, or out-of-scope blockers. Do not restart upstream merely because a Build attempt failed or a failed worktree contains partial files.",
+      "Failed goals stay inside the current collaboration closure. Use `manage_task` action=query_failed_goals, then route repair through `dispatch_agent` target=build with goalID/request, `manage_task` action=modify_goal, or `dispatch_agent` target=architect mode=structural_reentry only with named invalid architect artifact evidence; ask the operator only for external, destructive, or out-of-scope blockers. Do not restart upstream merely because a Build attempt failed or a failed worktree contains partial files.",
     )
   }
 
-  if (desc.dispatchable_goal_ids.length > 0) {
-    lines.push("Next dispatchable goals:")
-    for (const goalID of desc.dispatchable_goal_ids) {
+  if (desc.evidence_dispatchable_goal_ids.length > 0) {
+    lines.push("Next evidence-dispatchable goals:")
+    for (const goalID of desc.evidence_dispatchable_goal_ids) {
       lines.push(`- ${goalID}: ${titleByID.get(goalID) ?? "untitled"}`)
     }
   } else {
-    lines.push("Next dispatchable goals: none derived from current dependency evidence.")
+    lines.push("Next evidence-dispatchable goals: none derived from current dependency evidence.")
   }
 
   if (desc.blocked_goals.length > 0) {
     lines.push("Dependency-blocked goals:")
     for (const blocked of desc.blocked_goals) {
-      const blockers = blocked.blocked_by.map((dep) => `${dep.goal_id} [${dep.status}]`).join(", ")
+      const blockers = blocked.blocked_by
+        .map((dep) => `${dep.goal_id} [lifecycle=${dep.status}; evidence=${dep.evidence_status}; ${dep.reason}]`)
+        .join(", ")
       lines.push(`- ${blocked.goal_id}: blocked by ${blockers}`)
     }
   }
@@ -1204,7 +1219,7 @@ export function renderTaskDescription(desc: TaskDesc): string {
       lines.push("")
       lines.push(
         `**Bootstrap-first dispatch order**: goal \`${desc.active_bootstrap_goal_id}\` ` +
-          `(\`kind=bootstrap\`) is not yet \`passed\`. Bootstrap goals own ` +
+          `(\`kind=bootstrap\`) is not yet evidence-satisfied. Bootstrap goals own ` +
           `scaffold-level files (\`package.json\`, \`vite.config.ts\`/\`bunfig.toml\`, ` +
           `\`tsconfig.json\`, \`src/main.*\`, \`src/App.*\`); every other goal ` +
           `would inevitably touch those files on its worktree, producing ` +

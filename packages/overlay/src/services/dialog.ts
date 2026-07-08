@@ -9,6 +9,7 @@ import { apiJson } from "./api"
 import { selectedTaskDirectory } from "../store/board"
 import { t } from "../utils/i18n"
 import { renderMarkdown, escapeHtml } from "../utils/markdown"
+import { iconHtml } from "../utils/icon-html"
 import { describeToolPart } from "../utils/tool"
 import { dialogStore, setDialogStore, CONFIG_SECTIONS, type ConfigDialogTab } from "../store/dialog"
 import { panelMessage } from "./chat"
@@ -39,7 +40,7 @@ function renderSessionToolChip(part: any): string {
     ? `<span class="tool-status" data-status="${escapeHtml(display.status || "pending")}" title="${escapeHtml(display.statusLabel)}">${escapeHtml(display.statusLabel)}</span>`
     : ""
   return `<div class="msg-tool"${statusAttr}>
-    <span class="tool-icon">${escapeHtml(display.icon)}</span>
+    <span class="tool-icon" aria-hidden="true">${iconHtml(display.icon, 13)}</span>
     <span class="tool-name">${escapeHtml(display.label)}</span>
     ${detail}
     ${status}

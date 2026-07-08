@@ -39,6 +39,12 @@
   grid-row: 1;
 }
 
+.tool-icon > svg {
+  width: calc(13px * var(--ui-scale));
+  height: calc(13px * var(--ui-scale));
+  flex: none;
+}
+
 .tool-name {
   font-weight: var(--ui-font-weight-strong);
   color: var(--text-strong);
@@ -871,6 +877,17 @@
   font-size: var(--ui-font-control);
   color: var(--good);
   font-family: var(--mono);
+}
+
+.msg-patch__icon {
+  width: calc(13px * var(--ui-scale));
+  height: calc(13px * var(--ui-scale));
+  flex: none;
+}
+
+.msg-patch__text {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .msg-tool-code {

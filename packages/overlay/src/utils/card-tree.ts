@@ -15,10 +15,11 @@ import type {
   StepPayload,
   ActivityCounts as StoreActivityCounts,
 } from "../store/card-tree"
-import { toolNameKey, displayToolIcon, displayToolDetail } from "./tool"
+import { toolNameKey, displayToolDetail } from "./tool"
 import { extractTodos } from "./todos"
 import { isBoundaryMessagePart, isCardBodyMessagePart } from "./message-part"
 import { normalizeAgentRole } from "./message"
+import { timelineOrderKeyTime } from "./timeline-order"
 
 export type { CardNode, CardKind, CardStatus, StepPayload, BoundaryPart } from "../store/card-tree"
 
@@ -298,9 +299,9 @@ export function stepHeaderNodeWithBuildPhase(
 
 // ── Latest-activity preview (collapsed header) ──
 // Walks the subtree and keeps only the single most recent activity by
-// (card.time, part-index). An activity is either:
+// (part order-key time, part-index). An activity is either:
 //   - a text/reasoning part (assistant prose / chain-of-thought), or
-//   - a tool part (formatted as "<icon> <ToolName>: <detail>" so the
+//   - a tool part (formatted as "<ToolName>: <detail>" so the
 //     operator can see "what is this card actually doing right now").
 // This is the canonical preview source — text and tool calls compete
 // for the same line so the operator always sees the actual latest
@@ -314,7 +315,7 @@ interface LatestHit {
 
 // Internal-only tools whose tool name + state carry no operator-visible
 // signal. StructuredOutput is the Zod-call wrapper used for decompose /
-// architect; surfacing it as preview text produces "⚡ StructuredOutput:
+// architect; surfacing it as preview text produces "StructuredOutput:
 // Structured Output" — pure noise. Suppressed alongside TODO tools.
 const PREVIEW_SUPPRESS_TOOLS = new Set(["structuredoutput", "structured_output"])
 
@@ -328,39 +329,42 @@ function toolHitText(part: any): string {
   if (TODO_TOOLS.has(key)) return ""
   if (PREVIEW_SUPPRESS_TOOLS.has(key)) return ""
   const state = part.state || {}
-  const icon = displayToolIcon(name)
   const detail = displayToolDetail(name, state.input, state, "")
-  const head = icon ? `${icon} ${name}` : name
-  return detail ? `${head}: ${detail}` : head
+  return detail ? `${name}: ${detail}` : name
 }
 
-// Goal step cards (kind="step") want a different preview policy: the
-// operator scanning a goal needs the goal context (objective / latest
-// reasoning), not "Bash: rg --files". Tool calls are visible inside the
-// expanded card body — the collapsed line should answer "what is this
-// goal trying to do" rather than "what command is currently running".
-function gatherLatest(node: CardNode, hits: LatestHit[], suppressTools: boolean): void {
+function activityHitTime(part: any, label: string): number {
+  return timelineOrderKeyTime(part?.orderKey, label)
+}
+
+function gatherLatest(node: CardNode, hits: LatestHit[]): void {
   if (!node) return
-  const baseTime = typeof node.time === "number" ? node.time : 0
-  if (!suppressTools && node.kind === "tool" && node.toolPart) {
+  if (node.kind === "tool" && node.toolPart) {
     const toolText = toolHitText(node.toolPart)
-    if (toolText) hits.push({ time: baseTime, index: 0, text: toolText })
+    if (toolText) {
+      hits.push({
+        time: activityHitTime(node.toolPart, `collapsed preview tool card ${node.id}`),
+        index: 0,
+        text: toolText,
+      })
+    }
   }
   const parts = node.parts || []
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i]
     const text = partText(part)
     if (text) {
-      hits.push({ time: baseTime, index: i, text })
+      hits.push({ time: activityHitTime(part, `collapsed preview part ${node.id}/${i}`), index: i, text })
       continue
     }
-    if (suppressTools) continue
     const toolText = toolHitText(part)
-    if (toolText) hits.push({ time: baseTime, index: i, text: toolText })
+    if (toolText) {
+      hits.push({ time: activityHitTime(part, `collapsed preview tool part ${node.id}/${i}`), index: i, text: toolText })
+    }
   }
   for (const cid of node.childIDs || []) {
     const child = cardTreeStore.cards[cid]
-    if (child) gatherLatest(child as unknown as CardNode, hits, suppressTools)
+    if (child) gatherLatest(child as unknown as CardNode, hits)
   }
 }
 
@@ -369,20 +373,11 @@ export function collectLatestActivityText(node: CardNode): string {
   if (shouldUseCachedStats(node)) {
     const cached = node.subtreeLatestHit
     if (cached?.text) return cached.text
-    if (node.kind === "step" && node.goalDescription) {
-      return String(node.goalDescription).trim()
-    }
     return ""
   }
-  const suppressTools = node.kind === "step"
   const hits: LatestHit[] = []
-  gatherLatest(node, hits, suppressTools)
-  if (hits.length === 0) {
-    if (node.kind === "step" && node.goalDescription) {
-      return String(node.goalDescription).trim()
-    }
-    return ""
-  }
+  gatherLatest(node, hits)
+  if (hits.length === 0) return ""
   let best = hits[0]
   for (let i = 1; i < hits.length; i++) {
     const h = hits[i]
@@ -447,7 +442,7 @@ export function cardMessageSegments(card: CardNode): CardMessageSegment[] {
 
 // ── Activity counts (collapsed header) ──
 // Tally the work that has happened inside a card subtree so the collapsed
-// header can show "🤖 2  🛠 14  🎯 1  💬 5" and the operator gets a sense
+// header can show agent/tool/skill/message counts and the operator gets a sense
 // of activity volume without expanding the card.
 
 export interface ActivityCounts {

@@ -32,7 +32,7 @@
 
 .chat-header.oc-surface-header {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 }
 
 .oc-surface-header__main,

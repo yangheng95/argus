@@ -562,6 +562,8 @@ describe("Goal.startNewAttempt — options", () => {
     expect(outcome?.terminal_status).toBe("completed")
     expect(outcome?.outcome_kind).toBe("no_project_diff")
     expect(outcome?.no_diff_reason).toBe("actual_changed_files_empty")
+    expect(outcome?.evidence_contract_status).toBe("unsatisfied")
+    expect(outcome?.delivery_evidence_refs).toEqual([])
     expect(outcome?.commit_ref).toBe("abc1234")
     expect(outcome?.changed_files).toEqual([])
   })

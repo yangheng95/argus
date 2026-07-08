@@ -246,13 +246,18 @@ async function threeCenterWorkbenchPanelLayout(page: OverlayPage) {
     heightProbe.style.position = "fixed"
     heightProbe.style.visibility = "hidden"
     heightProbe.style.height = "var(--ui-overlay-min-height)"
-    document.body.append(widthProbe, heightProbe)
+    const aspectProbe = document.createElement("div")
+    aspectProbe.style.position = "fixed"
+    aspectProbe.style.visibility = "hidden"
+    aspectProbe.style.width = "calc(var(--ui-overlay-min-aspect-ratio) * 100px)"
+    document.body.append(widthProbe, heightProbe, aspectProbe)
     const minimumWidth = widthProbe.getBoundingClientRect().width
     const minimumHeight = heightProbe.getBoundingClientRect().height
+    const aspectRatio = aspectProbe.getBoundingClientRect().width / 100
     widthProbe.remove()
     heightProbe.remove()
+    aspectProbe.remove()
     const shell = document.body.getBoundingClientRect()
-    const aspectRatio = minimumWidth / minimumHeight
     return {
       minWidth,
       bodyClientWidth: body.clientWidth,
@@ -379,6 +384,8 @@ test(
         }
       })
       await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "load" })
+      await page.waitForSelector('[data-ui="chat-header-right-toolbar-toggle"]', { visible: true })
+      await page.click('[data-ui="chat-header-right-toolbar-toggle"]')
       await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="requirements"]', {
         visible: true,
       })
@@ -421,18 +428,32 @@ test(
         resolve(".scratch", "center-workbench-three-panel-min-width-1120.png"),
         await page.screenshot({ fullPage: true }),
       )
-      await page.setViewport({ width: 1120, height: 1000 })
+      await page.setViewport({ width: 1120, height: 1120 })
       await page.waitForSelector("#centerWorkbenchScreenshots[data-open='true']", { visible: true })
-      const illegalTallLayout = await threeCenterWorkbenchPanelLayout(page)
-      assertThreeCenterWorkbenchPanelsFit(illegalTallLayout, "1120x1000 illegal-tall three-panel layout")
-      assert.equal(illegalTallLayout.viewportHeight, 1000)
-      assert.ok(illegalTallLayout.aspectRatio > 1.5)
+      const squareLayout = await threeCenterWorkbenchPanelLayout(page)
+      assertThreeCenterWorkbenchPanelsFit(squareLayout, "1120x1120 square three-panel layout")
+      assert.equal(squareLayout.viewportHeight, 1120)
+      assert.ok(Math.abs(squareLayout.aspectRatio - 1) <= 0.001, JSON.stringify(squareLayout))
       assert.ok(
-        Math.abs(illegalTallLayout.shellHeight - illegalTallLayout.shellWidth / illegalTallLayout.aspectRatio) <= 1,
-        `expected illegal tall shell height to be aspect-clamped: ${JSON.stringify(illegalTallLayout)}`,
+        Math.abs(squareLayout.shellHeight - squareLayout.shellWidth) <= 1,
+        `expected square shell height to match shell width: ${JSON.stringify(squareLayout)}`,
       )
       await writeFile(
-        resolve(".scratch", "center-workbench-illegal-tall-aspect-frame.png"),
+        resolve(".scratch", "center-workbench-square-aspect-frame.png"),
+        await page.screenshot({ fullPage: true }),
+      )
+      await page.setViewport({ width: 1120, height: 1300 })
+      await page.waitForSelector("#centerWorkbenchScreenshots[data-open='true']", { visible: true })
+      const portraitClampLayout = await threeCenterWorkbenchPanelLayout(page)
+      assertThreeCenterWorkbenchPanelsFit(portraitClampLayout, "1120x1300 portrait-clamped three-panel layout")
+      assert.equal(portraitClampLayout.viewportHeight, 1300)
+      assert.ok(Math.abs(portraitClampLayout.aspectRatio - 1) <= 0.001, JSON.stringify(portraitClampLayout))
+      assert.ok(
+        Math.abs(portraitClampLayout.shellHeight - portraitClampLayout.shellWidth) <= 1,
+        `expected taller-than-square shell height to be square-clamped: ${JSON.stringify(portraitClampLayout)}`,
+      )
+      await writeFile(
+        resolve(".scratch", "center-workbench-portrait-clamped-aspect-frame.png"),
         await page.screenshot({ fullPage: true }),
       )
       await page.setViewport({ width: 1600, height: 720 })

@@ -62,12 +62,15 @@ export function WorkspaceEditorLaunchers() {
       }}
       onOpenChange={setOpen}
       primaryChildren={
-        <span class="workspace-editor-select-icon" data-editor={selectedEditor() ?? ""} aria-hidden="true">
-          <Icon
-            name={EDITOR_ICONS[selectedEditor() ?? "vscode"]}
-            size={EDITOR_ICON_SIZES[selectedEditor() ?? "vscode"]}
-          />
-        </span>
+        <>
+          <span class="workspace-editor-select-icon" data-editor={selectedEditor() ?? ""} aria-hidden="true">
+            <Icon
+              name={EDITOR_ICONS[selectedEditor() ?? "vscode"]}
+              size={EDITOR_ICON_SIZES[selectedEditor() ?? "vscode"]}
+            />
+          </span>
+          <span class="workspace-editor-primary-label">{t("workspace.editor_open")}</span>
+        </>
       }
       menuButtonChildren={
         <span class="workspace-editor-select-caret" aria-hidden="true">

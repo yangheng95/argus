@@ -2579,7 +2579,7 @@
                     "type": "array"
                   },
                   "followup_workload_guidance": {
-                    "description": "Explicit warning for subsequent agents about hidden or remaining work surface, evidence they must read deeper, and whether goal workload analysis or Architect re-sizing should be revisited.",
+                    "description": "Explicit warning for subsequent agents about hidden or remaining work surface, evidence they must read deeper, and whether goal workload analysis or Architect structural_reentry evidence should be revisited.",
                     "minLength": 1,
                     "type": "string"
                   },
@@ -44832,6 +44832,12 @@
                                         "commitRef": {
                                           "type": "string"
                                         },
+                                        "deliveryEvidenceRefs": {
+                                          "items": {
+                                            "type": "string"
+                                          },
+                                          "type": "array"
+                                        },
                                         "diffBaseRef": {
                                           "type": "string"
                                         },
@@ -44839,6 +44845,14 @@
                                           "type": "string"
                                         },
                                         "error": {
+                                          "type": "string"
+                                        },
+                                        "evidenceContractStatus": {
+                                          "enum": [
+                                            "satisfied",
+                                            "unsatisfied",
+                                            "failed"
+                                          ],
                                           "type": "string"
                                         },
                                         "goalRunID": {
@@ -50431,6 +50445,12 @@
                                             "commitRef": {
                                               "type": "string"
                                             },
+                                            "deliveryEvidenceRefs": {
+                                              "items": {
+                                                "type": "string"
+                                              },
+                                              "type": "array"
+                                            },
                                             "diffBaseRef": {
                                               "type": "string"
                                             },
@@ -50438,6 +50458,14 @@
                                               "type": "string"
                                             },
                                             "error": {
+                                              "type": "string"
+                                            },
+                                            "evidenceContractStatus": {
+                                              "enum": [
+                                                "satisfied",
+                                                "unsatisfied",
+                                                "failed"
+                                              ],
                                               "type": "string"
                                             },
                                             "goalRunID": {
@@ -60473,6 +60501,76 @@
           {
             "lang": "js",
             "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.workLedger.list({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/work-ledger/events": {
+      "get": {
+        "description": "Pure change-notification SSE for the unified Work Ledger. Emits Mission, Chat, and Task projection changes; clients refetch /work-ledger for the canonical projection.",
+        "operationId": "workLedger.events",
+        "parameters": [
+          {
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "in": "query",
+            "name": "directory",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "properties": {
+                    "sequence": {
+                      "type": "number"
+                    },
+                    "sessionID": {
+                      "type": "string"
+                    },
+                    "sourceType": {
+                      "type": "string"
+                    },
+                    "taskID": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "type": {
+                      "enum": [
+                        "work-ledger.connected",
+                        "work-ledger.heartbeat",
+                        "work-ledger.changed"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "sourceType",
+                    "sequence"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Work Ledger change stream"
+          }
+        },
+        "summary": "Subscribe to Work Ledger change notifications",
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.workLedger.events({\n  ...\n})"
           }
         ]
       }

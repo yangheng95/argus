@@ -15,6 +15,8 @@ test("App owns the global overlay host components", () => {
   expect(app).not.toContain("return null")
   for (const host of [
     "solidTitlebarMenu",
+    "solidChatHeaderEditorLaunchers",
+    "solidChatHeaderRightToolbarToggle",
     "solidWindowControls",
     "solidConnBadge",
     "solidTaskStatusMount",
@@ -35,6 +37,8 @@ test("App owns the global overlay host components", () => {
   }
   for (const component of [
     "TitlebarMenubar",
+    "WorkspaceEditorLaunchers",
+    "ChatHeaderRightToolbarToggle",
     "WindowControls",
     "ConnectionBadge",
     "TaskStatusHeader",

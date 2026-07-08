@@ -70,7 +70,8 @@
         <aside class="sidebar" id="sidebar" data-collapsed="false">
         <div class="side-panel-content sidebar-content">
           <div class="sidebar-header oc-surface-header">
-            <div class="sidebar-title oc-surface-header__title" id="leftPanelTitle" data-i18n="work_ledger.title">Work</div>
+            <div class="sidebar-title oc-surface-header__title" id="leftPanelTitle" data-i18n="work_ledger.title">Projects</div>
+            <div class="sidebar-header-actions oc-surface-header__actions" id="solidLeftPanelActions" data-active="true"></div>
           </div>
 
           <div class="side-activity-body sidebar-activity-body" id="leftPanelWork" data-side-activity="work" data-active="true">
@@ -110,6 +111,10 @@
                   </div>
                   <div class="chat-header-status" id="solidTaskStatusMount"></div>
                   <div class="chat-header-meta oc-surface-header__actions">
+                    <div class="chat-header-actions" data-no-drag="true">
+                      <div id="solidChatHeaderEditorLaunchers"></div>
+                      <div id="solidChatHeaderRightToolbarToggle"></div>
+                    </div>
                     <span
                       class="chat-usage"
                       id="chatUsage"
@@ -121,11 +126,11 @@
                 <div class="chat-content-frame" id="chatContentFrame">
                   <div class="chat-message-pane" id="chatMessagePane">
                     <div class="conversation-body" id="conversationBody">
+                      <div id="solidConversationAgentRailMount" class="conversation-agent-rail-host"></div>
                       <div class="conversation-scroll-shell">
                         <div class="chat-scroll session-content" id="chatScroll"></div>
                       </div>
                     </div>
-                    <div id="solidConversationAgentRailMount" class="conversation-agent-rail-host"></div>
                   </div>
                 </div>
                 <div id="solidChatComposer"></div>

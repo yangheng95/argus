@@ -128,10 +128,10 @@ export interface ActivityCounts {
 
 /** Cached "latest activity" hit used by `collectLatestActivityText`. The
  *  renderer wants the most recent text-or-tool moment in the subtree; we
- *  cache the (time,index)-tuple plus the rendered text so collapsed bubble
- *  reads are O(1). `text` is the already-formatted line (markdown for text
- *  parts, "icon Tool: detail" for tool parts) — see toolHitText / partText
- *  in utils/card-tree.ts. */
+ *  cache the (timeline-order-key time,index)-tuple plus the rendered text
+ *  so collapsed bubble reads are O(1). `text` is the already-formatted line
+ *  (markdown for text parts, "Tool: detail" for tool parts) — see
+ *  toolHitText / partText in utils/card-tree.ts. */
 export interface LatestActivityHit {
   time: number
   index: number

@@ -36,15 +36,16 @@ test("orchestrator core prompt forbids prose-only workflow decisions", async () 
   expect(normalized).toContain("`skill`, `read_context`, `manage_task` action=query_failed_goals, and plain prose do not count as a workflow decision")
 })
 
-test("orchestrator recovery guidance repairs no-diff producers without dependency bypass or generic Architect re-entry", async () => {
+test("orchestrator recovery guidance repairs unsatisfied producer evidence without dependency bypass or generic Architect re-entry", async () => {
   const prompt = await Bun.file(new URL("../../src/prompt/core/orchestrator-core.txt", import.meta.url)).text()
   const agentSource = await Bun.file(new URL("../../src/orchestrator/agent.ts", import.meta.url)).text()
   const toolsSource = await Bun.file(new URL("../../src/orchestrator/tools.ts", import.meta.url)).text()
   const combined = `${prompt}\n${agentSource}\n${toolsSource}`.replace(/\s+/g, " ")
 
-  expect(combined).toContain("no_project_diff producer")
-  expect(combined).toContain("Do not delete a dependency edge to bypass `no_project_diff`")
-  expect(combined).toContain("target=architect only when the persisted architect artifact itself is proven invalid and named")
+  expect(combined).toContain("producer evidence unsatisfied")
+  expect(combined).toContain("Do not delete a dependency edge to bypass unsatisfied producer evidence")
+  expect(combined).toContain("target=architect mode=structural_reentry")
+  expect(combined).toContain("invalid_architect_artifact_id")
   expect(combined).not.toContain("Re-run architect")
 })
 

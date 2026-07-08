@@ -41,6 +41,7 @@ test("left toolbar is retired and the left panel owns one Work Ledger mount", ()
   expect(html).toContain('id="leftPanelWork"')
   expect(html).toContain('id="workLedgerPanel"')
   expect(html).toContain('data-i18n="work_ledger.title"')
+  expect(html).toContain('id="solidLeftPanelActions"')
   expect(html).not.toContain('id="solidLeftActivityToolbar"')
   expect(html).not.toContain('id="leftPanelTasks"')
   expect(html).not.toContain('id="leftPanelMissions"')
@@ -53,6 +54,10 @@ test("left toolbar is retired and the left panel owns one Work Ledger mount", ()
 
   expect(main).toContain('document.getElementById("workLedgerPanel")')
   expect(main).toContain("<WorkLedger")
+  expect(main).toContain('document.getElementById("solidLeftPanelActions")')
+  expect(main).toContain('data-ui="left-panel-open-project"')
+  expect(main).toContain('Icon name="project-add"')
+  expect(main).toContain('runMainAsync("projects.open-folder", () => browseDirectory())')
   expect(main).not.toContain("type LeftActivity")
   expect(main).not.toContain("LEFT_ACTIVITIES")
   expect(main).not.toContain("selectLeftActivity")
@@ -63,6 +68,7 @@ test("left toolbar is retired and the left panel owns one Work Ledger mount", ()
 
   for (const key of [
     "work_ledger.title",
+    "work_ledger.open_project",
     "work_ledger.kind.mission",
     "work_ledger.kind.task",
     "work_ledger.kind.chat",
@@ -71,6 +77,8 @@ test("left toolbar is retired and the left panel owns one Work Ledger mount", ()
     expect(en).toContain(`"${key}"`)
     expect(zh).toContain(`"${key}"`)
   }
+  expect(en).toContain('"work_ledger.title": "Projects"')
+  expect(zh).toContain('"work_ledger.title": "Projects"')
 })
 
 test("Memory, Skill, Tool, and MCP remain Settings-owned instead of left-toolbar owned", () => {

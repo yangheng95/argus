@@ -4,7 +4,7 @@
 // and the chat-header usage strip.
 //
 // Why this exists: the collapsed bubble UI surfaces three subtree aggregates
-// per card — activity counts ("🤖 2  🛠 14  💬 5"), latest text-or-tool
+// per card — activity counts (agents/tools/messages), latest text-or-tool
 // activity line, and the most-recent TODO snapshot. Without caching, each
 // visible collapsed bubble's `createMemo` recursively walks its subtree on
 // every SSE event because Solid tracks `cardTreeStore.cards[childID]` reads
@@ -42,8 +42,9 @@
 // populated. The public collectors in `utils/card-tree.ts` keep a direct
 // recursive path for cards without cached aggregates.
 
-import { toolNameKey, displayToolIcon, displayToolDetail } from "../utils/tool"
+import { toolNameKey, displayToolDetail } from "../utils/tool"
 import { extractTodos } from "../utils/todos"
+import { timelineOrderKeyTime } from "../utils/timeline-order"
 import {
   collectScreenshotBrowserItemsFromCard,
   mergeScreenshotBrowserItemSets,
@@ -117,10 +118,8 @@ function toolHitText(part: any): string {
   if (TODO_TOOLS.has(key)) return ""
   if (PREVIEW_SUPPRESS_TOOLS.has(key)) return ""
   const state = part.state || {}
-  const icon = displayToolIcon(name)
   const detail = displayToolDetail(name, state.input, state, "")
-  const head = icon ? `${icon} ${name}` : name
-  return detail ? `${head}: ${detail}` : head
+  return detail ? `${name}: ${detail}` : name
 }
 
 function extractTodoList(part: any): any[] | null {
@@ -141,10 +140,11 @@ function pickLater<T extends { time: number; index: number }>(a: T | undefined, 
 /** Compute a single card's OWN-LEVEL contributions (parts + toolPart only,
  *  no recursion). Returns a tuple ready to be combined with cached child
  *  aggregates. */
-function ownLevelStats(
-  card: CardNode,
-  suppressTools: boolean,
-): {
+function activityHitTime(part: any, label: string): number {
+  return timelineOrderKeyTime(part?.orderKey, label)
+}
+
+function ownLevelStats(card: CardNode): {
   counts: ActivityCounts
   latestHit: LatestActivityHit | undefined
   todoHit: TodoActivityHit | undefined
@@ -157,9 +157,13 @@ function ownLevelStats(
 
   if (card.kind === "tool" && card.toolPart) {
     bumpForPart(card.toolPart, counts)
-    if (!suppressTools) {
-      const t = toolHitText(card.toolPart)
-      if (t) latestHit = pickLater(latestHit, { time: baseTime, index: 0, text: t })
+    const t = toolHitText(card.toolPart)
+    if (t) {
+      latestHit = pickLater(latestHit, {
+        time: activityHitTime(card.toolPart, `card-tree stats tool card ${card.id}`),
+        index: 0,
+        text: t,
+      })
     }
     const todos = extractTodoList(card.toolPart)
     if (todos && todos.length > 0) {
@@ -172,10 +176,20 @@ function ownLevelStats(
     bumpForPart(part, counts)
     const text = partText(part)
     if (text) {
-      latestHit = pickLater(latestHit, { time: baseTime, index: i, text })
-    } else if (!suppressTools) {
+      latestHit = pickLater(latestHit, {
+        time: activityHitTime(part, `card-tree stats part ${card.id}/${i}`),
+        index: i,
+        text,
+      })
+    } else {
       const tt = toolHitText(part)
-      if (tt) latestHit = pickLater(latestHit, { time: baseTime, index: i, text: tt })
+      if (tt) {
+        latestHit = pickLater(latestHit, {
+          time: activityHitTime(part, `card-tree stats tool part ${card.id}/${i}`),
+          index: i,
+          text: tt,
+        })
+      }
     }
     const todos = extractTodoList(part)
     if (todos && todos.length > 0) {
@@ -183,13 +197,6 @@ function ownLevelStats(
     }
   }
   return { counts, latestHit, todoHit, screenshotItems: collectScreenshotBrowserItemsFromCard(card) }
-}
-
-/** Goal step cards suppress tool-hits in the LATEST preview (operators want
- *  the goal objective / latest prose, not "Bash: rg --files"). Matches
- *  `collectLatestActivityText` policy in utils/card-tree.ts. */
-function suppressToolsForCard(card: CardNode): boolean {
-  return card.kind === "step"
 }
 
 function equalCounts(a: ActivityCounts | undefined, b: ActivityCounts): boolean {
@@ -631,8 +638,7 @@ export function unlinkChildFromParent(childID: string): void {
 function recomputeNodeStats(cardID: string): boolean {
   const card = cardTreeStore.cards[cardID]
   if (!card) return removeCardUsageAggregate(cardID)
-  const suppress = suppressToolsForCard(card)
-  const own = ownLevelStats(card, suppress)
+  const own = ownLevelStats(card)
   let counts = own.counts
   let latestHit = own.latestHit
   let todoHit = own.todoHit
@@ -652,15 +658,7 @@ function recomputeNodeStats(cardID: string): boolean {
         skills: counts.skills + childCounts.skills,
       }
     }
-    if (!suppress) {
-      latestHit = pickLater(latestHit, child.subtreeLatestHit)
-    } else {
-      // Goal-step suppression applies to OWN-LEVEL tool hits only; descendant
-      // text contributions still flow up (operators want the latest prose from
-      // any descendant agent). Children's caches already encode their own
-      // policy, so we propagate them as-is.
-      latestHit = pickLater(latestHit, child.subtreeLatestHit)
-    }
+    latestHit = pickLater(latestHit, child.subtreeLatestHit)
     todoHit = pickLater(todoHit, child.subtreeTodoHit)
     if (child.subtreeScreenshotItems) screenshotItemSets.push(child.subtreeScreenshotItems)
     if (child.subtreeUsageAggregate) {

@@ -366,7 +366,7 @@
   --oc-button-height: calc(24px * var(--ui-scale));
   width: calc(24px * var(--ui-scale));
   min-width: calc(24px * var(--ui-scale));
-  border-radius: calc(4px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
 }
 
 .browser-preview-status {
@@ -538,7 +538,7 @@
   position: relative;
   outline: none;
   border: 0;
-  border-radius: calc(4px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
   background: var(--surface);
   overflow: hidden;
   contain: layout;

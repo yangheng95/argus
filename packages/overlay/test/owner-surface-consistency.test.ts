@@ -158,6 +158,7 @@ test("structured card body content does not create nested card chrome", () => {
 test("conversation agent rail and conversation owner surfaces stay flat", () => {
   expect(bodyOf(CONVERSATION_CSS, ".conversation-agent-rail")).toMatch(/overflow:\s*hidden/)
   expect(bodyOf(CONVERSATION_CSS, ".conversation-agent-rail__row")).toMatch(/display:\s*grid/)
+  expect(bodyOf(CONVERSATION_CSS, ".conversation-agent-rail__stack")).toMatch(/display:\s*grid/)
   expect(CONVERSATION_CSS).not.toContain("conversation-agent-rail__run")
   expect(CONVERSATION_CSS).not.toContain("conversation-agent-rail__report")
   expect(
@@ -165,7 +166,7 @@ test("conversation agent rail and conversation owner surfaces stay flat", () => 
       CONVERSATION_CSS,
       '.conversation-agent-rail .oc-button[data-ui="conversation-agent-rail-locate"]:hover, .conversation-agent-rail .oc-button[data-ui="conversation-agent-rail-locate"]:focus-visible',
     ),
-  ).toMatch(/--oc-button-bg:\s*var\(--subtle-2\)/)
+  ).toMatch(/--oc-button-bg:\s*transparent/)
   expect(bodyOf(CARD_CSS, '.task-progress .oc-button[data-ui="task-progress-pill"]')).toMatch(
     /--oc-button-border:\s*var\(--oc-border-width\) solid var\(--card-border\)/,
   )

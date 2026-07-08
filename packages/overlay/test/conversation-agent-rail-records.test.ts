@@ -477,6 +477,10 @@ test("hydrated lifecycle-only agent records create rail entries without blank ca
         firstObservedAt: 100,
         lastObservedAt: 110,
         status: "error",
+        displaySummary: {
+          text: "Frontend research failed while preparing browser evidence.",
+          source: "session_status",
+        },
         placement: "top_level",
       },
     ],
@@ -485,6 +489,10 @@ test("hydrated lifecycle-only agent records create rail entries without blank ca
   expect(conversationAgentStore.records.map((record) => record.sessionID)).toEqual(["ses_frontend_research_failed"])
   expect(conversationAgentStore.records[0]?.stage).toBe("frontend-research")
   expect(conversationAgentStore.records[0]?.status).toBe("error")
+  expect(conversationAgentStore.records[0]?.displaySummary).toEqual({
+    text: "Frontend research failed while preparing browser evidence.",
+    source: "session_status",
+  })
   expect(conversationAgentStore.records[0]?.renderedCardID).toBeUndefined()
   expect(conversationAgentStore.records[0]?.targetMessageID).toBe("")
 })
@@ -1087,12 +1095,20 @@ test("live aborted session.status is a non-success rail status", () => {
   resetConversationAgentView()
   applyLiveConversationAgentSessionStatus(
     "task:tsk_live",
-    liveSessionStatus("ses_live_build", { type: "terminal", reason: "aborted" }),
+    liveSessionStatus("ses_live_build", {
+      type: "terminal",
+      reason: "aborted",
+      summary: "Build was cancelled before verification completed.",
+    }),
   )
 
   const records = conversationAgentRecordsForSource({ kind: "task", id: "tsk_live" })
   expect(records.map((item) => item.sessionID)).toEqual(["ses_live_build"])
   expect(records[0]?.status).toBe("skipped")
+  expect(records[0]?.displaySummary).toEqual({
+    text: "Build was cancelled before verification completed.",
+    source: "session_status",
+  })
   expect(records[0]?.completedAt).toBe(1_779_099_999_000)
 })
 

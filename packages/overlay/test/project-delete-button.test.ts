@@ -83,10 +83,10 @@ describe("project delete button", () => {
     expect(PROJECT_LEDGER_GROUP).toContain('armedDescription={t("armed_confirm.project.delete"')
     expect(PROJECT_LEDGER_GROUP).toContain("function runProjectAction")
     expect(PROJECT_LEDGER_GROUP).toContain(
-      "runProjectAction(`copy:${props.directory}`, () => props.onCopyProject?.(props.directory))",
+      "runProjectAction(`new-chat:${props.directory}`, () => props.onCreateChat?.(props.directory))",
     )
     expect(PROJECT_LEDGER_GROUP).toContain(
-      "runProjectAction(`new-chat:${props.directory}`, () => props.onCreateChat?.(props.directory))",
+      "runProjectAction(`copy:${props.directory}`, () => props.onCopyProject?.(props.directory))",
     )
     expect(PROJECT_LEDGER_GROUP).toContain("runProjectAction(`rename:${props.directory}`, () =>")
     expect(PROJECT_LEDGER_GROUP).toContain("props.onRenameProject?.(props.directory, label().name)")
@@ -94,10 +94,10 @@ describe("project delete button", () => {
       "runProjectAction(`delete:${props.directory}`, () => props.onDeleteProject?.(props.directory))",
     )
     expect(PROJECT_LEDGER_GROUP).toContain(
-      "const canCopyProject = () => !!props.onCopyProject && !!props.directory.trim()",
+      "const canCreateChat = () => !!props.onCreateChat && !!props.directory.trim()",
     )
     expect(PROJECT_LEDGER_GROUP).toContain(
-      "const canCreateChat = () => !!props.onCreateChat && !!props.directory.trim()",
+      "const canCopyProject = () => !!props.onCopyProject && !!props.directory.trim()",
     )
     expect(PROJECT_LEDGER_GROUP).toContain(
       "const canRenameProject = () => !!props.onRenameProject && !!props.directory.trim()",

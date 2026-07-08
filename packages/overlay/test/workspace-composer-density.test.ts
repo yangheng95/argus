@@ -40,29 +40,45 @@ describe("workspace header controls share a single density tier", () => {
 })
 
 describe("composer shell stays tighter than the surrounding canvas", () => {
-  test("composer textarea floor is capped at the compact 72px size", () => {
-    // The 72px floor is now declared once as `--chat-textarea-height`
-    // on `.chat-input`; both `.chat-textarea-wrap` and `.chat-textarea`
+  test("composer stack width, input minimum height, and radius are explicit", () => {
+    expect(COMPOSER).toMatch(/\.chat-composer-stack\s*\{[^}]*--chat-composer-inline-gutter:/)
+    expect(COMPOSER).toContain("--chat-composer-inline-gutter: calc(28px * var(--ui-scale));")
+    expect(COMPOSER).toContain("--chat-composer-max-width: calc(880px * var(--ui-scale));")
+    expect(COMPOSER).toContain("--chat-composer-min-height: calc(96px * var(--ui-scale));")
+    expect(COMPOSER).toContain(
+      "width: min(var(--chat-composer-max-width), calc(100% - var(--chat-composer-inline-gutter)));",
+    )
+    expect(COMPOSER).toContain("max-width: var(--chat-composer-max-width);")
+    expect(COMPOSER).toContain("min-height: var(--chat-composer-min-height);")
+    expect(COMPOSER).toContain("border-radius: var(--oc-radius-xl);")
+    expect(COMPOSER).toMatch(/\.chat-input\s*\{[\s\S]*?width:\s*100%;/)
+  })
+
+  test("composer textarea floor is capped at the compact 48px size", () => {
+    // The 48px floor is now declared once as `--chat-textarea-height`
+    // on `.chat-composer-stack`; both `.chat-textarea-wrap` and `.chat-textarea`
     // read from it via `min-height: var(--chat-textarea-height);`.
     // Pin both: the literal var declaration AND that the consumers
-    // route through the variable rather than re-declaring 72px or
+    // route through the variable rather than re-declaring 48px or
     // any other floor.
-    expect(COMPOSER).toContain("--chat-textarea-height: calc(72px * var(--ui-scale));")
+    expect(COMPOSER).toContain("--chat-textarea-height: calc(48px * var(--ui-scale));")
     expect(COMPOSER).toMatch(/\.chat-textarea\s*\{[^}]*min-height:\s*var\(--chat-textarea-height\)\s*;/)
     expect(COMPOSER).toMatch(/\.chat-textarea-wrap\s*\{[^}]*min-height:\s*var\(--chat-textarea-height\)\s*;/)
   })
 
-  test("send button shares the textarea height contract", () => {
+  test("send button uses the compact embedded action size", () => {
     expect(COMPOSER).toMatch(
-      /\.chat-compose-row\s+\.oc-button\[data-mode\]\s*\{[^}]*min-height:\s*var\(--chat-textarea-height\)\s*;/,
+      /\.chat-compose-meta-right\s+\.oc-button\[data-mode\]\s*\{[^}]*min-height:\s*var\(--chat-composer-action-size\)\s*;/,
     )
+    expect(COMPOSER).toMatch(/\.chat-send-label\s*\{[\s\S]*?clip:\s*rect\(0 0 0 0\);/)
   })
 
-  test("narrow composer panels keep selectors and right attachment loaders on one meta row", () => {
+  test("narrow composer panels keep selector buttons, attachment loaders, and send on one meta row", () => {
     expect(COMPOSER).toMatch(/\.chat-compose-meta\s*\{[^}]*flex-wrap:\s*nowrap\s*;/)
-    expect(COMPOSER).toMatch(
-      /\.chat-compose-meta-left\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*calc\(160px \* var\(--ui-scale\)\)\)\s+minmax\(0,\s*1fr\);/,
-    )
+    expect(COMPOSER).toMatch(/\.chat-compose-meta-right\s*\{[^}]*align-items:\s*center\s*;/)
+    expect(COMPOSER).toMatch(/\.chat-compose-meta-left\s*\{[\s\S]*?display:\s*flex\s*;/)
+    expect(COMPOSER).toMatch(/\.chat-compose-meta-left\s*\{[\s\S]*?justify-content:\s*flex-start\s*;/)
+    expect(COMPOSER).toMatch(/\.chat-compose-meta-left\s*\{[\s\S]*?flex:\s*0 1 auto\s*;/)
     expect(COMPOSER).toMatch(/\.composer-attachment-loaders\s*\{[^}]*justify-content:\s*flex-end\s*;/)
     expect(COMPOSER).not.toMatch(
       /@container \(max-width: 520px\)\s*\{[\s\S]*?\.chat-compose-meta-left\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s*;/,
@@ -70,6 +86,32 @@ describe("composer shell stays tighter than the surrounding canvas", () => {
     expect(COMPOSER).toMatch(
       /@container \(max-width: 360px\)\s*\{[\s\S]*?\.executor-dualbar\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s*;/,
     )
+  })
+
+  test("bottom mode, expert-squad, and model dropdowns keep a visible default boundary", () => {
+    expect(COMPOSER).toMatch(
+      /\.composer-mode-select-wrap,\s*\.expert-squad-select-wrap,\s*\.composer-model-selector\s*\{[\s\S]*?background:\s*color-mix\(in srgb,\s*var\(--surface-inset\) 26%, transparent\);/,
+    )
+    expect(COMPOSER).toMatch(
+      /\.composer-mode-select-wrap,\s*\.expert-squad-select-wrap,\s*\.composer-model-selector\s*\{[\s\S]*?box-shadow:\s*inset 0 0 0 var\(--oc-border-width\) color-mix\(in srgb,\s*var\(--border\) 46%, transparent\);/,
+    )
+    expect(COMPOSER).toMatch(
+      /\.composer-mode-select-value,\s*\.expert-squad-select-value,\s*\.composer-model-selector-value\s*\{[\s\S]*?color:\s*var\(--text-strong\);/,
+    )
+  })
+
+  test("bottom dropdown triggers render as short buttons without visible arrows", () => {
+    expect(COMPOSER).toMatch(
+      /\.composer-mode-select-wrap,\s*\.expert-squad-select-wrap,\s*\.composer-model-selector\s*\{[\s\S]*?max-width:\s*calc\(188px \* var\(--ui-scale\)\);/,
+    )
+    expect(COMPOSER).toMatch(
+      /\.composer-mode-select-trigger\.oc-select-trigger,\s*\.expert-squad-select-trigger\.oc-select-trigger,\s*\.composer-model-selector \.oc-button\[data-ui="composer-model-selector-trigger"\]\s*\{[\s\S]*?width:\s*auto;/,
+    )
+    expect(COMPOSER).toMatch(
+      /\.composer-mode-select-trigger\.oc-select-trigger,\s*\.expert-squad-select-trigger\.oc-select-trigger,\s*\.composer-model-selector \.oc-button\[data-ui="composer-model-selector-trigger"\]\s*\{[\s\S]*?justify-content:\s*center;/,
+    )
+    expect(COMPOSER).toMatch(/\.composer-mode-select-caret,\s*\.expert-squad-select-caret\s*\{[\s\S]*?display:\s*none;/)
+    expect(COMPOSER).toContain(".composer-model-selector-popover")
   })
 })
 

@@ -1,5 +1,5 @@
 :root {
-  /* Radius scale — 4 tokens, single source. Any value outside this set is
+  /* Radius scale — 5 tokens, single source. Any value outside this set is
    * rejected by `radius-token-coverage.test.ts`. The legacy
    * `--oc-radius-panel`, `--oc-radius-card`, `--oc-radius-control`,
    * `--radius`, `--radius-lg`, `--panel-radius`, `--card-radius`,
@@ -10,6 +10,7 @@
   --oc-radius-none: 0;
   --oc-radius-soft: calc(4px * var(--ui-scale, 1));
   --oc-radius-large: calc(8px * var(--ui-scale, 1));
+  --oc-radius-xl: calc(24px * var(--ui-scale, 1));
   --oc-radius-pill: 999px;
 
   /* Font-weight scale — 3 tokens, single source.

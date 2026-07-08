@@ -857,6 +857,8 @@ export const TaskBoardGoalStepPayload = z.object({
       summary: z.string().optional(),
       error: z.string().optional(),
       noDiffReason: z.string().optional(),
+      evidenceContractStatus: z.enum(["satisfied", "unsatisfied", "failed"]).optional(),
+      deliveryEvidenceRefs: z.array(z.string()).optional(),
       changedFiles: z.array(z.string()),
       commitRef: z.string().optional(),
       publishedCommitRef: z.string().optional(),

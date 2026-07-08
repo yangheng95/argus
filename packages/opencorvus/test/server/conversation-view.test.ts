@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
 import {
   conversationMessageHasDisplay,
   projectConversationAgentView,
@@ -482,6 +483,62 @@ test("projectConversationAgentView applies latest ledger status without replay e
       lastObservedAt: 1_776_000_011_000,
     }),
   ])
+})
+
+test("projectConversationAgentView exposes session status summaries as display summaries", () => {
+  const view = projectConversationAgentView(
+    {},
+    [],
+    [
+      {
+        type: "session.status",
+        emittedAt: 1_776_000_012_000,
+        payload: {
+          sessionID: "ses_visual_qa",
+          channel: "visual-qa",
+          parentSessionID: "ses_orchestrator",
+          status: {
+            type: "terminal",
+            reason: "completed",
+            summary: "Visual QA confirmed the rail hover and stack behavior.",
+          },
+        },
+      },
+    ],
+    [
+      {
+        sessionID: "ses_visual_qa",
+        stage: "visual-qa",
+        parentSessionID: "ses_orchestrator",
+        timeCreated: 1_776_000_009_000,
+        timeUpdated: 1_776_000_009_500,
+        orderKey: sessionOrderKey("ses_visual_qa", 1_776_000_009_000),
+        latestStatus: {
+          type: "terminal",
+          reason: "completed",
+          summary: "Ledger summary before replay.",
+        },
+        latestStatusEmittedAt: 1_776_000_011_000,
+      },
+    ],
+  )
+
+  expect(view.sessions).toEqual([
+    expect.objectContaining({
+      sessionID: "ses_visual_qa",
+      status: "completed",
+      displaySummary: {
+        text: "Visual QA confirmed the rail hover and stack behavior.",
+        source: "session_status",
+      },
+    }),
+  ])
+})
+
+test("conversation agent ledger SQL projects durable session status summaries", () => {
+  const source = readFileSync(new URL("../../src/orchestrator/task-event.ts", import.meta.url), "utf8")
+  expect(source).toContain("json_extract(pe.payload, '$.status.summary') AS statusSummary")
+  expect(source).toContain("...(row.statusSummary ? { summary: row.statusSummary } : {})")
 })
 
 test("projectConversationAgentView ignores orphan lifecycle status as rail existence", () => {

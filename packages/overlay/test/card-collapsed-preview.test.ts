@@ -16,6 +16,14 @@ function resetStore() {
   ;(cardTreeStore as any).order = []
 }
 
+function orderKey(domain: string, time: number, id: string): string {
+  return `v1:${String(time).padStart(16, "0")}:0000000000000000:0000000000000000:${domain}:${id}`
+}
+
+function partOrderKey(id: string, time: number): string {
+  return orderKey("part", time, id)
+}
+
 beforeEach(() => {
   resetStore()
 })
@@ -33,9 +41,9 @@ describe("collectLatestActivityText", () => {
       title: "x",
       time: 100,
       parts: [
-        { type: "text", text: "first" },
-        { type: "reasoning", text: "thinking" },
-        { type: "text", text: "newest" },
+        { type: "text", orderKey: partOrderKey("first", 100), text: "first" },
+        { type: "reasoning", orderKey: partOrderKey("thinking", 100), text: "thinking" },
+        { type: "text", orderKey: partOrderKey("newest", 100), text: "newest" },
       ],
     }
     expect(collectLatestActivityText(node)).toBe("newest")
@@ -47,20 +55,20 @@ describe("collectLatestActivityText", () => {
       kind: "phase",
       title: "c",
       time: 200,
-      parts: [{ type: "text", text: "child-newest" }],
+      parts: [{ type: "text", orderKey: partOrderKey("child-newest", 200), text: "child-newest" }],
     }
     const node: any = {
       id: "a",
       kind: "agent",
       title: "x",
       time: 100,
-      parts: [{ type: "text", text: "parent-old" }],
+      parts: [{ type: "text", orderKey: partOrderKey("parent-old", 100), text: "parent-old" }],
       childIDs: ["child"],
     }
     expect(collectLatestActivityText(node)).toBe("child-newest")
   })
 
-  test("falls back to goalDescription on empty step card", () => {
+  test("empty step card does not use static goalDescription as latest activity", () => {
     const node: any = {
       id: "s",
       kind: "step",
@@ -69,7 +77,7 @@ describe("collectLatestActivityText", () => {
       parts: [],
       goalDescription: "Build the thing",
     }
-    expect(collectLatestActivityText(node)).toBe("Build the thing")
+    expect(collectLatestActivityText(node)).toBe("")
   })
 
   test("preserves newlines in multi-line text", () => {
@@ -78,7 +86,7 @@ describe("collectLatestActivityText", () => {
       kind: "agent",
       title: "x",
       time: 1,
-      parts: [{ type: "text", text: "line one\nline two\nline three" }],
+      parts: [{ type: "text", orderKey: partOrderKey("multi-line", 1), text: "line one\nline two\nline three" }],
     }
     const out = collectLatestActivityText(node)
     expect(out.split("\n")).toEqual(["line one", "line two", "line three"])
@@ -91,8 +99,13 @@ describe("collectLatestActivityText", () => {
       title: "x",
       time: 1,
       parts: [
-        { type: "text", text: "hello" },
-        { type: "tool", tool: "bash", state: { input: { command: "ls -la" }, output: "" } },
+        { type: "text", orderKey: partOrderKey("hello", 1), text: "hello" },
+        {
+          type: "tool",
+          orderKey: partOrderKey("bash", 2),
+          tool: "bash",
+          state: { input: { command: "ls -la" }, output: "" },
+        },
       ],
     }
     const out = collectLatestActivityText(node)
@@ -109,6 +122,7 @@ describe("collectLatestActivityText", () => {
       parts: [],
       toolPart: {
         type: "tool",
+        orderKey: partOrderKey("read", 200),
         tool: "read",
         state: { input: { file_path: "/a/b/c.ts" } },
       },
@@ -118,7 +132,7 @@ describe("collectLatestActivityText", () => {
       kind: "agent",
       title: "x",
       time: 100,
-      parts: [{ type: "text", text: "old" }],
+      parts: [{ type: "text", orderKey: partOrderKey("old", 100), text: "old" }],
       childIDs: ["child"],
     }
     const out = collectLatestActivityText(node)
@@ -133,7 +147,7 @@ describe("collectLatestActivityText", () => {
       title: "x",
       time: 1,
       parts: [
-        { type: "text", text: "hello" },
+        { type: "text", orderKey: partOrderKey("hello-todo", 1), text: "hello" },
         { type: "tool", tool: "TodoWrite", state: { input: { todos: [{ content: "x", status: "pending" }] } } },
       ],
     }
@@ -147,7 +161,7 @@ describe("collectLatestActivityText", () => {
       title: "x",
       time: 1,
       parts: [
-        { type: "text", text: "actual prose" },
+        { type: "text", orderKey: partOrderKey("actual-prose", 1), text: "actual prose" },
         {
           type: "tool",
           tool: "StructuredOutput",
@@ -155,12 +169,12 @@ describe("collectLatestActivityText", () => {
         },
       ],
     }
-    // Without suppression operators see "⚡ StructuredOutput: Structured Output"
+    // Without suppression operators see "StructuredOutput: Structured Output"
     // — the tool name echoed as its own detail. Suppressed alongside Todo tools.
     expect(collectLatestActivityText(node)).toBe("actual prose")
   })
 
-  test("step cards prefer text over tool calls (operator wants goal context, not bash)", () => {
+  test("step cards use the latest tool call when it is newest activity", () => {
     const node: any = {
       id: "g2",
       kind: "step",
@@ -168,28 +182,27 @@ describe("collectLatestActivityText", () => {
       time: 1,
       goalDescription: "Implement /api/data",
       parts: [
-        { type: "reasoning", text: "planning the api shape" },
-        { type: "tool", tool: "bash", state: { input: { command: "rg --files" } } },
+        { type: "reasoning", orderKey: partOrderKey("planning", 1), text: "planning the api shape" },
+        { type: "tool", orderKey: partOrderKey("rg", 2), tool: "bash", state: { input: { command: "rg --files" } } },
       ],
     }
-    // Tool calls inside step subtrees are visible in the expanded body.
-    // The collapsed preview should answer "what is this goal trying to do",
-    // never "Bash: rg --files".
     const out = collectLatestActivityText(node)
-    expect(out).toBe("planning the api shape")
-    expect(out).not.toContain("rg --files")
+    expect(out).toContain("bash")
+    expect(out).toContain("rg --files")
   })
 
-  test("step cards with no text fall back to goalDescription (not tool command)", () => {
+  test("step cards with no text still show the latest tool call", () => {
     const node: any = {
       id: "g2",
       kind: "step",
       title: "Goal 2",
       time: 1,
       goalDescription: "Implement /api/data",
-      parts: [{ type: "tool", tool: "bash", state: { input: { command: "rg --files" } } }],
+      parts: [{ type: "tool", orderKey: partOrderKey("rg-only", 1), tool: "bash", state: { input: { command: "rg --files" } } }],
     }
-    expect(collectLatestActivityText(node)).toBe("Implement /api/data")
+    const out = collectLatestActivityText(node)
+    expect(out).toContain("bash")
+    expect(out).toContain("rg --files")
   })
 })
 
@@ -310,6 +323,7 @@ describe("collectTodoSummary", () => {
       parts: [
         {
           type: "tool",
+          orderKey: partOrderKey("todo-write", 1),
           tool: "TodoWrite",
           state: {
             input: {
@@ -341,6 +355,7 @@ describe("collectTodoSummary", () => {
       parts: [
         {
           type: "tool",
+          orderKey: partOrderKey("todo-new", 200),
           tool: "todowrite",
           state: { input: { todos: [{ content: "old1", status: "pending" }] } },
         },
@@ -383,6 +398,7 @@ describe("collectTodoSummary", () => {
       parts: [
         {
           type: "tool",
+          orderKey: partOrderKey("todo-completed", 1),
           tool: "TodoWrite",
           state: {
             input: {
@@ -416,12 +432,12 @@ describe("collectTodoSummary", () => {
       title: "x",
       time: 100,
       parts: [
-        { type: "text", text: "hi" },
-        { type: "reasoning", text: "thinking" },
-        { type: "tool", tool: "Read", state: { input: { file_path: "a" } } },
-        { type: "tool", tool: "Task", state: { input: {} } },
-        { type: "tool", tool: "Skill", state: { input: { skill: "x" } } },
-        { type: "tool", tool: "Bash", state: { input: { command: "echo hi" } } },
+        { type: "text", orderKey: partOrderKey("hi", 1), text: "hi" },
+        { type: "reasoning", orderKey: partOrderKey("thinking-count", 2), text: "thinking" },
+        { type: "tool", orderKey: partOrderKey("read-count", 3), tool: "Read", state: { input: { file_path: "a" } } },
+        { type: "tool", orderKey: partOrderKey("task-count", 4), tool: "Task", state: { input: {} } },
+        { type: "tool", orderKey: partOrderKey("skill-count", 5), tool: "Skill", state: { input: { skill: "x" } } },
+        { type: "tool", orderKey: partOrderKey("bash-count", 6), tool: "Bash", state: { input: { command: "echo hi" } } },
       ],
       childIDs: ["c1"],
     }
@@ -441,6 +457,7 @@ describe("collectTodoSummary", () => {
       parts: [
         {
           type: "tool",
+          orderKey: partOrderKey("todo-read-output", 1),
           tool: "todoread",
           state: {
             output: JSON.stringify([
@@ -466,6 +483,7 @@ describe("collectTodoSummary", () => {
       parts: [
         {
           type: "tool",
+          orderKey: partOrderKey("todo-metadata", 1),
           tool: "TodoWrite",
           state: {
             input: {

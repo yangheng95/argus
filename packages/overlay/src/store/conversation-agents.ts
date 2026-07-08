@@ -22,6 +22,10 @@ export interface ConversationAgentSessionView {
   firstObservedAt?: number
   lastObservedAt?: number
   status?: AgentWorkflowStatus
+  displaySummary?: {
+    text: string
+    source: "session_status"
+  }
   placement?: "top_level" | "goal_phase" | "hidden" | "filtered" | string
   phase?: {
     stepID: string
@@ -179,6 +183,7 @@ function agentRecordFromSession(session: ConversationAgentSessionView): AgentWor
   const targetObservedAt = targetMessageID ? Math.max(0, Number(session?.lastMessageTime ?? 0)) : 0
   const lastObservedAt = Math.max(startedAt, Number(session?.lastObservedAt ?? session?.lastMessageTime ?? 0))
   const status = session.status || "pending"
+  const displaySummaryText = String(session?.displaySummary?.text || "").trim()
   const terminal = status === "completed" || status === "error" || status === "skipped"
   return {
     id: sessionID,
@@ -200,6 +205,7 @@ function agentRecordFromSession(session: ConversationAgentSessionView): AgentWor
     goalID: session?.goalID,
     stepID: session?.phase?.stepID,
     phaseID: session?.phase?.phaseID,
+    ...(displaySummaryText ? { displaySummary: { text: displaySummaryText, source: "session_status" } } : {}),
     ...(target ? { ...target } : {}),
   }
 }
@@ -890,6 +896,11 @@ function liveAgentStatusFromSessionStatus(status: any): AgentWorkflowStatus {
   throw new Error(`conversation agent live view unknown session.status: ${JSON.stringify(status)}`)
 }
 
+function liveDisplaySummaryFromSessionStatus(status: any): AgentWorkflowRecord["displaySummary"] | undefined {
+  const summary = typeof status?.summary === "string" ? status.summary.trim() : ""
+  return summary ? { text: summary, source: "session_status" } : undefined
+}
+
 function liveSessionRecordTarget(
   rawStage: string,
   goalID: string,
@@ -909,6 +920,7 @@ export function applyLiveConversationAgentSessionStatus(sourceKeyInput: string, 
   if (!rawStage) return
   const stage = normalizeAgentRole(rawStage)
   const status = liveAgentStatusFromSessionStatus(properties?.status)
+  const displaySummary = liveDisplaySummaryFromSessionStatus(properties?.status)
   const observedAt = liveEventObservedAt(event)
   const orderKey = requireTimelineOrderKeyDomain(event?.orderKey, `conversation agent live session ${sessionID}`, "session")
   if (!(observedAt > 0)) {
@@ -938,6 +950,7 @@ export function applyLiveConversationAgentSessionStatus(sourceKeyInput: string, 
       depth: 0,
       targetMessageID: "",
       goalID: goalID || undefined,
+      ...(displaySummary ? { displaySummary } : {}),
       ...(target ? { ...target } : {}),
     }
     const pendingTarget = pendingTargetsForSource(sourceKey).get(sessionID)
@@ -963,6 +976,7 @@ export function applyLiveConversationAgentSessionStatus(sourceKeyInput: string, 
       lastObservedAt: Math.max(existing.lastObservedAt, observedAt),
       ...(terminal ? { completedAt: Math.max(existing.completedAt || 0, observedAt) } : {}),
       goalID: goalID || undefined,
+      displaySummary: displaySummary || existing.displaySummary,
     }
     nextRecords[index] = target
       ? mergeTargetIntoRecord(updated, {

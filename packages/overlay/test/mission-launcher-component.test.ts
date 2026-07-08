@@ -32,6 +32,8 @@ test("composer exposes a Kobalte-backed Mission/Chat mode selector and removes e
   expect(CHAT_COMPOSER).toContain("export type ComposerMode = \"mission\" | \"chat\"")
   expect(CHAT_COMPOSER).toContain("<SelectControl<ComposerModeOption>")
   expect(CHAT_COMPOSER).toContain('triggerDataUI="composer-mode-selector"')
+  expect(CHAT_COMPOSER).toContain('import { ComposerModelSelector } from "./ExecutorSelector"')
+  expect(CHAT_COMPOSER).toContain("<ComposerModelSelector />")
   expect(CHAT_COMPOSER).toContain('onComposerModeChange: (mode: ComposerMode) => void')
   expect(CHAT_COMPOSER).not.toContain("<ExecutorSelector")
   expect(CHAT_COMPOSER).not.toContain('import { ExecutorSelector }')
@@ -47,7 +49,7 @@ test("New Task launcher is retired; Mission-owned tasks are selected from Work L
   expect(MAIN_TSX).toContain("await selectTask(row.id, { directory: row.directory })")
   expect(WORK_LEDGER).toContain('data-ui="work-ledger-child-task"')
   expect(WORK_LEDGER).toContain("WorkLedgerTaskChildRow")
-  expect(WORK_LEDGER).toContain("props.onSelect(props.task)")
+  expect(WORK_LEDGER).toContain("onSelect={props.onSelect}")
   expect(WORK_LEDGER_CSS).toContain(".work-row-child-list")
 })
 

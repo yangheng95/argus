@@ -36,6 +36,7 @@ describe("conversation rendering i18n", () => {
     expect(agentRail).toContain('aria-label={t("agent_rail.workflow_label")}')
     expect(agentRail).toContain("AGENT_RAIL_STATUS_LABELS")
     expect(agentRail).toContain('t("agent_rail.status.running")')
+    expect(agentRail).toContain('t("agent_rail.detail.summary"')
     expect(agentRail).not.toContain('aria-label="Agent workflow"')
 
     expect(toolCardNode).toContain('"tool.card.todos"')
@@ -52,6 +53,7 @@ describe("conversation rendering i18n", () => {
       expect(locale).toContain('"tool.browser_observation_alt_with_label"')
       expect(locale).toContain('"agent_rail.workflow_label"')
       expect(locale).toContain('"agent_rail.status.running"')
+      expect(locale).toContain('"agent_rail.detail.summary"')
       expect(locale).toContain('"tool.card.todos"')
       expect(locale).toContain('"tool.card.plan"')
       expect(locale).toContain('"chat.part_error_title"')

@@ -404,6 +404,12 @@ body {
   line-height: 1;
 }
 
+.card__icon > svg {
+  width: calc(14px * var(--ui-scale));
+  height: calc(14px * var(--ui-scale));
+  display: block;
+}
+
 .card__round {
   font-variant-numeric: tabular-nums;
   font-size: var(--card-meta-size);
@@ -1231,7 +1237,7 @@ body {
   padding: 0;
 }
 
-/* ── AgentTrace surface (per-session 🔍 button + inline TracePanel) ── */
+/* ── AgentTrace surface (per-session inspect button + inline TracePanel) ── */
 
 /* Inline reply box at the END of agent session card body. Renders via
    <AgentSessionReplyBox/> in Card.tsx; spans full width of the card body. */

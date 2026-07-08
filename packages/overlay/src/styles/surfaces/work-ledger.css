@@ -21,8 +21,31 @@
 
 .work-row {
   --task-row-actions-width: calc(48px * var(--ui-scale));
+  --work-row-action-size: calc(22px * var(--ui-scale));
+  --work-row-action-gap: calc(4px * var(--ui-scale));
+  --work-row-action-rail-pad: calc(4px * var(--ui-scale));
 
-  min-height: calc(30px * var(--ui-scale));
+  min-height: calc(32px * var(--ui-scale));
+}
+
+.work-row[data-action-count="1"] {
+  --task-row-actions-width: calc(30px * var(--ui-scale));
+}
+
+.work-row[data-action-count="2"] {
+  --task-row-actions-width: calc(56px * var(--ui-scale));
+}
+
+.work-row[data-action-count="3"] {
+  --task-row-actions-width: calc(82px * var(--ui-scale));
+}
+
+.work-row[data-action-count="4"] {
+  --task-row-actions-width: calc(108px * var(--ui-scale));
+}
+
+.work-row[data-action-count="5"] {
+  --task-row-actions-width: calc(134px * var(--ui-scale));
 }
 
 .work-row-kind-mark {
@@ -61,7 +84,7 @@
   min-width: 0;
   max-width: 100%;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: calc(6px * var(--ui-scale));
   overflow: hidden;
   white-space: nowrap;
@@ -74,6 +97,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: calc(20px * var(--ui-scale));
 }
 
 .work-row-inline-meta {
@@ -88,7 +112,59 @@
 }
 
 .work-row-right {
+  min-height: calc(24px * var(--ui-scale));
+  align-items: center;
   gap: calc(6px * var(--ui-scale));
+}
+
+.work-row:hover .work-row-right,
+.work-row[data-actions-keyboard-open="true"] .work-row-right {
+  gap: 0;
+}
+
+.work-row .task-row-actions.work-row-actions {
+  position: static;
+  top: auto;
+  right: auto;
+  z-index: var(--ui-z-raised);
+  box-sizing: border-box;
+  width: 0;
+  height: calc(24px * var(--ui-scale));
+  flex: 0 0 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--work-row-action-gap);
+  padding: 0;
+  overflow: hidden;
+  transform: none;
+}
+
+.work-row:hover .task-row-actions.work-row-actions,
+.work-row[data-actions-keyboard-open="true"] .task-row-actions.work-row-actions {
+  width: var(--task-row-actions-width);
+  flex-basis: var(--task-row-actions-width);
+  padding: 0 var(--work-row-action-rail-pad);
+}
+
+.work-row:hover .work-row-status-mark,
+.work-row[data-actions-keyboard-open="true"] .work-row-status-mark,
+.work-row:hover .work-row-stamp,
+.work-row[data-actions-keyboard-open="true"] .work-row-stamp {
+  width: 0;
+  flex: 0 0 0;
+  max-width: 0;
+  margin: 0;
+  padding-right: 0;
+  padding-left: 0;
+  opacity: var(--ui-opacity-hidden);
+  pointer-events: none;
+}
+
+.work-row:hover .work-row-inline-meta,
+.work-row[data-actions-keyboard-open="true"] .work-row-inline-meta {
+  width: 0;
+  max-width: 0;
+  opacity: var(--ui-opacity-hidden);
 }
 
 .work-row-status-mark {
@@ -106,6 +182,13 @@
   color: var(--text-muted);
   background: var(--surface-hover);
   font-size: var(--ui-font-meta);
+  line-height: calc(20px * var(--ui-scale));
+}
+
+.work-row-stamp {
+  display: inline-flex;
+  height: calc(20px * var(--ui-scale));
+  align-items: center;
   line-height: calc(20px * var(--ui-scale));
 }
 
@@ -134,21 +217,18 @@
   list-style: none;
 }
 
-.work-row-child-main {
-  width: 100%;
-  min-width: 0;
-  justify-content: flex-start;
-  gap: calc(6px * var(--ui-scale));
-  padding-right: calc(8px * var(--ui-scale));
-}
-
-.work-row-child-main .work-row-status-mark {
-  margin-left: auto;
+.work-row-child .work-row {
+  min-height: calc(28px * var(--ui-scale));
 }
 
 .work-row-actions .oc-button[data-chrome="icon-action"][data-ui="work-row-stop"],
-.work-row-actions .oc-button[data-chrome="icon-action"][data-ui="work-row-delete"] {
-  --oc-button-height: calc(20px * var(--ui-scale));
+.work-row-actions .oc-button[data-chrome="icon-action"][data-ui="work-row-delete"],
+.work-row-actions .oc-button[data-chrome="icon-action"][data-ui="task-row-start-now"],
+.work-row-actions .oc-button[data-chrome="icon-action"][data-ui="task-row-cancel"],
+.work-row-actions .oc-button[data-chrome="icon-action"][data-ui="task-row-download"],
+.work-row-actions .oc-button[data-chrome="icon-action"][data-ui="task-row-rename"],
+.work-row-actions .oc-button[data-chrome="icon-action"][data-ui="task-row-delete"] {
+  --oc-button-height: var(--work-row-action-size);
   --oc-button-padding-x: 0;
   --oc-button-border: 0 solid transparent;
   --oc-button-bg: transparent;
@@ -156,10 +236,10 @@
   --oc-button-shadow: none;
 
   position: static;
-  width: calc(20px * var(--ui-scale));
-  height: calc(20px * var(--ui-scale));
-  min-width: calc(20px * var(--ui-scale));
-  min-height: calc(20px * var(--ui-scale));
+  width: var(--work-row-action-size);
+  height: var(--work-row-action-size);
+  min-width: var(--work-row-action-size);
+  min-height: var(--work-row-action-size);
   border-radius: var(--oc-radius-soft);
   opacity: var(--ui-opacity-hidden);
   pointer-events: none;
@@ -171,27 +251,50 @@
 }
 
 .work-row-actions .oc-button[data-ui="work-row-stop"] svg,
-.work-row-actions .oc-button[data-ui="work-row-delete"] svg {
+.work-row-actions .oc-button[data-ui="work-row-delete"] svg,
+.work-row-actions .oc-button[data-ui="task-row-start-now"] svg,
+.work-row-actions .oc-button[data-ui="task-row-cancel"] svg,
+.work-row-actions .oc-button[data-ui="task-row-download"] svg,
+.work-row-actions .oc-button[data-ui="task-row-rename"] svg,
+.work-row-actions .oc-button[data-ui="task-row-delete"] svg {
   width: calc(12px * var(--ui-scale));
   height: calc(12px * var(--ui-scale));
   stroke-width: 1.85;
 }
 
+.work-row-actions .oc-button[data-ui="work-row-stop"] svg,
+.work-row-actions .oc-button[data-ui="task-row-cancel"] svg {
+  width: calc(9px * var(--ui-scale));
+  height: calc(9px * var(--ui-scale));
+}
+
 .work-row:hover .work-row-actions .oc-button[data-ui="work-row-stop"],
 .work-row[data-actions-keyboard-open="true"] .work-row-actions .oc-button[data-ui="work-row-stop"],
 .work-row:hover .work-row-actions .oc-button[data-ui="work-row-delete"],
-.work-row[data-actions-keyboard-open="true"] .work-row-actions .oc-button[data-ui="work-row-delete"] {
+.work-row[data-actions-keyboard-open="true"] .work-row-actions .oc-button[data-ui="work-row-delete"],
+.work-row:hover .work-row-actions .oc-button[data-ui="task-row-start-now"],
+.work-row[data-actions-keyboard-open="true"] .work-row-actions .oc-button[data-ui="task-row-start-now"],
+.work-row:hover .work-row-actions .oc-button[data-ui="task-row-cancel"],
+.work-row[data-actions-keyboard-open="true"] .work-row-actions .oc-button[data-ui="task-row-cancel"],
+.work-row:hover .work-row-actions .oc-button[data-ui="task-row-download"],
+.work-row[data-actions-keyboard-open="true"] .work-row-actions .oc-button[data-ui="task-row-download"],
+.work-row:hover .work-row-actions .oc-button[data-ui="task-row-rename"],
+.work-row[data-actions-keyboard-open="true"] .work-row-actions .oc-button[data-ui="task-row-rename"],
+.work-row:hover .work-row-actions .oc-button[data-ui="task-row-delete"],
+.work-row[data-actions-keyboard-open="true"] .work-row-actions .oc-button[data-ui="task-row-delete"] {
   opacity: var(--ui-opacity-full);
   pointer-events: auto;
 }
 
-.work-row-actions .oc-button[data-ui="work-row-stop"]:hover {
+.work-row-actions .oc-button[data-ui="work-row-stop"]:hover,
+.work-row-actions .oc-button[data-ui="task-row-cancel"]:hover {
   opacity: var(--ui-opacity-full);
   --oc-button-bg: color-mix(in srgb, var(--warn) 9%, transparent);
   --oc-button-color: var(--warn);
 }
 
-.work-row-actions .oc-button[data-ui="work-row-stop"]:focus-visible {
+.work-row-actions .oc-button[data-ui="work-row-stop"]:focus-visible,
+.work-row-actions .oc-button[data-ui="task-row-cancel"]:focus-visible {
   opacity: var(--ui-opacity-full);
   --oc-button-bg: color-mix(in srgb, var(--warn) 9%, transparent);
   --oc-button-color: var(--warn);
@@ -199,13 +302,15 @@
   outline-offset: calc(1px * var(--ui-scale));
 }
 
-.work-row-actions .oc-button[data-ui="work-row-delete"]:hover {
+.work-row-actions .oc-button[data-ui="work-row-delete"]:hover,
+.work-row-actions .oc-button[data-ui="task-row-delete"]:hover {
   opacity: var(--ui-opacity-full);
   --oc-button-bg: color-mix(in srgb, var(--bad) 9%, transparent);
   --oc-button-color: var(--bad);
 }
 
-.work-row-actions .oc-button[data-ui="work-row-delete"]:focus-visible {
+.work-row-actions .oc-button[data-ui="work-row-delete"]:focus-visible,
+.work-row-actions .oc-button[data-ui="task-row-delete"]:focus-visible {
   opacity: var(--ui-opacity-full);
   --oc-button-bg: color-mix(in srgb, var(--bad) 9%, transparent);
   --oc-button-color: var(--bad);
@@ -213,7 +318,8 @@
   outline-offset: calc(1px * var(--ui-scale));
 }
 
-.work-row-actions .oc-button[data-ui="work-row-delete"][data-confirm="true"] {
+.work-row-actions .oc-button[data-ui="work-row-delete"][data-confirm="true"],
+.work-row-actions .oc-button[data-ui="task-row-delete"][data-confirm="true"] {
   opacity: var(--ui-opacity-full);
   --oc-button-bg: color-mix(in srgb, var(--bad) 13%, transparent);
   --oc-button-color: var(--bad);

@@ -758,6 +758,199 @@ export function ExecutorSelector() {
   )
 }
 
+export function ComposerModelSelector() {
+  const disclosure = useDisclosure()
+  const [slotRef, setSlotRef] = createSignal<HTMLElement>()
+  const [providerLoading, setProviderLoading] = createSignal(false)
+  const taskID = createMemo(() => activeTaskID().trim())
+
+  const taskOperatorContextKey = createMemo((): string | null => {
+    if (!appStore.connected) return null
+    const id = taskID()
+    if (!id) return null
+    const directory = activeDirectory().trim()
+    if (!directory) return null
+    return encodeTaskOperatorContextKey({ taskID: id, directory, refresh: sessionConfigRefreshToken() })
+  })
+  const [taskOperatorContext, { mutate: mutateTaskOperatorContext, refetch: refetchTaskOperatorContext }] =
+    createResource(taskOperatorContextKey, async (key): Promise<TaskOperatorModelContext> => {
+      const input = parseTaskOperatorContextKey(key)
+      return await getTaskOperatorModelContext({ taskID: input.taskID, directory: input.directory })
+    })
+
+  const currentTaskOperatorContext = createMemo(() => {
+    if (taskOperatorContext.error) return null
+    const ctx = taskOperatorContext()
+    if (!ctx) return null
+    if (ctx.taskID !== taskID()) return null
+    return ctx
+  })
+
+  const selectedModel = createMemo(() => {
+    if (hasSelectedTask()) return modelContextID(currentTaskOperatorContext())
+    return projectModelFromConfig()
+  })
+  const modelPlaceholder = createMemo(() => {
+    if (!hasSelectedTask()) return t("agent_models.option_not_set")
+    if (taskOperatorContext.error) return t("common.error")
+    if (taskOperatorContext.loading) return t("common.loading")
+    return t("agent_models.option_not_set")
+  })
+  const modelLabel = createMemo(() => selectedModel() || modelPlaceholder())
+  const groups = createMemo(mirrorProviderGroups)
+  const contextError = createMemo(() => (hasSelectedTask() ? taskOperatorContext.error : null))
+  const contextLoading = createMemo(() => hasSelectedTask() && taskOperatorContext.loading && !contextError())
+  const writeDisabled = createMemo(() => hasSelectedTask() && !currentTaskOperatorContext()?.sessionID)
+
+  async function ensureProviderInfoLoaded(): Promise<void> {
+    if (providerLoading()) return
+    if (appStore.providerCatalog) return
+    setProviderLoading(true)
+    try {
+      await loadProviderInfo(undefined, {
+        directory: activeDirectory().trim(),
+        isCurrentDirectory: (directory) => activeDirectory().trim() === directory,
+      })
+    } finally {
+      setProviderLoading(false)
+    }
+  }
+
+  function open() {
+    runExecutorSelectorAction("composer-provider-info", ensureProviderInfoLoaded)
+    disclosure.openIt()
+  }
+
+  async function pickModel(value: string) {
+    if (value === selectedModel()) {
+      disclosure.close()
+      return
+    }
+    if (hasSelectedTask()) {
+      const ctx = currentTaskOperatorContext()
+      if (!ctx?.agent || !ctx.sessionID) {
+        disclosure.close()
+        return
+      }
+      const directory = activeDirectory().trim()
+      if (!directory) {
+        disclosure.close()
+        return
+      }
+      await patchSessionConfig({
+        sessionID: ctx.sessionID,
+        directory,
+        diff: {
+          agent: {
+            [ctx.agent]: {
+              model: value ? value : null,
+            },
+          },
+        },
+      })
+      if (value) {
+        const slash = value.indexOf("/")
+        if (slash > 0) {
+          mutateTaskOperatorContext({
+            ...ctx,
+            model: {
+              providerID: value.slice(0, slash),
+              modelID: value.slice(slash + 1),
+            },
+          })
+        }
+      }
+      disclosure.close()
+      return
+    }
+    await patchConfig({ model: value ? value : null }, currentProjectConfigRequestOptions())
+    disclosure.close()
+  }
+
+  function retryTaskOperatorContext() {
+    runExecutorSelectorAction("composer-task-operator-context", () =>
+      Promise.resolve(refetchTaskOperatorContext()).then(() => undefined),
+    )
+  }
+
+  return (
+    <Popover.Root
+      open={disclosure.open()}
+      onOpenChange={(openState) => {
+        if (openState) {
+          open()
+          return
+        }
+        disclosure.close()
+      }}
+      anchorRef={slotRef}
+      placement="top-start"
+      gutter={6}
+      slide={false}
+    >
+      <div ref={setSlotRef} class="composer-model-selector" data-ui="composer-model-selector">
+        <Popover.Trigger
+          as={Button}
+          type="button"
+          variant="outline"
+          size="sm"
+          tone="neutral"
+          data-ui="composer-model-selector-trigger"
+          title={t("executor.mirror_chip_title", { model: modelLabel() })}
+          aria-label={t("executor.mirror_chip_aria", { model: modelLabel() })}
+        >
+          <span class="composer-model-selector-value" title={modelLabel()}>
+            {modelLabel()}
+          </span>
+        </Popover.Trigger>
+      </div>
+      <Popover.Portal>
+        <Popover.Content class="executor-popover composer-model-selector-popover" data-section="mirror">
+          <div class="executor-popover-header">
+            <span class="executor-popover-title">{t("executor.mirror_popover_title")}</span>
+            <span class="executor-popover-hint">{t("executor.mirror_popover_hint")}</span>
+          </div>
+          <Show
+            when={groups().length > 0}
+            fallback={
+              <div class="executor-popover-empty">
+                {providerLoading() ? t("common.loading") : t("executor.mirror_no_connected_providers")}
+              </div>
+            }
+          >
+            <Show when={!contextLoading()} fallback={<div class="executor-popover-empty">{t("common.loading")}</div>}>
+              <Show
+                when={!contextError()}
+                fallback={
+                  <div class="executor-popover-empty executor-popover-error" data-ui="composer-model-context-error">
+                    <span>{errorMessage(contextError()) || t("common.error")}</span>
+                    <Button type="button" variant="outline" size="mini" tone="neutral" onClick={retryTaskOperatorContext}>
+                      {t("common.retry")}
+                    </Button>
+                  </div>
+                }
+              >
+                <div class="executor-popover-body">
+                  <For each={groups()}>
+                    {(group) => (
+                      <ProviderModelGroup
+                        group={group}
+                        currentModel={selectedModel()}
+                        disabled={writeDisabled()}
+                        onPick={pickModel}
+                      />
+                    )}
+                  </For>
+                </div>
+              </Show>
+            </Show>
+          </Show>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  )
+}
+
 interface ExecutorChipProps {
   side: "mirror" | "external"
   disclosure: Disclosure

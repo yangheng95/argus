@@ -95,6 +95,7 @@ test("index.html declares the unified Work Ledger left panel and task-scope work
   expect(html).toContain('id="leftPanelWork"')
   expect(html).toContain('id="workLedgerPanel"')
   expect(html).toContain('data-i18n="work_ledger.title"')
+  expect(html).toContain('id="solidLeftPanelActions"')
   expect(html).not.toContain('id="leftPanelTasks"')
   expect(html).not.toContain('id="leftPanelMissions"')
   expect(html).not.toContain('id="leftPanelAssistant"')
@@ -497,6 +498,7 @@ test("redesign-required i18n keys exist in both locales; the legacy lifecycle ke
     "browser_preview.viewport.desktop",
     "coding_assistant.title",
     "work_ledger.title",
+    "work_ledger.open_project",
     "work_ledger.kind.mission",
     "work_ledger.kind.task",
     "work_ledger.kind.chat",

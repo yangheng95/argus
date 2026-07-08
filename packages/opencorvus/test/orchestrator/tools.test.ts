@@ -42,7 +42,7 @@ import * as TaskLoop from "../../src/orchestrator/loop"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { SessionPrompt } from "../../src/session/prompt"
 import { Agent } from "../../src/agent/agent"
-import { goalStatusByID } from "../../src/engine/describe"
+import { describeTask, goalStatusByID } from "../../src/engine/describe"
 import { Session } from "../../src/session"
 import { SessionTable } from "../../src/session/session.sql"
 import {
@@ -73,6 +73,7 @@ import {
   findGoal,
   findGoalRun,
   findGoalLatestWorkspace,
+  findBuildOutcomeByGoalRun,
   findBuildOutcomesForTask,
   findTask,
   findLatestIntegrityArtifactMissingStatus,
@@ -2232,6 +2233,7 @@ function insertWorkflowTaskWithGoal(input: {
   specID?: string
   requirementIDs?: string[]
   acceptanceSpecs?: unknown[]
+  goalKind?: "bootstrap" | "feature" | "verification" | "integration" | "system"
   insertProject?: boolean
 }) {
   const specID = input.specID ?? `spec_${input.goalID}`
@@ -2290,7 +2292,7 @@ function insertWorkflowTaskWithGoal(input: {
         depends_on: [],
         exports: [],
         imports: [],
-        kind: "feature",
+        kind: input.goalKind ?? "feature",
         requirement_ids: input.requirementIDs ?? [],
         priority: "blocking",
         source: "test",
@@ -16012,6 +16014,10 @@ describe("orchestrator tools", () => {
       },
     })
     expect(goalStatusByID(parentGoalID)).toBe("passed")
+    const desc = await describeTask(taskID)
+    expect(desc.collaboration_closure?.evidence_satisfied_goal_ids).not.toContain(parentGoalID)
+    expect(desc.collaboration_closure?.evidence_dispatchable_goal_ids).not.toContain(childGoalID)
+    expect(JSON.stringify(desc.collaboration_closure?.blocked_goals)).toContain("no_project_diff")
 
     let buildStarted = false
     buildAgentRunImpl = async () => {
@@ -16113,7 +16119,7 @@ describe("orchestrator tools", () => {
       workspaceDir: tmp.path,
       workspaceBranch: "opencorvus/no-diff-parent",
       workspaceBaseRef: "base123",
-      summary: "Build reported success but host diff was empty.",
+      summary: "Build completed but no goal-scoped delivery evidence was accepted.",
       diffs: [],
       now: now + 1,
     })
@@ -16144,10 +16150,101 @@ describe("orchestrator tools", () => {
         )
 
         const resultText = toolText(result)
-        expect(resultText).toContain("blocked by unfinished dependencies")
-        expect(resultText).toContain(`${parentGoalID}=no_project_diff(actual_changed_files_empty; status=passed)`)
+        expect(resultText).toContain("blocked by unsatisfied dependency evidence")
+        expect(resultText).toContain(
+          `${parentGoalID}=unsatisfied(evidence_unsatisfied(no_project_diff(actual_changed_files_empty); lifecycle=completed))`,
+        )
         expect(buildStarted).toBe(false)
         expect(listGoalRunsByGoal(childGoalID)).toHaveLength(0)
+      },
+    })
+  })
+
+  test("verification no-project-diff report evidence satisfies dependency readiness", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_build_dep_report_${stamp}`
+    const taskID = `tsk_build_dep_report_${stamp}`
+    const parentGoalID = `gol_dep_report_parent_${stamp}`
+    const childGoalID = `gol_dep_report_child_${stamp}`
+    const specID = `spec_dep_report_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID: parentGoalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "Report evidence dependency project",
+      taskTitle: "Report evidence dependency task",
+      request: "Build dependent goals after verification evidence is delivered.",
+      goalTitle: "Acceptance audit report",
+      goalSlug: "acceptance-audit-report",
+      objective: "Audit acceptance evidence and publish a durable report.",
+      goalKind: "verification",
+      now,
+      specID,
+    })
+    Database.use((db) => {
+      db.insert(EngineGoalTable)
+        .values({
+          id: childGoalID,
+          task_id: taskID,
+          spec_snapshot_id: specID,
+          title: "Dependent implementation",
+          slug: "dependent-implementation",
+          objective: "Consume the verification report evidence.",
+          acceptance_specs: [],
+          owned_paths: ["src/report-consumer.ts"],
+          depends_on: [parentGoalID],
+          exports: [],
+          imports: [],
+          kind: "feature",
+          requirement_ids: [],
+          priority: "blocking",
+          source: "test",
+          status: "pending",
+          order_index: 1,
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+    })
+    const parentGoalRunID = beginBuildAttempt({
+      taskID,
+      goalID: parentGoalID,
+      sessionID: "ses_build_dep_report_parent",
+      workspaceDir: tmp.path,
+      workspaceBranch: "opencorvus/report-parent",
+      workspaceBaseRef: "base123",
+      now,
+    })
+    EnginePersist.finalizeBuildAttempt({
+      goalRunID: parentGoalRunID,
+      taskID,
+      goalID: parentGoalID,
+      status: "completed",
+      commitRef: "abc1234",
+      workspaceDir: tmp.path,
+      workspaceBranch: "opencorvus/report-parent",
+      workspaceBaseRef: "base123",
+      summary: "Verification report accepted without project file changes.",
+      diffs: [],
+      now: now + 1,
+    })
+
+    const outcome = findBuildOutcomeByGoalRun(parentGoalRunID)
+    expect(outcome?.outcome_kind).toBe("no_project_diff")
+    expect(outcome?.evidence_contract_status).toBe("satisfied")
+    expect(outcome?.delivery_evidence_refs).toContain(`build_attempt_outcome:${outcome?.id}`)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const desc = await describeTask(taskID)
+        expect(desc.collaboration_closure?.evidence_satisfied_goal_ids).toContain(parentGoalID)
+        expect(desc.collaboration_closure?.evidence_dispatchable_goal_ids).toContain(childGoalID)
+        expect(JSON.stringify(desc.collaboration_closure?.blocked_goals)).not.toContain(childGoalID)
       },
     })
   })
@@ -16198,12 +16295,77 @@ describe("orchestrator tools", () => {
         const result = await runDispatchAgentTool(
           tools,
           "architect",
-          { reason: "Verify missing requirements preflight before architecture." },
+          { mode: "initial_decomposition", reason: "Verify missing requirements preflight before architecture." },
           {} as any,
         )
 
         expect(toolText(result)).toContain("no active requirements spec snapshot")
         expect(toolText(result)).toContain("requirements")
+        const architectSessionsForThisDispatch = Database.use((db) =>
+          db
+            .select()
+            .from(SessionTable)
+            .where(and(eq(SessionTable.kind, "architect"), eq(SessionTable.parent_id, parent.id)))
+            .all(),
+        )
+        expect(architectSessionsForThisDispatch).toHaveLength(0)
+      },
+    })
+  })
+
+  test("architect structural re-entry requires named artifact evidence before a session starts", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_architect_reentry_contract_${stamp}`
+    const taskID = `tsk_architect_reentry_contract_${stamp}`
+
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: process.cwd(),
+          name: "Architect structural reentry contract test",
+          sandboxes: [],
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "Architect structural reentry contract",
+          request: "verify structural reentry contract",
+          kind: "workflow",
+          priority: "normal",
+          status: "active",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+    })
+
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "architect structural reentry contract test" })
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await runDispatchAgentTool(
+          tools,
+          "architect",
+          { mode: "structural_reentry", reason: "Try generic architect repair." },
+          {} as any,
+        )
+
+        expect(toolText(result)).toContain("structural_reentry requires invalid_architect_artifact_id")
         const architectSessionsForThisDispatch = Database.use((db) =>
           db
             .select()
@@ -16336,7 +16498,7 @@ describe("orchestrator tools", () => {
         const result = await runDispatchAgentTool(
           tools,
           "architect",
-          { reason: "Promote requirements into architecture goals." },
+          { mode: "initial_decomposition", reason: "Promote requirements into architecture goals." },
           {} as any,
         )
         expect(toolText(result)).toContain("Architect decomposition complete")

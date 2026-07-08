@@ -15,6 +15,8 @@ export type TaskAgentOutcome = {
   summary?: string
   error?: string
   noDiffReason?: string
+  evidenceContractStatus?: "satisfied" | "unsatisfied" | "failed"
+  deliveryEvidenceRefs?: string[]
   changedFiles?: string[]
   reportedChangedFiles?: string[]
   diffs?: Array<{
@@ -52,6 +54,8 @@ const buildOutcomeProvider: TaskAgentOutcomeProvider = {
         summary: outcome.summary || undefined,
         error: outcome.error ?? undefined,
         noDiffReason: outcome.no_diff_reason ?? undefined,
+        evidenceContractStatus: outcome.evidence_contract_status,
+        deliveryEvidenceRefs: outcome.delivery_evidence_refs,
         changedFiles: outcome.changed_files,
         reportedChangedFiles: outcome.reported_changed_files,
         diffs: buildOutcomeDiffSummaries(outcome.host_facts.actual_changed_files),

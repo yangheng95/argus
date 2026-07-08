@@ -1,4 +1,4 @@
-import { layoutTokenPx } from "./layout-tokens"
+import { layoutTokenNumber, layoutTokenPx } from "./layout-tokens"
 
 export interface OverlayViewportSize {
   width: number
@@ -12,6 +12,7 @@ export interface OverlayLayoutFrame {
 
 export interface OverlayLayoutFrameConstraints {
   minimum: OverlayViewportSize
+  minimumAspectRatio: number
 }
 
 function assertPositiveFinite(value: number, label: string): void {
@@ -29,10 +30,10 @@ export function constrainOverlayLayoutFrame(
   const { minimum } = constraints
   assertPositiveFinite(minimum.width, "Overlay minimum width")
   assertPositiveFinite(minimum.height, "Overlay minimum height")
+  assertPositiveFinite(constraints.minimumAspectRatio, "Overlay minimum aspect ratio")
 
-  const minimumAspectRatio = minimum.width / minimum.height
   const width = Math.max(viewport.width, minimum.width)
-  const height = Math.max(minimum.height, Math.min(viewport.height, width / minimumAspectRatio))
+  const height = Math.max(minimum.height, Math.min(viewport.height, width / constraints.minimumAspectRatio))
   return { width, height }
 }
 
@@ -48,6 +49,7 @@ export function overlayLayoutFrameSize(): OverlayLayoutFrame {
       width: layoutTokenPx("--ui-overlay-min-width"),
       height: layoutTokenPx("--ui-overlay-min-height"),
     },
+    minimumAspectRatio: layoutTokenNumber("--ui-overlay-min-aspect-ratio"),
   }
   const viewport = {
     width: window.innerWidth,

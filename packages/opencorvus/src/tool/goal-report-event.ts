@@ -71,7 +71,7 @@ export namespace GoalReportEvent {
       .min(1)
       .optional()
       .describe(
-        "Explicit warning for subsequent agents about hidden or remaining work surface, evidence they must read deeper, and whether goal workload analysis or Architect re-sizing should be revisited.",
+        "Explicit warning for subsequent agents about hidden or remaining work surface, evidence they must read deeper, and whether goal workload analysis or Architect structural_reentry evidence should be revisited.",
       ),
   })
 

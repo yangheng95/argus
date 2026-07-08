@@ -12,6 +12,10 @@ describe("design density tokens stay on the tightened 2026-05-05 scale", () => {
     expect(TOKENS).toContain("--oc-radius-large: calc(8px * var(--ui-scale, 1));")
   })
 
+  test("xl radius owns the rounded floating composer tier", () => {
+    expect(TOKENS).toContain("--oc-radius-xl: calc(24px * var(--ui-scale, 1));")
+  })
+
   test("control heights share the 26px density contract", () => {
     expect(TOKENS).toContain("--oc-density-control-height: calc(26px * var(--ui-scale, 1));")
     expect(TOKENS).toContain("--oc-density-icon-button: calc(26px * var(--ui-scale, 1));")

@@ -432,7 +432,7 @@ describe("EngineRuntime goal-run convergence", () => {
         expect(runTaskLoop).toHaveBeenCalledTimes(1)
         expect(goalRefillNotificationsForTask(taskID)).toHaveLength(1)
         const desc = await describeTask(taskID)
-        expect(desc.collaboration_closure?.dispatchable_goal_ids).toEqual([goalC, goalD])
+        expect(desc.collaboration_closure?.evidence_dispatchable_goal_ids).toEqual([goalC, goalD])
       },
     })
   })
@@ -470,7 +470,7 @@ describe("EngineRuntime goal-run convergence", () => {
         expect(goalRefillNotificationsForTask(taskID)).toHaveLength(1)
         const desc = await describeTask(taskID)
         expect(desc.collaboration_closure?.failed_goal_ids).toContain(goalA)
-        expect(desc.collaboration_closure?.dispatchable_goal_ids).not.toContain(goalC)
+        expect(desc.collaboration_closure?.evidence_dispatchable_goal_ids).not.toContain(goalC)
         expect(goalRefillNotificationsForTask(taskID)[0]?.payload).toMatchObject({
           terminal_goal_run: { id: "grun_failed_a", goal_id: goalA, status: "failed" },
         })
@@ -625,7 +625,16 @@ function seedGoalRun(taskID: string, runID: string, goalRunID: string, status: s
           workspace_branch: null,
           workspace_base_ref: null,
           merge_ref: null,
-          metadata: null,
+          metadata:
+            status === "completed"
+              ? {
+                  manual_completion: {
+                    source: "test.seedGoalRun",
+                    reason: "seeded evidence-satisfied completed goal",
+                    time_completed: now,
+                  },
+                }
+              : null,
           time_started: now,
           time_completed: status === "completed" || status === "failed" || status === "aborted" ? now : null,
         },

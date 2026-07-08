@@ -149,7 +149,16 @@ function seedTaskWithGoals(
               supersede_of: null,
               superseded_reason: null,
               superseded_at: null,
-              metadata: null,
+              metadata:
+                g.status === "passed"
+                  ? {
+                      manual_completion: {
+                        source: "test.seedTaskWithGoals",
+                        reason: "seeded evidence-satisfied completed goal",
+                        time_completed: now,
+                      },
+                    }
+                  : null,
               time_started: now,
               time_completed: isTerminal ? now : null,
             },
@@ -311,13 +320,13 @@ describe("collaboration closure projection", () => {
 
         const desc = await describeTask(taskID)
         expect(desc.collaboration_closure?.execution_started).toBe(true)
-        expect(desc.collaboration_closure?.passed_goal_ids).toContain(bootstrap)
-        expect(desc.collaboration_closure?.dispatchable_goal_ids).toContain(feature)
+        expect(desc.collaboration_closure?.evidence_satisfied_goal_ids).toContain(bootstrap)
+        expect(desc.collaboration_closure?.evidence_dispatchable_goal_ids).toContain(feature)
 
         const md = renderTaskDescription(desc)
         expect(md).toContain("## Collaboration Closure")
         expect(md).toContain("The active goal graph has entered execution")
-        expect(md).toContain("Next dispatchable goals:")
+        expect(md).toContain("Next evidence-dispatchable goals:")
         expect(md).toContain(feature)
         expect(md).toContain("Build `files_changed[]`")
         expect(md).toContain("`manage_task` action=modify_goal")
@@ -355,12 +364,22 @@ describe("collaboration closure projection", () => {
 
         const desc = await describeTask(taskID)
         expect(desc.collaboration_closure?.blocked_goals).toEqual([
-          { goal_id: blocked, blocked_by: [{ goal_id: dependency, status: "running" }] },
+          {
+            goal_id: blocked,
+            blocked_by: [
+              {
+                goal_id: dependency,
+                status: "running",
+                evidence_status: "blocked",
+                reason: `blocked(running(goal_run=${dependency}_run))`,
+              },
+            ],
+          },
         ])
 
         const md = renderTaskDescription(desc)
         expect(md).toContain("Dependency-blocked goals:")
-        expect(md).toContain(`${blocked}: blocked by ${dependency} [running]`)
+        expect(md).toContain(`${blocked}: blocked by ${dependency} [lifecycle=running; evidence=blocked; blocked(running(goal_run=${dependency}_run))]`)
         expect(md).not.toContain("re-run Architect to unblock")
       },
     })
@@ -383,7 +402,7 @@ describe("collaboration closure projection", () => {
         expect(md).toContain("Failed goals stay inside the current collaboration closure")
         expect(md).toContain("route repair through `dispatch_agent` target=build")
         expect(md).toContain("`manage_task` action=modify_goal")
-        expect(md).toContain("`dispatch_agent` target=architect")
+        expect(md).toContain("`dispatch_agent` target=architect mode=structural_reentry")
         expect(md).not.toContain("build({ goalID, request })")
         expect(md).not.toContain("`modify_goal`, or `architect`")
         expect(md).toContain("ask the operator only for external, destructive, or out-of-scope blockers")

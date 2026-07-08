@@ -1,11 +1,34 @@
-/* Composer attachments strip: chips that show pending uploads above the
-   input row. The chip background and border use color-mix over the
+/* Composer stack: one geometry owner for the outside attachment strip and
+   the rounded input shell. */
+.chat-composer-stack {
+  --chat-composer-inline-gutter: calc(28px * var(--ui-scale));
+  --chat-composer-max-width: calc(880px * var(--ui-scale));
+  --chat-composer-min-height: calc(96px * var(--ui-scale));
+  --chat-textarea-height: calc(48px * var(--ui-scale));
+  --chat-composer-action-size: max(var(--ui-chat-send-size), calc(34px * var(--ui-scale)));
+  --chat-compose-scale: 1;
+
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--ui-scale));
+  width: min(var(--chat-composer-max-width), calc(100% - var(--chat-composer-inline-gutter)));
+  max-width: var(--chat-composer-max-width);
+  margin: calc(10px * var(--ui-scale)) auto calc(14px * var(--ui-scale));
+  flex-shrink: 0;
+  container-type: inline-size;
+}
+
+/* Composer attachments strip: chips that show pending uploads outside the
+   input shell. The chip background and border use color-mix over the
    surface palette so it adapts per theme. */
 .chat-attachments {
   display: flex;
   flex-wrap: wrap;
   gap: calc(6px * var(--ui-scale));
-  padding: 0;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0 calc(2px * var(--ui-scale));
 }
 
 /* Flat-redesign Step 2 (2026-05-04): attachment chip border retired
@@ -72,33 +95,57 @@
    The parent layout owns outer spacing, so this shell stays marginless
    while carrying its own radius token and inner padding. */
 .chat-input {
-  /* Compact density: textarea floor is 72px so the composer reads
-     taller while staying tighter than the surrounding canvas. Pinned by
+  /* Compact density: textarea floor is 48px so the composer reads
+     as a command input rather than a card. Pinned by
      workspace-composer-density.test.ts. */
-  --chat-textarea-height: calc(72px * var(--ui-scale));
-  --chat-compose-scale: 1;
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: calc(4px * var(--ui-scale));
+  gap: calc(6px * var(--ui-scale));
+  width: 100%;
+  max-width: 100%;
+  min-height: var(--chat-composer-min-height);
   margin: 0;
-  padding: calc(6px * var(--ui-scale));
-  border: 0;
-  border-radius: var(--oc-radius-none);
-  background: color-mix(in srgb, var(--surface-strong) 90%, transparent);
-  box-shadow: none;
+  padding: calc(10px * var(--ui-scale)) calc(14px * var(--ui-scale)) calc(9px * var(--ui-scale));
+  box-sizing: border-box;
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 76%, transparent);
+  border-radius: var(--oc-radius-xl);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface-elevated) 94%, transparent),
+      color-mix(in srgb, var(--surface-strong) 98%, transparent)
+    );
+  box-shadow:
+    0 calc(10px * var(--ui-scale)) calc(24px * var(--ui-scale))
+      color-mix(in srgb, var(--ui-shadow-tone) 18%, transparent),
+    inset 0 calc(1px * var(--ui-scale)) 0 var(--ui-highlight-tone);
   flex-shrink: 0;
-  container-type: inline-size;
 }
 
 .chat-input:focus-within {
-  background: color-mix(in srgb, var(--surface-strong) 94%, transparent);
-  box-shadow: none;
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface-elevated) 98%, transparent),
+      color-mix(in srgb, var(--surface-strong) 98%, transparent)
+    );
+  box-shadow:
+    0 calc(12px * var(--ui-scale)) calc(28px * var(--ui-scale))
+      color-mix(in srgb, var(--ui-shadow-tone) 22%, transparent),
+    0 0 0 calc(2px * var(--ui-scale)) color-mix(in srgb, var(--accent) 16%, transparent),
+    inset 0 calc(1px * var(--ui-scale)) 0 var(--ui-highlight-tone);
 }
 
 .chat-resize-handle {
-  height: calc(8px * var(--ui-scale));
-  margin: calc(-4px * var(--ui-scale)) 0 0;
+  position: absolute;
+  top: calc(4px * var(--ui-scale));
+  left: calc(16px * var(--ui-scale));
+  right: calc(16px * var(--ui-scale));
+  height: calc(6px * var(--ui-scale));
+  margin: 0;
+  z-index: 1;
   cursor: ns-resize;
   touch-action: none;
   user-select: none;
@@ -113,9 +160,8 @@
 }
 
 /* Composer textarea wrap and inner field: the wrap is the flex slot that
-   anchors the textarea to its height token; the textarea is the actual
-   editable surface. After iter17 / iter20 both render flat (no radius,
-   no shadow) so they read as a single slice of the chat-input shell. */
+   anchors the textarea to its height token; the textarea remains the actual
+   editable surface while visually reading as part of the composer shell. */
 .chat-textarea-wrap {
   position: relative;
   flex: 1;
@@ -123,6 +169,7 @@
   display: flex;
   align-self: stretch;
   min-height: var(--chat-textarea-height);
+  box-sizing: border-box;
 }
 
 .chat-textarea-wrap > .chat-textarea {
@@ -133,14 +180,15 @@
   flex: 1;
   min-width: 0;
   min-height: var(--chat-textarea-height);
+  box-sizing: border-box;
   resize: none;
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 92%, transparent);
+  border: var(--oc-border-width) solid transparent;
   border-radius: var(--oc-radius-soft);
-  background: color-mix(in srgb, var(--surface-inset) 96%, transparent);
+  background: transparent;
   color: var(--text-strong);
-  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  padding: calc(6px * var(--ui-scale)) calc(6px * var(--ui-scale)) calc(4px * var(--ui-scale));
   font-size: var(--ui-font-body);
-  line-height: 1.45;
+  line-height: 1.4;
   overflow-y: auto;
   transition:
     border-color var(--ui-duration-base),
@@ -150,9 +198,9 @@
 
 .chat-textarea:focus {
   outline: none;
-  border-color: color-mix(in srgb, var(--accent) 54%, var(--border));
-  background: var(--surface-inset);
-  box-shadow: 0 0 0 calc(2px * var(--ui-scale)) color-mix(in srgb, var(--accent) 18%, transparent);
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
 }
 
 .chat-textarea::placeholder {
@@ -166,10 +214,10 @@
 .chat-placeholder-float {
   position: absolute;
   inset: 0;
-  padding: calc(10px * var(--ui-scale) * var(--chat-compose-scale))
-    calc(12px * var(--ui-scale) * var(--chat-compose-scale));
+  padding: calc(6px * var(--ui-scale) * var(--chat-compose-scale))
+    calc(8px * var(--ui-scale) * var(--chat-compose-scale));
   font-size: var(--ui-font-body);
-  line-height: 1.45;
+  line-height: 1.4;
   color: var(--text-muted);
   pointer-events: none;
   overflow: hidden;
@@ -184,24 +232,30 @@
 /* Composer send/stop controls route through the shared Button primitive.
    This surface only owns the textarea-matched geometry and the explicit
    disabled token values that keep the primary action visible. */
-.chat-compose-row .oc-button[data-mode] {
-  --oc-button-height: var(--chat-textarea-height);
-  --oc-button-padding-x: calc(8px * var(--ui-scale));
+.chat-compose-meta-right .oc-button[data-mode] {
+  --oc-button-height: var(--chat-composer-action-size);
+  --oc-button-padding-x: 0;
   --oc-button-gap: calc(6px * var(--ui-scale) * var(--chat-compose-scale));
 
-  align-self: stretch;
-  height: 100%;
-  min-width: calc(72px * var(--ui-scale));
-  min-height: var(--chat-textarea-height);
+  align-self: center;
+  width: var(--chat-composer-action-size);
+  min-width: var(--chat-composer-action-size);
+  min-height: var(--chat-composer-action-size);
   flex-shrink: 0;
+  border-radius: var(--oc-radius-pill);
+  box-shadow:
+    0 calc(6px * var(--ui-scale)) calc(14px * var(--ui-scale))
+      color-mix(in srgb, currentColor 20%, transparent),
+    inset 0 calc(1px * var(--ui-scale)) 0 color-mix(in srgb, var(--text-on-accent) 32%, transparent);
 }
 
-.chat-compose-row .oc-button[data-mode="send"]:disabled {
+.chat-compose-meta-right .oc-button[data-mode="send"]:disabled {
   --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 28%, var(--border));
-  --oc-button-bg: color-mix(in srgb, var(--accent) 12%, var(--surface-inset));
+  --oc-button-bg: color-mix(in srgb, var(--accent) 16%, var(--surface-inset));
   --oc-button-color: color-mix(in srgb, var(--accent) 72%, var(--text-strong));
 
   opacity: var(--ui-opacity-full);
+  box-shadow: inset 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 .chat-send-icon {
@@ -212,19 +266,29 @@
 }
 
 .chat-send-label {
+  --px-exact: 1;
+
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
   white-space: nowrap;
+  border: 0;
 }
 
-/* Compose row: grid that lays the textarea wrap and send button across
-   the chat-input shell. The 8px gap is the
-   canonical value (the late `gap: 8px` override that lived in styles.css
-   wins over the historical 6px; folded here as the single source). */
+/* Compose row: the textarea owns the upper writing area. Action buttons
+   share the bottom toolbar so the input shell stays compact. */
 .chat-compose-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: calc(8px * var(--ui-scale));
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 0;
   min-width: 0;
+  min-height: var(--chat-textarea-height);
+  box-sizing: border-box;
 }
 
 /* Drag-over outline: dashed accent ring around the compose row when the
@@ -235,7 +299,7 @@
 .chat-input[data-dragover] .chat-compose-row {
   outline: calc(2px * var(--ui-scale)) dashed color-mix(in srgb, var(--accent) 50%, transparent);
   outline-offset: calc(-2px * var(--ui-scale));
-  border-radius: 0;
+  border-radius: var(--oc-radius-large);
 }
 
 .chat-input-warning {
@@ -261,9 +325,18 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: calc(6px * var(--ui-scale));
+  gap: calc(4px * var(--ui-scale));
   min-width: 0;
   flex: 0 0 auto;
+}
+
+.chat-compose-meta-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: calc(4px * var(--ui-scale) * var(--chat-compose-scale));
+  flex: 0 0 auto;
+  min-width: 0;
 }
 
 .composer-attachment-input {
@@ -278,8 +351,19 @@
 .composer-attachment-loader-trigger.oc-button {
   --oc-button-height: calc(28px * var(--ui-scale));
   --oc-button-padding-x: 0;
+  --oc-button-bg: transparent;
+  --oc-button-color: var(--text-muted);
+  --oc-button-shadow: none;
 
   flex: 0 0 auto;
+  border-radius: var(--oc-radius-pill);
+}
+
+.composer-attachment-loader-trigger.oc-button:hover,
+.composer-attachment-loader-trigger.oc-button:focus-visible {
+  --oc-button-bg: color-mix(in srgb, var(--surface-hover) 84%, transparent);
+  --oc-button-color: var(--text-strong);
+  --oc-button-shadow: inset 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--border) 72%, transparent);
 }
 
 .composer-attachment-loader-count {
@@ -298,35 +382,36 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: calc(6px * var(--ui-scale) * var(--chat-compose-scale));
+  gap: calc(8px * var(--ui-scale) * var(--chat-compose-scale));
   flex-wrap: nowrap;
   min-width: 0;
-  padding-top: calc(2px * var(--ui-scale) * var(--chat-compose-scale));
+  padding: 0 calc(2px * var(--ui-scale) * var(--chat-compose-scale));
   border-top: 0 solid transparent;
 }
 
 .chat-compose-meta-left {
-  display: grid;
-  grid-template-columns:
-    minmax(0, calc(160px * var(--ui-scale)))
-    minmax(0, 1fr);
-  align-items: stretch;
-  gap: calc(8px * var(--ui-scale) * var(--chat-compose-scale));
-  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: calc(5px * var(--ui-scale) * var(--chat-compose-scale));
+  flex: 0 1 auto;
   min-width: 0;
 }
 
 .composer-mode-select-wrap,
-.expert-squad-select-wrap {
+.expert-squad-select-wrap,
+.composer-model-selector {
   position: relative;
   display: flex;
   min-width: 0;
+  max-width: calc(188px * var(--ui-scale));
+  flex: 0 1 auto;
   align-items: center;
-  min-height: calc(40px * var(--ui-scale));
-  border-radius: var(--oc-radius-soft);
-  background: color-mix(in srgb, var(--surface-inset) 92%, transparent);
-  color: var(--text-soft);
-  box-shadow: inset 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--border) 88%, transparent);
+  min-height: calc(26px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: color-mix(in srgb, var(--surface-inset) 26%, transparent);
+  color: var(--text-strong);
+  box-shadow: inset 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--border) 46%, transparent);
   transition:
     background var(--ui-duration-fast),
     box-shadow var(--ui-duration-fast),
@@ -334,36 +419,53 @@
 }
 
 .composer-mode-select-wrap:hover,
-.expert-squad-select-wrap:hover {
-  background: color-mix(in srgb, var(--surface-inset) 86%, var(--accent) 14%);
+.expert-squad-select-wrap:hover,
+.composer-model-selector:hover {
+  background: color-mix(in srgb, var(--surface-hover) 78%, transparent);
   color: var(--text-strong);
-  box-shadow: inset 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--accent) 22%, var(--border));
+  box-shadow: inset 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--border) 70%, transparent);
 }
 
 .composer-mode-select-wrap:focus-within,
-.expert-squad-select-wrap:focus-within {
-  background: color-mix(in srgb, var(--surface-inset) 84%, var(--accent) 16%);
+.expert-squad-select-wrap:focus-within,
+.composer-model-selector:focus-within {
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface-hover));
   box-shadow:
     inset 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--accent) 28%, var(--border)),
     0 0 0 calc(2px * var(--ui-scale)) var(--accent-ring);
 }
 
 .composer-mode-select-trigger.oc-select-trigger,
-.expert-squad-select-trigger.oc-select-trigger {
+.expert-squad-select-trigger.oc-select-trigger,
+.composer-model-selector .oc-button[data-ui="composer-model-selector-trigger"] {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: calc(10px * var(--ui-scale));
-  width: 100%;
-  min-height: calc(40px * var(--ui-scale));
+  justify-content: center;
+  gap: 0;
+  width: auto;
+  max-width: 100%;
+  min-height: calc(26px * var(--ui-scale));
   min-width: 0;
-  padding: calc(7px * var(--ui-scale)) calc(11px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale)) calc(10px * var(--ui-scale));
   border: 0;
   background: transparent;
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
+}
+
+.composer-model-selector .oc-button[data-ui="composer-model-selector-trigger"] {
+  --oc-button-height: calc(26px * var(--ui-scale));
+  --oc-button-padding-x: calc(10px * var(--ui-scale));
+  --oc-button-gap: 0;
+  --oc-button-border: 0 solid transparent;
+  --oc-button-bg: transparent;
+  --oc-button-color: inherit;
+  --oc-button-shadow: none;
+
+  padding: calc(4px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  box-shadow: none;
 }
 
 .composer-mode-select-trigger.oc-select-trigger > .composer-mode-select-copy,
@@ -374,9 +476,9 @@
 .composer-mode-select-copy,
 .expert-squad-select-copy {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: calc(2px * var(--ui-scale));
+  flex-direction: row;
+  align-items: center;
+  gap: 0;
   min-width: 0;
   flex: 1 1 auto;
 }
@@ -388,15 +490,17 @@
   font-weight: var(--ui-font-weight-medium);
   color: var(--text-muted);
   line-height: 1;
+  display: none;
 }
 
 .composer-mode-select-value,
-.expert-squad-select-value {
+.expert-squad-select-value,
+.composer-model-selector-value {
   min-width: 0;
   overflow: hidden;
   color: var(--text-strong);
   font-size: calc(12px * var(--ui-scale));
-  font-weight: var(--ui-font-weight-strong);
+  font-weight: var(--ui-font-weight-medium);
   line-height: 1.15;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -404,9 +508,7 @@
 
 .composer-mode-select-caret,
 .expert-squad-select-caret {
-  display: inline-flex;
-  flex: 0 0 auto;
-  color: var(--text-muted);
+  display: none;
 }
 
 .composer-mode-select-trigger.oc-select-trigger:disabled,
@@ -424,6 +526,10 @@
 .composer-mode-select-content,
 .expert-squad-select-content {
   min-width: calc(180px * var(--ui-scale));
+}
+
+.composer-model-selector-popover {
+  min-width: calc(220px * var(--ui-scale));
 }
 
 .composer-mode-select-listbox,
@@ -478,7 +584,7 @@
    520px, hide the send label but keep the loader and selectors in one
    meta row; each control owns its own truncation. */
 @container (max-width: 520px) {
-  .chat-compose-row .oc-button[data-mode] {
+  .chat-compose-meta-right .oc-button[data-mode] {
     --oc-button-padding-x: calc(10px * var(--ui-scale));
   }
 
@@ -493,17 +599,17 @@
   }
 }
 
-/* Composer container reflow: at narrow composer widths the send button
-   drops onto its own row, so the textarea takes the entire first row. */
+/* Composer container reflow: keep the primary action circular even when the
+   composer narrows; only tighten the internal rhythm. */
 @container (max-width: 760px) {
   /* breakpoint: --ui-breakpoint-md */
   .chat-compose-row {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
   }
 
-  .chat-compose-row .oc-button[data-mode] {
-    grid-column: 1 / -1;
-    width: 100%;
+  .chat-compose-meta-right .oc-button[data-mode] {
+    width: var(--chat-composer-action-size);
   }
 }
 

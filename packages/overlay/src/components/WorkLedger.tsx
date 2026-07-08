@@ -31,7 +31,10 @@ export interface WorkLedgerProps {
   onSelectChat: (row: WorkLedgerChatRow) => void | Promise<void>
   onAbortMission: (row: WorkLedgerMissionRow) => void | Promise<void>
   onDeleteMission: (row: WorkLedgerMissionRow) => void | Promise<void>
+  onStartTask: (row: WorkLedgerTaskRow) => void | Promise<void>
   onCancelTask: (row: WorkLedgerTaskRow) => void | Promise<void>
+  onDownloadTask: (row: WorkLedgerTaskRow) => void | Promise<void>
+  onRenameTask: (row: WorkLedgerTaskRow) => void | Promise<void>
   onDeleteTask: (row: WorkLedgerTaskRow) => void | Promise<void>
   onCreateChat: (directory: string) => void | Promise<void>
   onStopChat: (row: WorkLedgerChatRow) => void | Promise<void>
@@ -96,6 +99,14 @@ function inlineMeta(row: WorkLedgerRow): string {
   return ""
 }
 
+function taskCanStop(row: WorkLedgerTaskRow): boolean {
+  return row.lifecycleStatus === "queued" || row.lifecycleStatus === "active"
+}
+
+function missionHasVisibleStoppableTask(row: WorkLedgerMissionRow): boolean {
+  return row.tasks.some(taskCanStop)
+}
+
 function WorkLedgerKindMark(props: { kind: WorkLedgerRow["kind"] }) {
   return (
     <span
@@ -113,6 +124,7 @@ function RowDeleteAction(props: {
   label: string
   description: string
   onConfirm: () => void
+  dataUi?: string
   tabIndex?: number
   children?: JSX.Element
 }) {
@@ -123,7 +135,7 @@ function RowDeleteAction(props: {
       size="icon"
       tone="danger"
       data-chrome="icon-action"
-      data-ui="work-row-delete"
+      data-ui={props.dataUi ?? "work-row-delete"}
       label={props.label}
       armedDescription={props.description}
       confirmWindowMs={CONFIRM_WINDOW_MS}
@@ -131,47 +143,23 @@ function RowDeleteAction(props: {
       tabIndex={props.tabIndex}
       confirmChildren={<Icon name="check" size={10} />}
     >
-      {props.children ?? <Icon name="close" size={11} />}
+      {props.children ?? <Icon name="delete" size={11} />}
     </ArmedConfirmButton>
-  )
-}
-
-function WorkLedgerTaskChildRow(props: { task: WorkLedgerTaskRow; onSelect: (row: WorkLedgerTaskRow) => void }) {
-  return (
-    <li
-      class="work-row-child"
-      data-ui="work-ledger-child-task"
-      data-kind="task"
-      data-task-id={props.task.id}
-      data-status={props.task.lifecycleStatus}
-    >
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        tone="neutral"
-        class="work-row-child-main"
-        title={rowTip(props.task)}
-        onClick={() => props.onSelect(props.task)}
-      >
-        <WorkLedgerKindMark kind="task" />
-        <span class="work-row-child-title">{props.task.title || props.task.id}</span>
-        <span class="work-row-status-mark" data-status={props.task.lifecycleStatus}>
-          {taskLifecycleStatusLabel(props.task.lifecycleStatus)}
-        </span>
-      </Button>
-    </li>
   )
 }
 
 function WorkLedgerRowView(props: {
   row: WorkLedgerRow
   selected: boolean
+  isSelected?: (row: WorkLedgerRow) => boolean
   onSelect: (row: WorkLedgerRow) => void
   onAfterAction: () => void
   onAbortMission: (row: WorkLedgerMissionRow) => void | Promise<void>
   onDeleteMission: (row: WorkLedgerMissionRow) => void | Promise<void>
+  onStartTask: (row: WorkLedgerTaskRow) => void | Promise<void>
   onCancelTask: (row: WorkLedgerTaskRow) => void | Promise<void>
+  onDownloadTask: (row: WorkLedgerTaskRow) => void | Promise<void>
+  onRenameTask: (row: WorkLedgerTaskRow) => void | Promise<void>
   onDeleteTask: (row: WorkLedgerTaskRow) => void | Promise<void>
   onStopChat: (row: WorkLedgerChatRow) => void | Promise<void>
   onDeleteChat: (row: WorkLedgerChatRow) => void | Promise<void>
@@ -180,12 +168,23 @@ function WorkLedgerRowView(props: {
   const row = () => props.row
   const canStop = () => {
     const current = row()
-    if (current.kind === "mission") return current.interruptible
-    if (current.kind === "task") return current.lifecycleStatus === "queued" || current.lifecycleStatus === "active"
+    if (current.kind === "mission") return current.interruptible && !missionHasVisibleStoppableTask(current)
+    if (current.kind === "task") return taskCanStop(current)
     return current.status === "active"
   }
+  const canStartNow = () => row().kind === "task" && (row() as WorkLedgerTaskRow).lifecycleStatus === "queued"
+  const canDownload = () => row().kind === "task" && !!(row() as WorkLedgerTaskRow).directory
+  const canRename = () => row().kind === "task"
   const hasActions = () => true
   const rowActions = useTaskRowActionsKeyboard(hasActions)
+  const actionCount = () => {
+    let count = 1
+    if (canStop()) count += 1
+    if (canStartNow()) count += 1
+    if (canDownload()) count += 1
+    if (canRename()) count += 1
+    return count
+  }
 
   async function runAction(action: () => void | Promise<void>) {
     if (busy()) return
@@ -204,6 +203,14 @@ function WorkLedgerRowView(props: {
     return t("task.cancel_button_title")
   }
 
+  function stopDataUi() {
+    return row().kind === "task" ? "task-row-cancel" : "work-row-stop"
+  }
+
+  function deleteDataUi() {
+    return row().kind === "task" ? "task-row-delete" : "work-row-delete"
+  }
+
   return (
     <div class="work-row-shell" data-ui="work-ledger-row-shell" data-kind={row().kind}>
       <div
@@ -213,6 +220,7 @@ function WorkLedgerRowView(props: {
         data-row-key={rowKey(row())}
         data-active={props.selected ? "true" : undefined}
         data-status={statusTone(row())}
+        data-action-count={String(actionCount())}
         data-actions-keyboard-open={rowActions.actionsKeyboardOpenData()}
         title={rowTip(row())}
         ref={(el) => rowActions.setRowRef(el)}
@@ -245,6 +253,26 @@ function WorkLedgerRowView(props: {
             {relativeTime(row().updated) || t("work_ledger.updated_unknown")}
           </small>
           <div class="task-row-actions work-row-actions" onKeyDown={rowActions.closeActionsFromKeyboardEvent}>
+            <Show when={canStartNow()}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                tone="accent"
+                data-chrome="icon-action"
+                data-ui="task-row-start-now"
+                disabled={busy()}
+                tabIndex={rowActions.actionButtonTabIndex()}
+                title={t("task.start_now_button_title")}
+                aria-label={t("task.start_now_button_title")}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  void runAction(() => props.onStartTask(row() as WorkLedgerTaskRow))
+                }}
+              >
+                <Icon name="send" size={11} />
+              </Button>
+            </Show>
             <Show when={canStop()}>
               <Button
                 type="button"
@@ -252,7 +280,7 @@ function WorkLedgerRowView(props: {
                 size="icon"
                 tone="neutral"
                 data-chrome="icon-action"
-                data-ui="work-row-stop"
+                data-ui={stopDataUi()}
                 disabled={busy()}
                 tabIndex={rowActions.actionButtonTabIndex()}
                 title={stopLabel()}
@@ -270,7 +298,48 @@ function WorkLedgerRowView(props: {
                 <Icon name="stop" size={11} />
               </Button>
             </Show>
+            <Show when={canDownload()}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                tone="neutral"
+                data-chrome="icon-action"
+                data-ui="task-row-download"
+                disabled={busy()}
+                tabIndex={rowActions.actionButtonTabIndex()}
+                title={t("task.download_project_button_title")}
+                aria-label={t("task.download_project_button_title")}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  void runAction(() => props.onDownloadTask(row() as WorkLedgerTaskRow))
+                }}
+              >
+                <Icon name="download" size={11} />
+              </Button>
+            </Show>
+            <Show when={canRename()}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                tone="neutral"
+                data-chrome="icon-action"
+                data-ui="task-row-rename"
+                disabled={busy()}
+                tabIndex={rowActions.actionButtonTabIndex()}
+                title={t("task.rename_button_title")}
+                aria-label={t("task.rename_button_title")}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  void runAction(() => props.onRenameTask(row() as WorkLedgerTaskRow))
+                }}
+              >
+                <Icon name="edit" size={11} />
+              </Button>
+            </Show>
             <RowDeleteAction
+              dataUi={deleteDataUi()}
               label={
                 row().kind === "mission"
                   ? t("mission.ledger.delete_title")
@@ -301,11 +370,123 @@ function WorkLedgerRowView(props: {
       <Show when={row().kind === "mission" && (row() as WorkLedgerMissionRow).tasks.length > 0}>
         <ul class="work-row-child-list" aria-label={t("mission.ledger.tasks_label")}>
           <For each={(row() as WorkLedgerMissionRow).tasks}>
-            {(task) => <WorkLedgerTaskChildRow task={task} onSelect={(next) => props.onSelect(next)} />}
+            {(task) => (
+              <WorkLedgerTaskChildRow
+                task={task}
+                selected={props.isSelected?.(task) ?? false}
+                isSelected={props.isSelected}
+                onSelect={props.onSelect}
+                onAfterAction={props.onAfterAction}
+                onStartTask={props.onStartTask}
+                onCancelTask={props.onCancelTask}
+                onDownloadTask={props.onDownloadTask}
+                onRenameTask={props.onRenameTask}
+                onDeleteTask={props.onDeleteTask}
+                onAbortMission={props.onAbortMission}
+                onDeleteMission={props.onDeleteMission}
+                onStopChat={props.onStopChat}
+                onDeleteChat={props.onDeleteChat}
+              />
+            )}
           </For>
         </ul>
       </Show>
     </div>
+  )
+}
+
+function WorkLedgerTaskChildRow(props: {
+  task: WorkLedgerTaskRow
+  selected: boolean
+  isSelected?: (row: WorkLedgerRow) => boolean
+  onSelect: (row: WorkLedgerRow) => void
+  onAfterAction: () => void
+  onAbortMission: (row: WorkLedgerMissionRow) => void | Promise<void>
+  onDeleteMission: (row: WorkLedgerMissionRow) => void | Promise<void>
+  onStartTask: (row: WorkLedgerTaskRow) => void | Promise<void>
+  onCancelTask: (row: WorkLedgerTaskRow) => void | Promise<void>
+  onDownloadTask: (row: WorkLedgerTaskRow) => void | Promise<void>
+  onRenameTask: (row: WorkLedgerTaskRow) => void | Promise<void>
+  onDeleteTask: (row: WorkLedgerTaskRow) => void | Promise<void>
+  onStopChat: (row: WorkLedgerChatRow) => void | Promise<void>
+  onDeleteChat: (row: WorkLedgerChatRow) => void | Promise<void>
+}) {
+  return (
+    <li
+      class="work-row-child"
+      data-ui="work-ledger-child-task"
+      data-kind="task"
+      data-task-id={props.task.id}
+      data-status={props.task.lifecycleStatus}
+    >
+      <WorkLedgerRowView
+        row={props.task}
+        selected={props.selected}
+        isSelected={props.isSelected}
+        onSelect={props.onSelect}
+        onAfterAction={props.onAfterAction}
+        onAbortMission={props.onAbortMission}
+        onDeleteMission={props.onDeleteMission}
+        onStartTask={props.onStartTask}
+        onCancelTask={props.onCancelTask}
+        onDownloadTask={props.onDownloadTask}
+        onRenameTask={props.onRenameTask}
+        onDeleteTask={props.onDeleteTask}
+        onStopChat={props.onStopChat}
+        onDeleteChat={props.onDeleteChat}
+      />
+    </li>
+  )
+}
+
+function WorkLedgerProjectGroupView(props: {
+  group: WorkLedgerGroup
+  directoryCollapse: ReturnType<typeof createProjectLedgerGroupCollapseState>
+  selected: (row: WorkLedgerRow) => boolean
+  onSelect: (row: WorkLedgerRow) => void
+  onAfterAction: () => void
+  onAbortMission: WorkLedgerProps["onAbortMission"]
+  onDeleteMission: WorkLedgerProps["onDeleteMission"]
+  onStartTask: WorkLedgerProps["onStartTask"]
+  onCancelTask: WorkLedgerProps["onCancelTask"]
+  onDownloadTask: WorkLedgerProps["onDownloadTask"]
+  onRenameTask: WorkLedgerProps["onRenameTask"]
+  onDeleteTask: WorkLedgerProps["onDeleteTask"]
+  onCreateChat: WorkLedgerProps["onCreateChat"]
+  onStopChat: WorkLedgerProps["onStopChat"]
+  onDeleteChat: WorkLedgerProps["onDeleteChat"]
+}) {
+  const collapsed = () => props.directoryCollapse.isCollapsed(props.group.directory)
+  return (
+    <ProjectLedgerGroup
+      directory={props.group.directory}
+      count={props.group.items.length}
+      collapsed={collapsed()}
+      onToggle={() => props.directoryCollapse.toggle(props.group.directory)}
+      onCreateChat={props.onCreateChat}
+      dataUi="work-ledger-project-group"
+    >
+      <For each={props.group.items}>
+        {(row) => (
+          <WorkLedgerRowView
+            row={row}
+            selected={props.selected(row)}
+            isSelected={props.selected}
+            onSelect={props.onSelect}
+            onAfterAction={props.onAfterAction}
+            onAbortMission={props.onAbortMission}
+            onDeleteMission={props.onDeleteMission}
+            onStartTask={props.onStartTask}
+            onCancelTask={props.onCancelTask}
+            onDownloadTask={props.onDownloadTask}
+            onRenameTask={props.onRenameTask}
+            onDeleteTask={props.onDeleteTask}
+            onStopChat={props.onStopChat}
+            onDeleteChat={props.onDeleteChat}
+          />
+        )}
+      </For>
+    </ProjectLedgerGroup>
   )
 }
 
@@ -420,33 +601,24 @@ export function WorkLedger(props: WorkLedgerProps) {
         onRetry={() => void reload()}
       >
         {(group) => {
-          const collapsed = directoryCollapse.isCollapsed(group.directory)
           return (
-            <ProjectLedgerGroup
-              directory={group.directory}
-              count={group.items.length}
-              collapsed={collapsed}
-              onToggle={() => directoryCollapse.toggle(group.directory)}
+            <WorkLedgerProjectGroupView
+              group={group}
+              directoryCollapse={directoryCollapse}
+              selected={selected}
+              onSelect={selectRow}
+              onAfterAction={() => void reload()}
+              onAbortMission={props.onAbortMission}
+              onDeleteMission={props.onDeleteMission}
+              onStartTask={props.onStartTask}
+              onCancelTask={props.onCancelTask}
+              onDownloadTask={props.onDownloadTask}
+              onRenameTask={props.onRenameTask}
+              onDeleteTask={props.onDeleteTask}
               onCreateChat={props.onCreateChat}
-              dataUi="work-ledger-project-group"
-            >
-              <For each={group.items}>
-                {(row) => (
-                  <WorkLedgerRowView
-                    row={row}
-                    selected={selected(row)}
-                    onSelect={selectRow}
-                    onAfterAction={() => void reload()}
-                    onAbortMission={props.onAbortMission}
-                    onDeleteMission={props.onDeleteMission}
-                    onCancelTask={props.onCancelTask}
-                    onDeleteTask={props.onDeleteTask}
-                    onStopChat={props.onStopChat}
-                    onDeleteChat={props.onDeleteChat}
-                  />
-                )}
-              </For>
-            </ProjectLedgerGroup>
+              onStopChat={props.onStopChat}
+              onDeleteChat={props.onDeleteChat}
+            />
           )
         }}
       </LedgerList>

@@ -949,7 +949,7 @@ test(
                 if (!rail) throw new Error("Missing conversation agent rail")
                 const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
                 for (const ratio of [0, 0.5, 1, 0.25, 0.75, 0]) {
-                  rail.scrollLeft = (rail.scrollWidth - rail.clientWidth) * ratio
+                  rail.scrollTop = (rail.scrollHeight - rail.clientHeight) * ratio
                   rail.dispatchEvent(new Event("scroll", { bubbles: true }))
                   await frame()
                 }

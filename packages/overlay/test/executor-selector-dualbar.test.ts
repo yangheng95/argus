@@ -35,6 +35,21 @@ function cssBlock(selector: string): string {
 }
 
 describe("ExecutorSelector dual chip bar", () => {
+  test("composer model selector exposes only the OpenCorvus model picker surface", () => {
+    expect(SRC).toContain("export function ComposerModelSelector()")
+    expect(SRC).toContain('data-ui="composer-model-selector"')
+    expect(SRC).toContain('data-ui="composer-model-selector-trigger"')
+    expect(SRC).toContain('class="executor-popover composer-model-selector-popover"')
+
+    const composerSelector = SRC.slice(SRC.indexOf("export function ComposerModelSelector()"))
+    const composerBody = composerSelector.slice(0, composerSelector.indexOf("interface ExecutorChipProps"))
+    expect(composerBody).toContain("mirrorProviderGroups")
+    expect(composerBody).toContain("patchSessionConfig")
+    expect(composerBody).toContain("patchConfig")
+    expect(composerBody).not.toContain("pickExternalModel")
+    expect(composerBody).not.toContain('data-side="external"')
+  })
+
   test("renders two distinct chip buttons rather than a single chip", () => {
     expect(SRC).toMatch(/data-ui=\{`executor-chip-\$\{props\.side\}`\}/)
     expect(SRC).toMatch(/side="mirror"/)
@@ -194,7 +209,8 @@ describe("ExecutorSelector dual chip bar", () => {
 
     expect(selectorStackBlock).toContain("display: block;")
     expect(CSS).toMatch(/\.executor-dualbar\s*\{[\s\S]*?width:\s*100%/)
-    expect(metaLeftBlock).toContain("flex: 1 1 100%;")
+    expect(metaLeftBlock).toContain("flex: 0 1 auto;")
+    expect(CSS).toContain(".composer-model-selector")
     const popoverBlock = cssBlock(".executor-popover")
     expect(popoverBlock).not.toContain("left:")
     expect(popoverBlock).not.toContain("bottom:")

@@ -433,6 +433,7 @@ import type {
   ToolListResponses,
   VcsDiffResponses,
   VcsGetResponses,
+  WorkLedgerEventsResponses,
   WorkLedgerListErrors,
   WorkLedgerListResponses,
   WorktreeCreateErrors,
@@ -10016,6 +10017,25 @@ export class WorkLedger extends HeyApiClient {
     )
     return (options?.client ?? this.client).get<WorkLedgerListResponses, WorkLedgerListErrors, ThrowOnError>({
       url: "/work-ledger",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Subscribe to Work Ledger change notifications
+   *
+   * Pure change-notification SSE for the unified Work Ledger. Emits Mission, Chat, and Task projection changes; clients refetch /work-ledger for the canonical projection.
+   */
+  public events<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).sse.get<WorkLedgerEventsResponses, unknown, ThrowOnError>({
+      url: "/work-ledger/events",
       ...options,
       ...params,
     })

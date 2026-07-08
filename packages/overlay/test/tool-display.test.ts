@@ -14,7 +14,7 @@ describe("tool display helpers", () => {
       "D:/workspace/app",
     )
 
-    expect(display.icon).toBe("\uD83D\uDCC4")
+    expect(display.icon).toBe("file-document")
     expect(display.detail).toBe("src/main.ts:3-18")
     expect(display.status).toBe("completed")
     expect(display.statusLabel.length).toBeGreaterThan(0)

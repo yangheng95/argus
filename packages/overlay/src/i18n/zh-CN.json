@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "be7cb72abb649762"
+    "panel_revision": "cd9e0ab00282d614"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -40,6 +40,7 @@
   "agent_rail.detail.selector": "选择器：{{value}}",
   "agent_rail.detail.session_id": "Session ID：{{value}}",
   "agent_rail.detail.status": "状态：{{value}}",
+  "agent_rail.detail.summary": "摘要：{{value}}",
   "agent_rail.locate_failed": "无法在对话中定位 {{agent}}。",
   "agent_rail.no_rendered_card_target": "{{agent}} 没有关联可渲染的对话卡片。",
   "agent_rail.rendered_card_missing": "无法在对话中定位渲染卡片 {{id}}。",
@@ -133,6 +134,8 @@
   "chat.part_error_unknown": "一个持久化消息片段无法按有效消息片段渲染。",
   "chat.render_error_title": "卡片渲染失败",
   "chat.render_error_unknown": "未知渲染错误",
+  "chat.right_toolbar_close": "关闭右侧工具栏",
+  "chat.right_toolbar_open": "打开右侧工具栏",
   "chat.scroll_bottom": "滚动到底部",
   "chat.git.baseline_created": "已创建初始 Git 检查点",
   "chat.git.baseline_recorded": "已将当前 HEAD 标记为初始检查点",
@@ -1197,6 +1200,7 @@
   "workspace.diff": "差异",
   "workspace.editor_launchers": "IDE 快捷入口",
   "workspace.editor_launchers_menu": "选择 IDE",
+  "workspace.editor_open": "打开于",
   "terminal.open": "打开终端",
   "terminal.open_menu": "选择终端",
   "terminal.default_profile_missing": "终端默认 profile 未配置。",

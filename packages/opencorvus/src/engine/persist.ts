@@ -2095,6 +2095,15 @@ export function deleteGoal(goalID: string) {
   })
 }
 
+function hasManualCompletionEvidence(row: GoalRunRow): boolean {
+  const metadata = row.metadata
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return false
+  const manual = (metadata as Record<string, unknown>).manual_completion
+  if (!manual || typeof manual !== "object" || Array.isArray(manual)) return false
+  const reason = (manual as Record<string, unknown>).reason
+  return typeof reason === "string" && reason.trim().length > 0
+}
+
 export function completeGoal(input: { goalID: string; reason: string; now?: number }): GoalRunRow {
   const goal = findGoal(input.goalID)
   if (!goal) {
@@ -2108,7 +2117,7 @@ export function completeGoal(input: { goalID: string; reason: string; now?: numb
   if (blocker) {
     throw new Error(`completeGoal: ${blocker}; finish or abort the active worker before marking the goal complete.`)
   }
-  if (tip?.status === "completed" && !tip.superseded_reason) {
+  if (tip?.status === "completed" && !tip.superseded_reason && hasManualCompletionEvidence(tip)) {
     return tip
   }
   const completionMetadata = {
@@ -2386,6 +2395,7 @@ export function beginBuildAttempt(input: {
 }
 
 type BuildAttemptOutcomeKind = "delivered" | "failed" | "aborted" | "no_project_diff"
+type BuildAttemptEvidenceContractStatus = "satisfied" | "unsatisfied" | "failed"
 
 function buildAttemptOutcomeKind(input: {
   status: "completed" | "failed" | "aborted"
@@ -2410,6 +2420,36 @@ function buildNoDiffReason(input: {
   return undefined
 }
 
+function noDiffBuildReportSatisfiesGoalKind(goalKind?: string | null): boolean {
+  return goalKind === "verification" || goalKind === "system"
+}
+
+function buildAttemptEvidenceContractStatus(input: {
+  outcomeKind: BuildAttemptOutcomeKind
+  goalKind?: string | null
+}): BuildAttemptEvidenceContractStatus {
+  if (input.outcomeKind === "delivered") return "satisfied"
+  if (input.outcomeKind === "failed" || input.outcomeKind === "aborted") return "failed"
+  if (noDiffBuildReportSatisfiesGoalKind(input.goalKind)) return "satisfied"
+  return "unsatisfied"
+}
+
+function buildAttemptDeliveryEvidenceRefs(input: {
+  outcomeID: string
+  outcomeKind: BuildAttemptOutcomeKind
+  evidenceContractStatus: BuildAttemptEvidenceContractStatus
+  commitRef?: string
+  changedFiles: string[]
+}): string[] {
+  if (input.evidenceContractStatus !== "satisfied") return []
+  const refs = [`build_attempt_outcome:${input.outcomeID}`]
+  if (input.outcomeKind === "delivered") {
+    refs.push(...(input.commitRef ? [`commit:${input.commitRef}`] : []))
+    refs.push(...input.changedFiles.map((file) => `changed_file:${file}`))
+  }
+  return refs
+}
+
 function writeBuildAttemptOutcome(
   db: EngineDatabaseConnection,
   input: {
@@ -2431,6 +2471,11 @@ function writeBuildAttemptOutcome(
   },
 ) {
   const outcomeID = Identifier.ascending("artifact")
+  const goalKind = findGoal(input.goalRun.goal_id)?.kind ?? null
+  const evidenceContractStatus = buildAttemptEvidenceContractStatus({
+    outcomeKind: input.outcomeKind,
+    goalKind,
+  })
   insertEngineArtifact(db, {
     id: outcomeID,
     taskID: input.goalRun.task_id,
@@ -2446,6 +2491,15 @@ function writeBuildAttemptOutcome(
       session_id: input.goalRun.session_id,
       terminal_status: input.status,
       outcome_kind: input.outcomeKind,
+      goal_kind: goalKind,
+      evidence_contract_status: evidenceContractStatus,
+      delivery_evidence_refs: buildAttemptDeliveryEvidenceRefs({
+        outcomeID,
+        outcomeKind: input.outcomeKind,
+        evidenceContractStatus,
+        commitRef: input.commitRef,
+        changedFiles: input.changedFiles,
+      }),
       summary: input.summary?.trim() || `Build attempt ${input.goalRun.id} ${input.outcomeKind}.`,
       error: input.error ?? null,
       no_diff_reason: input.noDiffReason ?? null,
@@ -2507,6 +2561,11 @@ export function recordTaskLevelBuildOutcome(input: {
     acceptanceDiffCount: actualChangedFiles.length,
   })
   const outcomeID = Identifier.ascending("artifact")
+  const actualChangedFilePaths = actualChangedFiles.map((file) => file.path)
+  const evidenceContractStatus = buildAttemptEvidenceContractStatus({
+    outcomeKind,
+    goalKind: null,
+  })
   recordEngineArtifact({
     id: outcomeID,
     taskID: input.taskID,
@@ -2521,6 +2580,15 @@ export function recordTaskLevelBuildOutcome(input: {
       session_id: input.sessionID ?? null,
       terminal_status: terminalStatus,
       outcome_kind: outcomeKind,
+      goal_kind: null,
+      evidence_contract_status: evidenceContractStatus,
+      delivery_evidence_refs: buildAttemptDeliveryEvidenceRefs({
+        outcomeID,
+        outcomeKind,
+        evidenceContractStatus,
+        commitRef: input.contributionCommitRef ?? undefined,
+        changedFiles: actualChangedFilePaths,
+      }),
       summary: input.result.summary.trim() || `Task-level build ${outcomeKind}.`,
       error: input.result.status === "failed" ? input.result.error : null,
       no_diff_reason: noDiffReason ?? null,

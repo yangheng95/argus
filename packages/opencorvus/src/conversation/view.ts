@@ -19,6 +19,10 @@ export interface ConversationSessionView {
   firstObservedAt?: number
   lastObservedAt?: number
   status?: "pending" | "running" | "idle" | "completed" | "error" | "skipped"
+  displaySummary?: {
+    text: string
+    source: "session_status"
+  }
   placement: "top_level" | "goal_phase" | "hidden" | "filtered"
   phase?: ConversationPhaseLocation
 }
@@ -53,6 +57,7 @@ export interface ConversationAgentSessionLedgerEntry {
     type: string
     reason?: string
     error?: string
+    summary?: string
   }
   latestStatusEmittedAt?: number
 }
@@ -162,6 +167,13 @@ function statusFromLifecycleStatus(status: unknown): NonNullable<ConversationSes
   throw new Error(`projectConversationAgentView: unknown lifecycle status ${JSON.stringify(status)}`)
 }
 
+function displaySummaryFromLifecycleStatus(status: unknown): ConversationSessionView["displaySummary"] | undefined {
+  const value =
+    status && typeof status === "object" && !Array.isArray(status) ? (status as Record<string, unknown>) : {}
+  const summary = typeof value.summary === "string" ? value.summary.trim() : ""
+  return summary ? { text: summary, source: "session_status" } : undefined
+}
+
 function lifecyclePayload(event: ConversationLifecycleEvent): Record<string, unknown> {
   if (event.payload && typeof event.payload === "object" && !Array.isArray(event.payload)) return event.payload
   throw new Error(`projectConversationAgentView: lifecycle event ${event.type || "<missing>"} missing payload`)
@@ -192,9 +204,11 @@ function applyLifecycleSession(
   const placement = placementOf(stage, phase)
   const displayGoalID = placement === "goal_phase" ? goalID : ""
   const status = statusFromLifecycleStatus(payload.status)
+  const displaySummary = displaySummaryFromLifecycleStatus(payload.status)
   existing.firstObservedAt = Math.min(existing.firstObservedAt ?? existing.firstMessageTime, observedAt)
   existing.lastObservedAt = Math.max(existing.lastObservedAt ?? existing.lastMessageTime, observedAt)
   existing.status = status
+  if (displaySummary) existing.displaySummary = displaySummary
   if (!existing.parentSessionID && parentSessionID) existing.parentSessionID = parentSessionID
   if (!existing.goalID && displayGoalID) existing.goalID = displayGoalID
   if (!existing.phase && phase) existing.phase = phase
@@ -263,6 +277,8 @@ function applyLedgerLatestStatus(session: ConversationSessionView, ledger: Conve
     throw new Error(`projectConversationAgentView: ledger session ${ledger.sessionID} status missing emitted time`)
   }
   session.status = statusFromLifecycleStatus(ledger.latestStatus)
+  const displaySummary = displaySummaryFromLifecycleStatus(ledger.latestStatus)
+  if (displaySummary) session.displaySummary = displaySummary
   session.firstObservedAt = Math.min(session.firstObservedAt ?? session.firstMessageTime, observedAt)
   session.lastObservedAt = Math.max(session.lastObservedAt ?? session.lastMessageTime, observedAt)
 }

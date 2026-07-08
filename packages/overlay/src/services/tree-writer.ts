@@ -1801,7 +1801,7 @@ function handleReviewStreamChunk(event: any): void {
       if (idx >= 0) {
         parts[idx].text = String(parts[idx].text || "") + delta
       } else {
-        parts.push({ type: "reasoning", partID, text: delta })
+        parts.push({ type: "reasoning", partID, orderKey: requireTimelineOrderKey(event?.orderKey, partID), text: delta })
       }
     }),
   )
@@ -3309,7 +3309,7 @@ function rebuildTaskContextCard(board: any): void {
     )
   }
   const orderKey = requireTimelineOrderKey(task?.orderKey, `task ${task?.id || "<unknown>"}`)
-  const parts: any[] = [{ id: "ctx:user-request:text", type: "text", text: String(task.request) }]
+  const parts: any[] = [{ id: "ctx:user-request:text", type: "text", orderKey, text: String(task.request) }]
   const attachments = Array.isArray(task.attachments) ? task.attachments : []
   for (let i = 0; i < attachments.length; i++) {
     const a = attachments[i]

@@ -20,7 +20,7 @@ describe("orchestrator-core workflow backtracking prohibition", () => {
     expect(normalized).toContain("do not rewind to earlier requirements / plan / executor stages inside the same task")
     expect(normalized).toContain("Use same-task repair actions when the current contract is still valid")
     expect(normalized).toContain("`manage_task` action=modify_goal for point contract repair")
-    expect(normalized).toContain("`dispatch_agent` target=architect")
+    expect(normalized).toContain("`dispatch_agent` target=architect mode=structural_reentry")
     expect(normalized).toContain("targeted `dispatch_agent` target=build for implementation")
   })
 

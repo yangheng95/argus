@@ -5,6 +5,7 @@ import { CommandPalette } from "./CommandPalette"
 import { ConnectionBadge } from "./ConnectionBadge"
 import { ConfigDialogHost } from "./ConfigDialogHost"
 import { ConnectionBanner } from "./ConnectionBanner"
+import { ChatHeaderRightToolbarToggle } from "./ChatHeaderRightToolbarToggle"
 import { ConversationAgentRail } from "./ConversationAgentRail"
 import { FileEditorPane } from "./FileEditorPane"
 import { GoalDialogHost } from "./GoalDialogHost"
@@ -17,6 +18,7 @@ import { TaskStatusHeader } from "./TaskStatusHeader"
 import { TitlebarBrandGuide } from "./titlebar/TitlebarBrandGuide"
 import { TitlebarMenubar } from "./titlebar/TitlebarMenubar"
 import { WindowControls } from "./WindowControls"
+import { WorkspaceEditorLaunchers } from "./WorkspaceEditorLaunchers"
 import { WorkspaceOnboardingDialog } from "./WorkspaceOnboardingDialog"
 
 function StaticMountPortal(props: { id: string; children: JSX.Element }) {
@@ -41,6 +43,12 @@ export function App() {
       </StaticMountPortal>
       <StaticMountPortal id="solidTitlebarMenu">
         <TitlebarMenubar />
+      </StaticMountPortal>
+      <StaticMountPortal id="solidChatHeaderEditorLaunchers">
+        <WorkspaceEditorLaunchers />
+      </StaticMountPortal>
+      <StaticMountPortal id="solidChatHeaderRightToolbarToggle">
+        <ChatHeaderRightToolbarToggle />
       </StaticMountPortal>
       <StaticMountPortal id="solidWindowControls">
         <WindowControls />

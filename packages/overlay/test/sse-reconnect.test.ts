@@ -6,6 +6,7 @@ import {
   TASK_LIST_REFRESH_INTERVAL_MS,
   SELECTED_TASK_STREAM_STALL_MS,
   performSseReconnect,
+  setWorkLedgerChangeHandler,
   startSSE,
   startTaskListSSE,
   stopSSE,
@@ -682,6 +683,53 @@ describe("startSSE stream error handling", () => {
       stopTaskListSSE()
       __setHostTransportForTest(undefined)
       setBoardStore("board", null as any)
+      setSettingsStore("directory", "")
+    }
+  })
+
+  test("work-ledger stream opens with the global task stream when a ledger handler is registered", () => {
+    const streams: StreamOpenRequest[] = []
+    const handlers = new Map<string, StreamHandlers>()
+    let changes = 0
+    const transport = {
+      kind: "tauri",
+      capabilities: HOST_CAPABILITIES.tauri,
+      request: async <T>(_input: TransportRequest) => ({ status: 200, ok: true, headers: {}, body: null as T }),
+      openStream: (input: StreamOpenRequest, h: StreamHandlers) => {
+        streams.push(input)
+        handlers.set(input.path, h)
+        return { close() {} }
+      },
+      native: async () => null,
+      subscribeUiCommand: () => ({ unsubscribe() {} }),
+    } satisfies HostTransport
+
+    try {
+      __setHostTransportForTest(transport)
+      setSettingsStore("directory", "D:/repo/next")
+      setWorkLedgerChangeHandler(() => {
+        changes += 1
+      })
+
+      startTaskListSSE()
+
+      expect(streams).toEqual([
+        { path: "work-ledger/events", query: { directory: "D:/repo/next" } },
+        { path: "task/events", query: { directory: "D:/repo/next" } },
+      ])
+
+      handlers.get("work-ledger/events")?.onEvent?.(
+        JSON.stringify({ type: "work-ledger.changed", sourceType: "session.updated", sessionID: "ses_live", sequence: 1 }),
+      )
+      handlers.get("work-ledger/events")?.onEvent?.(
+        JSON.stringify({ type: "work-ledger.heartbeat", sourceType: "work-ledger.heartbeat", sequence: 0 }),
+      )
+
+      expect(changes).toBe(1)
+    } finally {
+      stopTaskListSSE()
+      setWorkLedgerChangeHandler(null)
+      __setHostTransportForTest(undefined)
       setSettingsStore("directory", "")
     }
   })

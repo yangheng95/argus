@@ -186,7 +186,7 @@ export function createGoalWorkloadOutputTools(input: { knownGoalIDs: string[]; k
           "PASS: workload analysis finalized.",
           `  ${collector.briefs.length} goal brief(s); ${flagged.length} flagged with decomposition_concern.`,
           flagged.length > 0
-            ? `  Flagged (consider Architect re-sizing): ${flagged.map((b) => b.goal_id).join(", ")}`
+            ? `  Flagged (consider modify_goal; Architect structural_reentry only with named invalid artifact evidence): ${flagged.map((b) => b.goal_id).join(", ")}`
             : "",
         ]
           .filter(Boolean)

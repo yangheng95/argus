@@ -2,6 +2,7 @@ let layoutTokenProbe: HTMLElement | null = null
 const layoutTokenCache = new Map<string, { signature: string; value: number }>()
 
 export interface LayoutTokenResolver {
+  tokenNumber(name: string): number
   tokenPx(name: string): number
 }
 
@@ -57,6 +58,25 @@ export function layoutTokenPx(name: string): number {
   return createLayoutTokenResolver().tokenPx(name)
 }
 
+export function layoutTokenNumber(name: string): number {
+  return createLayoutTokenResolver().tokenNumber(name)
+}
+
+function resolveProbeWidth(signature: string, cacheKey: string, width: string): number {
+  const cached = layoutTokenCache.get(cacheKey)
+  if (cached?.signature === signature) return cached.value
+
+  const probe = probeElement()
+  probe.style.width = "0px"
+  probe.style.width = width
+  const value = probe.getBoundingClientRect().width
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`Layout token ${cacheKey} resolved to invalid width: ${value}`)
+  }
+  layoutTokenCache.set(cacheKey, { signature, value })
+  return value
+}
+
 export function createLayoutTokenResolver(): LayoutTokenResolver {
   if (typeof document === "undefined") {
     throw new Error("Layout token resolution requires a document.")
@@ -65,21 +85,14 @@ export function createLayoutTokenResolver(): LayoutTokenResolver {
   if (!root) {
     throw new Error("Layout token resolution requires documentElement.")
   }
-  const probe = probeElement()
   const signature = tokenSignature(root, document.body)
 
   return {
+    tokenNumber(name: string): number {
+      return resolveProbeWidth(signature, `number:${name}`, `calc(var(${name}) * 1px)`)
+    },
     tokenPx(name: string): number {
-      const cached = layoutTokenCache.get(name)
-      if (cached?.signature === signature) return cached.value
-
-      probe.style.width = `var(${name})`
-      const value = probe.getBoundingClientRect().width
-      if (!Number.isFinite(value) || value <= 0) {
-        throw new Error(`Layout token ${name} resolved to invalid width: ${value}`)
-      }
-      layoutTokenCache.set(name, { signature, value })
-      return value
+      return resolveProbeWidth(signature, `px:${name}`, `var(${name})`)
     },
   }
 }

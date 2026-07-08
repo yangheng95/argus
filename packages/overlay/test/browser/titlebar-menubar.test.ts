@@ -1386,7 +1386,7 @@ test(
           ".btn.mini",
           '[data-ui^="executor-chip-"]',
           ".chat-input",
-          ".chat-compose-row .oc-button[data-mode]",
+          ".chat-compose-meta-right .oc-button[data-mode]",
         ]
         return selectors.flatMap((selector) => {
           const node = document.querySelector<HTMLElement>(selector)
@@ -1425,9 +1425,9 @@ test(
             props: ["columnGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"],
             max: 8,
           },
-          { selector: ".chat-compose-row .oc-button[data-mode]", props: ["paddingLeft", "paddingRight"], max: 9 },
+          { selector: ".chat-compose-meta-right .oc-button[data-mode]", props: ["paddingLeft", "paddingRight"], max: 9 },
           {
-            selector: ".chat-compose-row .oc-button[data-mode]",
+            selector: ".chat-compose-meta-right .oc-button[data-mode]",
             props: ["columnGap", "paddingLeft", "paddingRight"],
             max: 9,
           },

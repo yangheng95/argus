@@ -280,7 +280,7 @@ Output: Creates directory 'foo'"
         "type": "array",
       },
       "followup_workload_guidance": {
-        "description": "Explicit warning for subsequent agents about hidden or remaining work surface, evidence they must read deeper, and whether goal workload analysis or Architect re-sizing should be revisited.",
+        "description": "Explicit warning for subsequent agents about hidden or remaining work surface, evidence they must read deeper, and whether goal workload analysis or Architect structural_reentry evidence should be revisited.",
         "minLength": 1,
         "type": "string",
       },

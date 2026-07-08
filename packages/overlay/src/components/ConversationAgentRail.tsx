@@ -1,4 +1,5 @@
-import { Index, Show, createMemo, onCleanup, type Accessor } from "solid-js"
+import * as Tooltip from "@kobalte/core/tooltip"
+import { Index, Show, createMemo, type Accessor } from "solid-js"
 import { cardTreeStore } from "../store/card-tree"
 import { boardStore } from "../store/board"
 import { conversationAgentRecordsForSource } from "../store/conversation-agents"
@@ -14,7 +15,7 @@ import { AppLog } from "../utils/log"
 import type { AgentWorkflowRecord, AgentWorkflowStatus } from "../utils/agent-workflow"
 import { parentIDChainForCard } from "../utils/card-tree"
 import { stageAccent } from "../utils/card-color"
-import { Avatar, avatarRole } from "./Avatar"
+import { avatarRole } from "./Avatar"
 import { Button } from "./ui/Button"
 import { t } from "../utils/i18n"
 
@@ -34,7 +35,49 @@ function agentRailStatusLabel(status: AgentWorkflowStatus): string {
 function compactLabel(record: AgentWorkflowRecord): string {
   const parts = [record.agentName, agentRailStatusLabel(record.status)]
   if (record.attempt) parts.push(t("agent_rail.attempt", { value: record.attempt }))
+  const summary = agentRailSummary(record)
+  if (summary) parts.push(summary)
   return parts.filter(Boolean).join(" · ")
+}
+
+interface AgentRailStack {
+  id: string
+  stage: string
+  agentName: string
+  records: AgentWorkflowRecord[]
+}
+
+function agentRailStage(record: AgentWorkflowRecord): string {
+  return avatarRole(record.stage)
+}
+
+function agentRailSummary(record: AgentWorkflowRecord): string {
+  return String(record.displaySummary?.text || "").trim()
+}
+
+function buildAdjacentAgentRailStacks(records: AgentWorkflowRecord[]): AgentRailStack[] {
+  const stacks: AgentRailStack[] = []
+  for (const record of records) {
+    const stage = agentRailStage(record)
+    const previous = stacks[stacks.length - 1]
+    if (previous?.stage === stage) {
+      previous.records.push(record)
+      previous.agentName = record.agentName || previous.agentName
+      continue
+    }
+    stacks.push({
+      id: `${stage}:${record.sessionID}`,
+      stage,
+      agentName: record.agentName,
+      records: [record],
+    })
+  }
+  return stacks
+}
+
+function tooltipSummaryLine(record: AgentWorkflowRecord): string {
+  const summary = agentRailSummary(record)
+  return summary ? t("agent_rail.detail.summary", { value: summary }) : ""
 }
 
 function parentIDsForCard(cardID: string): string[] {
@@ -159,147 +202,95 @@ async function locateRecord(record: AgentWorkflowRecord): Promise<void> {
   })
 }
 
-/** Wire up pointer-driven drag-to-scroll on the rail's lanes container.
- *  Press-and-drag horizontally scrolls the rail like a trackpad; a real
- *  click (no drag past the 4px threshold) still reaches the avatar
- *  button and triggers `locateRecord`. The dataset flag `data-dragging`
- *  lets CSS swap the cursor between `grab` and `grabbing` and disable
- *  text selection during the drag. */
-function attachRailDragScroll(el: HTMLElement): () => void {
-  const DRAG_THRESHOLD_PX = 4
-  let pointerId: number | null = null
-  let capturedPointerId: number | null = null
-  let capturedPointerTarget: Element | null = null
-  let startX = 0
-  let startScrollLeft = 0
-  let dragging = false
-  let suppressClick = false
-
-  function onPointerDown(event: PointerEvent) {
-    if (event.pointerType === "mouse" && event.button !== 0) return
-    if (pointerId !== null) return
-    if (!(event.target instanceof Element)) return
-    const captureTarget = event.target
-    pointerId = event.pointerId
-    startX = event.clientX
-    startScrollLeft = el.scrollLeft
-    dragging = false
-    suppressClick = false
-    captureTarget.setPointerCapture(pointerId)
-    capturedPointerId = pointerId
-    capturedPointerTarget = captureTarget
-  }
-
-  function onPointerMove(event: PointerEvent) {
-    if (pointerId === null || event.pointerId !== pointerId) return
-    const dx = event.clientX - startX
-    if (!dragging) {
-      if (Math.abs(dx) < DRAG_THRESHOLD_PX) return
-      dragging = true
-      suppressClick = true
-      el.dataset.dragging = "true"
-    }
-    el.scrollLeft = startScrollLeft - dx
-    event.preventDefault()
-  }
-
-  function onPointerEnd(event: PointerEvent) {
-    if (pointerId === null || event.pointerId !== pointerId) return
-    if (capturedPointerId === pointerId && capturedPointerTarget?.hasPointerCapture(pointerId)) {
-      capturedPointerTarget.releasePointerCapture(pointerId)
-    }
-    capturedPointerId = null
-    capturedPointerTarget = null
-    if (dragging) {
-      delete el.dataset.dragging
-    }
-    dragging = false
-    pointerId = null
-    // suppressClick stays true so the click event that follows the
-    // pointerup gets swallowed; it resets itself inside onClickCapture.
-  }
-
-  function onClickCapture(event: MouseEvent) {
-    if (!suppressClick) return
-    event.stopPropagation()
-    event.preventDefault()
-    suppressClick = false
-  }
-
-  el.addEventListener("pointerdown", onPointerDown)
-  el.addEventListener("pointermove", onPointerMove)
-  el.addEventListener("pointerup", onPointerEnd)
-  el.addEventListener("pointercancel", onPointerEnd)
-  el.addEventListener("click", onClickCapture, true)
-
-  return () => {
-    el.removeEventListener("pointerdown", onPointerDown)
-    el.removeEventListener("pointermove", onPointerMove)
-    el.removeEventListener("pointerup", onPointerEnd)
-    el.removeEventListener("pointercancel", onPointerEnd)
-    el.removeEventListener("click", onClickCapture, true)
-    if (capturedPointerId !== null && capturedPointerTarget?.hasPointerCapture(capturedPointerId)) {
-      capturedPointerTarget.releasePointerCapture(capturedPointerId)
-    }
-    capturedPointerId = null
-    capturedPointerTarget = null
-    delete el.dataset.dragging
-  }
-}
-
 function AgentRailRow(props: {
   record: Accessor<AgentWorkflowRecord>
   onLocate: (record: AgentWorkflowRecord) => Promise<void>
 }) {
   const record = props.record
+  const summary = () => agentRailSummary(record())
+  const tooltipLabel = () => compactLabel(record())
 
   return (
     <div
       class="conversation-agent-rail__row"
+      data-agent={agentRailStage(record())}
       data-status={record().status}
-      style={{ "--card-stage": stageAccent(avatarRole(record().stage)) }}
+      data-has-summary={summary() ? "true" : "false"}
+      style={{ "--card-stage": stageAccent(agentRailStage(record())) }}
     >
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        tone="neutral"
-        data-ui="conversation-agent-rail-locate"
-        data-session-id={record().sessionID}
-        data-target-message-id={record().targetMessageID || ""}
-        data-rendered-card-id={record().renderedCardID || ""}
-        aria-label={compactLabel(record())}
-        title={compactLabel(record())}
-        onClick={() => {
-          const current = record()
-          void props.onLocate(current).catch((error) => reportLocateFailure(current, error))
-        }}
-      >
-        <Avatar role={record().stage} status={record().status} />
-      </Button>
+      <Tooltip.Root openDelay={0} closeDelay={0} placement="right" gutter={8}>
+        <Tooltip.Trigger
+          as={Button}
+          type="button"
+          variant="ghost"
+          size="icon"
+          tone="neutral"
+          data-ui="conversation-agent-rail-locate"
+          data-session-id={record().sessionID}
+          data-target-message-id={record().targetMessageID || ""}
+          data-rendered-card-id={record().renderedCardID || ""}
+          aria-label={tooltipLabel()}
+          title={tooltipLabel()}
+          onClick={() => {
+            const current = record()
+            void props.onLocate(current).catch((error) => reportLocateFailure(current, error))
+          }}
+        >
+          <span class="conversation-agent-rail__tick" aria-hidden="true">
+            <span class="conversation-agent-rail__tick-line" />
+          </span>
+        </Tooltip.Trigger>
+        <Tooltip.Portal>
+          <Tooltip.Content class="conversation-agent-rail-tooltip">
+            <span class="conversation-agent-rail-tooltip__agent">
+              {t("agent_rail.detail.agent", { value: record().agentName })}
+            </span>
+            <span class="conversation-agent-rail-tooltip__meta">
+              {t("agent_rail.detail.status", { value: agentRailStatusLabel(record().status) })}
+            </span>
+            <Show when={record().attempt}>
+              {(attempt) => (
+                <span class="conversation-agent-rail-tooltip__meta">
+                  {t("agent_rail.detail.attempt", { value: attempt() })}
+                </span>
+              )}
+            </Show>
+            <Show when={tooltipSummaryLine(record())}>
+              {(line) => <span class="conversation-agent-rail-tooltip__summary">{line()}</span>}
+            </Show>
+          </Tooltip.Content>
+        </Tooltip.Portal>
+      </Tooltip.Root>
     </div>
   )
 }
 
 export function ConversationAgentRail() {
   const records = createMemo(() => conversationAgentRecordsForSource(boardStore.selectedSource))
+  const stacks = createMemo(() => buildAdjacentAgentRailStacks(records()))
   const hasRecords = createMemo(() => records().length > 0)
 
   return (
     <Show when={hasRecords()}>
       <aside class="conversation-agent-rail" aria-label={t("agent_rail.workflow_label")}>
-        <div
-          class="conversation-agent-rail__lanes"
-          role="list"
-          ref={(el) => {
-            if (!el) return
-            const dispose = attachRailDragScroll(el)
-            onCleanup(dispose)
-          }}
-        >
-          <div class="conversation-agent-rail__lane" data-kind="timeline" role="listitem">
-            <Index each={records()}>{(record) => <AgentRailRow record={record} onLocate={locateRecord} />}</Index>
-          </div>
+        <div class="conversation-agent-rail__lanes" role="list">
+          <Index each={stacks()}>
+            {(stack) => (
+              <div
+                class="conversation-agent-rail__stack"
+                data-stack-id={stack().id}
+                data-agent={stack().stage}
+                data-agent-name={stack().agentName}
+                data-count={stack().records.length}
+                role="listitem"
+                style={{ "--card-stage": stageAccent(stack().stage) }}
+              >
+                <Index each={stack().records}>
+                  {(record) => <AgentRailRow record={record} onLocate={locateRecord} />}
+                </Index>
+              </div>
+            )}
+          </Index>
         </div>
       </aside>
     </Show>

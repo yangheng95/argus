@@ -50,7 +50,7 @@ async function saveElementScreenshot(page: any, selector: string, filename: stri
   return screenshotPath
 }
 
-test("collapsed agent card renders terminal summary as a designed first-person section", async () => {
+test("collapsed agent card renders latest tool activity instead of terminal summary", async () => {
   assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
   assert.equal(typeof globalThis.Bun, "undefined")
 
@@ -58,6 +58,7 @@ test("collapsed agent card renders terminal summary as a designed first-person s
   const taskID = "task-agent-summary-card"
   const summaryText =
     "I checked the overlay projection, verified the collapsed card rendering, and recorded the passing screenshot evidence."
+  const latestToolCommand = "rg collapsed-card-preview packages/overlay/src"
   const task = {
     id: taskID,
     title: "Agent summary card",
@@ -126,6 +127,20 @@ test("collapsed agent card renders terminal summary as a designed first-person s
           type: "text",
           text:
             "The implementation projects the terminal lifecycle summary into the card tree and keeps the normal collapsed preview available below it.",
+        },
+        {
+          id: "part-architect-tool",
+          messageID: "msg-architect",
+          sessionID: "session-architect-summary",
+          orderKey: testPartOrderKey("part-architect-tool", now - 6_500),
+          type: "tool",
+          tool: "bash",
+          state: {
+            status: "completed",
+            time: { start: now - 6_500, end: now - 6_300 },
+            input: { command: latestToolCommand },
+            output: "",
+          },
         },
       ],
       info: {
@@ -273,6 +288,7 @@ test("collapsed agent card renders terminal summary as a designed first-person s
     if (path === `/task/${taskID}/transcript`) return send(transcript)
     if (path === `/task/${taskID}/trace`)
       return send({ events: [], traceDir: "D:/overlay/workspace/app/.opencorvus/trace" })
+    if (path === "/work-ledger/events") return eventStream()
     if (path === "/task/events" || path === `/task/${taskID}/events`) return eventStream()
     if (path === "/panel/knowledge/memory" || path === "/panel/knowledge/preference") return send([])
     if (path === "/log" && req.method === "POST") return send({ ok: true })
@@ -343,60 +359,49 @@ test("collapsed agent card renders terminal summary as a designed first-person s
     if (expanded === "true") {
       await page.click('.chat-bubble-row[data-kind="agent"] .chat-bubble__head-main')
     }
-    await page.waitForSelector('.chat-bubble-row[data-kind="agent"] [data-ui="agent-summary"]', {
+    await page.waitForSelector('.chat-bubble-row[data-kind="agent"] .card__collapsed-preview', {
       visible: true,
       timeout: 15_000,
     })
 
     const layout = await page.$eval(
       '.chat-bubble-row[data-kind="agent"]',
-      (row: HTMLElement, expectedSummary: string) => {
+      (row: HTMLElement, expectedToolCommand: string) => {
         const button = row.querySelector<HTMLButtonElement>(".chat-bubble__head-main")
         const title = row.querySelector<HTMLElement>(".chat-bubble__identity")
         const summary = row.querySelector<HTMLElement>('[data-ui="agent-summary"]')
-        const label = row.querySelector<HTMLElement>(".card__agent-summary-label")
-        const text = row.querySelector<HTMLElement>(".card__agent-summary-text")
         const preview = row.querySelector<HTMLElement>(".card__collapsed-preview")
         const rect = (el: Element | null) => el?.getBoundingClientRect()
         const titleRect = rect(title)
-        const summaryRect = rect(summary)
         const previewRect = rect(preview)
-        const style = summary ? getComputedStyle(summary) : undefined
         return {
           buttonExpanded: button?.getAttribute("aria-expanded") ?? "",
-          summaryInsideButton: Boolean(button && summary && button.contains(summary)),
-          summaryText: text?.textContent?.trim() ?? "",
-          labelText: label?.textContent?.trim() ?? "",
-          display: style?.display ?? "",
-          gridColumns: style?.gridTemplateColumns ?? "",
-          borderLeftWidth: style?.borderLeftWidth ?? "",
-          titleBeforeSummary: Boolean(titleRect && summaryRect && titleRect.bottom <= summaryRect.top + 1),
-          summaryBeforePreview: Boolean(summaryRect && previewRect && summaryRect.bottom <= previewRect.top + 1),
-          summaryHeight: summaryRect?.height ?? 0,
-          summaryWidth: summaryRect?.width ?? 0,
-          expectedSummary,
+          summaryRendered: Boolean(summary),
+          previewInsideButton: Boolean(button && preview && button.contains(preview)),
+          previewText: preview?.textContent?.trim() ?? "",
+          titleBeforePreview: Boolean(titleRect && previewRect && titleRect.bottom <= previewRect.top + 1),
+          previewHeight: previewRect?.height ?? 0,
+          previewWidth: previewRect?.width ?? 0,
+          expectedToolCommand,
         }
       },
-      summaryText,
+      latestToolCommand,
     )
     assert.equal(layout.buttonExpanded, "false")
-    assert.equal(layout.summaryInsideButton, true)
-    assert.equal(layout.summaryText, layout.expectedSummary)
-    assert.equal(layout.labelText, "I did")
-    assert.equal(layout.display, "grid")
-    assert.match(layout.gridColumns, /px/)
-    assert.notEqual(layout.borderLeftWidth, "0px")
-    assert.equal(layout.titleBeforeSummary, true)
-    assert.equal(layout.summaryBeforePreview, true)
-    assert.ok(layout.summaryHeight >= 36, `summary section too short: ${JSON.stringify(layout)}`)
-    assert.ok(layout.summaryWidth >= 280, `summary section too narrow: ${JSON.stringify(layout)}`)
+    assert.equal(layout.summaryRendered, false)
+    assert.equal(layout.previewInsideButton, true)
+    assert.match(layout.previewText, /^bash:/)
+    assert.ok(layout.previewText.includes(layout.expectedToolCommand), JSON.stringify(layout))
+    assert.equal(layout.titleBeforePreview, true)
+    assert.ok(layout.previewHeight >= 16, `preview section too short: ${JSON.stringify(layout)}`)
+    assert.ok(layout.previewWidth >= 280, `preview section too narrow: ${JSON.stringify(layout)}`)
 
     const screenshot = await saveElementScreenshot(
       page,
       '.chat-bubble-row[data-kind="agent"]',
-      "agent-summary-collapsed.png",
+      "agent-latest-tool-collapsed.png",
     )
-    assert.ok(screenshot.endsWith("agent-summary-collapsed.png"), `requests: ${requests.join("\n")}`)
+    assert.ok(screenshot.endsWith("agent-latest-tool-collapsed.png"), `requests: ${requests.join("\n")}`)
   } finally {
     await browser.close().catch(() => undefined)
     await server.close()

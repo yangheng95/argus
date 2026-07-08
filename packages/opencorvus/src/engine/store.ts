@@ -131,6 +131,7 @@ export type EvaluationRow = {
   time_updated: number
 }
 export type BuildAttemptOutcomeKind = "delivered" | "failed" | "aborted" | "no_project_diff"
+export type BuildAttemptEvidenceContractStatus = "satisfied" | "unsatisfied" | "failed"
 export type BuildAttemptOutcomeRow = {
   id: string
   task_id: string
@@ -150,6 +151,8 @@ export type BuildAttemptOutcomeRow = {
   changed_files: string[]
   reported_changed_files: string[]
   build_report: Record<string, unknown> | null
+  delivery_evidence_refs: string[]
+  evidence_contract_status: BuildAttemptEvidenceContractStatus
   host_facts: Record<string, unknown>
   workspace: {
     dir: string | null
@@ -2226,9 +2229,12 @@ function artifactRowToBuildAttemptOutcomeRow(row: typeof EngineArtifactTable.$in
     session_id?: string | null
     terminal_status?: "completed" | "failed" | "aborted"
     outcome_kind?: BuildAttemptOutcomeKind
+    goal_kind?: string | null
     summary?: string
     error?: string | null
     no_diff_reason?: string | null
+    delivery_evidence_refs?: unknown
+    evidence_contract_status?: BuildAttemptEvidenceContractStatus
     build_report?: Record<string, unknown>
     host_facts?: Record<string, unknown>
     workspace?: {
@@ -2241,11 +2247,19 @@ function artifactRowToBuildAttemptOutcomeRow(row: typeof EngineArtifactTable.$in
   const buildReport = payload.build_report && typeof payload.build_report === "object" ? payload.build_report : null
   const changedFiles = changedFilePathsFromHostFacts(hostFacts.actual_changed_files)
   const reportedChangedFiles = changedFilePathsFromBuildReport(buildReport?.files_changed)
+  const goalID = payload.goal_id ?? null
+  const evidenceContractStatus =
+    payload.evidence_contract_status ??
+    buildAttemptEvidenceContractStatus({
+      outcomeKind: payload.outcome_kind,
+      goalKind: payload.goal_kind ?? (goalID ? findGoal(goalID)?.kind : null),
+    })
+  const deliveryEvidenceRefs = stringArrayFromUnknown(payload.delivery_evidence_refs)
   return {
     id: row.id,
     task_id: payload.task_id ?? row.task_id,
     run_id: payload.run_id ?? row.run_id ?? null,
-    goal_id: payload.goal_id ?? null,
+    goal_id: goalID,
     goal_run_id: payload.goal_run_id ?? row.goal_run_id ?? null,
     session_id: payload.session_id ?? null,
     terminal_status: payload.terminal_status ?? "failed",
@@ -2263,6 +2277,11 @@ function artifactRowToBuildAttemptOutcomeRow(row: typeof EngineArtifactTable.$in
     changed_files: changedFiles,
     reported_changed_files: reportedChangedFiles,
     build_report: buildReport,
+    delivery_evidence_refs:
+      deliveryEvidenceRefs.length > 0 || evidenceContractStatus !== "satisfied"
+        ? deliveryEvidenceRefs
+        : [`build_attempt_outcome:${row.id}`],
+    evidence_contract_status: evidenceContractStatus,
     host_facts: hostFacts,
     workspace: {
       dir: payload.workspace?.dir ?? null,
@@ -2272,6 +2291,25 @@ function artifactRowToBuildAttemptOutcomeRow(row: typeof EngineArtifactTable.$in
     time_created: row.time_created,
     time_updated: row.time_updated,
   }
+}
+
+function noDiffBuildReportSatisfiesGoalKind(goalKind?: string | null): boolean {
+  return goalKind === "verification" || goalKind === "system"
+}
+
+function buildAttemptEvidenceContractStatus(input: {
+  outcomeKind?: BuildAttemptOutcomeKind
+  goalKind?: string | null
+}): BuildAttemptEvidenceContractStatus {
+  if (input.outcomeKind === "delivered") return "satisfied"
+  if (input.outcomeKind === "failed" || input.outcomeKind === "aborted") return "failed"
+  if (noDiffBuildReportSatisfiesGoalKind(input.goalKind)) return "satisfied"
+  return "unsatisfied"
+}
+
+function stringArrayFromUnknown(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
 }
 
 function changedFilePathsFromHostFacts(value: unknown): string[] {

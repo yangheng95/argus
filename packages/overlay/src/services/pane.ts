@@ -56,7 +56,7 @@ export const PANEL_PANE_CONFIG: PaneConfig = {
   leftHandleId: "leftPaneResizer",
   leftFixedControlIds: [],
   leftControls: ["sidebar", "workspaceMain"],
-  remainingFixedControlIds: ["solidRightActivityToolbar"],
+  remainingFixedControlIds: [],
   remainingMinWidth: defaultPanelRemainingMinWidth,
   sidebarVar: "--ui-sidebar-width",
 }

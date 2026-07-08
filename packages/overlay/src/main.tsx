@@ -18,6 +18,7 @@ import { BrowserPreviewPanel } from "./components/BrowserPreviewPanel"
 import { ScreenshotBrowserPanel } from "./components/ScreenshotBrowserPanel"
 import { SideActivityToolbar, type SideActivity } from "./components/SideActivityToolbar"
 import { ProjectRuntimeToolbarActions } from "./components/TaskDirBar"
+import { Button } from "./components/ui/Button"
 import { closeFileEditor, fileWorkbenchOpen } from "./services/file-workbench"
 import type { DiffTarget } from "./services/diff"
 import { initApp } from "./services/init"
@@ -32,7 +33,17 @@ import {
 } from "./store/board"
 import { clearMessages, messageStore, setChatAttachments } from "./store/messages"
 import { appStore } from "./store/app"
-import { selectTask, retryTask, replanTask, cancelTask, deleteTask } from "./services/task"
+import { rightToolbarOpen, setRightToolbarVisible } from "./store/right-toolbar"
+import {
+  selectTask,
+  retryTask,
+  replanTask,
+  cancelTask,
+  deleteTask,
+  renameTask,
+  downloadTaskProjectArchive,
+} from "./services/task"
+import { startQueuedTaskNow } from "./services/task-queue"
 import { canComposeChat, stopChatRequest } from "./services/chat"
 import { isTaskInterruptable } from "./store/board"
 import { loadAllLocales, localeTag, setLocale } from "./utils/i18n"
@@ -71,8 +82,9 @@ import { nativeOpen } from "./utils/native"
 import { getHostTransport } from "./services/host-transport"
 import { hydrateIconPlaceholders, installIconHtmlRenderer } from "./utils/icon-html"
 import { installNativeContextMenuSuppression } from "./utils/context-menu"
-import { notifyError, notifyWarning, formatErrorDetails, recomputeBadgeFromTasks } from "./services/notify"
-import { applyDirectory, activeDirectory, openPathInSelectedEditor } from "./services/workspace"
+import { notifyError, notifySuccess, notifyWarning, formatErrorDetails, recomputeBadgeFromTasks } from "./services/notify"
+import { showAppDialog } from "./services/app-dialog"
+import { applyDirectory, activeDirectory, browseDirectory, openPathInSelectedEditor } from "./services/workspace"
 import { openConfigDialog, openGoalDialog } from "./services/dialog"
 import { cardTreeStore } from "./store/card-tree"
 import { composerDraftKey } from "./services/composer-draft"
@@ -86,7 +98,7 @@ import {
 } from "./services/coding-assistant"
 import { abortMission, deleteMission, wakeMission, type MissionWakeResult } from "./services/mission"
 import type { WorkLedgerChatRow, WorkLedgerMissionRow, WorkLedgerTaskRow } from "./services/work-ledger"
-import { startSSE, stopSSE } from "./services/sse"
+import { setWorkLedgerChangeHandler, startSSE, stopSSE } from "./services/sse"
 import { resetWriter } from "./services/tree-writer"
 import { resetConversationAgentView } from "./store/conversation-agents"
 import { openImagePreview } from "./services/image-preview"
@@ -316,6 +328,8 @@ const [primaryCenterPanel, setPrimaryCenterPanel] = createSignal<PrimaryCenterPa
 const [missionSharedRefreshToken, setMissionSharedRefreshToken] = createSignal(0)
 const [missionLauncherSubmitting, setMissionLauncherSubmitting] = createSignal(false)
 const [assistantLauncherSubmitting, setAssistantLauncherSubmitting] = createSignal(false)
+setWorkLedgerChangeHandler(() => setMissionSharedRefreshToken((value) => value + 1))
+disposers.push(() => setWorkLedgerChangeHandler(null))
 const [composerMode, setComposerMode] = createSignal<ComposerMode>("chat")
 
 function isCenterWorkbenchPanelOpen(panel: CenterWorkbenchPanel): boolean {
@@ -368,6 +382,7 @@ function selectDiffActivity(): void {
 }
 
 function selectRightActivity(activity: RightActivity): void {
+  setRightToolbarVisible(true)
   if (activity === "diff") {
     selectDiffActivity()
     return
@@ -384,6 +399,7 @@ function selectRightActivity(activity: RightActivity): void {
 }
 
 function openRightActivity(activity: RightActivity): void {
+  setRightToolbarVisible(true)
   if (activity === "diff") {
     openDiffActivity()
     return
@@ -466,6 +482,53 @@ async function deleteWorkLedgerMission(row: WorkLedgerMissionRow): Promise<void>
 
 async function cancelWorkLedgerTask(row: WorkLedgerTaskRow): Promise<void> {
   await cancelTask(row.id)
+  setMissionSharedRefreshToken((value) => value + 1)
+}
+
+async function startWorkLedgerTask(row: WorkLedgerTaskRow): Promise<void> {
+  const result = await startQueuedTaskNow({ taskID: row.id, directory: row.directory })
+  await loadTasks({ requireFresh: true })
+  if (result.started) {
+    notifySuccess({
+      id: `task:start-now:${row.id}`,
+      title: t("task.start_now_started_title"),
+      message: result.task?.title || row.title || row.id,
+    })
+  } else {
+    notifyWarning({
+      id: `task:start-now:${row.id}`,
+      title: t("task.start_now_not_started_title"),
+      message: t("task.start_now_not_started"),
+    })
+  }
+  setMissionSharedRefreshToken((value) => value + 1)
+}
+
+async function downloadWorkLedgerTask(row: WorkLedgerTaskRow): Promise<void> {
+  const ok = await downloadTaskProjectArchive({ taskID: row.id, directory: row.directory })
+  if (!ok) throw new Error(t("task.download_project_failed", { error: row.id }))
+  notifySuccess({
+    id: `task:download-project:${row.id}`,
+    title: t("task.download_project_started_title"),
+    message: row.title || row.id,
+  })
+}
+
+async function renameWorkLedgerTask(row: WorkLedgerTaskRow): Promise<void> {
+  const dialog = await showAppDialog({
+    title: t("task.rename_button_title"),
+    input: true,
+    inputLabel: t("task.rename_placeholder"),
+    inputPlaceholder: t("task.rename_placeholder"),
+    inputValue: row.title || row.id,
+    cancel: true,
+    okLabel: t("common.ok"),
+  })
+  if (!dialog.confirmed) return
+  const title = String(dialog.value || "").trim()
+  if (!title || title === (row.title || "").trim()) return
+  const ok = await renameTask(row.id, title)
+  if (!ok) throw new Error(t("task.rename_placeholder"))
   setMissionSharedRefreshToken((value) => value + 1)
 }
 
@@ -1006,6 +1069,28 @@ if (sidebarTitleEl) {
   })
 }
 
+const leftPanelActionsEl = document.getElementById("solidLeftPanelActions")
+if (leftPanelActionsEl) {
+  render(
+    () => (
+      <Button
+        variant="ghost"
+        size="icon"
+        tone="neutral"
+        type="button"
+        data-ui="left-panel-open-project"
+        data-chrome="icon-action"
+        title={t("work_ledger.open_project")}
+        aria-label={t("work_ledger.open_project")}
+        onClick={() => runMainAsync("projects.open-folder", () => browseDirectory())}
+      >
+        <Icon name="project-add" size={15} />
+      </Button>
+    ),
+    leftPanelActionsEl,
+  )
+}
+
 // ── Mount: WorkLedger ──
 
 const workLedgerEl = document.getElementById("workLedgerPanel")
@@ -1024,7 +1109,10 @@ if (workLedgerEl) {
         onSelectChat={(row) => runMainAsync("work-ledger.select-chat", () => openWorkLedgerChat(row))}
         onAbortMission={(row) => abortWorkLedgerMission(row)}
         onDeleteMission={(row) => deleteWorkLedgerMission(row)}
+        onStartTask={(row) => startWorkLedgerTask(row)}
         onCancelTask={(row) => cancelWorkLedgerTask(row)}
+        onDownloadTask={(row) => downloadWorkLedgerTask(row)}
+        onRenameTask={(row) => renameWorkLedgerTask(row)}
         onDeleteTask={(row) => deleteWorkLedgerTask(row)}
         onCreateChat={(directory) =>
           runMainAsync("work-ledger.project-new-chat", () => createWorkLedgerProjectChat(directory))
@@ -1269,18 +1357,24 @@ if (btnTerminateRun) {
 const rightActivityToolbarEl = document.getElementById("solidRightActivityToolbar")
 if (rightActivityToolbarEl) {
   render(
-    () => (
-      <SideActivityToolbar
-        side="right"
-        activities={RIGHT_ACTIVITIES}
-        active={activeRightActivity}
-        isActive={isRightActivityOpen}
-        activeSemantics="pressed-toggle"
-        ariaLabelKey="activity.right"
-        onSelect={selectRightActivity}
-        trailing={<ProjectRuntimeToolbarActions />}
-      />
-    ),
+    () => {
+      createEffect(() => {
+        rightActivityToolbarEl.dataset.open = rightToolbarOpen() ? "true" : "false"
+      })
+
+      return (
+        <SideActivityToolbar
+          side="right"
+          activities={RIGHT_ACTIVITIES}
+          active={activeRightActivity}
+          isActive={isRightActivityOpen}
+          activeSemantics="pressed-toggle"
+          ariaLabelKey="activity.right"
+          onSelect={selectRightActivity}
+          trailing={<ProjectRuntimeToolbarActions />}
+        />
+      )
+    },
     rightActivityToolbarEl,
   )
 }

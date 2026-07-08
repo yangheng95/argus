@@ -132,6 +132,12 @@ describe("composer.attach → messageStore.chatAttachments wire (audit W2-V12)",
     expect(drop).toContain("if (!canAcceptComposerAttachment()) return")
     expect(paste).toContain("if (!canAcceptComposerAttachment()) return")
     expect(CHAT_COMPOSER).toContain("<Show when={canAcceptComposerAttachment() && attachments().length > 0}>")
+    const stackIdx = CHAT_COMPOSER.indexOf('<div class="chat-composer-stack">')
+    const attachmentsIdx = CHAT_COMPOSER.indexOf('id="chatAttachments"')
+    const formIdx = CHAT_COMPOSER.indexOf("<form", stackIdx)
+    expect(stackIdx).toBeGreaterThanOrEqual(0)
+    expect(attachmentsIdx).toBeGreaterThan(stackIdx)
+    expect(formIdx).toBeGreaterThan(attachmentsIdx)
   })
 
   test("host-driven composer.attach shares the ChatComposer attachment acceptance predicate", () => {

@@ -310,8 +310,13 @@ export async function selectTask(taskID: string, options: SelectTaskOptions = {}
     // Cross-project switch: apply the new directory so every project-scoped
     // API (config, permissions, meta, executors) targets the correct
     // backend Instance before we load the new task's board.
-    if (taskDirectory && taskDirectory !== settingsStore.directory) {
+    const needsProjectSwitch = taskDirectory && taskDirectory !== settingsStore.directory
+    if (needsProjectSwitch) {
       await applyDirectory(taskDirectory, { save: true, preserveSelection: true })
+      if (stale()) return
+    }
+    if (explicitDirectory && !needsProjectSwitch) {
+      await loadTasks({ requireFresh: true })
       if (stale()) return
     }
 

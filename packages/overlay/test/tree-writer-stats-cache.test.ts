@@ -1077,8 +1077,49 @@ test("subtree latest-hit cache equals the fresh recursive pick", () => {
   const fromAPI = cardTreeUtils.collectLatestActivityText(card as any)
   // Newest-by-(time,index): the bash tool part was added after the text part
   // and lives at a later array index, so the latest hit must be the bash
-  // line. (collectLatestActivityText formats it as "<icon> <tool>: <detail>".)
+  // line. (collectLatestActivityText formats it as "<tool>: <detail>".)
   expect(fromAPI).toContain("bash")
+})
+
+test("step-card latest-hit cache uses newest tool activity instead of static goal description", () => {
+  resetWriter()
+  try {
+    const stepID = "step:stats-dynamic:build"
+    setCardTreeStore("cards", stepID, {
+      id: stepID,
+      kind: "step",
+      stage: "build",
+      title: "Dynamic collapsed preview",
+      status: "completed",
+      orderKey: testBoardOrderKey("stats-dynamic-step", MSG_A_TIME, 1),
+      time: MSG_A_TIME,
+      goalDescription: "Implement the cached preview repair",
+      parts: [
+        {
+          type: "reasoning",
+          orderKey: partOrderKey("stats-dynamic-text", MSG_A_TIME + 100),
+          text: "older reasoning",
+        },
+        {
+          type: "tool",
+          orderKey: partOrderKey("stats-dynamic-tool", MSG_A_TIME + 200),
+          tool: "bash",
+          state: { input: { command: "rg cached-preview packages/overlay/src" } },
+        },
+      ],
+      childIDs: [],
+    } as any)
+    replaceCardTreeOrder([stepID])
+    markCardStatsDirty(stepID)
+    flushCardStats()
+
+    const card = cardTreeStore.cards[stepID]
+    expect(card?.subtreeLatestHit?.text).toContain("bash")
+    expect(cardTreeUtils.collectLatestActivityText(card as any)).toContain("rg cached-preview")
+    expect(cardTreeUtils.collectLatestActivityText(card as any)).not.toContain("Implement the cached preview repair")
+  } finally {
+    resetWriter()
+  }
 })
 
 test("todo-tool snapshot is cached and equals the fresh pick", () => {

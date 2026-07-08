@@ -42,7 +42,7 @@ export interface AgentWorkflowRecord {
   traceReport?: AgentWorkflowReport
   displaySummary?: {
     text: string
-    source: "trace_report"
+    source: "trace_report" | "session_status"
   }
 }
 

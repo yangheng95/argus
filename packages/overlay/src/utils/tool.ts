@@ -1,6 +1,7 @@
 // ── Tool utilities ──
 // toolNameKey, toolInputCommand, shortRelativePath, relativePathFrom, shortPath
 
+import type { IconName } from "../components/Icon"
 import { t } from "./i18n"
 
 // ── ANSI stripping ──
@@ -320,23 +321,23 @@ export function shortRelativePath(p: string, base = ""): string {
 
 // ── Tool icon ──
 
-export function displayToolIcon(name: string): string {
+export function displayToolIconName(name: string): IconName {
   const n = toolNameKey(name)
-  if (n === "read" || n === "readfile") return "\uD83D\uDCC4"
-  if (n === "edit" || n === "editfile" || n === "applypatch") return "\u270F\uFE0F"
-  if (n === "write" || n === "writefile") return "\uD83D\uDCDD"
-  if (n === "bash" || n === "shellcommand" || n === "runcommand") return "\uD83D\uDCBB"
-  if (n === "grep" || n === "searchcode") return "\uD83D\uDD0D"
-  if (n === "glob" || n === "findfiles") return "\uD83D\uDCC2"
-  if (n === "agent" || n === "spawnagent") return "\uD83E\uDD16"
-  if (n === "todowrite" || n === "todoupdate" || n === "updateplan") return "\u2611\uFE0F"
-  return "\u26A1"
+  if (n === "read" || n === "readfile") return "file-document"
+  if (n === "edit" || n === "editfile" || n === "applypatch") return "edit"
+  if (n === "write" || n === "writefile") return "file-document"
+  if (n === "bash" || n === "shellcommand" || n === "runcommand") return "terminal"
+  if (n === "grep" || n === "searchcode") return "search"
+  if (n === "glob" || n === "findfiles") return "folder-open"
+  if (n === "agent" || n === "spawnagent") return "avatar-assistant"
+  if (n === "todowrite" || n === "todoupdate" || n === "updateplan") return "tasks"
+  return "workflow"
 }
 
 export type ToolDisplayStatus = "pending" | "running" | "completed" | "error"
 
 export interface ToolDisplayModel {
-  icon: string
+  icon: IconName
   label: string
   detail: string
   status?: ToolDisplayStatus
@@ -452,7 +453,7 @@ export function describeToolCall(name: string, input: unknown, state: unknown, b
   const label = typeof name === "string" && name.trim() ? name.trim() : "tool"
   const status = normalizeToolStatus(record(state) ? (state as any).status : undefined)
   return {
-    icon: displayToolIcon(label),
+    icon: displayToolIconName(label),
     label,
     detail: displayToolDetail(label, input, state, base),
     status,

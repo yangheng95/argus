@@ -59,6 +59,14 @@ struct OverlayWindowSize {
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct OverlayWindowConstraints {
     min_size: OverlayWindowSize,
+    min_aspect_ratio: f64,
+}
+
+fn overlay_window_constraints(min_size: OverlayWindowSize) -> OverlayWindowConstraints {
+    OverlayWindowConstraints {
+        min_size,
+        min_aspect_ratio: min_size.height / min_size.height,
+    }
 }
 
 fn overlay_main_size_constraints(
@@ -88,11 +96,11 @@ fn overlay_main_size_constraints(
     if configured_size.height < min_size.height {
         panic!("main window config height must be greater than or equal to minHeight");
     }
-    OverlayWindowConstraints { min_size }
+    overlay_window_constraints(min_size)
 }
 
 fn overlay_min_aspect_ratio(constraints: OverlayWindowConstraints) -> f64 {
-    constraints.min_size.width / constraints.min_size.height
+    constraints.min_aspect_ratio
 }
 
 fn constrain_overlay_window_size(
@@ -2087,12 +2095,10 @@ mod tests {
     use std::path::Path;
 
     fn test_overlay_constraints() -> OverlayWindowConstraints {
-        OverlayWindowConstraints {
-            min_size: OverlayWindowSize {
-                width: 1120.0,
-                height: 720.0,
-            },
-        }
+        overlay_window_constraints(OverlayWindowSize {
+            width: 1120.0,
+            height: 720.0,
+        })
     }
 
     #[test]
@@ -2106,12 +2112,21 @@ mod tests {
     }
 
     #[test]
-    fn overlay_window_size_enforces_minimum_aspect_ratio() {
+    fn overlay_window_size_preserves_square_aspect_ratio() {
         let constraints = test_overlay_constraints();
-        let constrained = constrain_overlay_window_size(1120.0, 900.0, constraints);
+        let constrained = constrain_overlay_window_size(1120.0, 1120.0, constraints);
 
         assert_eq!(constrained.width, 1120.0);
-        assert_eq!(constrained.height, 720.0);
+        assert_eq!(constrained.height, 1120.0);
+    }
+
+    #[test]
+    fn overlay_window_size_clamps_taller_than_square_aspect_ratio() {
+        let constraints = test_overlay_constraints();
+        let constrained = constrain_overlay_window_size(1120.0, 1300.0, constraints);
+
+        assert_eq!(constrained.width, 1120.0);
+        assert_eq!(constrained.height, 1120.0);
     }
 
     #[test]
@@ -2125,14 +2140,14 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
-    fn overlay_windows_sizing_rect_enforces_minimum_aspect_ratio() {
+    fn overlay_windows_sizing_rect_preserves_square_aspect_ratio() {
         let constraints = test_overlay_constraints();
         let constrained = constrain_overlay_resize_rect_to_minimum_aspect(
             OverlayResizeRect {
                 left: 0,
                 top: 0,
                 right: 1120,
-                bottom: 1000,
+                bottom: 1120,
             },
             OverlayResizeEdge::Bottom,
             constraints,
@@ -2144,7 +2159,33 @@ mod tests {
                 left: 0,
                 top: 0,
                 right: 1120,
-                bottom: 720,
+                bottom: 1120,
+            }
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn overlay_windows_sizing_rect_clamps_taller_than_square_aspect_ratio() {
+        let constraints = test_overlay_constraints();
+        let constrained = constrain_overlay_resize_rect_to_minimum_aspect(
+            OverlayResizeRect {
+                left: 0,
+                top: 0,
+                right: 1120,
+                bottom: 1300,
+            },
+            OverlayResizeEdge::Bottom,
+            constraints,
+        );
+
+        assert_eq!(
+            constrained,
+            OverlayResizeRect {
+                left: 0,
+                top: 0,
+                right: 1120,
+                bottom: 1120,
             }
         );
     }
@@ -2156,7 +2197,7 @@ mod tests {
         let constrained = constrain_overlay_resize_rect_to_minimum_aspect(
             OverlayResizeRect {
                 left: 0,
-                top: -280,
+                top: -580,
                 right: 1120,
                 bottom: 720,
             },
@@ -2168,7 +2209,7 @@ mod tests {
             constrained,
             OverlayResizeRect {
                 left: 0,
-                top: 0,
+                top: -400,
                 right: 1120,
                 bottom: 720,
             }

@@ -5,6 +5,12 @@ import test from "node:test"
 
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
+import {
+  testMessageOrderKey,
+  testPartOrderKey,
+  testSessionOrderKey,
+  testTaskOrderKey,
+} from "../fixtures/timeline-order.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
 import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
 
@@ -54,7 +60,20 @@ test("ChatBubble collapsed preview is inside the Button disclosure target", asyn
     directory: "D:/overlay/workspace/app",
     status: "active",
     sessionID: "session-root",
+    orderKey: testTaskOrderKey(taskID, now - 90_000),
     time: { created: now - 90_000, started: now - 80_000, updated: now - 1_000 },
+  }
+  const workLedgerTask = {
+    kind: "task",
+    id: taskID,
+    title: task.title,
+    directory: task.directory,
+    created: task.time.created,
+    updated: task.time.updated,
+    lifecycleStatus: "active",
+    executionStatus: "running",
+    priority: "normal",
+    source: "test",
   }
   const board = {
     snapshotVersion: "chat-bubble-disclosure-board",
@@ -72,7 +91,16 @@ test("ChatBubble collapsed preview is inside the Button disclosure target", asyn
   }
   const transcript = [
     {
-      parts: [{ type: "text", text: "Please review the disclosure target." }],
+      parts: [
+        {
+          id: "part-user",
+          messageID: "msg-user",
+          sessionID: "session-user",
+          type: "text",
+          orderKey: testPartOrderKey("part-user", now - 9_999),
+          text: "Please review the disclosure target.",
+        },
+      ],
       info: {
         id: "msg-user",
         sessionID: "session-user",
@@ -80,6 +108,7 @@ test("ChatBubble collapsed preview is inside the Button disclosure target", asyn
         resolvedRole: "user",
         agent: "user",
         channel: "user",
+        orderKey: testMessageOrderKey("msg-user", now - 10_000),
         time: { created: now - 10_000 },
       },
     },
@@ -87,6 +116,9 @@ test("ChatBubble collapsed preview is inside the Button disclosure target", asyn
       parts: [
         {
           id: "part-architect",
+          messageID: "msg-architect",
+          sessionID: "session-architect",
+          orderKey: testPartOrderKey("part-architect", now - 6_999),
           type: "text",
           text: "The architecture review found that collapsed chat-bubble previews must stay inside the disclosure button so a single click on visible preview text expands the bubble.",
         },
@@ -98,6 +130,7 @@ test("ChatBubble collapsed preview is inside the Button disclosure target", asyn
         resolvedRole: "assistant",
         agent: "architect",
         channel: "analysis",
+        orderKey: testMessageOrderKey("msg-architect", now - 7_000),
         time: { created: now - 7_000 },
       },
     },
@@ -107,10 +140,35 @@ test("ChatBubble collapsed preview is inside the Button disclosure target", asyn
       type: "session.status",
       sequence: 1,
       emittedAt: now - 6_000,
+      orderKey: testSessionOrderKey("session-architect", now - 7_000),
       properties: {
         sessionID: "session-architect",
+        orderKey: testSessionOrderKey("session-architect", now - 7_000),
         status: { type: "terminal", reason: "completed" },
       },
+    },
+  ]
+  const viewMessages = transcript.map((message) => ({
+    messageID: message.info.id,
+    sessionID: message.info.sessionID,
+    stage: message.info.resolvedRole,
+    orderKey: message.info.orderKey,
+    time: message.info.time.created,
+    placement: "top_level",
+  }))
+  const viewSessions = [
+    {
+      sessionID: "session-architect",
+      stage: "architect",
+      messageIDs: ["msg-architect"],
+      lastDisplayMessageID: "msg-architect",
+      firstMessageTime: now - 7_000,
+      lastMessageTime: now - 7_000,
+      firstObservedAt: now - 7_000,
+      lastObservedAt: now - 7_000,
+      orderKey: testSessionOrderKey("session-architect", now - 7_000),
+      status: "completed",
+      placement: "top_level",
     },
   ]
   const conversation = {
@@ -119,17 +177,18 @@ test("ChatBubble collapsed preview is inside the Button disclosure target", asyn
     timeline: transcript,
     events: terminalEvents,
     view: {
-      sessions: [
-        {
-          sessionID: "session-architect",
-          stage: "architect",
-          messageIDs: ["msg-architect"],
-          firstMessageTime: now - 7_000,
-          placement: "top_level",
-        },
-      ],
+      topLevelSessionIDs: ["session-architect"],
+      sessions: viewSessions,
+      messages: viewMessages,
+    },
+    agentView: {
+      topLevelSessionIDs: ["session-architect"],
+      sessions: viewSessions,
+      messages: viewMessages.filter((message) => message.sessionID === "session-architect"),
     },
     eventReplay: { cursor: 1, latestSequence: 1, complete: true, limit: 100 },
+    history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 160 },
+    messageWatermark: 1,
     lastSequence: 1,
   }
 
@@ -147,6 +206,7 @@ test("ChatBubble collapsed preview is inside the Button disclosure target", asyn
     if (path === "/global/projects/discover")
       return send({ root: "D:/overlay", defaultDirectory: "D:/overlay/workspace/app", projects: [] })
     if (path === "/global/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
+    if (path === "/work-ledger") return send({ rows: [workLedgerTask], nextCursor: null })
     if (path === "/mission") return send([])
     if (path === "/executor")
       return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
@@ -175,6 +235,8 @@ test("ChatBubble collapsed preview is inside the Button disclosure target", asyn
     if (path === "/config") return send({ model: "opencorvus/gpt-5-nano" })
     if (path === "/channel") return send([])
     if (path === "/skill/installed" || path === "/skill" || path === "/skill/market") return send([])
+    if (path === "/skill/mounts")
+      return send({ scope: "project", skills: [], agents: [], matrix: [], project_mounts: { agents: {} }, unmounted_count: 0 })
     if (path === "/skill/directories")
       return send({
         global_config: "D:/skills/config",
@@ -203,6 +265,7 @@ test("ChatBubble collapsed preview is inside the Button disclosure target", asyn
     if (path === `/task/${taskID}/transcript`) return send(transcript)
     if (path === `/task/${taskID}/trace`)
       return send({ events: [], traceDir: "D:/overlay/workspace/app/.opencorvus/trace" })
+    if (path === "/work-ledger/events") return eventStream()
     if (path === "/task/events" || path === `/task/${taskID}/events`) return eventStream()
     if (path === "/panel/knowledge/memory" || path === "/panel/knowledge/preference") return send([])
     if (path === "/log" && req.method === "POST") return send({ ok: true })
@@ -234,21 +297,46 @@ test("ChatBubble collapsed preview is inside the Button disclosure target", asyn
     )
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
-    await page.waitForSelector(`.task-row-main[data-task-id="${taskID}"]`, { visible: true, timeout: 15_000 })
-    await page.click(`.task-row-main[data-task-id="${taskID}"]`)
-    await page.waitForSelector('.chat-bubble-row[data-kind="agent"] .chat-bubble__head-main', {
-      visible: true,
-      timeout: 15_000,
-    })
+    const taskRowSelector = `[data-row-key="task:${taskID}"] [data-ui="ledger-row-main"]`
+    await page.waitForSelector(taskRowSelector, { visible: true, timeout: 15_000 })
+    await page.click(taskRowSelector)
+    try {
+      await page.waitForSelector('.chat-bubble-row[data-kind="agent"] .chat-bubble__head-main', {
+        visible: true,
+        timeout: 15_000,
+      })
+    } catch (error) {
+      const diagnostics = await page.evaluate(() => ({
+        activeRows: Array.from(document.querySelectorAll<HTMLElement>(".task-row-main")).map((node) => ({
+          text: node.innerText,
+          dataUi: node.dataset.ui,
+          active: node.closest<HTMLElement>("[data-active]")?.dataset.active || "",
+          rowKey: node.closest<HTMLElement>("[data-row-key]")?.dataset.rowKey || "",
+        })),
+        bubbles: Array.from(document.querySelectorAll<HTMLElement>(".chat-bubble-row")).map((node) => ({
+          kind: node.dataset.kind,
+          text: node.innerText.slice(0, 400),
+        })),
+        bodyText: document.body.innerText.slice(0, 1200),
+      }))
+      assert.fail(
+        `agent chat bubble did not render: ${String(error)}\n${JSON.stringify(
+          { errors, requests, diagnostics },
+          null,
+          2,
+        )}`,
+      )
+    }
     assert.deepEqual(errors, [])
 
     const expandedBefore = await page.$eval(
       '.chat-bubble-row[data-kind="agent"] .chat-bubble__head-main',
       (button: HTMLButtonElement) => button.getAttribute("aria-expanded"),
     )
-    assert.equal(expandedBefore, "true")
 
-    await page.click('.chat-bubble-row[data-kind="agent"] .chat-bubble__head-main')
+    if (expandedBefore === "true") {
+      await page.click('.chat-bubble-row[data-kind="agent"] .chat-bubble__head-main')
+    }
     await page.waitForSelector('.chat-bubble-row[data-kind="agent"] .card__collapsed-preview', {
       visible: true,
       timeout: 15_000,

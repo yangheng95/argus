@@ -26,9 +26,11 @@ import { join } from "node:path"
 // config. Read the registry as text and parse the IconName union
 // instead — same single-source guarantee, no JSX runtime needed.
 const COMPONENTS_ROOT = join(import.meta.dir, "..", "src", "components")
+const SRC_ROOT = join(import.meta.dir, "..", "src")
 const ICON_TSX = readFileSync(join(COMPONENTS_ROOT, "Icon.tsx"), "utf8")
 const ICON_HTML_TSX = readFileSync(join(import.meta.dir, "..", "src", "utils", "icon-html.tsx"), "utf8")
 const MAIN_TSX = readFileSync(join(import.meta.dir, "..", "src", "main.tsx"), "utf8")
+const TOOL_TS = readFileSync(join(SRC_ROOT, "utils", "tool.ts"), "utf8")
 
 function registeredIconsFromSource(): string[] {
   // Carve out the union body between `export type IconName =` and the
@@ -102,6 +104,48 @@ describe("flat-redesign Icon primitive registry", () => {
     expect(MAIN_TSX).toContain("LUCIDE_ICON_NAMES")
     expect(MAIN_TSX).toContain("render(")
     expect(MAIN_TSX).not.toContain("renderToString")
+  })
+
+  test("tool display icons resolve to registered IconName values", () => {
+    expect(TOOL_TS).toContain("displayToolIconName")
+    expect(TOOL_TS).toContain("import type { IconName }")
+    expect(TOOL_TS).not.toMatch(/export function displayToolIcon\s*\(/)
+    expect(TOOL_TS).not.toMatch(/\\uD83D\\uDCC4|\\u270F\\uFE0F|\\uD83D\\uDCDD|\\uD83D\\uDCBB/)
+    expect(TOOL_TS).not.toMatch(/\\uD83D\\uDD0D|\\uD83D\\uDCC2|\\uD83E\\uDD16|\\u2611\\uFE0F|\\u26A1/)
+
+    for (const name of [
+      "file-document",
+      "edit",
+      "terminal",
+      "search",
+      "folder-open",
+      "avatar-assistant",
+      "tasks",
+      "workflow",
+    ]) {
+      const escaped = name.replace(/-/g, "\\-")
+      expect(ICON_TSX).toMatch(new RegExp(`(?:["']${escaped}["']|\\b${escaped}\\b)\\s*:\\s*\\{`))
+    }
+  })
+
+  test("tool icon consumers render through Icon or iconHtml", () => {
+    const cardHeader = readFileSync(join(COMPONENTS_ROOT, "CardHeader.tsx"), "utf8")
+    const inlineTool = readFileSync(join(COMPONENTS_ROOT, "InlineToolPart.tsx"), "utf8")
+    const cardParts = readFileSync(join(COMPONENTS_ROOT, "CardParts.tsx"), "utf8")
+    const dialog = readFileSync(join(SRC_ROOT, "services", "dialog.ts"), "utf8")
+
+    expect(cardHeader).toContain('from "./Icon"')
+    expect(cardHeader).toContain("<Icon name={name()} size={14} />")
+    expect(inlineTool).toContain('from "./Icon"')
+    expect(inlineTool).toContain("<Icon name={icon()} size={13} />")
+    expect(cardParts).toContain('from "./Icon"')
+    expect(cardParts).toContain('<Icon name="edit" size={13} class="msg-patch__icon" />')
+    expect(cardParts).toContain('<Icon name="nav-forward" size={13} />')
+    expect(cardParts).not.toContain('{"\\u2192"}')
+    expect(cardParts).not.toContain('"\\u2699 "')
+    expect(dialog).toContain('from "../utils/icon-html"')
+    expect(dialog).toContain("iconHtml(display.icon, 13)")
+    expect(dialog).not.toContain("escapeHtml(display.icon)")
   })
 })
 

@@ -35,6 +35,7 @@ import {
 } from "../services/composer-draft"
 import type { ExpertSquadOption } from "../services/expert-squad"
 import { currentUIScale } from "../utils/layout-tokens"
+import { ComposerModelSelector } from "./ExecutorSelector"
 
 // ── Types ──
 
@@ -808,16 +809,7 @@ export function ChatComposer(props: ChatComposerProps) {
   }
 
   return (
-    <form
-      ref={formRef}
-      id={props.formID ?? "chatForm"}
-      class="chat-input"
-      data-dragover={dragover() ? "true" : undefined}
-      onSubmit={handleSubmit}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-    >
+    <div class="chat-composer-stack">
       {/* Attachments strip */}
       <Show when={canAcceptComposerAttachment() && attachments().length > 0}>
         <div class="chat-attachments" id="chatAttachments">
@@ -851,171 +843,184 @@ export function ChatComposer(props: ChatComposerProps) {
         </div>
       </Show>
 
-      <div
-        class="chat-resize-handle"
-        role="separator"
-        aria-orientation="horizontal"
-        aria-controls={props.textareaID ?? "chatTextarea"}
-        aria-label={t("chat.resize_handle")}
-        aria-valuemin={Math.round(textareaResizeBounds().min)}
-        aria-valuemax={Math.round(textareaResizeBounds().max)}
-        aria-valuenow={currentTextareaResizeHeight()}
-        tabIndex={0}
-        title={t("chat.resize_handle")}
-        onPointerDown={handleResizePointerDown}
-        onPointerMove={handleResizePointerMove}
-        onPointerUp={handleResizePointerEnd}
-        onPointerCancel={handleResizePointerEnd}
-        onKeyDown={handleResizeKeyDown}
-      />
-
-      {/* Compose row: textarea + send */}
-      <div class="chat-compose-row">
-        <div class="chat-textarea-wrap" title={t("chat.tip")}>
-          <AutoGrowTextarea
-            ref={(el) => {
-              textareaRef = el
-            }}
-            id={props.textareaID ?? "chatTextarea"}
-            class="chat-textarea"
-            rows={2}
-            disabled={!props.enabled}
-            placeholder={props.enabled ? "" : t("chat.placeholder_disabled")}
-            title={t("chat.tip")}
-            value={text()}
-            data-ui={props.textareaDataUI}
-            onInput={(e) => {
-              writeDraftText(e.currentTarget.value)
-            }}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            onKeyDown={handleKeyDown}
-            onPaste={handlePaste}
-          />
-          <Show when={showHint()}>
-            <div class="chat-placeholder-float" aria-hidden="true">
-              <span class="chat-placeholder-text">{hintText()}</span>
-              <span class="chat-placeholder-caret" />
-            </div>
-          </Show>
-        </div>
-
-        {/* Send / Stop button */}
-        <Button
-          id={props.busy ? (props.stopID ?? "btnTaskInterrupt") : (props.sendID ?? "chatSend")}
-          variant="solid"
-          size="md"
-          tone={props.busy ? "danger" : "accent"}
-          type={props.busy ? "button" : "submit"}
-          data-ui={props.sendDataUI}
-          data-busy={props.busy ? "true" : undefined}
-          data-mode={props.busy ? "stop" : "send"}
-          disabled={sendDisabled()}
-          title={sendTitle()}
-          aria-label={sendAriaLabel()}
-          onClick={(e) => {
-            if (props.busy) {
-              e.preventDefault()
-              props.onStop?.()
-            }
-          }}
-        >
-          <span class="chat-send-icon" aria-hidden="true">
-            <Show when={props.busy} fallback={<Icon name="send" />}>
-              <Icon name="stop" />
-            </Show>
-          </span>
-          <span class="chat-send-label">{sendLabel()}</span>
-        </Button>
-      </div>
-
-      <Show when={showLargeRequestWarning()}>
-        <div class="chat-input-warning" role="status" aria-live="polite">
-          <Icon name="info-circle" size={13} />
-          <span>{t("chat.large_input_warning")}</span>
-        </div>
-      </Show>
-
-      {/* Compose meta. The drag/resize tip is now a
-       * native title on the textarea — appears only on hover so the row
-       * stays clean. */}
-      <div class="chat-compose-meta">
-        <div class="chat-compose-meta-left">
-          <SelectControl<ComposerModeOption>
-            class="composer-mode-select-wrap"
-            options={composerModeOptions()}
-            value={selectedComposerMode()}
-            onChange={selectComposerMode}
-            optionValue="id"
-            optionTextValue={(option) => option.label}
-            disabled={!props.enabled || props.busy}
-            disallowEmptySelection
-            gutter={4}
-            sameWidth
-            triggerClass="composer-mode-select-trigger"
-            triggerDataUI="composer-mode-selector"
-            triggerTitle={t("work_ledger.mode_selector_title")}
-            ariaLabel={t("work_ledger.mode_selector_title")}
-            contentClass="composer-mode-select-content"
-            listboxClass="composer-mode-select-listbox"
-            optionClass="composer-mode-select-option"
-            optionCopyClass="composer-mode-select-option-copy"
-            iconClass="composer-mode-select-caret"
-            icon={<Icon name="caret-down" size={9} />}
-            optionData={(option) => ({
-              "data-composer-mode": option.id,
-              title: option.label,
-            })}
-            renderValue={() => (
-              <span class="composer-mode-select-copy">
-                <span class="composer-mode-select-label">{t("work_ledger.mode_selector_label")}</span>
-                <span class="composer-mode-select-value">{selectedComposerMode().label}</span>
-              </span>
-            )}
-            renderOptionLabel={(option) => option.label}
-          />
-          <SelectControl<ExpertSquadOption>
-            class="expert-squad-select-wrap"
-            options={props.expertSquads}
-            value={selectedExpertSquad()}
-            onChange={selectExpertSquad}
-            optionValue="id"
-            optionTextValue={(option) => option.display_label}
-            disabled={expertSquadDisabled()}
-            disallowEmptySelection
-            gutter={4}
-            sameWidth
-            triggerClass="expert-squad-select-trigger"
-            triggerDataUI="expert-squad-selector"
-            triggerTitle={t("expert_squad.selector_title")}
-            ariaLabel={t("expert_squad.selector_title")}
-            contentClass="expert-squad-select-content"
-            listboxClass="expert-squad-select-listbox"
-            optionClass="expert-squad-select-option"
-            optionCopyClass="expert-squad-select-option-copy"
-            iconClass="expert-squad-select-caret"
-            icon={<Icon name="caret-down" size={9} />}
-            optionData={(option) => ({
-              "data-squad-id": option.id,
-              title: option.description ?? option.display_label,
-            })}
-            renderValue={() => (
-              <span class="expert-squad-select-copy">
-                <span class="expert-squad-select-label">{t("expert_squad.selector_label")}</span>
-                <span class="expert-squad-select-value">{expertSquadLabel()}</span>
-              </span>
-            )}
-            renderOptionLabel={(option) => option.display_label}
-            renderOptionDescription={(option) => option.description}
-          />
-        </div>
-        <ComposerAttachmentLoaders
-          disabled={!canAcceptComposerAttachment()}
-          attachmentCount={attachments().length}
-          onFiles={addFiles}
-          onFolderFiles={addFolderFiles}
+      <form
+        ref={formRef}
+        id={props.formID ?? "chatForm"}
+        class="chat-input"
+        data-dragover={dragover() ? "true" : undefined}
+        onSubmit={handleSubmit}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        <div
+          class="chat-resize-handle"
+          role="separator"
+          aria-orientation="horizontal"
+          aria-controls={props.textareaID ?? "chatTextarea"}
+          aria-label={t("chat.resize_handle")}
+          aria-valuemin={Math.round(textareaResizeBounds().min)}
+          aria-valuemax={Math.round(textareaResizeBounds().max)}
+          aria-valuenow={currentTextareaResizeHeight()}
+          tabIndex={0}
+          title={t("chat.resize_handle")}
+          onPointerDown={handleResizePointerDown}
+          onPointerMove={handleResizePointerMove}
+          onPointerUp={handleResizePointerEnd}
+          onPointerCancel={handleResizePointerEnd}
+          onKeyDown={handleResizeKeyDown}
         />
-      </div>
-    </form>
+
+        {/* Compose row: textarea only; all actions live in the bottom toolbar. */}
+        <div class="chat-compose-row">
+          <div class="chat-textarea-wrap" title={t("chat.tip")}>
+            <AutoGrowTextarea
+              ref={(el) => {
+                textareaRef = el
+              }}
+              id={props.textareaID ?? "chatTextarea"}
+              class="chat-textarea"
+              rows={2}
+              disabled={!props.enabled}
+              placeholder={props.enabled ? "" : t("chat.placeholder_disabled")}
+              title={t("chat.tip")}
+              value={text()}
+              data-ui={props.textareaDataUI}
+              onInput={(e) => {
+                writeDraftText(e.currentTarget.value)
+              }}
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+            />
+            <Show when={showHint()}>
+              <div class="chat-placeholder-float" aria-hidden="true">
+                <span class="chat-placeholder-text">{hintText()}</span>
+                <span class="chat-placeholder-caret" />
+              </div>
+            </Show>
+          </div>
+        </div>
+
+        <Show when={showLargeRequestWarning()}>
+          <div class="chat-input-warning" role="status" aria-live="polite">
+            <Icon name="info-circle" size={13} />
+            <span>{t("chat.large_input_warning")}</span>
+          </div>
+        </Show>
+
+        {/* Compose meta. The drag/resize tip is now a
+         * native title on the textarea — appears only on hover so the row
+         * stays clean. */}
+        <div class="chat-compose-meta">
+          <div class="chat-compose-meta-left">
+            <SelectControl<ComposerModeOption>
+              class="composer-mode-select-wrap"
+              options={composerModeOptions()}
+              value={selectedComposerMode()}
+              onChange={selectComposerMode}
+              optionValue="id"
+              optionTextValue={(option) => option.label}
+              disabled={!props.enabled || props.busy}
+              disallowEmptySelection
+              gutter={4}
+              sameWidth={false}
+              triggerClass="composer-mode-select-trigger"
+              triggerDataUI="composer-mode-selector"
+              triggerTitle={t("work_ledger.mode_selector_title")}
+              ariaLabel={t("work_ledger.mode_selector_title")}
+              contentClass="composer-mode-select-content"
+              listboxClass="composer-mode-select-listbox"
+              optionClass="composer-mode-select-option"
+              optionCopyClass="composer-mode-select-option-copy"
+              iconClass="composer-mode-select-caret"
+              icon={null}
+              optionData={(option) => ({
+                "data-composer-mode": option.id,
+                title: option.label,
+              })}
+              renderValue={() => (
+                <span class="composer-mode-select-copy">
+                  <span class="composer-mode-select-label">{t("work_ledger.mode_selector_label")}</span>
+                  <span class="composer-mode-select-value">{selectedComposerMode().label}</span>
+                </span>
+              )}
+              renderOptionLabel={(option) => option.label}
+            />
+            <SelectControl<ExpertSquadOption>
+              class="expert-squad-select-wrap"
+              options={props.expertSquads}
+              value={selectedExpertSquad()}
+              onChange={selectExpertSquad}
+              optionValue="id"
+              optionTextValue={(option) => option.display_label}
+              disabled={expertSquadDisabled()}
+              disallowEmptySelection
+              gutter={4}
+              sameWidth={false}
+              triggerClass="expert-squad-select-trigger"
+              triggerDataUI="expert-squad-selector"
+              triggerTitle={t("expert_squad.selector_title")}
+              ariaLabel={t("expert_squad.selector_title")}
+              contentClass="expert-squad-select-content"
+              listboxClass="expert-squad-select-listbox"
+              optionClass="expert-squad-select-option"
+              optionCopyClass="expert-squad-select-option-copy"
+              iconClass="expert-squad-select-caret"
+              icon={null}
+              optionData={(option) => ({
+                "data-squad-id": option.id,
+                title: option.description ?? option.display_label,
+              })}
+              renderValue={() => (
+                <span class="expert-squad-select-copy">
+                  <span class="expert-squad-select-label">{t("expert_squad.selector_label")}</span>
+                  <span class="expert-squad-select-value">{expertSquadLabel()}</span>
+                </span>
+              )}
+              renderOptionLabel={(option) => option.display_label}
+              renderOptionDescription={(option) => option.description}
+            />
+            <ComposerModelSelector />
+          </div>
+          <div class="chat-compose-meta-right">
+            <ComposerAttachmentLoaders
+              disabled={!canAcceptComposerAttachment()}
+              attachmentCount={attachments().length}
+              onFiles={addFiles}
+              onFolderFiles={addFolderFiles}
+            />
+            {/* Send / Stop button */}
+            <Button
+              id={props.busy ? (props.stopID ?? "btnTaskInterrupt") : (props.sendID ?? "chatSend")}
+              variant="solid"
+              size="md"
+              tone={props.busy ? "danger" : "accent"}
+              type={props.busy ? "button" : "submit"}
+              data-ui={props.sendDataUI}
+              data-busy={props.busy ? "true" : undefined}
+              data-mode={props.busy ? "stop" : "send"}
+              disabled={sendDisabled()}
+              title={sendTitle()}
+              aria-label={sendAriaLabel()}
+              onClick={(e) => {
+                if (props.busy) {
+                  e.preventDefault()
+                  props.onStop?.()
+                }
+              }}
+            >
+              <span class="chat-send-icon" aria-hidden="true">
+                <Show when={props.busy} fallback={<Icon name="send" />}>
+                  <Icon name="stop" />
+                </Show>
+              </span>
+              <span class="chat-send-label">{sendLabel()}</span>
+            </Button>
+          </div>
+        </div>
+      </form>
+    </div>
   )
 }

@@ -12,12 +12,15 @@ import { boardStore, clearBoard, loadBoard, setBoardStore, setTasksData } from "
 import { setChatRequest } from "../src/store/messages"
 import { registerConversationSourceDirectory } from "../src/services/conversation"
 import { panelMessage, stopChatRequest } from "../src/services/chat"
+import { selectTask } from "../src/services/task"
 import { taskOwningDirectory } from "../src/services/task-directory"
 import { currentTraceDirectory } from "../src/services/trace-directory"
 import { fetchFullDiffs } from "../src/services/diff"
+import { stopSSE } from "../src/services/sse"
 import { AppLog } from "../src/utils/log"
 import { setLocale } from "../src/utils/i18n"
 import { installRealOverlayI18n } from "./fixtures/i18n"
+import { setSettingsStore } from "../src/store/settings"
 
 installRealOverlayI18n()
 await setLocale("en-US")
@@ -53,6 +56,7 @@ function ok(body: unknown = {}): TransportResponse<unknown> {
 
 afterEach(() => {
   mock.restore()
+  stopSSE()
   clearBoard()
   __setHostTransportForTest(undefined)
   configure({ directory: "" })
@@ -61,6 +65,43 @@ afterEach(() => {
   setTasksData([])
   setChatRequest(null as any)
 })
+
+function taskListItem(id: string, directory: string, updated = 1): unknown {
+  return {
+    task: {
+      id,
+      title: id,
+      directory,
+      status: "active",
+      time: { created: updated, updated },
+    },
+    updated_at: updated,
+  }
+}
+
+function conversationPayload(taskID: string, directory: string): unknown {
+  return {
+    board: {
+      snapshotVersion: `board:${taskID}`,
+      task: {
+        id: taskID,
+        title: taskID,
+        directory,
+        status: "active",
+        time: { created: 1, updated: 1 },
+      },
+    },
+    transcript: [],
+    timeline: [],
+    events: [],
+    view: {},
+    agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
+    eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100, sinceTimestamp: null },
+    history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 100 },
+    messageWatermark: 0,
+    lastSequence: 0,
+  }
+}
 
 function userMessage(sessionID: string): unknown {
   return {
@@ -120,6 +161,49 @@ test("taskOwningDirectory rejects inconsistent selected source and task row dire
   })
 
   expect(() => taskOwningDirectory("tsk_inconsistent")).toThrow("inconsistent project directories")
+})
+
+test("selectTask refreshes same-directory explicit notification targets before ownership validation", async () => {
+  const taskID = "tsk_notification_open"
+  const captures: TransportRequest[] = []
+  const streams: StreamOpenRequest[] = []
+  configure({ directory: TASK_DIRECTORY })
+  setSettingsStore("directory", TASK_DIRECTORY)
+  setTasksData([taskListItem(taskID, SESSION_DIRECTORY)])
+
+  __setHostTransportForTest({
+    kind: "tauri",
+    capabilities: HOST_CAPABILITIES.tauri,
+    async request(req) {
+      captures.push(req)
+      if (req.path === "global/tasks") {
+        return ok({ tasks: [taskListItem(taskID, TASK_DIRECTORY)] })
+      }
+      if (req.path === `task/${taskID}/conversation`) {
+        expect(req.query?.directory).toBe(TASK_DIRECTORY)
+        return ok(conversationPayload(taskID, TASK_DIRECTORY))
+      }
+      throw new Error(`unexpected request: ${req.path}`)
+    },
+    openStream(req) {
+      streams.push(req)
+      return { close() {} }
+    },
+    async native(command) {
+      if (command.kind === "settings.save") return true
+      throw new Error(`unexpected native command: ${command.kind}`)
+    },
+    subscribeUiCommand() {
+      return { unsubscribe() {} }
+    },
+  } satisfies HostTransport)
+
+  await selectTask(taskID, { directory: TASK_DIRECTORY })
+
+  expect(captures.map((req) => req.path)).toEqual(["global/tasks", `task/${taskID}/conversation`])
+  expect(streams[0]?.path).toBe(`task/${taskID}/events`)
+  expect(streams[0]?.query?.directory).toBe(TASK_DIRECTORY)
+  expect(taskOwningDirectory(taskID)).toBe(TASK_DIRECTORY)
 })
 
 test("panelMessage sends task messages with the task row directory", async () => {

@@ -35,7 +35,7 @@ function textSeed(role: string, orderKey: string, time: number, text: string): I
       role,
       time: { created },
     },
-    parts: [{ type: "text", text }],
+    parts: [{ type: "text", orderKey, text }],
   }
 }
 

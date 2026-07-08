@@ -1,5 +1,5 @@
-import { Show, createMemo } from "solid-js"
-import { displayToolIcon } from "../utils/tool"
+import { Show } from "solid-js"
+import { displayToolIconName } from "../utils/tool"
 import {
   collapsedActivityPreviewText,
   collectLatestActivityText,
@@ -8,14 +8,14 @@ import {
 } from "../utils/card-tree"
 import { t } from "../utils/i18n"
 import { goalRevisionLabel } from "../utils/goal-label"
-import { AgentSummaryBlock } from "./AgentSummaryBlock"
 import { CardDurationChip, CardHeaderChrome } from "./CardHeaderChrome"
 import { CardTodoSummary } from "./CardTodoSummary"
+import { Icon, type IconName } from "./Icon"
 import { Button } from "./ui/Button"
 
-function leadingGlyph(node: CardNode): string {
-  if (node.kind === "tool") return displayToolIcon(node.stage || node.title)
-  return ""
+function leadingIconName(node: CardNode): IconName | undefined {
+  if (node.kind === "tool") return displayToolIconName(node.stage || node.title)
+  return undefined
 }
 
 function isStageCard(node: CardNode): boolean {
@@ -39,7 +39,7 @@ export function CardHeader(props: {
   onRewind?: (cursorTime: number, anchorID: string, opts: { resetWorktree: boolean }) => Promise<void>
   /** Set on cards that map 1:1 to an opencorvus session (kind="agent"
    *  cards whose id follows `<stage>:session:<sid>`). When present the
-   *  header renders a 🔍 button that calls `onTrace` to toggle the
+   *  header renders an inspect button that calls `onTrace` to toggle the
    *  AgentTrace panel for that session inside the card body. */
   traceSessionID?: string
   /** Whether the trace panel is currently open in the parent. */
@@ -53,18 +53,16 @@ export function CardHeader(props: {
   onAgentCancel?: (sessionID: string) => Promise<void>
   onAgentModelSettings?: (sessionID: string) => void
 }) {
-  const glyph = () => leadingGlyph(props.node)
+  const iconName = () => leadingIconName(props.node)
   const collapsedActive = () =>
     !props.expanded && props.node.status !== "running" && isStageCard(props.node) && props.node.kind !== "tool"
   const collapsedPreview = () =>
     collapsedActive() ? collapsedActivityPreviewText(collectLatestActivityText(props.node), props.node.title) : ""
-  const agentSummaryText = () =>
-    !props.expanded && props.node.status !== "running" ? props.node.agentSummary?.text?.trim() || "" : ""
   const todoSummary = () => (collapsedActive() ? collectTodoSummary(props.node) : null)
   // Drives `card__head--with-meta` (flex-start vs center). Only true when
   // we render a row BELOW the title row — subtitle is inline, so it does
   // not count toward "needs vertical alignment to top".
-  const hasSecondaryText = () => !!agentSummaryText() || !!collapsedPreview() || !!todoSummary()
+  const hasSecondaryText = () => !!collapsedPreview() || !!todoSummary()
   const stepRevisionLabel = () =>
     props.node.kind === "step" ? goalRevisionLabel(props.node.round, props.node.attempt) : ""
 
@@ -83,8 +81,12 @@ export function CardHeader(props: {
           props.onToggle()
         }}
       >
-        <Show when={glyph()}>
-          <span class="card__icon">{glyph()}</span>
+        <Show when={iconName()}>
+          {(name) => (
+            <span class="card__icon" aria-hidden="true">
+              <Icon name={name()} size={14} />
+            </span>
+          )}
         </Show>
         <span class="card__main">
           <span class="card__title-row">
@@ -107,7 +109,6 @@ export function CardHeader(props: {
             </Show>
             <span class="card__title-spacer" aria-hidden="true" />
           </span>
-          <Show when={agentSummaryText()}>{(text) => <AgentSummaryBlock text={text()} />}</Show>
           <Show when={collapsedPreview()}>
             <span class="card__preview-row">
               <span class="card__collapsed-preview" title={collapsedPreview()}>

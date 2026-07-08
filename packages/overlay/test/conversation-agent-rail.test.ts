@@ -2,9 +2,12 @@ import { expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
-test("ConversationAgentRail reads hydrated workflow records and renders a chronological strip", () => {
+test("ConversationAgentRail reads hydrated workflow records and renders adjacent identity stacks", () => {
   const source = readFileSync(join(import.meta.dir, "../src/components/ConversationAgentRail.tsx"), "utf8")
   expect(source).toContain("conversationAgentRecordsForSource(boardStore.selectedSource)")
+  expect(source).toContain("buildAdjacentAgentRailStacks(records())")
+  expect(source).toContain("previous?.stage === stage")
+  expect(source).toContain('class="conversation-agent-rail__stack"')
   expect(source).not.toContain("buildAgentWorkflow(")
   expect(source).not.toContain("mergeAgentRecords")
   expect(source).not.toContain("orderedReachableCardIDs()")
@@ -12,21 +15,26 @@ test("ConversationAgentRail reads hydrated workflow records and renders a chrono
   expect(source).toContain("Index")
   expect(source).not.toContain("compactAgentWorkflowLanesForNarrowRail")
   expect(source).not.toContain("LaneAvatarStack")
-  expect(source).not.toContain("conversation-agent-rail__stack")
   expect(source).not.toContain("buildAgentWorkflowLanes")
   expect(source).not.toContain("<For each={records()}>")
   expect(source).not.toContain("payload.report")
   expect(source).not.toContain("event.kind")
 })
 
-test("ConversationAgentRail avatar navigation uses the Button primitive and explicit labels", () => {
+test("ConversationAgentRail locate ticks use Button plus Kobalte tooltip summaries", () => {
   const source = readFileSync(join(import.meta.dir, "../src/components/ConversationAgentRail.tsx"), "utf8")
   const css = readFileSync(join(import.meta.dir, "../src/styles/surfaces/conversation.css"), "utf8")
+  expect(source).toContain('import * as Tooltip from "@kobalte/core/tooltip"')
   expect(source).toContain('import { Button } from "./ui/Button"')
-  expect(source).toContain("<Button")
+  expect(source).toContain("<Tooltip.Root")
+  expect(source).toContain("as={Button}")
   expect(source).toContain('data-ui="conversation-agent-rail-locate"')
-  expect(source).toContain("aria-label={compactLabel(record())}")
-  expect(source).toContain("title={compactLabel(record())}")
+  expect(source).toContain("aria-label={tooltipLabel()}")
+  expect(source).toContain("title={tooltipLabel()}")
+  expect(source).toContain("agentRailSummary(record)")
+  expect(source).toContain("record.displaySummary?.text ||")
+  expect(source).not.toContain("record.traceReport?.summary")
+  expect(source).toContain('t("agent_rail.detail.summary"')
   expect(source).toContain("AGENT_RAIL_STATUS_LABELS")
   expect(source).toContain('t("agent_rail.status.running")')
   expect(source).toContain('t("agent_rail.attempt"')
@@ -35,6 +43,8 @@ test("ConversationAgentRail avatar navigation uses the Button primitive and expl
   expect(source).not.toContain("<button")
   expect(source).not.toContain("conversation-agent-rail__avatar-button")
   expect(css).toContain('.conversation-agent-rail .oc-button[data-ui="conversation-agent-rail-locate"]')
+  expect(css).toContain(".conversation-agent-rail-tooltip")
+  expect(css).toContain(".conversation-agent-rail__tick-line")
   expect(css).not.toContain(".conversation-agent-rail__avatar-button")
   expect(css).not.toMatch(/conversation-agent-rail[^{]*\{[^}]*appearance:\s*none/)
 })
@@ -73,65 +83,53 @@ test("Conversation card-scroll waits for virtualized target materialization", ()
   )
 })
 
-test("ConversationAgentRail stays a fixed narrow bottom strip", () => {
+test("ConversationAgentRail stays a fixed narrow left rail inside the message pane", () => {
   const source = readFileSync(join(import.meta.dir, "../src/components/ConversationAgentRail.tsx"), "utf8")
   const css = readFileSync(join(import.meta.dir, "../src/styles/surfaces/conversation.css"), "utf8")
   const html = readFileSync(join(import.meta.dir, "../src/index.html"), "utf8")
   expect(source).not.toContain("--conversation-agent-rail-height")
-  // Old vertical drag-to-resize affordance: `startY - move.clientY` is
-  // its diagnostic fingerprint. Drag-to-scroll (a horizontal scroll
-  // gesture on a fixed-height strip — `attachRailDragScroll` below) is
-  // intentionally allowed and pinned by the positive assertions later
-  // in this test.
   expect(source).not.toContain("startY - move.clientY")
+  expect(source).not.toContain("attachRailDragScroll")
   expect(source).not.toContain("data-wide")
   expect(source).not.toContain("--conversation-agent-rail-width")
-  expect(css).toContain("border-top: var(--oc-border-width) solid color-mix(in srgb, var(--border) 82%, transparent)")
-  expect(css).toContain("height: calc(42px * var(--ui-scale))")
-  expect(css).not.toContain("max-height: calc(122px * var(--ui-scale))")
-  expect(css).not.toContain("max-height: calc(220px * var(--ui-scale))")
+  expect(css).toContain("border-right: 0 solid transparent")
+  expect(css).toContain("background: transparent;")
+  expect(css).toContain("box-shadow: none;")
+  expect(css).toContain("flex: 0 0 calc(46px * var(--ui-scale))")
+  expect(css).toContain("width: calc(46px * var(--ui-scale))")
+  expect(css).toContain("--conversation-message-lane-width: calc(920px * var(--ui-scale));")
+  expect(css).toContain("width: min(100%, var(--conversation-message-lane-width));")
+  expect(css).toContain("align-items: center;")
+  expect(css).toContain("height: 100%")
+  expect(css).toContain("flex-direction: column")
+  expect(css).toContain("overflow-y: auto")
+  expect(css).toContain("overflow-x: hidden")
+  expect(css).toContain(".conversation-agent-rail__stack")
+  expect(css).toContain(".conversation-agent-rail__tick-line")
+  expect(css).toContain(".conversation-agent-rail-tooltip")
   expect(css).not.toContain("conversation-agent-rail__resize")
-  expect(css).not.toContain("data-wide")
-  expect(css).toContain("flex-direction: row")
-  expect(css).toContain("overflow-x: auto")
-  expect(css).toContain("padding: calc(4px * var(--ui-scale)) calc(10px * var(--ui-scale))")
-  expect(css).toContain("scrollbar-width: none")
-  expect(css).toContain(".conversation-agent-rail__lanes::-webkit-scrollbar")
+  expect(css).not.toContain('conversation-agent-rail__lanes[data-dragging="true"]')
+  expect(css).not.toContain("cursor: grab")
+  expect(css).not.toContain(".conversation-agent-rail .chat-avatar")
   expect(css).not.toContain("scrollbar-width: thin")
-  expect(css).toMatch(/\.conversation-agent-rail__lanes\s*\{[^}]*flex-wrap:\s*nowrap/)
-  expect(css).toMatch(/\.conversation-agent-rail__lane\s*\{[^}]*flex-wrap:\s*nowrap/)
-  expect(css).toContain(".conversation-agent-rail .chat-avatar")
-  expect(css).toContain("animation: none;")
-  expect(html.indexOf('id="conversationBody"')).toBeLessThan(html.indexOf('id="solidConversationAgentRailMount"'))
-  // Drag-to-scroll: horizontal press-and-drag gesture on the lanes
-  // container. The drag handler is `attachRailDragScroll`, wired via
-  // a `ref` callback that registers `onCleanup` for the listener pair.
-  // The CSS shows the `grab` cursor when idle and `grabbing` while the
-  // dataset flag `data-dragging="true"` is set by the handler.
-  expect(source).toContain("attachRailDragScroll")
-  expect(source).toContain("onCleanup(dispose)")
-  const pointerDown = source.slice(source.indexOf("function onPointerDown"), source.indexOf("function onPointerMove"))
-  const pointerMove = source.slice(source.indexOf("function onPointerMove"), source.indexOf("function onPointerEnd"))
-  const pointerEnd = source.slice(source.indexOf("function onPointerEnd"), source.indexOf("function onClickCapture"))
-  expect(pointerDown).toContain("const captureTarget = event.target")
-  expect(pointerDown).toContain("captureTarget.setPointerCapture(pointerId)")
-  expect(pointerDown).toContain("capturedPointerId = pointerId")
-  expect(pointerDown).toContain("capturedPointerTarget = captureTarget")
-  expect(pointerMove).not.toContain("setPointerCapture")
-  expect(pointerEnd).toContain("capturedPointerTarget.releasePointerCapture(pointerId)")
-  expect(css).toContain("cursor: grab")
-  expect(css).toContain('.conversation-agent-rail__lanes[data-dragging="true"]')
-  expect(css).toContain("cursor: grabbing")
+  const bodyIndex = html.indexOf('id="conversationBody"')
+  const mountIndex = html.indexOf('id="solidConversationAgentRailMount"')
+  const scrollShellIndex = html.indexOf('class="conversation-scroll-shell"')
+  expect(bodyIndex).toBeGreaterThanOrEqual(0)
+  expect(mountIndex).toBeGreaterThan(bodyIndex)
+  expect(mountIndex).toBeLessThan(scrollShellIndex)
 })
 
-test("ConversationAgentRail keeps avatar DOM stable across workflow refreshes", () => {
+test("ConversationAgentRail keeps stack and row DOM stable across workflow refreshes", () => {
   const source = readFileSync(join(import.meta.dir, "../src/components/ConversationAgentRail.tsx"), "utf8")
   const css = readFileSync(join(import.meta.dir, "../src/styles/surfaces/conversation.css"), "utf8")
-  expect(source).toContain("<Index each={records()}>")
+  expect(source).toContain("<Index each={stacks()}>")
+  expect(source).toContain("<Index each={stack().records}>")
   expect(source).toContain("record: Accessor<AgentWorkflowRecord>")
-  expect(css).toContain(".conversation-agent-rail .chat-avatar")
-  expect(css).toContain("animation: none;")
-  expect(css).toContain(".conversation-agent-rail .chat-avatar::after")
+  expect(source).toContain("data-stack-id={stack().id}")
+  expect(source).toContain("data-count={stack().records.length}")
+  expect(css).toContain(".conversation-agent-rail__stack")
+  expect(css).toContain("grid-auto-rows: calc(12px * var(--ui-scale))")
 })
 
 test("ConversationAgentRail has no expanded detail surface", () => {
@@ -146,7 +144,7 @@ test("ConversationAgentRail has no expanded detail surface", () => {
   expect(css).not.toContain("agent-report-dialog")
 })
 
-test("ConversationAgentRail hides the bottom strip when there are no workflow lanes", () => {
+test("ConversationAgentRail hides the left rail when there are no workflow records", () => {
   const source = readFileSync(join(import.meta.dir, "../src/components/ConversationAgentRail.tsx"), "utf8")
   const css = readFileSync(join(import.meta.dir, "../src/styles/surfaces/conversation.css"), "utf8")
   expect(source).toContain("const hasRecords = createMemo(() => records().length > 0)")

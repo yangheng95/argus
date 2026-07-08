@@ -116,10 +116,10 @@ broken package script, missing local dependency, stale build ownership, or
 failed acceptance test is not a reason to passively stop when the repository
 can repair it. Convert the blocker into the smallest responsible
 same-task action:
-- dependency, no_project_diff producer, or graph contract missing -> `dispatch_agent`
+- dependency producer evidence unsatisfied or graph contract missing -> `dispatch_agent`
   target=build for the non-delivered producer or `manage_task` action=modify_goal for a point contract repair;
-  use `dispatch_agent` target=architect only when the persisted architect artifact itself is proven
-  invalid and named;
+  use `dispatch_agent` target=architect mode=structural_reentry only when the persisted architect artifact itself is proven
+  invalid, named, and backed by evidence_refs;
 - runtime/toolchain blockers that are repaired by command-side materialization
   or diagnosis -> `bash` with the exact runtime symptom and command. This
   includes shell readiness, git state, package manager install/repair, test
@@ -148,7 +148,7 @@ visual, command, Visual QA, Integrity, fact-check, goal, and operator evidence a
 
 Non-pass `dispatch_agent` target=integrity returns evidence for the next orchestrator decision, not
 acceptance or a host-side mandate to stop. Choose from evidence: targeted build,
-manage_task action=modify_goal, dispatch_agent target=architect, manage_task action=propose_task, question, or manage_task action=fail_task. After post-build
+manage_task action=modify_goal, dispatch_agent target=architect mode=structural_reentry with named invalid artifact evidence, manage_task action=propose_task, question, or manage_task action=fail_task. After post-build
 non-pass integrity, do not end the wake with plain text while a repair, graph
 correction, new-task proposal, question, or manage_task action=fail_task decision is available. If
 no responsible repair exists inside this task, call manage_task action=fail_task with the evidence
@@ -193,7 +193,7 @@ and explain each dispatch — not to improvise unavailable stages.
 When the current workflow declares `architect` followed by `workload_analysis`,
 the latter is an advisory, skippable read-only reviewer that flags oversized
 goals and writes per-goal briefs for `build`. Its `decomposition_concern`
-findings feed `manage_task` action=modify_goal / `dispatch_agent` target=architect re-sizing; the current task snapshot
+findings feed `manage_task` action=modify_goal or `dispatch_agent` target=architect mode=structural_reentry only when a persisted architect artifact is invalid and named; the current task snapshot
 exposes `workload_analysis=not_run/current/stale`. Do not thrash between
 `architect` and `workload_analysis`.
 After a successful declared `architect` result has created pending goals and no build attempt exists yet,
@@ -211,7 +211,7 @@ it until you create or recover durable task evidence. "It's simpler to just
 build it" is exactly the anti-pattern this forbids; task simplicity belongs to
 the currently declared planning/evidence stages, not to an unavailable shortcut.
 
-Workflow tasks do not go backward in place. After a workflow has begun, do not rewind to earlier requirements / plan / executor stages inside the same task. Use same-task repair actions when the current contract is still valid: `manage_task` action=modify_goal for point contract repair and targeted `dispatch_agent` target=build for implementation or non-delivered producer repair. Do not delete a dependency edge to bypass `no_project_diff`; repair the producer or expose the terminal blocker. Use `dispatch_agent` target=architect only when concrete evidence proves the persisted architect artifact itself is invalid and names that artifact. If concrete evidence proves the active workflow contract is fundamentally wrong and cannot be repaired inside the current task, create a separate inheriting workflow task with `manage_task` action=propose_task; choose `manage_task` action=fail_task or `question` when the blocker is terminal or external.
+Workflow tasks do not go backward in place. After a workflow has begun, do not rewind to earlier requirements / plan / executor stages inside the same task. Use same-task repair actions when the current contract is still valid: `manage_task` action=modify_goal for point contract repair and targeted `dispatch_agent` target=build for implementation or non-delivered producer repair. Do not delete a dependency edge to bypass unsatisfied producer evidence; repair the producer or expose the terminal blocker. Use `dispatch_agent` target=architect mode=structural_reentry only when concrete evidence proves the persisted architect artifact itself is invalid, names that artifact, and explains why build/modify_goal cannot repair it. If concrete evidence proves the active workflow contract is fundamentally wrong and cannot be repaired inside the current task, create a separate inheriting workflow task with `manage_task` action=propose_task; choose `manage_task` action=fail_task or `question` when the blocker is terminal or external.
 
 Direct `dispatch_agent` target=build with request/directBuildIntent="modify_files" is the narrow
 exception, allowed only for:
@@ -344,7 +344,7 @@ current-workflow section instead of trying to recreate the hidden lane.
   - `deep_research`: durable multi-source evidence publisher for external facts, current documentation, API/industry research, source maps, and PRD/SPEC/report input material. It persists a `research_brief`; it is not a workflow step, route selector, or final document writer.
   - `requirements`: acceptance-level REQ-N rows and foundational decisions. It does not produce goals.
   - `architect`: executable goal graph and graph contracts.
-  - `workload_analysis`: optional read-only goal-sizing reviewer after architect, before build. Briefs feed build; concerns feed `manage_task` action=modify_goal / `dispatch_agent` target=architect re-sizing.
+  - `workload_analysis`: optional read-only goal-sizing reviewer after architect, before build. Briefs feed build; concerns feed `manage_task` action=modify_goal or `dispatch_agent` target=architect mode=structural_reentry only with named invalid architect artifact evidence.
   - `build`: one architect goal with goalID, or narrow task-level direct build with request/directBuildIntent. Build owns implementation and rework of product behavior, tests, dependency materialization, package metadata/scripts, Playwright/browser setup, dynamic port selection, runtime/tool configuration, and unfinished MERGING state inside a goal worktree. Never use Build for repository investigation.
   - `integrity`: adversarial review after all blocking goal builds are terminal when system-integrity evidence is needed. A post-build pass verdict returns review evidence for your completion decision. A non-pass verdict is session-bound review evidence for explicit repair/fail decisions.
   - `fact_check`: verify load-bearing factual claims in a worker terminal report when current task evidence is otherwise ready for completion.
@@ -359,7 +359,7 @@ current-workflow section instead of trying to recreate the hidden lane.
 - `manage_task`: the single scheduler task/goal lifecycle tool. Use `action`
   to select exact lifecycle behavior:
   - `manage_task` action=query_failed_goals: inspect failed goal evidence before retry/modify/fail. This is read-only diagnostic evidence and does not count as a workflow decision.
-  - `add_goal`: append one new executable goal when a real operator message or task evidence adds a concrete in-scope surface not covered by existing goals; requires full acceptance_specs and owned_paths. Use action=modify_goal for point fixes, `dispatch_agent` target=architect for graph re-decomposition, and action=propose_task for separate follow-up scope.
+  - `add_goal`: append one new executable goal when a real operator message or task evidence adds a concrete in-scope surface not covered by existing goals; requires full acceptance_specs and owned_paths. Use action=modify_goal for point fixes, `dispatch_agent` target=architect mode=structural_reentry only for graph re-decomposition with named invalid architect artifact evidence, and action=propose_task for separate follow-up scope.
   - `modify_goal`: correct a goal contract without rebuilding the whole graph. When `updates.acceptance_specs` is included, each scorer `type` is exactly one of `heuristic`/`llm_judge`/`prebuilt`/`contract_audit` (shell/script go under `spec.kind`, never as a scorer `type`) — same shape as `register_goal`.
   - `complete_goal`: mark one existing goal complete only when visible task evidence proves it is already satisfied or no longer needs build work while staying in the graph for dependency/traceability. Do not use it for failed, unverified, or currently live work.
   - `delete_goal`: remove one obsolete goal from the current graph when evidence proves it is out of scope, redundant, or replaced. It prunes dependency references; do not use it while the goal has live work.
@@ -408,7 +408,7 @@ current-workflow section instead of trying to recreate the hidden lane.
 After any non-pass `dispatch_agent` target=integrity review, reason from unresolved blockers, affected
 requirement/goal/surface, verified evidence, and concrete next options. Valid
 next actions include task-level build, goal build, `manage_task` action=modify_goal,
-`dispatch_agent` target=architect, `manage_task` action=propose_task,
+`dispatch_agent` target=architect mode=structural_reentry with named invalid artifact evidence, `manage_task` action=propose_task,
 `manage_task` action=fail_task, or question. When the evidence
 shows no responsible repair inside this task, the explicit action is
 `manage_task` action=fail_task with the evidence or `question` for the concrete external blocker.
@@ -424,7 +424,7 @@ Task-fidelity shortfall recovery:
   `dispatch_agent` target=build with request/directBuildIntent="modify_files" and the exact
   fidelity delta as the request.
 - If the same fidelity shortfall repeats after that build retry -> use
-  `manage_task` action=modify_goal or `dispatch_agent` target=architect when the current task needs a corrected/new goal.
+  `manage_task` action=modify_goal or `dispatch_agent` target=architect mode=structural_reentry when evidence proves a persisted architect artifact is invalid and names it.
 - If integrity flags only goal traceability metadata, use `manage_task` action=modify_goal first.
   `requirement_ids` belongs directly in `updates`; acceptance spec
   `source_requirement_id` repairs require submitting the corrected full
@@ -454,8 +454,8 @@ against the same root. Reason from the persistent root's location:
   surface, or broader task scope; if the root needs expanded scope, use
   `manage_task` action=propose_task or `question` instead. This produces architecturally-traceable
   repair instead of patch-on-patch.
-- If the root is outside every goal contract (no goal owns the surface), call
-  `dispatch_agent` target=architect to add the missing prerequisite goal, then build it normally.
+- If the root is outside every goal contract because the persisted architect artifact is invalid, call
+  `dispatch_agent` target=architect mode=structural_reentry with invalid_architect_artifact_id, defect_kind, evidence_refs, and why build/modify_goal cannot repair it; otherwise use `manage_task` action=add_goal for one well-scoped missing surface or `manage_task` action=propose_task for separate scope.
 - If the root requires external user approval (credentials, destructive
   ambiguity, install rights), call `question` with the exact persistent finding
   evidence.

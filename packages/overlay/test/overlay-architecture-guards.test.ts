@@ -2138,13 +2138,13 @@ describe("overlay architecture guards", () => {
       "chat-compose-row",
       "chat-compose-meta",
       "chat-compose-meta-left",
+      "chat-compose-meta-right",
       "chat-resize-handle",
     ]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(composerSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
-    expect(composerSurface).not.toMatch(/(^|\n)\.chat-compose-meta-right(?:\s|\.|:|\{|,|\[)/)
     expect(composerSurface).not.toMatch(/(^|\n)\.chat-compose-meta-left\s+a(?:\s|\.|:|\{|,|\[)/)
 
     expect(composerSource).toContain('data-ui="chat-attachment-remove"')
@@ -2188,8 +2188,8 @@ describe("overlay architecture guards", () => {
       expect(selector).not.toMatch(/\.chat-send\b/)
     }
     expect(composerSurface).not.toMatch(/(^|\n)\.chat-send(?:\s|:|\{|,|\[)/)
-    expect(composerSurface).toMatch(/\.chat-compose-row\s+\.oc-button\[data-mode\]\s*\{/)
-    expect(composerSurface).toMatch(/\.chat-compose-row\s+\.oc-button\[data-mode="send"\]:disabled\s*\{/)
+    expect(composerSurface).toMatch(/\.chat-compose-meta-right\s+\.oc-button\[data-mode\]\s*\{/)
+    expect(composerSurface).toMatch(/\.chat-compose-meta-right\s+\.oc-button\[data-mode="send"\]:disabled\s*\{/)
     expect(composerSurface).not.toMatch(/\.chat-send\[data-busy="true"\]:hover\s*\{/)
   })
 
@@ -2614,9 +2614,9 @@ describe("overlay architecture guards", () => {
     )
     expect(body).toContain("margin: 0")
     expect(body).toContain(
-      "padding: calc(12px * var(--ui-scale)) calc(14px * var(--ui-scale)) calc(10px * var(--ui-scale))",
+      "padding: calc(10px * var(--ui-scale)) calc(14px * var(--ui-scale)) calc(9px * var(--ui-scale))",
     )
-    expect(body).toContain("gap: calc(8px * var(--ui-scale))")
+    expect(body).toContain("gap: calc(6px * var(--ui-scale))")
     expect(body).toContain("border-radius: var(--oc-radius-xl)")
   })
 
@@ -2743,11 +2743,11 @@ describe("overlay architecture guards", () => {
     const railBody = soloRuleBody(surface, ".conversation-agent-rail")
     for (const declaration of [
       "width: 100%",
-      "height: calc(42px * var(--ui-scale))",
-      "min-height: calc(42px * var(--ui-scale))",
+      "height: 100%",
+      "min-height: 0",
       "display: flex",
-      "flex-direction: row",
-      "padding: calc(4px * var(--ui-scale)) calc(10px * var(--ui-scale))",
+      "flex-direction: column",
+      "padding: calc(10px * var(--ui-scale)) calc(7px * var(--ui-scale))",
       "overflow: hidden",
     ]) {
       expect(railBody).toContain(declaration)
@@ -2755,17 +2755,24 @@ describe("overlay architecture guards", () => {
     expect(railBody).not.toContain("max-height:")
 
     const laneBody = soloRuleBody(surface, ".conversation-agent-rail__lanes")
-    expect(laneBody).toContain("overflow-x: auto")
-    expect(laneBody).toContain("overflow-y: hidden")
+    expect(laneBody).toContain("overflow-x: hidden")
+    expect(laneBody).toContain("overflow-y: auto")
     expect(laneBody).toContain("display: flex")
+    expect(laneBody).toContain("flex-direction: column")
     expect(laneBody).toContain("flex-wrap: nowrap")
     expect(laneBody).toContain("scrollbar-width: none")
     expect(surface).toContain(".conversation-agent-rail__lanes::-webkit-scrollbar")
     expect(surface).not.toContain("scrollbar-width: thin")
 
+    const stackBody = soloRuleBody(surface, ".conversation-agent-rail__stack")
+    expect(stackBody).toContain("display: grid")
+    expect(stackBody).toContain("grid-auto-rows: calc(12px * var(--ui-scale))")
+
     const rowBody = soloRuleBody(surface, ".conversation-agent-rail__row")
     expect(rowBody).toContain("display: grid")
-    expect(rowBody).toContain("grid-template-columns: calc(34px * var(--ui-scale))")
+    expect(rowBody).toContain("grid-template-columns: minmax(0, 1fr)")
+    expect(surface).toContain(".conversation-agent-rail-tooltip")
+    expect(surface).toContain(".conversation-agent-rail__tick-line")
     expect(surface).not.toContain("conversation-agent-rail__run")
     expect(surface).not.toContain("conversation-agent-rail__report")
     expect(surface).not.toContain("conversation-agent-rail__resize")

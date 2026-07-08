@@ -68,6 +68,7 @@ export interface ConversationAgentSessionLedgerStatus {
   type: string
   reason?: string
   error?: string
+  summary?: string
 }
 
 export interface AgentInvocationNode {
@@ -303,6 +304,7 @@ function toConversationAgentSessionLedgerRows(
     statusType: string | null
     statusReason: string | null
     statusError: string | null
+    statusSummary: string | null
     statusEmittedAt: number | null
   }>,
 ): ConversationAgentSessionLedgerRow[] {
@@ -335,6 +337,7 @@ function toConversationAgentSessionLedgerRows(
               type: statusType,
               ...(row.statusReason ? { reason: row.statusReason } : {}),
               ...(row.statusError ? { error: row.statusError } : {}),
+              ...(row.statusSummary ? { summary: row.statusSummary } : {}),
             },
             latestStatusEmittedAt: statusEmittedAt,
           }
@@ -382,6 +385,7 @@ export function listConversationAgentSessionsForSessionTree(input: {
       statusType: string | null
       statusReason: string | null
       statusError: string | null
+      statusSummary: string | null
       statusEmittedAt: number | null
     }>(sql`
       WITH RECURSIVE session_tree(id) AS (
@@ -404,6 +408,7 @@ export function listConversationAgentSessionsForSessionTree(input: {
         json_extract(pe.payload, '$.status.type') AS statusType,
         json_extract(pe.payload, '$.status.reason') AS statusReason,
         json_extract(pe.payload, '$.status.error') AS statusError,
+        json_extract(pe.payload, '$.status.summary') AS statusSummary,
         pe.emitted_at AS statusEmittedAt
       FROM session s
       JOIN session_tree st ON st.id = s.id

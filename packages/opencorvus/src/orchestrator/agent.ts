@@ -213,7 +213,7 @@ function schedulerParkAllowedFromSnapshot(snapshot: TaskDesc): boolean {
   if (snapshot.run_orphan) return false
   if ((snapshot.pending_agent_coordination?.length ?? 0) > 0) return false
 
-  const dispatchable = new Set(snapshot.collaboration_closure?.dispatchable_goal_ids ?? [])
+  const dispatchable = new Set(snapshot.collaboration_closure?.evidence_dispatchable_goal_ids ?? [])
   if (dispatchable.size > 0) return false
   if ((snapshot.collaboration_closure?.failed_goal_ids.length ?? 0) > 0) return false
 
@@ -1328,10 +1328,10 @@ async function buildSystemParts(
   // reads facts and routes repair; it does not expose a retry-loop switch.
   ctx.push("## Recovery Discipline")
   ctx.push(
-    "- Rejected acceptance reviews and failed terminal waves require same-task diagnosis from the rendered facts. Route product, dependency, toolchain, git-worktree, preview, browser-runner, and no_project_diff producer blockers to `dispatch_agent` target=build; route graph or dependency-contract blockers to `manage_task` action=modify_goal for point repair, and use `dispatch_agent` target=architect only when the persisted architect artifact itself is proven invalid and named. Ask the operator only for external, destructive, or out-of-scope blockers.",
+    "- Rejected acceptance reviews and failed terminal waves require same-task diagnosis from the rendered facts. Route product, dependency, toolchain, git-worktree, preview, browser-runner, and unsatisfied producer-evidence blockers to `dispatch_agent` target=build; route point contract blockers to `manage_task` action=modify_goal, and use `dispatch_agent` target=architect mode=structural_reentry only when the persisted architect artifact itself is proven invalid, named, and backed by evidence_refs. Ask the operator only for external, destructive, or out-of-scope blockers.",
   )
   ctx.push(
-    "- Do not restart upstream merely because a Build attempt failed, a producer is no_project_diff, or a retained worktree contains partial files. Do not delete a dependency edge to bypass a non-delivered producer. Reuse `manage_task` action=query_failed_goals, `dispatch_agent` target=build retry requests, or `manage_task` action=modify_goal according to the proven owner, then rerun the relevant verification or integrity path; use `manage_task` action=propose_task, `manage_task` action=fail_task, or `question` when the active workflow contract is invalid or blocked outside the current task.",
+    "- Do not restart upstream merely because a Build attempt failed, a producer has unsatisfied evidence, or a retained worktree contains partial files. Do not delete a dependency edge to bypass a non-delivered producer. Reuse `manage_task` action=query_failed_goals, `dispatch_agent` target=build retry requests, or `manage_task` action=modify_goal according to the proven owner, then rerun the relevant verification or integrity path; use `manage_task` action=propose_task, `manage_task` action=fail_task, or `question` when the active workflow contract is invalid or blocked outside the current task.",
   )
   ctx.push("")
 

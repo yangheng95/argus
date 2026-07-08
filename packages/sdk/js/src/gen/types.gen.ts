@@ -1018,7 +1018,7 @@ export type EventGoalReport = {
         summary: string
       }>
       /**
-       * Explicit warning for subsequent agents about hidden or remaining work surface, evidence they must read deeper, and whether goal workload analysis or Architect re-sizing should be revisited.
+       * Explicit warning for subsequent agents about hidden or remaining work surface, evidence they must read deeper, and whether goal workload analysis or Architect structural_reentry evidence should be revisited.
        */
       followup_workload_guidance?: string
       /**
@@ -15938,9 +15938,11 @@ export type TaskBoardResponses = {
             acceptancePresent: boolean
             changedFiles: Array<string>
             commitRef?: string
+            deliveryEvidenceRefs?: Array<string>
             diffBaseRef?: string
             diffHeadRef?: string
             error?: string
+            evidenceContractStatus?: "satisfied" | "unsatisfied" | "failed"
             goalRunID: string
             id: string
             noDiffReason?: string
@@ -17512,9 +17514,11 @@ export type TaskConversationResponses = {
               acceptancePresent: boolean
               changedFiles: Array<string>
               commitRef?: string
+              deliveryEvidenceRefs?: Array<string>
               diffBaseRef?: string
               diffHeadRef?: string
               error?: string
+              evidenceContractStatus?: "satisfied" | "unsatisfied" | "failed"
               goalRunID: string
               id: string
               noDiffReason?: string
@@ -20294,3 +20298,30 @@ export type WorkLedgerListResponses = {
 }
 
 export type WorkLedgerListResponse = WorkLedgerListResponses[keyof WorkLedgerListResponses]
+
+export type WorkLedgerEventsData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/work-ledger/events"
+}
+
+export type WorkLedgerEventsResponses = {
+  /**
+   * Work Ledger change stream
+   */
+  200: {
+    sequence: number
+    sessionID?: string
+    sourceType: string
+    taskID?: string | null
+    type: "work-ledger.connected" | "work-ledger.heartbeat" | "work-ledger.changed"
+  }
+}
+
+export type WorkLedgerEventsResponse = WorkLedgerEventsResponses[keyof WorkLedgerEventsResponses]
