@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "be7cb72abb649762"
+    "panel_revision": "cb0fb8c63ed25325"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -1232,7 +1232,6 @@
   "todo.progress_value": "{{completed}}/{{total}} done",
   "todo.progress_value_current": "{{completed}}/{{total}} done · {{current}}",
   "work_ledger.title": "Projects",
-  "work_ledger.open_project": "Open folder as project",
   "work_ledger.kind.mission": "Mission",
   "work_ledger.kind.task": "Task",
   "work_ledger.kind.chat": "Chat",
