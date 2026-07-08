@@ -44,12 +44,12 @@ import {
   EngineArtifactTable,
   EngineChannelBindingTable,
   EngineGoalTable,
-  EngineInteractionRequestTable,
   EngineTaskTable,
   type EngineInteractionStatus,
   type EngineMetadata,
 } from "@/engine/engine.sql"
 import { recordEngineArtifact } from "@/engine/artifact"
+import { resolveEngineInteractionRequest } from "@/engine/interaction-request"
 import { insertEngineProgressSnapshot } from "@/engine/progress"
 import {
   Budget,
@@ -3153,30 +3153,13 @@ function markProtocolInteraction(
   now: number,
 ) {
   Database.transaction((db) => {
-    db.update(EngineInteractionRequestTable)
-      .set({
-        status,
-        response,
-        time_resolved: now,
-        time_updated: now,
-      })
-      .where(eq(EngineInteractionRequestTable.id, row.id))
-      .run()
-    if (row.run_id) {
-      const runID = row.run_id
-      Database.effect(() =>
-        EngineProtocol.emit(
-          Event.InteractionResolved,
-          {
-            taskID: row.task_id,
-            runID,
-            interactionID: row.id,
-            status,
-            summary: status === "answered" ? "Interaction answered" : "Interaction rejected",
-          },
-          { taskID: row.task_id, runID, interactionID: row.id, source: "service.interaction" },
-        ),
-      )
-    }
+    resolveEngineInteractionRequest(db, {
+      row,
+      status,
+      response,
+      eventSource: "service.interaction",
+      resolvedEventScope: "run",
+      timeResolved: now,
+    })
   })
 }

@@ -108,3 +108,43 @@ Phase 3 verification:
 - `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts`
 
 The first combined engine regression attempt used `--timeout 20000` and timed out in two slow `task-global-project-forbidden` channel-binding cases, then polluted the shared instance cleanup for the next file. Re-running the same affected files with `--timeout 60000` passed. The verified issue is an undersized test timeout for these Windows host cases, not a progress snapshot boundary regression.
+
+## Phase 4 Interaction Request Boundary
+
+The next half-converged table is `engine_interaction_request`. The code already
+has `engine/interaction.ts` as the event bridge for permission/question requests,
+but production source still writes the same table directly from `engine/runtime.ts`
+for executor protocol interaction requests and from `task-api/index.ts` for
+operator resolution of protocol interactions.
+
+Phase 4 grep evidence:
+
+- `rg -n "\\.(insert|update|delete)\\s*\\(\\s*EngineInteractionRequestTable\\b|db\\.(insert|update|delete)\\s*\\(\\s*EngineInteractionRequestTable\\b" packages/opencorvus/src -g "*.ts"` shows direct inserts/updates in `engine/interaction.ts`, `engine/runtime.ts`, and `task-api/index.ts`.
+- `engine/interaction.ts` imports `EngineRuntime` to sync task/run state after writes, so `engine/runtime.ts` must not import it directly. The writer boundary must live in a lower-level module that both files can use without a runtime/interaction circular dependency.
+
+Phase 4 acceptance criteria:
+
+- Production source direct writes to `EngineInteractionRequestTable` exist only in the interaction request writer.
+- Permission/question bridge creation, executor protocol interaction creation, and protocol interaction resolution preserve their current event payloads, event sources, timestamps, status/response writes, and post-write sync behavior.
+- The static database write-boundary test rejects future direct `EngineInteractionRequestTable` writes outside the writer.
+- Existing interaction route and task conversation tests keep passing without frontend/API contract changes.
+
+Phase 4 verification:
+
+- `rg -n "db\\.(insert|update|delete)\\(EngineArtifactTable|\\.(insert|update|delete)\\(EngineArtifactTable|db\\.(insert|update|delete)\\(EngineProgressSnapshotTable|\\.(insert|update|delete)\\(EngineProgressSnapshotTable|db\\.(insert|update|delete)\\(EngineInteractionRequestTable|\\.(insert|update|delete)\\(EngineInteractionRequestTable" packages/opencorvus/src -g "*.ts"` reports only `engine/artifact.ts`, `engine/progress.ts`, and `engine/interaction-request.ts`.
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/engine/interaction-request.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/engine/interaction-permission.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/engine/task-message-revive.test.ts`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts`
+
+The first server-side attempt combined `orchestrator-bridge-init.test.ts`,
+`task-conversation-routes.test.ts`, and `task-project-archive.test.ts`. It printed
+initial passing cases and then had no output for two consecutive 60s activity
+windows. Separate single-file attempts for `orchestrator-bridge-init.test.ts`
+and `task-project-archive.test.ts` also printed passing cases and then had no
+output for repeated 30s windows. Those runs were stopped as invalid no-activity
+verifications. The focused `interaction-request.test.ts` now covers the writer
+row semantics and protocol event source behavior directly; `interaction-permission.test.ts`
+covers the permission bridge and service reply path.
