@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach } from "bun:test"
 import { extractTitle, validateContent } from "../../src/quicknote/text-processor"
-import { createNote, listNotes, getNote, deleteNote } from "../../src/quicknote/service"
-import { Database } from "@/storage/db"
+import { createNote, listNotes, getNote, deleteNote, deleteProjectNotes } from "../../src/quicknote/service"
+import { Database, eq } from "@/storage/db"
 import { QuickNoteTable } from "../../src/quicknote/quicknote.sql"
 
 describe("quicknote.service", () => {
@@ -176,6 +176,45 @@ describe("quicknote.service", () => {
       const notes = listNotes()
       expect(notes.length).toBe(1)
       expect(notes[0].note_id).not.toBe(note1.note_id)
+    })
+  })
+
+  describe("deleteProjectNotes", () => {
+    test("deletes only notes attached to the selected project", () => {
+      const now = Date.now()
+      Database.use((db) => {
+        db.insert(QuickNoteTable)
+          .values([
+            {
+              id: "nte_project_a",
+              project_id: "project_a",
+              content: "project A note",
+              summary: "project A note",
+              tags: "[]",
+              status: "draft",
+              time_created: now,
+              time_updated: now,
+            },
+            {
+              id: "nte_project_b",
+              project_id: "project_b",
+              content: "project B note",
+              summary: "project B note",
+              tags: "[]",
+              status: "draft",
+              time_created: now,
+              time_updated: now,
+            },
+          ])
+          .run()
+      })
+
+      deleteProjectNotes({ projectID: "project_a" })
+
+      expect(Database.use((db) => db.select().from(QuickNoteTable).where(eq(QuickNoteTable.id, "nte_project_a")).all()))
+        .toHaveLength(0)
+      expect(Database.use((db) => db.select().from(QuickNoteTable).where(eq(QuickNoteTable.id, "nte_project_b")).all()))
+        .toHaveLength(1)
     })
   })
 })

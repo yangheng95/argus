@@ -89,3 +89,13 @@ export function deleteNote(id: string): boolean {
 
   return true
 }
+
+export function deleteProjectNotes(input: { projectID: string }, db?: Database.TxOrDb): void {
+  const write = (target: Database.TxOrDb) =>
+    target.delete(QuickNoteTable).where(eq(QuickNoteTable.project_id, input.projectID)).run()
+  if (db) {
+    write(db)
+    return
+  }
+  Database.use(write)
+}

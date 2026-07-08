@@ -121,6 +121,12 @@ Session message 表按 Session writer 分层写入：`part` 的唯一直接表�
 | `control_message` | `control/control.sql.ts`     | 外部控制消息 timeline            |
 | `project`         | `project/project.sql.ts`     | 项目根                           |
 
+Control 和轻量辅助域按领域 writer 分层写入：`control_message` 的唯一直接表写入文件是
+`control/timeline.ts`，`decision_log` 的唯一直接表写入文件是
+`decision-log/index.ts`，`quick_note` 的唯一直接表写入文件是
+`quicknote/service.ts`。Project delete 可以编排项目级清理事务，但必须调用这些领域
+writer API，不能直接删除其它领域表。
+
 ## Project Storage Namespace
 
 `project.id` / `project_id` 是后端 storage namespace，不是用户可见项目数。

@@ -13,7 +13,7 @@
  * 3. Subsequent goal Planners read: avoid re-discovering known decisions.
  */
 
-import { Database, eq, and, desc } from "@/storage/db"
+import { Database, eq, and, desc, inArray } from "@/storage/db"
 import { DecisionLogTable } from "./schema"
 import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
@@ -108,6 +108,17 @@ export interface DecisionLogReader {
 }
 
 export type DecisionLog = DecisionLogWriter & DecisionLogReader
+
+export function deleteDecisionLogsForTasks(taskIDs: string[], db?: Database.TxOrDb): void {
+  if (taskIDs.length === 0) return
+  const write = (target: Database.TxOrDb) =>
+    target.delete(DecisionLogTable).where(inArray(DecisionLogTable.task_id, taskIDs)).run()
+  if (db) {
+    write(db)
+    return
+  }
+  Database.use(write)
+}
 
 /**
  * Default per-entry `value` cap applied when rendering to prompt text. The

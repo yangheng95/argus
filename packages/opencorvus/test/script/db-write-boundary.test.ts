@@ -24,6 +24,8 @@ function projectPath(file: string): string {
 }
 
 const approvedWriters: Record<string, string> = {
+  ControlMessageTable: "packages/opencorvus/src/control/timeline.ts",
+  DecisionLogTable: "packages/opencorvus/src/decision-log/index.ts",
   CronJobTable: "packages/opencorvus/src/scheduler/cron-service.ts",
   EngineArtifactTable: "packages/opencorvus/src/engine/artifact.ts",
   EngineChannelBindingTable: "packages/opencorvus/src/engine/channel-binding.ts",
@@ -40,6 +42,7 @@ const approvedWriters: Record<string, string> = {
   EngineTaskTable: "packages/opencorvus/src/engine/task.ts",
   EventJobTable: "packages/opencorvus/src/scheduler/event-service.ts",
   PartTable: "packages/opencorvus/src/session/index.ts",
+  QuickNoteTable: "packages/opencorvus/src/quicknote/service.ts",
   TaskQueueTable: "packages/opencorvus/src/scheduler/task-queue-service.ts",
 }
 
@@ -128,5 +131,17 @@ describe("database write boundary", () => {
 
   test("only the session writer directly writes PartTable", () => {
     expect(directWriteViolations("PartTable")).toEqual([])
+  })
+
+  test("only the control timeline writer directly writes ControlMessageTable", () => {
+    expect(directWriteViolations("ControlMessageTable")).toEqual([])
+  })
+
+  test("only the decision log writer directly writes DecisionLogTable", () => {
+    expect(directWriteViolations("DecisionLogTable")).toEqual([])
+  })
+
+  test("only the quicknote service directly writes QuickNoteTable", () => {
+    expect(directWriteViolations("QuickNoteTable")).toEqual([])
   })
 })

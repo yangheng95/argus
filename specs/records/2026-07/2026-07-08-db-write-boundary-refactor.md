@@ -626,3 +626,54 @@ Phase 19 verification:
 - `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/db-write-boundary.test.ts`
 - `bun run --cwd packages/opencorvus typecheck`
 - `git diff --check`
+
+## Phase 20 Project Delete Cross-Domain Cleanup Boundary
+
+After Phase 19, the production DB write inventory showed the remaining
+multi-writer tables were concentrated around project deletion:
+`ControlMessageTable`, `DecisionLogTable`, `QuickNoteTable`, and `ProjectTable`.
+`project/delete.ts` was directly deleting control timeline, decision log, and
+quicknote rows while also deleting the project row. The project layer should
+orchestrate project lifecycle cleanup, but it should not own the table write
+semantics of those domains.
+
+This phase adds narrow domain cleanup APIs and routes project deletion through
+them while preserving the existing project-delete transaction boundary:
+
+- `ControlTimeline.deleteProjectMessages({ projectID }, db)`
+- `deleteDecisionLogsForTasks(taskIDs, db)`
+- `deleteProjectNotes({ projectID }, db)`
+
+`ProjectTable` remains a separate project-domain boundary question because
+`project/project.ts`, `project/gc.ts`, and `project/delete.ts` all mutate the
+project lifecycle for different reasons. It is not folded into this phase.
+
+Phase 20 acceptance criteria:
+
+- `project/delete.ts` no longer imports or directly writes
+  `ControlMessageTable`, `DecisionLogTable`, or `QuickNoteTable`.
+- Project deletion still removes control timeline rows, decision-log rows for
+  deleted tasks, and quicknote rows for the deleted project.
+- Domain cleanup APIs can run inside the project delete transaction without
+  opening a second write source.
+- Production source direct `ControlMessageTable` writes exist only in
+  `control/timeline.ts`.
+- Production source direct `DecisionLogTable` writes exist only in
+  `decision-log/index.ts`.
+- Production source direct `QuickNoteTable` writes exist only in
+  `quicknote/service.ts`.
+- The static database write-boundary test rejects future cross-domain direct
+  writes for these three tables.
+- The architecture data document states these writer boundaries.
+
+Phase 20 verification:
+
+- `rg -n '\\.(insert|update|delete)\\s*\\(\\s*(ControlMessageTable|DecisionLogTable|QuickNoteTable)\\b|db\\.(insert|update|delete)\\s*\\(\\s*(ControlMessageTable|DecisionLogTable|QuickNoteTable)\\b' packages/opencorvus/src -g '*.ts'`
+- `bun test --timeout 60000 packages/opencorvus/test/control/timeline.test.ts -t "deleteProjectMessages"`
+- `bun test --timeout 60000 packages/opencorvus/test/pipeline/decision-log.test.ts -t "deleteDecisionLogsForTasks"`
+- `bun test packages/opencorvus/test/quicknote/service.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/server/project-routes.test.ts -t "DELETE /project/current removes DB state"`
+- `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `git diff --check`
