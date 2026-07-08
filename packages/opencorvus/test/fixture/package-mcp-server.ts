@@ -3,6 +3,18 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod"
 
 const server = new McpServer({ name: "package-mcp-test", version: "1.0.0" })
+const transport = new StdioServerTransport()
+let closing = false
+
+async function closeFromStdin() {
+  if (closing) return
+  closing = true
+  await server.close().catch(() => undefined)
+  process.exit(0)
+}
+
+process.stdin.once("end", () => void closeFromStdin())
+process.stdin.once("close", () => void closeFromStdin())
 const RAW_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
 
@@ -475,4 +487,4 @@ server.registerResource(
   }),
 )
 
-await server.connect(new StdioServerTransport())
+await server.connect(transport)

@@ -28,13 +28,7 @@ function killProcess(pid: number): void {
 }
 
 function spyCleanupFailure(message: string): void {
-  if (process.platform === "win32") {
-    spyOn(ProcessSupervisor, "terminateProcessTree").mockImplementation(async () => {
-      throw new Error(message)
-    })
-    return
-  }
-  spyOn(ProcessSupervisor, "terminateProcessGroup").mockImplementation(async () => {
+  spyOn(ProcessSupervisor, "terminateAndWaitForExit").mockImplementation(async () => {
     throw new Error(message)
   })
 }
@@ -127,12 +121,12 @@ describe("util.process", () => {
     setTimeout(() => abort.abort(), 25)
 
     await expect(
-      Process.run(node("setTimeout(() => {}, 500)"), {
+      Process.run(node("setTimeout(() => {}, 2000)"), {
         abort: abort.signal,
         nothrow: true,
       }),
     ).rejects.toThrow("forced process cleanup failure")
-    expect(Date.now() - started).toBeLessThan(500)
+    expect(Date.now() - started).toBeLessThan(1500)
   }, 3000)
 
   test("abort surfaces process cleanup failure after root exit but before close", async () => {

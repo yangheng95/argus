@@ -14,10 +14,13 @@ import { Session } from "../../src/session"
 import { resetDatabase } from "../fixture/db"
 import { repositoryExpertSquadRoot } from "../fixture/expert-squad"
 import { tmpdir } from "../fixture/fixture"
+import { runIsolatedBunTest } from "../harness/isolated-bun-runner"
 
 const PACKAGE_ID = "custom-replica"
 const PACKAGE_NAMESPACE = "partner"
 const test = baseTest.serial
+const runPackageManagerInstanceCases = process.env.OPENCORVUS_PACKAGE_MANAGER_INSTANCE_CASES === "1"
+const instanceBackedTest = runPackageManagerInstanceCases ? test : baseTest.skip
 
 async function writeFile(root: string, relativePath: string, content: string) {
   const target = path.join(root, relativePath)
@@ -224,6 +227,23 @@ describe("ExpertSquadPackageManager", () => {
     await resetDatabase()
   })
 
+  if (!runPackageManagerInstanceCases) {
+    test("runs Instance-backed package manager cases in isolated Bun processes", { timeout: 0 }, async () => {
+      await runIsolatedBunTest({
+        suiteName: "ExpertSquadPackageManager imports a source folder through Instance.provide",
+        isolatedFile: path.join(import.meta.dir, "package-manager.test.ts"),
+        temporaryPrefix: "opencorvus-package-manager-instance-",
+        expectedPassCount: 1,
+        inactivityTimeoutMilliseconds: 30_000,
+        bunTestArgs: ["-t", "imports a source folder into the canonical expert-squad directory without selecting it"],
+        env: {
+          OPENCORVUS_PACKAGE_MANAGER_INSTANCE_CASES: "1",
+        },
+        forbiddenOutput: ["killed "],
+      })
+    })
+  }
+
   test("payload package sources match current repository expert-squad packages", async () => {
     expect(payloadPackageSources.map((source) => `${source.namespace}/${source.id}`)).toEqual([
       "builtin/algorithm",
@@ -408,29 +428,21 @@ describe("ExpertSquadPackageManager", () => {
     expect(Object.keys(source!.files)).not.toContain("tools/test-protocol-contract.ts")
     expect(source!.manifestText).not.toContain("test-artifact-inventory")
     expect(source!.files["tools/opentest-protocol-engine.ts"]).toContain("parseProtocolContract(contractText)")
-    expect(source!.files["tools/opentest-runner.ts"]).toContain("spawn(input.executable")
-    expect(source!.files["tools/opentest-runner.ts"]).toContain('detached: process.platform !== "win32"')
-    expect(source!.files["tools/opentest-runner.ts"]).toContain('signalProcessGroup(pid, "SIGTERM")')
-    expect(source!.files["tools/opentest-runner.ts"]).toContain("Get-CimInstance Win32_Process")
-    expect(source!.files["tools/opentest-runner.ts"]).toContain("ParentProcessId")
-    expect(source!.files["tools/opentest-runner.ts"]).toContain("const terminationFailure = new Promise<never>")
-    expect(source!.files["tools/opentest-runner.ts"]).toContain(
-      "completion = await Promise.race([completionPromise, terminationFailure])",
-    )
-    expect(source!.files["tools/opentest-runner.ts"]).toContain("if (input.abort.aborted) throw new Error")
-    expect(source!.files["tools/opentest-runner.ts"]).toContain("} finally {\n    clearInactivityTimer()")
-    expect(source!.files["tools/opentest-runner.ts"]).toContain('input.abort.removeEventListener("abort", onAbort)')
-    expect(source!.files["tools/opentest-runner.ts"]).toContain(
-      "const WINDOWS_POWERSHELL_CLEANUP_TIMEOUT_MS = 5_000",
-    )
-    expect(source!.files["tools/opentest-runner.ts"]).toContain("PowerShell cleanup timed out after")
-    expect(source!.files["tools/opentest-runner.ts"]).toContain("runner.kill()")
-    expect(source!.files["tools/opentest-runner.ts"]).toContain(
-      "Stop-Process -Id $target -Force -ErrorAction SilentlyContinue",
-    )
-    expect(source!.files["tools/opentest-runner.ts"]).not.toContain(
-      "Stop-Process -Id $target -Force -ErrorAction Stop",
-    )
+    expect(source!.files["tools/opentest-runner.ts"]).toContain("context.host.runCommand")
+    expect(source!.files["tools/opentest-runner.ts"]).toContain("inactiveTimeoutMs: args.inactive_timeout_ms")
+    expect(source!.files["tools/opentest-runner.ts"]).toContain("abort: context.abort")
+    expect(source!.files["tools/opentest-runner.ts"]).not.toContain("node:child_process")
+    expect(source!.files["tools/opentest-runner.ts"]).not.toContain("spawn(input.executable")
+    expect(source!.files["tools/opentest-runner.ts"]).not.toContain('detached: process.platform !== "win32"')
+    expect(source!.files["tools/opentest-runner.ts"]).not.toContain('signalProcessGroup(pid, "SIGTERM")')
+    expect(source!.files["tools/opentest-runner.ts"]).not.toContain('spawnSync("taskkill.exe"')
+    expect(source!.files["tools/opentest-runner.ts"]).not.toContain("WINDOWS_TASKKILL_TIMEOUT_MS")
+    expect(source!.files["tools/opentest-runner.ts"]).not.toContain("const terminationFailure = new Promise<never>")
+    expect(source!.files["tools/opentest-runner.ts"]).not.toContain("taskkill timed out after")
+    expect(source!.files["tools/opentest-runner.ts"]).not.toContain('["/PID", String(pid), "/T", "/F"]')
+    expect(source!.files["tools/opentest-runner.ts"]).not.toContain("Stop-Process")
+    expect(source!.files["tools/opentest-runner.ts"]).not.toContain("Get-CimInstance")
+    expect(source!.files["tools/opentest-runner.ts"]).not.toContain('spawnSync("wmic"')
     expect(source!.files["tools/opentest-runner.ts"]).not.toContain("package_scripts")
     expect(source!.files["protocol-engine/opentest-protocol-engine.ts"]).toContain(
       "export function parseProtocolContract",
@@ -714,7 +726,7 @@ describe("ExpertSquadPackageManager", () => {
     await expect(fs.lstat(targetRoot)).rejects.toMatchObject({ code: "ENOENT" })
   })
 
-  test(
+  instanceBackedTest(
     "imports a source folder into the canonical expert-squad directory without selecting it",
     { timeout: 0 },
     async () => {
@@ -759,7 +771,14 @@ describe("ExpertSquadPackageManager", () => {
           )
           await expect(ExpertSquadRegistry.loadPackage(targetRoot)).resolves.toMatchObject({ id: PACKAGE_ID })
           expect(await readJsonFile(projectConfig.file)).toEqual(projectConfig.value)
-          expect(await ExpertSquadRegistry.discover(project.path)).toHaveLength(1)
+          const discovered = await ExpertSquadRegistry.discover(project.path)
+          const expectedDiscovered = [
+            ...payloadPackageSources.map((source) => `${source.namespace}/${source.id}`),
+            `${PACKAGE_NAMESPACE}/${PACKAGE_ID}`,
+          ]
+          expect(discovered.map((item) => `${item.namespace}/${item.id}`).sort()).toEqual(
+            expectedDiscovered.sort(),
+          )
         },
       )
     },

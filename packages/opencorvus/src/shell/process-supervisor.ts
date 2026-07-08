@@ -6,11 +6,21 @@ import { Filesystem } from "@/util/filesystem"
 import { which } from "@/util/which"
 
 const SIGKILL_TIMEOUT_MS = 200
+const WINDOWS_PID_FILE_EXIT_SETTLE_MS = 500
 
 export namespace ProcessSupervisor {
   export interface SpawnOptions {
     command: string
     shell: string
+    cwd?: string
+    env?: NodeJS.ProcessEnv
+    stdin?: "ignore" | "pipe"
+    requireProcessTreeCleanup?: boolean
+  }
+
+  export interface CommandSpawnOptions {
+    executable: string
+    args: string[]
     cwd?: string
     env?: NodeJS.ProcessEnv
     stdin?: "ignore" | "pipe"
@@ -50,6 +60,11 @@ export namespace ProcessSupervisor {
     return trackLiveHandle(opts, handle)
   }
 
+  export async function spawnCommand(opts: CommandSpawnOptions): Promise<Handle> {
+    const handle = await defaultSpawnCommand(opts)
+    return trackLiveHandle(opts, handle)
+  }
+
   export async function disposeLiveProcessesUnder(directory: string): Promise<{ disposed: number; pids: number[] }> {
     const target = normalizeCwd(directory)
     const matches = Array.from(liveHandles.values()).filter((entry) => Filesystem.contains(target, entry.cwd))
@@ -81,15 +96,20 @@ export namespace ProcessSupervisor {
   }
 
   async function defaultSpawnShell(opts: SpawnOptions): Promise<Handle> {
-    if (process.platform === "win32") return await spawnWindows(opts)
-    return spawnUnix(opts)
+    if (process.platform === "win32") return await spawnWindowsShell(opts)
+    return spawnUnixShell(opts)
+  }
+
+  async function defaultSpawnCommand(opts: CommandSpawnOptions): Promise<Handle> {
+    if (process.platform === "win32") return await spawnWindowsCommand(opts)
+    return spawnUnixCommand(opts)
   }
 
   function normalizeCwd(cwd: string) {
     return path.resolve(Filesystem.windowsPath(cwd))
   }
 
-  function trackLiveHandle(opts: SpawnOptions, handle: Handle): Handle {
+  function trackLiveHandle(opts: { cwd?: string }, handle: Handle): Handle {
     if (!opts.cwd) return handle
     const id = nextLiveHandleID++
     const cwd = normalizeCwd(opts.cwd)
@@ -113,6 +133,7 @@ export namespace ProcessSupervisor {
       unref: () => handle.unref(),
     }
     liveHandles.set(id, { id, pid: handle.pid, cwd, handle: tracked })
+    tracked.exited.finally(unregister).catch(() => undefined)
     return tracked
   }
 
@@ -186,7 +207,7 @@ export namespace ProcessSupervisor {
     await terminatePosixProcessGroup(pid, label)
   }
 
-  function spawnUnix(opts: SpawnOptions): Handle {
+  function spawnUnixShell(opts: SpawnOptions): Handle {
     const proc = spawn(opts.command, {
       shell: opts.shell,
       cwd: opts.cwd,
@@ -198,7 +219,62 @@ export namespace ProcessSupervisor {
     return childHandle(proc, { cleanupProcessGroup: true })
   }
 
-  async function spawnWindows(opts: SpawnOptions): Promise<Handle> {
+  function spawnUnixCommand(opts: CommandSpawnOptions): Handle {
+    const proc = spawn(opts.executable, opts.args, {
+      cwd: opts.cwd,
+      env: opts.env,
+      shell: false,
+      stdio: [opts.stdin ?? "ignore", "pipe", "pipe"],
+      detached: true,
+    })
+    if (!proc.pid) throw new Error(`Failed to start process: ${opts.executable}`)
+    return childHandle(proc, { cleanupProcessGroup: true })
+  }
+
+  async function spawnWindowsShell(opts: SpawnOptions): Promise<Handle> {
+    return await spawnWindowsRequest({
+      label: opts.command,
+      stdin: opts.stdin,
+      request: (pidPath) => ({
+        kind: "shell",
+        command: opts.command,
+        shell: opts.shell,
+        cwd: opts.cwd,
+        env: opts.env ?? process.env,
+        pid_file: pidPath,
+      }),
+    })
+  }
+
+  async function spawnWindowsCommand(opts: CommandSpawnOptions): Promise<Handle> {
+    const env = opts.env ?? process.env
+    const executable = resolveWindowsCommandExecutable(opts.executable, env)
+    return await spawnWindowsRequest({
+      label: executable,
+      stdin: opts.stdin,
+      request: (pidPath) => ({
+        kind: "command",
+        executable,
+        args: opts.args,
+        cwd: opts.cwd,
+        env,
+        pid_file: pidPath,
+      }),
+    })
+  }
+
+  function resolveWindowsCommandExecutable(executable: string, env: NodeJS.ProcessEnv): string {
+    if (path.isAbsolute(executable) || executable.includes("/") || executable.includes("\\")) return executable
+    const resolved = which(executable, env)
+    if (!resolved) throw new Error(`Windows command executable "${executable}" was not found in PATH`)
+    return resolved
+  }
+
+  async function spawnWindowsRequest(opts: {
+    label: string
+    stdin?: "ignore" | "pipe"
+    request: (pidPath: string) => Record<string, unknown>
+  }): Promise<Handle> {
     const helper = await resolveWindowsHelper()
     if (!helper) {
       throw new Error("Windows process supervisor helper is required for process-tree cleanup")
@@ -206,17 +282,7 @@ export namespace ProcessSupervisor {
     const requestDir = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-supervisor-"))
     const requestPath = path.join(requestDir, "request.json")
     const pidPath = path.join(requestDir, "pid.txt")
-    await fs.writeFile(
-      requestPath,
-      JSON.stringify({
-        command: opts.command,
-        shell: opts.shell,
-        cwd: opts.cwd,
-        env: opts.env ?? process.env,
-        pid_file: pidPath,
-      }),
-      "utf8",
-    )
+    await fs.writeFile(requestPath, JSON.stringify(opts.request(pidPath)), "utf8")
     const proc = spawn(helper, ["--request", requestPath], {
       stdio: [opts.stdin ?? "ignore", "pipe", "pipe"],
       windowsHide: true,
@@ -224,7 +290,7 @@ export namespace ProcessSupervisor {
     const helperHandle = childHandle(proc, { cleanupProcessGroup: false })
     let pid: number
     try {
-      pid = await waitForPidFile(pidPath, helperHandle.exited, opts.command)
+      pid = await waitForPidFile(pidPath, helperHandle.exited, opts.label)
     } catch (error) {
       await helperHandle.dispose().catch(() => undefined)
       await fs.rm(requestDir, { recursive: true, force: true }).catch(() => {})
@@ -232,34 +298,36 @@ export namespace ProcessSupervisor {
     }
     let terminated = false
     let disposed = false
+    let helperExited = false
+    const removeRequestDir = async () => {
+      await fs.rm(requestDir, { recursive: true, force: true }).catch(() => {})
+    }
+    helperHandle.exited
+      .finally(() => {
+        helperExited = true
+        void removeRequestDir()
+      })
+      .catch(() => undefined)
     const terminate = async () => {
       if (terminated) return
       terminated = true
-      let firstError: unknown
-      try {
-        await terminateProcessTree(pid, `Windows supervised process tree ${pid}`)
-      } catch (error) {
-        firstError = error
-      }
-      try {
-        await helperHandle.terminate()
-      } catch (error) {
-        if (!firstError) firstError = error
-      }
-      if (firstError) throw firstError
+      if (helperExited) return
+      await helperHandle.terminate()
     }
 
     const dispose = async () => {
       if (disposed) return
       disposed = true
       let firstError: unknown
-      try {
-        await terminate()
-      } catch (error) {
-        firstError = error
+      if (!helperExited) {
+        try {
+          await terminate()
+        } catch (error) {
+          firstError = error
+        }
       }
       await helperHandle.exited.catch(() => undefined)
-      await fs.rm(requestDir, { recursive: true, force: true }).catch(() => {})
+      await removeRequestDir()
       if (firstError) throw firstError
     }
 
@@ -276,10 +344,17 @@ export namespace ProcessSupervisor {
     let disposed = false
     let terminated = false
     let settled = false
+    let exitCode: number | null = null
+    let exitSignal: NodeJS.Signals | null = null
     const exited = new Promise<number>((resolve, reject) => {
       proc.once("exit", (code, signal) => {
         settled = true
-        resolve(code ?? (signal ? 1 : 0))
+        exitCode = code
+        exitSignal = signal
+      })
+      proc.once("close", (code, signal) => {
+        settled = true
+        resolve(code ?? exitCode ?? (signal || exitSignal ? 1 : 0))
       })
       proc.once("error", (error) => {
         settled = true
@@ -473,18 +548,26 @@ export namespace ProcessSupervisor {
   async function waitForPidFile(pidPath: string, exited: Promise<number>, command: string): Promise<number> {
     const deadline = Date.now() + 5_000
     let exitCode: number | undefined
+    let exitObservedAt: number | undefined
     exited
       .then((code) => {
         exitCode = code
+        exitObservedAt = Date.now()
       })
       .catch(() => {
         exitCode = 125
+        exitObservedAt = Date.now()
       })
     while (Date.now() < deadline) {
       const text = await fs.readFile(pidPath, "utf8").catch(() => undefined)
       const pid = text ? Number(text.trim()) : NaN
       if (Number.isInteger(pid) && pid > 0) return pid
-      if (exitCode !== undefined) {
+      const helperFailedBeforeLaunch = exitCode === 2 || exitCode === 125
+      if (
+        helperFailedBeforeLaunch &&
+        exitObservedAt !== undefined &&
+        Date.now() - exitObservedAt > WINDOWS_PID_FILE_EXIT_SETTLE_MS
+      ) {
         throw new Error(`Windows process supervisor exited before starting command '${command}' (exit=${exitCode})`)
       }
       await Bun.sleep(20)
@@ -498,28 +581,58 @@ export namespace ProcessSupervisor {
     const envPath = process.env.OPENCORVUS_PROCESS_SUPERVISOR
     if (envPath && Filesystem.stat(envPath)?.size) return envPath
 
-    const exe = "opencorvus-process-supervisor.exe"
     const execDir = path.dirname(process.execPath)
-    const candidates = [
+    const packagedCandidates = [
       path.join(execDir, exe),
       path.join(execDir, "bin", exe),
       path.join(path.dirname(execDir), exe),
       path.join(path.dirname(execDir), "bin", exe),
-      path.resolve(import.meta.dir, "../../native/process-supervisor/target/debug", exe),
-      path.resolve(import.meta.dir, "../../native/process-supervisor/target/release", exe),
     ]
-    for (const candidate of candidates) {
+    for (const candidate of packagedCandidates) {
       if (Filesystem.stat(candidate)?.size) return candidate
     }
 
     const manifest = path.resolve(import.meta.dir, "../../native/process-supervisor/Cargo.toml")
-    const cargo = which("cargo")
-    if (cargo && Filesystem.stat(manifest)?.size) {
-      const result = spawnSync(cargo, ["build", "--manifest-path", manifest], { stdio: "ignore" })
-      const debug = path.resolve(import.meta.dir, "../../native/process-supervisor/target/debug", exe)
-      if (result.status === 0 && Filesystem.stat(debug)?.size) return debug
+    const localCandidates = [
+      path.resolve(import.meta.dir, "../../native/process-supervisor/target/debug", exe),
+      path.resolve(import.meta.dir, "../../native/process-supervisor/target/release", exe),
+    ]
+    for (const candidate of localCandidates) {
+      if (!Filesystem.stat(candidate)?.size) continue
+      if (await localWindowsHelperIsFresh(candidate, manifest)) return candidate
+      const rebuilt = buildLocalWindowsHelper(manifest)
+      if (rebuilt) return rebuilt
     }
 
-    return undefined
+    return buildLocalWindowsHelper(manifest)
+  }
+
+  const exe = "opencorvus-process-supervisor.exe"
+
+  async function fileMtimeMs(file: string): Promise<number> {
+    const info = await fs.stat(file).catch(() => undefined)
+    return info?.mtimeMs ?? 0
+  }
+
+  async function localWindowsHelperIsFresh(helper: string, manifest: string): Promise<boolean> {
+    const helperMtime = await fileMtimeMs(helper)
+    if (!helperMtime) return false
+    const sourceRoot = path.dirname(manifest)
+    const sourceMtime = Math.max(
+      ...(await Promise.all([
+        fileMtimeMs(manifest),
+        fileMtimeMs(path.join(sourceRoot, "Cargo.lock")),
+        fileMtimeMs(path.join(sourceRoot, "src", "main.rs")),
+      ])),
+    )
+    return helperMtime >= sourceMtime
+  }
+
+  function buildLocalWindowsHelper(manifest: string): string | undefined {
+    const cargo = which("cargo")
+    if (!cargo || !Filesystem.stat(manifest)?.size) return undefined
+    const result = spawnSync(cargo, ["build", "--manifest-path", manifest], { stdio: "ignore" })
+    const debug = path.resolve(import.meta.dir, "../../native/process-supervisor/target/debug", exe)
+    return result.status === 0 && Filesystem.stat(debug)?.size ? debug : undefined
   }
 }

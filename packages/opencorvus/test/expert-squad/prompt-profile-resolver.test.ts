@@ -4,6 +4,7 @@ import fs from "node:fs/promises"
 import { AgentToolPool } from "../../src/agent/tool-pool-contract"
 import { Config } from "../../src/config/config"
 import { ExpertSquadCatalogSchema } from "../../src/expert-squad/catalog"
+import { payloadPackageSources } from "../../src/expert-squad/payload"
 import { PromptProfileResolver } from "../../src/expert-squad/prompt-profile-resolver"
 import { MCP } from "../../src/mcp"
 import { createOrchestratorTools } from "../../src/orchestrator/tools"
@@ -43,6 +44,7 @@ const retiredStaticProfileIDs = [
 ] as const
 const OPENTEST_EXPERT_SQUAD_ID = "opentest"
 const VIRTUAL_RUNTIME_EXPERT_SQUAD_ID = "virtual-runtime"
+const payloadSelectorSkillNames = payloadPackageSources.map((source) => `${source.id}-expert-squad`)
 const packageMcpServerPath = path.join(import.meta.dir, "../fixture/package-mcp-server.ts")
 const packagePromptResourceOnlyMcpServerPath = path.join(
   import.meta.dir,
@@ -404,7 +406,7 @@ describe("PromptProfileResolver", () => {
     ])
   })
 
-  test.serial("composes project package build overlays with default MCP context", { timeout: 0 }, async () => {
+  isolatedMcpTest("composes project package build overlays with default MCP context", { timeout: 0 }, async () => {
     await withPromptProfileResolverInactivityTimeout(
       "composes project package build overlays with default MCP context",
       15_000,
@@ -444,7 +446,7 @@ describe("PromptProfileResolver", () => {
     )
   })
 
-  test.serial("composes project package Orchestrator overlay with package MCP context", async () => {
+  isolatedMcpTest("composes project package Orchestrator overlay with package MCP context", { timeout: 0 }, async () => {
     await using project = await tmpdir({ git: true })
     const schedulerPackageMcpServerRef = `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/package-browser`
     const schedulerPackageMcpPromptRef = `${schedulerPackageMcpServerRef}/prompt/inspect`
@@ -814,7 +816,7 @@ describe("PromptProfileResolver", () => {
     expect(packageToolResult.metadata.provider_tool_name).toBe(packageToolProviderName)
   })
 
-  test.serial("projects repository opentest selector, scheduler tools, and worker tools", async () => {
+  test.serial("projects repository opentest selector, scheduler tools, and worker tools", { timeout: 0 }, async () => {
     await using project = await tmpdir({ git: true })
     const packageRoot = await copyRepositoryExpertSquadPackage(project.path, OPENTEST_EXPERT_SQUAD_ID)
     const testCaseRoot = path.join(project.path, "cases", "login")
@@ -1612,6 +1614,74 @@ describe("PromptProfileResolver", () => {
     expect(result.success).toBe(false)
   })
 
+  test.serial("projects MCP descriptors from manifest refs without starting scoped servers", async () => {
+    await using project = await tmpdir({ git: true })
+    const missingServer = path.join(project.path, "missing-mcp-server.ts")
+    const packageMcpServerRef = `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/package-browser`
+    const packageMcpPromptRef = `${packageMcpServerRef}/prompt/inspect`
+    const packageMcpResourceRef = `${packageMcpServerRef}/resource/dom`
+    const defaultMcpPromptRef = "default/mcp/package-browser/prompt/inspect"
+    const defaultMcpResourceRef = "default/mcp/package-browser/resource/dom"
+    await writeProjectExpertSquadPackage(project.path, PROJECT_EXPERT_SQUAD_ID, {
+      schedulerPackageMcpServerRefs: [packageMcpServerRef],
+      packageMcpDefinition: {
+        type: "local",
+        command: [process.execPath, missingServer],
+        capabilities: {
+          prompts: ["inspect"],
+          resources: ["dom"],
+        },
+      },
+      buildDefaultMcpPromptRefs: [defaultMcpPromptRef],
+      buildDefaultMcpResourceRefs: [defaultMcpResourceRef],
+      buildPackageToolRefs: [],
+    })
+    const config = Config.Info.parse({
+      prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID },
+      mcp: {
+        "package-browser": {
+          type: "local",
+          command: [process.execPath, missingServer],
+        },
+      },
+    })
+    const schedulerCapability = await PromptProfileResolver.resolveSchedulerCapability({
+      projectDirectory: project.path,
+      config,
+    })
+    const workerCapability = await PromptProfileResolver.resolveWorkerCapability({
+      projectDirectory: project.path,
+      agentID: "build",
+      config,
+    })
+
+    const packagePrompts = await PromptProfileResolver.projectSchedulerMcpPrompts(schedulerCapability, {
+      projectDirectory: project.path,
+    })
+    const packageResources = await PromptProfileResolver.projectSchedulerMcpResources(schedulerCapability, {
+      projectDirectory: project.path,
+    })
+    const defaultPrompts = await PromptProfileResolver.projectWorkerMcpPrompts(workerCapability, {
+      projectDirectory: project.path,
+    })
+    const defaultResources = await PromptProfileResolver.projectWorkerMcpResources(workerCapability, {
+      projectDirectory: project.path,
+    })
+
+    expect(packagePrompts[PromptProfileResolver.packageMcpPromptProviderName(packageMcpPromptRef)]?.name).toBe(
+      "inspect",
+    )
+    expect(packageResources[PromptProfileResolver.packageMcpResourceProviderName(packageMcpResourceRef)]?.name).toBe(
+      "dom",
+    )
+    expect(defaultPrompts[PromptProfileResolver.defaultMcpPromptProviderName(defaultMcpPromptRef)]?.name).toBe(
+      "inspect",
+    )
+    expect(defaultResources[PromptProfileResolver.defaultMcpResourceProviderName(defaultMcpResourceRef)]?.name).toBe(
+      "dom",
+    )
+  })
+
   test.serial(
     "active skill projection hash follows projected package skill content and metadata",
     { timeout: 0 },
@@ -2025,7 +2095,7 @@ describe("PromptProfileResolver", () => {
     expect(afterSkillProjection.projectionHash).not.toBe(beforeSkillProjection.projectionHash)
   })
 
-  test.serial("projects active package MCP prompts and resources as scoped runtime providers", async () => {
+  isolatedMcpTest("projects active package MCP prompts and resources as scoped runtime providers", { timeout: 0 }, async () => {
     await using project = await tmpdir({ git: true })
     const packageMcpServerRef = `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/package-browser`
     const packageMcpPromptRef = `${packageMcpServerRef}/prompt/inspect`
@@ -2063,8 +2133,10 @@ describe("PromptProfileResolver", () => {
     expect(projectedPrompts[promptProviderName]?.name).toBe("inspect")
     expect(projectedResources[resourceProviderName]?.name).toBe("dom")
 
-    const promptResult = await projectedPrompts[promptProviderName]!.get({ label: "active" })
-    const resourceResult = await projectedResources[resourceProviderName]!.read()
+    const [promptResult, resourceResult] = await MCP.withScopedConnectionPool(async () => [
+      await projectedPrompts[promptProviderName]!.get({ label: "active" }),
+      await projectedResources[resourceProviderName]!.read(),
+    ])
     const promptText = JSON.stringify(promptResult).replace(/\\\\/g, "/")
     const resourceText = JSON.stringify(resourceResult).replace(/\\\\/g, "/")
 
@@ -2118,8 +2190,10 @@ describe("PromptProfileResolver", () => {
           expect(projectedPrompts[promptProviderName]?.name).toBe("inspect")
           expect(projectedResources[resourceProviderName]?.name).toBe("dom")
 
-          const promptResult = await projectedPrompts[promptProviderName]!.get({ label: "active" })
-          const resourceResult = await projectedResources[resourceProviderName]!.read()
+          const [promptResult, resourceResult] = await MCP.withScopedConnectionPool(async () => [
+            await projectedPrompts[promptProviderName]!.get({ label: "active" }),
+            await projectedResources[resourceProviderName]!.read(),
+          ])
           activity("read prompt and resource")
           const promptText = JSON.stringify(promptResult).replace(/\\\\/g, "/")
           const resourceText = JSON.stringify(resourceResult).replace(/\\\\/g, "/")
@@ -2133,7 +2207,57 @@ describe("PromptProfileResolver", () => {
     },
   )
 
-  test.serial("composes active package MCP prompt and resource context", async () => {
+  isolatedMcpTest(
+    "shares concurrent scoped MCP prompt and resource reads through one local connection",
+    { timeout: 0 },
+    async () => {
+      await using project = await tmpdir({ git: true })
+      const startLogPath = path.join(project.path, "mcp-starts.log")
+      const packageMcpServerRef = `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/package-browser`
+      const packageMcpPromptRef = `${packageMcpServerRef}/prompt/inspect`
+      const packageMcpResourceRef = `${packageMcpServerRef}/resource/dom`
+      await writeProjectExpertSquadPackage(project.path, PROJECT_EXPERT_SQUAD_ID, {
+        schedulerPackageMcpServerRefs: [packageMcpServerRef],
+        packageMcpDefinition: {
+          type: "local",
+          command: [process.execPath, packagePromptResourceOnlyMcpServerPath],
+          environment: {
+            OPENCORVUS_MCP_START_LOG: startLogPath,
+          },
+          capabilities: {
+            prompts: ["inspect"],
+            resources: ["dom"],
+          },
+        },
+      })
+      const promptProviderName = PromptProfileResolver.packageMcpPromptProviderName(packageMcpPromptRef)
+      const resourceProviderName = PromptProfileResolver.packageMcpResourceProviderName(packageMcpResourceRef)
+      const capability = await PromptProfileResolver.resolveSchedulerCapability({
+        projectDirectory: project.path,
+        config: Config.Info.parse({ prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } }),
+      })
+      const projectedPrompts = await PromptProfileResolver.projectSchedulerMcpPrompts(capability, {
+        projectDirectory: project.path,
+      })
+      const projectedResources = await PromptProfileResolver.projectSchedulerMcpResources(capability, {
+        projectDirectory: project.path,
+      })
+
+      const [promptResult, resourceResult] = await MCP.withScopedConnectionPool(async () =>
+        Promise.all([
+          projectedPrompts[promptProviderName]!.get({ label: "concurrent" }),
+          projectedResources[resourceProviderName]!.read(),
+        ]),
+      )
+      const startPids = (await fs.readFile(startLogPath, "utf8")).trim().split(/\r?\n/).filter(Boolean)
+
+      expect(JSON.stringify(promptResult)).toContain("no-tool-mcp-prompt:concurrent:")
+      expect(JSON.stringify(resourceResult)).toContain("no-tool-mcp-resource:")
+      expect(startPids).toHaveLength(1)
+    },
+  )
+
+  isolatedMcpTest("composes active package MCP prompt and resource context", { timeout: 0 }, async () => {
     await using project = await tmpdir({ git: true })
     const packageMcpServerRef = `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/package-browser`
     const packageMcpPromptRef = `${packageMcpServerRef}/prompt/inspect`
@@ -2165,7 +2289,7 @@ describe("PromptProfileResolver", () => {
     expect(normalizedComposedPrompt).not.toContain('"_meta"')
   })
 
-  test.serial("keeps active package MCP prompts and resources out of global MCP registration", async () => {
+  isolatedMcpTest("keeps active package MCP prompts and resources out of global MCP registration", { timeout: 0 }, async () => {
     await using project = await tmpdir({ git: true })
     const packageMcpServerRef = `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/package-browser`
     const packageMcpPromptRef = `${packageMcpServerRef}/prompt/inspect`
@@ -2198,7 +2322,7 @@ describe("PromptProfileResolver", () => {
     }
   })
 
-  test.serial("rejects projected package MCP prompt image content before prompt composition", async () => {
+  isolatedMcpTest("rejects projected package MCP prompt image content before prompt composition", async () => {
     await using project = await tmpdir({ git: true })
     const packageMcpServerRef = `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/package-browser`
     const packageMcpPromptRef = `${packageMcpServerRef}/prompt/image`
@@ -2223,7 +2347,7 @@ describe("PromptProfileResolver", () => {
     ).rejects.toThrow(/MCP prompt .*image.*contains image content/)
   })
 
-  test.serial("rejects projected package MCP prompt audio content before prompt composition", async () => {
+  isolatedMcpTest("rejects projected package MCP prompt audio content before prompt composition", async () => {
     await using project = await tmpdir({ git: true })
 
     await expect(
@@ -2234,7 +2358,7 @@ describe("PromptProfileResolver", () => {
     ).rejects.toThrow(/MCP prompt .*audio.*contains audio content/)
   })
 
-  test.serial("projects safe package MCP resource_link metadata", async () => {
+  isolatedMcpTest("projects safe package MCP resource_link metadata", async () => {
     await using project = await tmpdir({ git: true })
 
     const prompt = await composeSchedulerPromptWithPackageMcp({
@@ -2251,7 +2375,7 @@ describe("PromptProfileResolver", () => {
     expect(prompt).not.toContain("data:image/png;base64")
   })
 
-  test.serial("rejects projected package MCP _meta before prompt composition", async () => {
+  isolatedMcpTest("rejects projected package MCP _meta before prompt composition", async () => {
     await using project = await tmpdir({ git: true })
 
     await expect(
@@ -2319,7 +2443,7 @@ describe("PromptProfileResolver", () => {
       error: /unsupported MCP content type "video"/,
     },
   ] satisfies readonly Array<{ name: string; promptName?: string; resourceName?: string; error: RegExp }>) {
-    test.serial(`rejects projected package MCP ${vector.name} before prompt composition`, async () => {
+    isolatedMcpTest(`rejects projected package MCP ${vector.name} before prompt composition`, async () => {
       await using project = await tmpdir({ git: true })
 
       await expect(
@@ -2332,7 +2456,7 @@ describe("PromptProfileResolver", () => {
     })
   }
 
-  test.serial("rejects projected package MCP inline base64 text before prompt composition", async () => {
+  isolatedMcpTest("rejects projected package MCP inline base64 text before prompt composition", async () => {
     await using project = await tmpdir({ git: true })
 
     await expect(
@@ -2343,7 +2467,7 @@ describe("PromptProfileResolver", () => {
     ).rejects.toThrow(/refusing inline base64 data URL/)
   })
 
-  test.serial(
+  isolatedMcpTest(
     "rejects projected package MCP inline base64 embedded resource text before prompt composition",
     async () => {
       await using project = await tmpdir({ git: true })
@@ -2357,7 +2481,7 @@ describe("PromptProfileResolver", () => {
     },
   )
 
-  test.serial(
+  isolatedMcpTest(
     "rejects projected package MCP inline base64 resource_link fields before prompt composition",
     async () => {
       await using project = await tmpdir({ git: true })
@@ -2371,7 +2495,7 @@ describe("PromptProfileResolver", () => {
     },
   )
 
-  test.serial(
+  isolatedMcpTest(
     "rejects projected package MCP inline base64 optional resource_link metadata before prompt composition",
     async () => {
       await using project = await tmpdir({ git: true })
@@ -2385,7 +2509,7 @@ describe("PromptProfileResolver", () => {
     },
   )
 
-  test.serial("rejects projected package MCP resource blob content before prompt composition", async () => {
+  isolatedMcpTest("rejects projected package MCP resource blob content before prompt composition", async () => {
     await using project = await tmpdir({ git: true })
     const packageMcpServerRef = `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/package-browser`
     const packageMcpResourceRef = `${packageMcpServerRef}/resource/dom-binary`
@@ -2410,7 +2534,7 @@ describe("PromptProfileResolver", () => {
     ).rejects.toThrow(/MCP resource .*dom-binary.*binary blob content/)
   })
 
-  test.serial("rejects projected package MCP inline base64 resource text before prompt composition", async () => {
+  isolatedMcpTest("rejects projected package MCP inline base64 resource text before prompt composition", async () => {
     await using project = await tmpdir({ git: true })
 
     await expect(
@@ -2439,7 +2563,7 @@ describe("PromptProfileResolver", () => {
       resourceName: "dom-raw-data-text",
     },
   ] satisfies readonly Array<{ name: string; promptName?: string; resourceName?: string }>) {
-    test.serial(`rejects projected package MCP raw base64 ${vector.name} before prompt composition`, async () => {
+    isolatedMcpTest(`rejects projected package MCP raw base64 ${vector.name} before prompt composition`, async () => {
       await using project = await tmpdir({ git: true })
 
       await expect(
@@ -2452,7 +2576,7 @@ describe("PromptProfileResolver", () => {
     })
   }
 
-  test.serial("projects worker default MCP prompts and resources from the effective config", async () => {
+  isolatedMcpTest("projects worker default MCP prompts and resources from the effective config", { timeout: 0 }, async () => {
     await using project = await tmpdir({ git: true })
     const defaultMcpPromptRef = "default/mcp/package-browser/prompt/inspect"
     const defaultMcpResourceRef = "default/mcp/package-browser/resource/dom"
@@ -2493,8 +2617,10 @@ describe("PromptProfileResolver", () => {
     expect(projectedPrompts[promptProviderName]?.name).toBe("inspect")
     expect(projectedResources[resourceProviderName]?.name).toBe("dom")
 
-    const promptResult = await projectedPrompts[promptProviderName]!.get({ label: "worker" })
-    const resourceResult = await projectedResources[resourceProviderName]!.read()
+    const [promptResult, resourceResult] = await MCP.withScopedConnectionPool(async () => [
+      await projectedPrompts[promptProviderName]!.get({ label: "worker" }),
+      await projectedResources[resourceProviderName]!.read(),
+    ])
     const promptText = JSON.stringify(promptResult).replace(/\\\\/g, "/")
     const resourceText = JSON.stringify(resourceResult).replace(/\\\\/g, "/")
     const normalizedProjectPath = project.path.replace(/\\/g, "/")
@@ -2505,7 +2631,7 @@ describe("PromptProfileResolver", () => {
     expect(resourceText).toContain(normalizedProjectPath)
   })
 
-  test.serial("composes worker default MCP prompt and resource context", async () => {
+  isolatedMcpTest("composes worker default MCP prompt and resource context", async () => {
     await using project = await tmpdir({ git: true })
     const defaultMcpPromptRef = "default/mcp/package-browser/prompt/inspect"
     const defaultMcpResourceRef = "default/mcp/package-browser/resource/dom"
@@ -2813,7 +2939,7 @@ describe("PromptProfileResolver", () => {
     ).toBe(false)
   })
 
-  test.serial("projects active package worker MCP tools as scoped runtime providers", async () => {
+  isolatedMcpTest("projects active package worker MCP tools as scoped runtime providers", async () => {
     await using project = await tmpdir({ git: true })
     const packageMcpServerRef = `${PROJECT_EXPERT_SQUAD_ID}/build/package-browser`
     const packageMcpToolRef = `${packageMcpServerRef}/tool/snapshot`
@@ -2851,7 +2977,7 @@ describe("PromptProfileResolver", () => {
     expect(Object.hasOwn(projectedTools, "package-browser_snapshot")).toBe(false)
   })
 
-  test.serial(
+  isolatedMcpTest(
     "projects virtual-agent package tools and MCP providers from the virtual-agent resource root",
     async () => {
       await using project = await tmpdir({ git: true })
@@ -3114,7 +3240,7 @@ describe("PromptProfileResolver", () => {
     ).rejects.toThrow("must export default ToolDefinition")
   })
 
-  test.serial("resolves general skill projection to selector skills and ordinary installed skills", { timeout: 0 }, async () => {
+  isolatedMcpTest("resolves general skill projection to selector skills and ordinary installed skills", { timeout: 0 }, async () => {
     await withPromptProfileResolverInactivityTimeout("general selector skill projection", 15_000, async (activity) => {
       await using project = await tmpdir({
         git: true,
@@ -3150,7 +3276,11 @@ describe("PromptProfileResolver", () => {
 
           expect(projection.activeProfile).toBe("general")
           expect(projection.projectedAgentIDs).toEqual(["orchestrator", "build"])
-          expect(projection.selectorSkillNames).toEqual([`${PROJECT_EXPERT_SQUAD_ID}-expert-squad`])
+          expect([...projection.selectorSkillNames].sort((left, right) => left.localeCompare(right))).toEqual(
+            [...payloadSelectorSkillNames, `${PROJECT_EXPERT_SQUAD_ID}-expert-squad`].sort((left, right) =>
+              left.localeCompare(right),
+            ),
+          )
           expect(projection.productionSkillNames).toContain("unreferenced-default")
           expect(projection.projectedSkillNames).toEqual(projection.skills.map((skill) => skill.name))
           expect(projection.projectedSkillNames).toContain(`${PROJECT_EXPERT_SQUAD_ID}-expert-squad`)
@@ -3269,7 +3399,7 @@ describe("PromptProfileResolver", () => {
     ).rejects.toThrow("collides with an expert-squad selector skill name")
   })
 
-  test.serial("active project package skill projection ignores inactive selector catalog failures", async () => {
+  isolatedMcpTest("active project package skill projection ignores inactive selector catalog failures", { timeout: 0 }, async () => {
     await using project = await tmpdir({ git: true })
     await writeProjectExpertSquadPackage(project.path)
     const inactiveRoot = await writeProjectExpertSquadPackage(project.path, "inactive-replica")
@@ -3324,8 +3454,9 @@ describe("PromptProfileResolver", () => {
     })
   })
 
-  test.serial(
+  isolatedMcpTest(
     "resolves active project package skill projection without registering package production skills globally",
+    { timeout: 0 },
     async () => {
       await using project = await tmpdir({ git: true })
       await writeProjectExpertSquadPackage(project.path)
@@ -3414,7 +3545,7 @@ describe("PromptProfileResolver", () => {
     },
   )
 
-  test.serial("projects package shared skills only through explicit package skill refs", async () => {
+  isolatedMcpTest("projects package shared skills only through explicit package skill refs", { timeout: 0 }, async () => {
     await using project = await tmpdir({ git: true })
     await writeProjectExpertSquadPackage(project.path)
     const packageRoot = path.join(
@@ -3459,7 +3590,7 @@ describe("PromptProfileResolver", () => {
     })
   })
 
-  test.serial("scheduler capability projection uses active workflow role bindings", async () => {
+  isolatedMcpTest("scheduler capability projection uses active workflow role bindings", { timeout: 0 }, async () => {
     await using project = await tmpdir({
       git: true,
       config: {
@@ -3582,7 +3713,7 @@ describe("PromptProfileResolver", () => {
     ])
   })
 
-  test.serial("unions ordinary default skill mounts with explicit default skill refs", async () => {
+  isolatedMcpTest("unions ordinary default skill mounts with explicit default skill refs", { timeout: 0 }, async () => {
     await using project = await tmpdir({
       git: true,
       init: async (dir) => {

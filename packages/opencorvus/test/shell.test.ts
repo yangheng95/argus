@@ -476,61 +476,193 @@ describe("shell process supervisor contract", () => {
     }
   })
 
-  test("windows helper dispose terminates the reported child process tree", async () => {
+  test("windows supervised request cleanup uses helper job ownership instead of reported pid kill-tree", async () => {
+    const supervisorSource = await Bun.file(new URL("../src/shell/process-supervisor.ts", import.meta.url)).text()
+    expect(supervisorSource).toContain("await helperHandle.terminate()")
+    expect(supervisorSource).not.toContain("Windows supervised process tree")
+    expect(supervisorSource).not.toContain("await terminateProcessTree(pid")
+  })
+
+  test("windows helper command mode launches executable args without shell command", async () => {
     if (process.platform !== "win32") return
 
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-supervisor-test-"))
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-supervisor-command-"))
     const cwd = path.join(root, "cwd")
     const helperCmd = path.join(root, "helper.cmd")
     const helperJs = path.join(root, "helper.js")
     const childJs = path.join(root, "child.js")
+    const requestRecord = path.join(root, "request.json")
     await fs.mkdir(cwd)
-    await fs.writeFile(childJs, "setInterval(() => {}, 1000)\n", "utf8")
+    await fs.writeFile(childJs, "process.exit(7)\n", "utf8")
     await fs.writeFile(
       helperJs,
       [
         'const fs = require("fs")',
-        'const path = require("path")',
         'const { spawn } = require("child_process")',
-        'if (process.argv[2] === "--kill-tree") {',
-        "  const pid = Number(process.argv[3])",
-        '  try { process.kill(pid, "SIGKILL") } catch (error) { if (error.code !== "ESRCH") throw error }',
-        "  process.exit(0)",
-        "}",
+        'if (process.argv[2] === "--kill-tree") process.exit(11)',
         'const requestIndex = process.argv.indexOf("--request")',
         "if (requestIndex < 0) process.exit(2)",
         'const request = JSON.parse(fs.readFileSync(process.argv[requestIndex + 1], "utf8"))',
-        'const child = spawn(process.execPath, [path.join(__dirname, "child.js")], {',
+        `fs.writeFileSync(${JSON.stringify(requestRecord)}, JSON.stringify(request), "utf8")`,
+        "if (request.kind !== 'command') process.exit(3)",
+        "if (Object.prototype.hasOwnProperty.call(request, 'command')) process.exit(4)",
+        "if (Object.prototype.hasOwnProperty.call(request, 'shell')) process.exit(5)",
+        "const child = spawn(request.executable, request.args, {",
         "  cwd: request.cwd,",
-        '  stdio: "ignore",',
+        '  stdio: ["ignore", "inherit", "inherit"],',
         "  windowsHide: true,",
         "})",
-        "child.unref()",
         'fs.writeFileSync(request.pid_file, String(child.pid), "utf8")',
-        "setInterval(() => {}, 1000)",
+        "child.on('exit', (code, signal) => process.exit(code ?? (signal ? 1 : 0)))",
         "",
       ].join("\n"),
       "utf8",
     )
     await fs.writeFile(helperCmd, `@echo off\r\n"${process.execPath}" "${helperJs}" %*\r\n`, "utf8")
 
-    let childPid: number | undefined
     const restore = ProcessSupervisor.setWindowsHelperResolverForTest(async () => helperCmd)
     try {
-      const handle = await ProcessSupervisor.spawnShell({
-        command: "ignored-by-fake-helper",
-        shell: process.env.COMSPEC ?? "cmd.exe",
+      const handle = await ProcessSupervisor.spawnCommand({
+        executable: process.execPath,
+        args: [childJs],
         cwd,
       })
-      childPid = handle.pid
-      expect(isProcessRunning(childPid)).toBe(true)
-
+      expect(await handle.exited).toBe(7)
       await handle.dispose()
-
-      expect(await waitForProcessExit(childPid)).toBe(true)
+      const request = JSON.parse(await fs.readFile(requestRecord, "utf8")) as {
+        kind: string
+        executable: string
+        args: string[]
+        cwd: string
+      }
+      expect(request.kind).toBe("command")
+      expect(request.executable).toBe(process.execPath)
+      expect(request.args).toEqual([childJs])
+      expect(request.cwd).toBe(cwd)
     } finally {
       restore()
-      killProcessForTest(childPid)
+      await fs.rm(root, { recursive: true, force: true })
+    }
+  }, 20_000)
+
+  test("windows helper command mode resolves bare executables before the helper request", async () => {
+    if (process.platform !== "win32") return
+
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-supervisor-command-path-"))
+    const cwd = path.join(root, "cwd")
+    const helperCmd = path.join(root, "helper.cmd")
+    const helperJs = path.join(root, "helper.js")
+    const childJs = path.join(root, "child.js")
+    const requestRecord = path.join(root, "request.json")
+    await fs.mkdir(cwd)
+    await fs.writeFile(childJs, "process.exit(9)\n", "utf8")
+    await fs.writeFile(
+      helperJs,
+      [
+        'const fs = require("fs")',
+        'const { spawn } = require("child_process")',
+        'if (process.argv[2] === "--kill-tree") process.exit(11)',
+        'const requestIndex = process.argv.indexOf("--request")',
+        "if (requestIndex < 0) process.exit(2)",
+        'const request = JSON.parse(fs.readFileSync(process.argv[requestIndex + 1], "utf8"))',
+        `fs.writeFileSync(${JSON.stringify(requestRecord)}, JSON.stringify(request), "utf8")`,
+        "if (request.kind !== 'command') process.exit(3)",
+        "const child = spawn(request.executable, request.args, {",
+        "  cwd: request.cwd,",
+        "  env: request.env,",
+        '  stdio: ["ignore", "inherit", "inherit"],',
+        "  windowsHide: true,",
+        "})",
+        'fs.writeFileSync(request.pid_file, String(child.pid), "utf8")',
+        "child.on('exit', (code, signal) => process.exit(code ?? (signal ? 1 : 0)))",
+        "",
+      ].join("\n"),
+      "utf8",
+    )
+    await fs.writeFile(helperCmd, `@echo off\r\n"${process.execPath}" "${helperJs}" %*\r\n`, "utf8")
+
+    const executableDir = path.dirname(process.execPath)
+    const restore = ProcessSupervisor.setWindowsHelperResolverForTest(async () => helperCmd)
+    try {
+      const handle = await ProcessSupervisor.spawnCommand({
+        executable: path.basename(process.execPath),
+        args: [childJs],
+        cwd,
+        env: {
+          ...process.env,
+          PATH: executableDir,
+          Path: executableDir,
+        },
+      })
+      expect(await handle.exited).toBe(9)
+      await handle.dispose()
+      const request = JSON.parse(await fs.readFile(requestRecord, "utf8")) as {
+        kind: string
+        executable: string
+        args: string[]
+        cwd: string
+      }
+      expect(request.kind).toBe("command")
+      expect(request.executable).toBe(process.execPath)
+      expect(request.args).toEqual([childJs])
+      expect(request.cwd).toBe(cwd)
+    } finally {
+      restore()
+      await fs.rm(root, { recursive: true, force: true })
+    }
+  }, 20_000)
+
+  test("windows helper command mode waits briefly for pid files after fast helper exit", async () => {
+    if (process.platform !== "win32") return
+
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-supervisor-command-pid-race-"))
+    const helperCmd = path.join(root, "helper.cmd")
+    const helperJs = path.join(root, "helper.js")
+    const writerJs = path.join(root, "writer.js")
+    await fs.writeFile(
+      writerJs,
+      [
+        'const fs = require("fs")',
+        "setTimeout(() => {",
+        "  fs.writeFileSync(process.argv[2], String(process.pid), 'utf8')",
+        "}, 100)",
+        "",
+      ].join("\n"),
+      "utf8",
+    )
+    await fs.writeFile(
+      helperJs,
+      [
+        'const { spawn } = require("child_process")',
+        'const fs = require("fs")',
+        'if (process.argv[2] === "--kill-tree") process.exit(0)',
+        'const requestIndex = process.argv.indexOf("--request")',
+        "if (requestIndex < 0) process.exit(2)",
+        'const request = JSON.parse(fs.readFileSync(process.argv[requestIndex + 1], "utf8"))',
+        `const writer = spawn(${JSON.stringify(process.execPath)}, [${JSON.stringify(writerJs)}, request.pid_file], {`,
+        "  detached: true,",
+        "  stdio: 'ignore',",
+        "  windowsHide: true,",
+        "})",
+        "writer.unref()",
+        "process.exit(7)",
+        "",
+      ].join("\n"),
+      "utf8",
+    )
+    await fs.writeFile(helperCmd, `@echo off\r\n"${process.execPath}" "${helperJs}" %*\r\n`, "utf8")
+
+    const restore = ProcessSupervisor.setWindowsHelperResolverForTest(async () => helperCmd)
+    try {
+      const handle = await ProcessSupervisor.spawnCommand({
+        executable: process.execPath,
+        args: ["--version"],
+      })
+      expect(handle.pid).toBeGreaterThan(0)
+      expect(await handle.exited).toBe(7)
+      await handle.dispose()
+    } finally {
+      restore()
       await fs.rm(root, { recursive: true, force: true })
     }
   }, 20_000)

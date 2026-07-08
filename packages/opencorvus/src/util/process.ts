@@ -136,24 +136,55 @@ export namespace Process {
 
   export async function run(cmd: string[], opts: RunOptions = {}): Promise<Result> {
     const command = normalizeExecutableArgv(cmd)
-    const proc = spawn(cmd, {
+    const handle = await ProcessSupervisor.spawnCommand({
+      executable: command[0]!,
+      args: command.slice(1),
       cwd: opts.cwd,
-      env: opts.env,
-      stdin: opts.stdin,
-      abort: opts.abort,
-      stdout: "pipe",
-      stderr: "pipe",
+      env: opts.env === null ? {} : opts.env ? { ...process.env, ...opts.env } : undefined,
+      stdin: opts.stdin === "pipe" ? "pipe" : "ignore",
     })
 
-    if (!proc.stdout || !proc.stderr) throw new Error("Process output not available")
+    if (!handle.stdout || !handle.stderr) throw new Error("Process output not available")
+
+    let terminationPromise: Promise<number> | undefined
+    let resolveTerminationRequested: ((promise: Promise<number>) => void) | undefined
+    const terminationRequested = new Promise<Promise<number>>((resolve) => {
+      resolveTerminationRequested = resolve
+    })
+    const requestTermination = () => {
+      if (!terminationPromise) {
+        terminationPromise = ProcessSupervisor.terminateAndWaitForExit(handle, `Process.run ${command.join(" ")}`)
+        terminationPromise.catch(() => undefined)
+        resolveTerminationRequested?.(terminationPromise)
+      }
+      return terminationPromise
+    }
+    const abort = () => {
+      requestTermination()
+    }
+
+    if (opts.abort) {
+      opts.abort.addEventListener("abort", abort, { once: true })
+      if (opts.abort.aborted) abort()
+    }
 
     let code: number
     let stdout: Buffer
     let stderr: Buffer
+    const stdoutBuffered = buffer(handle.stdout)
+    const stderrBuffered = buffer(handle.stderr)
+    const processCompleted = Promise.all([handle.exited, stdoutBuffered, stderrBuffered])
+    const terminationCompleted = terminationRequested.then(async (cleanup) => {
+      const terminatedCode = await cleanup
+      const [terminatedStdout, terminatedStderr] = await Promise.all([stdoutBuffered, stderrBuffered])
+      return [terminatedCode, terminatedStdout, terminatedStderr] as const
+    })
     try {
-      ;[code, stdout, stderr] = await Promise.all([proc.exited, buffer(proc.stdout), buffer(proc.stderr)])
+      ;[code, stdout, stderr] = await Promise.race([processCompleted, terminationCompleted])
+      if (terminationPromise) code = await terminationPromise
     } finally {
-      await proc.terminate()
+      opts.abort?.removeEventListener("abort", abort)
+      await ProcessSupervisor.disposeAndWaitForExit(handle, "Process.run")
     }
     const out = {
       code,

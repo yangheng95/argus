@@ -1,5 +1,6 @@
 # July 2026 Records
 
+- [2026-07-08-expert-squad-release-schema-audit.md](2026-07-08-expert-squad-release-schema-audit.md) records the long-lived expert-squad release-schema audit for `.opencorvus/expert-squads` as the only source, payload generation/release/load stability, and schema robustness.
 - [2026-07-08-subagent-terminal-summary-cards.md](2026-07-08-subagent-terminal-summary-cards.md) records the schema and overlay projection plan for carrying subagent terminal summaries through `session.status` into collapsed message cards.
 - [2026-07-08-expert-squad-project-open-payload-release.md](2026-07-08-expert-squad-project-open-payload-release.md) records the project lifecycle repair for automatically releasing bundled expert-squad payload packages when a project is opened, while keeping resolver/catalog read paths pure and `prompt_profile.active` unchanged.
 - [2026-07-08-atomic-close-before-delete.md](2026-07-08-atomic-close-before-delete.md) records the close-before-delete repair for Mission, task, and Coding Assistant chat deletion, making backend DELETE routes prove cancellation/settlement before physical row removal and preserving rows on incomplete cancellation.

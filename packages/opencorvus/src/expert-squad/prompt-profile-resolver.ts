@@ -24,6 +24,7 @@ import { Skill } from "@/skill/skill"
 import { Truncate } from "@/tool/truncation"
 import { MCP } from "@/mcp"
 import { materializeMcpToolResult } from "@/mcp/materialize"
+import { createPluginToolHost } from "@/tool/plugin-tool-host"
 import { Filesystem } from "@/util/filesystem"
 import { assertNoInlineBase64Payload } from "@/util/inline-base64"
 import { EngineConfig } from "@/engine/config"
@@ -1340,6 +1341,7 @@ export namespace PromptProfileResolver {
           directory: input.toolDirectory ?? input.projectDirectory,
           worktree: input.toolDirectory ?? input.projectDirectory,
           abort,
+          host: createPluginToolHost(),
           metadata: () => {},
           ask: async () => {
             throw new Error(`Package tool ${input.ref} cannot request permissions in ${input.agentID} projection.`)
@@ -1528,7 +1530,7 @@ export namespace PromptProfileResolver {
     return Config.Mcp.parse(config)
   }
 
-  export interface ProjectedMcpPrompt extends MCP.PromptInfo {
+  export interface ProjectedMcpPrompt extends Pick<MCP.PromptInfo, "name" | "description" | "arguments"> {
     ref: string
     providerName: string
     sourcePath?: string
@@ -1536,7 +1538,7 @@ export namespace PromptProfileResolver {
     getProjectionPayload(args?: Record<string, string>): Promise<MCP.ProjectionPromptPayload>
   }
 
-  export interface ProjectedMcpResource extends MCP.ResourceInfo {
+  export interface ProjectedMcpResource extends Pick<MCP.ResourceInfo, "name" | "description" | "mimeType"> {
     ref: string
     providerName: string
     sourcePath?: string
@@ -1554,15 +1556,8 @@ export namespace PromptProfileResolver {
     const { serverName, promptName } = defaultMcpPromptPartsFromRef(input.ref)
     const mcp = input.mcpServers[serverName]
     if (!mcp) throw new Error(`Active expert squad projects missing default MCP server default/mcp/${serverName}.`)
-    const info = await MCP.scopedPromptInfo({
-      key: input.providerName,
-      mcp,
-      promptName,
-      cwd: input.cwd,
-      globalTimeout: input.globalMcpTimeout,
-    })
     return {
-      ...info,
+      name: promptName,
       ref: input.ref,
       providerName: input.providerName,
       get: (args?: Record<string, string>) =>
@@ -1596,15 +1591,8 @@ export namespace PromptProfileResolver {
     const { serverName, resourceName } = defaultMcpResourcePartsFromRef(input.ref)
     const mcp = input.mcpServers[serverName]
     if (!mcp) throw new Error(`Active expert squad projects missing default MCP server default/mcp/${serverName}.`)
-    const info = await MCP.scopedResourceInfo({
-      key: input.providerName,
-      mcp,
-      resourceName,
-      cwd: input.cwd,
-      globalTimeout: input.globalMcpTimeout,
-    })
     return {
-      ...info,
+      name: resourceName,
       ref: input.ref,
       providerName: input.providerName,
       read: () =>
@@ -1644,15 +1632,8 @@ export namespace PromptProfileResolver {
     const definition = ExpertSquadRegistry.parseMcpDefinitionText(await readFile(sourcePath, "utf8"), sourcePath)
     const mcp = mcpConfigFromDefinition(definition)
     const cwd = path.dirname(sourcePath)
-    const info = await MCP.scopedPromptInfo({
-      key: input.providerName,
-      mcp,
-      promptName,
-      cwd,
-      globalTimeout: input.globalMcpTimeout,
-    })
     return {
-      ...info,
+      name: promptName,
       ref: input.ref,
       providerName: input.providerName,
       sourcePath,
@@ -1695,15 +1676,8 @@ export namespace PromptProfileResolver {
     const definition = ExpertSquadRegistry.parseMcpDefinitionText(await readFile(sourcePath, "utf8"), sourcePath)
     const mcp = mcpConfigFromDefinition(definition)
     const cwd = path.dirname(sourcePath)
-    const info = await MCP.scopedResourceInfo({
-      key: input.providerName,
-      mcp,
-      resourceName,
-      cwd,
-      globalTimeout: input.globalMcpTimeout,
-    })
     return {
-      ...info,
+      name: resourceName,
       ref: input.ref,
       providerName: input.providerName,
       sourcePath,
@@ -2515,39 +2489,43 @@ export namespace PromptProfileResolver {
     prompts: Record<string, ProjectedMcpPrompt>
     resources: Record<string, ProjectedMcpResource>
   }): Promise<string | undefined> {
-    const promptEntries = Object.entries(input.prompts)
-    const resourceEntries = Object.entries(input.resources)
-    if (promptEntries.length === 0 && resourceEntries.length === 0) return undefined
-    const promptBlocks = await Promise.all(
-      promptEntries.map(async ([providerName, prompt]) =>
-        renderMcpProjectionBlock({
-          kind: "prompt",
-          providerName,
-          ref: prompt.ref,
-          sourcePath: prompt.sourcePath,
-          payload: await prompt.getProjectionPayload({}),
-        }),
-      ),
-    )
-    const resourceBlocks = await Promise.all(
-      resourceEntries.map(async ([providerName, resource]) =>
-        renderMcpProjectionBlock({
-          kind: "resource",
-          providerName,
-          ref: resource.ref,
-          sourcePath: resource.sourcePath,
-          payload: await resource.readProjectionPayload(),
-        }),
-      ),
-    )
-    return [
-      "## Projected MCP Context",
-      "",
-      "These MCP prompts and resources are explicitly projected by the active expert-squad capability for this agent. They are loaded from the active/default scoped MCP definitions only.",
-      "",
-      ...promptBlocks,
-      ...resourceBlocks,
-    ].join("\n\n")
+    return MCP.withScopedConnectionPool(async () => {
+      const promptEntries = Object.entries(input.prompts)
+      const resourceEntries = Object.entries(input.resources)
+      if (promptEntries.length === 0 && resourceEntries.length === 0) return undefined
+      const promptBlocks: string[] = []
+      for (const [providerName, prompt] of promptEntries) {
+        promptBlocks.push(
+          renderMcpProjectionBlock({
+            kind: "prompt",
+            providerName,
+            ref: prompt.ref,
+            sourcePath: prompt.sourcePath,
+            payload: await prompt.getProjectionPayload({}),
+          }),
+        )
+      }
+      const resourceBlocks: string[] = []
+      for (const [providerName, resource] of resourceEntries) {
+        resourceBlocks.push(
+          renderMcpProjectionBlock({
+            kind: "resource",
+            providerName,
+            ref: resource.ref,
+            sourcePath: resource.sourcePath,
+            payload: await resource.readProjectionPayload(),
+          }),
+        )
+      }
+      return [
+        "## Projected MCP Context",
+        "",
+        "These MCP prompts and resources are explicitly projected by the active expert-squad capability for this agent. They are loaded from the active/default scoped MCP definitions only.",
+        "",
+        ...promptBlocks,
+        ...resourceBlocks,
+      ].join("\n\n")
+    })
   }
 
   async function activeMcpPromptContext(input: PromptInput): Promise<string | undefined> {
