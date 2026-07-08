@@ -195,6 +195,43 @@ async function missionTranscript(sessionID: string) {
   return enrichStandaloneSessionTranscript(await Session.messages({ sessionID })).filter(conversationMessageHasDisplay)
 }
 
+async function closeMissionExecution(session: MissionSessionRecord, handle: "mission.abort" | "mission.delete") {
+  const childTasks = listMissionTasks({
+    projectID: session.projectID,
+    missionID: session.missionID,
+    sessionID: session.id,
+  }).filter((task) => {
+    const status = deriveTaskStatus(task)
+    return status === "queued" || status === "active"
+  })
+  const failures: string[] = []
+  for (const task of childTasks) {
+    try {
+      await EngineService.cancelTask(task.id)
+    } catch (error) {
+      failures.push(`task ${task.id}: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+  try {
+    cancelSessionPromptInScope({
+      session,
+      handle,
+    })
+    await awaitSessionPromptFinishedInScope({
+      session,
+      handle,
+    })
+  } catch (error) {
+    failures.push(`mission ${session.missionID}: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  if (failures.length > 0) {
+    throw createTaskCancellationIncomplete({
+      handle,
+      cause: new Error(failures.join("; ")),
+    })
+  }
+}
+
 export function MissionRoutes() {
   return new Hono()
     .get(
@@ -354,40 +391,7 @@ export function MissionRoutes() {
       validator("param", MissionParam),
       async (c) => {
         const session = await missionRouteSession(c.req.valid("param").missionID)
-        const childTasks = listMissionTasks({
-          projectID: session.projectID,
-          missionID: session.missionID,
-          sessionID: session.id,
-        }).filter((task) => {
-          const status = deriveTaskStatus(task)
-          return status === "queued" || status === "active"
-        })
-        const failures: string[] = []
-        for (const task of childTasks) {
-          try {
-            await EngineService.cancelTask(task.id)
-          } catch (error) {
-            failures.push(`task ${task.id}: ${error instanceof Error ? error.message : String(error)}`)
-          }
-        }
-        try {
-          cancelSessionPromptInScope({
-            session,
-            handle: "mission.abort",
-          })
-          await awaitSessionPromptFinishedInScope({
-            session,
-            handle: "mission.abort",
-          })
-        } catch (error) {
-          failures.push(`mission ${session.missionID}: ${error instanceof Error ? error.message : String(error)}`)
-        }
-        if (failures.length > 0) {
-          throw createTaskCancellationIncomplete({
-            handle: "mission.abort",
-            cause: new Error(failures.join("; ")),
-          })
-        }
+        await closeMissionExecution(session, "mission.abort")
         return c.json(true)
       },
     )
@@ -402,12 +406,13 @@ export function MissionRoutes() {
             description: "Mission deleted",
             content: { "application/json": { schema: resolver(z.boolean()) } },
           },
-          ...errors(404),
+          ...errors(404, 409),
         },
       }),
       validator("param", MissionParam),
       async (c) => {
         const session = await missionRouteSession(c.req.valid("param").missionID)
+        await closeMissionExecution(session, "mission.delete")
         await EngineService.deleteSession(session.id, { projectID: session.projectID })
         return c.json(true)
       },
