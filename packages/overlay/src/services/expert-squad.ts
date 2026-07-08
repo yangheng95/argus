@@ -57,7 +57,7 @@ export interface ExpertSquadOption {
   id: string
   label: string
   description?: string
-  version?: string
+  version: string
   display_prefix?: string
   display_label: string
   built_in: boolean

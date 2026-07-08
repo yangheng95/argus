@@ -8,19 +8,16 @@ import { createEffect, createMemo, createRoot, createSignal, untrack } from "sol
 import { App } from "./components/App"
 import { Icon, LUCIDE_ICON_NAMES, REGISTERED_ICONS, type IconName } from "./components/Icon"
 import { Conversation } from "./components/Conversation"
-import { TaskList } from "./components/TaskList"
-import { CodingAssistantSessionList } from "./components/CodingAssistantSessionList"
 import { ArchitectBoardPanel, GoalsBoardPanel, RequirementsBoardPanel } from "./components/Board"
-import { Mission } from "./components/Mission"
-import { ChatComposer } from "./components/ChatComposer"
+import { ChatComposer, type ComposerMode } from "./components/ChatComposer"
+import { WorkLedger } from "./components/WorkLedger"
 import { LogViewer } from "./components/LogViewer"
 import { FileExplorerPanel } from "./components/FileExplorerPanel"
 import { FileChangesPanel, type FileChangesActiveView } from "./components/FileChangesPanel"
 import { BrowserPreviewPanel } from "./components/BrowserPreviewPanel"
 import { ScreenshotBrowserPanel } from "./components/ScreenshotBrowserPanel"
 import { SideActivityToolbar, type SideActivity } from "./components/SideActivityToolbar"
-import { ExtensionActivityPanel } from "./components/settings/SkillMarketPanel"
-import { MemoryPanel } from "./components/MemoryPanel"
+import { ProjectRuntimeToolbarActions } from "./components/TaskDirBar"
 import { closeFileEditor, fileWorkbenchOpen } from "./services/file-workbench"
 import type { DiffTarget } from "./services/diff"
 import { initApp } from "./services/init"
@@ -35,7 +32,7 @@ import {
 } from "./store/board"
 import { clearMessages, messageStore, setChatAttachments } from "./store/messages"
 import { appStore } from "./store/app"
-import { selectTask, retryTask, replanTask, cancelTask, createTask, deleteTask, renameTask } from "./services/task"
+import { selectTask, retryTask, replanTask, cancelTask, deleteTask } from "./services/task"
 import { canComposeChat, stopChatRequest } from "./services/chat"
 import { isTaskInterruptable } from "./store/board"
 import { loadAllLocales, localeTag, setLocale } from "./utils/i18n"
@@ -80,18 +77,15 @@ import { openConfigDialog, openGoalDialog } from "./services/dialog"
 import { cardTreeStore } from "./store/card-tree"
 import { composerDraftKey } from "./services/composer-draft"
 import { loadConversation } from "./services/conversation"
-import { codingAssistantStore } from "./store/coding-assistant"
 import {
   createCodingAssistantSession,
   deleteCodingAssistantSession,
   isCodingAssistantSource,
-  loadCodingAssistantSessions,
-  renameCodingAssistantSession,
   selectCodingAssistantSession,
-  setCodingAssistantSearchQuery,
   stopCodingAssistantSession,
 } from "./services/coding-assistant"
-import { wakeMission, type MissionWakeResult } from "./services/mission"
+import { abortMission, deleteMission, wakeMission, type MissionWakeResult } from "./services/mission"
+import type { WorkLedgerChatRow, WorkLedgerMissionRow, WorkLedgerTaskRow } from "./services/work-ledger"
 import { startSSE, stopSSE } from "./services/sse"
 import { resetWriter } from "./services/tree-writer"
 import { resetConversationAgentView } from "./store/conversation-agents"
@@ -266,8 +260,6 @@ type CenterWorkbenchPanel =
   | "screenshots"
   | "file"
 type RightActivity = Exclude<CenterWorkbenchPanel, "file">
-type LeftActivity = "tasks" | "mission" | "assistant" | "memory" | "extensions"
-type PrimaryLeftActivity = "tasks" | "mission" | "assistant"
 type PrimaryCenterPanel = "task" | "mission" | "chat"
 
 const CENTER_WORKBENCH_PANEL_ORDER: readonly CenterWorkbenchPanel[] = [
@@ -315,98 +307,16 @@ const RIGHT_ACTIVITIES: readonly SideActivity<RightActivity>[] = [
   },
 ]
 
-const LEFT_ACTIVITIES: readonly SideActivity<LeftActivity>[] = [
-  { id: "mission", icon: "mission", labelKey: "mission.title", tooltipKey: "activity.tooltip.mission" },
-  { id: "tasks", icon: "tasks", labelKey: "task.ledger.title", tooltipKey: "activity.tooltip.tasks" },
-  { id: "assistant", icon: "message", labelKey: "coding_assistant.title", tooltipKey: "activity.tooltip.assistant" },
-  { id: "memory", icon: "config-memory", labelKey: "memory.title", tooltipKey: "activity.tooltip.memory" },
-  {
-    id: "extensions",
-    icon: "config-skill",
-    labelKey: "extensions.title",
-    tooltipKey: "activity.tooltip.extensions",
-    badge: () =>
-      appStore.skillMounts?.unmounted_count > 0 ? (
-        <span data-tone="warn">{appStore.skillMounts.unmounted_count}</span>
-      ) : undefined,
-  },
-]
-
-const LEFT_ACTIVITY_BY_ID: ReadonlyMap<LeftActivity, SideActivity<LeftActivity>> = new Map(
-  LEFT_ACTIVITIES.map((activity) => [activity.id, activity]),
-)
-
-function leftActivityDefinition(activity: LeftActivity): SideActivity<LeftActivity> {
-  const definition = LEFT_ACTIVITY_BY_ID.get(activity)
-  if (!definition) throw new Error(`Unknown left activity: ${activity}`)
-  return definition
-}
-
 const [centerWorkbenchPanels, setCenterWorkbenchPanels] = createSignal<CenterWorkbenchPanel[]>(["workflow"])
 const activeRightActivity = (): RightActivity | null => {
   const panel = selectedCenterWorkbenchPanel()
   return panel && panel !== "file" ? panel : null
 }
-const [selectedLeftActivity, setSelectedLeftActivity] = createSignal<LeftActivity>("mission")
-const [selectedLeftPanelActivity, setSelectedLeftPanelActivity] = createSignal<LeftActivity>("mission")
-const [primaryCenterPanel, setPrimaryCenterPanel] = createSignal<PrimaryCenterPanel>("mission")
-const [missionActivityActivationToken, setMissionActivityActivationToken] = createSignal(0)
+const [primaryCenterPanel, setPrimaryCenterPanel] = createSignal<PrimaryCenterPanel>("chat")
 const [missionSharedRefreshToken, setMissionSharedRefreshToken] = createSignal(0)
-const [missionLauncherActive, setMissionLauncherActive] = createSignal(false)
 const [missionLauncherSubmitting, setMissionLauncherSubmitting] = createSignal(false)
-const [assistantLauncherActive, setAssistantLauncherActive] = createSignal(false)
 const [assistantLauncherSubmitting, setAssistantLauncherSubmitting] = createSignal(false)
-const activeLeftActivity = () => selectedLeftActivity()
-let codingAssistantActivationController: AbortController | null = null
-
-function abortCodingAssistantActivation(): void {
-  codingAssistantActivationController?.abort(
-    new DOMException("Left activity switched away from Coding Assistant", "AbortError"),
-  )
-  codingAssistantActivationController = null
-}
-
-function isAbortError(error: unknown): boolean {
-  return error instanceof DOMException && error.name === "AbortError"
-}
-
-function activateCodingAssistantSessionList(): void {
-  abortCodingAssistantActivation()
-  setMissionLauncherActive(false)
-  setAssistantLauncherActive(false)
-  if (isMissionSessionSource()) runMainAsync("task.deselect-mission-session", () => selectTask(""))
-  const controller = new AbortController()
-  codingAssistantActivationController = controller
-  bumpWorkspaceEpoch()
-  resetCenterWorkbenchToFocusedPanel("assistant")
-  setSelectedLeftActivity("assistant")
-  setSelectedLeftPanelActivity("assistant")
-  runMainAsync("coding-assistant.sessions", async () => {
-    try {
-      await loadCodingAssistantSessions({ directory: activeDirectory(), signal: controller.signal })
-      if (controller.signal.aborted) throw controller.signal.reason
-      const selectedID = codingAssistantStore.selectedSessionID
-      const session =
-        (selectedID ? codingAssistantStore.sessions.find((item) => item.id === selectedID) : undefined) ??
-        codingAssistantStore.sessions[0]
-      if (session?.id) {
-        setAssistantLauncherActive(false)
-        await selectCodingAssistantSession({
-          sessionID: session.id,
-          directory: String(session.directory || ""),
-          signal: controller.signal,
-        })
-      } else {
-        setAssistantLauncherActive(true)
-      }
-    } catch (error) {
-      if (isAbortError(error)) return
-      throw error
-    } finally {
-      if (codingAssistantActivationController === controller) codingAssistantActivationController = null
-    }
-  })
-}
+const [composerMode, setComposerMode] = createSignal<ComposerMode>("chat")
 
 function isCenterWorkbenchPanelOpen(panel: CenterWorkbenchPanel): boolean {
   return centerWorkbenchPanels().includes(panel)
@@ -415,37 +325,6 @@ function isCenterWorkbenchPanelOpen(panel: CenterWorkbenchPanel): boolean {
 function isRightActivityOpen(activity: RightActivity): boolean {
   if (activity === "workflow") return isCenterWorkbenchPanelOpen("workflow")
   return isCenterWorkbenchPanelOpen(activity)
-}
-
-function isLeftActivityOpen(activity: LeftActivity): boolean {
-  if (activity === "assistant") {
-    return (
-      selectedLeftActivity() === "assistant" &&
-      primaryCenterPanel() === "chat" &&
-      isCenterWorkbenchPanelOpen("workflow")
-    )
-  }
-  return selectedLeftActivity() === activity
-}
-
-const LEFT_PRIMARY_CENTER_PANEL: Record<PrimaryLeftActivity, PrimaryCenterPanel> = {
-  tasks: "task",
-  mission: "mission",
-  assistant: "chat",
-}
-
-function isPrimaryLeftActivity(activity: LeftActivity): activity is PrimaryLeftActivity {
-  return activity === "tasks" || activity === "mission" || activity === "assistant"
-}
-
-function leftActivityCenterPanel(activity: PrimaryLeftActivity): PrimaryCenterPanel {
-  return LEFT_PRIMARY_CENTER_PANEL[activity]
-}
-
-function focusedLeftActivityOwnsPrimaryPanel(
-  activity: LeftActivity = selectedLeftActivity(),
-): activity is PrimaryLeftActivity {
-  return isPrimaryLeftActivity(activity)
 }
 
 let pendingCenterWorkbenchRevealPanel: CenterWorkbenchPanel | null = null
@@ -457,8 +336,7 @@ function revealPendingCenterWorkbenchPanel(): void {
   getCenterWorkbenchViews()[panel]?.scrollIntoView({ block: "nearest", inline: "nearest" })
 }
 
-function resetCenterWorkbenchToFocusedPanel(activity: PrimaryLeftActivity): void {
-  const panel = leftActivityCenterPanel(activity)
+function resetCenterWorkbenchToPrimaryPanel(panel: PrimaryCenterPanel): void {
   setWorkspaceOpen(false)
   closeFileEditor()
   setPrimaryCenterPanel(panel)
@@ -494,9 +372,8 @@ function selectRightActivity(activity: RightActivity): void {
     selectDiffActivity()
     return
   }
-  const leftActivity = untrack(selectedLeftActivity)
-  if (activity === "workflow" && focusedLeftActivityOwnsPrimaryPanel(leftActivity)) {
-    resetCenterWorkbenchToFocusedPanel(leftActivity)
+  if (activity === "workflow") {
+    resetCenterWorkbenchToPrimaryPanel(primaryCenterPanel())
     return
   }
   if (untrack(centerWorkbenchPanels).includes(activity)) {
@@ -522,82 +399,87 @@ function openBrowserPreviewFromMessage(): boolean {
   return true
 }
 
-function selectLeftActivity(activity: LeftActivity): void {
-  if (activity === "assistant") {
-    activateCodingAssistantSessionList()
-    return
-  }
-  abortCodingAssistantActivation()
-  setAssistantLauncherActive(false)
-  setMissionLauncherActive(false)
-  if (boardStore.selectedSource?.kind === "session" && (activity !== "mission" || isCodingAssistantSource())) {
-    runMainAsync("task.deselect-session-source", () => selectTask(""))
-  }
-  if (focusedLeftActivityOwnsPrimaryPanel(activity)) {
-    resetCenterWorkbenchToFocusedPanel(activity)
-  } else {
-    setPrimaryCenterPanel("task")
-    openCenterWorkbenchPanel("workflow")
-  }
-  if (activity === "mission") setMissionActivityActivationToken((value) => value + 1)
-  setSelectedLeftActivity(activity)
-  setSelectedLeftPanelActivity(activity)
-}
-
 function isMissionSessionSource(): boolean {
   return boardStore.selectedSource?.kind === "session" && !isCodingAssistantSource()
 }
 
-function selectMissionTask(taskID: string, directory?: string): void {
-  setMissionLauncherActive(false)
-  setAssistantLauncherActive(false)
-  resetCenterWorkbenchToFocusedPanel("tasks")
-  setSelectedLeftActivity("tasks")
-  setSelectedLeftPanelActivity("tasks")
-  runMainAsync("task.select-mission-task", () => selectTask(taskID, { directory }))
-}
-
-function openTaskLauncher(): void {
-  abortCodingAssistantActivation()
-  setMissionLauncherActive(false)
-  setAssistantLauncherActive(false)
-  resetCenterWorkbenchToFocusedPanel("tasks")
-  setSelectedLeftActivity("tasks")
-  setSelectedLeftPanelActivity("tasks")
-  runMainAsync("task.open-launcher-deselect", () => selectTask(""))
+function focusComposerInput(): void {
   queueMicrotask(() => {
     document.querySelector<HTMLTextAreaElement>("#solidChatComposer textarea")?.focus()
   })
 }
 
-function openMissionLauncher(): void {
-  abortCodingAssistantActivation()
-  setAssistantLauncherActive(false)
-  resetCenterWorkbenchToFocusedPanel("mission")
-  setSelectedLeftActivity("mission")
-  setSelectedLeftPanelActivity("mission")
-  setMissionLauncherActive(true)
-  runMainAsync("mission.open-launcher-deselect", () => selectTask(""))
-  queueMicrotask(() => {
-    document.querySelector<HTMLTextAreaElement>("#solidChatComposer textarea")?.focus()
-  })
+function handleComposerModeChange(mode: ComposerMode): void {
+  setComposerMode(mode)
+  resetCenterWorkbenchToPrimaryPanel(mode === "mission" ? "mission" : "chat")
+  runMainAsync("composer.mode-clear-source", () => selectTask(""))
+  focusComposerInput()
 }
 
-function openCodingAssistantLauncher(): void {
-  abortCodingAssistantActivation()
-  setMissionLauncherActive(false)
-  setAssistantLauncherActive(true)
+async function selectWorkLedgerTask(row: WorkLedgerTaskRow): Promise<void> {
+  setComposerMode("mission")
+  resetCenterWorkbenchToPrimaryPanel("task")
+  await selectTask(row.id, { directory: row.directory })
+}
+
+async function openWorkLedgerChat(row: WorkLedgerChatRow): Promise<void> {
+  setComposerMode("chat")
   bumpWorkspaceEpoch()
-  resetCenterWorkbenchToFocusedPanel("assistant")
-  setSelectedLeftActivity("assistant")
-  setSelectedLeftPanelActivity("assistant")
-  runMainAsync("coding-assistant.open-launcher-deselect", () => selectTask(""))
-  queueMicrotask(() => {
-    document.querySelector<HTMLTextAreaElement>("#solidChatComposer textarea")?.focus()
-  })
+  resetCenterWorkbenchToPrimaryPanel("chat")
+  await selectCodingAssistantSession({ sessionID: row.sessionID, directory: row.directory })
 }
 
-async function openMissionSession(result: MissionWakeResult): Promise<void> {
+async function openWorkLedgerMission(row: WorkLedgerMissionRow): Promise<void> {
+  setComposerMode("mission")
+  resetCenterWorkbenchToPrimaryPanel("mission")
+  await openMissionSession(
+    { missionID: row.missionID, sessionID: row.sessionID, created: false },
+    row.directory,
+  )
+}
+
+async function abortWorkLedgerMission(row: WorkLedgerMissionRow): Promise<void> {
+  const ok = await abortMission({ missionID: row.missionID, directory: row.directory })
+  if (!ok) throw new Error(t("mission.error.action.abort"))
+  setMissionSharedRefreshToken((value) => value + 1)
+}
+
+async function deleteWorkLedgerMission(row: WorkLedgerMissionRow): Promise<void> {
+  const ok = await deleteMission({ missionID: row.missionID, directory: row.directory })
+  if (!ok) throw new Error(t("mission.error.action.delete"))
+  if (boardStore.selectedSource?.kind === "session" && boardStore.selectedSource.id === row.sessionID) {
+    await selectTask("")
+  }
+  setMissionSharedRefreshToken((value) => value + 1)
+}
+
+async function cancelWorkLedgerTask(row: WorkLedgerTaskRow): Promise<void> {
+  await cancelTask(row.id)
+  setMissionSharedRefreshToken((value) => value + 1)
+}
+
+async function deleteWorkLedgerTask(row: WorkLedgerTaskRow): Promise<void> {
+  const ok = await deleteTask(row.id)
+  if (!ok) throw new Error(t("task.delete_failed"))
+  setMissionSharedRefreshToken((value) => value + 1)
+}
+
+async function stopWorkLedgerChat(row: WorkLedgerChatRow): Promise<void> {
+  const ok = await stopCodingAssistantSession({ sessionID: row.sessionID, directory: row.directory })
+  if (!ok) throw new Error("Coding assistant stop failed")
+  setMissionSharedRefreshToken((value) => value + 1)
+}
+
+async function deleteWorkLedgerChat(row: WorkLedgerChatRow): Promise<void> {
+  const ok = await deleteCodingAssistantSession({ sessionID: row.sessionID, directory: row.directory })
+  if (!ok) throw new Error("Coding assistant delete failed")
+  if (boardStore.selectedSource?.kind === "session" && boardStore.selectedSource.id === row.sessionID) {
+    await selectTask("")
+  }
+  setMissionSharedRefreshToken((value) => value + 1)
+}
+
+async function openMissionSession(result: MissionWakeResult, directory = activeDirectory()): Promise<void> {
   const source = { kind: "session" as const, id: result.sessionID }
   stopSSE()
   clearMessages()
@@ -609,28 +491,15 @@ async function openMissionSession(result: MissionWakeResult): Promise<void> {
   await loadConversation(source, {
     scrollIntent: "bottom",
     resetCause: "mission-session-hydrate",
-    directory: activeDirectory(),
+    directory,
   })
-  startSSE(source, 0, { directory: activeDirectory() })
+  startSSE(source, 0, { directory })
   setMissionSharedRefreshToken((value) => value + 1)
-}
-
-function focusTaskPanel(): void {
-  resetCenterWorkbenchToFocusedPanel("tasks")
 }
 
 function focusInitialRestoredTaskWorkspace(): void {
   if (!activeTaskID() || boardStore.selectedSource?.kind !== "task") return
-  setMissionLauncherActive(false)
-  setAssistantLauncherActive(false)
-  resetCenterWorkbenchToFocusedPanel("tasks")
-  setSelectedLeftActivity("tasks")
-  setSelectedLeftPanelActivity("tasks")
-}
-
-function selectTaskFromTaskList(taskID: string, directory?: string): void {
-  if (activeTaskID() !== taskID) focusTaskPanel()
-  runMainAsync("task.select-from-list", () => selectTask(taskID, { directory }))
+  resetCenterWorkbenchToPrimaryPanel("task")
 }
 
 function openCenterWorkbenchPanel(panel: CenterWorkbenchPanel): void {
@@ -639,7 +508,7 @@ function openCenterWorkbenchPanel(panel: CenterWorkbenchPanel): void {
 }
 
 function closeCenterWorkbenchPanel(panel: CenterWorkbenchPanel): void {
-  if (panel === "workflow" && focusedLeftActivityOwnsPrimaryPanel(untrack(selectedLeftActivity))) return
+  if (panel === "workflow") return
   if (panel === "diff") setWorkspaceOpen(false)
   if (panel === "file") closeFileEditor()
   setCenterWorkbenchPanels((current) => current.filter((item) => item !== panel))
@@ -1126,190 +995,31 @@ if (sidebarTitleEl) {
   })
 }
 
-// ── Mount: TaskList ──
+// ── Mount: WorkLedger ──
 
-const LEFT_ACTIVITY_BODY_IDS: Record<LeftActivity, string> = {
-  tasks: "leftPanelTasks",
-  mission: "leftPanelMissions",
-  assistant: "leftPanelAssistant",
-  memory: "leftPanelMemory",
-  extensions: "leftPanelExtensions",
-}
-
-disposers.push(
-  createRoot((dispose) => {
-    createEffect(() => {
-      const activity = selectedLeftPanelActivity()
-      const activityDefinition = leftActivityDefinition(activity)
-      const titleKey = activityDefinition.labelKey
-      const titleText = t(titleKey)
-      for (const [id, elementID] of Object.entries(LEFT_ACTIVITY_BODY_IDS) as Array<[LeftActivity, string]>) {
-        const element = document.getElementById(elementID)
-        if (element) element.dataset.active = id === activity ? "true" : "false"
-      }
-      const title = document.getElementById("leftPanelTitle")
-      if (title) title.textContent = titleText
-      const taskActions = document.getElementById("leftPanelTaskActions")
-      if (taskActions) {
-        const hasCreateAction = activity === "tasks" || activity === "mission" || activity === "assistant"
-        taskActions.dataset.active = hasCreateAction ? "true" : "false"
-        taskActions.dataset.activityActions = activity
-        taskActions.dataset.i18nAriaLabel = titleKey
-        taskActions.setAttribute("aria-label", titleText)
-        for (const button of taskActions.querySelectorAll<HTMLElement>("[data-left-action]")) {
-          button.hidden = button.dataset.leftAction !== activity
-        }
-      }
-    })
-    return dispose
-  }),
-)
-
-const taskListEl = document.getElementById("taskListPanel")
-if (taskListEl) {
-  taskListEl.innerHTML = ""
+const workLedgerEl = document.getElementById("workLedgerPanel")
+if (workLedgerEl) {
+  workLedgerEl.innerHTML = ""
   render(
     () => (
-      <TaskList
-        onSelectTask={selectTaskFromTaskList}
-        onDeleteTask={(taskID) =>
-          runMainAsync("task.delete-from-list", async () => {
-            const ok = await deleteTask(taskID)
-            if (!ok) throw new Error(t("task.delete_failed"))
-          })
-        }
-        onCancelTask={(taskID) => runMainAsync("task.cancel-from-list", () => cancelTask(taskID))}
-        onRenameTask={async (taskID, title) => {
-          const ok = await renameTask(taskID, title)
-          if (!ok) throw new Error(t("task.rename_failed"))
-        }}
-      />
-    ),
-    taskListEl,
-  )
-}
-
-const codingAssistantListEl = document.getElementById("codingAssistantSessionListPanel")
-if (codingAssistantListEl) {
-  codingAssistantListEl.innerHTML = ""
-  render(
-    () => (
-      <CodingAssistantSessionList
-        sessions={codingAssistantStore.sessions}
-        selectedSessionID={codingAssistantStore.selectedSessionID}
-        loading={codingAssistantStore.loading}
-        loadingMore={codingAssistantStore.loadingMore}
-        error={codingAssistantStore.error}
-        searchQuery={codingAssistantStore.searchQuery}
-        hasMore={!!codingAssistantStore.nextCursor}
-        actionBusyID={codingAssistantStore.actionBusyID}
-        onSearchChange={(query) => {
-          setCodingAssistantSearchQuery(query)
-          const directory = activeDirectory()
-          const searchQuery = query.trim()
-          void loadCodingAssistantSessions({
-            directory,
-            searchQuery,
-            isCurrentSource: () =>
-              activeDirectory().trim() === directory.trim() && codingAssistantStore.searchQuery.trim() === searchQuery,
-          }).catch((error) => {
-            reportOverlayRuntimeError("coding-assistant.search", error)
-          })
-        }}
-        onSelectSession={(session) => {
-          setAssistantLauncherActive(false)
-          resetCenterWorkbenchToFocusedPanel("assistant")
-          void selectCodingAssistantSession({
-            sessionID: session.id,
-            directory: String(session.directory || ""),
-          }).catch((error) => {
-            reportOverlayRuntimeError("coding-assistant.select", error)
-          })
-        }}
-        onRenameSession={(session, title) =>
-          void renameCodingAssistantSession(
-            { sessionID: session.id, directory: String(session.directory || "") },
-            title,
-          )
-            .then((ok) => {
-              if (!ok) throw new Error("Coding assistant rename failed")
-            })
-            .catch((error) => {
-              reportOverlayRuntimeError("coding-assistant.rename", error)
-            })
-        }
-        onDeleteSession={(session) =>
-          void deleteCodingAssistantSession({ sessionID: session.id, directory: String(session.directory || "") })
-            .then((ok) => {
-              if (!ok) throw new Error("Coding assistant delete failed")
-            })
-            .catch((error) => {
-              reportOverlayRuntimeError("coding-assistant.delete", error)
-            })
-        }
-        onStopSession={(session) =>
-          void stopCodingAssistantSession({ sessionID: session.id, directory: String(session.directory || "") })
-            .then((ok) => {
-              if (!ok) throw new Error("Coding assistant stop failed")
-            })
-            .catch((error) => {
-              reportOverlayRuntimeError("coding-assistant.stop", error)
-            })
-        }
-        onRetry={() =>
-          void (() => {
-            const directory = activeDirectory()
-            const searchQuery = codingAssistantStore.searchQuery.trim()
-            return loadCodingAssistantSessions({
-              directory,
-              searchQuery,
-              isCurrentSource: () =>
-                activeDirectory().trim() === directory.trim() &&
-                codingAssistantStore.searchQuery.trim() === searchQuery,
-            }).catch((error) => {
-              reportOverlayRuntimeError("coding-assistant.retry", error)
-            })
-          })()
-        }
-        onLoadMore={() =>
-          void (() => {
-            const directory = activeDirectory()
-            const searchQuery = codingAssistantStore.searchQuery.trim()
-            const cursor = codingAssistantStore.nextCursor
-            return loadCodingAssistantSessions({
-              directory,
-              append: true,
-              searchQuery,
-              cursor,
-              isCurrentSource: () =>
-                activeDirectory().trim() === directory.trim() &&
-                codingAssistantStore.searchQuery.trim() === searchQuery &&
-                codingAssistantStore.nextCursor?.updated === cursor?.updated &&
-                codingAssistantStore.nextCursor?.sessionID === cursor?.sessionID,
-            }).catch((error) => {
-              reportOverlayRuntimeError("coding-assistant.more", error)
-            })
-          })()
-        }
-      />
-    ),
-    codingAssistantListEl,
-  )
-}
-
-const missionListEl = document.getElementById("missionListPanel")
-if (missionListEl) {
-  missionListEl.innerHTML = ""
-  render(
-    () => (
-      <Mission
-        active={selectedLeftPanelActivity() === "mission"}
-        activationToken={missionActivityActivationToken()}
+      <WorkLedger
+        selectedTaskID={activeTaskID()}
+        selectedSessionID={activeSessionID()}
         refreshToken={missionSharedRefreshToken()}
-        onSelectTask={selectMissionTask}
+        onSelectMission={(row) =>
+          runMainAsync("work-ledger.select-mission", () => openWorkLedgerMission(row))
+        }
+        onSelectTask={(row) => runMainAsync("work-ledger.select-task", () => selectWorkLedgerTask(row))}
+        onSelectChat={(row) => runMainAsync("work-ledger.select-chat", () => openWorkLedgerChat(row))}
+        onAbortMission={(row) => abortWorkLedgerMission(row)}
+        onDeleteMission={(row) => deleteWorkLedgerMission(row)}
+        onCancelTask={(row) => cancelWorkLedgerTask(row)}
+        onDeleteTask={(row) => deleteWorkLedgerTask(row)}
+        onStopChat={(row) => stopWorkLedgerChat(row)}
+        onDeleteChat={(row) => deleteWorkLedgerChat(row)}
       />
     ),
-    missionListEl,
+    workLedgerEl,
   )
 }
 
@@ -1410,36 +1120,23 @@ createEffect<string>((previousKey) => {
 }, "")
 
 const panelComposerDraftKey = () => {
-  if (missionSubmitActive()) {
-    const directory = activeDirectory()
-    return directory ? composerDraftKey("mission", "new", directory) : composerDraftKey("mission", "new")
-  }
-  if (missionLedgerActive()) {
-    const directory = activeDirectory()
-    return directory ? composerDraftKey("mission", "ledger", directory) : composerDraftKey("mission", "ledger")
-  }
-  if (assistantSubmitActive()) {
-    const directory = activeDirectory()
-    return directory ? composerDraftKey("assistant", "new", directory) : composerDraftKey("assistant", "new")
-  }
   const taskID = activeTaskID()
   if (taskID) return composerDraftKey("task", taskID)
   const sessionID = activeSessionID()
   if (sessionID) return composerDraftKey("session", sessionID)
   const directory = activeDirectory()
-  return directory ? composerDraftKey("task", "new", directory) : composerDraftKey("task", "new")
+  if (composerMode() === "mission") {
+    return directory ? composerDraftKey("mission", "new", directory) : composerDraftKey("mission", "new")
+  }
+  return directory ? composerDraftKey("assistant", "new", directory) : composerDraftKey("assistant", "new")
 }
 
 function missionSubmitActive(): boolean {
-  return missionLauncherActive()
-}
-
-function missionLedgerActive(): boolean {
-  return primaryCenterPanel() === "mission" && !missionSubmitActive() && !isMissionSessionSource()
+  return composerMode() === "mission" && !activeTaskID() && !activeSessionID()
 }
 
 function assistantSubmitActive(): boolean {
-  return assistantLauncherActive() || (primaryCenterPanel() === "chat" && !activeSessionID())
+  return composerMode() === "chat" && !activeTaskID() && !activeSessionID()
 }
 
 const composerEl = document.getElementById("solidChatComposer")
@@ -1447,9 +1144,7 @@ if (composerEl) {
   render(
     () => (
       <ChatComposer
-        enabled={
-          canComposeChat() && !missionLedgerActive() && !missionLauncherSubmitting() && !assistantLauncherSubmitting()
-        }
+        enabled={canComposeChat() && !missionLauncherSubmitting() && !assistantLauncherSubmitting()}
         // Composer busy ≡ a send request is in flight (SSE stream open).
         // A running task no longer disables the composer: the user can queue
         // additional messages; `panelMessage` routes them as operator notes /
@@ -1484,6 +1179,8 @@ if (composerEl) {
         expertSquads={expertSquads()}
         expertSquadID={activeExpertSquad()}
         onExpertSquadChange={setActiveExpertSquad}
+        composerMode={composerMode()}
+        onComposerModeChange={handleComposerModeChange}
         onSubmit={async (text, attachments, webSearch, expertSquadID) => {
           const promptProfile = expertSquadID.trim()
           const metadata = {
@@ -1500,7 +1197,6 @@ if (composerEl) {
               const model = typeof appStore.config?.model === "string" ? appStore.config.model : undefined
               const result = await wakeMission({ text, model, promptProfile })
               await openMissionSession(result)
-              setMissionLauncherActive(false)
               return result
             } finally {
               setMissionLauncherSubmitting(false)
@@ -1510,8 +1206,9 @@ if (composerEl) {
             setAssistantLauncherSubmitting(true)
             try {
               await createCodingAssistantSession({ directory: activeDirectory() })
-              setAssistantLauncherActive(false)
-              return await panelMessage(text, attachments, metadata)
+              const result = await panelMessage(text, attachments, metadata)
+              setMissionSharedRefreshToken((value) => value + 1)
+              return result
             } finally {
               setAssistantLauncherSubmitting(false)
             }
@@ -1567,50 +1264,10 @@ if (rightActivityToolbarEl) {
         activeSemantics="pressed-toggle"
         ariaLabelKey="activity.right"
         onSelect={selectRightActivity}
+        trailing={<ProjectRuntimeToolbarActions />}
       />
     ),
     rightActivityToolbarEl,
-  )
-}
-
-const leftActivityToolbarEl = document.getElementById("solidLeftActivityToolbar")
-if (leftActivityToolbarEl) {
-  render(
-    () => (
-      <SideActivityToolbar
-        side="left"
-        activities={LEFT_ACTIVITIES}
-        active={activeLeftActivity}
-        isActive={isLeftActivityOpen}
-        activeSemantics="current-page"
-        ariaLabelKey="activity.left"
-        onSelect={selectLeftActivity}
-      />
-    ),
-    leftActivityToolbarEl,
-  )
-}
-
-const leftExtensionsPanelEl = document.getElementById("solidLeftExtensionsPanel")
-if (leftExtensionsPanelEl) {
-  render(
-    () => <ExtensionActivityPanel active={selectedLeftPanelActivity() === "extensions"} directory={activeDirectory} />,
-    leftExtensionsPanelEl,
-  )
-}
-
-const leftMemoryPanelEl = document.getElementById("solidLeftMemoryPanel")
-if (leftMemoryPanelEl) {
-  render(
-    () => (
-      <MemoryPanel
-        active={selectedLeftPanelActivity() === "memory"}
-        taskID={() => activeTaskID() || undefined}
-        directory={activeDirectory}
-        compact
-      />
-    ),
-    leftMemoryPanelEl,
   )
 }
 
@@ -1710,20 +1367,8 @@ function onDocumentReady(callback: () => void): void {
 }
 
 function bindSidebarStaticControls(): void {
-  // ── Sidebar buttons ──
-  document.getElementById("btnCreateTask")?.addEventListener("click", () => {
-    openTaskLauncher()
-  })
-  document.getElementById("btnCreateMission")?.addEventListener("click", () => {
-    openMissionLauncher()
-  })
-  document.getElementById("btnCreateCodingAssistantSession")?.addEventListener("click", () => {
-    openCodingAssistantLauncher()
-  })
-
-  // Executor selection moved to <ExecutorSelector/> mounted inside ChatComposer
-  // (chat-compose-meta-left). The component owns its own dropdown, click-out
-  // dismissal and Escape handling — Solid lifecycle disposes both on unmount.
+  // Left-sidebar creation is now composer-mode driven. The Work Ledger has no
+  // static header action buttons to bind.
 }
 
 onDocumentReady(bindSidebarStaticControls)
@@ -1819,8 +1464,7 @@ disposers.push(
     createEffect(() => {
       settingsStore.locale
       boardStore.selectedSource
-      missionLauncherActive()
-      assistantLauncherActive()
+      composerMode()
       primaryCenterPanel()
       const title = document.querySelector("#chatViewTitle") as HTMLElement | null
       if (title) {

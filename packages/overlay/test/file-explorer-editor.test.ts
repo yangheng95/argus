@@ -43,7 +43,9 @@ test("file explorer, diff, and editor are wired through center workbench panels"
   const en = readText("src/i18n/en-US.json")
   const zh = readText("src/i18n/zh-CN.json")
 
-  expect(html).toContain('id="solidLeftActivityToolbar"')
+  expect(html).not.toContain('id="solidLeftActivityToolbar"')
+  expect(html).toContain('id="leftPanelWork"')
+  expect(html).toContain('id="workLedgerPanel"')
   expect(html).not.toContain('id="leftPanelExplorer"')
   expect(html).not.toContain('id="leftPanelChanges"')
   expect(html).not.toContain('data-left-activity="tasks"')

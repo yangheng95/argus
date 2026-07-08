@@ -15,10 +15,6 @@ import {
 
 const root = join(import.meta.dir, "..")
 const WORKSPACE_LAYOUT_CONTROLS_SOURCE = readFileSync(join(root, "src/components/WorkspaceLayoutControls.tsx"), "utf8")
-const WORKSPACE_CODING_CLI_LAUNCHERS_SOURCE = readFileSync(
-  join(root, "src/components/WorkspaceCodingCliLaunchers.tsx"),
-  "utf8",
-)
 
 afterEach(() => {
   __setHostTransportForTest(undefined)
@@ -277,27 +273,19 @@ describe("terminal client", () => {
     expect(currentTerminalProfileID()).toBe("cmd")
   })
 
-  test("workspace launchers reload profile data only when the directory key changes", () => {
-    for (const source of [WORKSPACE_LAYOUT_CONTROLS_SOURCE, WORKSPACE_CODING_CLI_LAUNCHERS_SOURCE]) {
-      expect(source).toContain("const directory = createMemo(() => activeDirectory().trim())")
-      expect(source).toMatch(/createEffect<string>\(\(previous\) => \{[\s\S]*?const next = directory\(\)/)
-      expect(source).toContain("if (next === previous) return previous")
-      expect(source).toMatch(/void reloadProfiles\(next\)[\s\S]*?return next/)
-      expect(source).not.toMatch(/createEffect\(\(\) => \{\s*activeDirectory\(\)\s*void reloadProfiles\(\)/)
-    }
+  test("workspace terminal launcher reloads profile data only when the directory key changes", () => {
+    expect(WORKSPACE_LAYOUT_CONTROLS_SOURCE).toContain("const directory = createMemo(() => activeDirectory().trim())")
+    expect(WORKSPACE_LAYOUT_CONTROLS_SOURCE).toMatch(/createEffect<string>\(\(previous\) => \{[\s\S]*?const next = directory\(\)/)
+    expect(WORKSPACE_LAYOUT_CONTROLS_SOURCE).toContain("if (next === previous) return previous")
+    expect(WORKSPACE_LAYOUT_CONTROLS_SOURCE).toMatch(/void reloadProfiles\(next\)[\s\S]*?return next/)
+    expect(WORKSPACE_LAYOUT_CONTROLS_SOURCE).not.toMatch(
+      /createEffect\(\(\) => \{\s*activeDirectory\(\)\s*void reloadProfiles\(\)/,
+    )
     expect(WORKSPACE_LAYOUT_CONTROLS_SOURCE).toContain("reloadTerminalProfileSelection({")
     expect(WORKSPACE_LAYOUT_CONTROLS_SOURCE).toContain("directory: nextDirectory")
     expect(WORKSPACE_LAYOUT_CONTROLS_SOURCE).toContain("close()")
     expect(WORKSPACE_LAYOUT_CONTROLS_SOURCE).toContain("clearTerminalProfileSelection()")
     expect(WORKSPACE_LAYOUT_CONTROLS_SOURCE).toContain("const ownsProfile = () => activeDirectory().trim() === cwd")
     expect(WORKSPACE_LAYOUT_CONTROLS_SOURCE).toContain("if (!ownsProfile()) return")
-    expect(WORKSPACE_CODING_CLI_LAUNCHERS_SOURCE).toContain("listCodingCliProfiles(nextDirectory)")
-    expect(WORKSPACE_CODING_CLI_LAUNCHERS_SOURCE).toContain("directory: nextDirectory")
-    expect(WORKSPACE_CODING_CLI_LAUNCHERS_SOURCE).toContain('const [profilesDirectory, setProfilesDirectory] = createSignal("")')
-    expect(WORKSPACE_CODING_CLI_LAUNCHERS_SOURCE).toContain("const profilesCurrentForDirectory = () =>")
-    expect(WORKSPACE_CODING_CLI_LAUNCHERS_SOURCE).toContain("setProfilesDirectory(nextDirectory)")
-    expect(WORKSPACE_CODING_CLI_LAUNCHERS_SOURCE).toContain("setProfilesDirectory(\"\")")
-    expect(WORKSPACE_CODING_CLI_LAUNCHERS_SOURCE).toContain("Coding CLI profiles are stale for the active directory")
-    expect(WORKSPACE_CODING_CLI_LAUNCHERS_SOURCE).toContain("profilesCurrentForDirectory() ? profiles() : []")
   })
 })

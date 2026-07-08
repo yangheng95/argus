@@ -41,6 +41,7 @@
   <link rel="stylesheet" href="styles/surfaces/chat-bubble.css">
   <link rel="stylesheet" href="styles/surfaces/mission.css">
   <link rel="stylesheet" href="styles/surfaces/coding-assistant.css">
+  <link rel="stylesheet" href="styles/surfaces/work-ledger.css">
 </head>
 <body data-page="overlay" data-theme="light">
   <!-- Titlebar (draggable) -->
@@ -60,103 +61,22 @@
     </div>
   </header>
 
-  <!-- Shared Project Directory Bar -->
-  <section class="task-bar workbench-project-bar">
-    <div id="solidProjectDirectoryBarMount"></div>
-  </section>
-
   <!-- Main Panel -->
   <main class="panel">
 
-    <!-- Horizontal body: task ledger left, workflow and right-toolbar views center -->
+    <!-- Horizontal body: unified work ledger left, workflow and right-toolbar views center -->
     <div class="panel-body" id="panelBody">
       <div class="left-activity-shell" id="leftActivityShell">
-        <div id="solidLeftActivityToolbar" class="side-activity-toolbar-mount left-activity-toolbar-mount" data-i18n-aria-label="activity.left"></div>
         <aside class="sidebar" id="sidebar" data-collapsed="false">
         <div class="side-panel-content sidebar-content">
           <div class="sidebar-header oc-surface-header">
-            <div class="sidebar-title oc-surface-header__title" id="leftPanelTitle" data-i18n="mission.title">Mission</div>
-            <div class="sidebar-header-actions oc-surface-header__actions" id="leftPanelTaskActions" data-activity-actions="mission" role="toolbar" aria-label="Mission" data-i18n-aria-label="mission.title">
-              <button
-                type="button"
-                class="oc-button"
-                id="btnCreateTask"
-                data-variant="solid"
-                data-size="md"
-                data-tone="accent"
-                data-ui="sidebar-new-task-button"
-                data-left-action="tasks"
-                data-i18n-title="task.ledger.new"
-                data-i18n-aria-label="task.ledger.new"
-                title="New Task"
-                aria-label="New Task"
-                hidden
-              >
-                <span class="sidebar-btn-icon" data-oc-icon="plus" data-oc-icon-size="13" aria-hidden="true"></span>
-                <span class="sidebar-btn-label" data-i18n="task.ledger.new">New Task</span>
-              </button>
-              <button
-                type="button"
-                class="oc-button"
-                id="btnCreateMission"
-                data-variant="solid"
-                data-size="md"
-                data-tone="accent"
-                data-ui="mission-new"
-                data-left-action="mission"
-                data-i18n-title="mission.new_title"
-                data-i18n-aria-label="mission.new"
-                title="New Mission"
-                aria-label="New Mission"
-              >
-                <span class="sidebar-btn-icon" data-oc-icon="plus" data-oc-icon-size="13" aria-hidden="true"></span>
-                <span class="sidebar-btn-label" data-i18n="mission.new">New Mission</span>
-              </button>
-              <button
-                type="button"
-                class="oc-button"
-                id="btnCreateCodingAssistantSession"
-                data-variant="solid"
-                data-size="md"
-                data-tone="accent"
-                data-ui="coding-assistant-new"
-                data-left-action="assistant"
-                data-i18n-title="coding_assistant.chat.new_title"
-                data-i18n-aria-label="coding_assistant.chat.new"
-                title="New Chat"
-                aria-label="New Chat"
-                hidden
-              >
-                <span class="sidebar-btn-icon" data-oc-icon="plus" data-oc-icon-size="13" aria-hidden="true"></span>
-                <span class="sidebar-btn-label" data-i18n="coding_assistant.chat.new">New Chat</span>
-              </button>
-            </div>
+            <div class="sidebar-title oc-surface-header__title" id="leftPanelTitle" data-i18n="work_ledger.title">Work</div>
           </div>
 
-          <div class="side-activity-body sidebar-activity-body" id="leftPanelTasks" data-side-activity="tasks" data-active="false">
+          <div class="side-activity-body sidebar-activity-body" id="leftPanelWork" data-side-activity="work" data-active="true">
             <div class="sidebar-body">
-              <div class="sidebar-list session-list-panel sidebar-session-list" id="taskListPanel"></div>
+              <div class="sidebar-list session-list-panel work-ledger-panel" id="workLedgerPanel"></div>
             </div>
-          </div>
-
-          <div class="side-activity-body sidebar-activity-body" id="leftPanelAssistant" data-side-activity="assistant" data-active="false">
-            <div class="sidebar-body">
-              <div class="sidebar-list session-list-panel assistant-session-list" id="codingAssistantSessionListPanel"></div>
-            </div>
-          </div>
-
-          <div class="side-activity-body sidebar-activity-body" id="leftPanelMissions" data-side-activity="mission" data-active="true">
-            <div class="sidebar-body">
-              <div class="sidebar-list session-list-panel mission-session-list" id="missionListPanel"></div>
-            </div>
-          </div>
-
-          <div class="side-activity-body sidebar-activity-body sidebar-extension-activity-body" id="leftPanelExtensions" data-side-activity="extensions" data-active="false">
-            <div id="solidLeftExtensionsPanel" class="sidebar-extension-panel"></div>
-          </div>
-
-          <div class="side-activity-body sidebar-activity-body sidebar-memory-activity-body" id="leftPanelMemory" data-side-activity="memory" data-active="false">
-            <div id="solidLeftMemoryPanel" class="sidebar-memory-panel"></div>
           </div>
 
           <footer class="sidebar-footer" aria-label="Author">

@@ -11,7 +11,7 @@ test("PANEL_PANE_CONFIG targets the default panel's elements and variables", () 
   expect(PANEL_PANE_CONFIG).toEqual({
     bodyId: "panelBody",
     leftHandleId: "leftPaneResizer",
-    leftFixedControlIds: ["solidLeftActivityToolbar"],
+    leftFixedControlIds: [],
     leftControls: ["sidebar", "workspaceMain"],
     remainingFixedControlIds: ["solidRightActivityToolbar"],
     remainingMinWidth: defaultPanelRemainingMinWidth,
@@ -51,7 +51,7 @@ test("default pane resizer exposes separator semantics through the pane service"
   expect(pane).toContain('layoutTokens.tokenPx("--ui-rail-width")')
   expect(pane).toContain('layoutTokens.tokenPx("--ui-rail-min-width")')
   expect(pane).toContain('layoutTokens.tokenPx("--ui-chat-min-width")')
-  expect(pane).toContain('leftFixedControlIds: ["solidLeftActivityToolbar"]')
+  expect(pane).toContain("leftFixedControlIds: []")
   expect(pane).toContain('remainingFixedControlIds: ["solidRightActivityToolbar"]')
   expect(pane).toContain("remainingMinWidth: defaultPanelRemainingMinWidth")
   expect(pane).toContain("function readPaneGeometrySnapshot(config: PaneConfig): PaneGeometrySnapshot | null")

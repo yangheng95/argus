@@ -13,7 +13,6 @@ import { InteractionDialogHost } from "./InteractionDialogHost"
 import { NotificationCenter } from "./NotificationCenter"
 import { SidebarVersionLabel } from "./SidebarVersionLabel"
 import { SessionDialogHost } from "./SessionDialogHost"
-import { ProjectDirectoryBar } from "./TaskDirBar"
 import { TaskStatusHeader } from "./TaskStatusHeader"
 import { TitlebarBrandGuide } from "./titlebar/TitlebarBrandGuide"
 import { TitlebarMenubar } from "./titlebar/TitlebarMenubar"
@@ -51,9 +50,6 @@ export function App() {
       </StaticMountPortal>
       <StaticMountPortal id="solidChatVersion">
         <SidebarVersionLabel />
-      </StaticMountPortal>
-      <StaticMountPortal id="solidProjectDirectoryBarMount">
-        <ProjectDirectoryBar />
       </StaticMountPortal>
       <StaticMountPortal id="solidTaskStatusMount">
         <TaskStatusHeader />

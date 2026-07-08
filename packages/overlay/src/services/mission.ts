@@ -199,6 +199,7 @@ export interface TaskStatusDetail {
   directory?: string
   error?: string
   progress: StatusProgress
+  agentInvocationDAG: unknown
   workflow?: {
     id: string
     name: string

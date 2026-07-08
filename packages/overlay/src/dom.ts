@@ -87,10 +87,6 @@ export interface DomRefs {
   btnTaskInterrupt: HTMLButtonElement | null
   chatSend: HTMLButtonElement | null
 
-  // Task list panel
-  taskListPanel: HTMLElement | null
-  btnCreateTask: HTMLButtonElement | null
-
   // Knowledge: Memory
   memoryBadge: HTMLElement | null
   memoryList: HTMLElement | null
@@ -211,10 +207,6 @@ export function getDomRefs(): DomRefs {
     chatAttachments: $<HTMLElement>("#chatAttachments"),
     btnTaskInterrupt: $<HTMLButtonElement>("#btnTaskInterrupt"),
     chatSend: $<HTMLButtonElement>("#chatSend"),
-
-    // Task list panel
-    taskListPanel: $<HTMLElement>("#taskListPanel"),
-    btnCreateTask: $<HTMLButtonElement>("#btnCreateTask"),
 
     // Knowledge: Memory
     memoryBadge: $<HTMLElement>("#memoryBadge"),

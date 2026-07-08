@@ -84,7 +84,6 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
             .popup-sample .recent-dir-panel,
             .popup-sample .workspace-terminal-menu,
             .popup-sample .workspace-editor-menu,
-            .popup-sample .workspace-coding-cli-menu,
             .popup-sample .titlebar-menubar-panel,
             .popup-sample .brand-guide-card,
             .popup-sample .cmdk-panel {
@@ -255,12 +254,6 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
                 <button class="workspace-editor-option" type="button" data-highlighted>
                   <span aria-hidden="true">E</span>
                   <span class="workspace-editor-option-label" data-popup-text>Open editor</span>
-                </button>
-              </div>
-              <div class="workspace-coding-cli-menu">
-                <button class="workspace-coding-cli-option" type="button" data-highlighted>
-                  <span aria-hidden="true">C</span>
-                  <span class="workspace-coding-cli-option-label" data-popup-text>Open coding CLI</span>
                 </button>
               </div>
             </section>
@@ -503,7 +496,7 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
     assert.equal(highlightedMetrics.recentFocusedRemove.pointerEvents, "auto")
     assert.deepEqual(
       highlightedMetrics.workspaceOptions.map((option) => option.backgroundColor !== "rgba(0, 0, 0, 0)"),
-      [true, true, true],
+      [true, true],
     )
     assert.notEqual(highlightedMetrics.titlebarHighlighted.backgroundColor, "rgba(0, 0, 0, 0)")
     assert.notEqual(

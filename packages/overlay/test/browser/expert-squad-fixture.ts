@@ -14,6 +14,7 @@ export interface ExpertSquadFixture {
   label: string
   namespace?: string
   description?: string
+  version?: string
   display_prefix?: string
   built_in?: boolean
   editable?: boolean
@@ -219,6 +220,7 @@ export function expertSquadOptionFixture(squad: ExpertSquadFixture) {
   return {
     id: squad.id,
     label: squad.label,
+    version: squad.version ?? "2026.07.08-test",
     display_prefix: squad.display_prefix,
     display_label: displayLabel,
     description: squad.description,

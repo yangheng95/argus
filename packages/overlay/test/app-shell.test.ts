@@ -17,7 +17,6 @@ test("App owns the global overlay host components", () => {
     "solidTitlebarMenu",
     "solidWindowControls",
     "solidConnBadge",
-    "solidProjectDirectoryBarMount",
     "solidTaskStatusMount",
     "solidConversationAgentRailMount",
     "solidFileEditorMount",
@@ -38,7 +37,6 @@ test("App owns the global overlay host components", () => {
     "TitlebarMenubar",
     "WindowControls",
     "ConnectionBadge",
-    "ProjectDirectoryBar",
     "TaskStatusHeader",
     "ConversationAgentRail",
     "FileEditorPane",
@@ -56,6 +54,8 @@ test("App owns the global overlay host components", () => {
     expect(main).not.toContain(`render(() => <${component}`)
   }
   expect(app).toContain('<NotificationCenter surface="panel" />')
+  expect(app).not.toContain("ProjectDirectoryBar")
+  expect(app).not.toContain("solidProjectDirectoryBarMount")
   expect(main).not.toContain('render(() => <NotificationCenter surface="panel" />')
   expect(main).toContain('import { App } from "./components/App"')
   expect(main).toContain("render(() => <App />, host)")

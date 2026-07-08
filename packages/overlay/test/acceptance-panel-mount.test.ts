@@ -42,7 +42,7 @@ function readAllSurfaceCss(): string {
 // acceptance card at all. This suite locks both the structural wiring and the
 // redesigned panel's verdict-driven behavior in place.
 
-test("index.html declares task-scope toolbar workbench activities without the historical Inspector panel", async () => {
+test("index.html declares the unified Work Ledger left panel and task-scope workbench activities", async () => {
   const html = await readSrc("src/index.html")
   expect(html).toContain('id="solidConversationAgentRailMount"')
   expect(html).toContain('id="chatContentFrame"')
@@ -86,26 +86,29 @@ test("index.html declares task-scope toolbar workbench activities without the hi
   expect(html).not.toContain('id="solidFileEditorToggleMount"')
   expect(html).not.toContain('id="rightPanelWorkflow"')
   expect(html).not.toContain('id="solidAgentWorkflowMount"')
-  expect(html).toContain('id="solidLeftActivityToolbar"')
+  expect(html).not.toContain('id="solidLeftActivityToolbar"')
   expect(html).not.toContain('id="solidLeftPanelCollapseControl"')
   expect(html).not.toContain('id="solidLeftCollapsedRailControl"')
   expect(html).not.toContain('class="sidebar-collapsed-rail"')
   expect(html).toContain('id="solidRightActivityToolbar"')
   expect(html).toContain('id="chatViewTitle"')
-  expect(html).toContain('id="leftPanelTasks"')
-  expect(html).toContain('id="leftPanelMissions"')
-  expect(html).toContain('id="leftPanelAssistant"')
-  expect(html).toContain('id="codingAssistantSessionListPanel"')
-  expect(html).toContain('id="leftPanelExtensions"')
+  expect(html).toContain('id="leftPanelWork"')
+  expect(html).toContain('id="workLedgerPanel"')
+  expect(html).toContain('data-i18n="work_ledger.title"')
+  expect(html).not.toContain('id="leftPanelTasks"')
+  expect(html).not.toContain('id="leftPanelMissions"')
+  expect(html).not.toContain('id="leftPanelAssistant"')
+  expect(html).not.toContain('id="codingAssistantSessionListPanel"')
+  expect(html).not.toContain('id="leftPanelExtensions"')
   expect(html).not.toContain('id="leftPanelSkills"')
   expect(html).not.toContain('id="leftPanelMcp"')
   expect(html).not.toContain('id="leftPanelTools"')
-  expect(html).toContain('id="leftPanelMemory"')
-  expect(html).toContain('id="solidLeftExtensionsPanel"')
+  expect(html).not.toContain('id="leftPanelMemory"')
+  expect(html).not.toContain('id="solidLeftExtensionsPanel"')
   expect(html).not.toContain('id="solidLeftSkillsPanel"')
   expect(html).not.toContain('id="solidLeftMcpPanel"')
   expect(html).not.toContain('id="solidLeftToolsPanel"')
-  expect(html).toContain('id="solidLeftMemoryPanel"')
+  expect(html).not.toContain('id="solidLeftMemoryPanel"')
   expect(html).not.toContain('id="leftPanelExplorer"')
   expect(html).not.toContain('id="leftPanelChanges"')
   expect(html).toContain('id="solidFileExplorerMount"')
@@ -166,7 +169,7 @@ test("task-scope panels render direct content through the shared scroll stack", 
   expect(css).toContain('.workflow-section-stack .oc-section[data-phase-state="active"]')
 })
 
-test("main.tsx mounts the top-level side activity toolbars and bodies", async () => {
+test("main.tsx mounts Work Ledger on the left and keeps the right activity toolbar", async () => {
   const main = await readSrc("src/main.tsx")
   const app = await readSrc("src/components/App.tsx")
   expect(app).toContain('id="solidConversationAgentRailMount"')
@@ -184,7 +187,8 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
   expect(main).toContain('document.getElementById("centerWorkbenchDiff")')
   expect(main).toContain('document.getElementById("solidFileChangesMount")')
   expect(main).not.toContain('document.getElementById("chatPluginOutlet")')
-  expect(main).toContain('document.getElementById("solidLeftActivityToolbar")')
+  expect(main).toContain('document.getElementById("workLedgerPanel")')
+  expect(main).not.toContain('document.getElementById("solidLeftActivityToolbar")')
   expect(main).toContain('document.getElementById("solidRightActivityToolbar")')
   expect(main).not.toContain('document.getElementById("solidLeftPanelCollapseControl")')
   expect(main).not.toContain('document.getElementById("solidLeftCollapsedRailControl")')
@@ -202,10 +206,11 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
   expect(main).not.toContain('document.getElementById("solidAcceptanceMount")')
   expect(main).not.toContain('document.getElementById("solidFrontendPreviewMount")')
   expect(main).not.toContain("<FrontendPreviewPanel")
+  expect(main).toContain("<WorkLedger")
   expect(main).toContain("<SideActivityToolbar")
-  expect(main).toContain("selectLeftActivity")
+  expect(main).not.toContain("selectLeftActivity")
   expect(main).toContain("selectRightActivity")
-  expect(main).toContain('type LeftActivity = "tasks" | "mission" | "assistant" | "memory" | "extensions"')
+  expect(main).not.toContain("type LeftActivity")
   expect(main).toContain("type CenterWorkbenchPanel =")
   expect(main).toContain('| "screenshots"')
   expect(main).toContain('type RightActivity = Exclude<CenterWorkbenchPanel, "file">')
@@ -235,21 +240,11 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
   expect(main).toContain('icon: "notifications"')
   expect(main).toContain('labelKey: "notify.center_label"')
   expect(main).toContain('tooltipKey: "activity.tooltip.notifications"')
-  expect(main).toContain(
-    'id: "assistant", icon: "message", labelKey: "coding_assistant.title", tooltipKey: "activity.tooltip.assistant"',
-  )
-  expect(main).toContain(
-    'id: "mission", icon: "mission", labelKey: "mission.title", tooltipKey: "activity.tooltip.mission"',
-  )
-  expect(main).toContain(
-    'id: "tasks", icon: "tasks", labelKey: "task.ledger.title", tooltipKey: "activity.tooltip.tasks"',
-  )
-  expect(main).toContain(
-    'id: "memory", icon: "config-memory", labelKey: "memory.title", tooltipKey: "activity.tooltip.memory"',
-  )
-  expect(main).toMatch(
-    /id:\s*"extensions"[\s\S]*?icon:\s*"config-skill"[\s\S]*?labelKey:\s*"extensions\.title"[\s\S]*?tooltipKey:\s*"activity\.tooltip\.extensions"/,
-  )
+  expect(main).not.toContain('id: "assistant", icon: "message"')
+  expect(main).not.toContain('id: "mission", icon: "mission"')
+  expect(main).not.toContain('id: "tasks", icon: "tasks"')
+  expect(main).not.toContain('id: "memory", icon: "config-memory"')
+  expect(main).not.toMatch(/id:\s*"extensions"[\s\S]*?icon:\s*"config-skill"/)
   expect(main).not.toContain('id: "tool"')
   expect(main).not.toContain('id: "skill"')
   expect(main).not.toContain('id: "mcp"')
@@ -283,19 +278,19 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
   expect(main).toContain('t("mission.title")')
   expect(main).not.toContain('render(() => <NotificationCenter surface="panel" />, notificationPanelEl)')
   expect(main).toContain('render(() => <NotificationCenter surface="toast" />, notificationHost)')
-  expect(main).toContain("<CodingAssistantSessionList")
-  expect(main).toContain("loadCodingAssistantSessions({ directory: activeDirectory(), signal: controller.signal })")
+  expect(main).not.toContain("<CodingAssistantSessionList")
+  expect(main).not.toContain("loadCodingAssistantSessions({ directory: activeDirectory(), signal: controller.signal })")
   expect(main).toMatch(
-    /selectCodingAssistantSession\(\{[\s\S]*?sessionID:\s*session\.id[\s\S]*?directory:\s*String\(session\.directory \|\| ""\)/,
+    /selectCodingAssistantSession\(\{[\s\S]*?sessionID:\s*row\.sessionID[\s\S]*?directory:\s*row\.directory/,
   )
   expect(main).toContain('type PrimaryCenterPanel = "task" | "mission" | "chat"')
-  expect(main).toContain("leftActivityCenterPanel")
-  expect(main).toContain("focusedLeftActivityOwnsPrimaryPanel")
-  expect(main).toContain("resetCenterWorkbenchToFocusedPanel")
+  expect(main).not.toContain("leftActivityCenterPanel")
+  expect(main).not.toContain("focusedLeftActivityOwnsPrimaryPanel")
+  expect(main).not.toContain("resetCenterWorkbenchToFocusedPanel")
+  expect(main).toContain("resetCenterWorkbenchToPrimaryPanel")
   expect(main).toContain('setCenterWorkbenchPanels(["workflow"])')
-  expect(main).toContain(
-    'boardStore.selectedSource?.kind === "session" && (activity !== "mission" || isCodingAssistantSource())',
-  )
+  expect(main).toContain("function isMissionSessionSource(): boolean")
+  expect(main).toContain("return boardStore.selectedSource?.kind === \"session\" && !isCodingAssistantSource()")
   expect(main).toContain("CENTER_WORKBENCH_PANEL_ORDER")
   expect(main).toContain("getCenterWorkbenchSeparators")
   expect(main).toContain("renderCenterWorkbenchPanelSeparators")
@@ -501,12 +496,17 @@ test("redesign-required i18n keys exist in both locales; the legacy lifecycle ke
     "browser_preview.capture_loading",
     "browser_preview.viewport.desktop",
     "coding_assistant.title",
+    "work_ledger.title",
+    "work_ledger.kind.mission",
+    "work_ledger.kind.task",
+    "work_ledger.kind.chat",
     "activity.tooltip.requirements",
     "activity.tooltip.architect",
     "activity.tooltip.goals",
-    "activity.tooltip.extensions",
-    "extensions.title",
-    "extensions.segment_aria",
+    "skill.title",
+    "skill.market.title",
+    "mcp.title",
+    "memory.title",
     "workflow.goals_pending",
   ]
   // i18n keys are flat strings with literal dots, not nested paths — use

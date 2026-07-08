@@ -1,25 +1,11 @@
 // ── TaskDirBar ──
-// Solid components for the project directory cluster used by both Panel and
-// Mission. The cwd control owns the breadcrumb, path actions, and
-// recent-directory popup trigger; project worktree management, the git branch badge, and
-// workspace launchers are siblings in the same project bar so there is one
-// workspace chrome implementation.
+// Solid components for project runtime controls hosted by the right activity
+// toolbar.
 
 import * as DropdownMenu from "@kobalte/core/dropdown-menu"
-import * as Popover from "@kobalte/core/popover"
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js"
 import { boardStore, loadBoard } from "../store/board"
-import { pathBreadcrumb } from "../utils/dom-utils"
-import {
-  activeDirectory,
-  browseDirectory,
-  loadRecentDirectories,
-  openDirectory,
-  removeRecentDirectory,
-  setDirectory,
-  type DiscoveredProject,
-} from "../services/workspace"
-import { loadWorkspaceOnboardingDiscovery } from "../services/workspace-onboarding-discovery"
+import { activeDirectory, openDirectory } from "../services/workspace"
 import { t } from "../utils/i18n"
 import { AppLog } from "../utils/log"
 import { canInitGit, initGitCurrent } from "../utils/git"
@@ -30,23 +16,10 @@ import {
   type ProjectWorktreeInfo,
 } from "../services/worktree"
 import { showAppDialog } from "../services/app-dialog"
-import { getHostTransport } from "../services/host-transport"
 import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
-import { WorkspaceCodingCliLaunchers } from "./WorkspaceCodingCliLaunchers"
-import { WorkspaceEditorLaunchers } from "./WorkspaceEditorLaunchers"
-import { WorkspaceLayoutControls } from "./WorkspaceLayoutControls"
 
 const directoryMemo = () => activeDirectory()
-
-function recentPathLabel(value: string): string {
-  return value || ""
-}
-
-function actionTarget(event: Event): HTMLElement | null {
-  const target = event.target as HTMLElement | null
-  return target?.closest?.("[data-path-action],[data-path-open],[data-path-set]") ?? null
-}
 
 function worktreeStateLabel(item: ProjectWorktreeInfo): string {
   if (item.status === "primary") return t("worktree.primary")
@@ -72,333 +45,11 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-async function showDirectoryError(error: unknown): Promise<void> {
-  await showAppDialog({
-    title: t("cwd.set_failed"),
-    message: t("cwd.set_failed_message", { error: errorMessage(error) }),
-    okLabel: t("common.ok"),
-  })
+export interface ProjectWorktreeDropdownProps {
+  compact?: boolean
 }
 
-export function TaskDirContent() {
-  const nativeCommands = getHostTransport().capabilities.nativeCommands
-  let cwdShellRef: HTMLElement | undefined
-  const dir = createMemo(directoryMemo)
-  const breadcrumbHtml = createMemo(() =>
-    pathBreadcrumb(dir(), {
-      browseDirectory: nativeCommands["workspace.pickDir"],
-      openDirectory: nativeCommands["open-path"],
-    }),
-  )
-  const dirTitle = createMemo(() => dir() || t("cwd.unavailable"))
-  const dirEmpty = createMemo(() => (dir() ? "false" : "true"))
-  const [open, setOpen] = createSignal(false)
-  const [recentDirs, setRecentDirs] = createSignal<string[]>([])
-  const [discoveredRoot, setDiscoveredRoot] = createSignal("")
-  const [discoveredProjects, setDiscoveredProjects] = createSignal<DiscoveredProject[]>([])
-  const [discoveryError, setDiscoveryError] = createSignal("")
-  const [pathDraft, setPathDraft] = createSignal("")
-  const [recentPanelInlineSize, setRecentPanelInlineSize] = createSignal("")
-
-  function syncRecentDirs(): void {
-    setRecentDirs(loadRecentDirectories())
-  }
-
-  async function syncDiscoveredProjects(): Promise<void> {
-    const discovery = await loadWorkspaceOnboardingDiscovery()
-    if (discovery.status === "ready") {
-      setDiscoveredRoot(discovery.root)
-      setDiscoveredProjects(discovery.projects)
-      setDiscoveryError("")
-      return
-    }
-
-    setDiscoveredRoot("")
-    setDiscoveredProjects([])
-    setDiscoveryError(discovery.message)
-    AppLog.warn("ui", "Failed to discover local OpenCorvus projects", { error: discovery.message })
-  }
-
-  function syncPanelData(): void {
-    syncRecentDirs()
-    setPathDraft(dir())
-    void syncDiscoveredProjects().catch((err) => {
-      const message = err instanceof Error ? err.message : String(err)
-      setDiscoveryError(message)
-      AppLog.warn("ui", "Failed to discover local OpenCorvus projects", { error: message })
-    })
-  }
-
-  function syncRecentPanelGeometry(): void {
-    if (!cwdShellRef) throw new Error("TaskDirBar recent panel anchor is not mounted.")
-    const width = cwdShellRef.getBoundingClientRect().width
-    if (!Number.isFinite(width) || width <= 0) {
-      throw new Error(`TaskDirBar recent panel anchor width is invalid: ${width}`)
-    }
-    setRecentPanelInlineSize(`${Math.round(width)}px`)
-  }
-
-  function closeRecentPanel(): void {
-    setOpen(false)
-  }
-
-  function setRecentPanelOpen(nextOpen: boolean): void {
-    if (nextOpen) {
-      syncPanelData()
-      syncRecentPanelGeometry()
-    }
-    setOpen(nextOpen)
-  }
-
-  async function handlePathAction(event: MouseEvent): Promise<void> {
-    const button = actionTarget(event)
-    if (!button || (button as HTMLButtonElement).disabled) return
-    event.stopPropagation()
-    const action = button.dataset.pathAction || ""
-    if (action === "browse") {
-      if (!nativeCommands["workspace.pickDir"]) return
-      await browseDirectory()
-      syncRecentDirs()
-      return
-    }
-    if (button.dataset.pathOpen) {
-      if (!nativeCommands["open-path"]) return
-      await openDirectory(button.dataset.pathOpen)
-      return
-    }
-    const target = button.dataset.pathSet || ""
-    if (!target) return
-    try {
-      await setDirectory(target)
-      syncRecentDirs()
-    } catch (err) {
-      const message = errorMessage(err)
-      AppLog.error("ui", "Failed to set working directory", { error: message })
-      await showDirectoryError(err)
-    }
-  }
-
-  async function chooseRecentDirectory(dir: string): Promise<void> {
-    try {
-      await setDirectory(dir)
-      syncRecentDirs()
-      closeRecentPanel()
-    } catch (err) {
-      const message = errorMessage(err)
-      AppLog.error("ui", "Failed to switch to recent directory", { dir, error: message })
-      await showDirectoryError(err)
-    }
-  }
-
-  function removeRecent(dir: string): void {
-    removeRecentDirectory(dir)
-    syncRecentDirs()
-    if (!loadRecentDirectories().length) closeRecentPanel()
-  }
-
-  async function submitPath(event: Event): Promise<void> {
-    event.preventDefault()
-    event.stopPropagation()
-    const next = pathDraft().trim()
-    if (!next) return
-    try {
-      await setDirectory(next)
-      syncPanelData()
-      closeRecentPanel()
-    } catch (err) {
-      const message = errorMessage(err)
-      AppLog.error("ui", "Failed to set working directory from cwd editor", { directory: next, error: message })
-      await showDirectoryError(err)
-    }
-  }
-
-  return (
-    <Popover.Root
-      open={open()}
-      onOpenChange={setRecentPanelOpen}
-      anchorRef={() => cwdShellRef}
-      placement="bottom-end"
-      gutter={6}
-      slide={false}
-    >
-      <div
-        ref={(element) => {
-          cwdShellRef = element
-        }}
-        class="task-dir-shell task-cwd-dropdown"
-        title={dirTitle()}
-      >
-        <span
-          class="task-dir"
-          title={dirTitle()}
-          data-empty={dirEmpty()}
-          innerHTML={breadcrumbHtml()}
-          onClick={(event) => void handlePathAction(event)}
-        />
-        <div class="task-dir-menu-actions">
-          <Popover.Trigger
-            as={Button}
-            type="button"
-            variant="ghost"
-            size="icon"
-            tone="neutral"
-            data-chrome="icon-action"
-            data-ui="cwd-recent-trigger"
-            aria-haspopup="dialog"
-            aria-label={t("cwd.recent")}
-            title={t("cwd.recent")}
-          >
-            <Icon name="caret-down" size={12} class="task-cwd-caret" />
-          </Popover.Trigger>
-        </div>
-      </div>
-      <Popover.Portal>
-        <Popover.Content
-          id="cwd-recent-panel"
-          class="recent-dir-panel"
-          role="dialog"
-          aria-label={t("cwd.recent")}
-          style={{ width: recentPanelInlineSize(), "max-width": recentPanelInlineSize() }}
-        >
-          <div class="recent-dir-panel-shell">
-            <div class="recent-dir-panel-head">
-              <div class="recent-dir-panel-title">{t("cwd.recent")}</div>
-              <Show when={dir()}>
-                <div class="recent-dir-panel-meta" title={dir()}>
-                  {recentPathLabel(dir())}
-                </div>
-              </Show>
-            </div>
-            <form class="recent-dir-edit-form" onSubmit={(event) => void submitPath(event)}>
-              <label class="recent-dir-edit-label">
-                <span>{t("cwd.path_label")}</span>
-                <input
-                  class="field-input"
-                  value={pathDraft()}
-                  onInput={(event) => setPathDraft(event.currentTarget.value)}
-                  placeholder={t("workspace_onboarding.browser_path_placeholder")}
-                  data-ui="cwd-path-input"
-                  autocomplete="off"
-                  spellcheck={false}
-                />
-              </label>
-              <Button
-                type="submit"
-                variant="ghost"
-                size="icon"
-                tone="neutral"
-                data-chrome="icon-action"
-                data-ui="recent-dir-edit-submit"
-                disabled={!pathDraft().trim()}
-                title={t("common.save")}
-                aria-label={t("common.save")}
-              >
-                <Icon name="folder-open" size={14} />
-              </Button>
-            </form>
-            <Show when={discoveryError()}>
-              <div class="recent-dir-discovery-error" data-testid="cwd-discovery-error" role="status">
-                <Icon name="status-failed" size={14} />
-                <span>{discoveryError()}</span>
-              </div>
-            </Show>
-            <Show when={discoveredProjects().length > 0}>
-              <div class="recent-dir-section" data-kind="discovered">
-                <div class="recent-dir-section-title" title={discoveredRoot()}>
-                  {t("cwd.detected_projects")}
-                </div>
-                <div class="recent-dir-list" data-kind="discovered" role="list">
-                  <For each={discoveredProjects()}>
-                    {(project) => {
-                      const isActive = () => !!dir() && project.directory.toLowerCase() === dir().toLowerCase()
-                      return (
-                        <div class="recent-dir-row" data-active={isActive() ? "true" : "false"} role="listitem">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            tone="neutral"
-                            class="recent-dir-item"
-                            data-ui="recent-dir-item"
-                            title={project.directory}
-                            aria-current={isActive() ? "location" : undefined}
-                            onClick={() => void chooseRecentDirectory(project.directory)}
-                          >
-                            <span class="recent-dir-copy">
-                              <span class="recent-dir-label">{project.name}</span>
-                              <span class="recent-dir-path">{project.directory}</span>
-                            </span>
-                            <Show when={isActive()}>
-                              <span class="recent-dir-state" aria-hidden="true">
-                                •
-                              </span>
-                            </Show>
-                          </Button>
-                        </div>
-                      )
-                    }}
-                  </For>
-                </div>
-              </div>
-            </Show>
-            <Show when={recentDirs().length > 0} fallback={<div class="recent-dir-empty">{t("cwd.recent_empty")}</div>}>
-              <div class="recent-dir-list" data-kind="recent" role="list">
-                <For each={recentDirs()}>
-                  {(recent) => {
-                    const isActive = () => !!dir() && recent.toLowerCase() === dir().toLowerCase()
-                    return (
-                      <div class="recent-dir-row" data-active={isActive() ? "true" : "false"} role="listitem">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          tone="neutral"
-                          class="recent-dir-item"
-                          data-ui="recent-dir-item"
-                          title={recent}
-                          aria-current={isActive() ? "location" : undefined}
-                          onClick={() => void chooseRecentDirectory(recent)}
-                        >
-                          <span class="recent-dir-copy">
-                            <span class="recent-dir-label">{recentPathLabel(recent)}</span>
-                            <span class="recent-dir-path">{recent}</span>
-                          </span>
-                          <Show when={isActive()}>
-                            <span class="recent-dir-state" aria-hidden="true">
-                              •
-                            </span>
-                          </Show>
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          tone="danger"
-                          data-chrome="icon-action"
-                          data-ui="recent-dir-remove"
-                          title={t("common.delete")}
-                          aria-label={t("common.delete")}
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            removeRecent(recent)
-                          }}
-                        >
-                          <Icon name="close" size={11} />
-                        </Button>
-                      </div>
-                    )
-                  }}
-                </For>
-              </div>
-            </Show>
-          </div>
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
-  )
-}
-
-export function ProjectWorktreeDropdown() {
+export function ProjectWorktreeDropdown(props: ProjectWorktreeDropdownProps = {}) {
   const dir = createMemo(directoryMemo)
   const [open, setOpen] = createSignal(false)
   const [worktrees, setWorktrees] = createSignal<ProjectWorktreeInfo[]>([])
@@ -585,27 +236,37 @@ export function ProjectWorktreeDropdown() {
   })
 
   return (
-    <DropdownMenu.Root open={open()} onOpenChange={setWorktreePanelOpen} placement="bottom-end" gutter={6} fitViewport>
+    <DropdownMenu.Root
+      open={open()}
+      onOpenChange={setWorktreePanelOpen}
+      placement={props.compact ? "left-start" : "bottom-end"}
+      gutter={6}
+      fitViewport
+    >
       <DropdownMenu.Trigger
         as={Button}
         type="button"
-        variant="outline"
-        size="sm"
+        variant={props.compact ? "ghost" : "outline"}
+        size={props.compact ? "icon" : "sm"}
         tone="neutral"
+        data-chrome={props.compact ? "icon-action" : undefined}
         data-ui="project-worktree-dropdown"
+        data-toolbar-compact={props.compact ? "true" : undefined}
         title={t("worktree.summary", { active: activeWorktrees().length, expired: expiredWorktrees().length })}
         aria-label={t("worktree.summary", { active: activeWorktrees().length, expired: expiredWorktrees().length })}
       >
-        <Icon name="folder-open" size={14} />
-        <span class="project-worktree-count" data-kind="active">
-          {t("worktree.active")} {activeWorktrees().length}
-        </span>
-        <Show when={expiredWorktrees().length > 0}>
-          <span class="project-worktree-count" data-kind="expired">
-            {t("worktree.expired")} {expiredWorktrees().length}
+        <Icon name="folder-open" size={props.compact ? 16 : 14} />
+        <Show when={!props.compact}>
+          <span class="project-worktree-count" data-kind="active">
+            {t("worktree.active")} {activeWorktrees().length}
           </span>
+          <Show when={expiredWorktrees().length > 0}>
+            <span class="project-worktree-count" data-kind="expired">
+              {t("worktree.expired")} {expiredWorktrees().length}
+            </span>
+          </Show>
+          <Icon name="caret-down" size={12} class="project-worktree-caret" />
         </Show>
-        <Icon name="caret-down" size={12} class="project-worktree-caret" />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content class="project-worktree-panel">
@@ -714,29 +375,11 @@ export function ProjectWorktreeDropdown() {
   )
 }
 
-export function ProjectDirectoryBar() {
-  return (
-    <div class="task-meta">
-      <div class="task-cwd">
-        <div class="task-project-cluster">
-          <TaskDirContent />
-          <ProjectWorktreeDropdown />
-          <InitGitButton />
-          <VcsBadge />
-        </div>
-        <div class="workspace-command-dock" data-no-drag="true">
-          <WorkspaceEditorLaunchers />
-          <div class="workspace-command-divider" aria-hidden="true" />
-          <WorkspaceCodingCliLaunchers />
-          <div class="workspace-command-divider" aria-hidden="true" />
-          <WorkspaceLayoutControls />
-        </div>
-      </div>
-    </div>
-  )
+export interface InitGitButtonProps {
+  compact?: boolean
 }
 
-export function InitGitButton() {
+export function InitGitButton(props: InitGitButtonProps = {}) {
   const [busy, setBusy] = createSignal(false)
   const visible = createMemo(() => canInitGit())
 
@@ -756,28 +399,36 @@ export function InitGitButton() {
     <Show when={visible()}>
       <Button
         type="button"
-        variant="outline"
-        size="sm"
+        variant={props.compact ? "ghost" : "outline"}
+        size={props.compact ? "icon" : "sm"}
         tone="accent"
+        data-chrome={props.compact ? "icon-action" : undefined}
         data-ui="project-init-git"
+        data-toolbar-compact={props.compact ? "true" : undefined}
         disabled={busy()}
         title={t("git.init")}
         aria-label={t("git.init")}
         onClick={() => void handleInitGit()}
       >
-        <Icon name="github" size={14} />
-        <span class="project-init-git-label">{busy() ? t("common.loading") : t("git.init")}</span>
+        <Icon name="github" size={props.compact ? 16 : 14} />
+        <Show when={!props.compact}>
+          <span class="project-init-git-label">{busy() ? t("common.loading") : t("git.init")}</span>
+        </Show>
       </Button>
     </Show>
   )
 }
 
-// VcsBadge — surfaces the current branch + dirty/ahead/behind count next to
-// the cwd dropdown. Pulls from boardStore.vcs (populated by services/meta.ts
-// via GET /vcs). Renders nothing when vcs.initialized is false so non-git
-// projects stay silent. The underlying signals refresh every time meta.ts
-// polls so the badge tracks branch switches without extra wiring.
-export function VcsBadge() {
+// VcsBadge — surfaces the current branch + dirty/ahead/behind count in the
+// project runtime toolbar. Pulls from boardStore.vcs (populated by
+// services/meta.ts via GET /vcs). Renders nothing when vcs.initialized is false
+// so non-git projects stay silent. The underlying signals refresh every time
+// meta.ts polls so the badge tracks branch switches without extra wiring.
+export interface VcsBadgeProps {
+  compact?: boolean
+}
+
+export function VcsBadge(props: VcsBadgeProps = {}) {
   const vcs = createMemo(
     () =>
       boardStore.vcs as null | {
@@ -835,17 +486,35 @@ export function VcsBadge() {
   })
 
   return (
-    <span class="vcs-badge" data-tone={tone()} hidden={!show()} title={title()}>
+    <span
+      class={props.compact ? "vcs-badge vcs-badge-compact" : "vcs-badge"}
+      data-ui="project-vcs-badge"
+      data-tone={tone()}
+      hidden={!show()}
+      title={title()}
+    >
       <span class="vcs-badge-icon" aria-hidden="true">
         ⎇
       </span>
-      <span class="vcs-badge-branch">{v()?.branch ?? ""}</span>
-      <Show when={counts()}>
-        <span class="vcs-badge-counts">{counts()}</span>
-      </Show>
-      <Show when={arrows()}>
-        <span class="vcs-badge-arrows">{arrows()}</span>
+      <Show when={!props.compact}>
+        <span class="vcs-badge-branch">{v()?.branch ?? ""}</span>
+        <Show when={counts()}>
+          <span class="vcs-badge-counts">{counts()}</span>
+        </Show>
+        <Show when={arrows()}>
+          <span class="vcs-badge-arrows">{arrows()}</span>
+        </Show>
       </Show>
     </span>
+  )
+}
+
+export function ProjectRuntimeToolbarActions() {
+  return (
+    <div class="project-runtime-toolbar-actions" data-ui="project-runtime-toolbar-actions">
+      <ProjectWorktreeDropdown compact />
+      <InitGitButton compact />
+      <VcsBadge compact />
+    </div>
   )
 }

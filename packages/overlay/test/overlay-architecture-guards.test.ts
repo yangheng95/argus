@@ -30,6 +30,7 @@ const SURFACE_DUPLICATE_SELECTOR_LIMITS = new Map<string, number>([
   ["settings.css", 13],
   ["sidebar.css", 9],
   ["titlebar.css", 11],
+  ["work-ledger.css", 0],
   ["workspace-onboarding.css", 4],
   ["workspace.css", 12],
 ])
@@ -779,22 +780,16 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).not.toMatch(/\.task-actions-buttons\s+\.oc-button[^{]*min-height:\s*auto/s)
   })
 
-  test("task dir bar (TaskDirBar) is owned by surfaces/conversation.css", () => {
+  test("project runtime controls are owned by surfaces CSS without cwd selector popups", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const conversationSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"))
 
     for (const className of [
-      "task-meta",
-      "task-cwd",
       "task-dir",
       "vcs-badge",
       "vcs-badge-icon",
       "vcs-badge-branch",
-      "task-dir-shell",
-      "task-cwd-dropdown",
-      "task-cwd-caret",
       "task-dir-actions",
-      "task-dir-menu-actions",
       "task-dir-path",
       "task-dir-tool",
       "task-dir-node",
@@ -808,28 +803,22 @@ describe("overlay architecture guards", () => {
     for (const tone of ["good", "warn", "bad"]) {
       expect(conversationSurface).toMatch(new RegExp(`\\.vcs-badge\\[data-tone="${tone}"\\]\\s*\\{`))
     }
-    expect(conversationSurface).toMatch(/\.task-cwd-dropdown:hover,\s*\.task-cwd-dropdown:focus-within\s*\{/)
-    expect(conversationSurface).toContain(
-      '.task-cwd-dropdown:has(.oc-button[data-ui="cwd-recent-trigger"][data-expanded])',
-    )
-    expect(conversationSurface).toContain(
-      '.task-dir-menu-actions .oc-button[data-ui="cwd-recent-trigger"][data-expanded] .task-cwd-caret',
-    )
-    expect(conversationSurface).not.toContain('.task-cwd-dropdown[data-open="true"]')
     expect(conversationSurface).toMatch(/\.oc-button\[data-ui="project-worktree-dropdown"\]\[data-expanded\]\s*\{/)
     expect(conversationSurface).not.toContain('.oc-button[data-ui="project-worktree-dropdown"][data-open="true"]')
-    expect(conversationSurface).toMatch(
-      /\.task-dir-menu-actions \.oc-button\[data-ui="cwd-recent-trigger"\]:hover,\s*\.task-dir-menu-actions \.oc-button\[data-ui="cwd-recent-trigger"\]:focus-visible,/,
-    )
-    expect(conversationSurface).not.toContain('.oc-button[data-ui="cwd-recent-trigger"][data-open="true"]')
-    expect(conversationSurface).not.toContain(".task-dir-recent-trigger")
+    expect(conversationSurface).not.toContain("recent-dir-current-path")
+    expect(conversationSurface).not.toContain("recent-dir-panel")
+    expect(conversationSurface).not.toContain("recent-dir-row")
+    expect(conversationSurface).not.toContain("cwd-recent-trigger")
+    expect(conversationSurface).not.toContain("task-cwd-dropdown")
+    expect(conversationSurface).not.toContain("task-dir-shell")
+    expect(conversationSurface).not.toContain("task-cwd-caret")
     expect(conversationSurface).toMatch(/\.task-dir-tool\.danger:hover,\s*\.task-dir-tool\.danger:focus-visible\s*\{/)
     expect(conversationSurface).not.toMatch(/#94a3b8/)
     expect(conversationSurface).not.toMatch(/#e5e7eb/)
     expect(conversationSurface).not.toMatch(/rgba\(248,\s*113,\s*113/)
   })
 
-  test("task bar, task status, and recent dir panel are owned by surfaces/conversation.css", () => {
+  test("task bar and task status are owned by surfaces/conversation.css without recent dir popup residue", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const conversationSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"))
     const sourceText = walkFiles(join(OVERLAY_ROOT, "src"), (path) => /\.(?:css|ts|tsx|html)$/.test(path))
@@ -849,16 +838,23 @@ describe("overlay architecture guards", () => {
       "workspace-command-dock",
       "workspace-command-divider",
       "workspace-editor-launchers",
-      "workspace-coding-cli-launchers",
       "workspace-layout-controls",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(conversationSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    for (const className of [
       "recent-dir-panel",
       "recent-dir-row",
       "recent-dir-label",
       "recent-dir-path",
       "recent-dir-state",
+      "recent-dir-edit-label",
     ]) {
-      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
-      expect(conversationSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}(?:\\s|\\.|:|\\{|,|\\[)`))
+      expect(conversationSurface).not.toMatch(new RegExp(`(^|\\n)\\.${className}(?:\\s|\\.|:|\\{|,|\\[)`))
+      expect(sourceText).not.toMatch(new RegExp(`\\b${className}\\b`))
     }
 
     // task-bar must not appear in any theme selector in styles.css
@@ -896,8 +892,8 @@ describe("overlay architecture guards", () => {
     expect(conversationSurface).not.toMatch(
       /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))[\s\S]*?\.task-bar\b/,
     )
-    expect(conversationSurface).toMatch(/\.recent-dir-row:hover,\s*\.recent-dir-row:focus-within\s*\{/)
-    expect(conversationSurface).toMatch(/\.recent-dir-row\[data-active="true"\]\s*\{/)
+    expect(conversationSurface).not.toMatch(/\.recent-dir-row:hover,\s*\.recent-dir-row:focus-within\s*\{/)
+    expect(conversationSurface).not.toMatch(/\.recent-dir-row\[data-active="true"\]\s*\{/)
   })
 
   test("executor chip and selector family are owned by surfaces/composer.css", () => {
@@ -2549,7 +2545,6 @@ describe("overlay architecture guards", () => {
   test("retired field input action/icon/row selectors stay removed while live field primitives remain", () => {
     const fieldSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/field.css")))
     const conversationSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css")))
-    const taskDirBarSource = withoutComments(readText(join(OVERLAY_ROOT, "src/components/TaskDirBar.tsx")))
     const productionSource = walkFiles(join(OVERLAY_ROOT, "src"), (path) => /\.(?:ts|tsx|html|json)$/.test(path))
       .map((path) => withoutComments(readText(path)))
       .join("\n")
@@ -2569,8 +2564,8 @@ describe("overlay architecture guards", () => {
     expect(productionSource).toContain("field-input-group")
     expect(productionSource).toContain("search-field-icon")
     expect(productionSource).toContain("search-field-input")
-    expect(taskDirBarSource).toMatch(/<input[\s\S]*class="field-input"[\s\S]*data-ui="cwd-path-input"/)
-    expect(conversationSurface).toMatch(/\.recent-dir-edit-label\s+\.field-input\s*\{/)
+    expect(productionSource).not.toContain('data-ui="cwd-path-input"')
+    expect(conversationSurface).not.toMatch(/\.recent-dir-edit-label\s+\.field-input\s*\{/)
     expect(conversationSurface).not.toMatch(/\.recent-dir-edit-label\s+input\b/)
     expect(conversationSurface).not.toMatch(/\.recent-dir-edit-label\s+input:focus\b/)
   })
@@ -2667,35 +2662,20 @@ describe("overlay architecture guards", () => {
         const selector = match[1] ?? ""
         const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
         const hasHeaderControl =
-          /\.(?:task-dir-shell|task-cwd-dropdown)\b/.test(selector) ||
-          /\.oc-button\[data-ui="cwd-recent-trigger"\]/.test(selector) ||
+          /\.project-directory-control\b/.test(selector) ||
+          /\.oc-button\[data-ui="project-group-directory-control"\]/.test(selector) ||
           /\[data-ui="sidebar-new-task-button"\]/.test(selector)
         if (!isThemeSelector || !hasHeaderControl) continue
 
         expect(selector).not.toMatch(
-          /\.(?:task-dir-shell|task-cwd-dropdown)\b|\.oc-button\[data-ui="cwd-recent-trigger"\]|\[data-ui="sidebar-new-task-button"\]/,
+          /\.project-directory-control\b|\.oc-button\[data-ui="project-group-directory-control"\]|\[data-ui="sidebar-new-task-button"\]/,
         )
       }
     }
 
-    const conversationSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"))
-    expect(soloRuleBody(conversationSurface, ".task-dir-shell")).toContain("gap: calc(2px * var(--ui-scale))")
-    expect(soloRuleBody(conversationSurface, ".task-dir-shell")).toContain("padding: calc(2px * var(--ui-scale))")
-    expect(soloRuleBody(conversationSurface, ".task-dir-shell")).toContain(
-      "border: var(--oc-border-width) solid var(--oc-control-border)",
-    )
-    expect(soloRuleBody(conversationSurface, ".task-dir-shell")).toContain("border-radius: var(--oc-radius-soft)")
-    expect(soloRuleBody(conversationSurface, ".task-dir-shell")).toContain("background: var(--oc-control-bg)")
-    expect(soloRuleBody(conversationSurface, ".task-dir-shell.task-cwd-dropdown")).toContain(
-      "padding-inline: calc(2px * var(--ui-scale))",
-    )
-    expect(soloRuleBody(conversationSurface, ".task-dir-shell.task-cwd-dropdown")).toContain(
-      "padding-block: calc(2px * var(--ui-scale))",
-    )
-    expect(
-      soloRuleBody(conversationSurface, '.task-dir-menu-actions .oc-button[data-ui="cwd-recent-trigger"]'),
-    ).toContain("width: calc(22px * var(--ui-scale))")
     const sidebarSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/sidebar.css")))
+    expect(sidebarSurface).not.toContain(".project-directory-control")
+    expect(sidebarSurface).not.toContain('data-ui="project-group-directory-control"')
     expect(sidebarSurface).not.toContain("sidebar-toolset")
     expect(sidebarSurface).not.toContain('data-ui="sidebar-refresh-button"')
     expect(sidebarSurface).not.toContain('data-ui="sidebar-toggle-button"')

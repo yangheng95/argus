@@ -10,8 +10,7 @@
      (font / overflow / flex column / antialiasing).
    - Native form-element font inheritance + anchor reset.
    - Scrollbar setup (firefox + webkit) for the global scroller and
-     the named scroll containers (#chatScroll / #taskListPanel /
-     Mission ledger / Coding Assistant ledger).
+     the named scroll containers (#chatScroll / #workLedgerPanel).
    - Reduced-motion @media that pins animation: none on shared
      loading affordances.
 
@@ -128,8 +127,7 @@ a {
  * on every overflow:auto" is visual noise — most containers
  * (dialogs, inspector cards, executor menus, markdown blocks) only
  * need the *ability* to scroll on overflow, not the gutter. Below,
- * `#chatScroll`, `#taskListPanel`, `.mission-ledger-list`, and
- * `.coding-assistant-ledger-list` opt back into a visible scrollbar because
+ * `#chatScroll` and `#workLedgerPanel` opt back into a visible scrollbar because
  * they are the primary content lists where the gutter doubles as a position
  * indicator. New opt-ins use the same id-or-class override pattern, not a
  * global toggle. */
@@ -142,32 +140,24 @@ a {
 }
 
 #chatScroll,
-#taskListPanel,
-.mission-ledger-list,
-.coding-assistant-ledger-list {
+#workLedgerPanel {
   scrollbar-width: auto;
   scrollbar-color: var(--scrollbar-thumb) var(--session-scrollbar-track);
 }
 
 #chatScroll::-webkit-scrollbar,
-#taskListPanel::-webkit-scrollbar,
-.mission-ledger-list::-webkit-scrollbar,
-.coding-assistant-ledger-list::-webkit-scrollbar {
+#workLedgerPanel::-webkit-scrollbar {
   width: var(--session-scrollbar-size);
 }
 
 #chatScroll::-webkit-scrollbar-track,
-#taskListPanel::-webkit-scrollbar-track,
-.mission-ledger-list::-webkit-scrollbar-track,
-.coding-assistant-ledger-list::-webkit-scrollbar-track {
+#workLedgerPanel::-webkit-scrollbar-track {
   background: var(--session-scrollbar-track);
   border-radius: var(--oc-radius-pill);
 }
 
 #chatScroll::-webkit-scrollbar-thumb,
-#taskListPanel::-webkit-scrollbar-thumb,
-.mission-ledger-list::-webkit-scrollbar-thumb,
-.coding-assistant-ledger-list::-webkit-scrollbar-thumb {
+#workLedgerPanel::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
   border-radius: var(--oc-radius-pill);
   border: calc(2px * var(--ui-scale)) solid transparent;
@@ -175,9 +165,7 @@ a {
 }
 
 #chatScroll::-webkit-scrollbar-thumb:hover,
-#taskListPanel::-webkit-scrollbar-thumb:hover,
-.mission-ledger-list::-webkit-scrollbar-thumb:hover,
-.coding-assistant-ledger-list::-webkit-scrollbar-thumb:hover {
+#workLedgerPanel::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-thumb-hover);
   border: calc(2px * var(--ui-scale)) solid transparent;
   background-clip: padding-box;

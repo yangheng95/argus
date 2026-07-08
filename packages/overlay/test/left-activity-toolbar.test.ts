@@ -18,209 +18,78 @@ function cssRuleBody(css: string, selector: string): string {
   throw new Error(`CSS rule not found: ${selector}`)
 }
 
-test("left activity shell keeps the token-owned minimum width", () => {
+test("left activity shell does not reserve the retired toolbar width", () => {
   const activityCss = read("src/styles/surfaces/activity.css")
   const body = cssRuleBody(activityCss, ".left-activity-shell")
 
-  expect(body).toContain("min-width: min(100%, calc(var(--ui-collapsed-pane-width) + var(--ui-rail-min-width)));")
+  expect(body).toContain("flex: 0 1 var(--ui-sidebar-width);")
+  expect(body).toContain("width: var(--ui-sidebar-width);")
+  expect(body).toContain("min-width: min(100%, var(--ui-rail-min-width));")
+  expect(body).toContain("max-width: var(--ui-sidebar-width);")
   expect(body.match(/min-width\s*:/g) ?? []).toHaveLength(1)
   expect(body).not.toMatch(/min-width\s*:\s*0\b/)
+  expect(body).not.toContain("var(--ui-collapsed-pane-width)")
 })
 
-test("left activity toolbar owns task, mission, assistant, memory, and consolidated extension controls", () => {
+test("left toolbar is retired and the left panel owns one Work Ledger mount", () => {
   const html = read("src/index.html")
   const main = read("src/main.tsx")
-  const toolbar = read("src/components/SideActivityToolbar.tsx")
-  const icons = read("src/components/Icon.tsx")
-  const activityCss = read("src/styles/surfaces/activity.css")
-  const settingsCss = read("src/styles/surfaces/settings.css")
   const en = read("src/i18n/en-US.json")
   const zh = read("src/i18n/zh-CN.json")
 
-  expect(html).toContain('id="solidLeftActivityToolbar"')
   expect(html).toContain('id="leftActivityShell"')
-  expect(html).toContain('id="leftPanelTasks"')
-  expect(html).toContain('id="leftPanelMissions"')
-  expect(html).toContain('id="leftPanelExtensions"')
-  expect(html).not.toContain('id="leftPanelSkills"')
-  expect(html).not.toContain('id="leftPanelTools"')
-  expect(html).not.toContain('id="leftPanelMcp"')
-  expect(html).toContain('id="leftPanelMemory"')
-  expect(main).toContain('type LeftActivity = "tasks" | "mission" | "assistant" | "memory" | "extensions"')
-  expect(main).toContain("const LEFT_ACTIVITIES")
-  expect(main).toContain("const LEFT_ACTIVITY_BY_ID")
-  expect(main).toContain("function leftActivityDefinition(activity: LeftActivity)")
-  expect(main).not.toContain("LEFT_ACTIVITY_TITLE_KEYS")
-  expect(main).toContain("const titleKey = activityDefinition.labelKey")
-  expect(main).toContain("taskActions.dataset.i18nAriaLabel = titleKey")
-  expect(main).toContain('taskActions.setAttribute("aria-label", titleText)')
-  expect(main).toContain("selectLeftActivity")
-  expect(main).toContain('setSelectedLeftActivity("assistant")')
-  expect(main).toContain("isLeftActivityOpen")
-  expect(main.indexOf('id: "mission", icon: "mission"')).toBeLessThan(main.indexOf('id: "tasks", icon: "tasks"'))
-  expect(main).toContain(
-    'const [selectedLeftActivity, setSelectedLeftActivity] = createSignal<LeftActivity>("mission")',
-  )
-  expect(main).toContain(
-    'const [selectedLeftPanelActivity, setSelectedLeftPanelActivity] = createSignal<LeftActivity>("mission")',
-  )
-  expect(main).toContain(
-    'const [primaryCenterPanel, setPrimaryCenterPanel] = createSignal<PrimaryCenterPanel>("mission")',
-  )
-  expect(html).toContain('id="leftPanelTasks" data-side-activity="tasks" data-active="false"')
-  expect(html).toContain('id="leftPanelMissions" data-side-activity="mission" data-active="true"')
-  expect(main).toContain(
-    'id: "tasks", icon: "tasks", labelKey: "task.ledger.title", tooltipKey: "activity.tooltip.tasks"',
-  )
-  expect(main).toContain(
-    'id: "assistant", icon: "message", labelKey: "coding_assistant.title", tooltipKey: "activity.tooltip.assistant"',
-  )
-  expect(main).toContain(
-    'id: "mission", icon: "mission", labelKey: "mission.title", tooltipKey: "activity.tooltip.mission"',
-  )
-  expect(main).toContain(
-    'id: "memory", icon: "config-memory", labelKey: "memory.title", tooltipKey: "activity.tooltip.memory"',
-  )
-  expect(main).toContain('id: "extensions"')
-  expect(main).toContain('icon: "config-skill"')
-  expect(main).toContain('labelKey: "extensions.title"')
-  expect(main).toContain('tooltipKey: "activity.tooltip.extensions"')
-  expect(main).toContain("appStore.skillMounts?.unmounted_count > 0")
-  expect(main).toContain("appStore.skillMounts.unmounted_count")
-  expect(main).toContain('data-tone="warn"')
-  expect(main).not.toContain('id: "tool"')
-  expect(main).not.toContain('id: "skill"')
-  expect(main).not.toContain('id: "mcp"')
-  expect(main).toContain("<ExtensionActivityPanel")
-  expect(main).toContain('active={selectedLeftPanelActivity() === "extensions"}')
-  expect(main).not.toContain("solidLeftSkillsPanel")
-  expect(main).not.toContain("solidLeftToolsPanel")
-  expect(main).not.toContain("solidLeftMcpPanel")
-  expect(icons).toContain("Wrench")
-  expect(icons).toContain('"config-tool": { component: Wrench }')
-  expect(main).toContain('active={selectedLeftPanelActivity() === "memory"}')
-  expect(main).toContain("directory={activeDirectory}")
-  expect(icons).toContain("ListTodo")
-  expect(icons).toContain("tasks: { component: ListTodo }")
-  expect(toolbar).toContain("tooltipKey?: string")
-  expect(toolbar).toContain("badge?: () => JSX.Element")
-  expect(toolbar).toContain("activeSemantics: SideActivityActiveSemantics")
-  expect(toolbar).toContain('aria-current={props.activeSemantics === "current-page" && active() ? "page" : undefined}')
-  expect(toolbar).toContain('aria-pressed={props.activeSemantics === "pressed-toggle" ? active() : undefined}')
-  expect(toolbar).not.toContain("aria-pressed={active()}")
-  expect(main).toContain('activeSemantics="current-page"')
-  expect(main).toContain('activeSemantics="pressed-toggle"')
-  expect(toolbar).toContain("title={tooltip()}")
-  expect(toolbar).toContain("aria-label={tooltip()}")
-  expect(toolbar).toContain("side-activity-badge")
-  expect(activityCss).toContain(".sidebar-extension-panel .extension-activity-tabs")
-  expect(activityCss).toContain(".sidebar-extension-panel .extension-settings-group")
-  expect(activityCss).toContain(".sidebar-memory-panel")
-  expect(activityCss).toContain(".left-activity-shell")
-  expect(activityCss).toContain(".side-activity-badge")
-  expect(activityCss).toContain("flex-direction: row")
-  expect(activityCss).toMatch(
-    /\.sidebar-extension-panel \.extension-settings-body\s*\{[^}]*flex:\s*1 1 0;[^}]*min-height:\s*0;/s,
-  )
-  expect(activityCss).toContain(".sidebar-extension-panel .tool-panel-toolbar")
-  expect(activityCss).toContain('.sidebar-extension-panel .oc-button[data-ui="tool-panel-action"]')
-  expect(activityCss).toContain(".sidebar-extension-panel .config-status-box")
-  expect(activityCss).not.toContain(".sidebar-extension-panel .memory-panel")
-  expect(activityCss).not.toContain(".sidebar-extension-panel .knowledge-list")
-  expect(activityCss).not.toContain(".sidebar-tool-panel")
-  expect(settingsCss).toContain('.memory-panel[data-compact="true"] .knowledge-toolbar')
-  expect(activityCss).toContain(".sidebar-extension-panel .extension-settings-row")
-  expect(activityCss).toContain(".sidebar-extension-panel .extension-settings-row .s-row-desc")
-  expect(activityCss).toContain("-webkit-line-clamp: 3")
-  expect(activityCss).toContain(".sidebar-extension-panel .skill-drop-zone__copy strong")
+  expect(html).toContain('id="leftPanelWork"')
+  expect(html).toContain('id="workLedgerPanel"')
+  expect(html).toContain('data-i18n="work_ledger.title"')
+  expect(html).not.toContain('id="solidLeftActivityToolbar"')
+  expect(html).not.toContain('id="leftPanelTasks"')
+  expect(html).not.toContain('id="leftPanelMissions"')
+  expect(html).not.toContain('id="leftPanelAssistant"')
+  expect(html).not.toContain('id="leftPanelExtensions"')
+  expect(html).not.toContain('id="leftPanelMemory"')
+  expect(html).not.toContain('id="btnCreateTask"')
+  expect(html).not.toContain('id="btnCreateMission"')
+  expect(html).not.toContain('id="btnCreateCodingAssistantSession"')
+
+  expect(main).toContain('document.getElementById("workLedgerPanel")')
+  expect(main).toContain("<WorkLedger")
+  expect(main).not.toContain("type LeftActivity")
+  expect(main).not.toContain("LEFT_ACTIVITIES")
+  expect(main).not.toContain("selectLeftActivity")
+  expect(main).not.toContain("<ExtensionActivityPanel")
+  expect(main).not.toContain("<TaskList")
+  expect(main).not.toContain("<Mission")
+  expect(main).not.toContain("<CodingAssistantSessionList")
+
   for (const key of [
-    "activity.tooltip.tasks",
-    "activity.tooltip.mission",
-    "activity.tooltip.assistant",
-    "activity.tooltip.memory",
-    "activity.tooltip.extensions",
-    "activity.tooltip.workflow",
-    "activity.tooltip.requirements",
-    "activity.tooltip.architect",
-    "activity.tooltip.goals",
-    "activity.tooltip.explorer",
-    "activity.tooltip.diff",
-    "activity.tooltip.browser",
-    "activity.tooltip.screenshots",
-    "activity.tooltip.notifications",
+    "work_ledger.title",
+    "work_ledger.kind.mission",
+    "work_ledger.kind.task",
+    "work_ledger.kind.chat",
+    "work_ledger.search_placeholder",
   ]) {
     expect(en).toContain(`"${key}"`)
     expect(zh).toContain(`"${key}"`)
   }
-  expect(en).toContain('"extensions.title"')
-  expect(zh).toContain('"extensions.title"')
-  expect(en).toContain('"extensions.segment_aria"')
-  expect(zh).toContain('"extensions.segment_aria"')
 })
 
-test("skill panel imports dropped files, directories, and zip archives through the project import route", () => {
-  const panel = read("src/components/settings/SkillMarketPanel.tsx")
-  const service = read("src/services/extensions.ts")
-  const en = read("src/i18n/en-US.json")
-  const zh = read("src/i18n/zh-CN.json")
+test("Memory, Skill, Tool, and MCP remain Settings-owned instead of left-toolbar owned", () => {
+  const main = read("src/main.tsx")
+  const configHost = read("src/components/ConfigDialogHost.tsx")
+  const skillPanel = read("src/components/settings/SkillMarketPanel.tsx")
+  const html = read("src/index.html")
 
-  expect(panel).toContain("handleDroppedSkillDrop")
-  expect(panel).toContain("data-skill-drop-active")
-  expect(panel).toContain("dataTransferEntries")
-  expect(panel).toContain("webkitGetAsEntry")
-  expect(panel).toContain("readEntryFiles")
-  expect(panel).toContain("fileToBase64")
-  expect(panel).toContain('nativeConfirm(t("skill.drop_confirm"')
-  expect(panel).toContain("await importSkillArchive(payload.archive.name, await fileToBase64(payload.archive), skillForm.policy, {")
-  expect(panel).toContain("await importSkillPackage(payload.sourceName, payload.files, skillForm.policy, {")
-  expect(panel).toContain("await importSkillFile(payload.file.name, await payload.file.text(), skillForm.policy, {")
-  expect(panel).toContain("handleAgentDrop")
-  expect(panel).toContain("droppedSkillImportPayload")
-  expect(panel).toContain("await importAndMountSkill(agent")
-  expect(panel).toContain('event.dataTransfer?.getData("application/x-opencorvus-skill")')
-  expect(panel).toContain("agent-skill-matrix")
-  expect(panel).toContain('data-view="agent-tabs"')
-  expect(panel).toContain('data-ui="agent-skill-tabs"')
-  expect(panel).toContain('data-ui="agent-skill-pool"')
-  expect(panel).toContain("ExtensionActivityPanel")
-  expect(panel).toContain("<SettingsSegmented<ExtensionActivityMode>")
-  expect(panel).toContain('data-ui="extension-activity-panel"')
-  expect(panel).toContain("handleSkillPoolContextMenu")
-  expect(panel).toContain("await handleMount(agent.name, skill.name)")
-  expect(panel).toContain("mounted_agents?: string[]")
-  expect(panel).toContain("unmounted?: boolean")
-  expect(panel).toContain('class="tool-panel-toolbar"')
-  expect(panel).toContain("<PanelActionButton compact")
-  expect(panel).toContain('class="skill-drop-zone"')
-  expect(service).toContain('apiJson(directoryOwnedPath("skill/import-file", options)')
-  expect(service).toContain('apiJson(skillMountPath("skill/mount", options)')
-  expect(service).toContain('apiJson(skillMountPath("skill/unmount", options)')
-  expect(service).toContain('apiJson(skillMountPath("skill/import-and-mount", options)')
-  expect(service).toContain("importSkillPackage")
-  expect(service).toContain("importSkillArchive")
-  expect(en).toContain('"skill.mount.matrix"')
-  expect(en).toContain('"skill.mount.unmounted_count"')
-  expect(zh).toContain('"skill.mount.matrix"')
-  expect(zh).toContain('"skill.mount.unmounted_count"')
-  expect(en).toContain("SKILL.md file, skill folder, or .zip")
-  expect(zh).toContain("SKILL.md、skill 文件夹或 .zip")
-})
+  expect(html).not.toContain('id="leftPanelMemory"')
+  expect(html).not.toContain('id="leftPanelExtensions"')
+  expect(main).not.toContain("solidLeftMemoryPanel")
+  expect(main).not.toContain("solidLeftExtensionsPanel")
+  expect(main).not.toContain("<ExtensionActivityPanel")
 
-test("skill panel surfaces duplicate skill locations from installed skill metadata", () => {
-  const panel = read("src/components/settings/SkillMarketPanel.tsx")
-  const settingsCss = read("src/styles/surfaces/settings.css")
-  const en = read("src/i18n/en-US.json")
-  const zh = read("src/i18n/zh-CN.json")
-
-  expect(panel).toContain("duplicate_locations?: string[]")
-  expect(panel).toContain("function skillDuplicateLocations")
-  expect(panel).toContain('<SettingsPill tone="warn" title={skillDuplicateTitle(item)}>')
-  expect(panel).toContain("title={skillDuplicateTitle(item)}")
-  expect(panel).toContain('t("skill.duplicate")')
-  expect(panel).toContain('t("skill.duplicate_locations_title"')
-  expect(settingsCss).toContain('.s-pill[data-tone="warn"]')
-  expect(en).toContain('"skill.duplicate"')
-  expect(en).toContain('"skill.duplicate_locations_title"')
-  expect(zh).toContain('"skill.duplicate"')
-  expect(zh).toContain('"skill.duplicate_locations_title"')
+  expect(configHost).toContain("return <SkillsPanel directory={activeProjectDirectory} />")
+  expect(configHost).toContain("return <SkillMarketPanel active={true} directory={activeProjectDirectory} />")
+  expect(configHost).toContain("return <McpPanel directory={activeProjectDirectory} />")
+  expect(configHost).toContain("return <MemoryPanel taskID={() => activeTaskID() || undefined} />")
+  expect(skillPanel).toContain("export function ToolsPanel")
+  expect(skillPanel).toContain("export function SkillsPanel")
+  expect(skillPanel).toContain("export function McpPanel")
 })

@@ -79,6 +79,8 @@
   --oc-button-shadow:
     0 calc(10px * var(--ui-scale)) calc(22px * var(--ui-scale)) color-mix(in srgb, var(--ui-shadow-tone) 34%, transparent),
     inset 0 calc(1px * var(--ui-scale)) 0 color-mix(in srgb, var(--text-on-strong) 18%, transparent);
+
+  width: calc(34px * var(--ui-scale));
   min-width: calc(34px * var(--ui-scale));
   border-radius: var(--oc-radius-pill);
 }
@@ -94,6 +96,7 @@
   width: calc(18px * var(--ui-scale));
   height: calc(18px * var(--ui-scale));
 }
+
 .conversation-agent-rail {
   flex: 1 1 0;
   width: 100%;
@@ -585,17 +588,6 @@
   flex-shrink: 0;
 }
 
-.workspace-coding-cli-launchers {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  border: var(--oc-border-width) solid var(--oc-control-border);
-  border-radius: var(--oc-radius-soft);
-  background: var(--oc-control-bg);
-  box-shadow: var(--oc-control-shadow);
-  flex-shrink: 0;
-}
-
 .workspace-layout-controls {
   display: inline-flex;
   align-items: center;
@@ -647,10 +639,7 @@
 .workspace-terminal-option-icon,
 .workspace-editor-select-icon,
 .workspace-editor-select-caret,
-.workspace-editor-option-icon,
-.workspace-coding-cli-select-icon,
-.workspace-coding-cli-select-caret,
-.workspace-coding-cli-option-icon {
+.workspace-editor-option-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -658,31 +647,25 @@
 }
 
 .workspace-terminal-select-icon,
-.workspace-editor-select-icon,
-.workspace-coding-cli-select-icon {
+.workspace-editor-select-icon {
   width: calc(20px * var(--ui-scale));
   height: calc(20px * var(--ui-scale));
   color: var(--accent);
 }
 
 .workspace-terminal-select-caret,
-.workspace-editor-select-caret,
-.workspace-coding-cli-select-caret {
+.workspace-editor-select-caret {
   color: var(--text-muted);
 }
 
 .workspace-command-dock .oc-button[data-chrome="workspace-split-menu"][data-expanded] .workspace-terminal-select-caret,
-.workspace-command-dock .oc-button[data-chrome="workspace-split-menu"][data-expanded] .workspace-editor-select-caret,
-.workspace-command-dock
-  .oc-button[data-chrome="workspace-split-menu"][data-expanded]
-  .workspace-coding-cli-select-caret {
+.workspace-command-dock .oc-button[data-chrome="workspace-split-menu"][data-expanded] .workspace-editor-select-caret {
   color: var(--text-strong);
   transform: rotate(180deg);
 }
 
 .workspace-terminal-menu,
-.workspace-editor-menu,
-.workspace-coding-cli-menu {
+.workspace-editor-menu {
   position: fixed;
   z-index: var(--ui-z-titlebar);
   width: max-content;
@@ -697,14 +680,12 @@
 }
 
 .workspace-terminal-menu[hidden],
-.workspace-editor-menu[hidden],
-.workspace-coding-cli-menu[hidden] {
+.workspace-editor-menu[hidden] {
   display: none;
 }
 
 .workspace-terminal-option,
-.workspace-editor-option,
-.workspace-coding-cli-option {
+.workspace-editor-option {
   appearance: none;
   width: 100%;
   min-height: calc(30px * var(--ui-scale));
@@ -726,17 +707,14 @@
 .workspace-terminal-option:hover,
 .workspace-terminal-option[data-highlighted],
 .workspace-editor-option:hover,
-.workspace-editor-option[data-highlighted],
-.workspace-coding-cli-option:hover,
-.workspace-coding-cli-option[data-highlighted] {
+.workspace-editor-option[data-highlighted] {
   background: var(--subtle-3);
   color: var(--text-strong);
   outline: none;
 }
 
 .workspace-terminal-option:focus-visible,
-.workspace-editor-option:focus-visible,
-.workspace-coding-cli-option:focus-visible {
+.workspace-editor-option:focus-visible {
   background: var(--subtle-3);
   color: var(--text-strong);
   outline: none;
@@ -744,8 +722,7 @@
 }
 
 .workspace-terminal-option-label,
-.workspace-editor-option-label,
-.workspace-coding-cli-option-label {
+.workspace-editor-option-label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -753,8 +730,7 @@
 }
 
 .workspace-terminal-option-icon,
-.workspace-editor-option-icon,
-.workspace-coding-cli-option-icon {
+.workspace-editor-option-icon {
   width: calc(22px * var(--ui-scale));
   height: calc(22px * var(--ui-scale));
 }
@@ -794,37 +770,6 @@
   color: var(--text-strong);
 }
 
-.workspace-coding-cli-option-icon[data-coding-cli-icon="claude-code"] {
-  color: var(--oc-brand-claude-code);
-}
-
-.workspace-coding-cli-option-icon[data-coding-cli-icon="codex"] {
-  color: var(--text-strong);
-}
-
-.workspace-coding-cli-select-icon[data-coding-cli-icon="claude-code"] {
-  color: var(--oc-brand-claude-code);
-}
-
-.workspace-coding-cli-select-icon[data-coding-cli-icon="codex"] {
-  color: var(--text-strong);
-}
-
-.workspace-coding-cli-option-icon[data-coding-cli-icon="gemini"],
-.workspace-coding-cli-select-icon[data-coding-cli-icon="gemini"] {
-  color: var(--oc-brand-gemini);
-}
-
-.workspace-coding-cli-option-icon[data-coding-cli-icon="copilot"],
-.workspace-coding-cli-select-icon[data-coding-cli-icon="copilot"] {
-  color: var(--text-strong);
-}
-
-.workspace-coding-cli-option-icon[data-coding-cli-icon="glm"],
-.workspace-coding-cli-select-icon[data-coding-cli-icon="glm"] {
-  color: var(--text-strong);
-}
-
 .workspace-command-dock .oc-button[data-chrome="workspace-split-primary"][aria-pressed="true"],
 .workspace-layout-controls .oc-button[aria-pressed="true"] {
   --oc-button-border: var(--oc-border-width) solid var(--oc-control-border-hover);
@@ -849,6 +794,10 @@
   white-space: nowrap;
   cursor: default;
   flex-shrink: 0;
+}
+
+.vcs-badge[hidden] {
+  display: none;
 }
 
 .vcs-badge[data-tone="good"] {
@@ -1269,100 +1218,13 @@
   overflow-wrap: anywhere;
 }
 
-/* Cwd control: control-vocab chip carrying the breadcrumb path and a
-   dedicated recent-directory trigger. The shell already routes through
-   `--oc-control-*` tokens — just relocating. */
-.task-dir-shell {
-  box-sizing: border-box;
-  height: calc(24px * var(--ui-scale));
-  display: flex;
-  align-items: center;
-  gap: calc(2px * var(--ui-scale));
-  padding: calc(2px * var(--ui-scale));
-  min-width: 0;
-  border: var(--oc-border-width) solid var(--oc-control-border);
-  border-radius: var(--oc-radius-soft);
-  background: var(--oc-control-bg);
-  box-shadow: var(--oc-control-shadow);
-}
-
-.task-cwd-dropdown {
-  cursor: default;
-  border-radius: var(--oc-radius-soft);
-  padding: 0 calc(4px * var(--ui-scale));
-  transition:
-    background var(--ui-duration-fast),
-    border-color var(--ui-duration-fast),
-    color var(--ui-duration-fast);
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.task-dir-shell.task-cwd-dropdown {
-  padding-inline: calc(2px * var(--ui-scale));
-  padding-block: calc(2px * var(--ui-scale));
-}
-
-.task-cwd-dropdown:hover,
-.task-cwd-dropdown:focus-within {
-  background: var(--oc-control-bg-hover);
-  border-color: var(--oc-control-border-hover);
-  outline: none;
-}
-
-.task-cwd-dropdown:has(.oc-button[data-ui="cwd-recent-trigger"][data-expanded]) {
-  background: var(--oc-control-bg-hover);
-  border-color: var(--oc-control-border-hover);
-}
-
-/* Caret rotates 180deg when the dropdown is open. Previous raw
-   slate hex literals (default + hover) routed through
-   `var(--text-muted)` (default tone) and `var(--text-strong)`
-   (hover/open tone) so the caret picks up theme colors. */
-.task-cwd-caret {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: calc(18px * var(--ui-scale));
-  height: calc(18px * var(--ui-scale));
-  color: var(--text-muted);
-  font-size: var(--ui-font-meta);
-  transition:
-    transform var(--ui-duration-base) var(--ui-timing-standard),
-    color var(--ui-duration-fast);
-}
-
-.task-cwd-dropdown:hover .task-cwd-caret,
-.task-dir-menu-actions .oc-button[data-ui="cwd-recent-trigger"]:focus-visible .task-cwd-caret {
-  color: var(--text-strong);
-}
-
-.task-dir-menu-actions .oc-button[data-ui="cwd-recent-trigger"][data-expanded] .task-cwd-caret {
-  transform: rotate(180deg);
-  color: var(--text-strong);
-}
-
-/* Breadcrumb path actions and the separate recent-menu trigger. */
-.task-dir-actions,
-.task-dir-menu-actions {
+/* Breadcrumb path actions generated by pathBreadcrumb. */
+.task-dir-actions {
   display: inline-flex;
   align-items: center;
   gap: calc(2px * var(--ui-scale));
   flex-shrink: 0;
   margin-left: auto;
-}
-
-.task-dir-menu-actions .oc-button[data-ui="cwd-recent-trigger"] {
-  --oc-button-height: calc(20px * var(--ui-scale));
-
-  width: calc(22px * var(--ui-scale));
-  min-width: calc(22px * var(--ui-scale));
-}
-
-.task-dir-menu-actions .oc-button[data-ui="cwd-recent-trigger"]:hover,
-.task-dir-menu-actions .oc-button[data-ui="cwd-recent-trigger"]:focus-visible,
-.task-dir-menu-actions .oc-button[data-ui="cwd-recent-trigger"][data-expanded] {
-  --oc-button-bg: var(--subtle-3);
 }
 
 .task-dir-path {
@@ -1551,381 +1413,6 @@
   font-size: var(--ui-font-small);
   color: var(--text-soft);
   font-variant-numeric: tabular-nums;
-}
-
-/* ── Recent Directory Panel (popup from task-cwd-dropdown) ── */
-.recent-dir-panel {
-  position: fixed;
-  min-width: calc(260px * var(--ui-scale));
-  max-width: calc(460px * var(--ui-scale));
-  max-height: calc(420px * var(--ui-scale));
-  overflow: hidden;
-  background: var(--menu-panel-bg);
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--border-strong) 88%, transparent);
-  border-radius: var(--oc-radius-large);
-  padding: 0;
-  box-shadow:
-    0 calc(20px * var(--ui-scale)) calc(40px * var(--ui-scale)) var(--ui-shadow-tone),
-    0 calc(10px * var(--ui-scale)) calc(18px * var(--ui-scale))
-      color-mix(in srgb, var(--ui-shadow-tone) 38%, transparent);
-  z-index: var(--ui-z-titlebar);
-}
-
-.recent-dir-panel-shell {
-  display: flex;
-  flex-direction: column;
-  gap: calc(8px * var(--ui-scale));
-  box-sizing: border-box;
-  max-height: inherit;
-  min-height: 0;
-  overflow: hidden;
-  padding: calc(8px * var(--ui-scale));
-}
-
-.recent-dir-panel-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: calc(12px * var(--ui-scale));
-  padding: calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--border) 82%, transparent);
-}
-
-.recent-dir-panel-title {
-  min-width: 0;
-  font-size: var(--ui-font-control);
-  font-weight: var(--ui-font-weight-strong);
-  color: var(--text-strong);
-  letter-spacing: var(--ui-letter-spacing-loose);
-}
-
-.recent-dir-panel-meta {
-  min-width: 0;
-  max-width: 48%;
-  color: var(--text-muted);
-  font-size: var(--ui-font-meta);
-  line-height: 1.3;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.recent-dir-edit-form {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) calc(30px * var(--ui-scale));
-  gap: calc(6px * var(--ui-scale));
-  align-items: end;
-  padding: 0 calc(2px * var(--ui-scale));
-}
-
-.recent-dir-edit-label {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: calc(4px * var(--ui-scale));
-  color: var(--text-soft);
-  font-size: var(--ui-font-meta);
-  font-weight: var(--ui-font-weight-medium);
-}
-
-.recent-dir-edit-label .field-input {
-  width: 100%;
-  min-width: 0;
-  height: calc(30px * var(--ui-scale));
-  padding: 0 calc(8px * var(--ui-scale));
-}
-
-.recent-dir-edit-form .oc-button[data-ui="recent-dir-edit-submit"] {
-  --oc-button-height: calc(30px * var(--ui-scale));
-  --oc-button-color: var(--text-soft);
-
-  width: calc(30px * var(--ui-scale));
-  min-width: calc(30px * var(--ui-scale));
-}
-
-.recent-dir-edit-form
-  .oc-button[data-size="icon"][data-variant="ghost"][data-chrome="icon-action"][data-ui="recent-dir-edit-submit"]:disabled {
-  --oc-button-color: var(--text-muted);
-
-  opacity: var(--ui-opacity-full);
-}
-
-.recent-dir-discovery-error {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: flex-start;
-  gap: calc(7px * var(--ui-scale));
-  padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--bad) 30%, var(--border));
-  border-radius: var(--oc-radius-soft);
-  background: color-mix(in srgb, var(--bad) 8%, var(--surface-inset));
-  color: var(--bad);
-  font-size: var(--ui-font-small);
-  line-height: 1.35;
-}
-
-.recent-dir-discovery-error svg {
-  flex-shrink: 0;
-  margin-top: calc(1px * var(--ui-scale));
-}
-
-.recent-dir-discovery-error span {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.recent-dir-section {
-  display: flex;
-  flex-direction: column;
-  gap: calc(6px * var(--ui-scale));
-  min-height: 0;
-}
-
-.recent-dir-section[data-kind="discovered"] {
-  flex: 1 1 auto;
-  overflow: hidden;
-}
-
-.recent-dir-section-title {
-  padding: calc(2px * var(--ui-scale)) calc(4px * var(--ui-scale));
-  color: var(--text-muted);
-  font-size: var(--ui-font-meta);
-  font-weight: var(--ui-font-weight-strong);
-  letter-spacing: var(--ui-letter-spacing-loose);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.recent-dir-list {
-  display: flex;
-  flex-direction: column;
-  gap: calc(6px * var(--ui-scale));
-  flex: 0 1 auto;
-  max-height: calc(248px * var(--ui-scale));
-  min-height: 0;
-  overflow-y: auto;
-  padding-right: calc(2px * var(--ui-scale));
-}
-
-.recent-dir-list[data-kind="discovered"] {
-  scrollbar-width: auto;
-  scrollbar-color: var(--scrollbar-thumb) var(--session-scrollbar-track);
-}
-
-.recent-dir-list[data-kind="discovered"]::-webkit-scrollbar {
-  width: var(--session-scrollbar-size);
-}
-
-.recent-dir-list[data-kind="discovered"]::-webkit-scrollbar-track {
-  background: var(--session-scrollbar-track);
-  border-radius: var(--oc-radius-pill);
-}
-
-.recent-dir-list[data-kind="discovered"]::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
-  border: calc(2px * var(--ui-scale)) solid transparent;
-  border-radius: var(--oc-radius-pill);
-  background-clip: padding-box;
-}
-
-.recent-dir-list[data-kind="discovered"]::-webkit-scrollbar-thumb:hover {
-  background: var(--scrollbar-thumb-hover);
-  border: calc(2px * var(--ui-scale)) solid transparent;
-  background-clip: padding-box;
-}
-
-.recent-dir-row {
-  --recent-dir-remove-slot-width: calc(28px * var(--ui-scale));
-
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: stretch;
-  gap: calc(6px * var(--ui-scale));
-  padding: calc(2px * var(--ui-scale));
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 82%, transparent);
-  border-radius: var(--oc-radius-large);
-  background:
-    linear-gradient(180deg, var(--ui-highlight-tone), transparent 72%),
-    color-mix(in srgb, var(--surface-inset) 74%, transparent);
-  transition:
-    background var(--ui-duration-base),
-    border-color var(--ui-duration-base),
-    box-shadow var(--ui-duration-base),
-    grid-template-columns var(--ui-duration-base),
-    transform var(--ui-duration-base);
-  position: relative;
-}
-
-.recent-dir-row:hover,
-.recent-dir-row:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 22%, var(--border));
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--accent) 8%, transparent),
-      color-mix(in srgb, var(--accent) 2%, transparent) 72%,
-      transparent
-    ),
-    color-mix(in srgb, var(--surface) 94%, transparent);
-  box-shadow: 0 calc(10px * var(--ui-scale)) calc(16px * var(--ui-scale))
-    color-mix(in srgb, var(--ui-shadow-tone) 31%, transparent);
-  transform: translateY(calc(-1px * var(--ui-scale)));
-}
-
-.recent-dir-row[data-active="true"] {
-  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--accent) 12%, transparent),
-      color-mix(in srgb, var(--accent) 3%, transparent) 74%,
-      transparent
-    ),
-    color-mix(in srgb, var(--surface) 95%, transparent);
-  box-shadow: inset 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--accent) 8%, transparent);
-}
-
-.recent-dir-row:has(.oc-button[data-ui="recent-dir-remove"]):hover,
-.recent-dir-row:has(.oc-button[data-ui="recent-dir-remove"]):focus-within,
-.recent-dir-row:has(.oc-button[data-ui="recent-dir-remove"])[data-active="true"] {
-  grid-template-columns: minmax(0, 1fr) var(--recent-dir-remove-slot-width);
-}
-
-.recent-dir-item {
-  grid-column: 1;
-  width: 100%;
-  min-width: 0;
-  text-align: left;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  border-radius: var(--oc-radius-large);
-  font-size: var(--ui-font-control);
-  font-weight: var(--ui-font-weight-body);
-  white-space: normal;
-  cursor: pointer;
-}
-
-.recent-dir-row > .oc-button[data-ui="recent-dir-item"].recent-dir-item {
-  --oc-button-height: auto;
-  --oc-button-padding-x: calc(10px * var(--ui-scale));
-  --oc-button-padding-y: calc(8px * var(--ui-scale));
-  --oc-button-gap: calc(10px * var(--ui-scale));
-  --oc-button-bg: transparent;
-  --oc-button-border: 0 solid transparent;
-  --oc-button-color: var(--text-soft);
-  --oc-button-shadow: none;
-}
-
-.recent-dir-copy {
-  min-width: 0;
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: calc(2px * var(--ui-scale));
-}
-
-.recent-dir-label {
-  min-width: 0;
-  color: var(--text-strong);
-  font-size: var(--ui-font-body);
-  font-weight: var(--ui-font-weight-strong);
-  line-height: 1.3;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.recent-dir-path {
-  min-width: 0;
-  color: var(--text-muted);
-  font-size: var(--ui-font-meta);
-  line-height: 1.35;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.recent-dir-state {
-  flex-shrink: 0;
-  width: calc(18px * var(--ui-scale));
-  height: calc(18px * var(--ui-scale));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--oc-radius-pill);
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  color: var(--accent);
-  font-size: var(--ui-font-meta);
-  line-height: 1;
-}
-
-.recent-dir-row:hover .recent-dir-item,
-.recent-dir-row:focus-within .recent-dir-item {
-  --oc-button-color: var(--text-strong);
-}
-
-.recent-dir-row[data-active="true"] .recent-dir-item {
-  --oc-button-color: var(--text-strong);
-}
-
-.oc-button[data-ui="recent-dir-item"].recent-dir-item:hover,
-.oc-button[data-ui="recent-dir-item"].recent-dir-item:focus-visible {
-  --oc-button-bg: transparent;
-  --oc-button-border: 0 solid transparent;
-  --oc-button-shadow: none;
-}
-
-.recent-dir-item:focus-visible {
-  outline: var(--oc-border-width) solid var(--accent);
-  outline-offset: calc(1px * var(--ui-scale));
-}
-
-.recent-dir-row .oc-button[data-ui="recent-dir-remove"] {
-  --oc-button-height: calc(22px * var(--ui-scale));
-  --oc-button-color: var(--text-muted);
-
-  width: calc(22px * var(--ui-scale));
-  min-width: calc(22px * var(--ui-scale));
-  position: absolute;
-  top: 50%;
-  right: calc(6px * var(--ui-scale));
-  transform: translateY(-50%);
-  opacity: var(--ui-opacity-hidden);
-  pointer-events: none;
-  transition:
-    background var(--ui-duration-fast),
-    color var(--ui-duration-fast),
-    opacity var(--ui-duration-base);
-}
-
-.recent-dir-row:hover .oc-button[data-ui="recent-dir-remove"],
-.recent-dir-row:focus-within .oc-button[data-ui="recent-dir-remove"],
-.recent-dir-row[data-active="true"] .oc-button[data-ui="recent-dir-remove"] {
-  opacity: var(--ui-opacity-full);
-  pointer-events: auto;
-}
-
-.recent-dir-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: calc(84px * var(--ui-scale));
-  padding: calc(16px * var(--ui-scale)) calc(14px * var(--ui-scale));
-  border: var(--oc-border-width) dashed color-mix(in srgb, var(--border) 80%, transparent);
-  border-radius: var(--oc-radius-large);
-  background:
-    linear-gradient(
-      180deg,
-      var(--ui-highlight-tone),
-      color-mix(in srgb, var(--accent) 1.4%, transparent) 72%,
-      transparent
-    ),
-    color-mix(in srgb, var(--surface-inset) 72%, transparent);
-  font-size: var(--ui-font-small);
-  color: var(--text-muted);
-  text-align: center;
 }
 
 /* ─────────────────────────────────────────────────────────────
