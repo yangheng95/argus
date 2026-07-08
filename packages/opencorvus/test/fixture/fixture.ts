@@ -50,10 +50,34 @@ function createGitTemplateRoot() {
 }
 
 const GIT_TEMPLATE_ROOT = createGitTemplateRoot()
+const REMOVE_RETRYABLE_CODES = new Set(["EBUSY", "EPERM", "ENOTEMPTY"])
 
 process.once("exit", () => {
   fsSync.rmSync(GIT_TEMPLATE_ROOT, { recursive: true, force: true })
 })
+
+function removeErrorCode(error: unknown): string | undefined {
+  if (!error || typeof error !== "object") return undefined
+  const code = (error as { code?: unknown }).code
+  return typeof code === "string" ? code : undefined
+}
+
+async function removeFixtureDirectory(dirpath: string) {
+  const attempts = process.platform === "win32" ? 10 : 1
+  let lastError: unknown
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      await fs.rm(dirpath, { recursive: true, force: true })
+      return
+    } catch (error) {
+      lastError = error
+      const code = removeErrorCode(error)
+      if (!code || !REMOVE_RETRYABLE_CODES.has(code) || attempt === attempts - 1) throw error
+      await Bun.sleep(25 * (attempt + 1))
+    }
+  }
+  throw lastError
+}
 
 export async function tmpdir<T>(options?: TmpDirOptions<T>) {
   const dirpath = sanitizePath(path.join(os.tmpdir(), "opencorvus-test-" + Math.random().toString(36).slice(2)))
@@ -77,7 +101,7 @@ export async function tmpdir<T>(options?: TmpDirOptions<T>) {
       try {
         await options?.dispose?.(dirpath)
       } finally {
-        await fs.rm(dirpath, { recursive: true, force: true })
+        await removeFixtureDirectory(dirpath)
       }
     },
     path: realpath,

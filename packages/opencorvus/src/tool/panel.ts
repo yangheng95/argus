@@ -1,9 +1,11 @@
 import z from "zod"
+import { randomBytes } from "node:crypto"
 import { Tool } from "./tool"
 import { EngineService } from "@/task-api"
 import { AgentInvocationDAG } from "@/engine/model"
 import { findChildrenOfTask } from "@/engine"
 import { Session } from "@/session"
+import { Message } from "@/session/message"
 import { Question } from "@/question"
 import { captureWindowScreenshot } from "@/gui/screenshot"
 import {
@@ -12,6 +14,10 @@ import {
   panelActionSchemaForAgent,
 } from "@/panel/capability"
 import { RIGHT_SIDEBAR_CODING_ASSISTANT_SOURCE, isRightSidebarCodingAssistantSession } from "@/coding-assistant/session"
+import { ensureMissionSession } from "@/mission/session"
+import { SessionWake } from "@/session/wake"
+import { EffectiveConfig } from "@/config/effective"
+import { attachMissionCaller } from "@/mission/caller-receipt"
 
 import { isDecodableText, decodeDataUrlText, decodeDataUrlBase64 } from "@/session/text-mime"
 
@@ -268,6 +274,21 @@ function requireMissionTaskSemanticTitle(input: unknown): string {
   return input.trim().replace(/\s+/g, " ")
 }
 
+function newChatForwardedMissionID(): string {
+  return `chat-${randomBytes(6).toString("hex")}`
+}
+
+async function requirePanelToolCallerUserMessageID(ctx: Tool.Context): Promise<string> {
+  const message = await Message.get({
+    sessionID: ctx.sessionID,
+    messageID: ctx.messageID,
+  })
+  if (message.info.role !== "assistant") {
+    throw new Error(`panel.wake_mission requires an assistant tool-call message: ${ctx.messageID}`)
+  }
+  return message.info.parentID
+}
+
 export const PanelTool = Tool.define<ReturnType<typeof panelActionSchemaForAgent>, {}>("panel", async (initCtx) => ({
   description:
     "Operate the OpenCorvus control plane: inspect plans/boards, manage task state, reply to interactions, and manage sessions.",
@@ -477,6 +498,62 @@ export const PanelTool = Tool.define<ReturnType<typeof panelActionSchemaForAgent
         return {
           title: "Task created",
           output: JSON.stringify({ kind: "created", task_id: taskID, message: `Task accepted: \`${taskID}\`` }),
+          metadata: {},
+        }
+      }
+      case "wake_mission": {
+        if (actor !== "right_sidebar_assistant") {
+          throw new Error(`panel.wake_mission is only permitted for the right sidebar assistant.`)
+        }
+        const callerSession = await Session.get(ctx.sessionID)
+        if (!isRightSidebarCodingAssistantSession(callerSession)) {
+          throw new Error(`panel.wake_mission requires a right-sidebar coding assistant session: ${ctx.sessionID}`)
+        }
+        const callerMessageID = await requirePanelToolCallerUserMessageID(ctx)
+        const missionID = newChatForwardedMissionID()
+        const missionSession = await ensureMissionSession({
+          missionID,
+          defaultCwd: callerSession.directory,
+        })
+        if (params.title) {
+          await Session.setTitle({
+            sessionID: missionSession.id,
+            title: params.title,
+          })
+        }
+        const callerConfig = await EffectiveConfig.effective({ sessionID: callerSession.id })
+        if (callerConfig.prompt_profile?.active) {
+          await Session.mergeConfigOverlay({
+            sessionID: missionSession.id,
+            patch: {
+              prompt_profile: {
+                active: callerConfig.prompt_profile.active,
+              },
+            },
+          })
+        }
+        await attachMissionCaller({
+          missionSessionID: missionSession.id,
+          callerSession,
+          callerMessageID,
+        })
+        await SessionWake.wake({
+          sessionID: missionSession.id,
+          prompt: params.request,
+          agent: "mission",
+          reason: {
+            source: "mission.operator",
+            missionID,
+          },
+        })
+        return {
+          title: "Mission started",
+          output: JSON.stringify({
+            kind: "mission_wake",
+            mission_id: missionID,
+            session_id: missionSession.id,
+            message: `Mission accepted: \`${missionID}\``,
+          }),
           metadata: {},
         }
       }

@@ -1112,6 +1112,32 @@ Output: Creates directory 'foo'"
         "additionalProperties": false,
         "properties": {
           "action": {
+            "const": "wake_mission",
+            "type": "string",
+          },
+          "request": {
+            "description": "Full workflow request to hand to Mission.",
+            "maxLength": 32000,
+            "minLength": 1,
+            "type": "string",
+          },
+          "title": {
+            "description": "Short Mission title shown in the Work Ledger.",
+            "maxLength": 80,
+            "minLength": 1,
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+          "request",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
             "const": "send_task_message",
             "type": "string",
           },

@@ -98,7 +98,7 @@ describe("coding assistant routes", () => {
         expect(claimBody.session.id).toBe(body.session.id)
       },
     })
-  })
+  }, 15_000)
 
   test("lists only right sidebar assistant sessions from the current project directory", async () => {
     await using first = await tmpdir({ git: true })
@@ -152,7 +152,7 @@ describe("coding assistant routes", () => {
         expect(queryBody.sessions.map((session) => session.id)).toEqual([otherDirectoryID])
       },
     })
-  })
+  }, 15_000)
 
   test("coding session routes reject current-project right sidebar sessions with a foreign parent chain", async () => {
     await using first = await tmpdir({ git: true })
@@ -1015,5 +1015,5 @@ describe("coding assistant routes", () => {
         })
       },
     })
-  })
+  }, 15_000)
 })

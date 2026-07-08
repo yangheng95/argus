@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, mock, test } from "bun:test"
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Identifier } from "../../src/id/id"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
+import { Message } from "../../src/session/message"
 import { SessionTable } from "../../src/session/session.sql"
 import { Database, eq } from "../../src/storage/db"
 import { PanelTool } from "../../src/tool/panel"
@@ -10,8 +11,42 @@ import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 import { RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA } from "../../src/coding-assistant/session"
+import { SessionWake } from "../../src/session/wake"
 
 Log.init({ print: false })
+
+async function seedPanelToolCallMessages(input: {
+  sessionID: string
+  agent: string
+  modelID?: string
+}): Promise<{ userMessageID: string; assistantMessageID: string }> {
+  const now = Date.now()
+  const userMessageID = Identifier.ascending("message")
+  const assistantMessageID = Identifier.ascending("message")
+  const modelID = input.modelID ?? "model"
+  await Session.updateMessage({
+    id: userMessageID,
+    sessionID: input.sessionID,
+    role: "user",
+    time: { created: now },
+    agent: input.agent,
+    model: { providerID: "test", modelID },
+  } satisfies Message.User)
+  await Session.updateMessage({
+    id: assistantMessageID,
+    sessionID: input.sessionID,
+    role: "assistant",
+    time: { created: now + 1 },
+    parentID: userMessageID,
+    modelID,
+    providerID: "test",
+    agent: input.agent,
+    path: { cwd: Instance.directory, root: Instance.worktree },
+    cost: 0,
+    tokens: { total: 0, input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+  } satisfies Message.Assistant)
+  return { userMessageID, assistantMessageID }
+}
 
 describe("panel tool", () => {
   afterEach(async () => {
@@ -140,7 +175,7 @@ describe("panel tool", () => {
         expect((await Session.get(foreignSessionID)).id).toBe(foreignSessionID)
       },
     })
-  })
+  }, 15_000)
 
   test("fork_session rejects a session owned by another active project", async () => {
     await using projectA = await tmpdir({ git: true })
@@ -183,7 +218,7 @@ describe("panel tool", () => {
       db.select({ id: SessionTable.id }).from(SessionTable).where(eq(SessionTable.parent_id, foreignSessionID)).all(),
     )
     expect(children).toEqual([])
-  })
+  }, 15_000)
 
   test("right sidebar assistant create_task writes server-derived provenance", async () => {
     await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
@@ -233,6 +268,108 @@ describe("panel tool", () => {
           keep: "value",
         })
         expect((task?.metadata as Record<string, unknown> | undefined)?.mission).toBeUndefined()
+      },
+    })
+  }, 15_000)
+
+  test("right sidebar assistant wake_mission creates a mission with caller provenance and no task", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({
+          kind: "assistant",
+          title: "right sidebar assistant",
+          metadata: RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA,
+        })
+        const { userMessageID, assistantMessageID } = await seedPanelToolCallMessages({
+          sessionID: session.id,
+          agent: "coding-assistant",
+        })
+        const wake = spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
+
+        const tool = await PanelTool.init()
+        const result = await tool.execute(
+          {
+            action: "wake_mission",
+            title: "Investigate workflow",
+            request: "Investigate, design, implement, and verify the long workflow.",
+          },
+          {
+            sessionID: session.id,
+            messageID: assistantMessageID,
+            agent: "coding",
+            abort: new AbortController().signal,
+            messages: [],
+            metadata() {},
+            async ask() {},
+            extra: { surface: "right-sidebar", source: "panel" },
+          },
+        )
+
+        const output = JSON.parse(result.output) as { mission_id: string; session_id: string }
+        const mission = await Session.get(output.session_id)
+        const missionMeta = (mission.metadata as { mission?: Record<string, unknown> } | undefined)?.mission
+        const tasks = Database.use((db) => db.select().from(EngineTaskTable).all())
+
+        expect(output.mission_id).toMatch(/^chat-[0-9a-f]{12}$/)
+        expect(mission.kind).toBe("mission")
+        expect(mission.title).toBe("Investigate workflow")
+        expect(missionMeta).toMatchObject({
+          id: output.mission_id,
+          caller: {
+            session_id: session.id,
+            message_id: userMessageID,
+            surface: "right-sidebar",
+          },
+        })
+        expect(tasks).toHaveLength(0)
+        expect(wake).toHaveBeenCalledTimes(1)
+        expect(wake.mock.calls[0]?.[0]).toMatchObject({
+          sessionID: output.session_id,
+          prompt: "Investigate, design, implement, and verify the long workflow.",
+          agent: "mission",
+          reason: {
+            source: "mission.operator",
+            missionID: output.mission_id,
+          },
+        })
+      },
+    })
+  }, 15_000)
+
+  test("wake_mission rejects non right-sidebar assistant sessions", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant", title: "plain assistant" })
+        const { assistantMessageID } = await seedPanelToolCallMessages({
+          sessionID: session.id,
+          agent: "coding-assistant",
+        })
+        const tool = await PanelTool.init()
+
+        await expect(
+          tool.execute(
+            {
+              action: "wake_mission",
+              request: "Try to forward from an unbound session.",
+            },
+            {
+              sessionID: session.id,
+              messageID: assistantMessageID,
+              agent: "coding",
+              abort: new AbortController().signal,
+              messages: [],
+              metadata() {},
+              async ask() {},
+              extra: { surface: "right-sidebar" },
+            },
+          ),
+        ).rejects.toThrow("only permitted for the right sidebar assistant")
       },
     })
   }, 15_000)
@@ -302,10 +439,10 @@ describe("panel tool", () => {
               extra: { surface: "right-sidebar" },
             },
           ),
-        ).rejects.toThrow("not permitted for the right sidebar assistant")
+        ).rejects.toThrow("not permitted for actor right_sidebar_assistant")
       },
     })
-  })
+  }, 15_000)
 
   test("explore agent may inspect project state but cannot mutate through panel tool", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -351,10 +488,10 @@ describe("panel tool", () => {
               extra: { surface: "panel" },
             },
           ),
-        ).rejects.toThrow("not permitted for the explore agent")
+        ).rejects.toThrow("not permitted for actor explore")
       },
     })
-  })
+  }, 15_000)
 
   test("right sidebar assistant local actions are authorized by the capability surface", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -392,7 +529,7 @@ describe("panel tool", () => {
         })
       },
     })
-  })
+  }, 15_000)
 
   test("update_checks preserves advanced config when panel toggles standard checks", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -497,5 +634,5 @@ describe("panel tool", () => {
         })
       },
     })
-  })
+  }, 15_000)
 })

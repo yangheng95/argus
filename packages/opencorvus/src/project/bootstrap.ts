@@ -21,6 +21,7 @@ import { ChannelSupervisor } from "@/channel/supervisor"
 import { Config } from "@/config/config"
 import { ensureTaskMessageProtocolBridge } from "@/orchestrator/protocol/message-bridge"
 import { TerminalProfile } from "@/system-terminal/profile"
+import { ensureMissionCallerReceiptBridge } from "@/mission/caller-receipt"
 
 export async function InstanceBootstrap() {
   Log.Default.info("bootstrapping", { directory: Instance.directory })
@@ -43,6 +44,7 @@ export async function InstanceBootstrap() {
   EngineService.init()
   EngineEventLog.init()
   ensureTaskMessageProtocolBridge()
+  ensureMissionCallerReceiptBridge()
   await TerminalProfile.ensureProjectDefaultProfile()
   await ChannelSupervisor.sync(await Config.get()).catch((error) => {
     Log.Default.warn("channel supervisor init failed", { error: String(error) })

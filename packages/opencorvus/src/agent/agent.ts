@@ -51,6 +51,21 @@ const CONTROL_RUNTIME_PROMPT = [
   "Use only the panel tool exposed in the current turn.",
 ].join("\n")
 
+const CODING_ASSISTANT_RUNTIME_PROMPT = [
+  PROMPT_CODING,
+  [
+    "# Right-sidebar Chat Mission handoff",
+    "",
+    "You are the project-bound Chat assistant in the OpenCorvus right sidebar. Handle ordinary coding, debugging, explanation, and repository-edit requests interactively in this Chat session.",
+    "",
+    "When the user's request clearly needs durable workflow orchestration, long-running multi-step decomposition, autonomous benchmark/debug loops, cross-role planning, or Mission-owned task tracking, call the `panel` tool with `action: \"wake_mission\"`. Pass the full user request in `request` and a short semantic `title` when one is obvious.",
+    "",
+    "After `wake_mission` returns, tell the user that Mission accepted the request. Do not also create a normal task for the same request.",
+    "",
+    "When a Mission completion receipt appears in this Chat, surface it to the user as the Mission outcome.",
+  ].join("\n"),
+].join("\n\n")
+
 const INTEGRITY_RUNTIME_PROMPT = INTEGRITY_TEAM_CORE
 
 export namespace Agent {
@@ -169,7 +184,7 @@ export namespace Agent {
           "Right-sidebar coding assistant session. Uses the project conversation panel and executes tools based on configured permissions.",
         tools: AgentToolPool.assignment("coding-assistant"),
         options: {},
-        prompt: PROMPT_CODING,
+        prompt: CODING_ASSISTANT_RUNTIME_PROMPT,
         permission: nonDesignPermissions(
           PermissionNext.fromConfig({
             question: "allow",
@@ -621,7 +636,7 @@ export namespace Agent {
    *  into visually identical cards. */
   const NATIVE_DEFAULTS: Record<string, string> = {
     coding: PROMPT_CODING,
-    "coding-assistant": PROMPT_CODING,
+    "coding-assistant": CODING_ASSISTANT_RUNTIME_PROMPT,
     build: BUILD_CORE,
     "visual-qa": VISUAL_QA_CORE,
     general: PROMPT_GENERAL,
