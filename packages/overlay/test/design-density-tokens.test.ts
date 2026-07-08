@@ -17,9 +17,16 @@ describe("design density tokens stay on the tightened 2026-05-05 scale", () => {
     expect(TOKENS).toContain("--oc-density-icon-button: calc(26px * var(--ui-scale, 1));")
   })
 
-  test("control and meta copy stay on the same 12px tier", () => {
-    expect(TOKENS).toContain("--ui-font-control: calc(12px * var(--ui-scale));")
-    expect(TOKENS).toContain("--ui-font-meta: calc(12px * var(--ui-scale));")
+  test("body, control, and meta copy share the 14px Codex app baseline", () => {
+    expect(TOKENS).toContain("--ui-font-body: calc(14px * var(--ui-scale));")
+    expect(TOKENS).toContain("--ui-font-control: calc(14px * var(--ui-scale));")
+    expect(TOKENS).toContain("--ui-font-meta: calc(14px * var(--ui-scale));")
+  })
+
+  test("secondary copy remains readable below the app baseline", () => {
+    expect(TOKENS).toContain("--ui-font-small: calc(12px * var(--ui-scale));")
+    expect(TOKENS).toContain("--ui-font-tiny: calc(11px * var(--ui-scale));")
+    expect(TOKENS).toContain("--ui-font-code: calc(13px * var(--ui-scale));")
   })
 
   test("titlebar and panel headers keep the compact 42/40px rhythm", () => {

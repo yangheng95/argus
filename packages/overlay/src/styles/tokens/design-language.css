@@ -141,19 +141,21 @@
   /* Typography scale — 4-tier hierarchy: display > heading > title >= body.
    * Restores visual structure after iter48 capped all four to 12px
    * (2026-05-03 feedback superseded by 2026-05-04 reference design request).
+   * Raised 2026-07-08 to a Codex app style 14px body baseline without
+   * changing layout density tokens or --ui-scale.
    * display: major empty-state headings, onboarding copy.
    * heading: panel / section titles, dialog headers.
    * title:   card titles, sidebar item titles, menu items.
    * body:    body text, message content. */
-  --ui-font-display: calc(18px * var(--ui-scale));
-  --ui-font-heading: calc(14px * var(--ui-scale));
-  --ui-font-title: calc(13px * var(--ui-scale));
-  --ui-font-body: calc(12px * var(--ui-scale));
-  --ui-font-control: calc(12px * var(--ui-scale));
-  --ui-font-meta: calc(12px * var(--ui-scale));
-  --ui-font-small: calc(11px * var(--ui-scale));
-  --ui-font-tiny: calc(10px * var(--ui-scale));
-  --ui-font-code: calc(11px * var(--ui-scale));
+  --ui-font-display: calc(22px * var(--ui-scale));
+  --ui-font-heading: calc(17px * var(--ui-scale));
+  --ui-font-title: calc(15px * var(--ui-scale));
+  --ui-font-body: calc(14px * var(--ui-scale));
+  --ui-font-control: calc(14px * var(--ui-scale));
+  --ui-font-meta: calc(14px * var(--ui-scale));
+  --ui-font-small: calc(12px * var(--ui-scale));
+  --ui-font-tiny: calc(11px * var(--ui-scale));
+  --ui-font-code: calc(13px * var(--ui-scale));
 
   --ui-titlebar-height: calc(42px * var(--ui-scale));
   --ui-panel-header-height: calc(40px * var(--ui-scale));

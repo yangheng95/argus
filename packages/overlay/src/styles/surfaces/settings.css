@@ -10,8 +10,8 @@
    settings panel. VSCode/JetBrains visual style: flat, no card
    border, hover via the dialog's settings-surface-hover wash,
    hierarchy expressed through `--ui-font-weight-*` + the
-   text-strong / text-soft / text-muted triad (not font size —
-   --ui-font-heading / title / body remain 14/13/12).
+   text-strong / text-soft / text-muted triad, not a settings-only
+   font-size scale. The shared typography tokens own size hierarchy.
 
    Migration map: settings-specific legacy row wrappers converge on
    .s-row, group wrappers converge on .s-group, and settings-owned
