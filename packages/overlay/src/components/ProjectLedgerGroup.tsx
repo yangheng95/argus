@@ -16,6 +16,7 @@ export interface ProjectLedgerGroupProps {
   onToggle: () => void
   projectName?: string
   onCopyProject?: (directory: string) => void | Promise<void>
+  onCreateChat?: (directory: string) => void | Promise<void>
   onRenameProject?: (directory: string, currentName: string) => void | Promise<void>
   onDeleteProject?: (directory: string) => void | Promise<void>
   children: JSX.Element
@@ -103,9 +104,10 @@ export function ProjectLedgerGroup(props: ProjectLedgerGroupProps) {
       .join(" / ")
   const bodyElementID = () => projectLedgerGroupBodyElementID(props.directory, props.dataUi)
   const canCopyProject = () => !!props.onCopyProject && !!props.directory.trim()
+  const canCreateChat = () => !!props.onCreateChat && !!props.directory.trim()
   const canRenameProject = () => !!props.onRenameProject && !!props.directory.trim()
   const canDeleteProject = () => !!props.onDeleteProject && !!props.directory.trim()
-  const hasProjectActions = () => canCopyProject() || canRenameProject() || canDeleteProject()
+  const hasProjectActions = () => canCreateChat() || canCopyProject() || canRenameProject() || canDeleteProject()
 
   return (
     <section
@@ -148,6 +150,25 @@ export function ProjectLedgerGroup(props: ProjectLedgerGroupProps) {
           </span>
         </Button>
         <div class="project-group-actions">
+          <Show when={canCreateChat()}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              tone="neutral"
+              data-chrome="icon-action"
+              data-ui="project-group-new-chat"
+              data-project-new-chat={props.directory}
+              title={t("project.new_chat_button_title")}
+              aria-label={t("project.new_chat_button_title")}
+              onClick={(event) => {
+                event.stopPropagation()
+                runProjectAction(`new-chat:${props.directory}`, () => props.onCreateChat?.(props.directory))
+              }}
+            >
+              <Icon name="message-add" size={10} />
+            </Button>
+          </Show>
           <Show when={canCopyProject()}>
             <Button
               type="button"

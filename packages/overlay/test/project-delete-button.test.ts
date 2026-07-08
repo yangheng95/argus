@@ -49,6 +49,7 @@ describe("project delete button", () => {
     expect(PROJECT_LEDGER_GROUP).not.toContain("ProjectDirectoryControl")
     expect(PROJECT_LEDGER_GROUP).toContain("projectName?: string")
     expect(PROJECT_LEDGER_GROUP).toContain("onCopyProject?: (directory: string) => void | Promise<void>")
+    expect(PROJECT_LEDGER_GROUP).toContain("onCreateChat?: (directory: string) => void | Promise<void>")
     expect(PROJECT_LEDGER_GROUP).toContain(
       "onRenameProject?: (directory: string, currentName: string) => void | Promise<void>",
     )
@@ -56,21 +57,25 @@ describe("project delete button", () => {
     expect(PROJECT_LEDGER_GROUP).toContain("const customName = String(props.projectName ||")
     expect(PROJECT_LEDGER_GROUP).not.toContain("const canUseProjectDirectory")
     expect(PROJECT_LEDGER_GROUP).toContain(
-      "const hasProjectActions = () => canCopyProject() || canRenameProject() || canDeleteProject()",
+      "const hasProjectActions = () => canCreateChat() || canCopyProject() || canRenameProject() || canDeleteProject()",
     )
     expect(PROJECT_LEDGER_GROUP).toContain('data-project-actions={hasProjectActions() ? "true" : undefined}')
     expect(PROJECT_LEDGER_GROUP).toContain('class="project-group-head"')
     expect(PROJECT_LEDGER_GROUP).toContain('class="project-group-actions"')
     expect(PROJECT_LEDGER_GROUP).toContain('data-ui="project-group-toggle"')
     expect(PROJECT_LEDGER_GROUP).not.toContain("project-group-directory-control")
+    expect(PROJECT_LEDGER_GROUP).toContain('data-ui="project-group-new-chat"')
     expect(PROJECT_LEDGER_GROUP).toContain('data-ui="project-group-copy"')
     expect(PROJECT_LEDGER_GROUP).toContain('data-ui="project-group-rename"')
     expect(PROJECT_LEDGER_GROUP).toContain('data-ui="project-group-delete"')
+    expect(PROJECT_LEDGER_GROUP).toContain("data-project-new-chat={props.directory}")
     expect(PROJECT_LEDGER_GROUP).toContain("data-project-copy={props.directory}")
     expect(PROJECT_LEDGER_GROUP).toContain("data-project-rename={props.directory}")
     expect(PROJECT_LEDGER_GROUP).toContain("data-project-delete={props.directory}")
+    expect(PROJECT_LEDGER_GROUP).toContain('title={t("project.new_chat_button_title")}')
     expect(PROJECT_LEDGER_GROUP).toContain('title={t("project.copy_button_title")}')
     expect(PROJECT_LEDGER_GROUP).toContain('title={t("project.rename_button_title")}')
+    expect(PROJECT_LEDGER_GROUP).toContain('<Icon name="message-add" size={10} />')
     expect(PROJECT_LEDGER_GROUP).toContain('<Icon name="copy" size={10} />')
     expect(PROJECT_LEDGER_GROUP).toContain('<Icon name="edit" size={10} />')
     expect(PROJECT_LEDGER_GROUP).toContain('<Icon name="delete" size={10} />')
@@ -80,6 +85,9 @@ describe("project delete button", () => {
     expect(PROJECT_LEDGER_GROUP).toContain(
       "runProjectAction(`copy:${props.directory}`, () => props.onCopyProject?.(props.directory))",
     )
+    expect(PROJECT_LEDGER_GROUP).toContain(
+      "runProjectAction(`new-chat:${props.directory}`, () => props.onCreateChat?.(props.directory))",
+    )
     expect(PROJECT_LEDGER_GROUP).toContain("runProjectAction(`rename:${props.directory}`, () =>")
     expect(PROJECT_LEDGER_GROUP).toContain("props.onRenameProject?.(props.directory, label().name)")
     expect(PROJECT_LEDGER_GROUP).toContain(
@@ -87,6 +95,9 @@ describe("project delete button", () => {
     )
     expect(PROJECT_LEDGER_GROUP).toContain(
       "const canCopyProject = () => !!props.onCopyProject && !!props.directory.trim()",
+    )
+    expect(PROJECT_LEDGER_GROUP).toContain(
+      "const canCreateChat = () => !!props.onCreateChat && !!props.directory.trim()",
     )
     expect(PROJECT_LEDGER_GROUP).toContain(
       "const canRenameProject = () => !!props.onRenameProject && !!props.directory.trim()",
@@ -100,6 +111,8 @@ describe("project delete button", () => {
   test("shared Mission and Coding Assistant project groups do not get project deletion", () => {
     expect(MISSION_LIST).toContain("ProjectLedgerGroup")
     expect(CODING_ASSISTANT_LIST).toContain("ProjectLedgerGroup")
+    expect(MISSION_LIST).not.toContain("onCreateChat")
+    expect(CODING_ASSISTANT_LIST).not.toContain("onCreateChat")
     expect(MISSION_LIST).not.toContain("onCopyProject")
     expect(CODING_ASSISTANT_LIST).not.toContain("onCopyProject")
     expect(MISSION_LIST).not.toContain("onRenameProject")
@@ -144,6 +157,7 @@ describe("project delete button", () => {
     expect(SIDEBAR_CSS).toMatch(
       /\.project-group\[data-project-actions="true"\]:hover \.project-group-count,[\s\S]*?pointer-events:\s*none;/,
     )
+    expect(SIDEBAR_CSS).toContain('.project-group .oc-button[data-ui="project-group-new-chat"]')
     expect(SIDEBAR_CSS).toContain('.project-group .oc-button[data-ui="project-group-copy"]')
     expect(SIDEBAR_CSS).toContain('.project-group .oc-button[data-ui="project-group-rename"]')
     expect(SIDEBAR_CSS).toContain('.project-group .oc-button[data-ui="project-group-delete"]')
@@ -154,6 +168,7 @@ describe("project delete button", () => {
     expect(SIDEBAR_CSS).toContain("--oc-button-height: calc(18px * var(--ui-scale));")
     expect(SIDEBAR_CSS).toContain("width: calc(18px * var(--ui-scale));")
     expect(SIDEBAR_CSS).toContain("min-width: calc(18px * var(--ui-scale));")
+    expect(SIDEBAR_CSS).toContain('.project-group .oc-button[data-ui="project-group-new-chat"] > svg')
     expect(SIDEBAR_CSS).toContain('.project-group .oc-button[data-ui="project-group-copy"] > svg')
     expect(SIDEBAR_CSS).toContain("width: calc(10px * var(--ui-scale));")
     expect(SIDEBAR_CSS).toContain('.project-group-delete-icon[data-icon="confirm"]')
@@ -176,6 +191,8 @@ describe("project delete button", () => {
       "project.copy_failed_title",
       "project.copy_failed",
       "project.copy_clipboard_unavailable",
+      "project.new_chat_button_title",
+      "project.new_chat_missing_directory",
       "project.rename_button_title",
       "project.rename_dialog_title",
       "project.rename_input_label",

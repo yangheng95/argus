@@ -97,6 +97,10 @@ test("TaskList task rows stay one-line while preserving detail in tooltips", () 
   expect(TASK_LIST_SOURCE).not.toContain('class="project-group-chevron"')
   expect(PROJECT_LEDGER_GROUP_SOURCE).toContain('import { Button } from "./ui/Button"')
   expect(PROJECT_LEDGER_GROUP_SOURCE).toContain('data-ui="project-group-toggle"')
+  expect(PROJECT_LEDGER_GROUP_SOURCE).toContain('data-ui="project-group-new-chat"')
+  expect(PROJECT_LEDGER_GROUP_SOURCE).toContain('data-project-new-chat={props.directory}')
+  expect(PROJECT_LEDGER_GROUP_SOURCE).toContain('title={t("project.new_chat_button_title")}')
+  expect(PROJECT_LEDGER_GROUP_SOURCE).toContain('<Icon name="message-add" size={10} />')
   expect(PROJECT_LEDGER_GROUP_SOURCE).toContain('variant="ghost"')
   expect(PROJECT_LEDGER_GROUP_SOURCE).toContain('size="mini"')
   expect(PROJECT_LEDGER_GROUP_SOURCE).toContain('tone="neutral"')
@@ -159,6 +163,7 @@ test("TaskList task rows stay one-line while preserving detail in tooltips", () 
   expect(SIDEBAR_CSS).toMatch(
     /\.project-group \.oc-button\[data-ui="project-group-toggle"\]\s*\{[^}]*min-height:\s*calc\(26px \* var\(--ui-scale\)\);/,
   )
+  expect(SIDEBAR_CSS).toContain('.project-group .oc-button[data-ui="project-group-new-chat"]')
   expect(SIDEBAR_CSS).not.toMatch(/\.project-group-heading\b/)
   expect(SIDEBAR_CSS).toMatch(
     /\.project-group-body\s*\{[^}]*padding-left:\s*calc\(18px \* var\(--ui-scale\) \+ 5px \* var\(--ui-scale\)\);/,

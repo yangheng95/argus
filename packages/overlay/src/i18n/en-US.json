@@ -1066,6 +1066,8 @@
   "project.copy_failed_title": "Project copy failed",
   "project.copy_failed": "Copy failed: {{error}}",
   "project.copy_clipboard_unavailable": "Clipboard is unavailable",
+  "project.new_chat_button_title": "New chat for this project",
+  "project.new_chat_missing_directory": "Project directory is required to create a new chat.",
   "project.rename_button_title": "Rename project",
   "project.rename_dialog_title": "Rename project",
   "project.rename_input_label": "Project name",
