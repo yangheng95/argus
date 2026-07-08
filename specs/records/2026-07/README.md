@@ -1,5 +1,6 @@
 # July 2026 Records
 
+- [2026-07-08-frontend-replica-mission-task-topology.md](2026-07-08-frontend-replica-mission-task-topology.md) records the frontend-replica Mission topology repair so multi-page replica missions first dispatch a serial template/source-baseline task, then parallel independent subpage tasks, instead of compressing the page family into one workflow task or redispatching `frontend_research` inside the same task.
 - [2026-07-08-db-write-boundary-refactor.md](2026-07-08-db-write-boundary-refactor.md) records the new worktree and first database write-boundary refactor slice that centralizes `engine_artifact` writes behind an engine-owned writer and adds a production architecture regression against scattered direct artifact writes.
 - [2026-07-08-right-toolbar-runtime-status-panel-merge.md](2026-07-08-right-toolbar-runtime-status-panel-merge.md) records the right-bottom Overlay runtime UI merge that makes Worktree management and Git status share one Kobalte panel and replaces the visible glyphs through the single Icon registry.
 - [2026-07-08-chat-default-mission-forwarding-receipt.md](2026-07-08-chat-default-mission-forwarding-receipt.md) records the Chat-default overlay change, right-sidebar `wake_mission` panel action, and Mission terminal receipt bridge back to the caller Chat session.

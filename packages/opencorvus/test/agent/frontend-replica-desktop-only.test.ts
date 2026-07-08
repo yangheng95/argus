@@ -23,6 +23,7 @@ async function frontendReplicaAgents() {
   const config = Config.Info.parse({ prompt_profile: { active: "frontend-replica" } })
   for (const target of [
     "coding",
+    "mission",
     "requirements",
     "architect",
     "frontend-design",
@@ -67,6 +68,12 @@ describe("frontend replica desktop-only generation scope", () => {
     expect(skill).toContain("Integrity review or re-review after repair")
     expect(skill).toContain("Do not re-run Requirements, Architect, `frontend_research`, or the whole workflow")
     expect(skill).toContain("Do not dispatch `frontend_design` as part of the normal frontend-replica workflow")
+    expect(skill).toContain("## Mission task topology")
+    expect(skill).toContain("First create one serial template/source-baseline task")
+    expect(skill).toContain("Dispatch page or subpage tasks only after the template/source-baseline task is terminal")
+    expect(skill).toContain("Page/subpage tasks may run in parallel only when no task depends on a sibling task")
+    expect(skill).toContain("Do not compress a page family into one workflow task")
+    expect(skill).toContain("`subpage_research_tasks`, uncovered anchors, and sibling page packets")
     expect(skill).toContain("## Source authority")
     expect(skill).toContain(
       "Source URL/screenshot/DOM/computed-style/interaction evidence defines the replica contract",
@@ -131,6 +138,13 @@ describe("frontend replica desktop-only generation scope", () => {
     const agents = await frontendReplicaAgents()
 
     expect(agents.coding).toContain("desktop source information architecture")
+    expect(agents.mission).toContain("For a single requested source page, one Mission-owned engine task is valid")
+    expect(agents.mission).toContain("For a multi-page, page-family, or subpage replica mission")
+    expect(agents.mission).toContain("First dispatch one serial template/source-baseline task")
+    expect(agents.mission).toContain("After the template/source-baseline task is terminal")
+    expect(agents.mission).toContain("Run those tasks in parallel only when each request cites the shared template artifact paths")
+    expect(agents.mission).toContain("Keep dependent subpage tasks queued in frontier.md / handoff.md")
+    expect(agents.mission).toContain("Do not ask the same workflow task to re-run `frontend_research`")
     expect(agents.requirements).toContain("Do not create tablet/mobile/non-desktop REQ rows")
     expect(agents.requirements).toContain("desktop-class viewport layout/alignment requirements")
     expect(agents.architect).toContain("Do not register tablet/mobile/non-desktop goals")
@@ -189,6 +203,8 @@ describe("frontend replica desktop-only generation scope", () => {
     expect(agents.orchestrator).toContain("generally 10 or more goals")
     expect(agents.orchestrator).toContain("raw source-row goals")
     expect(agents.orchestrator).toContain("reject bundled multi-component or raw source-row goals")
+    expect(agents.orchestrator).toContain("do not keep redispatching source investigation inside the same workflow task")
+    expect(agents.orchestrator).toContain("Treat `subpage_research_tasks`, uncovered anchors, and sibling page packets")
     expect(agents.orchestrator).toContain("per-surface rendered-feedback ledger")
     expect(agents.orchestrator).toContain("second consecutive rendered-feedback non-pass")
     expect(agents.orchestrator).toContain("per-surface rendered-feedback ledger")

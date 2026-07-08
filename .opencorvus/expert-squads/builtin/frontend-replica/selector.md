@@ -34,6 +34,14 @@ Do not accept source-row prose, screenshot-only commentary, no project diff, sca
 - After an agent has already produced its task-scope artifact, consume the persisted artifact instead of calling that same agent again for another angle. Exceptions are explicit retry of a failed/incomplete call, Build implementation or repair, Visual QA review or re-review, and Integrity review or re-review after repair.
 - Do not re-run Requirements, Architect, `frontend_research`, or the whole workflow as a convenience loop after their valid artifacts exist. If evidence proves a prior artifact invalid, name the invalid artifact and exact evidence, then perform a scoped retry/correction rather than restarting the workflow.
 
+## Mission task topology
+
+- Single-page replica requests may be one Mission-owned engine task whose Architect decomposes the page into one source-backed component or region per goal.
+- Multi-page, page-family, or subpage replica missions are task-level fan-out work. First create one serial template/source-baseline task that owns shared project scaffold, source evidence package, visual token system, reusable primitives, and implementation contract.
+- Dispatch page or subpage tasks only after the template/source-baseline task is terminal. Each page/subpage request must cite the template artifact paths and define disjoint source surface, file ownership, and acceptance evidence.
+- Page/subpage tasks may run in parallel only when no task depends on a sibling task's output, artifact, decision, implementation, or owned files. Otherwise keep dependent work in Mission frontier/handoff until the prerequisite is terminal.
+- Do not compress a page family into one workflow task and compensate by repeatedly calling `frontend_research`. `subpage_research_tasks`, uncovered anchors, and sibling page packets are Mission frontier items for later page/subpage tasks unless the current task's research artifact itself is proven invalid.
+
 ## Source authority
 
 - Source URL/screenshot/DOM/computed-style/interaction evidence defines the replica contract. Target project primitives, component libraries, data mocks, and business code are subordinate implementation choices.
