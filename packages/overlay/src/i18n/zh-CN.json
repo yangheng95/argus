@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "cb0fb8c63ed25325"
+    "panel_revision": "be7cb72abb649762"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -1232,6 +1232,7 @@
   "todo.progress_value": "{{completed}}/{{total}} 已完成",
   "todo.progress_value_current": "{{completed}}/{{total}} 已完成 · {{current}}",
   "work_ledger.title": "Projects",
+  "work_ledger.open_project": "打开文件夹作为项目",
   "work_ledger.kind.mission": "Mission",
   "work_ledger.kind.task": "Task",
   "work_ledger.kind.chat": "Chat",
