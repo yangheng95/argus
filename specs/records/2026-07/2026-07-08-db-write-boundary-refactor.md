@@ -266,3 +266,38 @@ Phase 8 verification:
 - `bun test --timeout 60000 packages/opencorvus/test/orchestrator/tools.test.ts -t "modify_goal records retry intent without clearing a completed workspace pointer"`
 - `bun run --cwd packages/opencorvus typecheck`
 - `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts`
+
+## Phase 9 Task Touch Boundary
+
+`EngineTaskTable` remains the largest unconverged core table. Current direct
+writes include lifecycle and queue CAS paths in `engine/state.ts`,
+`engine/queue.ts`, `engine/rewind.ts`, `task-api/index.ts`, and two
+stage-finalization touches in `orchestrator/tools.ts`.
+
+This phase deliberately does not claim full `engine_task` convergence. It
+extracts the non-lifecycle task touch/update used by requirements and architect
+stage persistence into a low-level engine task writer, preserving the existing
+transaction and event emission placement. Later phases must continue migrating
+the queue, terminal lifecycle, task creation, task deletion, and task API edit
+paths before `EngineTaskTable` can be added to the unique-writer static test.
+
+Phase 9 grep evidence:
+
+- `rg -n 'db\\.(insert|update|delete)\\(EngineTaskTable|\\.(insert|update|delete)\\(EngineTaskTable' packages/opencorvus/src -g '*.ts'` reports two `orchestrator/tools.ts` writes inside architect and requirements persistence, both updating `time_updated` and, for architect, `metadata.architect_fidelity`.
+- Existing `engine/state.ts::updateTask` owns lifecycle semantics and progress rows, but these stage-finalization writes intentionally do not write progress snapshots and already emit their own stage-specific `TaskUpdated` events from `orchestrator/tools.ts`.
+
+Phase 9 acceptance criteria:
+
+- The two `orchestrator/tools.ts` stage-finalization direct writes to `EngineTaskTable` are replaced by engine task writer calls.
+- The architect path preserves metadata merge semantics for `architect_fidelity`, the transaction boundary, and the existing `orchestrator.architect` event emission.
+- The requirements path preserves the timestamp touch, the transaction boundary, and the existing `orchestrator.requirements` event emission.
+- A focused writer test covers task touch and metadata merge behavior.
+- `EngineTaskTable` is not added to the unique-writer static test until all remaining production direct task writes are migrated.
+
+Phase 9 verification:
+
+- `rg -n 'db\\.(insert|update|delete)\\(EngineTaskTable|\\.(insert|update|delete)\\(EngineTaskTable' packages/opencorvus/src/orchestrator/tools.ts packages/opencorvus/src -g '*.ts'` no longer reports `orchestrator/tools.ts`; remaining production writes are still in engine/task lifecycle modules and task API and must be migrated in later phases.
+- `bun test --timeout 60000 packages/opencorvus/test/engine/task-writer.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/orchestrator/tools.test.ts -t "requirements persists a spec snapshot through the shared stage dispatcher"`
+- `bun test --timeout 60000 packages/opencorvus/test/orchestrator/tools.test.ts -t "architect promotion keeps requirements attached to the active spec"`
+- `bun run --cwd packages/opencorvus typecheck`

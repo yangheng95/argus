@@ -147,6 +147,7 @@ import {
   type EngineArtifactKind,
 } from "@/engine/engine.sql"
 import { recordEngineArtifact } from "@/engine/artifact"
+import { mergeEngineTaskMetadata, touchEngineTask } from "@/engine/task"
 import {
   insertEngineSpecSnapshot,
   supersedeActiveEngineSpecSnapshotsForTask,
@@ -7536,21 +7537,11 @@ export function createOrchestratorTools(input: {
             ...(mappedContractLines.length > 0 ? mappedContractLines : ["_(none)_"]),
           ].join("\n")
           updateEngineSpecSnapshotContent(db, { id: newSpecSnapshotID, content: mappedSpecContent, timeUpdated: now })
-          const taskMetadata =
-            task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)
-              ? (task.metadata as Record<string, unknown>)
-              : {}
-
-          db.update(EngineTaskTable)
-            .set({
-              metadata: {
-                ...taskMetadata,
-                architect_fidelity: mappedArchitectFidelity,
-              },
-              time_updated: now,
-            })
-            .where(eq(EngineTaskTable.id, taskID))
-            .run()
+          mergeEngineTaskMetadata(db, {
+            taskID,
+            metadata: { architect_fidelity: mappedArchitectFidelity },
+            timeUpdated: now,
+          })
 
           Database.effect(() =>
             EngineProtocol.emit(
@@ -7746,12 +7737,7 @@ export function createOrchestratorTools(input: {
             })
           }
 
-          db.update(EngineTaskTable)
-            .set({
-              time_updated: now,
-            })
-            .where(eq(EngineTaskTable.id, taskID))
-            .run()
+          touchEngineTask(db, { taskID, timeUpdated: now })
           Database.effect(() =>
             EngineProtocol.emit(
               EngineEvent.TaskUpdated,
