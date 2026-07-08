@@ -88,7 +88,62 @@ Implementation plan:
 5. Add targeted tests for default fold policy and the scroll-bottom control,
    then run overlay typecheck/build and browser screenshot review.
 
-## Validation
+## Follow-up Visual Adjustment
+
+### Recall
+
+User request:
+
+- Change the scroll-to-bottom button from the visible rounded square treatment
+  to a translucent circular downward arrow.
+
+Acceptance criteria:
+
+- Keep the existing scroll-to-bottom behavior and auto-scroll owner.
+- The button remains a real button with the existing localized label.
+- The visual treatment is a circular translucent control with a downward arrow,
+  not a solid rounded-square chip.
+- CSS uses existing overlay tokens and remains scoped to the scroll-bottom
+  affordance.
+
+Hard constraints:
+
+- No fallback, compatibility branch, or second scroll source.
+- Do not restart, refresh, or kill the user's running OpenCorvus / overlay
+  process.
+- Use Node, not Bun, for Playwright browser execution on Windows.
+
+Sources read before implementation:
+
+- `AGENTS.md`
+- `specs/artifacts/tv2ainvest.md`
+- `specs/records/2026-07/2026-07-08-overlay-finished-message-collapse-scroll-bottom.md`
+- `packages/overlay/src/components/Conversation.tsx`
+- `packages/overlay/src/styles/surfaces/conversation.css`
+- `packages/overlay/src/components/Icon.tsx`
+- `packages/overlay/test/conversation-scroll-bottom-button.test.ts`
+- `packages/overlay/test/browser/conversation-scroll-bottom-button-browser.test.ts`
+- `packages/overlay/src/index.html`
+
+Whole-repository search evidence:
+
+- `rg -n "scroll.*bottom|bottom.*scroll|scrollToBottom|scroll-to-bottom|to bottom|jump.*bottom|ArrowDown|ChevronDown|chevron.*down|data-ui=.*bottom|down.*arrow|scroll" packages/overlay/src specs/current specs/records/2026-07 specs/artifacts -S`
+- `rg -n "conversation-scroll-bottom|chat.scroll_bottom|scroll-bottom|scrollToBottom|setupAutoScroll|tracking|follow-lock" packages/overlay/src packages/overlay/test -S`
+- `rg -n "chevron-down|arrow-down|scroll|IconName|icons|lucide" packages/overlay/src/components/Icon.tsx packages/overlay/src -S`
+
+Plan:
+
+1. Keep `Conversation.tsx` on the existing `Button` primitive and `chevron-down`
+   icon, but use the ghost variant so the component semantics match a
+   translucent floating affordance.
+2. Update the conversation surface CSS for
+   `conversation-scroll-bottom` to define a token-driven circular translucent
+   background, border, hover/focus state, and icon size.
+3. Update focused unit/browser tests to verify the circular translucent
+   treatment and run the existing scroll-bottom test set plus Node browser
+   screenshot verification.
+
+## Initial Validation
 
 Commands:
 
@@ -117,3 +172,25 @@ Visual conclusion:
   pane and stays above the composer.
 - After clicking the button, the transcript is pinned to the bottom and the
   button is no longer visible.
+
+## Follow-up Validation
+
+Commands:
+
+- `bun test packages/overlay/test/conversation-scroll-bottom-button.test.ts packages/overlay/test/dom-utils-autoscroll.test.ts`
+  - Result: `16 pass / 0 fail`.
+- `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/conversation-scroll-bottom-button-browser.test.ts`
+  - Result: `1 pass / 0 fail`.
+- `bun run --cwd packages/overlay typecheck`
+  - Result: pass.
+
+Browser artifact reviewed:
+
+- `packages/overlay/.scratch/conversation-scroll-bottom-button/scroll-button-visible.png`
+
+Visual conclusion:
+
+- The scroll-to-bottom control renders as a circular translucent
+  downward-chevron button centered inside the conversation scroll shell.
+- The button remains above the composer and disappears after it re-pins the
+  transcript to the bottom.

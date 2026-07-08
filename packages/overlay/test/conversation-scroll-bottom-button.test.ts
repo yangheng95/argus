@@ -14,6 +14,8 @@ describe("conversation scroll-to-bottom control", () => {
 
     expect(source).toContain('import { Portal } from "solid-js/web"')
     expect(source).toContain('data-ui="conversation-scroll-bottom"')
+    expect(source).toContain('variant="ghost"')
+    expect(source).toContain('Icon name="chevron-down"')
     expect(source).toContain("setTracking(true)")
     expect(source).toContain("scrollController?.scrollToBottom()")
     expect(source).toContain("onUserScrollUp: () => setTracking(false)")
@@ -25,13 +27,16 @@ describe("conversation scroll-to-bottom control", () => {
     const css = read("src/styles/surfaces/conversation.css")
     const shellRule = css.match(/\.conversation-scroll-shell\s*\{[^}]*\}/)?.[0] ?? ""
     const buttonRule =
-      css.match(/\.conversation-scroll-shell > \.oc-button\[data-ui="conversation-scroll-bottom"\]\s*\{[^}]*\}/)?.[0] ??
-      ""
+      css.match(
+        /\.conversation-scroll-shell > \.oc-button\.conversation-scroll-bottom\[data-ui="conversation-scroll-bottom"\]\s*\{[^}]*\}/,
+      )?.[0] ?? ""
 
     expect(shellRule).toContain("position: relative")
     expect(css).toContain(".conversation-scroll-bottom")
     expect(buttonRule).toContain("border-radius: var(--oc-radius-pill)")
-    expect(buttonRule).toContain("width: calc(34px * var(--ui-scale))")
+    expect(buttonRule).toContain("--oc-button-bg: color-mix(in srgb, var(--text-strong) 14%, transparent)")
+    expect(buttonRule).toContain("width: var(--oc-button-height)")
+    expect(buttonRule).toContain("backdrop-filter: blur(calc(8px * var(--ui-scale)))")
   })
 
   test("scroll button label is localized in both shipped dictionaries", () => {

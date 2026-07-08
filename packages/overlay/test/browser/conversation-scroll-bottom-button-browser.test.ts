@@ -161,7 +161,7 @@ test("floating scroll-to-bottom button stays above the composer and re-pins the 
               <button
                 type="button"
                 class="oc-button conversation-scroll-bottom"
-                data-variant="solid"
+                data-variant="ghost"
                 data-size="icon"
                 data-tone="neutral"
                 data-ui="conversation-scroll-bottom"
@@ -227,9 +227,13 @@ test("floating scroll-to-bottom button stays above the composer and re-pins the 
       scroll.dispatchEvent(new Event("scroll"))
       const buttonRect = button.getBoundingClientRect()
       const composerRect = composer.getBoundingClientRect()
+      const buttonStyle = getComputedStyle(button)
       return {
         hidden: button.hidden,
         distanceFromBottom: scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop,
+        buttonWidth: buttonRect.width,
+        buttonHeight: buttonRect.height,
+        buttonBorderRadius: Number.parseFloat(buttonStyle.borderRadius),
         buttonCenterX: buttonRect.left + buttonRect.width / 2,
         shellCenterX: document.querySelector<HTMLElement>(".conversation-scroll-shell")!.getBoundingClientRect().left +
           document.querySelector<HTMLElement>(".conversation-scroll-shell")!.getBoundingClientRect().width / 2,
@@ -241,6 +245,8 @@ test("floating scroll-to-bottom button stays above the composer and re-pins the 
     })
     assert.equal(metricsBefore.hidden, false)
     assert.ok(metricsBefore.distanceFromBottom > 200)
+    assert.equal(metricsBefore.buttonWidth, metricsBefore.buttonHeight)
+    assert.ok(metricsBefore.buttonBorderRadius >= metricsBefore.buttonWidth / 2 - 1)
     assert.ok(Math.abs(metricsBefore.buttonCenterX - metricsBefore.shellCenterX) <= 1)
     assert.ok(metricsBefore.buttonBottom < metricsBefore.composerTop)
     assert.equal(metricsBefore.collapsedCount, 38)

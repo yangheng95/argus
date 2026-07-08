@@ -460,7 +460,7 @@ export function Conversation(props: { container: HTMLElement }) {
             <Show when={hasItems() && !tracking()}>
               <Button
                 type="button"
-                variant="solid"
+                variant="ghost"
                 size="icon"
                 tone="neutral"
                 class="conversation-scroll-bottom"
