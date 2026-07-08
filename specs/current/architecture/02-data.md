@@ -144,10 +144,11 @@ foreign attachment 来“修复”。Attachment bytes 的物理池在
 | `protocol_event` · `protocol_inbox` · `protocol_stream_chunk` | `protocol/protocol.sql.ts`   | executor 协议事件                               |
 | `task_queue` · `cron_job` · `event_job`                       | `scheduler/*.sql.ts`         | 调度器                                          |
 
-Scheduler 表按 service 分层写入：`cron_job` 的唯一直接表写入文件是
+Scheduler 表按 service 分层写入：`task_queue` 的唯一直接表写入文件是
+`scheduler/task-queue-service.ts`；`cron_job` 的唯一直接表写入文件是
 `scheduler/cron-service.ts`；`event_job` 的唯一直接表写入文件是
 `scheduler/event-service.ts`。Tool、server route、engine 和 executor 层只能通过
-scheduler service 创建、更新或删除 cron / event jobs，不能直接写 scheduler job 表。
+scheduler service 创建、更新或删除 scheduler job / queue rows，不能直接写 scheduler 表。
 
 ## Trace — 统一 workflow 追踪（横切）
 

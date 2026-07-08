@@ -198,20 +198,8 @@ async function cleanupGoalWorkspaces(goalIDs: string[]) {
 async function finalizeInterruptedQueueTasks(queueTaskIDs: Array<string | undefined>, reason: string) {
   const ids = [...new Set(queueTaskIDs.filter((id): id is string => typeof id === "string" && id.length > 0))]
   if (ids.length === 0) return
-  const now = Date.now()
-  const { TaskQueueTable } = await import("@/scheduler/task-queue.sql")
-  Database.use((db) =>
-    db
-      .update(TaskQueueTable)
-      .set({
-        status: "failed",
-        error_message: reason,
-        time_completed: now,
-        time_updated: now,
-      })
-      .where(and(inArray(TaskQueueTable.id, ids), inArray(TaskQueueTable.status, ["queued", "running"])))
-      .run(),
-  )
+  const { TaskQueueService } = await import("@/scheduler/task-queue-service")
+  TaskQueueService.failQueuedOrRunning({ taskIDs: ids, reason })
 }
 
 /** Abort a batch of goal_run rows. Workspace lifecycle is goal-scoped. */

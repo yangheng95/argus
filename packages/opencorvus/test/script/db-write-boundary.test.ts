@@ -39,6 +39,7 @@ const approvedWriters: Record<string, string> = {
   EngineSpecSnapshotTable: "packages/opencorvus/src/engine/spec-snapshot.ts",
   EngineTaskTable: "packages/opencorvus/src/engine/task.ts",
   EventJobTable: "packages/opencorvus/src/scheduler/event-service.ts",
+  TaskQueueTable: "packages/opencorvus/src/scheduler/task-queue-service.ts",
 }
 
 function directWriteViolations(tableName: string): string[] {
@@ -118,5 +119,9 @@ describe("database write boundary", () => {
 
   test("only the scheduler event service directly writes EventJobTable", () => {
     expect(directWriteViolations("EventJobTable")).toEqual([])
+  })
+
+  test("only the scheduler task queue service directly writes TaskQueueTable", () => {
+    expect(directWriteViolations("TaskQueueTable")).toEqual([])
   })
 })

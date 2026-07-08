@@ -510,6 +510,16 @@ Phase 16 verification:
 - `bun run --cwd packages/opencorvus typecheck`
 - `git diff --check`
 
+Additional verification attempt not counted as passing Phase 18 evidence:
+
+- `bun test --timeout 60000 packages/opencorvus/test/executor/opencorvus.test.ts`
+  passed the queue-related resume test and later failed two event-stream tests
+  that publish `message.part.delta` for message IDs not persisted in the
+  session table, causing `session-mirror: message ... missing persisted row for
+  overlay enrichment` and then a timeout waiting for a mapped event. That
+  failure is outside the `TaskQueueTable` write-boundary migration and remains
+  a separate executor event fixture issue.
+
 ## Phase 17 Schedule Tool To Scheduler Service Boundary
 
 The full production DB write inventory showed that `CronJobTable` and
@@ -541,6 +551,42 @@ Phase 17 verification:
 
 - `rg -n '\\.(insert|update|delete)\\s*\\(\\s*(CronJobTable|EventJobTable)\\b|db\\.(insert|update|delete)\\s*\\(\\s*(CronJobTable|EventJobTable)\\b' packages/opencorvus/src -g '*.ts'`
 - `bun test packages/opencorvus/test/tool/schedule.test.ts`
+- `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `git diff --check`
+
+## Phase 18 Task Queue Service Boundary
+
+The remaining scheduler-domain split writer was `TaskQueueTable`. The canonical
+owner is `scheduler/task-queue-service.ts`, but `executor/opencorvus.ts` directly
+read and failed queue rows for status/abort, and `engine/writer.ts` directly
+failed interrupted queue rows during live execution abort cleanup.
+
+This phase adds narrow `TaskQueueService` APIs for queue-task status by ID and
+for marking queued/running rows failed, then migrates executor and engine writer
+call sites to those APIs. The queue table remains visible to tests for
+assertions, but production writes are now service-owned.
+
+Phase 18 acceptance criteria:
+
+- `executor/opencorvus.ts` no longer imports or directly writes
+  `TaskQueueTable`.
+- `engine/writer.ts` no longer dynamically imports or directly writes
+  `TaskQueueTable`.
+- `TaskQueueService.getStatusByID` preserves executor status shape.
+- `TaskQueueService.failQueuedOrRunning` preserves queued/running failure
+  semantics with reason, completion time, and update time.
+- Production source direct `TaskQueueTable` writes exist only in
+  `scheduler/task-queue-service.ts`.
+- The static database write-boundary test rejects future direct
+  `TaskQueueTable` writes outside `scheduler/task-queue-service.ts`.
+
+Phase 18 verification:
+
+- `rg -n '\\.(insert|update|delete)\\s*\\(\\s*TaskQueueTable\\b|db\\.(insert|update|delete)\\s*\\(\\s*TaskQueueTable\\b' packages/opencorvus/src -g '*.ts'`
+- `bun test --timeout 60000 packages/opencorvus/test/scheduler/task-queue-service.test.ts -t "getStatusByID"`
+- `bun test --timeout 60000 packages/opencorvus/test/executor/opencorvus.test.ts -t "status and abort"`
 - `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
 - `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/db-write-boundary.test.ts`
 - `bun run --cwd packages/opencorvus typecheck`
