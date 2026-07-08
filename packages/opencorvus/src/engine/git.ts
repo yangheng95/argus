@@ -2,14 +2,14 @@ import { Snapshot } from "@/snapshot"
 import { Instance } from "@/project/instance"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Vcs } from "@/project/vcs"
-import { Database, eq } from "@/storage/db"
+import { Database } from "@/storage/db"
 import { git } from "@/util/git"
 import { Log } from "@/util/log"
-import { EngineTaskTable } from "./engine.sql"
 import { isActiveGoalRunStatus } from "./catalog"
 import { InternalGitCommitSubject } from "./internal-git-commit-subject"
 import { listGoalRunsForTask, requireTask, type AcceptanceRow, type PlanRow, type TaskRow } from "./store"
 import { insertEngineProgressSnapshot } from "./progress"
+import { setEngineTaskMetadata } from "./task"
 import fs from "node:fs/promises"
 import path from "node:path"
 
@@ -116,16 +116,7 @@ function save(task: TaskRow, patch: Record<string, unknown>, time = Date.now()) 
     ...dict(meta.git),
     ...patch,
   }
-  Database.use((db) =>
-    db
-      .update(EngineTaskTable)
-      .set({
-        metadata: meta,
-        time_updated: time,
-      })
-      .where(eq(EngineTaskTable.id, task.id))
-      .run(),
-  )
+  Database.use((db) => setEngineTaskMetadata(db, { taskID: task.id, metadata: meta, timeUpdated: time }))
   return requireTask(task.id)
 }
 

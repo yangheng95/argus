@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
-import { mergeEngineTaskMetadata, touchEngineTask } from "../../src/engine/task"
+import { mergeEngineTaskMetadata, setEngineTaskMetadata, touchEngineTask } from "../../src/engine/task"
 import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
@@ -77,6 +77,20 @@ describe("engine task writer", () => {
           id: taskID,
           metadata,
           time_updated: now + 2,
+        })
+
+        Database.transaction((db) =>
+          setEngineTaskMetadata(db, {
+            taskID,
+            metadata: { checks: { lint: false } },
+            timeUpdated: now + 3,
+          }),
+        )
+        row = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
+        expect(row).toMatchObject({
+          id: taskID,
+          metadata: { checks: { lint: false } },
+          time_updated: now + 3,
         })
       },
     })

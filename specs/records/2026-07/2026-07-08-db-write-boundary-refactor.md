@@ -301,3 +301,40 @@ Phase 9 verification:
 - `bun test --timeout 60000 packages/opencorvus/test/orchestrator/tools.test.ts -t "requirements persists a spec snapshot through the shared stage dispatcher"`
 - `bun test --timeout 60000 packages/opencorvus/test/orchestrator/tools.test.ts -t "architect promotion keeps requirements attached to the active spec"`
 - `bun run --cwd packages/opencorvus typecheck`
+
+## Phase 10 Task Metadata And Touch Boundary
+
+The next same-shape `engine_task` writes are non-lifecycle writes in engine
+modules:
+
+- `engine/checks.ts` replaces task metadata with a checks patch.
+- `engine/git.ts` replaces task metadata with a nested `git` patch.
+- `engine/writer.ts::createRun(linkAsActive=true)` only bumps `time_updated`.
+
+These are safe to route through the low-level task writer without absorbing
+queue CAS, terminal lifecycle, task creation, or task deletion semantics.
+
+Phase 10 acceptance criteria:
+
+- Production source direct `EngineTaskTable` writes in `engine/checks.ts`,
+  `engine/git.ts`, and `engine/writer.ts` are replaced by `engine/task.ts`
+  writer calls.
+- `writeTaskChecks` preserves its full metadata replacement behavior,
+  including deleting `metadata.checks` when checks are absent.
+- `engine/git.ts` preserves its nested `metadata.git` merge behavior.
+- `createRun(linkAsActive=true)` preserves the task `time_updated` bump in the
+  same transaction as run artifact creation.
+- Existing task writer tests cover metadata replacement and timestamp touch.
+
+Phase 10 verification:
+
+- `rg -n 'db\\.(insert|update|delete)\\(EngineTaskTable|\\.(insert|update|delete)\\(EngineTaskTable' packages/opencorvus/src -g '*.ts'` no longer reports `engine/checks.ts`, `engine/git.ts`, or `engine/writer.ts`; remaining production writes are `pipeline.ts`, `queue.ts`, `rewind.ts`, `state.ts`, `task-api/index.ts`, and `engine/task.ts`.
+- `bun test --timeout 60000 packages/opencorvus/test/engine/task-writer.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/engine/writer.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/tool/panel.test.ts -t "update_checks preserves advanced config when panel toggles standard checks"`
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts`
+
+Additional verification attempt not counted as passing evidence:
+
+- `bun test --timeout 60000 packages/opencorvus/test/engine/git-checkpoint-scenarios.test.ts` failed in the existing scenario 1 expectation: expected baseline mode `recorded_head`, received `created_commit`. This failure is in baseline dirty/commit classification, not in the task metadata writer call, and remains outside the Phase 10 accepted verification set.

@@ -8,6 +8,19 @@ export function touchEngineTask(db: Database.TxOrDb, input: { taskID: string; ti
     .run()
 }
 
+export function setEngineTaskMetadata(
+  db: Database.TxOrDb,
+  input: { taskID: string; metadata: EngineMetadata; timeUpdated?: number },
+): void {
+  db.update(EngineTaskTable)
+    .set({
+      metadata: input.metadata,
+      time_updated: input.timeUpdated ?? Date.now(),
+    })
+    .where(eq(EngineTaskTable.id, input.taskID))
+    .run()
+}
+
 export function mergeEngineTaskMetadata(
   db: Database.TxOrDb,
   input: { taskID: string; metadata: EngineMetadata; timeUpdated?: number },
