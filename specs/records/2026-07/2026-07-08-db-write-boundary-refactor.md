@@ -238,3 +238,31 @@ Phase 7 verification:
 - `bun run --cwd packages/opencorvus typecheck`
 - `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts`
 - `git diff --check`
+
+## Phase 8 Goal Contract Field Boundary
+
+The next small cross-layer write is `manage_task(action=modify_goal)`.
+`orchestrator/tools.ts` computes changed contract fields correctly, but then
+directly updates `engine_goal`. Goal row creation, deletion, architect upsert,
+operator add-goal, and active plan repointing already live in `engine/persist.ts`.
+
+Phase 8 grep evidence:
+
+- `rg -n 'db\\.(insert|update|delete)\\(EngineGoalTable|\\.(insert|update|delete)\\(EngineGoalTable' packages/opencorvus/src -g '*.ts'` reports one non-persist production write in `orchestrator/tools.ts` inside `modify_goal`.
+- The existing no-op filter and live-work blocking stay in `orchestrator/tools.ts`; the persistence boundary should only own the row update once the tool has proven a real contract change.
+
+Phase 8 acceptance criteria:
+
+- Production source direct writes to `EngineGoalTable` exist only in `engine/persist.ts`.
+- `modify_goal` keeps its existing no-op filtering, dependency graph mutation refusal, retry-intent behavior, and return text.
+- Static database write-boundary tests reject future direct `EngineGoalTable` writes outside `engine/persist.ts`.
+- A focused writer test covers applying a contract field patch to a goal row.
+
+Phase 8 verification:
+
+- `rg -n 'db\\.(insert|update|delete)\\(EngineGoalTable|\\.(insert|update|delete)\\(EngineGoalTable' packages/opencorvus/src -g '*.ts'` reports only `engine/persist.ts`.
+- `bun test --timeout 60000 packages/opencorvus/test/engine/goal-contract-fields.test.ts`
+- `bun test packages/opencorvus/test/script/db-write-boundary.test.ts`
+- `bun test --timeout 60000 packages/opencorvus/test/orchestrator/tools.test.ts -t "modify_goal records retry intent without clearing a completed workspace pointer"`
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts`

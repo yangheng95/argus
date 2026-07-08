@@ -292,6 +292,8 @@ export type CreateActivePlanGraphResult = {
   planNodeIDs: string[]
 }
 
+export type GoalContractFieldPatch = Partial<typeof EngineGoalTable.$inferInsert>
+
 function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
 }
@@ -588,6 +590,13 @@ export function createActivePlanGraph(
   }
 
   return { planID, planNodeIDs }
+}
+
+export function updateGoalContractFields(
+  db: Database.TxOrDb,
+  input: { goalID: string; values: GoalContractFieldPatch },
+): void {
+  db.update(EngineGoalTable).set(input.values).where(eq(EngineGoalTable.id, input.goalID)).run()
 }
 
 /**

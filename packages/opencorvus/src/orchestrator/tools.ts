@@ -162,8 +162,10 @@ import {
   persistTaskFrontendResearchBrief,
   persistTaskResearchBrief,
   recordTaskLevelBuildOutcome,
+  updateGoalContractFields,
   updateGoalWorkspace,
   updateGoalRun,
+  type GoalContractFieldPatch,
 } from "@/engine/persist"
 import {
   findActivePlanForTask,
@@ -10356,12 +10358,8 @@ export function createOrchestratorTools(input: {
 
         if (contractChanged) {
           setValues.time_updated = Date.now()
-          const { EngineGoalTable } = await import("@/engine/engine.sql")
           Database.use((db) => {
-            db.update(EngineGoalTable)
-              .set(setValues as any)
-              .where(eq(EngineGoalTable.id, goalID))
-              .run()
+            updateGoalContractFields(db, { goalID, values: setValues as GoalContractFieldPatch })
           })
         }
 

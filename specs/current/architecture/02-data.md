@@ -60,7 +60,9 @@ writer 创建或解析 interaction row。`engine_channel_binding` 的唯一直�
 supersede 或更新 spec snapshot row。`engine_plan_version` 和 `engine_plan_node`
 的唯一直接表写入文件是 `engine/persist.ts`；architect graph、operator add-goal
 和 create-run active plan graph 只能通过这个 persistence writer 创建、supersede
-或更新 plan graph row。其他 `engine_*` 表的写入仍必须停留在
+或更新 plan graph row。`engine_goal` 的唯一直接表写入文件是 `engine/persist.ts`；
+architect upsert、operator add/modify/delete/complete、active plan repoint 和 retry
+attempt bookkeeping 只能通过这个 persistence writer 变更 goal row。其他 `engine_*` 表的写入仍必须停留在
 `task-api/index.ts` 和 engine 生命周期 writer/service 内，禁止跨域模块直接写。
 
 ## session 域（5 表）

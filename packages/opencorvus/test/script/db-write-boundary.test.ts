@@ -26,6 +26,7 @@ function projectPath(file: string): string {
 const approvedWriters: Record<string, string> = {
   EngineArtifactTable: "packages/opencorvus/src/engine/artifact.ts",
   EngineChannelBindingTable: "packages/opencorvus/src/engine/channel-binding.ts",
+  EngineGoalTable: "packages/opencorvus/src/engine/persist.ts",
   EngineInteractionRequestTable: "packages/opencorvus/src/engine/interaction-request.ts",
   EnginePlanNodeTable: "packages/opencorvus/src/engine/persist.ts",
   EnginePlanVersionTable: "packages/opencorvus/src/engine/persist.ts",
@@ -78,5 +79,9 @@ describe("database write boundary", () => {
 
   test("only the engine persistence writer directly writes EnginePlanNodeTable", () => {
     expect(directWriteViolations("EnginePlanNodeTable")).toEqual([])
+  })
+
+  test("only the engine persistence writer directly writes EngineGoalTable", () => {
+    expect(directWriteViolations("EngineGoalTable")).toEqual([])
   })
 })
