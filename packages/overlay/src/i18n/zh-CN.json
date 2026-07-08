@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "be7cb72abb649762"
+    "panel_revision": "cb0fb8c63ed25325"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -820,6 +820,11 @@
   "section.files": "文件变更",
   "explorer.title": "资源管理器",
   "browser_preview.capture_title": "从已保存的后端预览目标捕获 Playwright 证据。",
+  "browser_preview.capture_loading": "正在捕获证据",
+  "browser_preview.empty.evidence_failed": "已保存的预览证据加载失败。",
+  "browser_preview.empty.evidence_loading": "正在加载已保存的预览证据。",
+  "browser_preview.evidence.image_failed": "截图图片加载失败",
+  "browser_preview.evidence.missing_persisted": "验证失败，{{viewport}} 没有可用的持久化证据",
   "browser_preview.address.label": "预览地址",
   "browser_preview.comment.cancel": "取消",
   "browser_preview.comment.label": "节点评论",
@@ -1230,7 +1235,6 @@
   "todo.progress_value": "{{completed}}/{{total}} 已完成",
   "todo.progress_value_current": "{{completed}}/{{total}} 已完成 · {{current}}",
   "work_ledger.title": "Projects",
-  "work_ledger.open_project": "打开文件夹作为项目",
   "work_ledger.kind.mission": "Mission",
   "work_ledger.kind.task": "Task",
   "work_ledger.kind.chat": "Chat",

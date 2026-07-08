@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "be7cb72abb649762"
+    "panel_revision": "cb0fb8c63ed25325"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -820,6 +820,11 @@
   "section.files": "Files",
   "explorer.title": "Explorer",
   "browser_preview.capture_title": "Capture Playwright evidence from the saved backend preview target.",
+  "browser_preview.capture_loading": "Capturing evidence",
+  "browser_preview.empty.evidence_failed": "Saved preview evidence failed to load.",
+  "browser_preview.empty.evidence_loading": "Loading saved preview evidence.",
+  "browser_preview.evidence.image_failed": "Capture image failed",
+  "browser_preview.evidence.missing_persisted": "Verification failed before persisted evidence was available for {{viewport}}",
   "browser_preview.address.label": "Preview address",
   "browser_preview.comment.cancel": "Cancel",
   "browser_preview.comment.label": "Node comment",
@@ -1230,7 +1235,6 @@
   "todo.progress_value": "{{completed}}/{{total}} done",
   "todo.progress_value_current": "{{completed}}/{{total}} done · {{current}}",
   "work_ledger.title": "Projects",
-  "work_ledger.open_project": "Open folder as project",
   "work_ledger.kind.mission": "Mission",
   "work_ledger.kind.task": "Task",
   "work_ledger.kind.chat": "Chat",

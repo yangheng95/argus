@@ -6,7 +6,6 @@ import {
   loadTaskBrowserPreviewEvidence,
   loadTaskBrowserPreviewEvidenceCaptureObjectUrl,
   saveTaskBrowserPreviewTarget,
-  selectTaskBrowserPreviewTarget,
   type BrowserPreviewEvidence,
   type BrowserPreviewTarget,
   type BrowserPreviewViewportID,
@@ -216,12 +215,6 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     },
   )
   const candidates = createMemo(() => currentTarget()?.candidates ?? [])
-  const selectedCandidate = createMemo(
-    () =>
-      candidates().find((item) => item.selected) ??
-      candidates().find((item) => item.id === currentTarget()?.id) ??
-      null,
-  )
   const viewports = createMemo(() => currentTarget()?.viewports ?? [])
   const targetUrl = createMemo(() => currentTarget()?.url)
   const readyTarget = createMemo(() => {
@@ -319,13 +312,6 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     Boolean(
       target.loading || targetTransitionPending() || currentVerificationLoading() || currentLatestEvidenceLoading(),
     ),
-  )
-  const viewportOptions = createMemo(() =>
-    viewports().map((viewport) => ({
-      value: viewport.id,
-      label: viewportLabel(viewport.id),
-      disabled: previewActionPending(),
-    })),
   )
   const nativePreviewScope = createMemo<BrowserPreviewNativeScope | undefined>(() => {
     const taskID = props.taskID()
@@ -485,46 +471,6 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
       refetchTargetFromPanel()
     }
   })
-
-  const selectCandidate = (candidate: BrowserPreviewCandidate | null) => {
-    const taskID = props.taskID()
-    const directory = props.directory()
-    if (!taskID || !directory || !candidate || candidate.selected) return
-    setPendingSelectedTargetID(candidate.id)
-    setTargetSelectionError("")
-    setVerificationRequest(undefined)
-    requestNativePreviewClose(false)
-    void selectTaskBrowserPreviewTarget({ taskID, directory, targetID: candidate.id })
-      .then(() => {
-        if (props.taskID() !== taskID || props.directory() !== directory) return
-        setRefreshToken((value) => value + 1)
-      })
-      .catch((error) => {
-        if (props.taskID() !== taskID || props.directory() !== directory) return
-        if (pendingSelectedTargetID() !== candidate.id) return
-        setPendingSelectedTargetID("")
-        setTargetSelectionError(browserPreviewErrorMessage(error))
-        refetchTargetFromPanel()
-      })
-  }
-
-  const captureEvidence = () => {
-    const taskID = props.taskID()
-    const directory = props.directory()
-    const resolved = currentTarget()
-    if (!taskID || !directory || resolved?.status !== "ready" || !resolved.url || !resolved.id) return
-    const viewportIDs = viewports().map((viewport) => viewport.id)
-    if (viewportIDs.length === 0) return
-    setNativePreviewError("")
-    setVerificationRequest({
-      taskID,
-      directory,
-      targetID: resolved.id,
-      viewportIDs,
-      targetKey: browserPreviewTargetKey(resolved),
-      token: Date.now(),
-    })
-  }
 
   const saveAddressTarget = () => {
     const taskID = props.taskID()
@@ -821,241 +767,67 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   return (
     <section class="browser-preview-panel" aria-label={t("browser_preview.title")} data-active={String(panelActive())}>
       <div class="browser-preview-command-surface" data-ui="browser-preview-chrome">
-          <div class="browser-preview-chrome-grid" data-ui="browser-preview-toolbar">
-            <form
-              class="browser-preview-address-form"
-              data-ui="browser-preview-address-form"
-              onSubmit={(event) => {
-                event.preventDefault()
-                saveAddressTarget()
+        <div class="browser-preview-chrome-grid" data-ui="browser-preview-toolbar">
+          <form
+            class="browser-preview-address-form"
+            data-ui="browser-preview-address-form"
+            onSubmit={(event) => {
+              event.preventDefault()
+              saveAddressTarget()
+            }}
+          >
+            <input
+              class="browser-preview-address-input"
+              data-ui="browser-preview-address-input"
+              value={addressDraft()}
+              placeholder="about:blank"
+              aria-label={t("browser_preview.address.label")}
+              disabled={!props.taskID() || addressSaving()}
+              spellcheck={false}
+              onInput={(event) => {
+                setAddressDraft(event.currentTarget.value)
+                setAddressDirty(true)
+                setAddressError("")
               }}
-            >
-              <input
-                class="browser-preview-address-input"
-                data-ui="browser-preview-address-input"
-                value={addressDraft()}
-                placeholder="about:blank"
-                aria-label={t("browser_preview.address.label")}
-                disabled={!props.taskID() || addressSaving()}
-                spellcheck={false}
-                onInput={(event) => {
-                  setAddressDraft(event.currentTarget.value)
-                  setAddressDirty(true)
-                  setAddressError("")
-                }}
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                tone="neutral"
-                title={t("browser_preview.navigation.reload_title")}
-                aria-label={t("browser_preview.navigation.reload_title")}
-                disabled={!readyTarget()}
-                onClick={() => navigatePreview("reload")}
-              >
-                <Icon name="refresh" size={18} />
-              </Button>
-            </form>
-        <div class="browser-preview-controls" data-ui="browser-preview-toolbar">
-          <div class="browser-preview-toolbar-row" data-row="address">
-            <Show when={readyTarget()}>
-              <div class="browser-preview-browser-controls" data-ui="browser-preview-navigation-controls">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  tone="neutral"
-                  title={t("browser_preview.navigation.back_title")}
-                  aria-label={t("browser_preview.navigation.back_title")}
-                  disabled={!nativePreviewNavigationReady()}
-                  onClick={() => navigateNativePreview("back")}
-                >
-                  <Icon name="nav-back" size={13} />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  tone="neutral"
-                  title={t("browser_preview.navigation.forward_title")}
-                  aria-label={t("browser_preview.navigation.forward_title")}
-                  disabled={!nativePreviewNavigationReady()}
-                  onClick={() => navigateNativePreview("forward")}
-                >
-                  <Icon name="nav-forward" size={13} />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  tone="neutral"
-                  title={t("browser_preview.navigation.reload_title")}
-                  aria-label={t("browser_preview.navigation.reload_title")}
-                  disabled={!nativePreviewNavigationReady()}
-                  onClick={() => navigateNativePreview("reload")}
-                >
-                  <Icon name="refresh" size={13} />
-                </Button>
-              </div>
-            </Show>
-
-            <Show when={readyTarget() && candidates().length > 0}>
-              <SelectControl<BrowserPreviewCandidate>
-                class="browser-preview-candidate-select"
-                options={candidates()}
-                value={selectedCandidate()}
-                onChange={selectCandidate}
-                optionValue="id"
-                optionTextValue="url"
-                disabled={candidates().length <= 1 || previewActionPending()}
-                disallowEmptySelection
-                gutter={4}
-                sameWidth
-                beforeTrigger={<Icon name="external-link" size={13} />}
-                triggerClass="browser-preview-candidate-trigger"
-                triggerDataUI="browser-preview-candidate-trigger"
-                ariaLabel={t("browser_preview.candidates.label")}
-                contentClass="browser-preview-candidate-content"
-                listboxClass="browser-preview-candidate-listbox"
-                optionClass="browser-preview-candidate-option"
-                indicatorClass="browser-preview-candidate-indicator"
-                optionData={(candidate) => ({
-                  "data-ui": "browser-preview-candidate-option",
-                  "data-target-id": candidate.id,
-                })}
-                renderValue={(candidate) => <span>{candidate?.url ?? targetUrl() ?? ""}</span>}
-                renderOptionLabel={(candidate) => candidate.url}
-              />
-            </Show>
-          </div>
-
-          <div class="browser-preview-toolbar-row" data-row="tools">
-            <Show when={readyTarget() && viewports().length > 0}>
-              <div
-                class="browser-preview-viewport-controls"
-                data-ui="browser-preview-viewports"
-                data-orientation="horizontal"
-              >
-                <SegmentedControl<BrowserPreviewViewportID>
-                  options={viewportOptions()}
-                  value={viewportID()}
-                  onChange={setViewportID}
-                  ariaLabel={t("browser_preview.viewport.label")}
-                  class="oc-tabs"
-                  itemClass="oc-tab"
-                  itemAttributes={(option) => ({
-                    "data-ui": "browser-preview-viewport",
-                    "data-viewport-id": option.value,
-                    "data-size": "sm",
-                  })}
-                />
-              </div>
-            </Show>
-
+            />
             <Button
               type="button"
-              variant="outline"
-              size="sm"
+              variant="ghost"
+              size="icon"
               tone="neutral"
-              class="browser-preview-capture-button"
-              title={t("browser_preview.capture_title")}
-              aria-label={t("browser_preview.capture_title")}
-              disabled={!props.taskID() || !readyTarget() || previewActionPending()}
-              onClick={captureEvidence}
+              title={t("browser_preview.navigation.reload_title")}
+              aria-label={t("browser_preview.navigation.reload_title")}
+              disabled={!readyTarget()}
+              onClick={() => navigatePreview("reload")}
             >
-              <Icon name="inspect" size={13} />
-              <span>{t("browser_preview.capture")}</span>
+              <Icon name="refresh" size={18} />
             </Button>
+          </form>
 
-            <Show
-              when={
-                currentVerificationError() ||
-                currentLatestEvidenceError() ||
-                currentVerificationLoading() ||
-                currentLatestEvidenceLoading() ||
-                currentVerification() ||
-                renderedEvidence()
-              }
+          <div class="browser-preview-chrome-actions">
+            <Button
+              type="button"
+              variant={nodeSelectionEnabled() ? "solid" : "ghost"}
+              size="icon"
+              tone="neutral"
+              class="browser-preview-comment-mode-button"
+              title={t("browser_preview.selection.title")}
+              aria-label={t("browser_preview.selection.title")}
+              aria-pressed={nodeSelectionEnabled()}
+              disabled={!readyTarget()}
+              onClick={() => {
+                const nextEnabled = !nodeSelectionEnabled()
+                setNodeSelectionEnabled(nextEnabled)
+                setNodeSelection(undefined)
+              }}
             >
-              <div
-                class="browser-preview-evidence-status"
-                data-status={
-                  currentVerificationError()
-                    ? "failed"
-                    : currentVerificationLoading() || currentLatestEvidenceLoading()
-                      ? "loading"
-                      : currentLatestEvidenceError()
-                        ? "failed"
-                        : currentCaptureImageError()
-                          ? "failed"
-                          : (currentVerification()?.status ??
-                            renderedEvidence()?.status ??
-                            (currentVerificationLoading() ? "loading" : "idle"))
-                }
-                role={currentVerificationLoading() || currentLatestEvidenceLoading() ? "status" : undefined}
-                aria-live={currentVerificationLoading() || currentLatestEvidenceLoading() ? "polite" : undefined}
-              >
-                <Switch>
-                  <Match when={currentVerificationError()}>
-                    {(error) => (
-                      <>
-                        <Icon name="status-failed" size={14} />
-                        <span>{String(error())}</span>
-                      </>
-                    )}
-                  </Match>
-                  <Match when={currentVerificationLoading()}>
-                    <span class="card__spinner" />
-                    <span>{t("browser_preview.capture_loading")}</span>
-                  </Match>
-                  <Match when={currentLatestEvidenceLoading()}>
-                    <span class="card__spinner" />
-                    <span>{t("browser_preview.evidence.loading")}</span>
-                  </Match>
-                  <Match when={currentLatestEvidenceError()}>
-                    {(error) => (
-                      <>
-                        <Icon name="status-failed" size={14} />
-                        <span>
-                          {t("browser_preview.evidence.load_failed")}: {error().message}
-                        </span>
-                      </>
-                    )}
-                  </Match>
-                  <Match when={currentCaptureImageError()}>
-                    {(error) => (
-                      <>
-                        <Icon name="status-failed" size={14} />
-                        <span>{error()}</span>
-                      </>
-                    )}
-                  </Match>
-                  <Match when={currentVerification()}>
-                    {(resolved) => (
-                      <>
-                        <Icon name={resolved().status === "passed" ? "status-completed" : "status-failed"} size={14} />
-                        <span>
-                          {resolved().captures[viewportID()]?.summary ??
-                            renderedEvidence()?.summary ??
-                            resolved().diagnostics.join(" ")}
-                        </span>
-                      </>
-                    )}
-                  </Match>
-                  <Match when={renderedEvidence()}>
-                    {(evidence) => (
-                      <>
-                        <Icon name={evidence().status === "passed" ? "status-completed" : "status-failed"} size={14} />
-                        <span>{evidence().summary}</span>
-                      </>
-                    )}
-                  </Match>
-                </Switch>
-              </div>
-            </Show>
+              <Icon name="message" size={18} />
+            </Button>
           </div>
         </div>
+        <Show when={target.loading || targetTransitionPending()}>
+          <div class="browser-preview-progress" data-ui="browser-preview-progress" />
+        </Show>
       </div>
 
       <div class="browser-preview-stage">
