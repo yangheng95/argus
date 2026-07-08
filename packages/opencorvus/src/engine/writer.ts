@@ -20,6 +20,7 @@ import { Database, and, eq, inArray, isNotNull, isNull } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { isActiveGoalRunStatus, isLiveRunStatus, isResettableGoalRunStatus } from "./catalog"
 import { EngineArtifactTable, EngineTaskTable, type EngineRunStatus } from "./engine.sql"
+import { insertEngineArtifact } from "./artifact"
 import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
 import { Message } from "@/session/message"
@@ -117,18 +118,15 @@ export function createRun(input: CreateRunInput): RunRow {
     time_completed: null,
   }
   Database.transaction((db) => {
-    db.insert(EngineArtifactTable)
-      .values({
-        id: runID,
-        task_id: input.taskID,
-        run_id: runID,
-        kind: "run",
-        label: `run-${input.status}`,
-        payload,
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
+    insertEngineArtifact(db, {
+      id: runID,
+      taskID: input.taskID,
+      runID,
+      kind: "run",
+      label: `run-${input.status}`,
+      payload,
+      timeCreated: now,
+    })
     if (input.linkAsActive) {
       // Phase-6-f-3: task.active_run_id deleted — new runs are the active
       // one by virtue of being the latest artifact. Keep a time_updated

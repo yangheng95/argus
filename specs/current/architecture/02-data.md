@@ -44,12 +44,11 @@
 
 > 实际 `sqliteTable` 注册以 `packages/opencorvus/src/engine/engine.sql.ts` 的 `export const Engine*Table = sqliteTable(...)` 为唯一真源；本文档只描述表职责，不复制完整注册清单或数量。
 
-**唯一写入者**：`task-api/index.ts` 和 `engine/**`。`engine_artifact`
-的跨域过程 / 证据 / preview / review row 必须通过
-`engine/artifact.ts` 的 writer 进入；非 engine 模块禁止直接
-`insert` / `update` / `delete` `EngineArtifactTable`。`engine/persist.ts` /
-`engine/state.ts` / `engine/store.ts` 仍是 engine 生命周期内部写入面。
-禁止其他模块直接写 `engine_*` 表。
+**唯一写入者**：`engine_artifact` 的唯一直接表写入文件是
+`engine/artifact.ts`。所有过程 / 证据 / preview / review / run /
+goal-run artifact row 必须通过这个 writer 进入；生产源码中其他文件禁止直接
+`insert` / `update` / `delete` `EngineArtifactTable`。其他 `engine_*` 表的写入
+仍必须停留在 `task-api/index.ts` 和 engine 生命周期 writer/service 内，禁止跨域模块直接写。
 
 ## session 域（5 表）
 

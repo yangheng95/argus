@@ -24,11 +24,11 @@ function projectPath(file: string): string {
 }
 
 function isApprovedEngineArtifactWriter(path: string): boolean {
-  return path.startsWith("packages/opencorvus/src/engine/") || path === "packages/opencorvus/src/task-api/index.ts"
+  return path === "packages/opencorvus/src/engine/artifact.ts"
 }
 
 describe("database write boundary", () => {
-  test("non-engine production modules do not directly write EngineArtifactTable", () => {
+  test("only the engine artifact writer directly writes EngineArtifactTable", () => {
     const violations: string[] = []
     const writePattern = /\.(insert|update|delete)\s*\(\s*EngineArtifactTable\b/g
 

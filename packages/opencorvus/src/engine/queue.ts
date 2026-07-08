@@ -18,6 +18,7 @@ import { SessionTable } from "@/session/session.sql"
 import { Database, and, desc, eq, sql } from "@/storage/db"
 import { Log } from "@/util/log"
 import { EngineArtifactTable, EngineProgressSnapshotTable, EngineTaskTable } from "./engine.sql"
+import { recordEngineArtifact, updateEngineArtifact, updateEngineArtifactsWhere } from "./artifact"
 import { findActiveRunForTask, findTask, type TaskRow } from "./store"
 import { deriveTaskStatus, isTaskActive, isTaskQueued, isTaskTerminal } from "./task-status"
 import type { OrchestratorEvent } from "@/orchestrator/agent"
@@ -141,57 +142,43 @@ function persistQueuedOperatorWake(
       ? { queued_by_instance_directory: instance.directory, queued_by_project_id: instance.project.id }
       : {}),
   }
-  Database.use((db) =>
-    db
-      .insert(EngineArtifactTable)
-      .values({
-        id: Identifier.ascending("artifact"),
-        task_id: taskID,
-        run_id: null,
-        goal_run_id: null,
-        acceptance_id: null,
-        kind: "queued_operator_wake",
-        label: "pending",
-        payload,
-        time_created: now,
-        time_updated: now,
-      })
-      .run(),
-  )
+  recordEngineArtifact({
+    taskID,
+    kind: "queued_operator_wake",
+    label: "pending",
+    payload,
+    timeCreated: now,
+  })
 }
 
 function discardPendingQueuedOperatorWakes(taskID: string): void {
   const now = Date.now()
   Database.use((db) =>
-    db
-      .update(EngineArtifactTable)
-      .set({ label: "discarded", time_updated: now })
-      .where(
-        and(
-          eq(EngineArtifactTable.task_id, taskID),
-          eq(EngineArtifactTable.kind, "queued_operator_wake"),
-          eq(EngineArtifactTable.label, "pending"),
-        ),
-      )
-      .run(),
+    updateEngineArtifactsWhere(db, {
+      label: "discarded",
+      timeUpdated: now,
+      where: and(
+        eq(EngineArtifactTable.task_id, taskID),
+        eq(EngineArtifactTable.kind, "queued_operator_wake"),
+        eq(EngineArtifactTable.label, "pending"),
+      )!,
+    }),
   )
 }
 
 export function discardPendingQueuedOperatorWakeForRequest(input: { taskID: string; requestID: string }): void {
   const now = Date.now()
   Database.use((db) =>
-    db
-      .update(EngineArtifactTable)
-      .set({ label: "discarded", time_updated: now })
-      .where(
-        and(
-          eq(EngineArtifactTable.task_id, input.taskID),
-          eq(EngineArtifactTable.kind, "queued_operator_wake"),
-          eq(EngineArtifactTable.label, "pending"),
-          sql`json_extract(${EngineArtifactTable.payload}, '$.request_id') = ${input.requestID}`,
-        ),
-      )
-      .run(),
+    updateEngineArtifactsWhere(db, {
+      label: "discarded",
+      timeUpdated: now,
+      where: and(
+        eq(EngineArtifactTable.task_id, input.taskID),
+        eq(EngineArtifactTable.kind, "queued_operator_wake"),
+        eq(EngineArtifactTable.label, "pending"),
+        sql`json_extract(${EngineArtifactTable.payload}, '$.request_id') = ${input.requestID}`,
+      )!,
+    }),
   )
 }
 
@@ -242,13 +229,7 @@ function findNextPendingQueuedOperatorWake(taskID: string):
 }
 
 function markQueuedOperatorWakeDrained(artifactID: string): void {
-  Database.use((db) =>
-    db
-      .update(EngineArtifactTable)
-      .set({ label: "drained", time_updated: Date.now() })
-      .where(eq(EngineArtifactTable.id, artifactID))
-      .run(),
-  )
+  updateEngineArtifact({ id: artifactID, label: "drained" })
 }
 
 function hasQueuedTaskEvent(taskID: string): boolean {

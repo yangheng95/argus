@@ -1,5 +1,6 @@
 import { AgentRoleContract, type AgentRoleID } from "@/agent/role-contract"
 import { EngineArtifactTable, type EngineArtifactKind, type EngineMetadata } from "@/engine/engine.sql"
+import { insertEngineArtifact, updateEngineArtifactsWhere } from "@/engine/artifact"
 import { Database, and, desc, eq } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { processOwner } from "@/engine/lease"
@@ -92,20 +93,14 @@ export function createStageContinuationRequest(input: {
     created_at: now,
   }
   Database.use((db) => {
-    db.insert(EngineArtifactTable)
-      .values({
-        id: artifactID,
-        task_id: input.taskID,
-        run_id: null,
-        goal_run_id: null,
-        acceptance_id: null,
-        kind: "stage_continuation_request" as EngineArtifactKind,
-        label: "pending",
-        payload,
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
+    insertEngineArtifact(db, {
+      id: artifactID,
+      taskID: input.taskID,
+      kind: "stage_continuation_request" as EngineArtifactKind,
+      label: "pending",
+      payload,
+      timeCreated: now,
+    })
   })
   return { artifactID, taskID: input.taskID, payload, timeCreated: now, timeUpdated: now }
 }
@@ -293,20 +288,16 @@ function updateStageContinuationPayload(input: {
   now: number
 }): void {
   Database.use((db) => {
-    db.update(EngineArtifactTable)
-      .set({
-        payload: input.payload,
-        label: input.label,
-        time_updated: input.now,
-      })
-      .where(
-        and(
-          eq(EngineArtifactTable.task_id, input.taskID),
-          eq(EngineArtifactTable.id, input.artifactID),
-          eq(EngineArtifactTable.kind, "stage_continuation_request" as EngineArtifactKind),
-        ),
-      )
-      .run()
+    updateEngineArtifactsWhere(db, {
+      payload: input.payload,
+      label: input.label,
+      timeUpdated: input.now,
+      where: and(
+        eq(EngineArtifactTable.task_id, input.taskID),
+        eq(EngineArtifactTable.id, input.artifactID),
+        eq(EngineArtifactTable.kind, "stage_continuation_request" as EngineArtifactKind),
+      )!,
+    })
   })
 }
 

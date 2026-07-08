@@ -9,6 +9,7 @@ import { taskIDForSession } from "@/orchestrator/task-event"
 import { and, desc, eq, sql } from "@/storage/db"
 import { Database } from "@/storage/db"
 import { EngineArtifactTable, EngineTaskTable, type EngineArtifactKind, type EngineMetadata } from "./engine.sql"
+import { insertEngineArtifact, updateEngineArtifactsWhere, updateEngineArtifactWhereReturning } from "./artifact"
 import { findGoal, findGoalRun } from "./store"
 import { listLiveOrchestratorToolOwnership } from "./tool-ownership"
 
@@ -662,20 +663,15 @@ export async function createAgentCoordinationRequest(input: {
       ...(ownership.toolOwnershipArtifactID ? { tool_ownership_artifact_id: ownership.toolOwnershipArtifactID } : {}),
     }
 
-    db.insert(EngineArtifactTable)
-      .values({
-        id: requestID,
-        task_id: input.taskID,
-        run_id: null,
-        goal_run_id: input.goalRunID ?? null,
-        acceptance_id: null,
-        kind: "agent_coordination_request" as EngineArtifactKind,
-        label: "pending",
-        payload,
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
+    insertEngineArtifact(db, {
+      id: requestID,
+      taskID: input.taskID,
+      goalRunID: input.goalRunID,
+      kind: "agent_coordination_request" as EngineArtifactKind,
+      label: "pending",
+      payload,
+      timeCreated: now,
+    })
     EngineProtocol.emitInTransaction(
       Event.AgentCoordinationRequested,
       {
@@ -775,20 +771,15 @@ export async function createOperatorSteerCoordinationRequest(input: {
       ...(ownership.toolOwnershipArtifactID ? { tool_ownership_artifact_id: ownership.toolOwnershipArtifactID } : {}),
     }
 
-    db.insert(EngineArtifactTable)
-      .values({
-        id: requestID,
-        task_id: input.taskID,
-        run_id: null,
-        goal_run_id: input.goalRunID ?? null,
-        acceptance_id: null,
-        kind: "agent_coordination_request" as EngineArtifactKind,
-        label: "pending",
-        payload,
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
+    insertEngineArtifact(db, {
+      id: requestID,
+      taskID: input.taskID,
+      goalRunID: input.goalRunID,
+      kind: "agent_coordination_request" as EngineArtifactKind,
+      label: "pending",
+      payload,
+      timeCreated: now,
+    })
     EngineProtocol.emitInTransaction(
       Event.AgentCoordinationRequested,
       {
@@ -1164,59 +1155,43 @@ export async function createAgentCoordinationResponse(input: {
     }
     assertAgentCoordinationActionPayload(actionPayload)
 
-    const updated = db
-      .update(EngineArtifactTable)
-      .set({
-        label: "responded",
-        payload: {
-          ...request.payload,
-          status: "responded",
-          responded_at: now,
-          response_id: responseID,
-        } satisfies AgentCoordinationRequestPayload,
-        time_updated: now,
-      })
-      .where(
-        and(
-          eq(EngineArtifactTable.task_id, input.taskID),
-          eq(EngineArtifactTable.id, input.requestID),
-          eq(EngineArtifactTable.kind, "agent_coordination_request"),
-          eq(EngineArtifactTable.label, "pending"),
-          sql`json_extract(${EngineArtifactTable.payload}, '$.status') = 'pending'`,
-        ),
-      )
-      .returning({ id: EngineArtifactTable.id })
-      .get()
+    const updated = updateEngineArtifactWhereReturning(db, {
+      label: "responded",
+      payload: {
+        ...request.payload,
+        status: "responded",
+        responded_at: now,
+        response_id: responseID,
+      } satisfies AgentCoordinationRequestPayload,
+      timeUpdated: now,
+      where: and(
+        eq(EngineArtifactTable.task_id, input.taskID),
+        eq(EngineArtifactTable.id, input.requestID),
+        eq(EngineArtifactTable.kind, "agent_coordination_request"),
+        eq(EngineArtifactTable.label, "pending"),
+        sql`json_extract(${EngineArtifactTable.payload}, '$.status') = 'pending'`,
+      )!,
+    })
     if (!updated) throw new Error(`Agent coordination request ${input.requestID} was already claimed`)
 
-    db.insert(EngineArtifactTable)
-      .values({
-        id: responseID,
-        task_id: input.taskID,
-        run_id: null,
-        goal_run_id: request.payload.goal_run_id ?? null,
-        acceptance_id: null,
-        kind: "agent_coordination_response" as EngineArtifactKind,
-        label: input.decision,
-        payload,
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
-    db.insert(EngineArtifactTable)
-      .values({
-        id: actionID,
-        task_id: input.taskID,
-        run_id: null,
-        goal_run_id: request.payload.goal_run_id ?? null,
-        acceptance_id: null,
-        kind: "agent_coordination_action" as EngineArtifactKind,
-        label: "pending",
-        payload: actionPayload,
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
+    insertEngineArtifact(db, {
+      id: responseID,
+      taskID: input.taskID,
+      goalRunID: request.payload.goal_run_id,
+      kind: "agent_coordination_response" as EngineArtifactKind,
+      label: input.decision,
+      payload,
+      timeCreated: now,
+    })
+    insertEngineArtifact(db, {
+      id: actionID,
+      taskID: input.taskID,
+      goalRunID: request.payload.goal_run_id,
+      kind: "agent_coordination_action" as EngineArtifactKind,
+      label: "pending",
+      payload: actionPayload,
+      timeCreated: now,
+    })
     EngineProtocol.emitInTransaction(
       Event.AgentCoordinationResponded,
       {
@@ -1304,24 +1279,18 @@ async function updateAgentCoordinationAction(input: {
     }
     assertAgentCoordinationActionPayload(payload)
 
-    updated = db
-      .update(EngineArtifactTable)
-      .set({
-        label: input.status,
-        payload,
-        time_updated: now,
-      })
-      .where(
-        and(
-          eq(EngineArtifactTable.task_id, input.taskID),
-          eq(EngineArtifactTable.id, input.actionID),
-          eq(EngineArtifactTable.kind, "agent_coordination_action"),
-          eq(EngineArtifactTable.label, "pending"),
-          sql`json_extract(${EngineArtifactTable.payload}, '$.status') = 'pending'`,
-        ),
-      )
-      .returning()
-      .get()
+    updated = updateEngineArtifactWhereReturning(db, {
+      label: input.status,
+      payload,
+      timeUpdated: now,
+      where: and(
+        eq(EngineArtifactTable.task_id, input.taskID),
+        eq(EngineArtifactTable.id, input.actionID),
+        eq(EngineArtifactTable.kind, "agent_coordination_action"),
+        eq(EngineArtifactTable.label, "pending"),
+        sql`json_extract(${EngineArtifactTable.payload}, '$.status') = 'pending'`,
+      )!,
+    })
     if (!updated) throw new Error(`Agent coordination action ${input.actionID} was already completed`)
 
     if (input.status === "failed") {
@@ -1339,29 +1308,25 @@ async function updateAgentCoordinationAction(input: {
       const request = requestRow ? requestRowFromArtifact(requestRow) : undefined
       if (request?.payload.status === "responded" && request.payload.response_id === current.payload.response_id) {
         const { response_id: _responseID, responded_at: _respondedAt, ...requestPayload } = request.payload
-        db.update(EngineArtifactTable)
-          .set({
-            label: "pending",
-            payload: {
-              ...requestPayload,
-              status: "pending",
-              last_failed_response_id: current.payload.response_id,
-              last_failed_action_id: current.payload.action_id,
-              last_action_error: actionErrorMessage(input.error),
-              last_action_failed_at: now,
-            } satisfies AgentCoordinationRequestPayload,
-            time_updated: now,
-          })
-          .where(
-            and(
-              eq(EngineArtifactTable.task_id, input.taskID),
-              eq(EngineArtifactTable.id, current.payload.request_id),
-              eq(EngineArtifactTable.kind, "agent_coordination_request"),
-              eq(EngineArtifactTable.label, "responded"),
-              sql`json_extract(${EngineArtifactTable.payload}, '$.response_id') = ${current.payload.response_id}`,
-            ),
-          )
-          .run()
+        updateEngineArtifactsWhere(db, {
+          label: "pending",
+          payload: {
+            ...requestPayload,
+            status: "pending",
+            last_failed_response_id: current.payload.response_id,
+            last_failed_action_id: current.payload.action_id,
+            last_action_error: actionErrorMessage(input.error),
+            last_action_failed_at: now,
+          } satisfies AgentCoordinationRequestPayload,
+          timeUpdated: now,
+          where: and(
+            eq(EngineArtifactTable.task_id, input.taskID),
+            eq(EngineArtifactTable.id, current.payload.request_id),
+            eq(EngineArtifactTable.kind, "agent_coordination_request"),
+            eq(EngineArtifactTable.label, "responded"),
+            sql`json_extract(${EngineArtifactTable.payload}, '$.response_id') = ${current.payload.response_id}`,
+          )!,
+        })
       }
     }
     emitAgentCoordinationActionEventInTransaction({
@@ -1408,20 +1373,17 @@ export async function recordAgentCoordinationActionProgress(input: {
       result: mergeAgentCoordinationActionResult({ current: current.payload, patch: input.result }),
     }
     assertAgentCoordinationActionPayload(payload)
-    updated = db
-      .update(EngineArtifactTable)
-      .set({ payload, time_updated: now })
-      .where(
-        and(
-          eq(EngineArtifactTable.task_id, input.taskID),
-          eq(EngineArtifactTable.id, input.actionID),
-          eq(EngineArtifactTable.kind, "agent_coordination_action"),
-          eq(EngineArtifactTable.label, "pending"),
-          sql`json_extract(${EngineArtifactTable.payload}, '$.status') = 'pending'`,
-        ),
-      )
-      .returning()
-      .get()
+    updated = updateEngineArtifactWhereReturning(db, {
+      payload,
+      timeUpdated: now,
+      where: and(
+        eq(EngineArtifactTable.task_id, input.taskID),
+        eq(EngineArtifactTable.id, input.actionID),
+        eq(EngineArtifactTable.kind, "agent_coordination_action"),
+        eq(EngineArtifactTable.label, "pending"),
+        sql`json_extract(${EngineArtifactTable.payload}, '$.status') = 'pending'`,
+      )!,
+    })
     if (!updated) throw new Error(`Agent coordination action ${input.actionID} was already completed`)
     emitAgentCoordinationActionEventInTransaction({
       taskID: input.taskID,
@@ -1482,20 +1444,18 @@ async function cancelPendingAgentCoordinationRequests(input: {
     }
     let updated: { id: string } | undefined
     Database.transaction((db) => {
-      updated = db
-        .update(EngineArtifactTable)
-        .set({ label: "cancelled", payload, time_updated: now })
-        .where(
-          and(
-            eq(EngineArtifactTable.task_id, input.taskID),
-            eq(EngineArtifactTable.id, request.artifactID),
-            eq(EngineArtifactTable.kind, "agent_coordination_request"),
-            eq(EngineArtifactTable.label, "pending"),
-            sql`json_extract(${EngineArtifactTable.payload}, '$.status') = 'pending'`,
-          ),
-        )
-        .returning({ id: EngineArtifactTable.id })
-        .get()
+      updated = updateEngineArtifactWhereReturning(db, {
+        label: "cancelled",
+        payload,
+        timeUpdated: now,
+        where: and(
+          eq(EngineArtifactTable.task_id, input.taskID),
+          eq(EngineArtifactTable.id, request.artifactID),
+          eq(EngineArtifactTable.kind, "agent_coordination_request"),
+          eq(EngineArtifactTable.label, "pending"),
+          sql`json_extract(${EngineArtifactTable.payload}, '$.status') = 'pending'`,
+        )!,
+      })
       if (!updated) return
       EngineProtocol.emitInTransaction(
         Event.AgentCoordinationCancelled,
@@ -1563,11 +1523,7 @@ function normalizeAgentCoordinationRequestPayload(payload: unknown): AgentCoordi
   if (typeof value.task_id !== "string" || value.task_id.length === 0) return undefined
   if (typeof value.session_id !== "string" || value.session_id.length === 0) return undefined
   if (typeof value.agent !== "string" || value.agent.length === 0) return undefined
-  if (
-    value.origin !== undefined &&
-    value.origin !== "worker_request" &&
-    value.origin !== "operator_steer"
-  ) {
+  if (value.origin !== undefined && value.origin !== "worker_request" && value.origin !== "operator_steer") {
     return undefined
   }
   if (value.origin === "operator_steer") {

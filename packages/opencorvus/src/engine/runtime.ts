@@ -28,6 +28,7 @@ import {
 } from "./store"
 import { Identifier } from "@/id/id"
 import { isExecutorActiveRunStatus, isLiveGoalRunStatus, isTerminalRunStatus } from "./catalog"
+import { recordEngineArtifact } from "./artifact"
 
 export const ActiveExecutorSessionsError = NamedError.create(
   "ActiveExecutorSessionsError",
@@ -287,36 +288,29 @@ function recordTerminalGoalRefillWakeFact(input: {
   dispatchResult: "started" | "queued"
 }) {
   const now = Date.now()
-  Database.use((db) =>
-    db
-      .insert(EngineArtifactTable)
-      .values({
-        id: Identifier.ascending("artifact"),
-        task_id: input.taskID,
-        run_id: input.runID,
-        goal_run_id: input.terminalGoalRun.id,
-        kind: "goal_refill_notification" as EngineArtifactKind,
-        label: "goal-refill-wake-dispatched",
-        payload: {
-          task_id: input.taskID,
-          run_id: input.runID,
-          fingerprint: input.fingerprint,
-          terminal_goal_run: {
-            id: input.terminalGoalRun.id,
-            goal_id: input.terminalGoalRun.goal_id,
-            status: input.terminalGoalRun.status,
-          },
-          live_sibling_goal_runs: input.liveSiblingGoalRuns
-            .map((goalRun) => ({ id: goalRun.id, goal_id: goalRun.goal_id, status: goalRun.status }))
-            .sort((a, b) => a.id.localeCompare(b.id)),
-          dispatch_result: input.dispatchResult,
-          time_dispatched: now,
-        },
-        time_created: now,
-        time_updated: now,
-      })
-      .run(),
-  )
+  recordEngineArtifact({
+    taskID: input.taskID,
+    runID: input.runID,
+    goalRunID: input.terminalGoalRun.id,
+    kind: "goal_refill_notification" as EngineArtifactKind,
+    label: "goal-refill-wake-dispatched",
+    payload: {
+      task_id: input.taskID,
+      run_id: input.runID,
+      fingerprint: input.fingerprint,
+      terminal_goal_run: {
+        id: input.terminalGoalRun.id,
+        goal_id: input.terminalGoalRun.goal_id,
+        status: input.terminalGoalRun.status,
+      },
+      live_sibling_goal_runs: input.liveSiblingGoalRuns
+        .map((goalRun) => ({ id: goalRun.id, goal_id: goalRun.goal_id, status: goalRun.status }))
+        .sort((a, b) => a.id.localeCompare(b.id)),
+      dispatch_result: input.dispatchResult,
+      time_dispatched: now,
+    },
+    timeCreated: now,
+  })
 }
 
 function upsertExecutorInteraction(

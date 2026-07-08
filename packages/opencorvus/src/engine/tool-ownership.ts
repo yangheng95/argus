@@ -1,6 +1,7 @@
 import { desc, eq, and, sql } from "@/storage/db"
 import { Database } from "@/storage/db"
 import { EngineArtifactTable, type EngineArtifactKind, type EngineMetadata } from "@/engine/engine.sql"
+import { recordEngineArtifact } from "@/engine/artifact"
 import { Identifier } from "@/id/id"
 import { processOwner } from "./lease"
 import { Log } from "@/util/log"
@@ -83,20 +84,15 @@ export function createOrchestratorToolOwnershipPayload(input: {
 export function insertOrchestratorToolOwnershipArtifact(input: OwnershipArtifactInput): string {
   const now = input.now ?? Date.now()
   const artifactID = input.id ?? Identifier.ascending("artifact")
-  Database.use((db) => {
-    db.insert(EngineArtifactTable)
-      .values({
-        id: artifactID,
-        task_id: input.taskID,
-        run_id: input.runID ?? null,
-        goal_run_id: input.goalRunID ?? null,
-        kind: "orchestrator_tool_ownership" as EngineArtifactKind,
-        label: input.label ?? "tool-ownership",
-        payload: input.payload,
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
+  recordEngineArtifact({
+    id: artifactID,
+    taskID: input.taskID,
+    runID: input.runID,
+    goalRunID: input.goalRunID,
+    kind: "orchestrator_tool_ownership" as EngineArtifactKind,
+    label: input.label ?? "tool-ownership",
+    payload: input.payload,
+    timeCreated: now,
   })
   return artifactID
 }

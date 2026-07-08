@@ -3,6 +3,7 @@ import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
 import { progressStatus } from "./helpers"
 import { EngineArtifactTable, EngineProgressSnapshotTable, EngineTaskTable } from "./engine.sql"
+import { insertEngineArtifact } from "./artifact"
 import { findActiveRunForTask, findRun, requireRun, requireTask, type RunRow, type TaskRow } from "./store"
 import { deriveTaskStatus } from "./task-status"
 import { doesRunStatusImplyStarted, isLiveRunStatus, isTerminalRunStatus } from "./catalog"
@@ -367,18 +368,15 @@ export async function updateRun(row: RunRow, values: Partial<RunRow>, summary: s
     time_completed: isTerminalRunStatus(nextStatus) && values.time_completed === undefined ? now : nextCompleted,
   }
   Database.transaction((db) => {
-    db.insert(EngineArtifactTable)
-      .values({
-        id: Identifier.ascending("run"),
-        task_id: row.task_id,
-        run_id: row.id,
-        kind: "run",
-        label: `run-${nextStatus}`,
-        payload: mergedPayload,
-        time_created: effectiveNow,
-        time_updated: effectiveNow,
-      })
-      .run()
+    insertEngineArtifact(db, {
+      id: Identifier.ascending("run"),
+      taskID: row.task_id,
+      runID: row.id,
+      kind: "run",
+      label: `run-${nextStatus}`,
+      payload: mergedPayload,
+      timeCreated: effectiveNow,
+    })
     // Phase-6-f-3: task.active_run_id deleted — derive via
     // findActiveRunForTask(taskID) from the run artifact stream. Keep the
     // time_updated bump so task listings refresh on run writes.

@@ -1,5 +1,5 @@
 import { Identifier } from "@/id/id"
-import { Database, eq } from "@/storage/db"
+import { Database, eq, type SQL } from "@/storage/db"
 import { EngineArtifactTable, type EngineArtifactKind, type EngineMetadata } from "./engine.sql"
 
 export type EngineArtifactRow = typeof EngineArtifactTable.$inferSelect
@@ -24,6 +24,13 @@ export interface EngineArtifactUpdateInput {
   timeUpdated?: number
 }
 
+export interface EngineArtifactWhereUpdateInput {
+  where: SQL
+  label?: string
+  payload?: EngineMetadata
+  timeUpdated?: number
+}
+
 function artifactValues(input: EngineArtifactInput) {
   const id = input.id ?? Identifier.ascending("artifact")
   const timeCreated = input.timeCreated ?? Date.now()
@@ -41,6 +48,15 @@ function artifactValues(input: EngineArtifactInput) {
   }
 }
 
+function artifactPatchValues(input: { label?: string; payload?: EngineMetadata; timeUpdated?: number }) {
+  const set: Partial<typeof EngineArtifactTable.$inferInsert> = {
+    time_updated: input.timeUpdated ?? Date.now(),
+  }
+  if (input.label !== undefined) set.label = input.label
+  if (input.payload !== undefined) set.payload = input.payload
+  return set
+}
+
 export function insertEngineArtifact(db: Database.TxOrDb, input: EngineArtifactInput): string {
   const values = artifactValues(input)
   db.insert(EngineArtifactTable).values(values).run()
@@ -51,11 +67,21 @@ export function recordEngineArtifact(input: EngineArtifactInput): string {
   return Database.use((db) => insertEngineArtifact(db, input))
 }
 
+export function patchEngineArtifact(db: Database.TxOrDb, input: EngineArtifactUpdateInput): void {
+  db.update(EngineArtifactTable).set(artifactPatchValues(input)).where(eq(EngineArtifactTable.id, input.id)).run()
+}
+
 export function updateEngineArtifact(input: EngineArtifactUpdateInput): void {
-  const set: Partial<typeof EngineArtifactTable.$inferInsert> = {
-    time_updated: input.timeUpdated ?? Date.now(),
-  }
-  if (input.label !== undefined) set.label = input.label
-  if (input.payload !== undefined) set.payload = input.payload
-  Database.use((db) => db.update(EngineArtifactTable).set(set).where(eq(EngineArtifactTable.id, input.id)).run())
+  Database.use((db) => patchEngineArtifact(db, input))
+}
+
+export function updateEngineArtifactsWhere(db: Database.TxOrDb, input: EngineArtifactWhereUpdateInput): void {
+  db.update(EngineArtifactTable).set(artifactPatchValues(input)).where(input.where).run()
+}
+
+export function updateEngineArtifactWhereReturning(
+  db: Database.TxOrDb,
+  input: EngineArtifactWhereUpdateInput,
+): EngineArtifactRow | undefined {
+  return db.update(EngineArtifactTable).set(artifactPatchValues(input)).where(input.where).returning().get()
 }

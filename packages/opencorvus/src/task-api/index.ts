@@ -50,6 +50,7 @@ import {
   type EngineInteractionStatus,
   type EngineMetadata,
 } from "@/engine/engine.sql"
+import { recordEngineArtifact } from "@/engine/artifact"
 import {
   Budget,
   CreateTaskInput,
@@ -1063,31 +1064,21 @@ function recordOperatorMessageWake(input: {
       : input.error === undefined
         ? undefined
         : { name: "Error", message: String(input.error) }
-  Database.use((db) =>
-    db
-      .insert(EngineArtifactTable)
-      .values({
-        id: Identifier.ascending("artifact"),
-        task_id: input.taskID,
-        run_id: null,
-        goal_run_id: null,
-        acceptance_id: null,
-        kind: "operator_message_wake",
-        label: input.wakeStatus,
-        payload: {
-          task_id: input.taskID,
-          message_id: input.messageID,
-          source: input.source,
-          wake_status: input.wakeStatus,
-          time_recorded: now,
-          recorded_by_process_id: process.pid,
-          ...(error ? { error } : {}),
-        },
-        time_created: now,
-        time_updated: now,
-      })
-      .run(),
-  )
+  recordEngineArtifact({
+    taskID: input.taskID,
+    kind: "operator_message_wake",
+    label: input.wakeStatus,
+    payload: {
+      task_id: input.taskID,
+      message_id: input.messageID,
+      source: input.source,
+      wake_status: input.wakeStatus,
+      time_recorded: now,
+      recorded_by_process_id: process.pid,
+      ...(error ? { error } : {}),
+    },
+    timeCreated: now,
+  })
 }
 
 function assertTaskOperatorMessageAccepted(task: TaskRow, text: string, attachments: readonly unknown[] = []) {
