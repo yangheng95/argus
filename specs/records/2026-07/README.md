@@ -1,5 +1,6 @@
 # July 2026 Records
 
+- [2026-07-08-overlay-codex-milk-tea-light-theme.md](2026-07-08-overlay-codex-milk-tea-light-theme.md) records the Overlay light-theme palette update that replaces pure-white materials with a Codex-like warm milk-tea off-white token ramp.
 - [2026-07-08-overlay-codex-font-size-alignment.md](2026-07-08-overlay-codex-font-size-alignment.md) records the Overlay typography scale update that aligns body, control, and meta text with a 14px Codex app baseline through shared design-language tokens.
 - [2026-07-08-frontend-replica-mission-task-topology.md](2026-07-08-frontend-replica-mission-task-topology.md) records the frontend-replica Mission topology repair so multi-page replica missions first dispatch a serial template/source-baseline task, then parallel independent subpage tasks, instead of compressing the page family into one workflow task or redispatching `frontend_research` inside the same task.
 - [2026-07-08-db-write-boundary-refactor.md](2026-07-08-db-write-boundary-refactor.md) records the new worktree and first database write-boundary refactor slice that centralizes `engine_artifact` writes behind an engine-owned writer and adds a production architecture regression against scattered direct artifact writes.

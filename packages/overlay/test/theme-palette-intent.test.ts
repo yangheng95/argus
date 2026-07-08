@@ -46,6 +46,37 @@ describe("overlay theme palette intent", () => {
     expect(vscodeDark).not.toContain("rgba(28, 33, 58")
   })
 
+  test("light theme uses a warm milk-tea material ramp instead of pure white", () => {
+    const materialTokens = [
+      ["--bg", "rgb(241, 235, 224)"],
+      ["--surface", "rgb(251, 248, 241)"],
+      ["--surface-hover", "rgb(246, 240, 229)"],
+      ["--surface-inset", "rgb(244, 238, 226)"],
+      ["--surface-strong", "rgb(255, 252, 246)"],
+      ["--rail-surface", "rgb(247, 242, 233)"],
+      ["--chat-canvas", "rgb(250, 246, 239)"],
+      ["--inspector-surface", "rgb(247, 242, 233)"],
+      ["--panel-body-bg", "rgb(250, 246, 239)"],
+      ["--chrome", "rgb(252, 248, 241)"],
+      ["--dialog-bg", "rgb(252, 248, 241)"],
+      ["--menu-panel-bg", "rgb(252, 248, 241)"],
+    ] as const
+
+    for (const [token, value] of materialTokens) {
+      expect(themeToken(light, token)).toBe(value)
+      expect(value).not.toBe("rgb(255, 255, 255)")
+      expect(value).not.toBe("#ffffff")
+    }
+
+    expect(themeToken(light, "--body-bg")).toBe(
+      "linear-gradient(135deg, rgb(253, 249, 242) 0%, rgb(247, 240, 230) 48%, rgb(239, 232, 220) 100%)",
+    )
+    expect(light).not.toContain("rgb(238, 243, 255)")
+    expect(light).not.toContain("rgb(243, 247, 255)")
+    expect(light).not.toContain("rgb(247, 249, 255)")
+    expect(light).not.toContain("rgb(250, 252, 255)")
+  })
+
   test("all themes keep shell backing materials opaque", () => {
     const themes = [
       ["dark", dark],
