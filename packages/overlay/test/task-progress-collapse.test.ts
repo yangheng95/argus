@@ -38,7 +38,26 @@ test("task progress fold labels are localized", () => {
   for (const bundle of [en, zh]) {
     expect(bundle).toContain('"progress.expand_card"')
     expect(bundle).toContain('"progress.collapse_card"')
+    expect(bundle).toContain('"progress.move_window"')
+    expect(bundle).toContain('"progress.resize_window"')
   }
+})
+
+test("TaskProgressBar is a bounded floating window in the message panel", () => {
+  expect(source).toContain("messagePanelForProgress")
+  expect(source).toContain('closest<HTMLElement>(".chat-scroll")')
+  expect(source).toContain("taskProgressFloatingBounds")
+  expect(source).toContain("initialTaskProgressFloatingFrame")
+  expect(source).toContain("moveTaskProgressFloatingFrame")
+  expect(source).toContain("resizeTaskProgressFloatingFrame")
+  expect(source).toContain("setPointerCapture")
+  expect(source).toContain("releasePointerCapture")
+  expect(source).toContain('data-ui="task-progress-drag-handle"')
+  expect(source).toContain('data-ui="task-progress-resize"')
+  expect(source).not.toContain("localStorage")
+  expect(css).toMatch(/\.task-progress\s*\{[^}]*position:\s*fixed;[^}]*transparent\);[^}]*opacity:\s*var\(--ui-opacity-full\);/s)
+  expect(css).toContain(".task-progress[data-window-state=\"dragging\"]")
+  expect(css).toContain(".task-progress .oc-button[data-ui=\"task-progress-resize\"]")
 })
 
 test("TaskProgressBar is the single conversation goal progress surface", () => {

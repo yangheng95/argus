@@ -1512,19 +1512,24 @@ body {
    decorative card stack. Conversation items should scan like an event log.
    ========================================================================== */
 
-/* ── Task progress bar ───────────────────────────────────────
- * Sticky one-row overview of every architect-emitted goal,
- * including pending ones. Lives at the top of the conversation
- * panel so the operator can see "where are we in the task" at
- * a glance. Pills jump to the corresponding goal card on click.
+/* ── Task progress floating window ───────────────────────────
+ * Movable overview of every architect-emitted goal, including pending ones.
+ * Lives inside the conversation panel bounds so the operator can keep task
+ * progress visible without losing the goal-pill jump-to-card behavior.
  */
 .task-progress {
-  position: sticky;
-  top: 0;
-  z-index: var(--ui-z-sticky);
-  margin: 0 0 var(--card-gap) 0;
+  position: fixed;
+  left: var(--task-progress-left);
+  top: var(--task-progress-top);
+  z-index: calc(var(--ui-z-sticky) + 1);
+  width: var(--task-progress-width);
+  height: var(--task-progress-height);
+  min-width: 0;
+  max-width: none;
+  max-height: none;
+  margin: 0;
   padding: calc(8px * var(--ui-scale, 1)) calc(10px * var(--ui-scale, 1));
-  background: color-mix(in srgb, var(--card-bg-1) 92%, var(--bg));
+  background: color-mix(in srgb, var(--card-bg-1) 84%, transparent);
   border: var(--oc-border-width) solid var(--card-border);
   border-radius: var(--oc-radius-soft);
   display: flex;
@@ -1533,12 +1538,47 @@ body {
   font-size: var(--card-meta-size);
   color: var(--text-soft);
   backdrop-filter: blur(calc(6px * var(--ui-scale)));
+  box-shadow: var(--shadow-lg);
+  opacity: var(--ui-opacity-full);
+  overflow: hidden;
+  transition:
+    opacity var(--ui-duration-base) var(--ui-timing-standard),
+    border-color var(--ui-duration-base) var(--ui-timing-standard),
+    box-shadow var(--ui-duration-base) var(--ui-timing-standard);
+}
+
+.task-progress[data-floating-ready="false"] {
+  visibility: hidden;
+}
+
+.task-progress[data-window-state="dragging"],
+.task-progress[data-window-state="resizing"] {
+  opacity: var(--ui-opacity-full);
+  border-color: var(--card-border-strong);
+  box-shadow: var(--shadow);
 }
 
 .task-progress__header {
   display: flex;
   align-items: center;
   gap: calc(8px * var(--ui-scale));
+  flex: none;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.task-progress[data-window-state="dragging"] .task-progress__header {
+  cursor: grabbing;
+}
+.task-progress__body {
+  min-height: 0;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: calc(6px * var(--ui-scale));
+  overflow: auto;
+  scrollbar-gutter: stable;
+  padding-bottom: calc(16px * var(--ui-scale));
 }
 .task-progress__heading {
   font-weight: var(--ui-font-weight-strong);
@@ -1569,6 +1609,33 @@ body {
   transition:
     --oc-button-bg var(--ui-duration-base) var(--ui-timing-standard),
     --oc-button-color var(--ui-duration-base) var(--ui-timing-standard);
+}
+
+.task-progress .oc-button[data-ui="task-progress-resize"] {
+  --oc-button-height: calc(22px * var(--ui-scale));
+  --oc-button-padding-x: 0;
+  --oc-button-padding-y: 0;
+  --oc-button-color: var(--text-soft);
+  --oc-button-bg: color-mix(in srgb, var(--card-bg-0) 74%, transparent);
+  --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--card-border) 78%, transparent);
+  --oc-button-shadow: none;
+
+  position: absolute;
+  right: calc(4px * var(--ui-scale));
+  bottom: calc(4px * var(--ui-scale));
+  width: calc(22px * var(--ui-scale));
+  min-width: calc(22px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+.task-progress .oc-button[data-ui="task-progress-resize"]:hover,
+.task-progress .oc-button[data-ui="task-progress-resize"]:focus-visible,
+.task-progress[data-window-state="resizing"] .oc-button[data-ui="task-progress-resize"] {
+  --oc-button-bg: var(--card-bg-hover);
+  --oc-button-border: var(--oc-border-width) solid var(--card-border-strong);
+  --oc-button-color: var(--text-strong);
 }
 
 .task-progress .oc-button[data-ui="task-progress-fold"]:hover,

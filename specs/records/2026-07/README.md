@@ -1,5 +1,6 @@
 # July 2026 Records
 
+- [2026-07-09-task-progress-floating-window.md](2026-07-09-task-progress-floating-window.md) records the Overlay task progress surface change that turns the existing conversation GOALS strip into a draggable, resizable, slightly transparent window constrained to the message panel.
 - [2026-07-09-codex-reference-light-theme.md](2026-07-09-codex-reference-light-theme.md) records the Codex screenshot-reference light theme correction that replaces the beige milk-tea ramp with a pale-blue rail and near-white canvas palette.
 - [2026-07-09-goal-progress-session-history-load.md](2026-07-09-goal-progress-session-history-load.md) records the root-cause analysis and repair plan for completed task G1-G4 goal-pill clicks failing to materialize persisted build-session history.
 - [2026-07-09-browser-preview-selection-unmounted-rejection.md](2026-07-09-browser-preview-selection-unmounted-rejection.md) records the Browser Preview native selection cleanup repair for `window.unhandledrejection: browser preview webview is not mounted`.

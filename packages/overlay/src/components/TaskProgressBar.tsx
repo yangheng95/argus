@@ -1,7 +1,7 @@
 // ── TaskProgressBar ──
 //
-// Sticky one-row goal progress strip rendered at the top of the
-// Conversation panel. Reads `boardStore.board.goalWorkflows` so it shows
+// Floating goal progress window rendered inside the Conversation panel.
+// Reads `boardStore.board.goalWorkflows` so it shows
 // EVERY goal the architect emitted — including pending ones that haven't
 // been dispatched yet. Operators no longer need to hunt the right pane
 // or scroll the timeline to answer "how much of this task is done".
@@ -17,7 +17,7 @@
 // services/conversation, which replays backend conversation view data into
 // the tree-writer before this component requests a scroll target.
 
-import { For, Show, createMemo, createSignal, onCleanup, onMount } from "solid-js"
+import { For, Show, createEffect, createMemo, createSignal, onCleanup } from "solid-js"
 import { boardStore } from "../store/board"
 import { cardTreeStore } from "../store/card-tree"
 import { conversationAgentRecordsForSource } from "../store/conversation-agents"
@@ -37,7 +37,16 @@ import { AppLog } from "../utils/log"
 import type { AgentWorkflowRecord } from "../utils/agent-workflow"
 import { Icon } from "./Icon"
 import { createAnimationFrameScheduler } from "../utils/animation-frame"
+import { currentUIScale } from "../utils/layout-tokens"
 import { Button } from "./ui/Button"
+import {
+  clampTaskProgressFloatingFrame,
+  initialTaskProgressFloatingFrame,
+  moveTaskProgressFloatingFrame,
+  resizeTaskProgressFloatingFrame,
+  taskProgressFloatingBounds,
+  type TaskProgressFloatingFrame,
+} from "./task-progress-floating-frame"
 
 /** Visible pill rows before the strip collapses behind a "+N more" toggle.
  *  Operators scanning a long task want the goal list visible at a glance, not
@@ -185,6 +194,21 @@ function expandCardAndParents(cardID: string): void {
   }
 }
 
+type FloatingPointerSession = {
+  kind: "move" | "resize"
+  pointerID: number
+  startClientX: number
+  startClientY: number
+  startFrame: TaskProgressFloatingFrame
+  captureElement: HTMLElement
+}
+
+function messagePanelForProgress(element: HTMLElement): HTMLElement {
+  const panel = element.closest<HTMLElement>(".chat-scroll")
+  if (!panel) throw new Error("TaskProgressBar floating window requires a .chat-scroll message panel.")
+  return panel
+}
+
 export function TaskProgressBar() {
   const goals = createMemo<GoalPill[]>(() => {
     const list = (boardStore.board as any)?.goalWorkflows
@@ -221,14 +245,19 @@ export function TaskProgressBar() {
   // depend on UI scale, font, and pill-title length when wrapped). When the
   // natural layout would exceed 3 rows we expose a `+N more` toggle; under
   // the limit the toggle stays hidden and the strip is unconstrained.
-  let pillsEl: HTMLDivElement | undefined
+  const [progressEl, setProgressEl] = createSignal<HTMLDivElement | null>(null)
+  const [pillsEl, setPillsEl] = createSignal<HTMLDivElement | null>(null)
   const [folded, setFolded] = createSignal(false)
   const [expanded, setExpanded] = createSignal(false)
   const [hiddenCount, setHiddenCount] = createSignal(0)
   const [collapsedMaxHeight, setCollapsedMaxHeight] = createSignal<number | null>(null)
+  const [floatingFrame, setFloatingFrame] = createSignal<TaskProgressFloatingFrame | null>(null)
+  const [windowState, setWindowState] = createSignal<"idle" | "dragging" | "resizing">("idle")
+  let floatingPanelEl: HTMLElement | null = null
+  let floatingPointerSession: FloatingPointerSession | null = null
 
   const remeasure = () => {
-    const el = pillsEl
+    const el = pillsEl()
     if (!el) return
     const pills = el.querySelectorAll<HTMLElement>('[data-ui="task-progress-pill"]')
     if (pills.length === 0) {
@@ -269,20 +298,22 @@ export function TaskProgressBar() {
     setCollapsedMaxHeight(firstHiddenTop)
   }
 
-  onMount(() => {
-    if (!pillsEl) return
+  createEffect(() => {
+    const el = pillsEl()
+    if (!el) return
     const remeasureOnFrame = createAnimationFrameScheduler(remeasure)
     // Initial measure waits for the first paint so offsetTop values are stable.
     remeasureOnFrame.schedule()
     const ro = new ResizeObserver(remeasureOnFrame.schedule)
-    ro.observe(pillsEl)
+    ro.observe(el)
     // Pill children may resize independently of the container (i18n switch
     // changes label length; UI scale changes pill padding). Observe each pill
     // to catch those cases too.
     const observed = new WeakSet<Element>()
     const observePills = () => {
-      if (!pillsEl) return
-      for (const pill of pillsEl.querySelectorAll<HTMLElement>('[data-ui="task-progress-pill"]')) {
+      const current = pillsEl()
+      if (!current) return
+      for (const pill of current.querySelectorAll<HTMLElement>('[data-ui="task-progress-pill"]')) {
         if (!observed.has(pill)) {
           ro.observe(pill)
           observed.add(pill)
@@ -294,13 +325,114 @@ export function TaskProgressBar() {
       observePills()
       remeasureOnFrame.schedule()
     })
-    mo.observe(pillsEl, { childList: true, subtree: false })
+    mo.observe(el, { childList: true, subtree: false })
     onCleanup(() => {
       ro.disconnect()
       mo.disconnect()
       remeasureOnFrame.cancel()
     })
   })
+
+  const currentFloatingBounds = () => {
+    if (!floatingPanelEl) {
+      const current = progressEl()
+      if (!current) throw new Error("TaskProgressBar floating bounds require the progress element.")
+      floatingPanelEl = messagePanelForProgress(current)
+    }
+    return taskProgressFloatingBounds(floatingPanelEl.clientWidth, floatingPanelEl.clientHeight, currentUIScale())
+  }
+
+  const syncFloatingFrame = () => {
+    const bounds = currentFloatingBounds()
+    setFloatingFrame((current) =>
+      current ? clampTaskProgressFloatingFrame(current, bounds) : initialTaskProgressFloatingFrame(bounds),
+    )
+  }
+
+  createEffect(() => {
+    const current = progressEl()
+    if (!current) return
+    floatingPanelEl = messagePanelForProgress(current)
+    const syncOnFrame = createAnimationFrameScheduler(syncFloatingFrame)
+    syncOnFrame.schedule()
+    const ro = new ResizeObserver(syncOnFrame.schedule)
+    ro.observe(floatingPanelEl)
+    window.addEventListener("resize", syncOnFrame.schedule)
+    onCleanup(() => {
+      window.removeEventListener("resize", syncOnFrame.schedule)
+      ro.disconnect()
+      syncOnFrame.cancel()
+      floatingPanelEl = null
+      floatingPointerSession = null
+      setWindowState("idle")
+    })
+  })
+
+  const floatingStyle = () => {
+    const frame = floatingFrame()
+    const panel = floatingPanelEl
+    if (!frame || !panel) return undefined
+    const panelRect = panel.getBoundingClientRect()
+    return {
+      "--task-progress-left": `${Math.round(panelRect.left + frame.x)}px`,
+      "--task-progress-top": `${Math.round(panelRect.top + frame.y)}px`,
+      "--task-progress-width": `${frame.width}px`,
+      "--task-progress-height": `${frame.height}px`,
+    }
+  }
+
+  const beginFloatingPointerSession = (event: PointerEvent, kind: FloatingPointerSession["kind"]) => {
+    if (event.button !== 0) return
+    const frame = floatingFrame()
+    if (!frame) throw new Error("TaskProgressBar floating pointer session requires an initialized frame.")
+    const captureElement = event.currentTarget as HTMLElement
+    captureElement.setPointerCapture(event.pointerId)
+    floatingPointerSession = {
+      kind,
+      pointerID: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startFrame: frame,
+      captureElement,
+    }
+    setWindowState(kind === "move" ? "dragging" : "resizing")
+    event.preventDefault()
+  }
+
+  const onHeaderPointerDown = (event: PointerEvent) => {
+    const target = event.target as HTMLElement | null
+    if (target?.closest("button, a, input, textarea, select")) return
+    beginFloatingPointerSession(event, "move")
+  }
+
+  const onResizePointerDown = (event: PointerEvent) => {
+    beginFloatingPointerSession(event, "resize")
+    event.stopPropagation()
+  }
+
+  const onFloatingPointerMove = (event: PointerEvent) => {
+    const session = floatingPointerSession
+    if (!session || session.pointerID !== event.pointerId) return
+    const deltaX = event.clientX - session.startClientX
+    const deltaY = event.clientY - session.startClientY
+    const bounds = currentFloatingBounds()
+    setFloatingFrame(
+      session.kind === "move"
+        ? moveTaskProgressFloatingFrame(session.startFrame, deltaX, deltaY, bounds)
+        : resizeTaskProgressFloatingFrame(session.startFrame, deltaX, deltaY, bounds),
+    )
+    event.preventDefault()
+  }
+
+  const endFloatingPointerSession = (event: PointerEvent) => {
+    const session = floatingPointerSession
+    if (!session || session.pointerID !== event.pointerId) return
+    if (session.captureElement.hasPointerCapture(event.pointerId)) {
+      session.captureElement.releasePointerCapture(event.pointerId)
+    }
+    floatingPointerSession = null
+    setWindowState("idle")
+  }
 
   const [locatingGoalID, setLocatingGoalID] = createSignal("")
 
@@ -336,13 +468,25 @@ export function TaskProgressBar() {
   return (
     <Show when={hasGoals()} fallback={null}>
       <div
+        ref={setProgressEl}
         class="task-progress"
         role="region"
         aria-label={t("progress.heading")}
         data-folded={folded() ? "true" : "false"}
+        data-floating-ready={floatingFrame() ? "true" : "false"}
         data-running={counts().running > 0 ? "true" : undefined}
+        data-window-state={windowState()}
+        style={floatingStyle()}
+        onPointerMove={onFloatingPointerMove}
+        onPointerUp={endFloatingPointerSession}
+        onPointerCancel={endFloatingPointerSession}
       >
-        <div class="task-progress__header">
+        <div
+          class="task-progress__header"
+          data-ui="task-progress-drag-handle"
+          title={t("progress.move_window")}
+          onPointerDown={onHeaderPointerDown}
+        >
           <span class="task-progress__heading">{t("progress.heading")}</span>
           <span
             class="task-progress__summary"
@@ -370,68 +514,82 @@ export function TaskProgressBar() {
             <Icon name={folded() ? "chevron-down" : "chevron-up"} size={12} />
           </Button>
         </div>
-        <div class="task-progress__bar" aria-hidden="true">
-          <div
-            class="task-progress__bar-fill"
-            style={{
-              "--progress-passed": `${counts().total === 0 ? 0 : Math.round((counts().passed / counts().total) * 100)}%`,
-            }}
-          />
-          <Show when={counts().failed > 0}>
+        <div class="task-progress__body">
+          <div class="task-progress__bar" aria-hidden="true">
             <div
-              class="task-progress__bar-fail"
+              class="task-progress__bar-fill"
               style={{
-                "--progress-failed": `${Math.round((counts().failed / counts().total) * 100)}%`,
+                "--progress-passed": `${counts().total === 0 ? 0 : Math.round((counts().passed / counts().total) * 100)}%`,
               }}
             />
+            <Show when={counts().failed > 0}>
+              <div
+                class="task-progress__bar-fail"
+                style={{
+                  "--progress-failed": `${Math.round((counts().failed / counts().total) * 100)}%`,
+                }}
+              />
+            </Show>
+          </div>
+          <div
+            id="taskProgressPills"
+            ref={setPillsEl}
+            class="task-progress__pills"
+            data-collapsed={hiddenCount() > 0 && !expanded() ? "true" : "false"}
+            style={
+              hiddenCount() > 0 && !expanded() && collapsedMaxHeight() !== null
+                ? { "max-height": `${collapsedMaxHeight()}px` }
+                : undefined
+            }
+          >
+            <For each={goals()}>
+              {(g) => (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="mini"
+                  tone="neutral"
+                  data-ui="task-progress-pill"
+                  data-goal-id={g.goalID}
+                  data-state={g.state}
+                  data-loading={locatingGoalID() === g.goalID ? "true" : undefined}
+                  title={pillStateLabel(g.state, g.title)}
+                  aria-label={pillStateLabel(g.state, g.title)}
+                  aria-busy={locatingGoalID() === g.goalID ? "true" : undefined}
+                  onClick={() => onPillClick(g.goalID)}
+                >
+                  <span class="task-progress__pill-id">{goalRevisionLabelFromIndexes(g.index, g.attempt)}</span>
+                  <span class="task-progress__pill-title">{g.title}</span>
+                </Button>
+              )}
+            </For>
+          </div>
+          <Show when={hiddenCount() > 0}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="mini"
+              tone="neutral"
+              data-ui="task-progress-toggle"
+              aria-expanded={expanded() ? "true" : "false"}
+              onClick={() => setExpanded((v) => !v)}
+            >
+              {expanded() ? t("progress.collapse") : t("progress.expand_more", { count: String(hiddenCount()) })}
+            </Button>
           </Show>
         </div>
-        <div
-          id="taskProgressPills"
-          ref={pillsEl}
-          class="task-progress__pills"
-          data-collapsed={hiddenCount() > 0 && !expanded() ? "true" : "false"}
-          style={
-            hiddenCount() > 0 && !expanded() && collapsedMaxHeight() !== null
-              ? { "max-height": `${collapsedMaxHeight()}px` }
-              : undefined
-          }
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          tone="neutral"
+          data-ui="task-progress-resize"
+          title={t("progress.resize_window")}
+          aria-label={t("progress.resize_window")}
+          onPointerDown={onResizePointerDown}
         >
-          <For each={goals()}>
-            {(g) => (
-              <Button
-                type="button"
-                variant="outline"
-                size="mini"
-                tone="neutral"
-                data-ui="task-progress-pill"
-                data-goal-id={g.goalID}
-                data-state={g.state}
-                data-loading={locatingGoalID() === g.goalID ? "true" : undefined}
-                title={pillStateLabel(g.state, g.title)}
-                aria-label={pillStateLabel(g.state, g.title)}
-                aria-busy={locatingGoalID() === g.goalID ? "true" : undefined}
-                onClick={() => onPillClick(g.goalID)}
-              >
-                <span class="task-progress__pill-id">{goalRevisionLabelFromIndexes(g.index, g.attempt)}</span>
-                <span class="task-progress__pill-title">{g.title}</span>
-              </Button>
-            )}
-          </For>
-        </div>
-        <Show when={hiddenCount() > 0}>
-          <Button
-            type="button"
-            variant="ghost"
-            size="mini"
-            tone="neutral"
-            data-ui="task-progress-toggle"
-            aria-expanded={expanded() ? "true" : "false"}
-            onClick={() => setExpanded((v) => !v)}
-          >
-            {expanded() ? t("progress.collapse") : t("progress.expand_more", { count: String(hiddenCount()) })}
-          </Button>
-        </Show>
+          <Icon name="maximize" size={12} />
+        </Button>
       </div>
     </Show>
   )

@@ -1239,6 +1239,8 @@
   "progress.collapse": "收起",
   "progress.expand_card": "展开目标",
   "progress.collapse_card": "折叠目标",
+  "progress.move_window": "拖动目标窗口",
+  "progress.resize_window": "调整目标窗口大小",
   "todo.progress_label": "清单进度",
   "todo.progress_value": "{{completed}}/{{total}} 已完成",
   "todo.progress_value_current": "{{completed}}/{{total}} 已完成 · {{current}}",

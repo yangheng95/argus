@@ -1239,6 +1239,8 @@
   "progress.collapse": "Collapse",
   "progress.expand_card": "Expand goals",
   "progress.collapse_card": "Collapse goals",
+  "progress.move_window": "Drag goals window",
+  "progress.resize_window": "Resize goals window",
   "todo.progress_label": "Checklist progress",
   "todo.progress_value": "{{completed}}/{{total}} done",
   "todo.progress_value_current": "{{completed}}/{{total}} done · {{current}}",
