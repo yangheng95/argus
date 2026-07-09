@@ -464,9 +464,21 @@ describe("document health audit regressions", () => {
 
     expect(buildWorkflow).toContain('install_dependencies: "false"')
     expect(buildWorkflow).toContain(
-      "bun install --frozen-lockfile --no-progress --ignore-scripts --backend=copyfile --network-concurrency=1 && bun run script/build.ts --single --baseline --musl-only --no-clean",
+      "apk add --no-cache nodejs ripgrep && bun install --frozen-lockfile --no-progress --ignore-scripts --backend=copyfile --network-concurrency=1 && bun run script/build.ts --single --baseline --musl-only --no-clean",
     )
     expect(buildWorkflow.match(/name: Build SDK package/g)?.length).toBe(2)
+    expect(cliPackageBlock).toContain("name: Install Linux CLI runtime dependencies")
+    expect(cliPackageBlock).toContain("sudo apt-get install -y ripgrep")
+    expect(cliPackageBlock).toContain("name: Install macOS CLI runtime dependencies")
+    expect(cliPackageBlock).toContain("brew install ripgrep")
+    expect(cliPackageBlock).toContain("name: Install Windows CLI runtime dependencies")
+    expect(cliPackageBlock).toContain("choco install ripgrep --yes --no-progress")
+    expect(overlayPackageBlock).toContain("name: Install Linux system dependencies")
+    expect(overlayPackageBlock).toContain("ripgrep \\")
+    expect(overlayPackageBlock).toContain("name: Install macOS overlay runtime dependencies")
+    expect(overlayPackageBlock).toContain("brew install ripgrep")
+    expect(overlayPackageBlock).toContain("name: Install Windows overlay runtime dependencies")
+    expect(overlayPackageBlock).toContain("choco install ripgrep --yes --no-progress")
     for (const block of [cliPackageBlock, overlayPackageBlock]) {
       expect(block).toContain("run: bun ./packages/sdk/js/script/build.ts")
       expect(block.indexOf("Build SDK package")).toBeGreaterThan(block.indexOf("Sync repo versions"))
@@ -474,6 +486,24 @@ describe("document health audit regressions", () => {
     expect(cliPackageBlock.indexOf("Build SDK package")).toBeLessThan(
       cliPackageBlock.indexOf("Build CLI (native + baseline)"),
     )
+    for (const stepName of [
+      "Install Linux CLI runtime dependencies",
+      "Install macOS CLI runtime dependencies",
+      "Install Windows CLI runtime dependencies",
+    ]) {
+      expect(cliPackageBlock.indexOf(stepName)).toBeGreaterThan(cliPackageBlock.indexOf("Build SDK package"))
+      expect(cliPackageBlock.indexOf(stepName)).toBeLessThan(cliPackageBlock.indexOf("Build CLI (native + baseline)"))
+    }
+    for (const stepName of [
+      "Install Linux system dependencies",
+      "Install macOS overlay runtime dependencies",
+      "Install Windows overlay runtime dependencies",
+    ]) {
+      expect(overlayPackageBlock.indexOf(stepName)).toBeGreaterThan(overlayPackageBlock.indexOf("Build SDK package"))
+      expect(overlayPackageBlock.indexOf(stepName)).toBeLessThan(
+        overlayPackageBlock.indexOf("Build bound overlay bundle"),
+      )
+    }
     expect(overlayPackageBlock.indexOf("Build SDK package")).toBeLessThan(
       overlayPackageBlock.indexOf("Build bound overlay bundle"),
     )
