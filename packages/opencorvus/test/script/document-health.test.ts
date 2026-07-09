@@ -463,9 +463,15 @@ describe("document health audit regressions", () => {
     )
 
     expect(buildWorkflow).toContain('install_dependencies: "false"')
+    expect(buildWorkflow).toContain("apk add --no-cache nodejs ripgrep su-exec")
     expect(buildWorkflow).toContain(
-      "apk add --no-cache nodejs ripgrep && bun install --frozen-lockfile --no-progress --ignore-scripts --backend=copyfile --network-concurrency=1 && bun run script/build.ts --single --baseline --musl-only --no-clean",
+      'su-exec "$HOST_UID:$HOST_GID" bun install --frozen-lockfile --no-progress --ignore-scripts --backend=copyfile --network-concurrency=1',
     )
+    expect(buildWorkflow).toContain(
+      'su-exec "$HOST_UID:$HOST_GID" bun run script/build.ts --single --baseline --musl-only --no-clean',
+    )
+    expect(buildWorkflow).toContain('-e HOST_UID="$(id -u)"')
+    expect(buildWorkflow).toContain('-e HOST_GID="$(id -g)"')
     expect(buildWorkflow.match(/name: Build SDK package/g)?.length).toBe(2)
     expect(cliPackageBlock).toContain("name: Install Linux CLI runtime dependencies")
     expect(cliPackageBlock).toContain("sudo apt-get install -y ripgrep")

@@ -161,16 +161,13 @@ jobs:
           # The build script reads MODELS_DEV_API_JSON; mount the file into
           # the container so the path the env var points to actually exists.
           # Without this -v line every musl build inside Docker hit ENOENT.
-          # `--user $(id -u):$(id -g)` makes the container write artifacts as
-          # the runner user, otherwise dist/ ends up owned by root and the
-          # next host-side step (Stage overlay web bundle into CLI dist)
-          # hits EACCES on mkdir.
           docker run --rm \
-            --user "$(id -u):$(id -g)" \
             -v "$GITHUB_WORKSPACE:/workspace" \
             -v /tmp/models-api-clean.json:/tmp/models-api-clean.json:ro \
             -w /workspace/packages/opencorvus \
             -e HOME=/tmp \
+            -e HOST_UID="$(id -u)" \
+            -e HOST_GID="$(id -g)" \
             -e MODELS_DEV_API_JSON=/tmp/models-api-clean.json \
             -e OPENCORVUS_RELEASE="${OPENCORVUS_RELEASE}" \
             -e OPENCORVUS_VERSION="${OPENCORVUS_VERSION}" \
@@ -178,7 +175,7 @@ jobs:
             -e GH_REPO="${GH_REPO}" \
             -e GH_TOKEN="${GH_TOKEN}" \
             oven/bun:alpine \
-            sh -c "apk add --no-cache nodejs ripgrep && bun install --frozen-lockfile --no-progress --ignore-scripts --backend=copyfile --network-concurrency=1 && bun run script/build.ts --single --baseline --musl-only --no-clean"
+            sh -c 'apk add --no-cache nodejs ripgrep su-exec && su-exec "$HOST_UID:$HOST_GID" bun install --frozen-lockfile --no-progress --ignore-scripts --backend=copyfile --network-concurrency=1 && su-exec "$HOST_UID:$HOST_GID" bun run script/build.ts --single --baseline --musl-only --no-clean'
 
       - name: Build overlay web bundle
         # The CLI ships its overlay UI as static assets under
