@@ -34,7 +34,7 @@ test("task progress floating move clamps to the message panel", () => {
   })
 })
 
-test("task progress floating resize clamps size and preserves anchored corner", () => {
+test("task progress floating resize clamps width and preserves height", () => {
   const bounds = taskProgressFloatingBounds(900, 520, 1)
   const start = { x: 100, y: 80, width: 420, height: 170 }
 
@@ -42,13 +42,13 @@ test("task progress floating resize clamps size and preserves anchored corner", 
     x: 100,
     y: 80,
     width: 792,
-    height: 432,
+    height: 170,
   })
   expect(resizeTaskProgressFloatingFrame(start, -300, -120, bounds)).toEqual({
     x: 100,
     y: 80,
     width: 320,
-    height: 96,
+    height: 170,
   })
 })
 

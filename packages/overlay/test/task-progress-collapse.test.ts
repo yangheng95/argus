@@ -49,14 +49,14 @@ test("task progress fold labels are localized", () => {
 
 test("TaskProgressBar is a bounded floating window in the message panel", () => {
   expect(source).toContain("interface TaskProgressBarProps")
-  expect(source).toContain("messagePanel: HTMLElement")
   expect(source).toContain("overlayMount: HTMLElement")
   expect(source).toContain("taskProgressFloatingBounds")
   expect(source).toContain("initialTaskProgressFloatingFrame")
   expect(source).toContain("moveTaskProgressFloatingFrame")
   expect(source).toContain("resizeTaskProgressFloatingFrame")
-  expect(source).toContain("props.messagePanel.clientWidth")
-  expect(source).toContain("props.overlayMount.getBoundingClientRect()")
+  expect(source).toContain("props.overlayMount.clientWidth")
+  expect(source).not.toContain("messagePanel")
+  expect(source).toContain('"--task-progress-left": `${frame.x}px`')
   expect(source).toContain("setPointerCapture")
   expect(source).toContain("releasePointerCapture")
   expect(source).toContain('data-ui="task-progress-drag-handle"')
@@ -73,9 +73,10 @@ test("TaskProgressBar is a bounded floating window in the message panel", () => 
 
 test("TaskProgressBar is the single conversation goal progress surface", () => {
   expect(conversationSource).toContain('const [progressOverlayMount, setProgressOverlayMount] = createSignal<HTMLElement | null>(null)')
-  expect(conversationSource).toContain("setProgressOverlayMount(mount)")
+  expect(conversationSource).toContain('progressMount.classList.contains("conversation-body")')
+  expect(conversationSource).toContain("setProgressOverlayMount(progressMount)")
   expect(conversationSource).toContain("<Portal mount={mount}>")
-  expect(conversationSource).toContain("<TaskProgressBar messagePanel={el} overlayMount={mount} />")
+  expect(conversationSource).toContain("<TaskProgressBar overlayMount={mount} />")
   expect(conversationSource).not.toContain("<TaskProgressBar />")
   expect(css).toContain('.task-progress .oc-button[data-ui="task-progress-pill"]')
   for (const sourceText of [html, domSource, conversationCss]) {
@@ -135,6 +136,8 @@ test("TaskProgressBar visual CSS locks in the redesign invariants", () => {
   expect(css).toMatch(
     /\.task-progress \.oc-button\[data-ui="task-progress-resize"\]\s*\{[^}]*--oc-button-bg:\s*transparent;[^}]*--oc-button-border:\s*0 solid transparent;[^}]*background-image:\s*linear-gradient/s,
   )
+  expect(css).toMatch(/\.task-progress \.oc-button\[data-ui="task-progress-resize"\]\s*\{[^}]*cursor:\s*ew-resize;/s)
+  expect(conversationCss).toMatch(/\.conversation-body\s*\{[^}]*position:\s*relative;/s)
   expect(css).toMatch(
     /\.task-progress:hover \.oc-button\[data-ui="task-progress-resize"\],\s*\.task-progress:focus-within \.oc-button\[data-ui="task-progress-resize"\],\s*\.task-progress\[data-window-state="resizing"\] \.oc-button\[data-ui="task-progress-resize"\]\s*\{[^}]*opacity:\s*var\(--ui-opacity-subtle\);/s,
   )

@@ -42,6 +42,7 @@
   --conversation-message-content-width: var(--ui-chat-message-content-width);
   --conversation-message-lane-width: var(--ui-chat-message-scroll-width);
 
+  position: relative;
   flex: 1 1 auto;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, var(--conversation-message-lane-width)) minmax(0, 1fr);

@@ -217,7 +217,6 @@ type FloatingPointerSession = {
 }
 
 interface TaskProgressBarProps {
-  messagePanel: HTMLElement
   overlayMount: HTMLElement
 }
 
@@ -350,7 +349,7 @@ export function TaskProgressBar(props: TaskProgressBarProps) {
   })
 
   const currentFloatingBounds = () => {
-    return taskProgressFloatingBounds(props.messagePanel.clientWidth, props.messagePanel.clientHeight, currentUIScale())
+    return taskProgressFloatingBounds(props.overlayMount.clientWidth, props.overlayMount.clientHeight, currentUIScale())
   }
 
   const syncFloatingFrame = () => {
@@ -366,7 +365,6 @@ export function TaskProgressBar(props: TaskProgressBarProps) {
     const syncOnFrame = createAnimationFrameScheduler(syncFloatingFrame)
     syncOnFrame.schedule()
     const ro = new ResizeObserver(syncOnFrame.schedule)
-    ro.observe(props.messagePanel)
     ro.observe(props.overlayMount)
     window.addEventListener("resize", syncOnFrame.schedule)
     onCleanup(() => {
@@ -381,11 +379,9 @@ export function TaskProgressBar(props: TaskProgressBarProps) {
   const floatingStyle = () => {
     const frame = floatingFrame()
     if (!frame) return undefined
-    const panelRect = props.messagePanel.getBoundingClientRect()
-    const mountRect = props.overlayMount.getBoundingClientRect()
     return {
-      "--task-progress-left": `${Math.round(panelRect.left - mountRect.left + frame.x)}px`,
-      "--task-progress-top": `${Math.round(panelRect.top - mountRect.top + frame.y)}px`,
+      "--task-progress-left": `${frame.x}px`,
+      "--task-progress-top": `${frame.y}px`,
       "--task-progress-width": `${frame.width}px`,
       "--task-progress-height": `${frame.height}px`,
     }

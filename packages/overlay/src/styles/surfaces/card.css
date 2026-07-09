@@ -1649,7 +1649,7 @@ body {
 }
 
 .task-progress .oc-button[data-ui="task-progress-resize"] {
-  --oc-button-height: calc(22px * var(--ui-scale));
+  --oc-button-height: calc(36px * var(--ui-scale));
   --oc-button-padding-x: 0;
   --oc-button-padding-y: 0;
   --oc-button-color: color-mix(in srgb, var(--text-soft) 82%, transparent);
@@ -1658,32 +1658,25 @@ body {
   --oc-button-shadow: none;
 
   position: absolute;
-  right: calc(2px * var(--ui-scale));
-  bottom: calc(2px * var(--ui-scale));
-  width: calc(22px * var(--ui-scale));
-  min-width: calc(22px * var(--ui-scale));
+  top: 50%;
+  right: calc(0px * var(--ui-scale));
+  bottom: auto;
+  width: calc(14px * var(--ui-scale));
+  min-width: calc(14px * var(--ui-scale));
   border-radius: var(--oc-radius-soft);
-  background-image:
-    linear-gradient(
-      135deg,
-      transparent calc(50% - var(--oc-border-width)),
-      currentColor calc(50% - var(--oc-border-width)) calc(50% + var(--oc-border-width)),
-      transparent calc(50% + var(--oc-border-width))
-    ),
-    linear-gradient(
-      135deg,
-      transparent calc(50% - var(--oc-border-width)),
-      currentColor calc(50% - var(--oc-border-width)) calc(50% + var(--oc-border-width)),
-      transparent calc(50% + var(--oc-border-width))
-    );
-  background-position:
-    right calc(5px * var(--ui-scale)) bottom calc(5px * var(--ui-scale)),
-    right calc(5px * var(--ui-scale)) bottom calc(10px * var(--ui-scale));
+  background-image: linear-gradient(
+    90deg,
+    transparent calc(50% - 3px * var(--ui-scale)),
+    currentColor calc(50% - 3px * var(--ui-scale)) calc(50% - 2px * var(--ui-scale)),
+    transparent calc(50% - 2px * var(--ui-scale)) calc(50% + 2px * var(--ui-scale)),
+    currentColor calc(50% + 2px * var(--ui-scale)) calc(50% + 3px * var(--ui-scale)),
+    transparent calc(50% + 3px * var(--ui-scale))
+  );
+  background-position: center;
   background-repeat: no-repeat;
-  background-size:
-    calc(8px * var(--ui-scale)) calc(8px * var(--ui-scale)),
-    calc(13px * var(--ui-scale)) calc(13px * var(--ui-scale));
-  cursor: nwse-resize;
+  background-size: calc(12px * var(--ui-scale)) calc(24px * var(--ui-scale));
+  cursor: ew-resize;
+  transform: translateY(-50%);
   touch-action: none;
   opacity: var(--ui-opacity-hidden);
   transition:

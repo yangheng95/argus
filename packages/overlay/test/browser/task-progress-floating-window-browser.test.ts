@@ -92,8 +92,15 @@ test("task progress floating window drags and resizes inside the message panel",
               border: var(--oc-border-width) solid var(--border);
               background: var(--surface);
             }
-            .fixture-scroll-shell {
+            .fixture-body {
               position: relative;
+              min-height: 0;
+              display: grid;
+              grid-template-columns: minmax(0, 1fr) minmax(0, 760px) minmax(0, 1fr);
+              background: var(--chat-canvas);
+            }
+            .fixture-scroll-shell {
+              grid-column: 2;
               min-height: 0;
               display: flex;
             }
@@ -137,10 +144,12 @@ test("task progress floating window drags and resizes inside the message panel",
         <body data-theme="dark">
           <section class="fixture-shell">
             <header class="fixture-header">Chat</header>
-            <div class="fixture-scroll-shell" data-ui="scroll-shell">
-              <main class="chat-scroll" data-ui="message-panel">
-                ${Array.from({ length: 18 }, (_, index) => `<article class="fixture-message" data-ui="fixture-message">Message panel content row ${index + 1}. The floating goals window should sit above this content and stay within the panel while it moves.</article>`).join("")}
-              </main>
+            <div class="fixture-body" data-ui="movement-boundary">
+              <div class="fixture-scroll-shell" data-ui="scroll-shell">
+                <main class="chat-scroll" data-ui="message-panel">
+                  ${Array.from({ length: 18 }, (_, index) => `<article class="fixture-message" data-ui="fixture-message">Message panel content row ${index + 1}. The floating goals window should sit above this content and stay within the panel while it moves.</article>`).join("")}
+                </main>
+              </div>
               <section
                 class="task-progress"
                 role="region"
@@ -208,42 +217,40 @@ test("task progress floating window drags and resizes inside the message panel",
             </div>
           </section>
           <script>
-            const shell = document.querySelector('[data-ui="scroll-shell"]');
+            const boundary = document.querySelector('[data-ui="movement-boundary"]');
             const panel = document.querySelector('[data-ui="message-panel"]');
             const progress = document.querySelector(".task-progress");
             const header = document.querySelector('[data-ui="task-progress-drag-handle"]');
             const resize = document.querySelector('[data-ui="task-progress-resize"]');
             const inset = 8;
             let frame = {
-              width: Math.round((panel.clientWidth - inset * 2) * 0.64),
+              width: Math.round((boundary.clientWidth - inset * 2) * 0.64),
               height: 220,
             };
-            frame.x = Math.round((panel.clientWidth - frame.width) / 2);
-            frame.y = Math.round((panel.clientHeight - frame.height) * 0.24);
+            frame.x = Math.round((boundary.clientWidth - frame.width) / 2);
+            frame.y = Math.round((boundary.clientHeight - frame.height) * 0.24);
             let session = null;
             function clamp(next) {
-              const minWidth = Math.min(320, panel.clientWidth - inset * 2);
-              const minHeight = Math.min(96, panel.clientHeight - inset * 2);
-              const width = Math.min(panel.clientWidth - inset * 2, Math.max(minWidth, next.width));
-              const height = Math.min(panel.clientHeight - inset * 2, Math.max(minHeight, next.height));
-              const x = Math.min(Math.max(next.x, inset), panel.clientWidth - inset - width);
-              const y = Math.min(Math.max(next.y, inset), panel.clientHeight - inset - height);
+              const minWidth = Math.min(320, boundary.clientWidth - inset * 2);
+              const minHeight = Math.min(96, boundary.clientHeight - inset * 2);
+              const width = Math.min(boundary.clientWidth - inset * 2, Math.max(minWidth, next.width));
+              const height = Math.min(boundary.clientHeight - inset * 2, Math.max(minHeight, next.height));
+              const x = Math.min(Math.max(next.x, inset), boundary.clientWidth - inset - width);
+              const y = Math.min(Math.max(next.y, inset), boundary.clientHeight - inset - height);
               return { x, y, width, height };
             }
             function resizeFromAnchor(start, dx, dy) {
               const anchored = clamp(start);
               return {
                 ...anchored,
-                width: Math.min(panel.clientWidth - inset - anchored.x, Math.max(320, anchored.width + dx)),
-                height: Math.min(panel.clientHeight - inset - anchored.y, Math.max(96, anchored.height + dy)),
+                width: Math.min(boundary.clientWidth - inset - anchored.x, Math.max(320, anchored.width + dx)),
+                height: anchored.height,
               };
             }
             function apply() {
               frame = clamp(frame);
-              const rect = panel.getBoundingClientRect();
-              const shellRect = shell.getBoundingClientRect();
-              progress.style.setProperty("--task-progress-left", Math.round(rect.left - shellRect.left + frame.x) + "px");
-              progress.style.setProperty("--task-progress-top", Math.round(rect.top - shellRect.top + frame.y) + "px");
+              progress.style.setProperty("--task-progress-left", Math.round(frame.x) + "px");
+              progress.style.setProperty("--task-progress-top", Math.round(frame.y) + "px");
               progress.style.setProperty("--task-progress-width", Math.round(frame.width) + "px");
               progress.style.setProperty("--task-progress-height", Math.round(frame.height) + "px");
             }
@@ -293,6 +300,7 @@ test("task progress floating window drags and resizes inside the message panel",
 
     await page.waitForSelector(".task-progress[data-floating-ready='true']", { visible: true })
     const initial = await page.evaluate(() => {
+      const boundary = document.querySelector<HTMLElement>('[data-ui="movement-boundary"]')!.getBoundingClientRect()
       const panel = document.querySelector<HTMLElement>('[data-ui="message-panel"]')!.getBoundingClientRect()
       const firstMessage = document.querySelector<HTMLElement>('[data-ui="fixture-message"]')!.getBoundingClientRect()
       const node = document.querySelector<HTMLElement>(".task-progress")!
@@ -302,6 +310,10 @@ test("task progress floating window drags and resizes inside the message panel",
       return {
         left: rect.left,
         top: rect.top,
+        boundaryLeft: boundary.left,
+        boundaryTop: boundary.top,
+        boundaryRight: boundary.right,
+        boundaryBottom: boundary.bottom,
         panelLeft: panel.left,
         panelTop: panel.top,
         firstMessageTop: firstMessage.top,
@@ -314,8 +326,8 @@ test("task progress floating window drags and resizes inside the message panel",
       }
     })
     assert.equal(initial.opacity, "1")
-    assert.ok(initial.left > initial.panelLeft + 80, `initial window should not stick to the left edge: ${JSON.stringify(initial)}`)
-    assert.ok(initial.top > initial.panelTop + 40, `initial window should not stick to the top edge: ${JSON.stringify(initial)}`)
+    assert.ok(initial.left > initial.boundaryLeft + 80, `initial window should not stick to the left edge: ${JSON.stringify(initial)}`)
+    assert.ok(initial.top > initial.boundaryTop + 40, `initial window should not stick to the top edge: ${JSON.stringify(initial)}`)
     assert.ok(
       Math.abs(initial.firstMessageTop - (initial.panelTop + 18)) <= 2,
       `first message should stay at panel padding instead of below the progress window: ${JSON.stringify(initial)}`,
@@ -333,23 +345,57 @@ test("task progress floating window drags and resizes inside the message panel",
     })
     await page.mouse.move(headerRect.x, headerRect.y)
     await page.mouse.down()
-    await page.mouse.move(headerRect.x + 190, headerRect.y + 110, { steps: 8 })
+    await page.mouse.move(headerRect.x + 360, headerRect.y + 110, { steps: 8 })
     await page.mouse.up()
 
-    const moved = await page.evaluate(() => {
+    const movedRight = await page.evaluate(() => {
+      const boundary = document.querySelector<HTMLElement>('[data-ui="movement-boundary"]')!.getBoundingClientRect()
       const panel = document.querySelector<HTMLElement>('[data-ui="message-panel"]')!.getBoundingClientRect()
       const progress = document.querySelector<HTMLElement>(".task-progress")!.getBoundingClientRect()
       return {
+        boundary: { left: boundary.left, top: boundary.top, right: boundary.right, bottom: boundary.bottom },
         panel: { left: panel.left, top: panel.top, right: panel.right, bottom: panel.bottom },
         progress: { left: progress.left, top: progress.top, right: progress.right, bottom: progress.bottom },
       }
     })
-    assert.ok(moved.progress.left > initial.left + 120)
-    assert.ok(moved.progress.top > initial.top + 80)
-    assert.ok(moved.progress.left >= moved.panel.left + 7)
-    assert.ok(moved.progress.top >= moved.panel.top + 7)
-    assert.ok(moved.progress.right <= moved.panel.right - 7)
-    assert.ok(moved.progress.bottom <= moved.panel.bottom - 7)
+    assert.ok(movedRight.progress.left > initial.left + 120)
+    assert.ok(movedRight.progress.top > initial.top + 80)
+    assert.ok(movedRight.progress.right > movedRight.panel.right + 80)
+    assert.ok(movedRight.progress.left >= movedRight.boundary.left + 7)
+    assert.ok(movedRight.progress.top >= movedRight.boundary.top + 7)
+    assert.ok(movedRight.progress.right <= movedRight.boundary.right - 7)
+    assert.ok(movedRight.progress.bottom <= movedRight.boundary.bottom - 7)
+
+    const rightGutterScreenshotPath = saveScreenshot("dark-window-right-gutter.png", await page.screenshot({ fullPage: false }))
+    assert.ok(rightGutterScreenshotPath.endsWith("dark-window-right-gutter.png"))
+
+    const movedHeaderRect = await page.$eval('[data-ui="task-progress-drag-handle"]', (node) => {
+      const rect = (node as HTMLElement).getBoundingClientRect()
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+    })
+    await page.mouse.move(movedHeaderRect.x, movedHeaderRect.y)
+    await page.mouse.down()
+    await page.mouse.move(movedHeaderRect.x - 760, movedHeaderRect.y - 60, { steps: 10 })
+    await page.mouse.up()
+
+    const movedLeft = await page.evaluate(() => {
+      const boundary = document.querySelector<HTMLElement>('[data-ui="movement-boundary"]')!.getBoundingClientRect()
+      const panel = document.querySelector<HTMLElement>('[data-ui="message-panel"]')!.getBoundingClientRect()
+      const progress = document.querySelector<HTMLElement>(".task-progress")!.getBoundingClientRect()
+      return {
+        boundary: { left: boundary.left, top: boundary.top, right: boundary.right, bottom: boundary.bottom },
+        panel: { left: panel.left, top: panel.top, right: panel.right, bottom: panel.bottom },
+        progress: { left: progress.left, top: progress.top, right: progress.right, bottom: progress.bottom },
+      }
+    })
+    assert.ok(movedLeft.progress.left < movedLeft.panel.left - 80)
+    assert.ok(movedLeft.progress.left >= movedLeft.boundary.left + 7)
+    assert.ok(movedLeft.progress.top >= movedLeft.boundary.top + 7)
+    assert.ok(movedLeft.progress.right <= movedLeft.boundary.right - 7)
+    assert.ok(movedLeft.progress.bottom <= movedLeft.boundary.bottom - 7)
+
+    const leftGutterScreenshotPath = saveScreenshot("dark-window-left-gutter.png", await page.screenshot({ fullPage: false }))
+    assert.ok(leftGutterScreenshotPath.endsWith("dark-window-left-gutter.png"))
 
     const resizeRect = await page.$eval('[data-ui="task-progress-resize"]', (node) => {
       const rect = (node as HTMLElement).getBoundingClientRect()
@@ -361,7 +407,7 @@ test("task progress floating window drags and resizes inside the message panel",
     await page.mouse.up()
 
     const resized = await page.evaluate(() => {
-      const panel = document.querySelector<HTMLElement>('[data-ui="message-panel"]')!.getBoundingClientRect()
+      const boundary = document.querySelector<HTMLElement>('[data-ui="movement-boundary"]')!.getBoundingClientRect()
       const progressEl = document.querySelector<HTMLElement>(".task-progress")!
       const progress = progressEl.getBoundingClientRect()
       const style = getComputedStyle(progressEl)
@@ -370,19 +416,19 @@ test("task progress floating window drags and resizes inside the message panel",
         width: progress.width,
         height: progress.height,
         heightBudget: Number.parseFloat(style.getPropertyValue("--task-progress-height")),
-        panelRight: panel.right,
-        panelBottom: panel.bottom,
+        boundaryRight: boundary.right,
+        boundaryBottom: boundary.bottom,
         right: progress.right,
         bottom: progress.bottom,
         resizeCursor: getComputedStyle(resizeButton).cursor,
       }
     })
-    assert.ok(resized.width >= moved.progress.right - moved.progress.left)
-    assert.ok(resized.heightBudget > initial.budget + 60)
+    assert.ok(resized.width >= movedLeft.progress.right - movedLeft.progress.left)
+    assert.equal(resized.heightBudget, initial.budget)
     assert.ok(resized.height <= resized.heightBudget)
-    assert.ok(resized.right <= resized.panelRight - 7)
-    assert.ok(resized.bottom <= resized.panelBottom - 7)
-    assert.equal(resized.resizeCursor, "nwse-resize")
+    assert.ok(resized.right <= resized.boundaryRight - 7)
+    assert.ok(resized.bottom <= resized.boundaryBottom - 7)
+    assert.equal(resized.resizeCursor, "ew-resize")
 
     const screenshotPath = saveScreenshot("dark-window-after-drag-resize.png", await page.screenshot({ fullPage: false }))
     assert.ok(screenshotPath.endsWith("dark-window-after-drag-resize.png"))

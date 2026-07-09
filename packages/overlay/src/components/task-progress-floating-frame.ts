@@ -127,15 +127,14 @@ export function moveTaskProgressFloatingFrame(
 export function resizeTaskProgressFloatingFrame(
   frame: TaskProgressFloatingFrame,
   deltaX: number,
-  deltaY: number,
+  _deltaY: number,
   bounds: TaskProgressFloatingBounds,
 ): TaskProgressFloatingFrame {
   const anchored = clampTaskProgressFloatingFrame(frame, bounds)
   const maxWidthFromAnchor = bounds.panelWidth - bounds.inset - anchored.x
-  const maxHeightFromAnchor = bounds.panelHeight - bounds.inset - anchored.y
   return {
     ...anchored,
     width: Math.round(Math.min(maxWidthFromAnchor, Math.max(bounds.minWidth, anchored.width + deltaX))),
-    height: Math.round(Math.min(maxHeightFromAnchor, Math.max(bounds.minHeight, anchored.height + deltaY))),
+    height: anchored.height,
   }
 }

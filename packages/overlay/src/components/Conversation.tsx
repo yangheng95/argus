@@ -303,8 +303,12 @@ export function Conversation(props: { container: HTMLElement }) {
   onMount(() => {
     const mount = el.parentElement
     if (!mount) throw new Error("Conversation requires chatScroll to be mounted inside conversation-scroll-shell")
+    const progressMount = mount.parentElement
+    if (!progressMount || !progressMount.classList.contains("conversation-body")) {
+      throw new Error("Conversation progress overlay requires conversation-scroll-shell to be mounted inside conversation-body")
+    }
     setScrollButtonMount(mount)
-    setProgressOverlayMount(mount)
+    setProgressOverlayMount(progressMount)
     const c = setupAutoScroll(el, {
       isTracking: tracking,
       onUserScrollUp: () => setTracking(false),
@@ -427,7 +431,7 @@ export function Conversation(props: { container: HTMLElement }) {
       <Show when={progressOverlayMount()} keyed>
         {(mount) => (
           <Portal mount={mount}>
-            <TaskProgressBar messagePanel={el} overlayMount={mount} />
+            <TaskProgressBar overlayMount={mount} />
           </Portal>
         )}
       </Show>
