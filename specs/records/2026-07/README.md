@@ -1,5 +1,6 @@
 # July 2026 Records
 
+- [2026-07-09-goal-progress-session-history-load.md](2026-07-09-goal-progress-session-history-load.md) records the root-cause analysis and repair plan for completed task G1-G4 goal-pill clicks failing to materialize persisted build-session history.
 - [2026-07-09-browser-preview-selection-unmounted-rejection.md](2026-07-09-browser-preview-selection-unmounted-rejection.md) records the Browser Preview native selection cleanup repair for `window.unhandledrejection: browser preview webview is not mounted`.
 - [2026-07-09-browser-preview-header-project-action-visibility.md](2026-07-09-browser-preview-header-project-action-visibility.md) records the Browser Preview header height repair and the Projects row new-Mission action visibility fix.
 - [2026-07-08-project-actions-budget-capsule-repair.md](2026-07-08-project-actions-budget-capsule-repair.md) records the Overlay Projects row repair that keeps project counts visible with new-project actions and moves Hexin remaining budget display into the composer model capsule.

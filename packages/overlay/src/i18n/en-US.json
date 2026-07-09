@@ -1232,6 +1232,8 @@
   "progress.goal.passed": "{{title}} — passed",
   "progress.goal.failed": "{{title}} — failed",
   "progress.goal.blocked": "{{title}} — blocked",
+  "progress.card_unavailable_title": "Goal card unavailable",
+  "progress.locate_failed": "Could not locate {{title}} in the conversation.",
   "progress.summary": "{{passed}}/{{total}} passed · {{failed}} failed · {{running}} running",
   "progress.expand_more": "+{{count}} more",
   "progress.collapse": "Collapse",
