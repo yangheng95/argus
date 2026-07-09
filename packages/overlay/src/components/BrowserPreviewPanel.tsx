@@ -307,9 +307,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     Boolean(latestEvidenceScope() && latestEvidence.loading && !renderedEvidence()),
   )
   const previewActionPending = createMemo(() =>
-    Boolean(
-      target.loading || targetTransitionPending() || currentVerificationLoading() || currentLatestEvidenceLoading(),
-    ),
+    Boolean(target.loading || targetTransitionPending() || currentVerificationLoading()),
   )
   const nativePreviewScope = createMemo<BrowserPreviewNativeScope | undefined>(() => {
     const taskID = props.taskID()
@@ -324,13 +322,11 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     if (currentVerificationRequest()) {
       return undefined
     }
-    if ((latestEvidenceScope() || renderedEvidence()) && !nodeSelectionEnabled() && !nodeSelection()) {
-      return undefined
-    }
     return { taskID, directory, targetID: resolved.id, url: resolved.url }
   })
   const [captureImage] = createResource(
     () => {
+      if (nativePreviewScope()) return undefined
       const evidence = renderedEvidence()
       if (!evidence?.capture?.captured || !evidence.id) return undefined
       const directory = props.directory()
@@ -660,14 +656,12 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   }
 
   function navigatePreview(action: BrowserPreviewNativeNavigationAction): void {
+    const nativeNavigationRequested = Boolean(nativePreviewScope() && browserPreviewNativeSurfaceAvailable())
+    if (nativeNavigationRequested) navigateNativePreview(action)
     if (action === "reload") {
       setTargetSelectionError("")
       setRefreshToken((value) => value + 1)
       clearNodeSelection()
-    }
-    if (nativePreviewScope() && browserPreviewNativeSurfaceAvailable()) {
-      navigateNativePreview(action)
-      return
     }
   }
 
@@ -886,6 +880,49 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
               <p>{t("browser_preview.capture_loading")}</p>
             </div>
           </Match>
+          <Match when={nativePreviewError()}>
+            {(error) => (
+              <div class="browser-preview-empty" data-status="failed" data-ui="browser-preview-native-error">
+                <Icon name="status-failed" size={18} />
+                <p>{t("browser_preview.empty.native_failed")}</p>
+                <Show when={targetUrl()}>{(url) => <code>{url()}</code>}</Show>
+                <code>{error()}</code>
+              </div>
+            )}
+          </Match>
+          <Match when={nativePreviewScope()}>
+            {(scope) => (
+              <section
+                class="browser-preview-live"
+                data-ui="browser-preview-live"
+                data-status={nativePreviewSyncing() ? "loading" : "ready"}
+                data-target-id={scope().targetID}
+              >
+                <div class="browser-preview-native-frame">
+                  <div
+                    ref={bindNativePreviewElement}
+                    class="browser-preview-native-surface"
+                    data-ui="browser-preview-native-surface"
+                    data-selecting={nodeSelectionEnabled() ? "true" : undefined}
+                    role="application"
+                    aria-label={t("browser_preview.title")}
+                  >
+                    <Show when={nativePreviewSyncing()}>
+                      <span class="card__spinner" aria-hidden="true" />
+                    </Show>
+                    <BrowserPreviewNodeSelectionLayer selection={nodeSelection()} />
+                    <BrowserPreviewNodeCommentPopover
+                      selection={nodeSelection()}
+                      value={nodeCommentText()}
+                      onInput={setNodeCommentText}
+                      onCancel={clearNodeSelection}
+                      onSubmit={submitNodeCommentDraft}
+                    />
+                  </div>
+                </div>
+              </section>
+            )}
+          </Match>
           <Match when={currentLatestEvidenceLoading()}>
             <div class="browser-preview-empty" data-status="loading" data-ui="browser-preview-evidence-loading">
               <span class="card__spinner" aria-hidden="true" />
@@ -899,16 +936,6 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
                 <p>{t("browser_preview.empty.evidence_failed")}</p>
                 <code>{error().evidenceID}</code>
                 <code>{error().message}</code>
-              </div>
-            )}
-          </Match>
-          <Match when={nativePreviewError()}>
-            {(error) => (
-              <div class="browser-preview-empty" data-status="failed" data-ui="browser-preview-native-error">
-                <Icon name="status-failed" size={18} />
-                <p>{t("browser_preview.empty.native_failed")}</p>
-                <Show when={targetUrl()}>{(url) => <code>{url()}</code>}</Show>
-                <code>{error()}</code>
               </div>
             )}
           </Match>
@@ -973,39 +1000,6 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
                   </Show>
                 </dl>
                 <For each={evidence().diagnostics}>{(item) => <code>{item}</code>}</For>
-              </section>
-            )}
-          </Match>
-          <Match when={nativePreviewScope()}>
-            {(scope) => (
-              <section
-                class="browser-preview-live"
-                data-ui="browser-preview-live"
-                data-status={nativePreviewSyncing() ? "loading" : "ready"}
-                data-target-id={scope().targetID}
-              >
-                <div class="browser-preview-native-frame">
-                  <div
-                    ref={bindNativePreviewElement}
-                    class="browser-preview-native-surface"
-                    data-ui="browser-preview-native-surface"
-                    data-selecting={nodeSelectionEnabled() ? "true" : undefined}
-                    role="application"
-                    aria-label={t("browser_preview.title")}
-                  >
-                    <Show when={nativePreviewSyncing()}>
-                      <span class="card__spinner" aria-hidden="true" />
-                    </Show>
-                    <BrowserPreviewNodeSelectionLayer selection={nodeSelection()} />
-                    <BrowserPreviewNodeCommentPopover
-                      selection={nodeSelection()}
-                      value={nodeCommentText()}
-                      onInput={setNodeCommentText}
-                      onCancel={clearNodeSelection}
-                      onSubmit={submitNodeCommentDraft}
-                    />
-                  </div>
-                </div>
               </section>
             )}
           </Match>

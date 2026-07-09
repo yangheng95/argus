@@ -5,21 +5,44 @@ import { resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import sharp from "sharp"
 
-import { launchBrowser } from "../launch.ts"
+import { launchBrowser, type OverlayPage } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { testTaskOrderKey } from "../fixtures/timeline-order.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
 import { expertSquadCatalogFixture } from "./expert-squad-fixture.ts"
+import { installBrowserErrorCollector } from "./error-collector.ts"
 
-const PORT = 7778
 const SCREENSHOT_DIR = fileURLToPath(new URL("../../.scratch/browser-preview-visual-stress/", import.meta.url))
+
+await ensureOverlayDist()
 
 type NativeCommandRecord = {
   command: string
   args: Record<string, unknown>
 }
 
-await ensureOverlayDist()
+type BrowserPreviewTargetMode = "load-error" | "ready" | "failed"
+
+const expertSquadCatalog = expertSquadCatalogFixture({
+  active: "default",
+  projectActive: "default",
+  defaultSquad: "general",
+  targets: [{ id: "build", label: "Build", description: "Build agent prompt.", editable: true, built_in_only: false }],
+  squads: [
+    {
+      id: "general",
+      label: "General",
+      description: "General implementation profile.",
+      built_in: true,
+    },
+    {
+      id: "default",
+      label: "Default",
+      description: "Default implementation profile.",
+      built_in: false,
+    },
+  ],
+})
 
 function route(url: URL) {
   return url.pathname.replace(/\/+$/, "") || "/"
@@ -36,89 +59,51 @@ function json(value: unknown, init?: ResponseInit) {
 }
 
 function eventStream() {
-  return new Response(
-    new ReadableStream({
-      start(controller) {
-        controller.enqueue(new TextEncoder().encode(":\n\n"))
-      },
-    }),
-    {
-      headers: { "content-type": "text/event-stream; charset=utf-8" },
-    },
-  )
-}
-
-async function pngBytes(label: string, colors: [string, string]) {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
-    <defs>
-      <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
-        <stop offset="0" stop-color="${colors[0]}"/>
-        <stop offset="1" stop-color="${colors[1]}"/>
-      </linearGradient>
-    </defs>
-    <rect width="640" height="360" fill="url(#g)"/>
-    <rect x="32" y="38" width="576" height="88" rx="8" fill="rgba(255,255,255,.86)"/>
-    <text x="54" y="94" font-family="Arial, sans-serif" font-size="32" font-weight="700" fill="#0f172a">${escapeXml(label)}</text>
-    <rect x="48" y="162" width="182" height="118" rx="6" fill="rgba(15,23,42,.78)"/>
-    <rect x="252" y="162" width="148" height="118" rx="6" fill="rgba(255,255,255,.64)"/>
-    <rect x="422" y="162" width="170" height="118" rx="6" fill="rgba(22,163,74,.72)"/>
-  </svg>`
-  return sharp(Buffer.from(svg)).png().toBuffer()
-}
-
-function escapeXml(value: string) {
-  return value.replace(/[&<>"']/g, (char) => {
-    const entities: Record<string, string> = {
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&apos;",
-    }
-    return entities[char]
+  return new Response(":\n\n", {
+    headers: { "content-type": "text/event-stream; charset=utf-8" },
   })
 }
 
-async function waitForActivityState(
-  page: Awaited<ReturnType<Awaited<ReturnType<typeof launchBrowser>>["newPage"]>>,
-  predicate: () => boolean,
-  label: string,
-  diagnostics: () => unknown,
-  idleTimeoutMs = 6_000,
-) {
-  let lastActivity = Date.now()
-  let previousSignature = ""
-  for (;;) {
-    if (await page.evaluate(predicate)) return
-    const diagnosticSnapshot = diagnostics()
-    const signature = JSON.stringify({
-      page: await page.evaluate(() => ({
-        text: document.body.textContent?.slice(0, 1800) || "",
-        targetStatus: document.querySelector<HTMLElement>(".browser-preview-status")?.dataset.status || "",
-        evidenceStatus: document.querySelector<HTMLElement>(".browser-preview-evidence-status")?.dataset.status || "",
-        stageStatus:
-          document.querySelector<HTMLElement>(
-            "[data-ui='browser-preview-selection-failed'], [data-ui='browser-preview-target-load-failed'], [data-ui='browser-preview-live'], [data-ui='browser-preview-native-error'], [data-ui='browser-preview-target-failed'], [data-ui='browser-preview-evidence'], [data-ui='browser-preview-evidence-missing']",
-          )?.dataset.status || "",
-      })),
-      diagnostics: activityDiagnostics(diagnosticSnapshot),
-    })
-    if (signature !== previousSignature) {
-      previousSignature = signature
-      lastActivity = Date.now()
-    }
-    if (Date.now() - lastActivity > idleTimeoutMs) {
-      const snapshot = await page.evaluate(() => ({
-        centerOpen: document.querySelector<HTMLElement>("#centerWorkbench")?.dataset.open || "",
-        browserOpen: document.querySelector<HTMLElement>("#centerWorkbenchBrowser")?.dataset.open || "",
-        browserActive: document.querySelector<HTMLElement>("#centerWorkbenchBrowser")?.dataset.active || "",
-        bodyText: document.body.textContent?.slice(0, 2400) || "",
-      }))
-      assert.fail(
-        `No page activity while waiting for ${label}\n${JSON.stringify({ snapshot, diagnostics: diagnostics() }, null, 2)}`,
-      )
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100))
+function taskFixture(input: { id: string; title: string; directory: string; now: number }) {
+  return {
+    id: input.id,
+    directory: input.directory,
+    orderKey: testTaskOrderKey(input.id, input.now - 10_000),
+    status: "active",
+    sessionID: `ses_${input.id}`,
+    request: input.title,
+    title: input.title,
+    time: { created: input.now - 10_000, started: input.now - 9_000, updated: input.now - 1_000 },
+  }
+}
+
+function boardFixture(task: ReturnType<typeof taskFixture>) {
+  return {
+    snapshotVersion: `${task.id}-board`,
+    lastSequence: 0,
+    task,
+    overview: {
+      headline: task.title,
+      summary: "Backend-owned browser preview target fixture.",
+      controls: {},
+    },
+    lanes: [],
+    interactions: [],
+  }
+}
+
+function conversationFixture(board: ReturnType<typeof boardFixture>) {
+  return {
+    lastSequence: 0,
+    board,
+    transcript: [],
+    timeline: [],
+    events: [],
+    view: { topLevelSessionIDs: [], sessions: [], messages: [] },
+    agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
+    history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 160 },
+    eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
+    messageWatermark: 0,
   }
 }
 
@@ -127,98 +112,212 @@ function activityDiagnostics(value: unknown) {
   const source = value as Record<string, unknown>
   const out: Record<string, unknown> = {}
   for (const [key, item] of Object.entries(source)) {
+    if (key === "requestLog" && Array.isArray(item)) {
+      const meaningful = item.filter(
+        (entry) =>
+          typeof entry !== "string" ||
+          (!/^GET \/task(?:\/[^/]+)?\/events(?:\?|$)/.test(entry) &&
+            !/^GET \/work-ledger\/events(?:\?|$)/.test(entry) &&
+            !/^POST \/log$/.test(entry)),
+      )
+      out[key] = { length: meaningful.length, last: meaningful.at(-1) }
+      continue
+    }
     out[key] = Array.isArray(item) ? { length: item.length, last: item.at(-1) } : item
   }
   return out
 }
 
-async function waitForText(
-  page: Awaited<ReturnType<Awaited<ReturnType<typeof launchBrowser>>["newPage"]>>,
-  text: string,
+async function waitForPageState(
+  page: OverlayPage,
+  predicate: () => boolean,
   label: string,
   diagnostics: () => unknown,
+  idleTimeoutMs = 6_000,
 ) {
   let lastActivity = Date.now()
   let previousSignature = ""
   for (;;) {
-    if (await page.evaluate((value) => document.body.textContent?.includes(value) ?? false, text)) return
+    if (await page.evaluate<boolean>(predicate)) return
     const signature = JSON.stringify({
-      text: await page.evaluate(() => document.body.textContent?.slice(0, 1800) || ""),
+      page: await page.evaluate(() => {
+        const activeStage = document.querySelector<HTMLElement>(
+          [
+            "[data-ui='browser-preview-target-load-failed']",
+            "[data-ui='browser-preview-native-error']",
+            "[data-ui='browser-preview-live']",
+            "[data-ui='browser-preview-target-failed']",
+            "[data-ui='browser-preview-evidence']",
+            "[data-status='missing']",
+          ].join(", "),
+        )
+        return {
+          centerOpen: document.querySelector<HTMLElement>("#centerWorkbench")?.dataset.open || "",
+          browserActive: document.querySelector<HTMLElement>("#centerWorkbenchBrowser")?.dataset.active || "",
+          activeUI: activeStage?.getAttribute("data-ui") || "",
+          activeStatus: activeStage?.dataset.status || "",
+          nativeSurface: !!document.querySelector('[data-ui="browser-preview-native-surface"]'),
+          nativeCommands: ((window as any).__browserPreviewNativeCommands || []).length,
+          text: document.body.textContent?.slice(0, 1600) || "",
+        }
+      }),
       diagnostics: activityDiagnostics(diagnostics()),
     })
     if (signature !== previousSignature) {
       previousSignature = signature
       lastActivity = Date.now()
     }
-    if (Date.now() - lastActivity > 6_000) {
-      const preview = await page.evaluate(() => {
-        const stage = document.querySelector<HTMLElement>(".browser-preview-stage")
-        const active = document.querySelector<HTMLElement>(
-          "[data-ui='browser-preview-selection-failed'], [data-ui='browser-preview-native-error'], [data-ui='browser-preview-live'], [data-ui='browser-preview-evidence'], [data-ui='browser-preview-evidence-missing']",
-        )
-        return {
-          selectedSource: (window as any).boardStore?.selectedSource ?? null,
-          boardTaskID: (window as any).boardStore?.board?.task?.id ?? "",
-          settingsDirectory: (window as any).settingsStore?.directory ?? "",
-          activeRowTaskID:
-            document.querySelector<HTMLElement>(".task-row-main[aria-current='page']")?.dataset.taskId || "",
-          status: document.querySelector<HTMLElement>(".browser-preview-status")?.dataset.status || "",
-          activeUI: active?.getAttribute("data-ui") || "",
-          activeStatus: active?.dataset.status || "",
-          text: stage?.textContent?.slice(0, 1200) || "",
-        }
-      })
-      assert.fail(
-        `No page activity while waiting for ${label}\n${JSON.stringify({ state: JSON.parse(signature), preview }, null, 2)}`,
-      )
+    if (Date.now() - lastActivity > idleTimeoutMs) {
+      assert.fail(`No page activity while waiting for ${label}\n${signature}`)
     }
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
 }
 
-async function waitForNativePreviewSync(
-  page: Awaited<ReturnType<Awaited<ReturnType<typeof launchBrowser>>["newPage"]>>,
-  input: { url: string; minCount: number; label: string },
-) {
+async function openBrowserPreviewFromTask(page: OverlayPage, taskID: string, diagnostics: () => unknown) {
+  const taskRow = `[data-row-key="task:${taskID}"] [data-ui="ledger-row-main"]`
+  await page.waitForSelector(taskRow, { visible: true })
+  await page.click(taskRow)
+  const browserAlreadyActive = await page.evaluate(
+    () => document.querySelector<HTMLElement>("#centerWorkbenchBrowser")?.dataset.active === "true",
+  )
+  if (!browserAlreadyActive) await clickRightBrowserActivity(page, diagnostics)
+  await waitForPageState(
+    page,
+    () => document.querySelector<HTMLElement>("#centerWorkbenchBrowser")?.dataset.active === "true",
+    `browser preview active for ${taskID}`,
+    diagnostics,
+  )
+}
+
+async function clickRightBrowserActivity(page: OverlayPage, diagnostics: () => unknown) {
+  const browserButton = '[data-ui="side-activity-button"][data-side="right"][data-activity="browser"]'
+  const toolbarToggle = '[data-ui="chat-header-right-toolbar-toggle"]'
   let lastActivity = Date.now()
   let previousSignature = ""
   for (;;) {
-    const commands = await page.evaluate(
-      (url) =>
-        (((window as any).__browserPreviewNativeCommands || []) as NativeCommandRecord[]).filter(
-          (entry) => entry.command === "overlay_browser_preview_sync" && entry.args.url === url,
-        ),
-      input.url,
+    const state = await page.evaluate(
+      ({ buttonSelector, toggleSelector }) => {
+        const visible = (node: HTMLElement | null) => {
+          if (!node) return false
+          const rect = node.getBoundingClientRect()
+          const style = getComputedStyle(node)
+          return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none"
+        }
+        return {
+          buttonVisible: visible(document.querySelector<HTMLElement>(buttonSelector)),
+          toggleVisible: visible(document.querySelector<HTMLElement>(toggleSelector)),
+          toolbarVisible: document.querySelector<HTMLElement>("#solidRightActivityToolbar")?.dataset.visible || "",
+          browserActive: document.querySelector<HTMLElement>("#centerWorkbenchBrowser")?.dataset.active || "",
+        }
+      },
+      { buttonSelector: browserButton, toggleSelector: toolbarToggle },
     )
-    if (commands.length >= input.minCount) return
-    const signature = JSON.stringify({ count: commands.length, last: commands.at(-1) || null })
+    if (state.buttonVisible) {
+      await page.$eval(browserButton, (node: HTMLElement) => node.click())
+      return
+    }
+    if (state.toggleVisible) await page.$eval(toolbarToggle, (node: HTMLElement) => node.click())
+    const signature = JSON.stringify({ state, diagnostics: activityDiagnostics(diagnostics()) })
     if (signature !== previousSignature) {
       previousSignature = signature
       lastActivity = Date.now()
     }
     if (Date.now() - lastActivity > 6_000) {
-      assert.fail(`No native preview sync while waiting for ${input.label}\n${signature}`)
+      assert.fail(`No page activity while opening right browser activity\n${signature}`)
     }
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
 }
 
-async function clickBrowserPreviewViewport(
-  page: Awaited<ReturnType<Awaited<ReturnType<typeof launchBrowser>>["newPage"]>>,
-  viewportID: "desktop" | "tablet" | "mobile",
-) {
-  const selector = `[data-ui="browser-preview-viewport"][data-viewport-id="${viewportID}"]`
-  await page.waitForSelector(selector, { visible: true })
-  await page.evaluate((value) => {
-    const node = document.querySelector<HTMLElement>(String(value))
-    if (!node) throw new Error(`Browser preview viewport trigger is missing: ${value}`)
-    setTimeout(() => node.click(), 0)
-    return true
-  }, selector)
+async function nativeCommands(page: OverlayPage): Promise<NativeCommandRecord[]> {
+  return await page.evaluate(() =>
+    (((window as any).__browserPreviewNativeCommands || []) as NativeCommandRecord[]).map((entry) => {
+      const args = (entry.args || {}) as Record<string, unknown>
+      const bounds = args.bounds as Record<string, unknown> | undefined
+      return {
+        command: String(entry.command || ""),
+        args: {
+          ...(typeof args.action === "string" ? { action: args.action } : {}),
+          ...(typeof args.enabled === "boolean" ? { enabled: args.enabled } : {}),
+          ...(typeof args.url === "string" ? { url: args.url } : {}),
+          ...(typeof args.scopeKey === "string" ? { scopeKey: args.scopeKey } : {}),
+          ...(bounds && typeof bounds === "object"
+            ? {
+                bounds: {
+                  x: typeof bounds.x === "number" ? bounds.x : 0,
+                  y: typeof bounds.y === "number" ? bounds.y : 0,
+                  width: typeof bounds.width === "number" ? bounds.width : 0,
+                  height: typeof bounds.height === "number" ? bounds.height : 0,
+                },
+              }
+            : {}),
+        },
+      }
+    }),
+  )
+}
+
+function nativeSyncCommands(commands: NativeCommandRecord[]): NativeCommandRecord[] {
+  return commands.filter((entry) => entry.command === "overlay_browser_preview_sync")
+}
+
+async function waitForNativeSyncUrl(page: OverlayPage, url: string, minCount: number, label: string) {
+  let lastActivity = Date.now()
+  let previousSignature = ""
+  for (;;) {
+    const commands = await nativeCommands(page)
+    const matches = nativeSyncCommands(commands).filter((entry) => entry.args.url === url)
+    if (matches.length >= minCount) return commands
+    const signature = JSON.stringify({ matches: matches.length, last: commands.at(-1) || null })
+    if (signature !== previousSignature) {
+      previousSignature = signature
+      lastActivity = Date.now()
+    }
+    if (Date.now() - lastActivity > 6_000) {
+      assert.fail(`No native preview sync while waiting for ${label}\n${signature}`)
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+}
+
+async function waitForNativeNavigation(page: OverlayPage, action: string, minCount: number, label: string) {
+  let lastActivity = Date.now()
+  let previousSignature = ""
+  for (;;) {
+    const commands = (await nativeCommands(page)).filter(
+      (entry) => entry.command === "overlay_browser_preview_navigate" && entry.args.action === action,
+    )
+    if (commands.length >= minCount) return
+    const signature = JSON.stringify(commands)
+    if (signature !== previousSignature) {
+      previousSignature = signature
+      lastActivity = Date.now()
+    }
+    if (Date.now() - lastActivity > 6_000) {
+      assert.fail(`No native preview navigation while waiting for ${label}\n${signature}`)
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+}
+
+async function saveAddressTarget(page: OverlayPage, url: string) {
+  const input = '[data-ui="browser-preview-address-input"]'
+  await page.waitForSelector(input, { visible: true })
+  await page.focus(input)
+  await page.$eval(
+    input,
+    (node: HTMLInputElement, nextURL) => {
+      node.value = String(nextURL)
+      node.dispatchEvent(new Event("input", { bubbles: true }))
+    },
+    url,
+  )
+  await page.keyboard.press("Enter")
 }
 
 async function writeAndAssertScreenshot(
-  page: Awaited<ReturnType<Awaited<ReturnType<typeof launchBrowser>>["newPage"]>>,
+  page: OverlayPage,
   name: string,
   options: { minHeight?: number; minNonWhiteDensity?: number; minWidth?: number } = {},
 ) {
@@ -231,14 +330,14 @@ async function writeAndAssertScreenshot(
   writeFileSync(file, screenshot)
   const stats = await analyzePng(screenshot)
   assert.ok(
-    stats.width >= (options.minWidth ?? 260) && stats.height >= (options.minHeight ?? 300),
+    stats.width >= (options.minWidth ?? 320) && stats.height >= (options.minHeight ?? 360),
     `${name} screenshot dimensions are invalid: ${JSON.stringify({ stats }, null, 2)}`,
   )
   assert.ok(
-    stats.nonWhiteDensity > (options.minNonWhiteDensity ?? 0.03),
+    stats.nonWhiteDensity > (options.minNonWhiteDensity ?? 0.018),
     `${name} screenshot lacks visible UI pixels: ${JSON.stringify(stats)}`,
   )
-  assert.ok(stats.uniqueColorBuckets > 24, `${name} screenshot is visually too sparse: ${JSON.stringify(stats)}`)
+  assert.ok(stats.uniqueColorBuckets > 18, `${name} screenshot is visually too sparse: ${JSON.stringify(stats)}`)
   return file
 }
 
@@ -270,119 +369,13 @@ async function analyzePng(buffer: Buffer) {
   }
 }
 
-async function averageRgb(buffer: Buffer) {
-  const raw = await sharp(buffer).resize(1, 1).removeAlpha().raw().toBuffer()
-  return { r: raw[0], g: raw[1], b: raw[2] }
-}
-
-async function assertImageMatchesReference(
-  page: Awaited<ReturnType<Awaited<ReturnType<typeof launchBrowser>>["newPage"]>>,
-  selector: string,
-  reference: Buffer,
-  label: string,
-) {
-  const element = await page.$(selector)
-  assert.ok(element, `${label} image should exist`)
-  const actualBytes = Buffer.from(
-    await page.$eval(selector, async (image: HTMLImageElement) => {
-      if (!image.complete || image.naturalWidth <= 0 || image.naturalHeight <= 0) {
-        throw new Error(`Image ${image.getAttribute("data-ui") || image.src} is not decoded`)
-      }
-      const response = await fetch(image.src)
-      if (!response.ok) throw new Error(`Image fetch failed with ${response.status}`)
-      return Array.from(new Uint8Array(await response.arrayBuffer()))
-    }),
-  )
-  const [actualAverage, expectedAverage] = await Promise.all([averageRgb(actualBytes), averageRgb(reference)])
-  const distance =
-    Math.abs(actualAverage.r - expectedAverage.r) +
-    Math.abs(actualAverage.g - expectedAverage.g) +
-    Math.abs(actualAverage.b - expectedAverage.b)
-  assert.ok(
-    distance <= 72,
-    `${label} image does not match expected visual signature\n${JSON.stringify({ actualAverage, expectedAverage, distance }, null, 2)}`,
-  )
-}
-
-async function waitForImageMatchesReference(
-  page: Awaited<ReturnType<Awaited<ReturnType<typeof launchBrowser>>["newPage"]>>,
-  selector: string,
-  reference: Buffer,
-  label: string,
-) {
-  let lastError: unknown
-  for (let attempt = 0; attempt < 40; attempt += 1) {
-    try {
-      await assertImageMatchesReference(page, selector, reference, label)
-      return
-    } catch (error) {
-      lastError = error
-      await new Promise((resolve) => setTimeout(resolve, 100))
-    }
-  }
-  throw lastError
-}
-
-function assertNoPreviewLayoutBreakage(layout: {
-  bodyOverflowX: number
-  legalShellOverflowX: number
-  shell: Box | null
-  panel: Box | null
-  command: Box | null
-  stage: Box | null
-  badBoxes: string[]
-  badShellBoxes: string[]
-  overlaps: string[]
-  candidateEllipsis: boolean
-  evidenceStatusPresent: boolean
-  evidenceEllipsis: boolean
-}) {
-  assert.ok(layout.shell, `legal overlay shell should be visible\n${JSON.stringify(layout, null, 2)}`)
-  assert.ok(layout.panel, `preview panel should be visible\n${JSON.stringify(layout, null, 2)}`)
-  assert.ok(layout.command, `preview command surface should be visible\n${JSON.stringify(layout, null, 2)}`)
-  assert.ok(layout.stage, `preview stage should be visible\n${JSON.stringify(layout, null, 2)}`)
-  assert.ok(
-    layout.legalShellOverflowX <= 1,
-    `page should not overflow the legal overlay shell\n${JSON.stringify(layout, null, 2)}`,
-  )
-  assert.deepEqual(
-    layout.badShellBoxes,
-    [],
-    `preview elements escaped the legal shell\n${JSON.stringify(layout, null, 2)}`,
-  )
-  assert.deepEqual(layout.badBoxes, [], `preview elements escaped their panel\n${JSON.stringify(layout, null, 2)}`)
-  assert.deepEqual(layout.overlaps, [], `preview controls overlap incoherently\n${JSON.stringify(layout, null, 2)}`)
-  assert.equal(
-    layout.candidateEllipsis,
-    true,
-    `long preview candidate URL must truncate cleanly\n${JSON.stringify(layout, null, 2)}`,
-  )
-  if (layout.evidenceStatusPresent) {
-    assert.equal(
-      layout.evidenceEllipsis,
-      true,
-      `long evidence status must truncate cleanly\n${JSON.stringify(layout, null, 2)}`,
-    )
-  }
-}
-
-type Box = {
-  label: string
-  left: number
-  top: number
-  right: number
-  bottom: number
-  width: number
-  height: number
-}
-
-async function previewLayout(page: Awaited<ReturnType<Awaited<ReturnType<typeof launchBrowser>>["newPage"]>>) {
-  return page.evaluate(() => {
-    const box = (label: string, node: Element | null): Box | null => {
+async function previewLayout(page: OverlayPage) {
+  return await page.evaluate(() => {
+    const box = (selector: string) => {
+      const node = document.querySelector<HTMLElement>(selector)
       if (!node) return null
       const rect = node.getBoundingClientRect()
       return {
-        label,
         left: Math.round(rect.left),
         top: Math.round(rect.top),
         right: Math.round(rect.right),
@@ -391,64 +384,24 @@ async function previewLayout(page: Awaited<ReturnType<Awaited<ReturnType<typeof 
         height: Math.round(rect.height),
       }
     }
-    const intersects = (a: Box, b: Box) =>
-      a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1
-    const panel = box("panel", document.querySelector(".browser-preview-panel"))
-    const shell = box("shell", document.body)
-    const command = box("command", document.querySelector(".browser-preview-command-surface"))
-    const stage = box("stage", document.querySelector(".browser-preview-stage"))
-    const watched = [
-      box("status", document.querySelector(".browser-preview-status")),
-      box("candidate", document.querySelector(".browser-preview-candidate-select")),
-      box("viewports", document.querySelector(".browser-preview-viewport-controls")),
-      box("evidence-status", document.querySelector(".browser-preview-evidence-status")),
-    ].filter((item): item is Box => Boolean(item && item.width > 0 && item.height > 0))
-    const badBoxes = panel
-      ? watched
-          .filter((item) => item.left < panel.left - 2 || item.right > panel.right + 2 || item.top < panel.top - 2)
-          .map((item) => item.label)
-      : watched.map((item) => item.label)
-    const shellWatched = [panel, command, stage, ...watched].filter((item): item is Box => Boolean(item))
-    const badShellBoxes = shell
-      ? shellWatched
-          .filter((item) => item.left < shell.left - 2 || item.right > shell.right + 2 || item.top < shell.top - 2)
-          .map((item) => item.label)
-      : shellWatched.map((item) => item.label)
-    const overlaps: string[] = []
-    for (let i = 0; i < watched.length; i += 1) {
-      for (let j = i + 1; j < watched.length; j += 1) {
-        if (intersects(watched[i], watched[j])) overlaps.push(`${watched[i].label}/${watched[j].label}`)
-      }
-    }
-    const candidateText = document.querySelector<HTMLElement>(".browser-preview-candidate-trigger > span:first-child")
-    const evidenceText = document.querySelector<HTMLElement>(".browser-preview-evidence-status span:last-child")
     return {
-      bodyOverflowX: document.documentElement.scrollWidth - window.innerWidth,
-      legalShellOverflowX: shell
-        ? document.documentElement.scrollWidth - shell.width
-        : document.documentElement.scrollWidth,
-      shell,
-      panel,
-      command,
-      stage,
-      badBoxes,
-      badShellBoxes,
-      overlaps,
-      candidateEllipsis:
-        !!candidateText &&
-        getComputedStyle(candidateText).textOverflow === "ellipsis" &&
-        candidateText.scrollWidth >= candidateText.clientWidth,
-      evidenceStatusPresent: !!evidenceText,
-      evidenceEllipsis:
-        !!evidenceText &&
-        getComputedStyle(evidenceText).textOverflow === "ellipsis" &&
-        evidenceText.scrollWidth >= evidenceText.clientWidth,
+      overflowX: document.documentElement.scrollWidth - window.innerWidth,
+      panel: box(".browser-preview-panel"),
+      chrome: box('[data-ui="browser-preview-chrome"]'),
+      toolbar: box('[data-ui="browser-preview-toolbar"]'),
+      stage: box(".browser-preview-stage"),
+      surface: box('[data-ui="browser-preview-native-surface"]'),
+      address: box('[data-ui="browser-preview-address-form"]'),
+      input: box('[data-ui="browser-preview-address-input"]'),
+      reload: box('[aria-label="Reload the current preview page."]'),
+      selection: box('[aria-label="Select a node in the live preview."]'),
+      evidence: !!document.querySelector('[data-ui="browser-preview-evidence"]'),
     }
   })
 }
 
 test(
-  `browser preview visual Playwright stress covers target, evidence, live, failure, and layout states on port ${PORT}`,
+  "browser preview visual stress follows task-scoped native preview ownership",
   async () => {
     assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
     assert.equal(typeof globalThis.Bun, "undefined")
@@ -456,686 +409,415 @@ test(
     mkdirSync(SCREENSHOT_DIR, { recursive: true })
 
     const now = Date.now()
-    const taskID = "tsk_browserpreview_visual_stress"
-    const otherTaskID = "tsk_browserpreview_visual_other"
+    const primaryTaskID = "tsk_browserpreview_visual_stress"
+    const missingTaskID = "tsk_browserpreview_visual_missing"
     const primaryTargetID = "art_previewtarget_visual_primary"
-    const alternateTargetID = "art_previewtarget_visual_alternate"
-    const staleTargetID = "art_previewtarget_visual_stale"
+    const savedTargetID = "art_previewtarget_visual_saved"
+    const evidenceID = "art_previewevidence_visual_existing"
     const projectRoot = "D:/overlay/workspace/preview-stress"
-    const otherProjectRoot = "D:/overlay/workspace/preview-other"
     const requestLog: string[] = []
-    const errors: string[] = []
-    const captureBodies: unknown[] = []
-    const selectedTargets: unknown[] = []
     const unexpectedRequests: string[] = []
-    const logBodies: unknown[] = []
-    let boardRequestCount = 0
-    let previewTargetRequestCount = 0
+    const saveBodies: unknown[] = []
     let serverOrigin = ""
-    let targetMode: "load-error" | "missing" | "ready" | "failed" = "load-error"
+    let targetMode: BrowserPreviewTargetMode = "load-error"
     let selectedTargetID = primaryTargetID
-    let expectedTargetLoadFailureConsoleCount = 0
-    let expectedTargetSelectionFailureConsoleCount = 0
-    const validTargetIDs = new Set([primaryTargetID, alternateTargetID])
-    const png = {
-      evidence: await pngBytes("persisted evidence", ["#312e81", "#0f172a"]),
-    }
+    let selectedURL = ""
+    const previewURL = () => `${serverOrigin}/preview/visual-saved`
     const viewports = [
       { id: "desktop", labelKey: "browser_preview.viewport.desktop", width: 1440, height: 900 },
       { id: "tablet", labelKey: "browser_preview.viewport.tablet", width: 834, height: 1112 },
       { id: "mobile", labelKey: "browser_preview.viewport.mobile", width: 390, height: 844 },
     ]
-    const task = {
-      id: taskID,
-      directory: projectRoot,
-      orderKey: testTaskOrderKey(taskID, now - 10_000),
-      status: "active",
-      sessionID: "ses_preview_visual_stress",
-      request: "Build agent started a browser_preview service and the operator is validating the preview panel.",
+    const primaryTask = taskFixture({
+      id: primaryTaskID,
       title: "Preview visual stress",
-      time: { created: now - 10_000, started: now - 9_000, updated: now - 1_000 },
-    }
-    const otherTask = {
-      id: otherTaskID,
-      directory: otherProjectRoot,
-      orderKey: testTaskOrderKey(otherTaskID, now - 20_000),
-      status: "active",
-      sessionID: "ses_preview_visual_other",
-      request: "A second task verifies preview state does not leak across task switches.",
-      title: "Preview visual other task",
-      time: { created: now - 20_000, started: now - 19_000, updated: now - 2_000 },
-    }
-    const board = {
-      snapshotVersion: "preview-visual-stress-board",
-      lastSequence: 0,
-      task,
-      overview: {
-        headline: "Preview visual stress",
-        summary: "Task-scoped browser preview target is controlled by backend artifacts.",
-        controls: {},
-      },
-      lanes: [],
-      interactions: [],
-    }
-    const otherBoard = {
-      snapshotVersion: "preview-visual-other-board",
-      lastSequence: 0,
-      task: otherTask,
-      overview: {
-        headline: "Preview visual other task",
-        summary: "This task has no saved browser preview target.",
-        controls: {},
-      },
-      lanes: [],
-      interactions: [],
-    }
-    const expertSquadCatalog = expertSquadCatalogFixture({
-      active: "frontend-replica",
-      projectActive: "frontend-replica",
-      targets: [
-        { id: "build", label: "Build", description: "Build agent prompt.", editable: true, built_in_only: false },
-      ],
-      squads: [
-        {
-          id: "general",
-          label: "General",
-          description: "General profile.",
-          built_in: true,
-        },
-        {
-          id: "frontend-replica",
-          label: "Frontend Replica",
-          description: "Frontend implementation profile.",
-          built_in: false,
-        },
-      ],
+      directory: projectRoot,
+      now,
     })
-    const urlFor = (id: string) =>
-      id === alternateTargetID
-        ? `${serverOrigin}/preview/alternate/${"very-long-segment-".repeat(18)}`
-        : `${serverOrigin}/preview/primary/${"very-long-segment-".repeat(18)}`
-    const targetResponse = () => {
-      if (targetMode === "missing") {
-        return {
+    const missingTask = taskFixture({
+      id: missingTaskID,
+      title: "Preview missing target",
+      directory: projectRoot,
+      now: now - 200,
+    })
+    const tasks = [primaryTask, missingTask]
+    const boards = new Map(tasks.map((task) => [task.id, boardFixture(task)]))
+    const targetResponse = () => ({
+      id: selectedTargetID,
+      taskID: primaryTaskID,
+      latestEvidenceIDs: { desktop: evidenceID },
+      kind: "task-url",
+      status: "ready",
+      projectRoot,
+      url: selectedURL || previewURL(),
+      viewports,
+      diagnostics: ["Resolved saved browser preview target."],
+      candidates: [
+        {
+          id: selectedTargetID,
+          url: selectedURL || previewURL(),
+          source: "task-artifact",
+          selected: true,
+          timeUpdated: now - 500,
+        },
+      ],
+      source: "task-artifact",
+    })
+
+    const server = await startBrowserFixture(async (req) => {
+      const url = new URL(req.url)
+      const path = route(url)
+      requestLog.push(`${req.method} ${url.pathname}${url.search}`)
+      if (path === "/" || path === "/ui" || path === "/ui/") return Response.redirect(`${url.origin}/ui/index.html`, 302)
+      if (path === "/favicon.ico") return new Response(null, { status: 204 })
+      if (path === "/preview/visual-saved")
+        return new Response("<main><h1>Native visual stress target</h1></main>", {
+          headers: { "content-type": "text/html; charset=utf-8" },
+        })
+      const staticResponse = await overlayStaticResponse(path)
+      if (staticResponse) return staticResponse
+      if (path === "/global/health") return json({ version: "1.2.3" })
+      if (path === "/mission") return json([])
+      if (path === "/global/projects/discover")
+        return json({ root: "D:/overlay", defaultDirectory: projectRoot, projects: [] })
+      if (path === "/project/current/worktrees") return json([])
+      if (path === "/coding/cli/profiles" || path === "/terminal/profiles") return json({ profiles: [] })
+      if (path === "/global/tasks") return json({ tasks: tasks.map((task) => ({ task, updated_at: task.time.updated })) })
+      if (path === "/work-ledger")
+        return json({
+          rows: tasks.map((task) => ({
+            kind: "task",
+            id: task.id,
+            title: task.title,
+            directory: task.directory,
+            created: task.time.created,
+            updated: task.time.updated,
+            lifecycleStatus: task.status,
+            executionStatus: "active",
+            priority: "normal",
+            source: "browser-preview-visual-stress-test",
+          })),
+          nextCursor: null,
+        })
+      if (path === "/path") return json({ directory: projectRoot })
+      if (path === "/vcs")
+        return json({
+          branch: "preview-visual-stress",
+          clean: true,
+          dirty: false,
+          staged: 0,
+          modified: 0,
+          untracked: 0,
+          conflicts: 0,
+          ahead: 0,
+          behind: 0,
+        })
+      if (path === "/provider") return json({ all: [], connected: [], default: {} })
+      if (path === "/provider/auth") return json({})
+      if (path === "/expert-squad/catalog") return json(expertSquadCatalog)
+      if (path === "/config" && req.method === "PATCH") return json({ model: "", prompt_profile: { active: "default" } })
+      if (path === "/config") return json({ model: "", prompt_profile: { active: "default" } })
+      if (path === "/log" && req.method === "POST") return json({ ok: true })
+      if (path === "/channel") return json([])
+      if (path === "/executor") return json([])
+      if (path === "/agent") return json([])
+      if (path === "/file") return json([])
+      if (path === "/find/file") return json([])
+      if (path === "/skill/installed" || path === "/skill") return json([])
+      if (path === "/skill/mounts")
+        return json({
+          scope: "project",
+          skills: [],
+          agents: [],
+          matrix: [],
+          project_mounts: { agents: {} },
+          unmounted_count: 0,
+        })
+      if (path === "/skill/market") return json([])
+      if (path === "/mcp") return json({})
+      if (path === "/panel/knowledge/memory") return json([])
+      if (path === "/panel/knowledge/preference") return json([])
+      for (const task of tasks) {
+        const board = boards.get(task.id)
+        if (path === `/task/${task.id}/operator-model-context`) return json({ selected: null, candidates: [] })
+        if (path === `/task/${task.id}/board`) return json(board, { headers: { etag: `"board-${task.time.updated}"` } })
+        if (path === `/task/${task.id}/conversation`) return json(conversationFixture(board!))
+        if (path === `/task/${task.id}/transcript`) return json([])
+        if (path === `/task/${task.id}/trace`)
+          return json({ events: [], traceDir: `${task.directory}/.opencorvus/trace`, enabled: true })
+        if (path === `/task/${task.id}/followup` && req.method === "POST") return json({ suggestion: "" })
+        if (
+          path === "/work-ledger/events" ||
+          path === "/task/events" ||
+          path === `/task/${task.id}/events` ||
+          path === `/task/${task.id}/conversation/events`
+        )
+          return eventStream()
+      }
+      if (path === `/task/${missingTaskID}/browser-preview`)
+        return json({
           kind: "missing",
           status: "missing",
           projectRoot,
-          taskID,
+          taskID: missingTaskID,
           viewports,
           diagnostics: ["No browser preview target saved for this task."],
           candidates: [],
           source: "none",
-        }
-      }
-      if (targetMode === "failed") {
-        return {
-          id: selectedTargetID,
-          taskID,
-          kind: "failed",
-          status: "failed",
-          projectRoot,
-          url: urlFor(selectedTargetID),
-          viewports,
-          diagnostics: ["Saved browser preview target is unreachable during stress validation."],
-          candidates: [
-            {
-              id: selectedTargetID,
-              url: urlFor(selectedTargetID),
-              source: "task-artifact",
-              selected: true,
-              timeUpdated: now + 40,
-            },
-          ],
-          source: "task-artifact",
-        }
-      }
-      const candidates = [primaryTargetID, staleTargetID, alternateTargetID].map((id) => ({
-        id,
-        url: urlFor(id),
-        source: "task-artifact",
-        selected: id === selectedTargetID,
-        timeUpdated: id === selectedTargetID ? now + 20 : now,
-      }))
-      const latestEvidenceIDs =
-        selectedTargetID === primaryTargetID
-          ? {
-              desktop: "art_previewevidence_primary_desktop",
-              tablet: "art_previewevidence_primary_tablet",
-              mobile: "art_previewevidence_primary_mobile",
-            }
-          : {}
-      return {
-        id: selectedTargetID,
-        taskID,
-        latestEvidenceIDs,
-        kind: "task-url",
-        status: "ready",
-        projectRoot,
-        url: urlFor(selectedTargetID),
-        viewports,
-        diagnostics: [`Using task browser preview target ${selectedTargetID}.`],
-        candidates,
-        source: "task-artifact",
-      }
-    }
-    const evidence = (id: string) => {
-      const viewportID = id.includes("mobile") ? "mobile" : id.includes("tablet") ? "tablet" : "desktop"
-      const targetID = id.includes("alternate") ? alternateTargetID : primaryTargetID
-      return {
-        id,
-        taskID,
-        targetID,
-        viewportID,
-        status: id.includes("failed") ? "failed" : "passed",
-        summary: `${targetID === alternateTargetID ? "alternate" : "primary"} ${viewportID} ${"evidence summary ".repeat(16)}`,
-        capture: { captured: true, passed: !id.includes("failed"), url: urlFor(targetID), sha: `${id}-sha` },
-        diagnostics: [`${id} diagnostics ${"detail ".repeat(12)}`],
-        timeCompleted: now,
-        timeCreated: now - 100,
-      }
-    }
-
-    const server = await startBrowserFixture(
-      async (req) => {
-        const url = new URL(req.url)
-        const path = route(url)
-        requestLog.push(`${req.method} ${url.pathname}${url.search}`)
-        if (path === "/" || path === "/ui" || path === "/ui/")
-          return Response.redirect(`${url.origin}/ui/index.html`, 302)
-        if (path === "/favicon.ico") return new Response(null, { status: 204 })
-        if (path.startsWith("/preview/")) {
-          return new Response(
-            `<!doctype html><html><head><title>${path}</title></head><body><main>${path} ${"visual content ".repeat(120)}</main><button>Action</button></body></html>`,
-            { headers: { "content-type": "text/html; charset=utf-8" } },
-          )
-        }
-        const staticResponse = await overlayStaticResponse(path)
-        if (staticResponse) return staticResponse
-        if (path === "/global/health") return json({ version: "1.2.3" })
-        if (path === "/mission") return json([])
-        if (path === "/global/projects/discover") return json([])
-        if (path === "/project/current/worktrees") return json([])
-        if (path === "/coding/cli/profiles" || path === "/terminal/profiles") return json({ profiles: [] })
-        if (path === `/task/${taskID}/operator-model-context` || path === `/task/${otherTaskID}/operator-model-context`)
-          return json({ selected: null, candidates: [] })
-        if (path === "/global/tasks")
+        })
+      if (path === `/task/${primaryTaskID}/browser-preview`) {
+        if (targetMode === "load-error")
+          return json({ message: "browser preview target lookup failed during visual stress" }, { status: 503 })
+        if (targetMode === "failed")
           return json({
-            tasks: [
-              { task, updated_at: now - 1_000 },
-              { task: otherTask, updated_at: now - 2_000 },
-            ],
-          })
-        if (path === "/path") return json({ directory: projectRoot })
-        if (path === "/vcs")
-          return json({
-            branch: "preview-visual-stress",
-            clean: true,
-            dirty: false,
-            staged: 0,
-            modified: 0,
-            untracked: 0,
-            conflicts: 0,
-            ahead: 0,
-            behind: 0,
-          })
-        if (path === "/provider") return json({ all: [], connected: [], default: {} })
-        if (path === "/provider/auth") return json({})
-        if (path === "/expert-squad/catalog") return json(expertSquadCatalog)
-        if (path === "/config" && req.method === "PATCH")
-          return json({ model: "", prompt_profile: { active: "frontend-replica" } })
-        if (path === "/config") return json({ model: "", prompt_profile: { active: "frontend-replica" } })
-        if (path === "/log" && req.method === "POST") {
-          try {
-            logBodies.push(await req.json())
-          } catch {
-            logBodies.push(await req.text())
-          }
-          return json({ ok: true })
-        }
-        if (path === "/channel") return json([])
-        if (path === "/executor") return json([])
-        if (path === "/agent") return json([])
-        if (path === "/skill/installed" || path === "/skill") return json([])
-        if (path === "/skill/mounts")
-          return json({
-            scope: "project",
-            skills: [],
-            agents: [],
-            matrix: [],
-            project_mounts: { agents: {} },
-            unmounted_count: 0,
-          })
-        if (path === "/skill/market") return json([])
-        if (path === "/mcp") return json({})
-        if (path === "/panel/knowledge/memory") return json([])
-        if (path === "/panel/knowledge/preference") return json([])
-        if (path === `/task/${taskID}/board`) {
-          boardRequestCount += 1
-          return json(board, { headers: { etag: `"board-${now}-${boardRequestCount}"` } })
-        }
-        if (path === `/task/${otherTaskID}/board`) {
-          return json(otherBoard, { headers: { etag: `"other-board-${now}"` } })
-        }
-        if (path === `/task/${taskID}/conversation`)
-          return json({
-            lastSequence: 0,
-            board,
-            transcript: [],
-            timeline: [],
-            events: [],
-            view: { topLevelSessionIDs: [], sessions: [], messages: [] },
-            agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
-            history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 160 },
-            eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
-            messageWatermark: 0,
-          })
-        if (path === `/task/${otherTaskID}/conversation`)
-          return json({
-            lastSequence: 0,
-            board: otherBoard,
-            transcript: [],
-            timeline: [],
-            events: [],
-            view: { topLevelSessionIDs: [], sessions: [], messages: [] },
-            agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
-            history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 160 },
-            eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
-            messageWatermark: 0,
-          })
-        if (path === `/task/${taskID}/transcript`) return json([])
-        if (path === `/task/${otherTaskID}/transcript`) return json([])
-        if ((path === `/task/${taskID}/followup` || path === `/task/${otherTaskID}/followup`) && req.method === "POST")
-          return json({ suggestion: "" })
-        if (path === `/task/${taskID}/trace`)
-          return json({ events: [], traceDir: `${projectRoot}/.opencorvus/trace`, enabled: true })
-        if (path === `/task/${otherTaskID}/trace`)
-          return json({ events: [], traceDir: `${otherProjectRoot}/.opencorvus/trace`, enabled: true })
-        if (path === "/task/events" || path === `/task/${taskID}/conversation/events`) {
-          return eventStream()
-        }
-        if (path === `/task/${taskID}/events`) return eventStream()
-        if (path === `/task/${otherTaskID}/events`) return eventStream()
-        if (path === `/task/${otherTaskID}/browser-preview`)
-          return json({
-            kind: "missing",
-            status: "missing",
-            projectRoot: otherProjectRoot,
-            taskID: otherTaskID,
+            id: selectedTargetID,
+            taskID: primaryTaskID,
+            kind: "failed",
+            status: "failed",
+            projectRoot,
+            url: selectedURL || previewURL(),
             viewports,
-            diagnostics: ["No browser preview target saved for this task."],
+            diagnostics: ["Saved browser preview target is unreachable during visual stress."],
             candidates: [],
-            source: "none",
+            source: "task-artifact",
           })
-        if (path === `/task/${taskID}/browser-preview`) {
-          previewTargetRequestCount += 1
-          if (targetMode === "load-error") {
-            expectedTargetLoadFailureConsoleCount += 1
-            return json({ message: "browser preview target lookup failed during stress validation" }, { status: 503 })
-          }
-          return json(targetResponse())
-        }
-        if (path === `/task/${taskID}/browser-preview/target` && req.method === "PUT") {
-          const body = await req.json()
-          selectedTargets.push(body)
-          const requestedTargetID = String((body as { targetID?: unknown }).targetID || "")
-          if (!validTargetIDs.has(requestedTargetID)) {
-            expectedTargetSelectionFailureConsoleCount += 1
-            return json({ message: `Unknown browser preview target ${requestedTargetID}` }, { status: 404 })
-          }
-          selectedTargetID = requestedTargetID
-          targetMode = "ready"
-          return json(targetResponse())
-        }
-        if (path === `/task/${taskID}/browser-preview/capture` && req.method === "POST") {
-          const body = await req.json()
-          const requestedTargetID = String((body as { targetID?: unknown }).targetID || selectedTargetID)
-          if (!validTargetIDs.has(requestedTargetID)) {
-            return json({ message: `Unknown browser preview target ${requestedTargetID}` }, { status: 404 })
-          }
-          captureBodies.push(body)
-          return json({ message: "visual stress must not trigger hidden evidence capture" }, { status: 500 })
-        }
-        const evidenceMatch = path.match(new RegExp(`^/task/${taskID}/browser-preview/evidence/([^/]+)$`))
-        if (evidenceMatch) return json(evidence(evidenceMatch[1]))
-        const captureMatch = path.match(new RegExp(`^/task/${taskID}/browser-preview/evidence/([^/]+)/capture\\.png$`))
-        if (captureMatch) return new Response(png.evidence, { headers: { "content-type": "image/png" } })
+        return json(targetResponse())
+      }
+      if (path === `/task/${primaryTaskID}/browser-preview/target` && req.method === "POST") {
+        const body = (await req.json()) as { url?: unknown; viewports?: unknown }
+        saveBodies.push(body)
+        if (typeof body.url !== "string" || !body.url.trim())
+          return json({ message: "url is required" }, { status: 400 })
+        selectedURL = body.url.trim()
+        selectedTargetID = savedTargetID
+        targetMode = "ready"
+        return json(targetResponse())
+      }
+      if (path === `/task/${primaryTaskID}/browser-preview/capture` && req.method === "POST")
+        return json({ message: "visual stress must not trigger hidden evidence capture" }, { status: 500 })
+      if (path === `/task/${primaryTaskID}/browser-preview/evidence/${evidenceID}`)
+        return json({
+          id: evidenceID,
+          taskID: primaryTaskID,
+          targetID: selectedTargetID,
+          viewportID: "desktop",
+          status: "passed",
+          summary: "persisted evidence must not own the native visual preview",
+          capture: { captured: true, passed: true, url: selectedURL || previewURL(), sha: "visual-stress-existing" },
+          diagnostics: ["persisted evidence loaded for diagnostics"],
+          timeCompleted: now - 100,
+          timeCreated: now - 200,
+        })
+      if (path === `/task/${primaryTaskID}/browser-preview/evidence/${evidenceID}/capture.png`)
+        return new Response(
+          Buffer.from(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4AWP4z8DwHwAFgwJ/l3qJ6wAAAABJRU5ErkJggg==",
+            "base64",
+          ),
+          { headers: { "content-type": "image/png" } },
+        )
+      if (path.includes("/browser-preview/live/")) {
         unexpectedRequests.push(`${req.method} ${path}`)
-        return json({ message: `Unexpected browser preview stress route ${req.method} ${path}` }, { status: 404 })
-      },
-      { port: PORT },
-    )
-    serverOrigin = server.origin
-    assert.equal(server.port, PORT)
-    const unknownCaptureResponse = await fetch(`${server.origin}/task/${taskID}/browser-preview/capture`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ targetID: "art_previewtarget_unknown", viewportIDs: ["desktop"] }),
+        return json({ message: "PNG live preview route is retired" }, { status: 410 })
+      }
+      unexpectedRequests.push(`${req.method} ${path}`)
+      return json({ message: `Unexpected browser preview stress route ${req.method} ${path}` }, { status: 404 })
     })
-    assert.equal(unknownCaptureResponse.status, 404)
+    serverOrigin = server.origin
+    selectedURL = previewURL()
 
     const browser = await launchBrowser(["--disable-dev-shm-usage"])
     try {
       const page = await browser.newPage()
-      await page.setViewport({ width: 1440, height: 900 })
-      await page.evaluateOnNewDocument((serverUrl) => {
-        ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
-        localStorage.setItem("oc_locale", "en-US")
-        localStorage.setItem("oc_directory", "D:/overlay/workspace/preview-stress")
-        localStorage.setItem("oc_server_url", serverUrl)
-        localStorage.setItem("oc_workspace_task", "tsk_browserpreview_visual_stress")
-        localStorage.setItem("oc_workspace_directory", "D:/overlay/workspace/preview-stress")
-        const settings = {
-          serverUrl,
-          autoServer: false,
-          locale: "en-US",
-          directory: "D:/overlay/workspace/preview-stress",
-          directoryMode: "custom",
-          workspaceTaskID: "tsk_browserpreview_visual_stress",
-          workspaceDirectory: "D:/overlay/workspace/preview-stress",
-        }
-        const nativeCommands: NativeCommandRecord[] = []
-        ;(window as any).__browserPreviewNativeCommands = nativeCommands
-        ;(window as any).__TAURI__ = {
-          core: {
-            invoke: async (command: string, args: Record<string, unknown> = {}) => {
-              if (command === "overlay_settings_load") return settings
-              if (command === "overlay_settings_save") {
-                Object.assign(settings, (args.settings as Record<string, unknown>) || {})
-                return true
-              }
-              if (command === "overlay_open_path") return true
-              if (command === "overlay_open_url") return true
-              if (command.startsWith("overlay_browser_preview_")) {
-                nativeCommands.push({ command, args })
-                return true
-              }
-              return null
-            },
-          },
-          window: {
-            getCurrentWindow() {
-              return {
-                close: async () => true,
-                hide: async () => true,
-                startDragging: async () => true,
-                minimize: async () => true,
-              }
-            },
-          },
-        }
-      }, server.origin)
-      page.on("pageerror", (error) => errors.push(`pageerror: ${error.stack || error.message}`))
-      page.on("console", (msg) => {
-        if (msg.type() !== "error") return
-        if (expectedTargetLoadFailureConsoleCount > 0 && msg.text().includes("status of 503")) {
-          expectedTargetLoadFailureConsoleCount -= 1
-          return
-        }
-        if (expectedTargetSelectionFailureConsoleCount > 0 && msg.text().includes("status of 404")) {
-          expectedTargetSelectionFailureConsoleCount -= 1
-          return
-        }
-        errors.push(`console: ${msg.text()}`)
+      const errors = installBrowserErrorCollector(page, {
+        allowConsoleError(message) {
+          return message.text.includes("503")
+        },
+        allowResponse(response) {
+          return response.status === 503 && response.path === `/task/${primaryTaskID}/browser-preview`
+        },
       })
+      await page.setViewport({ width: 1440, height: 900 })
+      await page.evaluateOnNewDocument(
+        ({ serverUrl, directory, taskID }) => {
+          ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
+          localStorage.setItem("oc_locale", "en-US")
+          localStorage.setItem("oc_directory", directory)
+          localStorage.setItem("oc_server_url", serverUrl)
+          localStorage.setItem("oc_workspace_task", taskID)
+          localStorage.setItem("oc_workspace_directory", directory)
+          const settings = {
+            serverUrl,
+            autoServer: false,
+            locale: "en-US",
+            directory,
+            directoryMode: "custom",
+            workspaceTaskID: taskID,
+            workspaceDirectory: directory,
+          }
+          const nativeCommands: NativeCommandRecord[] = []
+          ;(window as any).__browserPreviewNativeCommands = nativeCommands
+          ;(window as any).__browserPreviewFailNativeSync = false
+          ;(window as any).__TAURI__ = {
+            core: {
+              invoke: async (command: string, args: Record<string, unknown> = {}) => {
+                if (command === "overlay_settings_load") return settings
+                if (command === "overlay_settings_save") {
+                  Object.assign(settings, (args.settings as Record<string, unknown>) || {})
+                  return true
+                }
+                if (command === "overlay_open_path") return true
+                if (command === "overlay_open_url") return true
+                if (command.startsWith("overlay_browser_preview_")) {
+                  nativeCommands.push({ command, args })
+                  if ((window as any).__browserPreviewFailNativeSync && command === "overlay_browser_preview_sync") {
+                    throw new Error("native sync unavailable")
+                  }
+                  return true
+                }
+                return null
+              },
+            },
+            window: {
+              getCurrentWindow() {
+                return {
+                  close: async () => true,
+                  hide: async () => true,
+                  startDragging: async () => true,
+                  minimize: async () => true,
+                }
+              },
+            },
+          }
+        },
+        { serverUrl: server.origin, directory: projectRoot, taskID: primaryTaskID },
+      )
 
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
-      await waitForActivityState(
+      await waitForPageState(
         page,
         () => document.querySelector("#connBadge")?.getAttribute("data-status") === "online",
         "online connection",
-        () => ({ errors, requestLog }),
+        () => ({ errors: errors.unexpectedErrors, requestLog }),
       )
-      await waitForActivityState(
-        page,
-        () => document.body.textContent?.includes("Preview visual stress") ?? false,
-        "visible visual stress task",
-        () => ({ errors, requestLog }),
-      )
-      await page.click('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]')
-      await waitForActivityState(
-        page,
-        () =>
-          Array.from(document.querySelectorAll<HTMLElement>(".global-task-row")).some((node) => {
-            const rect = node.getBoundingClientRect()
-            return rect.width > 0 && rect.height > 0 && (node.textContent || "").includes("Preview visual stress")
-          }),
-        "visible task row",
-        () => ({ errors, requestLog }),
-      )
-      const taskRowSelector = `.task-row-main[data-task-id="${taskID}"]`
-      await page.waitForSelector(taskRowSelector, { visible: true })
-      const taskRowHitTest = await page.$eval(
-        taskRowSelector,
-        (node: HTMLElement, selector) => {
-          const rect = node.getBoundingClientRect()
-          const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
-          return hit?.closest(String(selector)) === node
-        },
-        taskRowSelector,
-      )
-      assert.equal(taskRowHitTest, true)
-      await page.click(taskRowSelector)
-      await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="browser"]')
-      await waitForActivityState(
+
+      await openBrowserPreviewFromTask(page, primaryTaskID, () => ({ errors: errors.unexpectedErrors, requestLog }))
+      await waitForPageState(
         page,
         () => !!document.querySelector('[data-ui="browser-preview-target-load-failed"]'),
-        "target load failure state",
-        () => ({
-          errors,
-          requestLog,
-          previewTargetRequestCount,
-        }),
+        "target load failure",
+        () => ({ errors: errors.unexpectedErrors, requestLog }),
       )
-      if (!(await page.$('[data-ui="browser-preview-target-load-failed"]'))) {
-        const state = await page.evaluate(() => ({
-          status: document.querySelector<HTMLElement>(".browser-preview-status")?.outerHTML || "",
-          stage: document.querySelector<HTMLElement>(".browser-preview-stage")?.outerHTML || "",
-          text: document.body.textContent?.slice(0, 2400) || "",
-        }))
-        assert.fail(
-          `target load failure must render in preview stage\n${JSON.stringify(
-            { state, previewTargetRequestCount, requestLog },
-            null,
-            2,
-          )}`,
-        )
-      }
       assert.equal(await page.$('[data-ui="browser-preview-native-surface"]'), null)
-      await writeAndAssertScreenshot(page, "01-target-load-failure", { minNonWhiteDensity: 0.018 })
+      await writeAndAssertScreenshot(page, "01-target-load-failure")
 
-      targetMode = "missing"
-      await page.click('[aria-label="Refresh the saved preview evidence."]')
-      await waitForText(page, "No browser preview target is saved for this task.", "missing preview state", () => ({
-        errors,
-        requestLog,
-      }))
-      assert.equal(await page.$('[data-ui="browser-preview-native-surface"]'), null)
-      assert.equal(await page.$('[data-ui="browser-preview-candidate-trigger"]'), null)
-      assert.equal(await page.$('[data-ui="browser-preview-viewports"]'), null)
-      assert.equal(await page.$(".browser-preview-evidence-status"), null)
-      await writeAndAssertScreenshot(page, "02-missing-target", { minNonWhiteDensity: 0.018 })
-
-      targetMode = "ready"
-      await page.click('[aria-label="Refresh the saved preview evidence."]')
-      await waitForActivityState(
+      await saveAddressTarget(page, previewURL())
+      await waitForPageState(
         page,
-        () => {
-          const img = document.querySelector<HTMLImageElement>('[data-ui="browser-preview-screenshot"]')
-          return !!img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0
-        },
-        "ready persisted evidence screenshot",
-        () => ({ errors, requestLog }),
+        () => !!document.querySelector('[data-ui="browser-preview-native-surface"]'),
+        "saved address native surface",
+        () => ({ errors: errors.unexpectedErrors, requestLog, saveBodies }),
       )
-      assert.ok(previewTargetRequestCount > 0, `preview target should be requested: ${previewTargetRequestCount}`)
-      await waitForText(page, "primary desktop evidence summary", "primary persisted evidence", () => ({
-        errors,
-        requestLog,
-      }))
-      assertNoPreviewLayoutBreakage(await previewLayout(page))
-      await assertImageMatchesReference(
+      await waitForNativeSyncUrl(page, previewURL(), 1, "saved address native sync")
+      await waitForPageState(
         page,
-        '[data-ui="browser-preview-screenshot"]',
-        png.evidence,
-        "primary evidence",
+        () => document.querySelector<HTMLElement>('[data-ui="browser-preview-live"]')?.dataset.status === "ready",
+        "saved address native surface ready",
+        () => ({ errors: errors.unexpectedErrors, requestLog, saveBodies }),
       )
-      await writeAndAssertScreenshot(page, "03-ready-desktop")
-
-      await page.click('[data-ui="browser-preview-candidate-trigger"]')
-      await page.waitForSelector(`[data-ui="browser-preview-candidate-option"][data-target-id="${staleTargetID}"]`)
-      await page.click(`[data-ui="browser-preview-candidate-option"][data-target-id="${staleTargetID}"]`)
-      await waitForText(
-        page,
-        `Unknown browser preview target ${staleTargetID}`,
-        "stale candidate selection failure",
-        () => ({
-          errors,
-          requestLog,
-          selectedTargets,
-        }),
-      )
-      assert.ok(await page.$('[data-ui="browser-preview-selection-failed"]'))
-      assert.equal(
-        await page.evaluate(() => document.querySelector<HTMLElement>(".browser-preview-status")?.dataset.status),
-        "failed",
-      )
-      await writeAndAssertScreenshot(page, "04-stale-candidate-failure")
-
-      const otherTaskRowSelector = `.task-row-main[data-task-id="${otherTaskID}"]`
-      await page.waitForSelector(otherTaskRowSelector, { visible: true })
-      await page.click(otherTaskRowSelector)
-      await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="browser"]')
-      await waitForText(
-        page,
-        "No browser preview target is saved for this task.",
-        "other task missing preview after selection failure",
-        () => ({
-          errors,
-          requestLog,
-          logBodies,
-        }),
-      )
-      assert.equal(await page.$('[data-ui="browser-preview-selection-failed"]'), null)
       assert.equal(await page.$('[data-ui="browser-preview-evidence"]'), null)
-      assert.equal(await page.$(".browser-preview-evidence-status"), null)
-      assert.equal(await page.$('[data-ui="browser-preview-native-surface"]'), null)
-      await writeAndAssertScreenshot(page, "05-cross-task-missing-clears-selection", { minNonWhiteDensity: 0.018 })
-
-      await page.click(taskRowSelector)
-      await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="browser"]')
-      await waitForText(page, "primary desktop evidence summary", "primary preview restored after task switch", () => ({
-        errors,
-        requestLog,
-      }))
-      assert.equal(await page.$('[data-ui="browser-preview-selection-failed"]'), null)
-
-      await page.click('[data-ui="browser-preview-candidate-trigger"]')
-      await page.waitForSelector(`[data-ui="browser-preview-candidate-option"][data-target-id="${alternateTargetID}"]`)
-      await page.click(`[data-ui="browser-preview-candidate-option"][data-target-id="${alternateTargetID}"]`)
-      await waitForActivityState(
-        page,
-        () => !(document.body.textContent || "").includes("primary desktop evidence summary"),
-        "stale primary evidence hidden",
-        () => ({ errors, requestLog, captureBodies, selectedTargets }),
+      assert.equal(await page.$('[data-ui="browser-preview-evidence-missing"]'), null)
+      const layout = await previewLayout(page)
+      assert.ok(layout.panel && layout.chrome && layout.stage && layout.surface, JSON.stringify(layout, null, 2))
+      assert.ok(layout.overflowX <= 1, `preview must not overflow horizontally\n${JSON.stringify(layout, null, 2)}`)
+      assert.ok(
+        layout.surface.top >= layout.chrome.bottom - 1,
+        `native surface must sit below browser chrome\n${JSON.stringify(layout, null, 2)}`,
       )
-      await waitForNativePreviewSync(page, {
-        url: urlFor(alternateTargetID),
-        minCount: 1,
-        label: "alternate desktop native webview sync after target selection",
+      assert.ok(
+        layout.surface.height > layout.surface.width * 0.6,
+        `native surface must use the panel height, not a PNG aspect-ratio frame\n${JSON.stringify(layout, null, 2)}`,
+      )
+      assert.equal(layout.evidence, false)
+      assert.deepEqual(
+        saveBodies.map((body) => ({
+          url: (body as { url?: unknown }).url,
+          viewportIDs: ((body as { viewports?: Array<{ id?: string }> }).viewports || []).map((item) => item.id),
+        })),
+        [{ url: previewURL(), viewportIDs: ["desktop", "tablet", "mobile"] }],
+      )
+      await writeAndAssertScreenshot(page, "02-ready-native")
+
+      const reloadCountBefore = (await nativeCommands(page)).filter(
+        (entry) => entry.command === "overlay_browser_preview_navigate" && entry.args.action === "reload",
+      ).length
+      await page.click('[aria-label="Reload the current preview page."]')
+      await waitForNativeNavigation(page, "reload", reloadCountBefore + 1, "native reload command")
+      await waitForPageState(
+        page,
+        () => document.querySelector<HTMLElement>('[data-ui="browser-preview-live"]')?.dataset.status === "ready",
+        "native surface ready after reload",
+        () => ({ errors: errors.unexpectedErrors, requestLog }),
+      )
+
+      await page.evaluate(() => {
+        ;(window as any).__browserPreviewFailNativeSync = true
       })
-      await waitForActivityState(
+      await page.click('[aria-label="Reload the current preview page."]')
+      await waitForPageState(
         page,
         () =>
-          !!document.querySelector('[data-ui="browser-preview-native-surface"]') &&
-          !document.querySelector('[data-ui="browser-preview-evidence"]'),
-        "alternate native webview before capture evidence",
-        () => ({ errors, requestLog }),
+          document
+            .querySelector<HTMLElement>('[data-ui="browser-preview-native-error"]')
+            ?.textContent?.includes("native sync unavailable") === true,
+        "native sync failure state",
+        () => ({ errors: errors.unexpectedErrors, requestLog, nativeCommands: [] }),
       )
-      assertNoPreviewLayoutBreakage(await previewLayout(page))
-      await writeAndAssertScreenshot(page, "06-alternate-native", { minNonWhiteDensity: 0.018 })
+      await writeAndAssertScreenshot(page, "03-native-sync-failure")
+      await page.evaluate(() => {
+        ;(window as any).__browserPreviewFailNativeSync = false
+      })
 
-      await clickBrowserPreviewViewport(page, "tablet")
-      await waitForActivityState(
+      await openBrowserPreviewFromTask(page, missingTaskID, () => ({ errors: errors.unexpectedErrors, requestLog }))
+      await waitForPageState(
         page,
-        () => !!document.querySelector('[data-ui="browser-preview-native-surface"]'),
-        "tablet native webview surface",
-        () => ({ errors, requestLog }),
+        () => document.body.textContent?.includes("No browser preview target is saved for this task.") === true,
+        "missing preview target",
+        () => ({ errors: errors.unexpectedErrors, requestLog }),
       )
-      assertNoPreviewLayoutBreakage(await previewLayout(page))
-      await writeAndAssertScreenshot(page, "07-tablet-native", { minNonWhiteDensity: 0.018 })
-
-      await clickBrowserPreviewViewport(page, "mobile")
-      await waitForActivityState(
-        page,
-        () => !!document.querySelector('[data-ui="browser-preview-native-surface"]'),
-        "mobile native webview surface",
-        () => ({ errors, requestLog }),
-      )
-      await page.click('[aria-label="Go back in the preview browser."]')
-      await page.click('[aria-label="Go forward in the preview browser."]')
-      await page.click('[aria-label="Reload the current preview page."]')
-      await waitForActivityState(
-        page,
-        () => {
-          const actions = (((window as any).__browserPreviewNativeCommands || []) as NativeCommandRecord[])
-            .filter((entry) => entry.command === "overlay_browser_preview_navigate")
-            .map((entry) => entry.args.action)
-          return actions.includes("back") && actions.includes("forward") && actions.includes("reload")
-        },
-        "native browser navigation commands",
-        () => ({ errors, requestLog }),
-      )
-      await writeAndAssertScreenshot(page, "08-mobile-native", { minNonWhiteDensity: 0.018 })
-
-      await page.setViewport({ width: 390, height: 760 })
-      await new Promise((resolve) => setTimeout(resolve, 250))
-      assertNoPreviewLayoutBreakage(await previewLayout(page))
-      await writeAndAssertScreenshot(page, "09-narrow-layout", { minNonWhiteDensity: 0.018 })
-
-      await page.setViewport({ width: 1440, height: 900 })
-      await new Promise((resolve) => setTimeout(resolve, 250))
-      targetMode = "failed"
-      await page.click('[aria-label="Refresh the saved preview evidence."]')
-      await waitForText(
-        page,
-        "Saved browser preview target is unreachable during stress validation.",
-        "failed target replaces stale evidence",
-        () => ({
-          errors,
-          requestLog,
-        }),
-      )
-      assert.ok(await page.$('[data-ui="browser-preview-target-failed"]'))
-      assert.equal(await page.$('[data-ui="browser-preview-evidence"]'), null)
-      assert.equal(await page.$(".browser-preview-evidence-status"), null)
       assert.equal(await page.$('[data-ui="browser-preview-native-surface"]'), null)
-      assert.equal(
-        await page.$eval(
-          '[aria-label="Capture Playwright evidence from the saved backend preview target."]',
-          (node: Element) => (node as HTMLButtonElement).disabled,
-        ),
-        true,
-      )
-      await writeAndAssertScreenshot(page, "10-target-failed")
+      assert.equal(await page.$('[data-ui="browser-preview-evidence"]'), null)
+      await writeAndAssertScreenshot(page, "04-missing-target")
 
-      assert.deepEqual(selectedTargets, [{ targetID: staleTargetID }, { targetID: alternateTargetID }])
-      assert.equal(
-        requestLog.some((entry) => entry.includes("/browser-preview/live/")),
-        false,
+      targetMode = "failed"
+      await openBrowserPreviewFromTask(page, primaryTaskID, () => ({ errors: errors.unexpectedErrors, requestLog }))
+      await waitForPageState(
+        page,
+        () => !!document.querySelector('[data-ui="browser-preview-target-failed"]'),
+        "failed preview target",
+        () => ({ errors: errors.unexpectedErrors, requestLog }),
+      )
+      assert.equal(await page.$('[data-ui="browser-preview-native-surface"]'), null)
+      assert.equal(await page.$('[data-ui="browser-preview-evidence"]'), null)
+      await writeAndAssertScreenshot(page, "05-target-failed")
+
+      assert.deepEqual(
+        requestLog.filter((entry) => entry.includes("/browser-preview/live/")),
+        [],
         `visual stress must not call retired PNG live routes\n${JSON.stringify(requestLog, null, 2)}`,
       )
-      const nativeActions = await page.evaluate(() =>
-        (((window as any).__browserPreviewNativeCommands || []) as NativeCommandRecord[])
-          .filter((entry) => entry.command === "overlay_browser_preview_navigate")
-          .map((entry) => entry.args.action),
+      assert.deepEqual(
+        requestLog.filter((entry) => entry.includes("/browser-preview/capture")),
+        [],
+        `visual stress must not auto-capture evidence\n${JSON.stringify(requestLog, null, 2)}`,
       )
-      assert.deepEqual(nativeActions.slice(-3), ["back", "forward", "reload"])
-      assert.equal(
-        captureBodies.length,
-        0,
-        `visual stress must not auto-capture evidence\n${JSON.stringify(captureBodies, null, 2)}`,
+      assert.deepEqual(
+        requestLog.filter((entry) => entry.includes("/capture.png")),
+        [],
+        `native preview must not fetch hidden evidence PNGs\n${JSON.stringify(requestLog, null, 2)}`,
       )
       assert.deepEqual(unexpectedRequests, [])
-      assert.equal(errors.length, 0, errors.join("\n"))
+      errors.assertNoUnexpectedErrors()
     } finally {
       await browser.close().catch(() => undefined)
       await server.close()

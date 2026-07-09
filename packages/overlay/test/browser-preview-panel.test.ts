@@ -62,6 +62,12 @@ test("browser preview panel uses native WebView surface with task evidence as th
     "if (lastNativePreviewSyncKey !== syncKey || currentNativePreviewSyncKey() !== syncKey) return",
   )
   expect(component).toContain("if (!nativePreviewNavigationReady()) return")
+  expect(component).toContain(
+    "const nativeNavigationRequested = Boolean(nativePreviewScope() && browserPreviewNativeSurfaceAvailable())",
+  )
+  expect(component.indexOf("if (nativeNavigationRequested) navigateNativePreview(action)")).toBeLessThan(
+    component.indexOf('if (action === "reload")'),
+  )
   expect(component).toContain('imageDataUI="browser-preview-screenshot"')
   expect(component).toContain("<PreviewableImage")
   expect(component).not.toContain("<SelectControl<BrowserPreviewCandidate>")
@@ -98,7 +104,24 @@ test("browser preview panel uses native WebView surface with task evidence as th
   expect(component).toContain("props.taskID() !== taskID || props.directory() !== directory")
   expect(component).toContain("scopeKey: browserPreviewNativeScopeKey(scope)")
   expect(component).toContain("if (!browserPreviewNativeSurfaceAvailable())")
-  expect(component).toContain("if ((latestEvidenceScope() || renderedEvidence()) && !nodeSelectionEnabled() && !nodeSelection())")
+  expect(component).toContain("if (nativePreviewScope()) return undefined")
+  const nativePreviewScopeStart = component.indexOf("const nativePreviewScope = createMemo")
+  const nativePreviewScopeEnd = component.indexOf("const [captureImage] = createResource", nativePreviewScopeStart)
+  expect(nativePreviewScopeStart).toBeGreaterThan(-1)
+  expect(nativePreviewScopeEnd).toBeGreaterThan(nativePreviewScopeStart)
+  const nativePreviewScopeBody = component.slice(nativePreviewScopeStart, nativePreviewScopeEnd)
+  expect(nativePreviewScopeBody).not.toContain("latestEvidenceScope()")
+  expect(nativePreviewScopeBody).not.toContain("renderedEvidence()")
+  const pendingStart = component.indexOf("const previewActionPending = createMemo")
+  expect(pendingStart).toBeGreaterThan(-1)
+  const pendingBody = component.slice(pendingStart, nativePreviewScopeStart)
+  expect(pendingBody).not.toContain("currentLatestEvidenceLoading")
+  expect(component.indexOf("<Match when={nativePreviewScope()}>")).toBeLessThan(
+    component.indexOf("<Match when={currentLatestEvidenceLoading()}>"),
+  )
+  expect(component.indexOf("<Match when={nativePreviewScope()}>")).toBeLessThan(
+    component.indexOf("<Match when={!nodeSelectionEnabled() && !nodeSelection() ? renderedEvidence() : undefined}>"),
+  )
   expect(component).toContain('data-ui="browser-preview-node-selection"')
   expect(component).toContain('data-ui="browser-preview-node-comment"')
 

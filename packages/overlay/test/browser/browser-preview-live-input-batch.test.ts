@@ -194,6 +194,7 @@ test("browser preview native surface owns browser navigation without PNG live ro
   const now = Date.now()
   const taskID = "tsk_browserpreview_native_surface"
   const targetID = "art_previewtarget_native_surface"
+  const evidenceID = "art_previewevidence_existing_native_surface"
   const projectRoot = "D:/overlay/workspace/native-surface"
   const requestLog: string[] = []
   const errors: string[] = []
@@ -331,7 +332,7 @@ test("browser preview native surface owns browser navigation without PNG live ro
       return json({
         id: targetID,
         taskID,
-        latestEvidenceIDs: {},
+        latestEvidenceIDs: { desktop: evidenceID },
         kind: "task-url",
         status: "ready",
         projectRoot,
@@ -349,6 +350,26 @@ test("browser preview native surface owns browser navigation without PNG live ro
         ],
         source: "task-artifact",
       })
+    if (path === `/task/${taskID}/browser-preview/evidence/${evidenceID}`)
+      return json({
+        id: evidenceID,
+        taskID,
+        targetID,
+        viewportID: "desktop",
+        status: "passed",
+        summary: "existing persisted evidence must not suppress the live native preview",
+        capture: { captured: true, passed: true, url: previewUrl(), sha: "native-existing-evidence" },
+        diagnostics: ["existing persisted evidence loaded for diagnostics"],
+        timeCompleted: now - 100,
+        timeCreated: now - 200,
+      })
+    if (path === `/task/${taskID}/browser-preview/evidence/${evidenceID}/capture.png`) {
+      const png = Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4AWP4z8DwHwAFgwJ/l3qJ6wAAAABJRU5ErkJggg==",
+        "base64",
+      )
+      return new Response(png, { headers: { "content-type": "image/png" } })
+    }
     if (path.includes("/browser-preview/live/")) {
       unexpectedRequests.push(`${req.method} ${path}`)
       return json({ message: "PNG live preview route is retired" }, { status: 410 })
@@ -458,6 +479,11 @@ test("browser preview native surface owns browser navigation without PNG live ro
       () => ({ errors, requestLog, nativeCommands: [] }),
     )
     const commandsAfterInitialSync = await nativeCommands(page)
+    assert.equal(
+      await page.$('[data-ui="browser-preview-evidence"]'),
+      null,
+      "persisted Playwright evidence must not replace the live native preview surface",
+    )
     const firstSyncIndex = commandsAfterInitialSync.findIndex((entry) => entry.command === "overlay_browser_preview_sync")
     assert.ok(firstSyncIndex >= 0, `initial sync command missing: ${JSON.stringify(commandsAfterInitialSync)}`)
     assert.ok(
@@ -559,6 +585,11 @@ test("browser preview native surface owns browser navigation without PNG live ro
       requestLog.filter((entry) => entry.includes("/browser-preview/capture")),
       [],
       "opening and reloading native live preview must not auto-capture evidence",
+    )
+    assert.deepEqual(
+      requestLog.filter((entry) => entry.includes("/capture.png")),
+      [],
+      "native live preview must not fetch hidden persisted evidence PNGs",
     )
 
     await page.evaluate(() => {
