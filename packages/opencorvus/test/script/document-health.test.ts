@@ -493,6 +493,13 @@ describe("document health audit regressions", () => {
     expect(generateWorkflow).toContain("token: ${{ github.token }}")
   })
 
+  test("repository lockfile is portable for public GitHub package runners", () => {
+    const lockfile = read("bun.lock")
+
+    expect(lockfile).not.toContain("repositories.myhexin.com")
+    expect(lockfile).not.toContain("repository/npm-public")
+  })
+
   test("beta release script does not use broad destructive git cleanup", () => {
     const beta = read("script/beta.ts")
 
