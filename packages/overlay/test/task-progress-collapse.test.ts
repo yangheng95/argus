@@ -48,18 +48,21 @@ test("task progress fold labels are localized", () => {
 })
 
 test("TaskProgressBar is a bounded floating window in the message panel", () => {
-  expect(source).toContain("messagePanelForProgress")
-  expect(source).toContain('closest<HTMLElement>(".chat-scroll")')
+  expect(source).toContain("interface TaskProgressBarProps")
+  expect(source).toContain("messagePanel: HTMLElement")
+  expect(source).toContain("overlayMount: HTMLElement")
   expect(source).toContain("taskProgressFloatingBounds")
   expect(source).toContain("initialTaskProgressFloatingFrame")
   expect(source).toContain("moveTaskProgressFloatingFrame")
   expect(source).toContain("resizeTaskProgressFloatingFrame")
+  expect(source).toContain("props.messagePanel.clientWidth")
+  expect(source).toContain("props.overlayMount.getBoundingClientRect()")
   expect(source).toContain("setPointerCapture")
   expect(source).toContain("releasePointerCapture")
   expect(source).toContain('data-ui="task-progress-drag-handle"')
   expect(source).toContain('data-ui="task-progress-resize"')
   expect(source).not.toContain("localStorage")
-  expect(css).toMatch(/\.task-progress\s*\{[^}]*position:\s*fixed;[^}]*height:\s*auto;[^}]*max-height:\s*var\(--task-progress-height\);/s)
+  expect(css).toMatch(/\.task-progress\s*\{[^}]*position:\s*absolute;[^}]*height:\s*auto;[^}]*max-height:\s*var\(--task-progress-height\);/s)
   expect(css).toMatch(/\.task-progress\s*\{[^}]*background:\s*color-mix\(in srgb, var\(--card-bg-1\) 88%, transparent\);/s)
   expect(css).toMatch(/\.task-progress\s*\{[^}]*-webkit-backdrop-filter:\s*blur\(calc\(10px \* var\(--ui-scale\)\)\) saturate\(118%\);/s)
   expect(css).toMatch(/\.task-progress\s*\{[^}]*backdrop-filter:\s*blur\(calc\(10px \* var\(--ui-scale\)\)\) saturate\(118%\);/s)
@@ -69,7 +72,11 @@ test("TaskProgressBar is a bounded floating window in the message panel", () => 
 })
 
 test("TaskProgressBar is the single conversation goal progress surface", () => {
-  expect(conversationSource).toContain("<TaskProgressBar />")
+  expect(conversationSource).toContain('const [progressOverlayMount, setProgressOverlayMount] = createSignal<HTMLElement | null>(null)')
+  expect(conversationSource).toContain("setProgressOverlayMount(mount)")
+  expect(conversationSource).toContain("<Portal mount={mount}>")
+  expect(conversationSource).toContain("<TaskProgressBar messagePanel={el} overlayMount={mount} />")
+  expect(conversationSource).not.toContain("<TaskProgressBar />")
   expect(css).toContain('.task-progress .oc-button[data-ui="task-progress-pill"]')
   for (const sourceText of [html, domSource, conversationCss]) {
     expect(sourceText).not.toMatch(/\bchatGoalsStrip\b/)

@@ -1518,7 +1518,7 @@ body {
  * progress visible without losing the goal-pill jump-to-card behavior.
  */
 .task-progress {
-  position: fixed;
+  position: absolute;
   left: var(--task-progress-left);
   top: var(--task-progress-top);
   z-index: calc(var(--ui-z-sticky) + 1);

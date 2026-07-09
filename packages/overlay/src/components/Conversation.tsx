@@ -254,6 +254,7 @@ export function Conversation(props: { container: HTMLElement }) {
   const [tracking, setTracking] = createSignal(true)
   const [historyAnchorPinID, setHistoryAnchorPinID] = createSignal<string | null>(null)
   const [scrollButtonMount, setScrollButtonMount] = createSignal<HTMLElement | null>(null)
+  const [progressOverlayMount, setProgressOverlayMount] = createSignal<HTMLElement | null>(null)
   const isSessionSource = () => boardStore.selectedSource?.kind === "session"
   const sessionBoard = () => (isSessionSource() ? (boardStore.board as any) : null)
   const currentTaskID = () => (isSessionSource() ? "" : String(activeTaskID() || boardStore.board?.task?.id || ""))
@@ -303,6 +304,7 @@ export function Conversation(props: { container: HTMLElement }) {
     const mount = el.parentElement
     if (!mount) throw new Error("Conversation requires chatScroll to be mounted inside conversation-scroll-shell")
     setScrollButtonMount(mount)
+    setProgressOverlayMount(mount)
     const c = setupAutoScroll(el, {
       isTracking: tracking,
       onUserScrollUp: () => setTracking(false),
@@ -422,7 +424,13 @@ export function Conversation(props: { container: HTMLElement }) {
 
   return (
     <>
-      <TaskProgressBar />
+      <Show when={progressOverlayMount()} keyed>
+        {(mount) => (
+          <Portal mount={mount}>
+            <TaskProgressBar messagePanel={el} overlayMount={mount} />
+          </Portal>
+        )}
+      </Show>
       <Show when={!hasItems() && taskContextID()}>
         <div class="chat-empty chat-empty--task" data-status={selectedTaskStatus()}>
           <div class="chat-empty-marker" aria-hidden="true">

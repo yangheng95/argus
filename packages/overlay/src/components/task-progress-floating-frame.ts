@@ -21,8 +21,9 @@ export type TaskProgressFloatingBounds = {
 const TASK_PROGRESS_FLOATING_INSET = 8
 const TASK_PROGRESS_FLOATING_MIN_WIDTH = 320
 const TASK_PROGRESS_FLOATING_MIN_HEIGHT = 96
-const TASK_PROGRESS_FLOATING_DEFAULT_WIDTH_RATIO = 0.78
+const TASK_PROGRESS_FLOATING_DEFAULT_WIDTH_RATIO = 0.64
 const TASK_PROGRESS_FLOATING_DEFAULT_HEIGHT = 220
+const TASK_PROGRESS_FLOATING_DEFAULT_TOP_RATIO = 0.24
 
 function positiveFinite(value: number, label: string): number {
   if (!Number.isFinite(value) || value <= 0) {
@@ -94,10 +95,12 @@ export function clampTaskProgressFloatingFrame(
 }
 
 export function initialTaskProgressFloatingFrame(bounds: TaskProgressFloatingBounds): TaskProgressFloatingFrame {
+  const x = Math.round((bounds.panelWidth - bounds.defaultWidth) / 2)
+  const y = Math.round((bounds.panelHeight - bounds.defaultHeight) * TASK_PROGRESS_FLOATING_DEFAULT_TOP_RATIO)
   return clampTaskProgressFloatingFrame(
     {
-      x: bounds.inset,
-      y: bounds.inset,
+      x,
+      y,
       width: bounds.defaultWidth,
       height: bounds.defaultHeight,
     },

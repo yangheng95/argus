@@ -1,6 +1,7 @@
 // ── TaskProgressBar ──
 //
-// Floating goal progress window rendered inside the Conversation panel.
+// Floating goal progress window rendered in an overlay layer above the
+// Conversation message panel.
 // Reads `boardStore.board.goalWorkflows` so it shows
 // EVERY goal the architect emitted — including pending ones that haven't
 // been dispatched yet. Operators no longer need to hunt the right pane
@@ -215,13 +216,12 @@ type FloatingPointerSession = {
   captureElement: HTMLElement
 }
 
-function messagePanelForProgress(element: HTMLElement): HTMLElement {
-  const panel = element.closest<HTMLElement>(".chat-scroll")
-  if (!panel) throw new Error("TaskProgressBar floating window requires a .chat-scroll message panel.")
-  return panel
+interface TaskProgressBarProps {
+  messagePanel: HTMLElement
+  overlayMount: HTMLElement
 }
 
-export function TaskProgressBar() {
+export function TaskProgressBar(props: TaskProgressBarProps) {
   const goals = createMemo<GoalPill[]>(() => {
     const list = (boardStore.board as any)?.goalWorkflows
     if (!Array.isArray(list) || list.length === 0) return []
@@ -270,7 +270,6 @@ export function TaskProgressBar() {
   const [floatingFrame, setFloatingFrame] = createSignal<TaskProgressFloatingFrame | null>(null)
   const [windowState, setWindowState] = createSignal<"idle" | "dragging" | "resizing">("idle")
   const [hotGoalID, setHotGoalID] = createSignal("")
-  let floatingPanelEl: HTMLElement | null = null
   let floatingPointerSession: FloatingPointerSession | null = null
 
   const remeasure = () => {
@@ -351,12 +350,7 @@ export function TaskProgressBar() {
   })
 
   const currentFloatingBounds = () => {
-    if (!floatingPanelEl) {
-      const current = progressEl()
-      if (!current) throw new Error("TaskProgressBar floating bounds require the progress element.")
-      floatingPanelEl = messagePanelForProgress(current)
-    }
-    return taskProgressFloatingBounds(floatingPanelEl.clientWidth, floatingPanelEl.clientHeight, currentUIScale())
+    return taskProgressFloatingBounds(props.messagePanel.clientWidth, props.messagePanel.clientHeight, currentUIScale())
   }
 
   const syncFloatingFrame = () => {
@@ -369,17 +363,16 @@ export function TaskProgressBar() {
   createEffect(() => {
     const current = progressEl()
     if (!current) return
-    floatingPanelEl = messagePanelForProgress(current)
     const syncOnFrame = createAnimationFrameScheduler(syncFloatingFrame)
     syncOnFrame.schedule()
     const ro = new ResizeObserver(syncOnFrame.schedule)
-    ro.observe(floatingPanelEl)
+    ro.observe(props.messagePanel)
+    ro.observe(props.overlayMount)
     window.addEventListener("resize", syncOnFrame.schedule)
     onCleanup(() => {
       window.removeEventListener("resize", syncOnFrame.schedule)
       ro.disconnect()
       syncOnFrame.cancel()
-      floatingPanelEl = null
       floatingPointerSession = null
       setWindowState("idle")
     })
@@ -387,12 +380,12 @@ export function TaskProgressBar() {
 
   const floatingStyle = () => {
     const frame = floatingFrame()
-    const panel = floatingPanelEl
-    if (!frame || !panel) return undefined
-    const panelRect = panel.getBoundingClientRect()
+    if (!frame) return undefined
+    const panelRect = props.messagePanel.getBoundingClientRect()
+    const mountRect = props.overlayMount.getBoundingClientRect()
     return {
-      "--task-progress-left": `${Math.round(panelRect.left + frame.x)}px`,
-      "--task-progress-top": `${Math.round(panelRect.top + frame.y)}px`,
+      "--task-progress-left": `${Math.round(panelRect.left - mountRect.left + frame.x)}px`,
+      "--task-progress-top": `${Math.round(panelRect.top - mountRect.top + frame.y)}px`,
       "--task-progress-width": `${frame.width}px`,
       "--task-progress-height": `${frame.height}px`,
     }

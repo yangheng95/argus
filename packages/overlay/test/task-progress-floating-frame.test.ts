@@ -11,7 +11,9 @@ test("task progress floating frame initializes inside message panel bounds", () 
   const bounds = taskProgressFloatingBounds(900, 520, 1)
   const frame = initialTaskProgressFloatingFrame(bounds)
 
-  expect(frame).toEqual({ x: 8, y: 8, width: 690, height: 220 })
+  expect(frame).toEqual({ x: 167, y: 72, width: 566, height: 220 })
+  expect(frame.x).toBeGreaterThan(bounds.inset)
+  expect(frame.y).toBeGreaterThan(bounds.inset)
 })
 
 test("task progress floating move clamps to the message panel", () => {

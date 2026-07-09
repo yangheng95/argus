@@ -92,6 +92,11 @@ test("task progress floating window drags and resizes inside the message panel",
               border: var(--oc-border-width) solid var(--border);
               background: var(--surface);
             }
+            .fixture-scroll-shell {
+              position: relative;
+              min-height: 0;
+              display: flex;
+            }
             .fixture-header {
               display: flex;
               align-items: center;
@@ -101,7 +106,7 @@ test("task progress floating window drags and resizes inside the message panel",
               font-weight: var(--ui-font-weight-strong);
             }
             .chat-scroll {
-              position: relative;
+              flex: 1 1 auto;
               min-height: 0;
               height: 100%;
               padding: 18px 22px;
@@ -132,7 +137,10 @@ test("task progress floating window drags and resizes inside the message panel",
         <body data-theme="dark">
           <section class="fixture-shell">
             <header class="fixture-header">Chat</header>
-            <main class="chat-scroll" data-ui="message-panel">
+            <div class="fixture-scroll-shell" data-ui="scroll-shell">
+              <main class="chat-scroll" data-ui="message-panel">
+                ${Array.from({ length: 18 }, (_, index) => `<article class="fixture-message" data-ui="fixture-message">Message panel content row ${index + 1}. The floating goals window should sit above this content and stay within the panel while it moves.</article>`).join("")}
+              </main>
               <section
                 class="task-progress"
                 role="region"
@@ -197,21 +205,21 @@ test("task progress floating window drags and resizes inside the message panel",
                   aria-label="Resize goals window"
                 ></button>
               </section>
-              ${Array.from({ length: 18 }, (_, index) => `<article class="fixture-message">Message panel content row ${index + 1}. The floating goals window should sit above this content and stay within the panel while it moves.</article>`).join("")}
-            </main>
+            </div>
           </section>
           <script>
+            const shell = document.querySelector('[data-ui="scroll-shell"]');
             const panel = document.querySelector('[data-ui="message-panel"]');
             const progress = document.querySelector(".task-progress");
             const header = document.querySelector('[data-ui="task-progress-drag-handle"]');
             const resize = document.querySelector('[data-ui="task-progress-resize"]');
             const inset = 8;
             let frame = {
-              x: inset,
-              y: inset,
-              width: Math.round((panel.clientWidth - inset * 2) * 0.78),
+              width: Math.round((panel.clientWidth - inset * 2) * 0.64),
               height: 220,
             };
+            frame.x = Math.round((panel.clientWidth - frame.width) / 2);
+            frame.y = Math.round((panel.clientHeight - frame.height) * 0.24);
             let session = null;
             function clamp(next) {
               const minWidth = Math.min(320, panel.clientWidth - inset * 2);
@@ -233,8 +241,9 @@ test("task progress floating window drags and resizes inside the message panel",
             function apply() {
               frame = clamp(frame);
               const rect = panel.getBoundingClientRect();
-              progress.style.setProperty("--task-progress-left", Math.round(rect.left + frame.x) + "px");
-              progress.style.setProperty("--task-progress-top", Math.round(rect.top + frame.y) + "px");
+              const shellRect = shell.getBoundingClientRect();
+              progress.style.setProperty("--task-progress-left", Math.round(rect.left - shellRect.left + frame.x) + "px");
+              progress.style.setProperty("--task-progress-top", Math.round(rect.top - shellRect.top + frame.y) + "px");
               progress.style.setProperty("--task-progress-width", Math.round(frame.width) + "px");
               progress.style.setProperty("--task-progress-height", Math.round(frame.height) + "px");
             }
@@ -283,13 +292,19 @@ test("task progress floating window drags and resizes inside the message panel",
     `)
 
     await page.waitForSelector(".task-progress[data-floating-ready='true']", { visible: true })
-    const initial = await page.$eval(".task-progress", (node) => {
-      const rect = (node as HTMLElement).getBoundingClientRect()
-      const style = getComputedStyle(node as HTMLElement)
+    const initial = await page.evaluate(() => {
+      const panel = document.querySelector<HTMLElement>('[data-ui="message-panel"]')!.getBoundingClientRect()
+      const firstMessage = document.querySelector<HTMLElement>('[data-ui="fixture-message"]')!.getBoundingClientRect()
+      const node = document.querySelector<HTMLElement>(".task-progress")!
+      const rect = node.getBoundingClientRect()
+      const style = getComputedStyle(node)
       const budget = Number.parseFloat(style.getPropertyValue("--task-progress-height"))
       return {
         left: rect.left,
         top: rect.top,
+        panelLeft: panel.left,
+        panelTop: panel.top,
+        firstMessageTop: firstMessage.top,
         width: rect.width,
         height: rect.height,
         budget,
@@ -299,6 +314,12 @@ test("task progress floating window drags and resizes inside the message panel",
       }
     })
     assert.equal(initial.opacity, "1")
+    assert.ok(initial.left > initial.panelLeft + 80, `initial window should not stick to the left edge: ${JSON.stringify(initial)}`)
+    assert.ok(initial.top > initial.panelTop + 40, `initial window should not stick to the top edge: ${JSON.stringify(initial)}`)
+    assert.ok(
+      Math.abs(initial.firstMessageTop - (initial.panelTop + 18)) <= 2,
+      `first message should stay at panel padding instead of below the progress window: ${JSON.stringify(initial)}`,
+    )
     assert.ok(initial.height < initial.budget)
     assert.notEqual(initial.boxShadow, "none")
     assert.notEqual(initial.backdropFilter, "none")

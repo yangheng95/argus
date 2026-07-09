@@ -1,5 +1,6 @@
 # July 2026 Records
 
+- [2026-07-09-task-progress-floating-overlay-repair.md](2026-07-09-task-progress-floating-overlay-repair.md) records the GOALS floating window repair that mounts the progress surface over `.chat-scroll`, restores non-edge default placement, and prevents it from affecting message-card flow.
 - [2026-07-09-task-progress-window-visual-redesign.md](2026-07-09-task-progress-window-visual-redesign.md) records the GOALS floating window visual redesign: content-fit height, always-on frosted elevation, per-goal segmented minimap bar, neutral icon-state pills on an aligned grid, header state counts, and a corner resize grip.
 - [2026-07-09-task-progress-floating-window.md](2026-07-09-task-progress-floating-window.md) records the Overlay task progress surface change that turns the existing conversation GOALS strip into a draggable, resizable, slightly transparent window constrained to the message panel.
 - [2026-07-09-overlay-page-preview-e2e-repair.md](2026-07-09-overlay-page-preview-e2e-repair.md) records the end-to-end Overlay Browser Preview repair plan for restoring native live page preview ownership when persisted evidence exists.
