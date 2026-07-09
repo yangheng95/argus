@@ -45,9 +45,9 @@ Whole-repo grep evidence:
 
 Independent agents:
 
-- Sagan: ingress and binding reliability audit. Pending at implementation start.
-- Euler: protocol 1 channel-runtime vs legacy task-report audit. Pending at implementation start.
-- Hubble: tests, capability contract, and permission-reply audit. Pending at implementation start.
+- Sagan: ingress and binding reliability audit. Found that first channel-message task creation depended on the LLM optionally supplying `platform/channel/thread`; server channel identity was present in `ControlMessageInput` text but not in tool `extra`. Also flagged that binding lookup should reject cross-project bindings at ingress, not after routing.
+- Euler: protocol 1 channel-runtime vs legacy task-report audit. Found that managed in-process runtime set `OPENCORVUS_CHANNEL_PROTOCOL=1` only in a local env map while `ChannelRuntime` read `process.env`; protocol selection needed to be an explicit constructor option. Also found that `evaluation.completed` replies only used hot in-memory bindings and could miss durable `engine_channel_binding` rows after runtime restart.
+- Hubble: tests, capability contract, and permission-reply audit. Found that `PanelTool.execute` did not enforce `ctx.extra.surface` at tool level, unknown permission replies could fall through to the control LLM, and external channel capability snapshots lacked explicit coverage.
 
 ## Root Cause
 
@@ -69,3 +69,30 @@ The repair is to carry the server-owned channel identity in tool context and mak
 3. Derive channel task `source` from the resolved binding rather than from a lone `params.platform`.
 4. Add focused tests for server-derived binding, conflict rejection, partial-identity rejection, and explicit complete binding behavior.
 5. Run focused tests, then inspect diffs and agent feedback for any new channel-chain issues.
+
+## Completed Changes
+
+- `ControlMessage` now builds tool `extra.channelBinding` from server-derived channel context and rejects channel surfaces without a complete `channel/thread` identity before prompting.
+- `panel.create_task` resolves channel binding from the server context as the single source for configured channels, rejects conflicting model-supplied identities, rejects partial explicit identities, and still accepts complete explicit bindings for non-channel callers.
+- `ChannelIngress.find` validates bound task project ownership before routing. Cross-project and legacy global task bindings now fail at ingress with structured project-binding errors instead of waking the wrong task.
+- Pending permission replies now handle unrecognized text deterministically inside `ChannelIngress.message` and do not fall through to the control LLM.
+- `ChannelRuntime` protocol 1 selection is explicit constructor state. Managed configured channels pass `channelProtocol: true`; core ignores `OPENCORVUS_CHANNEL_PROTOCOL` unless main process converts it into that option.
+- `ChannelRuntime` hydrates `evaluation.completed` task bindings from durable `client.task.bindings({ taskID })` when hot runtime memory has no binding, so replies still find the channel after runtime restart.
+- `PanelTool.execute` now enforces the active surface from `ctx.extra.surface`; capability snapshots include the external-channel action set.
+- Gateway channel tests now cover first-message durable binding, cross-project binding rejection, deterministic pending interaction replies, route-shape binding APIs, and avoid nested route `Instance.provide` locks in HTTP route tests.
+
+## Verification
+
+- `bun test packages/opencorvus/test/gateway/e2e.test.ts` — 18 pass.
+- `bun test packages/channel-runtime/test/core-channel-protocol.test.ts packages/channel-runtime/test/core-submit-mode.test.ts packages/channel-runtime/test/subscribe-events-global.test.ts` — 16 pass.
+- `bun test packages/opencorvus/test/tool/panel-channel-binding.test.ts packages/opencorvus/test/control/channel-binding-context.test.ts packages/opencorvus/test/panel/actor-whitelist.test.ts packages/opencorvus/test/tool/panel-capability.test.ts` — 36 pass.
+- `bun test packages/opencorvus/test/channel/ingress-attachments.test.ts` — 4 pass.
+- `bun test packages/opencorvus/test/shell.test.ts -t "windows helper"` — 7 pass.
+- `bun test packages/opencorvus/test/script/routes-check-openapi.test.ts packages/opencorvus/test/script/sdk-open-corvus-client-contract.test.ts` — 15 pass.
+- `bun run typecheck` — passed.
+
+## Remaining Cleanup Candidates
+
+- `allow_session_mutation` appears unused in the channel ingress input surface.
+- `ChannelIngress.bindThread()` is production-exposed but currently behaves like a test/manual binding helper.
+- External channel capability still exposes session-management style actions such as `create_session/fork_session/delete_session`; this may be intentional product surface, so it was not removed without explicit product confirmation.

@@ -630,7 +630,7 @@ describe("Gateway e2e — channel bindings + reverse lookup (template §17.14)",
   test(
     "HTTP GET /task/:taskID/bindings returns the bindings for the task only",
     async () => {
-      await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
+      await using tmp = await tmpdir({ config: { model: "test/model" } })
       const { targetID } = await seedGatewayProject(tmp.path, () => {
         const targetID = insertIngressTask({ title: "target" })
         const otherID = insertIngressTask({ title: "other" })
@@ -658,7 +658,7 @@ describe("Gateway e2e — channel bindings + reverse lookup (template §17.14)",
   test(
     "HTTP GET /task/:taskID/bindings distinguishes a missing task from an existing task without bindings",
     async () => {
-      await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
+      await using tmp = await tmpdir({ config: { model: "test/model" } })
       const taskID = await seedGatewayProject(tmp.path, () => insertIngressTask({ title: "task with no bindings" }))
 
       try {
@@ -684,7 +684,7 @@ describe("Gateway e2e — channel bindings + reverse lookup (template §17.14)",
 
 describe("Gateway e2e — HTTP routes via Server.App().request (template §11)", () => {
   test("POST /channel/message with bound thread reaches ControlMessage.handle through the route", async () => {
-    await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
+    await using tmp = await tmpdir({ config: { model: "test/model" } })
     const taskID = await seedGatewayProject(tmp.path, () => {
       const taskID = insertIngressTask({ title: "for routing" })
       ChannelIngress.bindThread({ platform: "slack", channel: "C-rt", thread: "T-rt", taskID })
@@ -724,44 +724,43 @@ describe("Gateway e2e — HTTP routes via Server.App().request (template §11)",
   })
 
   test("POST /gateway/channel/:platform/message bridges into ChannelIngress with the URL platform", async () => {
-    await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const handleSpy = spyOn(ControlMessage, "handle").mockResolvedValue({
-          kind: "panel_response",
-          message: "ok",
-        })
-        const ingressSpy = spyOn(ChannelIngress, "message")
-
-        const response = await Server.App().request("/gateway/channel/discord/message", {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-opencorvus-directory": tmp.path,
-          },
-          body: JSON.stringify({
-            channel: "guild-ch",
-            thread: "thr-1",
-            text: "from gateway bridge",
-            allow_create: false,
-          }),
-        })
-
-        expect(response.status).toBe(200)
-        // ChannelIngress sees the platform from the URL even though the body
-        // omitted it (gateway route fills it in).
-        expect(ingressSpy).toHaveBeenCalledTimes(1)
-        const arg = ingressSpy.mock.calls[0]?.[0] as { platform?: string }
-        expect(arg?.platform).toBe("discord")
-        // allow_create=false + no binding → ControlMessage.handle not called.
-        expect(handleSpy).not.toHaveBeenCalled()
-      },
+    await using tmp = await tmpdir({ config: { model: "test/model" } })
+    const handleSpy = spyOn(ControlMessage, "handle").mockResolvedValue({
+      kind: "panel_response",
+      message: "ok",
     })
+    const ingressSpy = spyOn(ChannelIngress, "message")
+
+    try {
+      const response = await Server.App().request("/gateway/channel/discord/message", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-opencorvus-directory": tmp.path,
+        },
+        body: JSON.stringify({
+          channel: "guild-ch",
+          thread: "thr-1",
+          text: "from gateway bridge",
+          allow_create: false,
+        }),
+      })
+
+      expect(response.status).toBe(200)
+      // ChannelIngress sees the platform from the URL even though the body
+      // omitted it (gateway route fills it in).
+      expect(ingressSpy).toHaveBeenCalledTimes(1)
+      const arg = ingressSpy.mock.calls[0]?.[0] as { platform?: string }
+      expect(arg?.platform).toBe("discord")
+      // allow_create=false + no binding -> ControlMessage.handle not called.
+      expect(handleSpy).not.toHaveBeenCalled()
+    } finally {
+      await Instance.disposeAll()
+    }
   })
 
   test("GET /gateway/stats returns project / task / capability summary", async () => {
-    await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
+    await using tmp = await tmpdir({ config: { model: "test/model" } })
     const taskID = await seedGatewayProject(tmp.path, () => insertIngressTask({ title: "stats sample" }))
 
     try {
@@ -786,27 +785,26 @@ describe("Gateway e2e — HTTP routes via Server.App().request (template §11)",
   })
 
   test("GET /gateway/stats propagates channel runtime status failures", async () => {
-    await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        spyOn(ChannelSupervisor, "status").mockRejectedValue(new Error("channel runtime status unavailable"))
+    await using tmp = await tmpdir({ config: { model: "test/model" } })
+    spyOn(ChannelSupervisor, "status").mockRejectedValue(new Error("channel runtime status unavailable"))
 
-        const response = await Server.App().request("/gateway/stats", {
-          headers: { "x-opencorvus-directory": tmp.path },
-        })
+    try {
+      const response = await Server.App().request("/gateway/stats", {
+        headers: { "x-opencorvus-directory": tmp.path },
+      })
 
-        expect(response.status).toBe(500)
-        await expect(response.json()).resolves.toMatchObject({
-          name: "UnknownError",
-          data: { message: "channel runtime status unavailable" },
-        })
-      },
-    })
+      expect(response.status).toBe(500)
+      await expect(response.json()).resolves.toMatchObject({
+        name: "UnknownError",
+        data: { message: "channel runtime status unavailable" },
+      })
+    } finally {
+      await Instance.disposeAll()
+    }
   })
 
   test("GET /task/:taskID/bindings returns the documented row shape (id, task_id, platform, channel, thread)", async () => {
-    await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
+    await using tmp = await tmpdir({ config: { model: "test/model" } })
     const taskID = await seedGatewayProject(tmp.path, () => {
       const taskID = insertIngressTask({ title: "shape check" })
       ChannelIngress.bindThread({
