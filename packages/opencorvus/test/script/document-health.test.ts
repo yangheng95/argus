@@ -464,6 +464,9 @@ describe("document health audit regressions", () => {
 
     expect(buildWorkflow).toContain('install_dependencies: "false"')
     expect(buildWorkflow).toContain("apk add --no-cache nodejs ripgrep su-exec")
+    expect(buildWorkflow).toContain("-e OPENCORVUS_HOME=/tmp/opencorvus-home")
+    expect(buildWorkflow).toContain('mkdir -p "$OPENCORVUS_HOME"')
+    expect(buildWorkflow).toContain('chown -R "$HOST_UID:$HOST_GID" "$OPENCORVUS_HOME"')
     expect(buildWorkflow).toContain(
       'su-exec "$HOST_UID:$HOST_GID" bun install --frozen-lockfile --no-progress --ignore-scripts --backend=copyfile --network-concurrency=1',
     )
