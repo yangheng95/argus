@@ -18,25 +18,25 @@ body[data-theme="light"] {
   --text-on-accent: #ffffff;
   --text-on-strong: #ffffff;
   --text-on-danger: #101527;
-  --bg: rgb(241, 235, 224);
-  --surface: rgb(251, 248, 241);
-  --surface-hover: rgb(246, 240, 229);
-  --surface-inset: rgb(244, 238, 226);
-  --surface-strong: rgb(255, 252, 246);
-  --rail-surface: rgb(247, 242, 233);
-  --chat-canvas: rgb(250, 246, 239);
-  --inspector-surface: rgb(247, 242, 233);
-  --body-bg: linear-gradient(135deg, rgb(253, 249, 242) 0%, rgb(247, 240, 230) 48%, rgb(239, 232, 220) 100%);
-  --panel-body-bg: rgb(250, 246, 239);
+  --bg: rgb(236, 246, 249);
+  --surface: rgb(255, 255, 255);
+  --surface-hover: rgb(247, 248, 249);
+  --surface-inset: rgb(244, 244, 245);
+  --surface-strong: rgb(255, 255, 255);
+  --rail-surface: rgb(236, 246, 249);
+  --chat-canvas: rgb(255, 255, 255);
+  --inspector-surface: rgb(248, 249, 250);
+  --body-bg: linear-gradient(90deg, rgb(236, 246, 249) 0%, rgb(236, 246, 249) 24%, rgb(255, 255, 255) 24%, rgb(255, 255, 255) 100%);
+  --panel-body-bg: rgb(255, 255, 255);
   --panel-body-blur: blur(20px);
-  --chrome: rgb(252, 248, 241);
-  --border: rgba(92, 112, 163, 0.16);
-  --border-hover: rgba(85, 101, 238, 0.34);
-  --border-strong: rgba(84, 103, 165, 0.22);
-  --text: #35405c;
-  --text-strong: #101527;
-  --text-soft: #5f6b87;
-  --text-muted: #616b87;
+  --chrome: rgb(236, 246, 249);
+  --border: rgba(32, 38, 40, 0.14);
+  --border-hover: rgba(32, 38, 40, 0.28);
+  --border-strong: rgba(32, 38, 40, 0.22);
+  --text: #3f474a;
+  --text-strong: #202326;
+  --text-soft: #4f585b;
+  --text-muted: #697174;
   --accent: #5256e8;
   --accent-dim: color-mix(in srgb, var(--accent) 7%, transparent);
   --accent-hover: #474add;
@@ -63,10 +63,10 @@ body[data-theme="light"] {
   --warn-dim: rgba(143, 87, 12, 0.12);
   --bad: #d85666;
   --bad-dim: rgba(216, 86, 102, 0.12);
-  --shadow: inset 0 1px 0 color-mix(in srgb, var(--surface-strong) 72%, transparent);
-  --shadow-md: inset 0 1px 0 color-mix(in srgb, var(--surface-strong) 76%, transparent);
-  --shadow-lg: inset 0 1px 0 color-mix(in srgb, var(--surface-strong) 80%, transparent);
-  --scrollbar-thumb: rgba(95, 111, 162, 0.24);
+  --shadow: inset 0 1px 0 color-mix(in srgb, var(--surface-strong) 82%, transparent);
+  --shadow-md: 0 4px 12px rgba(32, 38, 40, 0.08), inset 0 1px 0 color-mix(in srgb, var(--surface-strong) 86%, transparent);
+  --shadow-lg: 0 12px 32px rgba(32, 38, 40, 0.1), inset 0 1px 0 color-mix(in srgb, var(--surface-strong) 90%, transparent);
+  --scrollbar-thumb: rgba(32, 38, 40, 0.18);
   --scrollbar-thumb-hover: color-mix(in srgb, var(--accent) 34%, transparent);
   --session-scrollbar-track: color-mix(in srgb, var(--surface-strong) 48%, transparent);
   --subtle-1: color-mix(in srgb, var(--accent) 4%, transparent);
@@ -90,10 +90,10 @@ body[data-theme="light"] {
   --oc-syntax-deletion-text: #82071e;
   --oc-syntax-deletion-bg: color-mix(in srgb, #cf222e 12%, transparent);
 
-  --dialog-bg: rgb(252, 248, 241);
+  --dialog-bg: rgb(255, 255, 255);
   --dialog-backdrop: rgba(0, 0, 0, 0.4);
   --ui-scrim: color-mix(in srgb, black 40%, transparent);
-  --ui-shadow-tone: color-mix(in srgb, black 12%, transparent);
+  --ui-shadow-tone: color-mix(in srgb, black 10%, transparent);
   --ui-highlight-tone: color-mix(in srgb, var(--surface-strong) 56%, transparent);
   --ui-glass-tint: color-mix(in srgb, var(--surface-strong) 62%, transparent);
   --executor-menu-bg: var(--menu-panel-bg);
@@ -102,8 +102,8 @@ body[data-theme="light"] {
   --task-bar-bg: var(--ui-glass-tint);
   --task-bar-backdrop-filter: blur(calc(18px * var(--ui-scale)));
   --task-bar-border-color: color-mix(in srgb, var(--accent) 14%, var(--border));
-  --menu-panel-bg: rgb(252, 248, 241);
-  --divider-soft: rgba(92, 112, 163, 0.12);
+  --menu-panel-bg: rgb(255, 255, 255);
+  --divider-soft: rgba(32, 38, 40, 0.1);
   --panel-fill:
     linear-gradient(
       180deg,

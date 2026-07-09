@@ -48,13 +48,19 @@ function parseRgb(value: string): SampledColor {
   }
 }
 
-function assertWarmOffWhite(color: SampledColor, label: string): void {
-  assert.notEqual(color.raw, "rgb(255, 255, 255)", `${label} must not be pure white`)
-  assert.ok(color.r >= color.b, `${label} should be warm rather than blue-white: ${color.raw}`)
-  assert.ok(color.r >= 240 && color.g >= 232 && color.b >= 220, `${label} should remain an off-white: ${color.raw}`)
+function assertCodexRail(color: SampledColor, label: string): void {
+  assert.ok(color.g >= color.r + 6, `${label} should carry the Codex pale-blue rail tint: ${color.raw}`)
+  assert.ok(color.b >= color.r + 9, `${label} should carry the Codex pale-blue rail tint: ${color.raw}`)
+  assert.ok(color.r >= 232 && color.g >= 242 && color.b >= 245, `${label} should remain a light rail: ${color.raw}`)
 }
 
-test("light theme renders warm milk-tea surfaces instead of pure white", async () => {
+function assertCodexCanvas(color: SampledColor, label: string): void {
+  const spread = Math.max(color.r, color.g, color.b) - Math.min(color.r, color.g, color.b)
+  assert.ok(spread <= 2, `${label} should be a neutral near-white canvas: ${color.raw}`)
+  assert.ok(color.r >= 252 && color.g >= 252 && color.b >= 252, `${label} should match the near-white reference: ${color.raw}`)
+}
+
+test("light theme renders Codex-reference pale rail and near-white canvas", async () => {
   assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
   assert.equal(typeof globalThis.Bun, "undefined")
 
@@ -81,7 +87,7 @@ test("light theme renders warm milk-tea surfaces instead of pure white", async (
               margin: 0;
               padding: calc(18px * var(--ui-scale));
             }
-            .milk-tea-stage {
+            .codex-theme-stage {
               width: calc(1120px * var(--ui-scale));
               height: calc(680px * var(--ui-scale));
               display: flex;
@@ -90,18 +96,18 @@ test("light theme renders warm milk-tea surfaces instead of pure white", async (
               border-radius: var(--oc-radius-large);
               background: var(--panel-body-bg);
             }
-            .milk-tea-sidebar {
+            .codex-theme-sidebar {
               flex: 0 0 calc(280px * var(--ui-scale));
             }
-            .milk-tea-chat {
+            .codex-theme-chat {
               min-width: 0;
               flex: 1 1 auto;
             }
           </style>
         </head>
         <body data-theme="light">
-          <main class="milk-tea-stage panel-body">
-            <aside class="sidebar milk-tea-sidebar">
+          <main class="codex-theme-stage panel-body">
+            <aside class="sidebar codex-theme-sidebar">
               <div class="side-panel-content sidebar-content">
                 <div class="sidebar-header oc-surface-header">
                   <div class="sidebar-title oc-surface-header__title">Projects</div>
@@ -124,7 +130,7 @@ test("light theme renders warm milk-tea surfaces instead of pure white", async (
                 </div>
               </div>
             </aside>
-            <section class="chat milk-tea-chat">
+            <section class="chat codex-theme-chat">
               <header class="chat-header oc-surface-header">
                 <div class="chat-header-main oc-surface-header__main">
                   <span class="chat-title oc-surface-header__title">Workflow</span>
@@ -144,13 +150,13 @@ test("light theme renders warm milk-tea surfaces instead of pure white", async (
                       <div class="chat-bubble-shell" data-align="right">
                         <article class="chat-bubble" data-align="right">
                           <div class="chat-bubble__body">
-                            Warm light theme visual sample.
+                            Codex reference light theme visual sample.
                           </div>
                         </article>
                       </div>
                     </div>
                     <article class="card" data-kind="message">
-                      <div class="card__body">The card surface should read as milk-tea off-white, not flat white.</div>
+                      <div class="card__body">The rail should read pale blue while the main surface stays near-white.</div>
                     </article>
                   </div>
                 </div>
@@ -196,6 +202,7 @@ test("light theme renders warm milk-tea surfaces instead of pure white", async (
         bodyBgImage: getComputedStyle(document.body).backgroundImage,
         panel: bg(".panel-body"),
         sidebar: bg(".sidebar"),
+        sidebarHeader: bg(".sidebar-header"),
         chat: bg(".chat"),
         chatScroll: bg(".chat-scroll"),
         composerBorder: getComputedStyle(document.querySelector<HTMLElement>(".chat-input")!).borderColor,
@@ -203,26 +210,27 @@ test("light theme renders warm milk-tea surfaces instead of pure white", async (
       }
     })
 
-    assert.match(samples.bodyBgImage, /rgb\(253,\s*249,\s*242\)/)
-    assert.match(samples.bodyBgImage, /rgb\(239,\s*232,\s*220\)/)
+    assert.match(samples.bodyBgImage, /rgb\(236,\s*246,\s*249\)/)
+    assert.match(samples.bodyBgImage, /rgb\(255,\s*255,\s*255\)/)
+    assertCodexRail(parseRgb(samples.sidebar), "sidebar")
+    assertCodexRail(parseRgb(samples.sidebarHeader), "sidebar header")
     for (const [label, raw] of Object.entries({
       panel: samples.panel,
-      sidebar: samples.sidebar,
       chat: samples.chat,
       chatScroll: samples.chatScroll,
     })) {
-      assertWarmOffWhite(parseRgb(raw), label)
+      assertCodexCanvas(parseRgb(raw), label)
     }
     assert.notEqual(samples.composerBorder, "rgb(255, 255, 255)")
-    assert.match(samples.composerImage, /(?:rgb\(255,\s*252,\s*246\)|color\(srgb 1 0\.988235 0\.964706)/)
+    assert.match(samples.composerImage, /(?:rgb\(255,\s*255,\s*255\)|color\(srgb 1 1 1(?: \/ 0\.\d+)?\))/)
 
-    const stage = await page.$(".milk-tea-stage")
+    const stage = await page.$(".codex-theme-stage")
     assert.ok(stage)
-    const screenshotPath = resolve(".scratch/light-theme-milk-tea.png")
+    const screenshotPath = resolve(".scratch/light-theme-codex-reference.png")
     mkdirSync(dirname(screenshotPath), { recursive: true })
     const buffer = await stage.screenshot({})
     writeFileSync(screenshotPath, buffer)
-    assert.ok(buffer.length > 20_000, `milk-tea screenshot is too small: ${buffer.length}`)
+    assert.ok(buffer.length > 20_000, `Codex reference theme screenshot is too small: ${buffer.length}`)
   } finally {
     await browser.close()
   }

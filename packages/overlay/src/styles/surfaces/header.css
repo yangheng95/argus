@@ -18,6 +18,10 @@
   flex-shrink: 0;
 }
 
+.sidebar-header.oc-surface-header {
+  background: var(--rail-surface);
+}
+
 .oc-surface-header[data-surface="settings-group"] {
   width: 100%;
   height: auto;

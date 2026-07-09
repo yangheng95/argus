@@ -71,6 +71,12 @@ test("SurfaceHeader variants have surface CSS hooks", () => {
   expect(css).toContain("var(--oc-header-title-line-height)")
 })
 
+test("sidebar header variant inherits the rail surface token", () => {
+  const css = readFileSync(HEADER_CSS, "utf8")
+
+  expect(css).toMatch(/\.sidebar-header\.oc-surface-header\s*\{[^}]*background:\s*var\(--rail-surface\)/)
+})
+
 test("cascade layer does not own base surface header chrome (it lives in header.css)", () => {
   // sidebar-header / chat-header / sections-header are now defined in
   // surfaces/header.css — they must not appear as standalone top-level rules

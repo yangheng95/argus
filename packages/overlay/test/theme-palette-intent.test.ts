@@ -46,35 +46,46 @@ describe("overlay theme palette intent", () => {
     expect(vscodeDark).not.toContain("rgba(28, 33, 58")
   })
 
-  test("light theme uses a warm milk-tea material ramp instead of pure white", () => {
+  test("light theme follows the Codex reference pale-blue rail and near-white canvas", () => {
     const materialTokens = [
-      ["--bg", "rgb(241, 235, 224)"],
-      ["--surface", "rgb(251, 248, 241)"],
-      ["--surface-hover", "rgb(246, 240, 229)"],
-      ["--surface-inset", "rgb(244, 238, 226)"],
-      ["--surface-strong", "rgb(255, 252, 246)"],
-      ["--rail-surface", "rgb(247, 242, 233)"],
-      ["--chat-canvas", "rgb(250, 246, 239)"],
-      ["--inspector-surface", "rgb(247, 242, 233)"],
-      ["--panel-body-bg", "rgb(250, 246, 239)"],
-      ["--chrome", "rgb(252, 248, 241)"],
-      ["--dialog-bg", "rgb(252, 248, 241)"],
-      ["--menu-panel-bg", "rgb(252, 248, 241)"],
+      ["--bg", "rgb(236, 246, 249)"],
+      ["--surface", "rgb(255, 255, 255)"],
+      ["--surface-hover", "rgb(247, 248, 249)"],
+      ["--surface-inset", "rgb(244, 244, 245)"],
+      ["--surface-strong", "rgb(255, 255, 255)"],
+      ["--rail-surface", "rgb(236, 246, 249)"],
+      ["--chat-canvas", "rgb(255, 255, 255)"],
+      ["--inspector-surface", "rgb(248, 249, 250)"],
+      ["--panel-body-bg", "rgb(255, 255, 255)"],
+      ["--chrome", "rgb(236, 246, 249)"],
+      ["--dialog-bg", "rgb(255, 255, 255)"],
+      ["--menu-panel-bg", "rgb(255, 255, 255)"],
     ] as const
 
     for (const [token, value] of materialTokens) {
       expect(themeToken(light, token)).toBe(value)
-      expect(value).not.toBe("rgb(255, 255, 255)")
-      expect(value).not.toBe("#ffffff")
     }
 
     expect(themeToken(light, "--body-bg")).toBe(
-      "linear-gradient(135deg, rgb(253, 249, 242) 0%, rgb(247, 240, 230) 48%, rgb(239, 232, 220) 100%)",
+      "linear-gradient(90deg, rgb(236, 246, 249) 0%, rgb(236, 246, 249) 24%, rgb(255, 255, 255) 24%, rgb(255, 255, 255) 100%)",
     )
-    expect(light).not.toContain("rgb(238, 243, 255)")
-    expect(light).not.toContain("rgb(243, 247, 255)")
-    expect(light).not.toContain("rgb(247, 249, 255)")
-    expect(light).not.toContain("rgb(250, 252, 255)")
+    expect(themeToken(light, "--text")).toBe("#3f474a")
+    expect(themeToken(light, "--text-strong")).toBe("#202326")
+    expect(themeToken(light, "--text-soft")).toBe("#4f585b")
+    expect(themeToken(light, "--text-muted")).toBe("#697174")
+    expect(themeToken(light, "--border")).toBe("rgba(32, 38, 40, 0.14)")
+    expect(themeToken(light, "--border-strong")).toBe("rgba(32, 38, 40, 0.22)")
+
+    for (const retired of [
+      "rgb(241, 235, 224)",
+      "rgb(251, 248, 241)",
+      "rgb(246, 240, 229)",
+      "rgb(244, 238, 226)",
+      "rgb(250, 246, 239)",
+      "rgb(247, 242, 233)",
+    ]) {
+      expect(light).not.toContain(retired)
+    }
   })
 
   test("all themes keep shell backing materials opaque", () => {
