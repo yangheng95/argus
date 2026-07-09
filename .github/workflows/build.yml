@@ -104,6 +104,9 @@ jobs:
       - name: Sync repo versions
         run: bun ./script/sync-version.ts "${{ needs.prepare.outputs.version }}"
 
+      - name: Build SDK package
+        run: bun ./packages/sdk/js/script/build.ts
+
       - name: Fetch models.dev snapshot
         run: curl -fsSL https://models.dev/api.json | tr -d '\n\r' > /tmp/models-api-clean.json
 
@@ -279,6 +282,9 @@ jobs:
 
       - name: Sync repo versions
         run: bun ./script/sync-version.ts "${{ needs.prepare.outputs.version }}"
+
+      - name: Build SDK package
+        run: bun ./packages/sdk/js/script/build.ts
 
       - name: Install Linux system dependencies
         if: runner.os == 'Linux'

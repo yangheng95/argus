@@ -452,9 +452,30 @@ describe("document health audit regressions", () => {
       "bun install --frozen-lockfile --no-progress --ignore-scripts --backend=copyfile --network-concurrency=1",
     )
     expect(setupBunAction).toContain('HUSKY: "0"')
-    expect(read(".github/workflows/build.yml")).toContain('install_dependencies: "false"')
-    expect(read(".github/workflows/build.yml")).toContain(
+    const buildWorkflow = read(".github/workflows/build.yml")
+    const cliPackageBlock = buildWorkflow.slice(
+      buildWorkflow.indexOf("  package-cli:"),
+      buildWorkflow.indexOf("  package-overlay:"),
+    )
+    const overlayPackageBlock = buildWorkflow.slice(
+      buildWorkflow.indexOf("  package-overlay:"),
+      buildWorkflow.indexOf("  publish-release-assets:"),
+    )
+
+    expect(buildWorkflow).toContain('install_dependencies: "false"')
+    expect(buildWorkflow).toContain(
       "bun install --frozen-lockfile --no-progress --ignore-scripts --backend=copyfile --network-concurrency=1 && bun run script/build.ts --single --baseline --musl-only --no-clean",
+    )
+    expect(buildWorkflow.match(/name: Build SDK package/g)?.length).toBe(2)
+    for (const block of [cliPackageBlock, overlayPackageBlock]) {
+      expect(block).toContain("run: bun ./packages/sdk/js/script/build.ts")
+      expect(block.indexOf("Build SDK package")).toBeGreaterThan(block.indexOf("Sync repo versions"))
+    }
+    expect(cliPackageBlock.indexOf("Build SDK package")).toBeLessThan(
+      cliPackageBlock.indexOf("Build CLI (native + baseline)"),
+    )
+    expect(overlayPackageBlock.indexOf("Build SDK package")).toBeLessThan(
+      overlayPackageBlock.indexOf("Build bound overlay bundle"),
     )
     const actionDefinition = read("github/action.yml")
     expectPublishedGitHubActionDefinition(actionDefinition)
