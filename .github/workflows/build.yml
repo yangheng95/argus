@@ -156,7 +156,7 @@ jobs:
             -e GH_REPO="${GH_REPO}" \
             -e GH_TOKEN="${GH_TOKEN}" \
             oven/bun:alpine \
-            sh -c "apk add --no-cache nodejs && bun install --frozen-lockfile --no-progress --ignore-scripts --backend=copyfile && bun run script/build.ts --single --baseline --musl-only --no-clean"
+            sh -c "apk add --no-cache nodejs && bun install --frozen-lockfile --no-progress --ignore-scripts --backend=copyfile --network-concurrency=8 && bun run script/build.ts --single --baseline --musl-only --no-clean"
 
       - name: Build overlay web bundle
         # The CLI ships its overlay UI as static assets under

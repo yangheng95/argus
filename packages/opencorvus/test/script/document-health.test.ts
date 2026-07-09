@@ -448,11 +448,13 @@ describe("document health audit regressions", () => {
     expect(setupBunAction).toContain("actions/cache@v6")
     expect(setupBunAction).toContain("install_dependencies:")
     expect(setupBunAction).toContain("if: ${{ inputs.install_dependencies == 'true' }}")
-    expect(setupBunAction).toContain("bun install --frozen-lockfile --no-progress --ignore-scripts --backend=copyfile")
+    expect(setupBunAction).toContain(
+      "bun install --frozen-lockfile --no-progress --ignore-scripts --backend=copyfile --network-concurrency=8",
+    )
     expect(setupBunAction).toContain('HUSKY: "0"')
     expect(read(".github/workflows/build.yml")).toContain('install_dependencies: "false"')
     expect(read(".github/workflows/build.yml")).toContain(
-      "bun install --frozen-lockfile --no-progress --ignore-scripts --backend=copyfile && bun run script/build.ts --single --baseline --musl-only --no-clean",
+      "bun install --frozen-lockfile --no-progress --ignore-scripts --backend=copyfile --network-concurrency=8 && bun run script/build.ts --single --baseline --musl-only --no-clean",
     )
     const actionDefinition = read("github/action.yml")
     expectPublishedGitHubActionDefinition(actionDefinition)

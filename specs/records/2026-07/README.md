@@ -1,6 +1,6 @@
 # July 2026 Records
 
-- [2026-07-09-github-overlay-package-ci.md](2026-07-09-github-overlay-package-ci.md) records the GitHub overlay package CI repair that separates Bun runtime setup from dependency installation for `build.yml` prepare, while keeping frozen lockfile installs with `HUSKY=0` for package jobs.
+- [2026-07-09-github-overlay-package-ci.md](2026-07-09-github-overlay-package-ci.md) records the GitHub overlay package CI repair that separates Bun runtime setup from dependency installation for `build.yml` prepare, while keeping frozen lockfile installs with `HUSKY=0` and bounded Bun network concurrency for package jobs.
 - [2026-07-09-task-progress-floating-overlay-repair.md](2026-07-09-task-progress-floating-overlay-repair.md) records the GOALS floating window repair that mounts the progress surface over `.chat-scroll`, restores non-edge default placement, and prevents it from affecting message-card flow.
 - [2026-07-09-channel-link-root-repair.md](2026-07-09-channel-link-root-repair.md) records the channel-chain root repair that makes first-message task creation persist server-derived channel bindings and rejects conflicting or partial model-supplied binding identity.
 - [2026-07-09-task-progress-window-visual-redesign.md](2026-07-09-task-progress-window-visual-redesign.md) records the GOALS floating window visual redesign: content-fit height, always-on frosted elevation, per-goal segmented minimap bar, neutral icon-state pills on an aligned grid, header state counts, and a corner resize grip.
