@@ -1,5 +1,10 @@
 name: "Setup Bun"
-description: "Setup Bun with caching and install dependencies"
+description: "Setup Bun with caching and optional dependency install"
+inputs:
+  install_dependencies:
+    description: "Run the repository dependency install step."
+    required: false
+    default: "true"
 runs:
   using: "composite"
   steps:
@@ -37,6 +42,7 @@ runs:
         bun-download-url: ${{ steps.bun-url.outputs.url }}
 
     - name: Install dependencies
+      if: ${{ inputs.install_dependencies == 'true' }}
       run: bun install --frozen-lockfile --no-progress --ignore-scripts --backend=copyfile
       shell: bash
       env:
