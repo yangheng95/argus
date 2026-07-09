@@ -443,8 +443,11 @@ describe("document health audit regressions", () => {
       "actions/download-artifact@v4",
     ])
 
-    expect(read(".github/actions/setup-bun/action.yml")).toContain("actions/setup-node@v6")
-    expect(read(".github/actions/setup-bun/action.yml")).toContain("actions/cache@v6")
+    const setupBunAction = read(".github/actions/setup-bun/action.yml")
+    expect(setupBunAction).toContain("actions/setup-node@v6")
+    expect(setupBunAction).toContain("actions/cache@v6")
+    expect(setupBunAction).toContain("bun install --frozen-lockfile --no-progress")
+    expect(setupBunAction).toContain('HUSKY: "0"')
     const actionDefinition = read("github/action.yml")
     expectPublishedGitHubActionDefinition(actionDefinition)
     expect(actionDefinition).toContain("oven-sh/setup-bun@v2")
