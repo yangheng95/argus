@@ -30,12 +30,12 @@ import {
 import { requestConversationCardScroll } from "../services/conversation-scroll"
 import { formatErrorDetails, notifyWarning } from "../services/notify"
 import { t } from "../utils/i18n"
-import { goalRevisionLabelFromIndexes } from "../utils/goal-label"
+import { goalCompactLabelFromIndexes } from "../utils/goal-label"
 import { goalState, type GoalState } from "../utils/goal-state"
 import { parentIDChainForCard } from "../utils/card-tree"
 import { AppLog } from "../utils/log"
 import type { AgentWorkflowRecord } from "../utils/agent-workflow"
-import { Icon } from "./Icon"
+import { Icon, type IconName } from "./Icon"
 import { createAnimationFrameScheduler } from "../utils/animation-frame"
 import { currentUIScale } from "../utils/layout-tokens"
 import { Button } from "./ui/Button"
@@ -53,6 +53,18 @@ import {
  *  pushing the conversation down by 8+ rows. Three rows fits ~6–12 pills in a
  *  typical conversation column and keeps the sticky header light. */
 const MAX_VISIBLE_PILL_ROWS = 3
+
+const GOAL_STATE_ICON_NAMES: Record<GoalState, IconName> = {
+  pending: "status-idle",
+  running: "refresh",
+  passed: "check",
+  failed: "status-failed",
+  blocked: "status-failed",
+}
+
+function goalStateIconName(state: GoalState): IconName {
+  return GOAL_STATE_ICON_NAMES[state]
+}
 
 interface GoalPill {
   goalID: string
@@ -229,12 +241,16 @@ export function TaskProgressBar() {
     let passed = 0
     let failed = 0
     let running = 0
+    let pending = 0
+    let blocked = 0
     for (const g of all) {
       if (g.state === "passed") passed++
       else if (g.state === "failed") failed++
       else if (g.state === "running") running++
+      else if (g.state === "pending") pending++
+      else if (g.state === "blocked") blocked++
     }
-    return { passed, failed, running, total: all.length }
+    return { passed, failed, running, pending, blocked, total: all.length }
   })
 
   const hasGoals = () => goals().length > 0
@@ -253,6 +269,7 @@ export function TaskProgressBar() {
   const [collapsedMaxHeight, setCollapsedMaxHeight] = createSignal<number | null>(null)
   const [floatingFrame, setFloatingFrame] = createSignal<TaskProgressFloatingFrame | null>(null)
   const [windowState, setWindowState] = createSignal<"idle" | "dragging" | "resizing">("idle")
+  const [hotGoalID, setHotGoalID] = createSignal("")
   let floatingPanelEl: HTMLElement | null = null
   let floatingPointerSession: FloatingPointerSession | null = null
 
@@ -488,6 +505,48 @@ export function TaskProgressBar() {
           onPointerDown={onHeaderPointerDown}
         >
           <span class="task-progress__heading">{t("progress.heading")}</span>
+          <span class="task-progress__counts">
+            <Show when={counts().passed > 0}>
+              <span
+                class="task-progress__count"
+                data-state="passed"
+                title={t("progress.count.passed", { count: String(counts().passed) })}
+              >
+                <span class="task-progress__count-dot" aria-hidden="true" />
+                <span>{counts().passed}</span>
+              </span>
+            </Show>
+            <Show when={counts().running > 0}>
+              <span
+                class="task-progress__count"
+                data-state="running"
+                title={t("progress.count.running", { count: String(counts().running) })}
+              >
+                <span class="task-progress__count-dot" aria-hidden="true" />
+                <span>{counts().running}</span>
+              </span>
+            </Show>
+            <Show when={counts().failed > 0}>
+              <span
+                class="task-progress__count"
+                data-state="failed"
+                title={t("progress.count.failed", { count: String(counts().failed) })}
+              >
+                <span class="task-progress__count-dot" aria-hidden="true" />
+                <span>{counts().failed}</span>
+              </span>
+            </Show>
+            <Show when={counts().pending > 0}>
+              <span
+                class="task-progress__count"
+                data-state="pending"
+                title={t("progress.count.pending", { count: String(counts().pending) })}
+              >
+                <span class="task-progress__count-dot" aria-hidden="true" />
+                <span>{counts().pending}</span>
+              </span>
+            </Show>
+          </span>
           <span
             class="task-progress__summary"
             title={t("progress.summary", {
@@ -516,20 +575,20 @@ export function TaskProgressBar() {
         </div>
         <div class="task-progress__body">
           <div class="task-progress__bar" aria-hidden="true">
-            <div
-              class="task-progress__bar-fill"
-              style={{
-                "--progress-passed": `${counts().total === 0 ? 0 : Math.round((counts().passed / counts().total) * 100)}%`,
-              }}
-            />
-            <Show when={counts().failed > 0}>
-              <div
-                class="task-progress__bar-fail"
-                style={{
-                  "--progress-failed": `${Math.round((counts().failed / counts().total) * 100)}%`,
-                }}
-              />
-            </Show>
+            <For each={goals()}>
+              {(g) => (
+                <span
+                  class="task-progress__segment"
+                  data-ui="task-progress-segment"
+                  data-state={g.state}
+                  data-goal-id={g.goalID}
+                  data-hot={hotGoalID() === g.goalID ? "true" : undefined}
+                  title={pillStateLabel(g.state, g.title)}
+                  onMouseEnter={() => setHotGoalID(g.goalID)}
+                  onMouseLeave={() => setHotGoalID("")}
+                />
+              )}
+            </For>
           </div>
           <div
             id="taskProgressPills"
@@ -552,13 +611,19 @@ export function TaskProgressBar() {
                   data-ui="task-progress-pill"
                   data-goal-id={g.goalID}
                   data-state={g.state}
+                  data-hot={hotGoalID() === g.goalID ? "true" : undefined}
                   data-loading={locatingGoalID() === g.goalID ? "true" : undefined}
                   title={pillStateLabel(g.state, g.title)}
                   aria-label={pillStateLabel(g.state, g.title)}
                   aria-busy={locatingGoalID() === g.goalID ? "true" : undefined}
+                  onMouseEnter={() => setHotGoalID(g.goalID)}
+                  onMouseLeave={() => setHotGoalID("")}
                   onClick={() => onPillClick(g.goalID)}
                 >
-                  <span class="task-progress__pill-id">{goalRevisionLabelFromIndexes(g.index, g.attempt)}</span>
+                  <span class="task-progress__pill-icon" aria-hidden="true">
+                    <Icon name={goalStateIconName(g.state)} size={12} />
+                  </span>
+                  <span class="task-progress__pill-id">{goalCompactLabelFromIndexes(g.index, g.attempt)}</span>
                   <span class="task-progress__pill-title">{g.title}</span>
                 </Button>
               )}
@@ -587,9 +652,7 @@ export function TaskProgressBar() {
           title={t("progress.resize_window")}
           aria-label={t("progress.resize_window")}
           onPointerDown={onResizePointerDown}
-        >
-          <Icon name="maximize" size={12} />
-        </Button>
+        />
       </div>
     </Show>
   )

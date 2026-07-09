@@ -31,6 +31,41 @@ test("task progress floating window drags and resizes inside the message panel",
     readCss("primitives/button.css"),
     readCss("surfaces/card.css"),
   ].join("\n")
+  const fixtureGoals = [
+    { number: 1, state: "passed", title: "Frame budget CSS handoff" },
+    { number: 2, state: "passed", title: "Glass elevation polish" },
+    { number: 3, state: "running", title: "Segmented minimap wiring" },
+    { number: 4, state: "failed", title: "Failure evidence review" },
+    { number: 5, state: "blocked", title: "Blocked dependency note" },
+    { number: 6, state: "pending", title: "Final screenshot review" },
+  ]
+  const fixtureIcon = (state: string) => {
+    if (state === "passed") {
+      return '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.3 6.6 11.4 12.8 4.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    }
+    if (state === "running") {
+      return '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8a5 5 0 0 1-8.4 3.7M3 8a5 5 0 0 1 8.4-3.7M11.4 1.8v2.5H8.9M4.6 14.2v-2.5h2.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    }
+    if (state === "pending") {
+      return '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="4.8" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>'
+    }
+    return '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="4.8" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M5.8 5.8 10.2 10.2M10.2 5.8 5.8 10.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>'
+  }
+  const segmentsMarkup = fixtureGoals
+    .map(
+      (goal) =>
+        `<span class="task-progress__segment" data-ui="task-progress-segment" data-state="${goal.state}" data-goal-id="goal-${goal.number}" title="${goal.title}" aria-hidden="true"></span>`,
+    )
+    .join("")
+  const pillsMarkup = fixtureGoals
+    .map(
+      (goal) => `<button type="button" class="oc-button" data-variant="outline" data-size="mini" data-tone="neutral" data-ui="task-progress-pill" data-state="${goal.state}" data-goal-id="goal-${goal.number}" title="${goal.title}">
+        <span class="task-progress__pill-icon" aria-hidden="true">${fixtureIcon(goal.state)}</span>
+        <span class="task-progress__pill-id">#G${goal.number}</span>
+        <span class="task-progress__pill-title">${goal.title}</span>
+      </button>`,
+    )
+    .join("")
 
   const browser = await launchBrowser(["--disable-dev-shm-usage"])
   try {
@@ -90,7 +125,7 @@ test("task progress floating window drags and resizes inside the message panel",
               --task-progress-left: 0px;
               --task-progress-top: 0px;
               --task-progress-width: 600px;
-              --task-progress-height: 180px;
+              --task-progress-height: 220px;
             }
           </style>
         </head>
@@ -109,7 +144,25 @@ test("task progress floating window drags and resizes inside the message panel",
               >
                 <div class="task-progress__header" data-ui="task-progress-drag-handle" title="Drag goals window">
                   <span class="task-progress__heading">Goals</span>
-                  <span class="task-progress__summary">5/15</span>
+                  <span class="task-progress__counts">
+                    <span class="task-progress__count" data-state="passed" title="2 passed">
+                      <span class="task-progress__count-dot" aria-hidden="true"></span>
+                      <span>2</span>
+                    </span>
+                    <span class="task-progress__count" data-state="running" title="1 running">
+                      <span class="task-progress__count-dot" aria-hidden="true"></span>
+                      <span>1</span>
+                    </span>
+                    <span class="task-progress__count" data-state="failed" title="1 failed">
+                      <span class="task-progress__count-dot" aria-hidden="true"></span>
+                      <span>1</span>
+                    </span>
+                    <span class="task-progress__count" data-state="pending" title="1 pending">
+                      <span class="task-progress__count-dot" aria-hidden="true"></span>
+                      <span>1</span>
+                    </span>
+                  </span>
+                  <span class="task-progress__summary">2/6</span>
                   <button
                     type="button"
                     class="oc-button"
@@ -127,23 +180,10 @@ test("task progress floating window drags and resizes inside the message panel",
                 </div>
                 <div class="task-progress__body">
                   <div class="task-progress__bar" aria-hidden="true">
-                    <div class="task-progress__bar-fill" style="--progress-passed: 33%"></div>
+                    ${segmentsMarkup}
                   </div>
                   <div id="taskProgressPills" class="task-progress__pills" data-collapsed="false">
-                    ${Array.from({ length: 15 }, (_, index) => {
-                      const number = index + 1
-                      const state = number <= 5 ? "passed" : number === 6 ? "running" : "pending"
-                      const title =
-                        number === 6
-                          ? "Hooks and page-local stores"
-                          : number === 7
-                            ? "Chart and indicator components"
-                            : `Goal surface ${number} implementation`
-                      return `<button type="button" class="oc-button" data-variant="outline" data-size="mini" data-tone="neutral" data-ui="task-progress-pill" data-state="${state}" data-goal-id="goal-${number}">
-                        <span class="task-progress__pill-id">#G${number}V1</span>
-                        <span class="task-progress__pill-title">${title}</span>
-                      </button>`
-                    }).join("")}
+                    ${pillsMarkup}
                   </div>
                 </div>
                 <button
@@ -155,9 +195,7 @@ test("task progress floating window drags and resizes inside the message panel",
                   data-ui="task-progress-resize"
                   title="Resize goals window"
                   aria-label="Resize goals window"
-                >
-                  <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
-                </button>
+                ></button>
               </section>
               ${Array.from({ length: 18 }, (_, index) => `<article class="fixture-message">Message panel content row ${index + 1}. The floating goals window should sit above this content and stay within the panel while it moves.</article>`).join("")}
             </main>
@@ -172,7 +210,7 @@ test("task progress floating window drags and resizes inside the message panel",
               x: inset,
               y: inset,
               width: Math.round((panel.clientWidth - inset * 2) * 0.78),
-              height: 196,
+              height: 220,
             };
             let session = null;
             function clamp(next) {
@@ -248,9 +286,25 @@ test("task progress floating window drags and resizes inside the message panel",
     const initial = await page.$eval(".task-progress", (node) => {
       const rect = (node as HTMLElement).getBoundingClientRect()
       const style = getComputedStyle(node as HTMLElement)
-      return { left: rect.left, top: rect.top, width: rect.width, height: rect.height, opacity: style.opacity }
+      const budget = Number.parseFloat(style.getPropertyValue("--task-progress-height"))
+      return {
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+        budget,
+        opacity: style.opacity,
+        boxShadow: style.boxShadow,
+        backdropFilter: style.backdropFilter,
+      }
     })
     assert.equal(initial.opacity, "1")
+    assert.ok(initial.height < initial.budget)
+    assert.notEqual(initial.boxShadow, "none")
+    assert.notEqual(initial.backdropFilter, "none")
+
+    const idleScreenshotPath = saveScreenshot("dark-window-idle-mixed-states.png", await page.screenshot({ fullPage: false }))
+    assert.ok(idleScreenshotPath.endsWith("dark-window-idle-mixed-states.png"))
 
     const headerRect = await page.$eval('[data-ui="task-progress-drag-handle"]', (node) => {
       const rect = (node as HTMLElement).getBoundingClientRect()
@@ -287,11 +341,14 @@ test("task progress floating window drags and resizes inside the message panel",
 
     const resized = await page.evaluate(() => {
       const panel = document.querySelector<HTMLElement>('[data-ui="message-panel"]')!.getBoundingClientRect()
-      const progress = document.querySelector<HTMLElement>(".task-progress")!.getBoundingClientRect()
+      const progressEl = document.querySelector<HTMLElement>(".task-progress")!
+      const progress = progressEl.getBoundingClientRect()
+      const style = getComputedStyle(progressEl)
       const resizeButton = document.querySelector<HTMLElement>('[data-ui="task-progress-resize"]')!
       return {
         width: progress.width,
         height: progress.height,
+        heightBudget: Number.parseFloat(style.getPropertyValue("--task-progress-height")),
         panelRight: panel.right,
         panelBottom: panel.bottom,
         right: progress.right,
@@ -300,7 +357,8 @@ test("task progress floating window drags and resizes inside the message panel",
       }
     })
     assert.ok(resized.width >= moved.progress.right - moved.progress.left)
-    assert.ok(resized.height > moved.progress.bottom - moved.progress.top)
+    assert.ok(resized.heightBudget > initial.budget + 60)
+    assert.ok(resized.height <= resized.heightBudget)
     assert.ok(resized.right <= resized.panelRight - 7)
     assert.ok(resized.bottom <= resized.panelBottom - 7)
     assert.equal(resized.resizeCursor, "nwse-resize")

@@ -2,6 +2,7 @@ export type TaskProgressFloatingFrame = {
   x: number
   y: number
   width: number
+  /** Height budget consumed by CSS as max-height; content may render shorter. */
   height: number
 }
 

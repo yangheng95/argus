@@ -40,6 +40,10 @@ test("task progress fold labels are localized", () => {
     expect(bundle).toContain('"progress.collapse_card"')
     expect(bundle).toContain('"progress.move_window"')
     expect(bundle).toContain('"progress.resize_window"')
+    expect(bundle).toContain('"progress.count.passed"')
+    expect(bundle).toContain('"progress.count.running"')
+    expect(bundle).toContain('"progress.count.failed"')
+    expect(bundle).toContain('"progress.count.pending"')
   }
 })
 
@@ -55,7 +59,11 @@ test("TaskProgressBar is a bounded floating window in the message panel", () => 
   expect(source).toContain('data-ui="task-progress-drag-handle"')
   expect(source).toContain('data-ui="task-progress-resize"')
   expect(source).not.toContain("localStorage")
-  expect(css).toMatch(/\.task-progress\s*\{[^}]*position:\s*fixed;[^}]*transparent\);[^}]*opacity:\s*var\(--ui-opacity-full\);/s)
+  expect(css).toMatch(/\.task-progress\s*\{[^}]*position:\s*fixed;[^}]*height:\s*auto;[^}]*max-height:\s*var\(--task-progress-height\);/s)
+  expect(css).toMatch(/\.task-progress\s*\{[^}]*background:\s*color-mix\(in srgb, var\(--card-bg-1\) 88%, transparent\);/s)
+  expect(css).toMatch(/\.task-progress\s*\{[^}]*-webkit-backdrop-filter:\s*blur\(calc\(10px \* var\(--ui-scale\)\)\) saturate\(118%\);/s)
+  expect(css).toMatch(/\.task-progress\s*\{[^}]*backdrop-filter:\s*blur\(calc\(10px \* var\(--ui-scale\)\)\) saturate\(118%\);/s)
+  expect(css).toMatch(/\.task-progress\s*\{[^}]*box-shadow:\s*var\(--shadow\), inset 0 var\(--oc-border-width\) 0/s)
   expect(css).toContain(".task-progress[data-window-state=\"dragging\"]")
   expect(css).toContain(".task-progress .oc-button[data-ui=\"task-progress-resize\"]")
 })
@@ -76,12 +84,53 @@ test("TaskProgressBar goal pills expose visible keyboard focus", () => {
   expect(source).not.toContain('class="task-progress__pill"')
   expect(source).toContain("onClick={() => onPillClick(g.goalID)}")
   expect(css).toMatch(
-    /\.task-progress \.oc-button\[data-ui="task-progress-pill"\]:hover,\s*\.task-progress \.oc-button\[data-ui="task-progress-pill"\]:focus-visible\s*\{[^}]*--oc-button-bg:\s*var\(--card-bg-hover\);[^}]*--oc-button-border:\s*var\(--oc-border-width\) solid var\(--card-border-strong\);[^}]*--oc-button-color:\s*var\(--text-strong\);/s,
+    /\.task-progress \.oc-button\[data-ui="task-progress-pill"\]:hover,\s*\.task-progress \.oc-button\[data-ui="task-progress-pill"\]:focus-visible,\s*\.task-progress \.oc-button\[data-ui="task-progress-pill"\]\[data-hot="true"\]\s*\{[^}]*--oc-button-bg:\s*var\(--card-bg-hover\);[^}]*--oc-button-border:\s*var\(--oc-border-width\) solid var\(--card-border-strong\);[^}]*--oc-button-color:\s*var\(--text-strong\);/s,
   )
   expect(buttonCss).toMatch(
     /\.oc-button:focus-visible\s*\{[^}]*outline:\s*var\(--oc-border-width\) solid var\(--accent\);/s,
   )
   expect(css).not.toMatch(/\.task-progress__(?:fold|pill|toggle)(?:\s|:|\[|\{)/)
+})
+
+test("TaskProgressBar renders segmented minimap, header counts, and icon-led compact pills", () => {
+  expect(source).toContain("const [hotGoalID, setHotGoalID] = createSignal(\"\")")
+  expect(source).toContain('data-ui="task-progress-segment"')
+  expect(source).toContain('data-hot={hotGoalID() === g.goalID ? "true" : undefined}')
+  expect(source.match(/onMouseEnter=\{\(\) => setHotGoalID\(g\.goalID\)\}/g)?.length).toBe(2)
+  expect(source.match(/onMouseLeave=\{\(\) => setHotGoalID\(""\)\}/g)?.length).toBe(2)
+  expect(source).toContain('class="task-progress__counts"')
+  expect(source).toContain('t("progress.count.passed"')
+  expect(source).toContain('t("progress.count.running"')
+  expect(source).toContain('t("progress.count.failed"')
+  expect(source).toContain('t("progress.count.pending"')
+  expect(source).toContain('class="task-progress__pill-icon"')
+  expect(source).toContain("<Icon name={goalStateIconName(g.state)} size={12} />")
+  expect(source).toContain("goalCompactLabelFromIndexes(g.index, g.attempt)")
+  expect(source).not.toContain("goalRevisionLabelFromIndexes(g.index, g.attempt)")
+  expect(source).not.toContain("task-progress__bar-fill")
+  expect(source).not.toContain("task-progress__bar-fail")
+  expect(source).not.toContain('Icon name="maximize"')
+})
+
+test("TaskProgressBar visual CSS locks in the redesign invariants", () => {
+  expect(css).toMatch(
+    /\.task-progress__pills\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(auto-fill, minmax\(calc\(168px \* var\(--ui-scale, 1\)\), 1fr\)\);/s,
+  )
+  expect(css).toContain(".task-progress__segment")
+  expect(css).toContain('.task-progress__segment[data-state="passed"]')
+  expect(css).toContain('.task-progress__segment[data-state="failed"]')
+  expect(css).toContain('.task-progress__segment[data-state="running"]')
+  expect(css).toContain('.task-progress__segment[data-state="pending"]')
+  expect(css).toContain('.task-progress__segment[data-hot="true"]')
+  expect(css).toContain(".task-progress__pill-icon")
+  expect(css).toContain('data-state="running"] .task-progress__pill-icon > svg')
+  expect(css).toContain("@media (prefers-reduced-motion: reduce)")
+  expect(css).toMatch(
+    /\.task-progress \.oc-button\[data-ui="task-progress-resize"\]\s*\{[^}]*--oc-button-bg:\s*transparent;[^}]*--oc-button-border:\s*0 solid transparent;[^}]*background-image:\s*linear-gradient/s,
+  )
+  expect(css).toMatch(
+    /\.task-progress:hover \.oc-button\[data-ui="task-progress-resize"\],\s*\.task-progress:focus-within \.oc-button\[data-ui="task-progress-resize"\],\s*\.task-progress\[data-window-state="resizing"\] \.oc-button\[data-ui="task-progress-resize"\]\s*\{[^}]*opacity:\s*var\(--ui-opacity-subtle\);/s,
+  )
 })
 
 test("TaskProgressBar goal pill locate materializes historical build sessions before scrolling", () => {

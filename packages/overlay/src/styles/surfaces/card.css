@@ -1523,13 +1523,13 @@ body {
   top: var(--task-progress-top);
   z-index: calc(var(--ui-z-sticky) + 1);
   width: var(--task-progress-width);
-  height: var(--task-progress-height);
+  height: auto;
   min-width: 0;
   max-width: none;
-  max-height: none;
+  max-height: var(--task-progress-height);
   margin: 0;
   padding: calc(8px * var(--ui-scale, 1)) calc(10px * var(--ui-scale, 1));
-  background: color-mix(in srgb, var(--card-bg-1) 84%, transparent);
+  background: color-mix(in srgb, var(--card-bg-1) 88%, transparent);
   border: var(--oc-border-width) solid var(--card-border);
   border-radius: var(--oc-radius-soft);
   display: flex;
@@ -1537,10 +1537,12 @@ body {
   gap: calc(6px * var(--ui-scale));
   font-size: var(--card-meta-size);
   color: var(--text-soft);
-  backdrop-filter: blur(calc(6px * var(--ui-scale)));
-  box-shadow: var(--shadow-lg);
+  -webkit-backdrop-filter: blur(calc(10px * var(--ui-scale))) saturate(118%);
+  backdrop-filter: blur(calc(10px * var(--ui-scale))) saturate(118%);
+  box-shadow: var(--shadow), inset 0 var(--oc-border-width) 0 color-mix(in srgb, var(--text-strong) 7%, transparent);
   opacity: var(--ui-opacity-full);
   overflow: hidden;
+  box-sizing: border-box;
   transition:
     opacity var(--ui-duration-base) var(--ui-timing-standard),
     border-color var(--ui-duration-base) var(--ui-timing-standard),
@@ -1555,7 +1557,7 @@ body {
 .task-progress[data-window-state="resizing"] {
   opacity: var(--ui-opacity-full);
   border-color: var(--card-border-strong);
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow), inset 0 var(--oc-border-width) 0 color-mix(in srgb, var(--text-strong) 9%, transparent);
 }
 
 .task-progress__header {
@@ -1587,6 +1589,41 @@ body {
   color: var(--text-muted);
   font-size: calc(var(--card-meta-size) - calc(1px * var(--ui-scale)));
 }
+.task-progress__counts {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  min-width: 0;
+}
+.task-progress__count {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(3px * var(--ui-scale));
+  color: var(--text-soft);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--ui-font-weight-medium);
+  line-height: 1;
+}
+.task-progress__count-dot {
+  width: calc(6px * var(--ui-scale));
+  height: calc(6px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: color-mix(in srgb, var(--text-muted) 48%, transparent);
+  flex: none;
+}
+.task-progress__count[data-state="passed"] .task-progress__count-dot {
+  background: var(--good);
+}
+.task-progress__count[data-state="running"] .task-progress__count-dot {
+  background: var(--warn);
+}
+.task-progress__count[data-state="failed"] .task-progress__count-dot {
+  background: var(--bad);
+}
+.task-progress__count[data-state="pending"] .task-progress__count-dot {
+  background: transparent;
+  box-shadow: inset 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--text-muted) 74%, transparent);
+}
 .task-progress__summary {
   margin-left: auto;
   font-variant-numeric: tabular-nums;
@@ -1615,27 +1652,58 @@ body {
   --oc-button-height: calc(22px * var(--ui-scale));
   --oc-button-padding-x: 0;
   --oc-button-padding-y: 0;
-  --oc-button-color: var(--text-soft);
-  --oc-button-bg: color-mix(in srgb, var(--card-bg-0) 74%, transparent);
-  --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--card-border) 78%, transparent);
+  --oc-button-color: color-mix(in srgb, var(--text-soft) 82%, transparent);
+  --oc-button-bg: transparent;
+  --oc-button-border: 0 solid transparent;
   --oc-button-shadow: none;
 
   position: absolute;
-  right: calc(4px * var(--ui-scale));
-  bottom: calc(4px * var(--ui-scale));
+  right: calc(2px * var(--ui-scale));
+  bottom: calc(2px * var(--ui-scale));
   width: calc(22px * var(--ui-scale));
   min-width: calc(22px * var(--ui-scale));
   border-radius: var(--oc-radius-soft);
+  background-image:
+    linear-gradient(
+      135deg,
+      transparent calc(50% - var(--oc-border-width)),
+      currentColor calc(50% - var(--oc-border-width)) calc(50% + var(--oc-border-width)),
+      transparent calc(50% + var(--oc-border-width))
+    ),
+    linear-gradient(
+      135deg,
+      transparent calc(50% - var(--oc-border-width)),
+      currentColor calc(50% - var(--oc-border-width)) calc(50% + var(--oc-border-width)),
+      transparent calc(50% + var(--oc-border-width))
+    );
+  background-position:
+    right calc(5px * var(--ui-scale)) bottom calc(5px * var(--ui-scale)),
+    right calc(5px * var(--ui-scale)) bottom calc(10px * var(--ui-scale));
+  background-repeat: no-repeat;
+  background-size:
+    calc(8px * var(--ui-scale)) calc(8px * var(--ui-scale)),
+    calc(13px * var(--ui-scale)) calc(13px * var(--ui-scale));
   cursor: nwse-resize;
   touch-action: none;
+  opacity: var(--ui-opacity-hidden);
+  transition:
+    opacity var(--ui-duration-base) var(--ui-timing-standard),
+    --oc-button-color var(--ui-duration-base) var(--ui-timing-standard);
+}
+
+.task-progress:hover .oc-button[data-ui="task-progress-resize"],
+.task-progress:focus-within .oc-button[data-ui="task-progress-resize"],
+.task-progress[data-window-state="resizing"] .oc-button[data-ui="task-progress-resize"] {
+  opacity: var(--ui-opacity-subtle);
 }
 
 .task-progress .oc-button[data-ui="task-progress-resize"]:hover,
 .task-progress .oc-button[data-ui="task-progress-resize"]:focus-visible,
 .task-progress[data-window-state="resizing"] .oc-button[data-ui="task-progress-resize"] {
-  --oc-button-bg: var(--card-bg-hover);
-  --oc-button-border: var(--oc-border-width) solid var(--card-border-strong);
+  --oc-button-bg: transparent;
+  --oc-button-border: 0 solid transparent;
   --oc-button-color: var(--text-strong);
+  opacity: var(--ui-opacity-full);
 }
 
 .task-progress .oc-button[data-ui="task-progress-fold"]:hover,
@@ -1646,39 +1714,57 @@ body {
 
 .task-progress__bar {
   position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: calc(2px * var(--ui-scale));
   height: calc(4px * var(--ui-scale));
   border-radius: var(--oc-radius-pill);
-  background: color-mix(in srgb, var(--text-muted) 18%, transparent);
-  overflow: hidden;
+  background: transparent;
+  overflow: visible;
 }
-.task-progress__bar-fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: var(--progress-passed, 0%);
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--good) 80%, transparent),
-    color-mix(in srgb, var(--good) 100%, transparent)
-  );
-  transition: width var(--ui-duration-slow) var(--ui-timing-standard);
+.task-progress__segment {
+  flex: 1 1 0;
+  min-width: calc(3px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  background: color-mix(in srgb, var(--text-muted) 22%, transparent);
+  transform: scaleY(1);
+  transform-origin: center;
+  transition:
+    background-color var(--ui-duration-base) var(--ui-timing-standard),
+    opacity var(--ui-duration-base) var(--ui-timing-standard),
+    transform var(--ui-duration-fast) var(--ui-timing-standard);
 }
-.task-progress__bar-fail {
-  position: absolute;
-  inset: 0 0 0 auto;
-  width: var(--progress-failed, 0%);
-  background: color-mix(in srgb, var(--bad) 80%, transparent);
+.task-progress__segment[data-hot="true"] {
+  transform: scaleY(1.75);
+}
+.task-progress__segment[data-state="passed"] {
+  background: var(--good);
+}
+.task-progress__segment[data-state="failed"] {
+  background: var(--bad);
+}
+.task-progress__segment[data-state="running"],
+.task-progress__segment[data-state="blocked"] {
+  background: var(--warn);
+}
+.task-progress__segment[data-state="running"] {
+  animation: task-progress-segment-pulse var(--ui-duration-loop-pulse) var(--ui-timing-standard) infinite;
+}
+.task-progress__segment[data-state="pending"] {
+  background: color-mix(in srgb, var(--text-muted) 22%, transparent);
 }
 
 .task-progress__pills {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(calc(168px * var(--ui-scale, 1)), 1fr));
   gap: calc(4px * var(--ui-scale));
   /* When the strip naturally exceeds MAX_VISIBLE_PILL_ROWS, the component
    * sets `data-collapsed="true"` and a precise inline `max-height` (the
    * offsetTop of the first row that would otherwise overflow) so the last
    * visible row never gets truncated mid-pill. Without the inline value
    * `overflow: hidden` does nothing — but with `data-collapsed="false"`
-   * (default), it is a no-op since `max-height` is unset. */
+   * (default), it is a no-op since `max-height` is unset. CSS grid preserves
+   * offsetTop row measurement while keeping pill columns aligned. */
   overflow: hidden;
   transition: max-height var(--ui-duration-base) var(--ui-timing-standard);
 }
@@ -1726,8 +1812,10 @@ body {
 
   border-radius: var(--oc-radius-pill);
   font-size: calc(var(--card-meta-size) - calc(0.5px * var(--ui-scale)));
-  max-width: 18rem;
+  width: 100%;
+  max-width: none;
   min-width: 0;
+  justify-content: flex-start;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1737,10 +1825,24 @@ body {
     --oc-button-color var(--ui-duration-base) var(--ui-timing-standard);
 }
 .task-progress .oc-button[data-ui="task-progress-pill"]:hover,
-.task-progress .oc-button[data-ui="task-progress-pill"]:focus-visible {
+.task-progress .oc-button[data-ui="task-progress-pill"]:focus-visible,
+.task-progress .oc-button[data-ui="task-progress-pill"][data-hot="true"] {
   --oc-button-bg: var(--card-bg-hover);
   --oc-button-border: var(--oc-border-width) solid var(--card-border-strong);
   --oc-button-color: var(--text-strong);
+}
+.task-progress__pill-icon {
+  width: calc(14px * var(--ui-scale));
+  height: calc(14px * var(--ui-scale));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  color: var(--text-muted);
+}
+.task-progress__pill-icon > svg {
+  width: calc(12px * var(--ui-scale));
+  height: calc(12px * var(--ui-scale));
 }
 .task-progress__pill-id {
   flex: none;
@@ -1751,43 +1853,63 @@ body {
   color: color-mix(in srgb, var(--text-muted) 92%, var(--text-soft));
 }
 .task-progress__pill-title {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* state colours echo the badge palette so the progress strip and
- * the per-card badges stay visually consistent. */
-.task-progress .oc-button[data-ui="task-progress-pill"][data-state="passed"] {
-  --oc-button-bg: color-mix(in srgb, var(--good) 18%, var(--card-bg-0));
-  --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--good) 35%, var(--card-border));
-  --oc-button-color: color-mix(in srgb, var(--good) 80%, var(--text-strong));
+/* state colours now live on the leading icon; the pill body stays neutral. */
+.task-progress .oc-button[data-ui="task-progress-pill"][data-state="passed"] .task-progress__pill-icon {
+  color: var(--good);
 }
 .task-progress .oc-button[data-ui="task-progress-pill"][data-state="failed"] {
-  --oc-button-bg: color-mix(in srgb, var(--bad) 16%, var(--card-bg-0));
   --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--bad) 32%, var(--card-border));
-  --oc-button-color: color-mix(in srgb, var(--bad) 75%, var(--text-strong));
+}
+.task-progress .oc-button[data-ui="task-progress-pill"][data-state="failed"] .task-progress__pill-icon {
+  color: var(--bad);
 }
 .task-progress .oc-button[data-ui="task-progress-pill"][data-state="running"] {
-  --oc-button-bg: color-mix(in srgb, var(--warn) 18%, var(--card-bg-0));
   --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--warn) 36%, var(--card-border));
-  --oc-button-color: color-mix(in srgb, var(--warn) 70%, var(--text-strong));
+}
+.task-progress .oc-button[data-ui="task-progress-pill"][data-state="running"] .task-progress__pill-icon {
+  color: var(--warn);
+}
+.task-progress .oc-button[data-ui="task-progress-pill"][data-state="running"] .task-progress__pill-icon > svg {
+  animation: task-progress-icon-spin var(--ui-duration-loop-spin) linear infinite;
 }
 .task-progress .oc-button[data-ui="task-progress-pill"][data-state="blocked"] {
-  --oc-button-bg: color-mix(in srgb, var(--warn) 18%, var(--card-bg-0));
   --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--warn) 32%, var(--card-border));
-  --oc-button-color: color-mix(in srgb, var(--warn) 75%, var(--text-strong));
+}
+.task-progress .oc-button[data-ui="task-progress-pill"][data-state="blocked"] .task-progress__pill-icon {
+  color: var(--warn);
+}
+.task-progress .oc-button[data-ui="task-progress-pill"][data-state="pending"] .task-progress__pill-icon {
+  color: var(--text-muted);
 }
 .task-progress .oc-button[data-ui="task-progress-pill"][data-state="pending"] {
   opacity: var(--ui-opacity-dim);
 }
 
-@keyframes task-progress-pulse {
+@keyframes task-progress-segment-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--warn) 30%, transparent);
+    opacity: var(--ui-opacity-subtle);
   }
   50% {
-    box-shadow: 0 0 0 calc(4px * var(--ui-scale)) color-mix(in srgb, var(--warn) 5%, transparent);
+    opacity: var(--ui-opacity-full);
+  }
+}
+
+@keyframes task-progress-icon-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-progress__segment[data-state="running"],
+  .task-progress .oc-button[data-ui="task-progress-pill"][data-state="running"] .task-progress__pill-icon > svg {
+    animation: none;
   }
 }
