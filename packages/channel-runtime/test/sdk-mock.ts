@@ -22,6 +22,9 @@ function createNoopClient() {
     permission: {
       reply: async () => ({ data: {}, error: undefined }),
     },
+    task: {
+      bindings: async () => ({ data: [], error: undefined }),
+    },
     session: {
       create: async () => ({ data: { id: "session_mock" }, error: undefined }),
       get: async () => ({ data: undefined, error: undefined }),
@@ -59,6 +62,7 @@ export class OpenCorvusClientMock {
   channel = createNoopClient().channel
   event = createNoopClient().event
   permission = createNoopClient().permission
+  task = createNoopClient().task
   session = createNoopClient().session
 }
 

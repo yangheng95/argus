@@ -21,20 +21,34 @@ test("ConversationAgentRail reads hydrated workflow records and renders adjacent
   expect(source).not.toContain("event.kind")
 })
 
-test("ConversationAgentRail locate ticks use Button plus Kobalte tooltip summaries", () => {
+test("ConversationAgentRail locate ticks use Button without hover tooltip summaries", () => {
   const source = readFileSync(join(import.meta.dir, "../src/components/ConversationAgentRail.tsx"), "utf8")
   const css = readFileSync(join(import.meta.dir, "../src/styles/surfaces/conversation.css"), "utf8")
-  expect(source).toContain('import * as Tooltip from "@kobalte/core/tooltip"')
+  const railTickRule = css.match(/\.conversation-agent-rail__tick-line\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? ""
+  const runningTickRule =
+    css.match(
+      /\.conversation-agent-rail__row\[data-status="running"\]\s+\.conversation-agent-rail__tick-line\s*\{(?<body>[^}]+)\}/,
+    )?.groups?.body ?? ""
+  const focusedTickRule =
+    css.match(
+      /\.conversation-agent-rail\s+\.oc-button\[data-ui="conversation-agent-rail-locate"\]:focus-visible\s+\.conversation-agent-rail__tick-line\s*\{(?<body>[^}]+)\}/,
+    )?.groups?.body ?? ""
   expect(source).toContain('import { Button } from "./ui/Button"')
-  expect(source).toContain("<Tooltip.Root")
-  expect(source).toContain("as={Button}")
+  expect(source).toContain("<Button")
   expect(source).toContain('data-ui="conversation-agent-rail-locate"')
-  expect(source).toContain("aria-label={tooltipLabel()}")
-  expect(source).toContain("title={tooltipLabel()}")
+  expect(source).toContain("aria-label={accessibleLabel()}")
+  expect(source).toContain("data-proximity={proximity()}")
+  expect(source).toContain("onPointerEnter={() => props.onActivate(record())}")
+  expect(source).toContain("onPointerLeave={() => props.onDeactivate(record())}")
+  expect(source).toContain("proximityForRecord")
+  expect(source).not.toContain("tooltipLabel")
+  expect(source).not.toContain("title={accessibleLabel()}")
+  expect(source).not.toContain("<Tooltip.")
+  expect(source).not.toContain("Tooltip.")
   expect(source).toContain("agentRailSummary(record)")
   expect(source).toContain("record.displaySummary?.text ||")
   expect(source).not.toContain("record.traceReport?.summary")
-  expect(source).toContain('t("agent_rail.detail.summary"')
+  expect(source).not.toContain('t("agent_rail.detail.summary"')
   expect(source).toContain("AGENT_RAIL_STATUS_LABELS")
   expect(source).toContain('t("agent_rail.status.running")')
   expect(source).toContain('t("agent_rail.attempt"')
@@ -43,7 +57,18 @@ test("ConversationAgentRail locate ticks use Button plus Kobalte tooltip summari
   expect(source).not.toContain("<button")
   expect(source).not.toContain("conversation-agent-rail__avatar-button")
   expect(css).toContain('.conversation-agent-rail .oc-button[data-ui="conversation-agent-rail-locate"]')
-  expect(css).toContain(".conversation-agent-rail-tooltip")
+  expect(css).not.toContain(".conversation-agent-rail-tooltip")
+  expect(css).not.toContain(':hover .conversation-agent-rail__tick-line')
+  expect(railTickRule).toContain("width var(--ui-duration-fast)")
+  expect(runningTickRule).not.toContain("width:")
+  expect(focusedTickRule).not.toContain("width:")
+  expect(css).toContain("--conversation-agent-rail-tick-width-active: calc(32px * var(--ui-scale));")
+  expect(css).toContain('.conversation-agent-rail__row[data-proximity="0"] .conversation-agent-rail__tick-line')
+  expect(css).toContain("width: var(--conversation-agent-rail-tick-width-active);")
+  expect(css).toContain('.conversation-agent-rail__row[data-proximity="1"] .conversation-agent-rail__tick-line')
+  expect(css).toContain("width: var(--conversation-agent-rail-tick-width-nearer);")
+  expect(css).toContain('.conversation-agent-rail__row[data-proximity="2"] .conversation-agent-rail__tick-line')
+  expect(css).toContain("width: var(--conversation-agent-rail-tick-width-near);")
   expect(css).toContain(".conversation-agent-rail__tick-line")
   expect(css).not.toContain(".conversation-agent-rail__avatar-button")
   expect(css).not.toMatch(/conversation-agent-rail[^{]*\{[^}]*appearance:\s*none/)
@@ -96,9 +121,15 @@ test("ConversationAgentRail stays a fixed narrow left rail inside the message pa
   expect(css).toContain("background: transparent;")
   expect(css).toContain("box-shadow: none;")
   expect(css).toContain("--conversation-agent-rail-width: calc(46px * var(--ui-scale));")
+  expect(css).toContain("--conversation-agent-rail-tick-width: calc(16px * var(--ui-scale));")
   expect(css).toContain("--conversation-agent-rail-tick-height: calc(14px * var(--ui-scale));")
   expect(css).toContain("--conversation-agent-rail-tick-gap: calc(5px * var(--ui-scale));")
-  expect(css).toContain("--conversation-message-lane-width: calc(1040px * var(--ui-scale));")
+  expect(css).toContain("--conversation-message-content-width: var(--ui-chat-message-content-width);")
+  expect(css).toContain("--conversation-message-lane-width: var(--ui-chat-message-scroll-width);")
+  expect(css).toContain("scrollbar-gutter: stable both-edges;")
+  expect(css).toContain(
+    "padding: calc(18px * var(--ui-scale)) var(--ui-chat-message-padding-x) calc(20px * var(--ui-scale));",
+  )
   expect(css).toContain(".conversation-body:has(.conversation-agent-rail-host:not(:empty))")
   expect(css).toContain("grid-template-columns:")
   expect(css).toContain("var(--conversation-agent-rail-width)")
@@ -112,7 +143,7 @@ test("ConversationAgentRail stays a fixed narrow left rail inside the message pa
   expect(css).toContain("overflow-x: hidden")
   expect(css).toContain(".conversation-agent-rail__stack")
   expect(css).toContain(".conversation-agent-rail__tick-line")
-  expect(css).toContain(".conversation-agent-rail-tooltip")
+  expect(css).not.toContain(".conversation-agent-rail-tooltip")
   expect(css).not.toContain("conversation-agent-rail__resize")
   expect(css).not.toContain('conversation-agent-rail__lanes[data-dragging="true"]')
   expect(css).not.toContain("cursor: grab")

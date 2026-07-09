@@ -164,6 +164,24 @@ function iconHtmlClassName(name: string, className?: string): string {
   return ["lucide", `lucide-${name}`, className].filter(Boolean).join(" ")
 }
 
+function measureChatScrollbarGutter(): number {
+  const scroll = document.getElementById("chatScroll")
+  if (!scroll) throw new Error("Chat scrollbar gutter measurement requires #chatScroll.")
+  const gutter = (scroll.offsetWidth - scroll.clientWidth) / 2
+  if (!Number.isFinite(gutter) || gutter < 0) {
+    throw new Error(`Chat scrollbar gutter resolved to invalid width: ${gutter}`)
+  }
+  return gutter
+}
+
+function syncChatScrollbarGutter(): void {
+  document.documentElement.style.setProperty("--ui-chat-scrollbar-gutter-x", `${measureChatScrollbarGutter()}px`)
+}
+
+const syncChatScrollbarGutterOnFrame = createAnimationFrameScheduler(syncChatScrollbarGutter)
+disposers.push(() => syncChatScrollbarGutterOnFrame.cancel())
+syncChatScrollbarGutterOnFrame.schedule()
+
 disposers.push(
   installIconHtmlRenderer(({ name, size, className }) => {
     const resolvedName = iconHtmlName(name)
@@ -1862,6 +1880,7 @@ window.addEventListener(
 )
 function applyWindowResize(): void {
   applyZoom(settingsStore.zoom)
+  syncChatScrollbarGutter()
   schedulePaneLayout(paneCallbacks.getState())
   renderCenterWorkbenchPanelLayoutOnFrame.schedule()
 }

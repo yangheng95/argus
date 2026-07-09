@@ -52,12 +52,10 @@ function incoming(platform: "slack" | "telegram" | "discord" | "googlechat", tex
 }
 
 beforeEach(() => {
-  process.env.OPENCORVUS_CHANNEL_PROTOCOL = "1"
   oldFetch = globalThis.fetch
 })
 
 afterEach(() => {
-  delete process.env.OPENCORVUS_CHANNEL_PROTOCOL
   globalThis.fetch = oldFetch
 })
 
@@ -67,7 +65,7 @@ describe("channel runtime channel protocol", () => {
     const uploads: Array<{ channel: string; thread: string; filename: string; title?: string }> = []
     const calls: Array<unknown> = []
     const a = adapter("telegram", sent, uploads)
-    const core = new ChannelRuntime() as unknown as {
+    const core = new ChannelRuntime({ channelProtocol: true }) as unknown as {
       adapters: ChannelAdapter[]
       client: {
         channel: {
@@ -135,7 +133,7 @@ describe("channel runtime channel protocol", () => {
     const sent: string[] = []
     const uploads: Array<{ channel: string; thread: string; filename: string; title?: string }> = []
     const a = adapter("discord", sent, uploads)
-    const core = new ChannelRuntime() as unknown as {
+    const core = new ChannelRuntime({ channelProtocol: true }) as unknown as {
       adapters: ChannelAdapter[]
       client: {
         channel: {
@@ -185,12 +183,73 @@ describe("channel runtime channel protocol", () => {
     expect(uploads).toHaveLength(0)
   })
 
+  test("hydrates evaluation event bindings from durable task bindings after runtime restart", async () => {
+    const sent: string[] = []
+    const uploads: Array<{ channel: string; thread: string; filename: string; title?: string }> = []
+    const a = adapter("discord", sent, uploads)
+    const bindingCalls: Array<unknown> = []
+    const core = new ChannelRuntime({ channelProtocol: true }) as unknown as {
+      adapters: ChannelAdapter[]
+      client: {
+        task: {
+          bindings(input: unknown): Promise<{
+            error?: unknown
+            data?: Array<{
+              id: string
+              task_id: string
+              platform: string
+              channel: string
+              thread: string
+            }>
+          }>
+        }
+      }
+      handleEvent(event: unknown): Promise<void>
+    }
+
+    core.adapters = [a]
+    core.client = {
+      task: {
+        bindings: async (input) => {
+          bindingCalls.push(input)
+          return {
+            data: [
+              {
+                id: "binding_1",
+                task_id: "task_3",
+                platform: "discord",
+                channel: "ch-durable",
+                thread: "root-durable",
+              },
+            ],
+          }
+        },
+      },
+    }
+
+    await core.handleEvent({
+      type: "evaluation.completed",
+      properties: {
+        taskID: "task_3",
+        runID: "run_1",
+        evaluationID: "evaluation_1",
+        status: "passed",
+        verdict: "accepted",
+        summary: "Accepted after restart",
+      },
+    })
+
+    expect(bindingCalls).toEqual([{ taskID: "task_3" }])
+    expect(sent).toEqual(["ch-durable:root-durable:Evaluation accepted: Accepted after restart"])
+    expect(uploads).toHaveLength(0)
+  })
+
   test("routes feishu messages through the shared channel protocol", async () => {
     const sent: string[] = []
     const uploads: Array<{ channel: string; thread: string; filename: string; title?: string }> = []
     const calls: Array<unknown> = []
     const a = adapter("feishu", sent, uploads)
-    const core = new ChannelRuntime() as unknown as {
+    const core = new ChannelRuntime({ channelProtocol: true }) as unknown as {
       adapters: ChannelAdapter[]
       client: {
         channel: {
@@ -264,7 +323,7 @@ describe("channel runtime channel protocol", () => {
     const urlUploads: Array<{ channel: string; thread: string; url: string; filename: string; title?: string }> = []
     const calls: Array<unknown> = []
     const a = adapter("googlechat", sent, uploads, urlUploads)
-    const core = new ChannelRuntime() as unknown as {
+    const core = new ChannelRuntime({ channelProtocol: true }) as unknown as {
       adapters: ChannelAdapter[]
       serverUrl: string
       directory: string
@@ -346,7 +405,7 @@ describe("channel runtime channel protocol", () => {
         throw new Error("url upload failed")
       },
     }
-    const core = new ChannelRuntime() as unknown as {
+    const core = new ChannelRuntime({ channelProtocol: true }) as unknown as {
       adapters: ChannelAdapter[]
       serverUrl: string
       directory: string

@@ -42,8 +42,10 @@ describe("workspace header controls share a single density tier", () => {
 describe("composer shell stays tighter than the surrounding canvas", () => {
   test("composer stack width, input minimum height, and radius are explicit", () => {
     expect(COMPOSER).toMatch(/\.chat-composer-stack\s*\{[^}]*--chat-composer-inline-gutter:/)
-    expect(COMPOSER).toContain("--chat-composer-inline-gutter: calc(28px * var(--ui-scale));")
-    expect(COMPOSER).toContain("--chat-composer-max-width: calc(1040px * var(--ui-scale));")
+    expect(COMPOSER).toContain(
+      "--chat-composer-inline-gutter: calc((var(--ui-chat-message-padding-x) + var(--ui-chat-scrollbar-gutter-x)) * 2);",
+    )
+    expect(COMPOSER).toContain("--chat-composer-max-width: var(--ui-chat-message-content-width);")
     expect(COMPOSER).toContain("--chat-composer-min-height: calc(96px * var(--ui-scale));")
     expect(COMPOSER).toContain(
       "width: min(var(--chat-composer-max-width), calc(100% - var(--chat-composer-inline-gutter)));",

@@ -16,6 +16,7 @@ import { Log } from "@/util/log"
 import { Identifier } from "@/id/id"
 import { EngineService } from "@/task-api"
 import { Instance } from "@/project/instance"
+import { ChannelId } from "@/channel/catalog"
 
 const log = Log.create({ service: "control-message" })
 const ResultSchema = z.toJSONSchema(ControlMessageResult)
@@ -98,16 +99,7 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
     const system = await systemPrompt(input)
     const parts = buildUserParts(input)
     const tools = await panelTools()
-    const extra = {
-      surface: input.surface,
-      source: input.source ?? defaultSource(input.surface),
-      ...(input.request_id ? { requestID: input.request_id } : {}),
-      originalText: input.text,
-      // Pass raw attachments so panel tool handlers can decode them into the task request
-      attachments: input.attachments ?? [],
-      // Forward web_search flag so panel tool handlers can propagate it to task metadata
-      ...(input.metadata?.web_search === true ? { web_search: true } : {}),
-    }
+    const extra = controlMessageToolExtra(input)
 
     const result = await SessionPrompt.prompt({
       sessionID: control.info.id,
@@ -226,6 +218,21 @@ function userTimelineMetadata(input: z.infer<typeof ControlMessageInput>) {
   }
 }
 
+export function controlMessageToolExtra(input: z.infer<typeof ControlMessageInput>) {
+  const channelBinding = serverChannelBinding(input)
+  return {
+    surface: input.surface,
+    source: input.source ?? defaultSource(input.surface),
+    ...(input.request_id ? { requestID: input.request_id } : {}),
+    originalText: input.text,
+    ...(channelBinding ? { channelBinding } : {}),
+    // Pass raw attachments so panel tool handlers can decode them into the task request.
+    attachments: input.attachments ?? [],
+    // Forward web_search flag so panel tool handlers can propagate it to task metadata.
+    ...(input.metadata?.web_search === true ? { web_search: true } : {}),
+  }
+}
+
 async function resolveModel(explicitModel?: string) {
   // Single model resolver (spec §13.1/§13.2). Agent.defaultAgent throws on
   // config issues (no visible agent, hidden default) — those surface.
@@ -330,6 +337,19 @@ export function structuredOutputFailureMessage(message: Message.WithParts) {
 function defaultSource(surface: z.infer<typeof ControlMessageInput>["surface"]) {
   if (surface === "panel") return "panel"
   return `channel:${surface}`
+}
+
+function serverChannelBinding(input: z.infer<typeof ControlMessageInput>) {
+  const platform = ChannelId.safeParse(input.surface)
+  if (!platform.success) return undefined
+  if (!input.channel || !input.thread) {
+    throw new Error(`Control channel surface "${platform.data}" requires channel and thread.`)
+  }
+  return {
+    platform: platform.data,
+    channel: input.channel,
+    thread: input.thread,
+  }
 }
 
 async function resolveSession(input: z.infer<typeof ControlMessageInput>) {

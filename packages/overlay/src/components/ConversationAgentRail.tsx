@@ -1,5 +1,4 @@
-import * as Tooltip from "@kobalte/core/tooltip"
-import { Index, Show, createMemo, type Accessor } from "solid-js"
+import { Index, Show, createMemo, createSignal, type Accessor } from "solid-js"
 import { cardTreeStore } from "../store/card-tree"
 import { boardStore } from "../store/board"
 import { conversationAgentRecordsForSource } from "../store/conversation-agents"
@@ -73,11 +72,6 @@ function buildAdjacentAgentRailStacks(records: AgentWorkflowRecord[]): AgentRail
     })
   }
   return stacks
-}
-
-function tooltipSummaryLine(record: AgentWorkflowRecord): string {
-  const summary = agentRailSummary(record)
-  return summary ? t("agent_rail.detail.summary", { value: summary }) : ""
 }
 
 function parentIDsForCard(cardID: string): string[] {
@@ -204,11 +198,18 @@ async function locateRecord(record: AgentWorkflowRecord): Promise<void> {
 
 function AgentRailRow(props: {
   record: Accessor<AgentWorkflowRecord>
+  proximity: Accessor<number | undefined>
+  onActivate: (record: AgentWorkflowRecord) => void
+  onDeactivate: (record: AgentWorkflowRecord) => void
   onLocate: (record: AgentWorkflowRecord) => Promise<void>
 }) {
   const record = props.record
   const summary = () => agentRailSummary(record())
-  const tooltipLabel = () => compactLabel(record())
+  const accessibleLabel = () => compactLabel(record())
+  const proximity = () => {
+    const value = props.proximity()
+    return value === undefined ? undefined : String(value)
+  }
 
   return (
     <div
@@ -216,51 +217,32 @@ function AgentRailRow(props: {
       data-agent={agentRailStage(record())}
       data-status={record().status}
       data-has-summary={summary() ? "true" : "false"}
+      data-proximity={proximity()}
       style={{ "--card-stage": stageAccent(agentRailStage(record())) }}
     >
-      <Tooltip.Root openDelay={0} closeDelay={0} placement="right" gutter={8}>
-        <Tooltip.Trigger
-          as={Button}
-          type="button"
-          variant="ghost"
-          size="icon"
-          tone="neutral"
-          data-ui="conversation-agent-rail-locate"
-          data-session-id={record().sessionID}
-          data-target-message-id={record().targetMessageID || ""}
-          data-rendered-card-id={record().renderedCardID || ""}
-          aria-label={tooltipLabel()}
-          title={tooltipLabel()}
-          onClick={() => {
-            const current = record()
-            void props.onLocate(current).catch((error) => reportLocateFailure(current, error))
-          }}
-        >
-          <span class="conversation-agent-rail__tick" aria-hidden="true">
-            <span class="conversation-agent-rail__tick-line" />
-          </span>
-        </Tooltip.Trigger>
-        <Tooltip.Portal>
-          <Tooltip.Content class="conversation-agent-rail-tooltip">
-            <span class="conversation-agent-rail-tooltip__agent">
-              {t("agent_rail.detail.agent", { value: record().agentName })}
-            </span>
-            <span class="conversation-agent-rail-tooltip__meta">
-              {t("agent_rail.detail.status", { value: agentRailStatusLabel(record().status) })}
-            </span>
-            <Show when={record().attempt}>
-              {(attempt) => (
-                <span class="conversation-agent-rail-tooltip__meta">
-                  {t("agent_rail.detail.attempt", { value: attempt() })}
-                </span>
-              )}
-            </Show>
-            <Show when={tooltipSummaryLine(record())}>
-              {(line) => <span class="conversation-agent-rail-tooltip__summary">{line()}</span>}
-            </Show>
-          </Tooltip.Content>
-        </Tooltip.Portal>
-      </Tooltip.Root>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        tone="neutral"
+        data-ui="conversation-agent-rail-locate"
+        data-session-id={record().sessionID}
+        data-target-message-id={record().targetMessageID || ""}
+        data-rendered-card-id={record().renderedCardID || ""}
+        aria-label={accessibleLabel()}
+        onPointerEnter={() => props.onActivate(record())}
+        onPointerLeave={() => props.onDeactivate(record())}
+        onFocus={() => props.onActivate(record())}
+        onBlur={() => props.onDeactivate(record())}
+        onClick={() => {
+          const current = record()
+          void props.onLocate(current).catch((error) => reportLocateFailure(current, error))
+        }}
+      >
+        <span class="conversation-agent-rail__tick" aria-hidden="true">
+          <span class="conversation-agent-rail__tick-line" />
+        </span>
+      </Button>
     </div>
   )
 }
@@ -269,6 +251,24 @@ export function ConversationAgentRail() {
   const records = createMemo(() => conversationAgentRecordsForSource(boardStore.selectedSource))
   const stacks = createMemo(() => buildAdjacentAgentRailStacks(records()))
   const hasRecords = createMemo(() => records().length > 0)
+  const [activeSessionID, setActiveSessionID] = createSignal<string | undefined>()
+  const activeIndex = createMemo(() => {
+    const sessionID = activeSessionID()
+    if (!sessionID) return -1
+    return records().findIndex((record) => record.sessionID === sessionID)
+  })
+  const proximityForRecord = (record: AgentWorkflowRecord): number | undefined => {
+    const index = activeIndex()
+    if (index < 0) return undefined
+    const recordIndex = records().findIndex((candidate) => candidate.sessionID === record.sessionID)
+    if (recordIndex < 0) return undefined
+    const distance = Math.abs(recordIndex - index)
+    return distance <= 2 ? distance : undefined
+  }
+  const activateRecord = (record: AgentWorkflowRecord) => setActiveSessionID(record.sessionID)
+  const deactivateRecord = (record: AgentWorkflowRecord) => {
+    if (activeSessionID() === record.sessionID) setActiveSessionID(undefined)
+  }
 
   return (
     <Show when={hasRecords()}>
@@ -286,7 +286,15 @@ export function ConversationAgentRail() {
                 style={{ "--card-stage": stageAccent(stack().stage) }}
               >
                 <Index each={stack().records}>
-                  {(record) => <AgentRailRow record={record} onLocate={locateRecord} />}
+                  {(record) => (
+                    <AgentRailRow
+                      record={record}
+                      proximity={() => proximityForRecord(record())}
+                      onActivate={activateRecord}
+                      onDeactivate={deactivateRecord}
+                      onLocate={locateRecord}
+                    />
+                  )}
                 </Index>
               </div>
             )}

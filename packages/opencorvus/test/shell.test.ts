@@ -666,4 +666,41 @@ describe("shell process supervisor contract", () => {
       await fs.rm(root, { recursive: true, force: true })
     }
   }, 20_000)
+
+  test("windows helper command mode accepts completed zero-exit command without pid file", async () => {
+    if (process.platform !== "win32") return
+
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-supervisor-command-fast-zero-"))
+    const helperCmd = path.join(root, "helper.cmd")
+    const helperJs = path.join(root, "helper.js")
+    await fs.writeFile(
+      helperJs,
+      [
+        'const fs = require("fs")',
+        'if (process.argv[2] === "--kill-tree") process.exit(0)',
+        'const requestIndex = process.argv.indexOf("--request")',
+        "if (requestIndex < 0) process.exit(2)",
+        "JSON.parse(fs.readFileSync(process.argv[requestIndex + 1], 'utf8'))",
+        "process.stdout.write('done')",
+        "process.exit(0)",
+        "",
+      ].join("\n"),
+      "utf8",
+    )
+    await fs.writeFile(helperCmd, `@echo off\r\n"${process.execPath}" "${helperJs}" %*\r\n`, "utf8")
+
+    const restore = ProcessSupervisor.setWindowsHelperResolverForTest(async () => helperCmd)
+    try {
+      const handle = await ProcessSupervisor.spawnCommand({
+        executable: process.execPath,
+        args: ["--version"],
+      })
+      expect(handle.pid).toBeGreaterThan(0)
+      expect(await handle.exited).toBe(0)
+      await handle.dispose()
+    } finally {
+      restore()
+      await fs.rm(root, { recursive: true, force: true })
+    }
+  }, 20_000)
 })

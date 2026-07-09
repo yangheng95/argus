@@ -1,8 +1,8 @@
 /* Composer stack: one geometry owner for the outside attachment strip and
    the rounded input shell. */
 .chat-composer-stack {
-  --chat-composer-inline-gutter: calc(28px * var(--ui-scale));
-  --chat-composer-max-width: calc(1040px * var(--ui-scale));
+  --chat-composer-inline-gutter: calc((var(--ui-chat-message-padding-x) + var(--ui-chat-scrollbar-gutter-x)) * 2);
+  --chat-composer-max-width: var(--ui-chat-message-content-width);
   --chat-composer-min-height: calc(96px * var(--ui-scale));
   --chat-textarea-height: calc(48px * var(--ui-scale));
   --chat-composer-action-size: max(var(--ui-chat-send-size), calc(34px * var(--ui-scale)));

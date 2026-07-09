@@ -121,6 +121,12 @@ test("window and center workbench resize paths use the shared frame scheduler", 
   expect(main).toContain('window.visualViewport.addEventListener("resize", applyWindowResizeOnFrame.schedule')
   expect(main).not.toContain('window.addEventListener("resize", onResize')
   expect(main).not.toContain('window.visualViewport.addEventListener("resize", onResize')
+  expect(main).toContain("function measureChatScrollbarGutter(): number")
+  expect(main).toContain('document.getElementById("chatScroll")')
+  expect(main).toContain('document.documentElement.style.setProperty("--ui-chat-scrollbar-gutter-x"')
+  expect(main).toContain("const syncChatScrollbarGutterOnFrame = createAnimationFrameScheduler(syncChatScrollbarGutter)")
+  expect(main).toContain("syncChatScrollbarGutter()")
+  expect(windowResizeFunction).toContain("syncChatScrollbarGutter()")
 
   expect(main).toContain(
     "const applyCenterWorkbenchPanelResizeOnFrame = createAnimationFrameScheduler(applyPendingCenterWorkbenchPanelResize)",

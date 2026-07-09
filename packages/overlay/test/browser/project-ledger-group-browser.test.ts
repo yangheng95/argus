@@ -7,6 +7,7 @@ import { launchBrowser, type OverlayPage } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
 import { generalExpertSquadCatalog } from "./expert-squad-fixture.ts"
+import { testTaskOrderKey } from "../fixtures/timeline-order.ts"
 
 await ensureOverlayDist()
 
@@ -36,6 +37,7 @@ function taskItem(index: number, directory = PROJECT_DIR): any {
     },
     task: {
       id,
+      orderKey: testTaskOrderKey(id, created),
       requestID: `req-${id}`,
       title: `Ledger task ${index}`,
       request: `Review project group ${index}`,
@@ -150,6 +152,15 @@ async function saveElementScreenshot(page: OverlayPage, selector: string, filena
   const target = resolve(".scratch", filename)
   mkdirSync(dirname(target), { recursive: true })
   const screenshot = await element.screenshot({})
+  assert.ok(screenshot.length > 0, `${filename} screenshot should not be empty`)
+  writeFileSync(target, screenshot)
+  return target
+}
+
+async function savePageScreenshot(page: OverlayPage, filename: string) {
+  const target = resolve(".scratch", filename)
+  mkdirSync(dirname(target), { recursive: true })
+  const screenshot = await page.screenshot({})
   assert.ok(screenshot.length > 0, `${filename} screenshot should not be empty`)
   writeFileSync(target, screenshot)
   return target
@@ -493,6 +504,105 @@ async function verifyProjectGroup(
   await saveElementScreenshot(page, input.groupSelector, input.screenshot)
 }
 
+async function verifyKindTooltip(
+  page: OverlayPage,
+  input: {
+    kind: "mission" | "task" | "chat"
+    expectedDescription: string
+    expectedText: string
+    screenshot: string
+  },
+) {
+  const triggerSelector = `[data-ui="work-ledger-row"][data-kind="${input.kind}"] [data-ui="work-row-kind-mark"]`
+  await page.waitForSelector(triggerSelector, { visible: true, timeout: 10_000 })
+  const trigger = await page.$eval(triggerSelector, (node: HTMLElement) => {
+    const rect = node.getBoundingClientRect()
+    return {
+      tag: node.tagName,
+      title: node.getAttribute("title") ?? "",
+      ariaLabel: node.getAttribute("aria-label") ?? "",
+      width: rect.width,
+      height: rect.height,
+      dataKind: node.dataset.kind ?? "",
+      dataUi: node.dataset.ui ?? "",
+    }
+  })
+  assert.deepEqual(
+    {
+      tag: trigger.tag,
+      title: trigger.title,
+      ariaLabel: trigger.ariaLabel,
+      dataKind: trigger.dataKind,
+      dataUi: trigger.dataUi,
+    },
+    {
+      tag: "SPAN",
+      title: "",
+      ariaLabel: input.expectedDescription,
+      dataKind: input.kind,
+      dataUi: "work-row-kind-mark",
+    },
+  )
+  assert.ok(trigger.width >= 18 && trigger.height >= 18, `kind trigger should keep row icon geometry: ${JSON.stringify(trigger)}`)
+
+  await page.hover(triggerSelector)
+  await page.waitForFunction(
+    (expectedText) => {
+      return Array.from(document.querySelectorAll<HTMLElement>('[data-ui="work-row-kind-tooltip"]')).some((node) => {
+        const rect = node.getBoundingClientRect()
+        const style = window.getComputedStyle(node)
+        return (
+          node.textContent?.trim() === expectedText &&
+          rect.width > 0 &&
+          rect.height > 0 &&
+          style.visibility !== "hidden" &&
+          style.display !== "none" &&
+          Number(style.opacity || "1") > 0
+        )
+      })
+    },
+    { timeout: 5_000 },
+    input.expectedText,
+  )
+  const tooltip = await page.evaluate((expectedText) => {
+    const node = Array.from(document.querySelectorAll<HTMLElement>('[data-ui="work-row-kind-tooltip"]')).find((item) => {
+      const rect = item.getBoundingClientRect()
+      const style = window.getComputedStyle(item)
+      return (
+        item.textContent?.trim() === expectedText &&
+        rect.width > 0 &&
+        rect.height > 0 &&
+        style.visibility !== "hidden" &&
+        style.display !== "none" &&
+        Number(style.opacity || "1") > 0
+      )
+    })
+    if (!node) return null
+    const rect = node.getBoundingClientRect()
+    const style = window.getComputedStyle(node)
+    return {
+      text: node.textContent?.trim() ?? "",
+      role: node.getAttribute("role") ?? "",
+      className: node.className,
+      width: rect.width,
+      height: rect.height,
+      background: style.backgroundColor,
+      color: style.color,
+      visibility: style.visibility,
+    }
+  }, input.expectedText)
+  assert.ok(tooltip, `tooltip should render for ${input.kind}`)
+  assert.equal(tooltip.text, input.expectedText)
+  assert.equal(tooltip.role, "tooltip")
+  assert.match(tooltip.className, /\bcard-meta-tooltip\b/)
+  assert.ok(tooltip.width > 80 && tooltip.height > 18, `tooltip should be visible: ${JSON.stringify(tooltip)}`)
+  assert.notEqual(tooltip.background, "rgba(0, 0, 0, 0)")
+  assert.notEqual(tooltip.color, "rgba(0, 0, 0, 0)")
+  assert.equal(tooltip.visibility, "visible")
+  await savePageScreenshot(page, input.screenshot)
+  await page.mouse.move(0, 0)
+}
+
 test(
   "unified Work Ledger project grouping includes Task, Mission, and Coding Assistant rows",
   { timeout: 90_000 },
@@ -688,6 +798,24 @@ test(
         expectedProjectActions: true,
         screenshot: "project-ledger-group-work-ledger.png",
         requestLog,
+      })
+      await verifyKindTooltip(page, {
+        kind: "mission",
+        expectedDescription: "Long-running orchestration task.",
+        expectedText: "Mission: Long-running orchestration task.",
+        screenshot: "work-ledger-kind-tooltip-mission.png",
+      })
+      await verifyKindTooltip(page, {
+        kind: "task",
+        expectedDescription: "Execution unit of a Mission.",
+        expectedText: "Task: Execution unit of a Mission.",
+        screenshot: "work-ledger-kind-tooltip-task.png",
+      })
+      await verifyKindTooltip(page, {
+        kind: "chat",
+        expectedDescription: "Interactive coding.",
+        expectedText: "Chat: Interactive coding.",
+        screenshot: "work-ledger-kind-tooltip-chat.png",
       })
       await page.setViewport({ width: 390, height: 720 })
       await verifyProjectGroup(page, {

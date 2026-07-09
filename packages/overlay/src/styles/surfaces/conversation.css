@@ -15,8 +15,9 @@
   max-width: 100%;
   contain: layout;
   overflow-y: auto;
+  scrollbar-gutter: stable both-edges;
   overflow-anchor: auto;
-  padding: calc(18px * var(--ui-scale)) calc(22px * var(--ui-scale)) calc(20px * var(--ui-scale));
+  padding: calc(18px * var(--ui-scale)) var(--ui-chat-message-padding-x) calc(20px * var(--ui-scale));
   display: flex;
   flex-direction: column;
   gap: calc(8px * var(--ui-scale));
@@ -32,9 +33,14 @@
 
 .conversation-body {
   --conversation-agent-rail-width: calc(46px * var(--ui-scale));
+  --conversation-agent-rail-tick-width: calc(16px * var(--ui-scale));
+  --conversation-agent-rail-tick-width-near: calc(22px * var(--ui-scale));
+  --conversation-agent-rail-tick-width-nearer: calc(27px * var(--ui-scale));
+  --conversation-agent-rail-tick-width-active: calc(32px * var(--ui-scale));
   --conversation-agent-rail-tick-height: calc(14px * var(--ui-scale));
   --conversation-agent-rail-tick-gap: calc(5px * var(--ui-scale));
-  --conversation-message-lane-width: calc(1040px * var(--ui-scale));
+  --conversation-message-content-width: var(--ui-chat-message-content-width);
+  --conversation-message-lane-width: var(--ui-chat-message-scroll-width);
 
   flex: 1 1 auto;
   display: grid;
@@ -149,7 +155,7 @@
   align-items: stretch;
   justify-content: center;
   min-width: 0;
-  padding: calc(10px * var(--ui-scale)) calc(7px * var(--ui-scale));
+  padding: calc(10px * var(--ui-scale)) calc(5px * var(--ui-scale));
   color: var(--text-soft);
   background: transparent;
   overflow: hidden;
@@ -184,7 +190,7 @@
 
 .conversation-agent-rail__stack {
   flex: 0 0 auto;
-  width: calc(30px * var(--ui-scale));
+  width: calc(36px * var(--ui-scale));
   display: grid;
   grid-auto-rows: var(--conversation-agent-rail-tick-height);
   gap: var(--conversation-agent-rail-tick-gap);
@@ -214,8 +220,8 @@
   --oc-button-color: var(--text-strong);
   --oc-button-shadow: none;
 
-  width: calc(30px * var(--ui-scale));
-  min-width: calc(30px * var(--ui-scale));
+  width: calc(36px * var(--ui-scale));
+  min-width: calc(36px * var(--ui-scale));
   border-radius: var(--oc-radius-pill);
   justify-content: flex-start;
   box-shadow: none;
@@ -239,7 +245,7 @@
 
 .conversation-agent-rail__tick-line {
   display: block;
-  width: calc(20px * var(--ui-scale));
+  width: var(--conversation-agent-rail-tick-width);
   height: calc(2px * var(--ui-scale));
   margin-left: calc(3px * var(--ui-scale));
   border-radius: var(--oc-radius-pill);
@@ -250,8 +256,21 @@
     opacity var(--ui-duration-fast) var(--ui-timing-standard);
 }
 
+.conversation-agent-rail__row[data-proximity="0"] .conversation-agent-rail__tick-line {
+  width: var(--conversation-agent-rail-tick-width-active);
+  background: var(--card-stage, var(--accent));
+  opacity: var(--ui-opacity-full);
+}
+
+.conversation-agent-rail__row[data-proximity="1"] .conversation-agent-rail__tick-line {
+  width: var(--conversation-agent-rail-tick-width-nearer);
+}
+
+.conversation-agent-rail__row[data-proximity="2"] .conversation-agent-rail__tick-line {
+  width: var(--conversation-agent-rail-tick-width-near);
+}
+
 .conversation-agent-rail__row[data-status="running"] .conversation-agent-rail__tick-line {
-  width: calc(25px * var(--ui-scale));
   background: color-mix(in srgb, var(--card-stage, var(--accent)) 76%, var(--text-muted));
 }
 
@@ -264,42 +283,11 @@
   opacity: var(--ui-opacity-muted);
 }
 
-.conversation-agent-rail .oc-button[data-ui="conversation-agent-rail-locate"]:hover .conversation-agent-rail__tick-line,
 .conversation-agent-rail
   .oc-button[data-ui="conversation-agent-rail-locate"]:focus-visible
   .conversation-agent-rail__tick-line {
-  width: calc(28px * var(--ui-scale));
   background: var(--card-stage, var(--accent));
   opacity: var(--ui-opacity-full);
-}
-
-.conversation-agent-rail-tooltip {
-  max-width: min(calc(320px * var(--ui-scale)), calc(100cqw - calc(32px * var(--ui-scale))));
-  display: grid;
-  gap: calc(3px * var(--ui-scale));
-  padding: calc(7px * var(--ui-scale)) calc(8px * var(--ui-scale));
-  border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--oc-radius-soft);
-  background: var(--surface-elevated);
-  color: var(--text-strong);
-  font-size: var(--ui-font-tiny);
-  line-height: 1.4;
-  box-shadow: var(--shadow-lg);
-  z-index: var(--ui-z-titlebar);
-}
-
-.conversation-agent-rail-tooltip__agent {
-  color: var(--text-strong);
-  font-weight: var(--ui-font-weight-strong);
-}
-
-.conversation-agent-rail-tooltip__meta {
-  color: var(--text-muted);
-}
-
-.conversation-agent-rail-tooltip__summary {
-  color: var(--text);
-  overflow-wrap: anywhere;
 }
 
 .conversation-agent-target--pulse {

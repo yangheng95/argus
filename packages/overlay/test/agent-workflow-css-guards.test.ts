@@ -9,6 +9,7 @@ test("agent rail expanded report surface stays deleted", () => {
   expect(css).not.toContain("conversation-agent-rail__resize")
   expect(css).not.toContain("conversation-agent-rail__report")
   expect(css).not.toContain("conversation-agent-rail__run")
+  expect(css).not.toContain("conversation-agent-rail-tooltip")
 })
 
 test("old workflow report section and pre scroll rules stay deleted", () => {

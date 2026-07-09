@@ -290,7 +290,7 @@ export namespace ProcessSupervisor {
     const helperHandle = childHandle(proc, { cleanupProcessGroup: false })
     let pid: number
     try {
-      pid = await waitForPidFile(pidPath, helperHandle.exited, opts.label)
+      pid = await waitForPidFile(pidPath, helperHandle.exited, opts.label, helperHandle.pid)
     } catch (error) {
       await helperHandle.dispose().catch(() => undefined)
       await fs.rm(requestDir, { recursive: true, force: true }).catch(() => {})
@@ -545,7 +545,12 @@ export namespace ProcessSupervisor {
     }
   }
 
-  async function waitForPidFile(pidPath: string, exited: Promise<number>, command: string): Promise<number> {
+  async function waitForPidFile(
+    pidPath: string,
+    exited: Promise<number>,
+    command: string,
+    completedHelperPid: number,
+  ): Promise<number> {
     const deadline = Date.now() + 5_000
     let exitCode: number | undefined
     let exitObservedAt: number | undefined
@@ -562,13 +567,12 @@ export namespace ProcessSupervisor {
       const text = await fs.readFile(pidPath, "utf8").catch(() => undefined)
       const pid = text ? Number(text.trim()) : NaN
       if (Number.isInteger(pid) && pid > 0) return pid
-      const helperFailedBeforeLaunch = exitCode === 2 || exitCode === 125
-      if (
-        helperFailedBeforeLaunch &&
-        exitObservedAt !== undefined &&
-        Date.now() - exitObservedAt > WINDOWS_PID_FILE_EXIT_SETTLE_MS
-      ) {
-        throw new Error(`Windows process supervisor exited before starting command '${command}' (exit=${exitCode})`)
+      const helperFailedBeforeLaunch = exitCode === 2 || exitCode === 3 || exitCode === 125
+      if (exitObservedAt !== undefined && Date.now() - exitObservedAt > WINDOWS_PID_FILE_EXIT_SETTLE_MS) {
+        if (exitCode === 0) return completedHelperPid
+        if (helperFailedBeforeLaunch) {
+          throw new Error(`Windows process supervisor exited before starting command '${command}' (exit=${exitCode})`)
+        }
       }
       await Bun.sleep(20)
     }

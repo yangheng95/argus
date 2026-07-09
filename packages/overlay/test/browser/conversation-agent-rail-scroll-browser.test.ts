@@ -21,11 +21,15 @@ const ABSORBED_LAST_CARD_ID = `build:session:${ABSORBED_SESSION_ID}:message:${AB
 const PROJECT_ROOT = "D:/overlay/workspace/conversation-agent-rail-scroll"
 const T0 = 1_776_100_000_000
 const RAIL_SCREENSHOT_PATH = resolve(".scratch", "conversation-agent-rail-scroll-browser", "left-rail.png")
-const TOOLTIP_SCREENSHOT_PATH = resolve(".scratch", "conversation-agent-rail-scroll-browser", "left-rail-tooltip.png")
 const CHAT_PANE_SCREENSHOT_PATH = resolve(
   ".scratch",
   "conversation-agent-rail-scroll-browser",
   "chat-pane-after-locate.png",
+)
+const CHAT_SECTION_SCREENSHOT_PATH = resolve(
+  ".scratch",
+  "conversation-agent-rail-scroll-browser",
+  "chat-section-after-locate.png",
 )
 const ABSORBED_CARD_SCREENSHOT_PATH = resolve(
   ".scratch",
@@ -146,7 +150,7 @@ function sessionForMessage(item: ReturnType<typeof message>) {
   }
 }
 
-test("ConversationAgentRail renders left stacked history, tooltip summaries, and locate behavior", async () => {
+test("ConversationAgentRail renders left stacked history without hover summaries and keeps locate behavior", async () => {
   assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
   assert.equal(typeof globalThis.Bun, "undefined")
 
@@ -166,7 +170,7 @@ test("ConversationAgentRail renders left stacked history, tooltip summaries, and
     run: { executor: "opencorvus", phase: "assistant", status: "active" },
     overview: {
       headline: "Conversation agent rail left",
-      summary: "Fixture board for left rail stack and tooltip validation.",
+      summary: "Fixture board for left rail stack and hover removal validation.",
       controls: {},
     },
     requirements: [],
@@ -352,15 +356,29 @@ test("ConversationAgentRail renders left stacked history, tooltip summaries, and
       const composer = document.querySelector<HTMLElement>(".chat-composer-stack")
       const hostStyle = getComputedStyle(host)
       const lanesStyle = lanes ? getComputedStyle(lanes) : null
+      const chatScrollStyle = chatScroll ? getComputedStyle(chatScroll) : null
       const scrollRect = scrollShell?.getBoundingClientRect()
       const chatScrollRect = chatScroll?.getBoundingClientRect()
       const bodyRect = body?.getBoundingClientRect()
       const composerRect = composer?.getBoundingClientRect()
       const bodyStyle = body ? getComputedStyle(body) : null
+      const scrollbarTotal = chatScroll && chatScrollRect ? Math.max(0, chatScrollRect.width - chatScroll.clientWidth) : 0
+      const paddingLeft = Number.parseFloat(chatScrollStyle?.paddingLeft || "0") || 0
+      const paddingRight = Number.parseFloat(chatScrollStyle?.paddingRight || "0") || 0
+      const messageContentLeft = (chatScrollRect?.left || 0) + scrollbarTotal / 2 + paddingLeft
+      const messageContentRight = (chatScrollRect?.right || 0) - scrollbarTotal / 2 - paddingRight
       return {
         viewportWidth: window.innerWidth,
         documentWidth: document.documentElement.scrollWidth,
         bodyGridColumns: bodyStyle?.gridTemplateColumns || "",
+        chatScrollStyle: {
+          paddingLeft,
+          paddingRight,
+          scrollbarGutter: chatScrollStyle?.scrollbarGutter || "",
+          clientWidth: chatScroll?.clientWidth || 0,
+          offsetWidth: chatScroll?.offsetWidth || 0,
+          scrollbarTotal,
+        },
         host: {
           left: hostRect.left,
           right: hostRect.right,
@@ -387,6 +405,11 @@ test("ConversationAgentRail renders left stacked history, tooltip summaries, and
           right: chatScrollRect?.right || 0,
           width: chatScrollRect?.width || 0,
           height: chatScrollRect?.height || 0,
+        },
+        messageContent: {
+          left: messageContentLeft,
+          right: messageContentRight,
+          width: Math.max(0, messageContentRight - messageContentLeft),
         },
         composer: {
           left: composerRect?.left || 0,
@@ -433,11 +456,32 @@ test("ConversationAgentRail renders left stacked history, tooltip summaries, and
     )
     assert.ok(
       Math.abs(
-        geometry.chatScroll.left +
-          geometry.chatScroll.width / 2 -
+        geometry.messageContent.left +
+          geometry.messageContent.width / 2 -
           (geometry.composer.left + geometry.composer.width / 2),
       ) <= 1.5,
-      `message scroll lane should share the composer center axis: ${JSON.stringify(geometry)}`,
+      `message content lane should share the composer center axis without counting scrollbar width: ${JSON.stringify(geometry)}`,
+    )
+    assert.ok(
+      Math.abs(geometry.messageContent.left - geometry.composer.left) <= 1.5,
+      `message content left edge should align with composer left edge: ${JSON.stringify(geometry)}`,
+    )
+    assert.ok(
+      Math.abs(geometry.messageContent.right - geometry.composer.right) <= 1.5,
+      `message content right edge should align with composer right edge: ${JSON.stringify(geometry)}`,
+    )
+    assert.ok(
+      Math.abs(geometry.messageContent.width - geometry.composer.width) <= 1.5,
+      `message content width should match composer width: ${JSON.stringify(geometry)}`,
+    )
+    assert.equal(
+      geometry.chatScrollStyle.scrollbarGutter,
+      "stable both-edges",
+      `message content alignment must reserve symmetric scrollbar gutter: ${JSON.stringify(geometry)}`,
+    )
+    assert.ok(
+      geometry.chatScrollStyle.scrollbarTotal >= 0,
+      `scrollbar gutter measurement should be non-negative: ${JSON.stringify(geometry)}`,
     )
     assert.ok(
       geometry.bodyGridColumns.split(" ").length >= 5,
@@ -473,18 +517,44 @@ test("ConversationAgentRail renders left stacked history, tooltip summaries, and
       assert.ok(stack.max - stack.min <= 1, `same-agent stack should keep one horizontal lane: ${JSON.stringify(stackGeometry)}`)
     }
 
-    const tooltipButtonSelector =
+    const hoverButtonSelector =
       '.conversation-agent-rail .oc-button[data-ui="conversation-agent-rail-locate"][data-session-id="ses_agent_rail_02"]'
-    await page.hover(tooltipButtonSelector)
-    await page.waitForSelector(".conversation-agent-rail-tooltip", { visible: true, timeout: 15_000 })
-    const tooltipText = await page.$eval(".conversation-agent-rail-tooltip", (element: HTMLElement) => element.textContent || "")
-    assert.match(tooltipText, /Agent: build/)
-    assert.match(tooltipText, /Status: Completed/)
-    assert.match(tooltipText, /Summary: Completed build execution for msg_agent_rail_02\./)
-    const tooltip = await page.$(".conversation-agent-rail-tooltip")
-    assert.ok(tooltip, "agent rail tooltip should exist for screenshot review")
-    mkdirSync(dirname(TOOLTIP_SCREENSHOT_PATH), { recursive: true })
-    writeFileSync(TOOLTIP_SCREENSHOT_PATH, await tooltip.screenshot({}))
+    const beforeHover = await page.$eval(hoverButtonSelector, (button: HTMLElement) => {
+      const tick = button.querySelector<HTMLElement>(".conversation-agent-rail__tick-line")
+      const rect = tick?.getBoundingClientRect()
+      return {
+        title: button.getAttribute("title"),
+        ariaLabel: button.getAttribute("aria-label") || "",
+        tickWidth: rect?.width || 0,
+        tickHeight: rect?.height || 0,
+      }
+    })
+    assert.equal(beforeHover.title, null, "agent rail locate button must not expose a native hover title")
+    assert.match(beforeHover.ariaLabel, /build/)
+    assert.match(beforeHover.ariaLabel, /Completed/)
+    assert.match(beforeHover.ariaLabel, /Completed build execution for msg_agent_rail_02\./)
+    await page.hover(hoverButtonSelector)
+    await new Promise((resolve) => setTimeout(resolve, 250))
+    const afterHover = await page.$eval(hoverButtonSelector, (button: HTMLElement) => {
+      const tick = button.querySelector<HTMLElement>(".conversation-agent-rail__tick-line")
+      const rect = tick?.getBoundingClientRect()
+      return {
+        title: button.getAttribute("title"),
+        tickWidth: rect?.width || 0,
+        tickHeight: rect?.height || 0,
+        tooltipCount: document.querySelectorAll(".conversation-agent-rail-tooltip").length,
+      }
+    })
+    assert.equal(afterHover.title, null, "agent rail locate button must still not expose a native hover title")
+    assert.equal(afterHover.tooltipCount, 0, "agent rail hover must not render the removed custom tooltip")
+    assert.ok(
+      afterHover.tickWidth > beforeHover.tickWidth + 8,
+      `agent rail hover should stretch the active tick: ${JSON.stringify({ beforeHover, afterHover })}`,
+    )
+    assert.ok(
+      Math.abs(afterHover.tickHeight - beforeHover.tickHeight) <= 0.5,
+      `agent rail hover must not change tick thickness: ${JSON.stringify({ beforeHover, afterHover })}`,
+    )
 
     const lanesScroll = await page.$eval(".conversation-agent-rail__lanes", (el: HTMLElement) => {
       el.scrollTop = 9999
@@ -580,6 +650,10 @@ test("ConversationAgentRail renders left stacked history, tooltip summaries, and
     assert.ok(chatPane, "chat pane should exist for full rail/card screenshot review")
     mkdirSync(dirname(CHAT_PANE_SCREENSHOT_PATH), { recursive: true })
     writeFileSync(CHAT_PANE_SCREENSHOT_PATH, await chatPane.screenshot({}))
+    const chatSection = await page.$("#chatSection")
+    assert.ok(chatSection, "chat section should exist for composer/message alignment screenshot review")
+    mkdirSync(dirname(CHAT_SECTION_SCREENSHOT_PATH), { recursive: true })
+    writeFileSync(CHAT_SECTION_SCREENSHOT_PATH, await chatSection.screenshot({}))
     const rail = await page.$(".conversation-agent-rail")
     assert.ok(rail, "agent rail should exist for screenshot review")
     mkdirSync(dirname(RAIL_SCREENSHOT_PATH), { recursive: true })

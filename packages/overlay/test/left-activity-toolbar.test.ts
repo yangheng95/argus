@@ -72,6 +72,9 @@ test("left toolbar is retired and the left panel owns one Work Ledger mount", ()
     "work_ledger.kind.mission",
     "work_ledger.kind.task",
     "work_ledger.kind.chat",
+    "work_ledger.kind_description.mission",
+    "work_ledger.kind_description.task",
+    "work_ledger.kind_description.chat",
     "work_ledger.search_placeholder",
   ]) {
     expect(en).toContain(`"${key}"`)

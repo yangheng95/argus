@@ -12,6 +12,7 @@ import {
   derivePanelActor,
   panelActionSetForActor,
   panelActionSchemaForAgent,
+  PanelSurface,
 } from "@/panel/capability"
 import { RIGHT_SIDEBAR_CODING_ASSISTANT_SOURCE, isRightSidebarCodingAssistantSession } from "@/coding-assistant/session"
 import { ensureMissionSession } from "@/mission/session"
@@ -20,6 +21,7 @@ import { EffectiveConfig } from "@/config/effective"
 import { attachMissionCaller } from "@/mission/caller-receipt"
 
 import { isDecodableText, decodeDataUrlText, decodeDataUrlBase64 } from "@/session/text-mime"
+import { ChannelId } from "@/channel/catalog"
 
 const localOnly = (ctx: Tool.Context) => ctx.extra?.surface === "panel" || ctx.extra?.surface === "right-sidebar"
 
@@ -82,9 +84,70 @@ const PanelQueryTaskOutput = z.object({
 })
 
 type PanelTaskBoard = Awaited<ReturnType<typeof EngineService.getBoard>>
+const PanelChannelBindingIdentity = z.object({
+  platform: ChannelId,
+  channel: z.string().min(1),
+  thread: z.string().min(1),
+})
+type PanelChannelBindingIdentity = z.infer<typeof PanelChannelBindingIdentity>
 
 function nonEmptyString(input: unknown) {
   return typeof input === "string" && input.trim().length > 0 ? input.trim() : undefined
+}
+
+function channelBindingKey(input: PanelChannelBindingIdentity) {
+  return `${input.platform}:${input.channel}:${input.thread}`
+}
+
+function channelBindingFromContext(ctx: Tool.Context): PanelChannelBindingIdentity | undefined {
+  const raw = ctx.extra?.channelBinding
+  if (raw === undefined) return undefined
+  return PanelChannelBindingIdentity.parse(raw)
+}
+
+function explicitCreateTaskChannelBinding(params: {
+  platform?: z.infer<typeof ChannelId>
+  channel?: string
+  thread?: string
+}): PanelChannelBindingIdentity | undefined {
+  const hasPlatform = params.platform !== undefined
+  const hasChannel = params.channel !== undefined
+  const hasThread = params.thread !== undefined
+  if (!hasPlatform && !hasChannel && !hasThread) return undefined
+  if (!hasPlatform || !hasChannel || !hasThread) {
+    throw new Error("panel.create_task channel binding requires platform, channel, and thread together.")
+  }
+  return PanelChannelBindingIdentity.parse({
+    platform: params.platform,
+    channel: params.channel,
+    thread: params.thread,
+  })
+}
+
+function resolveCreateTaskChannelBinding(
+  params: {
+    platform?: z.infer<typeof ChannelId>
+    channel?: string
+    thread?: string
+    metadata?: Record<string, unknown>
+  },
+  ctx: Tool.Context,
+) {
+  const serverBinding = channelBindingFromContext(ctx)
+  const toolBinding = explicitCreateTaskChannelBinding(params)
+  if (serverBinding && toolBinding && channelBindingKey(serverBinding) !== channelBindingKey(toolBinding)) {
+    throw new Error(
+      `panel.create_task channel binding conflict: server context ${channelBindingKey(
+        serverBinding,
+      )} does not match tool params ${channelBindingKey(toolBinding)}.`,
+    )
+  }
+  const identity = serverBinding ?? toolBinding
+  if (!identity) return undefined
+  return {
+    ...identity,
+    payload: params.metadata ?? {},
+  }
 }
 
 function panelTaskAcceptance(board: PanelTaskBoard): z.infer<typeof PanelTaskAcceptanceResult> | undefined {
@@ -231,6 +294,14 @@ async function resolvePanelActor(ctx: Tool.Context) {
   return derivePanelActor(ctx.agent)
 }
 
+function resolvePanelSurface(ctx: Tool.Context): z.infer<typeof PanelSurface> {
+  const result = PanelSurface.safeParse(ctx.extra?.surface)
+  if (!result.success) {
+    throw new Error("panel tool requires ctx.extra.surface to authorize surface-specific actions.")
+  }
+  return result.data
+}
+
 async function resolveCreateTaskQueueDecision(input: { queue?: boolean; ctx: Tool.Context }) {
   if (typeof input.queue === "boolean") return input.queue
   if (input.ctx.extra?.surface !== "panel") {
@@ -295,11 +366,11 @@ export const PanelTool = Tool.define<ReturnType<typeof panelActionSchemaForAgent
   parameters: panelActionSchemaForAgent(initCtx?.agent?.name),
   async execute(params, ctx) {
     const actor = await resolvePanelActor(ctx)
-    const actorSurface = actor === "right_sidebar_assistant" ? "right-sidebar" : undefined
-    const allowedActions = panelActionSetForActor(actor, actorSurface)
+    const surface = resolvePanelSurface(ctx)
+    const allowedActions = panelActionSetForActor(actor, surface)
     if (!allowedActions.has(params.action)) {
       throw new Error(
-        `panel action "${params.action}" is not permitted for actor ${actor}. ` +
+        `panel action "${params.action}" is not permitted for actor ${actor} on surface ${surface}. ` +
           `Allowed actions: ${[...allowedActions].join(", ")}.`,
       )
     }
@@ -463,12 +534,15 @@ export const PanelTool = Tool.define<ReturnType<typeof panelActionSchemaForAgent
           actor,
           ...(missionProvenance ? { mission: missionProvenance } : {}),
         }
+        const taskChannelBinding = resolveCreateTaskChannelBinding(params, ctx)
         const source =
           actor === "mission"
             ? "mission"
             : actor === "right_sidebar_assistant"
               ? RIGHT_SIDEBAR_CODING_ASSISTANT_SOURCE
-              : (params.source ?? ctx.extra?.source ?? (params.platform ? `channel:${params.platform}` : "panel"))
+              : (params.source ??
+                ctx.extra?.source ??
+                (taskChannelBinding ? `channel:${taskChannelBinding.platform}` : "panel"))
         const taskID = await EngineService.createTask({
           requestID: params.request_id ?? ctx.extra?.requestID,
           title: params.title,
@@ -479,16 +553,7 @@ export const PanelTool = Tool.define<ReturnType<typeof panelActionSchemaForAgent
           checks: params.checks,
           routing: params.routing,
           source,
-          ...(params.platform && params.channel && params.thread
-            ? {
-                channelBinding: {
-                  platform: params.platform,
-                  channel: params.channel,
-                  thread: params.thread,
-                  payload: params.metadata ?? {},
-                },
-              }
-            : {}),
+          ...(taskChannelBinding ? { channelBinding: taskChannelBinding } : {}),
           ...(binaryAttachments.length > 0 ? { attachments: binaryAttachments } : {}),
           // Server-derived `actor` + `mission` are the authoritative provenance
           // fields (computed above as taskMetadata). See PanelActor in

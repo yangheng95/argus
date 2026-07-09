@@ -1,3 +1,4 @@
+import * as Tooltip from "@kobalte/core/tooltip"
 import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js"
 import type { JSX } from "solid-js"
 import { loadWorkLedger, type WorkLedgerChatRow, type WorkLedgerMissionRow, type WorkLedgerRow, type WorkLedgerTaskRow } from "../services/work-ledger"
@@ -69,6 +70,12 @@ function kindLabel(kind: WorkLedgerRow["kind"]): string {
   return t("work_ledger.kind.task")
 }
 
+function kindDescription(kind: WorkLedgerRow["kind"]): string {
+  if (kind === "mission") return t("work_ledger.kind_description.mission")
+  if (kind === "chat") return t("work_ledger.kind_description.chat")
+  return t("work_ledger.kind_description.task")
+}
+
 function statusLabel(row: WorkLedgerRow): string {
   if (row.kind === "mission") {
     const stats = row.taskStats
@@ -108,15 +115,25 @@ function missionHasVisibleStoppableTask(row: WorkLedgerMissionRow): boolean {
 }
 
 function WorkLedgerKindMark(props: { kind: WorkLedgerRow["kind"] }) {
+  const label = () => kindLabel(props.kind)
+  const description = () => kindDescription(props.kind)
   return (
-    <span
-      class="work-row-kind-mark"
-      data-kind={props.kind}
-      title={kindLabel(props.kind)}
-      aria-label={kindLabel(props.kind)}
-    >
-      <Icon name={kindIcon(props.kind)} size={13} />
-    </span>
+    <Tooltip.Root openDelay={0} closeDelay={0} placement="right" gutter={6}>
+      <Tooltip.Trigger
+        as="span"
+        class="work-row-kind-mark"
+        data-ui="work-row-kind-mark"
+        data-kind={props.kind}
+        aria-label={description()}
+      >
+        <Icon name={kindIcon(props.kind)} size={13} />
+      </Tooltip.Trigger>
+      <Tooltip.Portal>
+        <Tooltip.Content class="card-meta-tooltip" data-ui="work-row-kind-tooltip">
+          {label()}: {description()}
+        </Tooltip.Content>
+      </Tooltip.Portal>
+    </Tooltip.Root>
   )
 }
 

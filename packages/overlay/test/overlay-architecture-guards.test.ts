@@ -2747,7 +2747,7 @@ describe("overlay architecture guards", () => {
       "min-height: 0",
       "display: flex",
       "flex-direction: column",
-      "padding: calc(10px * var(--ui-scale)) calc(7px * var(--ui-scale))",
+      "padding: calc(10px * var(--ui-scale)) calc(5px * var(--ui-scale))",
       "overflow: hidden",
     ]) {
       expect(railBody).toContain(declaration)
@@ -2773,11 +2773,13 @@ describe("overlay architecture guards", () => {
     expect(rowBody).toContain("display: grid")
     expect(rowBody).toContain("grid-template-columns: minmax(0, 1fr)")
     expect(rowBody).toContain("min-height: var(--conversation-agent-rail-tick-height)")
-    expect(surface).toContain("--conversation-message-lane-width: calc(1040px * var(--ui-scale))")
+    expect(surface).toContain("--conversation-message-content-width: var(--ui-chat-message-content-width)")
+    expect(surface).toContain("--conversation-message-lane-width: var(--ui-chat-message-scroll-width)")
+    expect(surface).toContain("scrollbar-gutter: stable both-edges")
     expect(surface).toContain("--conversation-agent-rail-width: calc(46px * var(--ui-scale))")
     expect(surface).toContain(".conversation-body:has(.conversation-agent-rail-host:not(:empty))")
     expect(surface).toContain(".conversation-body:has(.conversation-agent-rail-host:not(:empty))::after")
-    expect(surface).toContain(".conversation-agent-rail-tooltip")
+    expect(surface).not.toContain(".conversation-agent-rail-tooltip")
     expect(surface).toContain(".conversation-agent-rail__tick-line")
     expect(surface).not.toContain("conversation-agent-rail__run")
     expect(surface).not.toContain("conversation-agent-rail__report")
@@ -2988,8 +2990,9 @@ describe("overlay architecture guards", () => {
     )
     const body = bodies.at(-1) ?? ""
     expect(body).toContain(
-      "padding: calc(18px * var(--ui-scale)) calc(22px * var(--ui-scale)) calc(20px * var(--ui-scale))",
+      "padding: calc(18px * var(--ui-scale)) var(--ui-chat-message-padding-x) calc(20px * var(--ui-scale))",
     )
+    expect(body).toContain("scrollbar-gutter: stable both-edges")
   })
 
   test("conversation auxiliary surfaces keep chrome out of theme selectors", () => {

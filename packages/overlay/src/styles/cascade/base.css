@@ -62,6 +62,13 @@
   --ui-chat-send-size: calc(32px * var(--ui-scale));
   --ui-chat-min-height: calc(58px * var(--ui-scale));
   --ui-chat-max-height: calc(140px * var(--ui-scale));
+  --ui-chat-message-content-width: calc(1040px * var(--ui-scale));
+  --ui-chat-message-padding-x: calc(22px * var(--ui-scale));
+  --ui-chat-scrollbar-gutter-x: var(--session-scrollbar-size);
+  --ui-chat-message-scroll-width: calc(
+    var(--ui-chat-message-content-width) + (var(--ui-chat-message-padding-x) * 2) +
+      (var(--ui-chat-scrollbar-gutter-x) * 2)
+  );
   --ui-select-padding-right: calc(28px * var(--ui-scale));
   /* --title-size / --subhead-size aliases retired 2026-05-04 (Step 5
    * v3, rule 8). Consumers reference --ui-font-title / --ui-font-

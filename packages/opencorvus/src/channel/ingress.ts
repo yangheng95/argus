@@ -1,8 +1,10 @@
-import { EngineChannelBindingTable } from "@/engine/engine.sql"
+import { EngineChannelBindingTable, EngineTaskTable } from "@/engine/engine.sql"
+import { TaskChannelBindingProjectConflictError, TaskGlobalProjectBindingError } from "@/engine/task-project-error"
 import { EngineService } from "@/task-api"
 import { ControlMessage } from "@/control/message"
 import { ControlMessageInput, ControlMessageResult } from "@/control/message-schema"
 import { Database, and, eq } from "@/storage/db"
+import { Instance } from "@/project/instance"
 import z from "zod"
 import { ChannelId } from "./catalog"
 import { isModelReference } from "@/provider/model-ref"
@@ -181,8 +183,12 @@ async function tryReplyInteraction(
       const result = await EngineService.rejectInteraction(pending.id, { autoReply: false })
       return { kind: "interaction", message: "Permission rejected.", task_id: taskID, interaction_id: result.id }
     }
-    // Unrecognized permission reply — fall through to LLM
-    return undefined
+    return {
+      kind: "panel_response",
+      message: "Permission reply not recognized. Reply with allow, always, or reject.",
+      task_id: taskID,
+      interaction_id: pending.id,
+    }
   }
 
   // Question interaction — pass message text; service will derive answers
@@ -194,10 +200,14 @@ async function tryReplyInteraction(
 }
 
 function find(platform: string, channel: string, thread: string) {
-  return Database.use((db) =>
+  const row = Database.use((db) =>
     db
-      .select()
+      .select({
+        binding: EngineChannelBindingTable,
+        project_id: EngineTaskTable.project_id,
+      })
       .from(EngineChannelBindingTable)
+      .innerJoin(EngineTaskTable, eq(EngineTaskTable.id, EngineChannelBindingTable.task_id))
       .where(
         and(
           eq(EngineChannelBindingTable.platform, platform),
@@ -207,6 +217,26 @@ function find(platform: string, channel: string, thread: string) {
       )
       .get(),
   )
+  if (!row) return undefined
+  if (row.project_id === "global") {
+    throw new TaskGlobalProjectBindingError({
+      message: `Channel binding ${platform}/${channel}/${thread} points to task ${row.binding.task_id} bound to project global. Task workflow state requires a concrete Git project.`,
+      taskID: row.binding.task_id,
+      projectID: row.project_id,
+    })
+  }
+  if (row.project_id !== Instance.project.id) {
+    throw new TaskChannelBindingProjectConflictError({
+      message: `Channel binding ${platform}/${channel}/${thread} points to task ${row.binding.task_id} in project ${row.project_id}, but the active project is ${Instance.project.id}.`,
+      platform,
+      channel,
+      thread,
+      taskID: row.binding.task_id,
+      projectID: row.project_id,
+      activeProjectID: Instance.project.id,
+    })
+  }
+  return row.binding
 }
 
 /**

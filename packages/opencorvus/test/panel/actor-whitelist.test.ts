@@ -1,12 +1,10 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Identifier } from "../../src/id/id"
-import { Instance } from "../../src/project/instance"
 import { panelActionSchemaForAgent } from "../../src/panel/capability"
 import { PanelTool } from "../../src/tool/panel"
 import { EngineService } from "../../src/task-api"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
-import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
 
@@ -72,30 +70,24 @@ describe("panel actor whitelist — mission", () => {
     await resetDatabase()
   })
 
-  async function call(action: Record<string, unknown>, agent: string) {
-    await using tmp = await tmpdir({ git: true })
+  async function call(action: Record<string, unknown>, agent: string, surface = "panel") {
     let result: unknown
     let error: unknown
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const tool = await PanelTool.init()
-        try {
-          result = await tool.execute(action as any, {
-            sessionID: Identifier.ascending("session"),
-            messageID: Identifier.ascending("message"),
-            agent,
-            abort: new AbortController().signal,
-            messages: [],
-            metadata() {},
-            async ask() {},
-            extra: { surface: "panel" },
-          })
-        } catch (err) {
-          error = err
-        }
-      },
-    })
+    const tool = await PanelTool.init()
+    try {
+      result = await tool.execute(action as any, {
+        sessionID: Identifier.ascending("session"),
+        messageID: Identifier.ascending("message"),
+        agent,
+        abort: new AbortController().signal,
+        messages: [],
+        metadata() {},
+        async ask() {},
+        extra: { surface },
+      })
+    } catch (err) {
+      error = err
+    }
     return { result, error }
   }
 
@@ -143,5 +135,11 @@ describe("panel actor whitelist — mission", () => {
     spyOn(EngineService, "replanTask").mockResolvedValue(undefined as any)
     const { error } = await call({ action: "replan_task", taskID: "task_1" }, "gateway")
     expect(isWhitelistDenied(error)).toBe(false)
+  })
+
+  test("tool execution enforces the active surface, not only the actor whitelist", async () => {
+    const { error } = await call({ action: "select_task", taskID: "task_1" }, "control", "slack")
+    expect(error).toBeInstanceOf(Error)
+    expect(String((error as Error).message)).toContain("on surface slack")
   })
 })

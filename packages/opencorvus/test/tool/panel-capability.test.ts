@@ -118,3 +118,28 @@ test("right sidebar capabilities come from the panel registry without session-ma
     required: expect.arrayContaining(["action", "request"]),
   })
 })
+
+test("external channel capability snapshot is explicit", () => {
+  const actions = [...panelCapabilityActionSet("slack")].sort()
+
+  expect(actions).toEqual([
+    "cancel_task",
+    "capture_overlay_screenshot",
+    "create_session",
+    "create_task",
+    "delete_goal",
+    "delete_session",
+    "fork_session",
+    "query_task",
+    "reject_interaction",
+    "replan_task",
+    "reply_interaction",
+    "retry_task",
+    "send_task_message",
+    "update_checks",
+    "update_goal",
+    "view_board",
+    "view_plan",
+    "view_tasks",
+  ])
+})

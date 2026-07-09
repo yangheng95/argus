@@ -85,6 +85,15 @@ test("Work Ledger owns row-kind rendering, child task mounting, and row actions"
 
   expect(component).toContain('data-ui="work-ledger-child-task"')
   expect(component).toContain('data-kind="task"')
+  expect(component).toContain('import * as Tooltip from "@kobalte/core/tooltip"')
+  expect(component).toContain('function kindDescription(kind: WorkLedgerRow["kind"]): string')
+  expect(component).toContain('<Tooltip.Root openDelay={0} closeDelay={0} placement="right" gutter={6}>')
+  expect(component).toContain('data-ui="work-row-kind-mark"')
+  expect(component).toContain('data-ui="work-row-kind-tooltip"')
+  expect(component).toContain('class="card-meta-tooltip"')
+  expect(component).toContain('t("work_ledger.kind_description.mission")')
+  expect(component).toContain('t("work_ledger.kind_description.task")')
+  expect(component).toContain('t("work_ledger.kind_description.chat")')
   expect(component).toContain("useTaskRowActionsKeyboard")
   expect(component).toContain("function WorkLedgerProjectGroupView")
   expect(component).toContain("const collapsed = () => props.directoryCollapse.isCollapsed(props.group.directory)")
@@ -114,6 +123,7 @@ test("Work Ledger owns row-kind rendering, child task mounting, and row actions"
   expect(component).not.toContain("const collapsed = directoryCollapse.isCollapsed(group.directory)")
 
   expect(css).toContain(".work-row-kind-mark")
+  expect(css).not.toContain(".work-row-kind-tooltip")
   expect(css).toContain(".work-row-status-mark")
   expect(css).toContain(".work-row-inline-meta")
   expect(css).toMatch(/\.work-row-main\s*\{[^}]*flex-direction:\s*row;/)

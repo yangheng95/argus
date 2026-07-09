@@ -97,6 +97,7 @@ export interface ChannelRuntimeOptions {
   port?: number
   baseUrl?: string
   directory?: string
+  channelProtocol?: boolean
   sharedMode?: boolean
   sharedFile?: string
 }
@@ -556,7 +557,7 @@ export class ChannelRuntime {
   }
 
   private channelProtocol(platform: string): platform is ControlPlatform {
-    return process.env.OPENCORVUS_CHANNEL_PROTOCOL === "1" && controlPlatforms.includes(platform as ControlPlatform)
+    return this.options?.channelProtocol === true && controlPlatforms.includes(platform as ControlPlatform)
   }
 
   private async handleChannelMessage(
@@ -619,6 +620,32 @@ export class ChannelRuntime {
 
   private findTaskBindings(taskID: string) {
     return this.taskBindings.get(taskID) ?? []
+  }
+
+  private async findTaskBindingsForEvent(taskID: string) {
+    const cached = this.findTaskBindings(taskID)
+    if (cached.length > 0) return cached
+    const result = await this.client.task.bindings({ taskID })
+    if (result.error || !result.data) {
+      console.warn(`[ChannelRuntime] task.bindings failed for ${taskID}:`, JSON.stringify(result.error).slice(0, 500))
+      return []
+    }
+    const sessions = result.data.flatMap((binding) => {
+      const adapter = this.adapters.find((item) => item.platform === binding.platform)
+      if (!adapter) return []
+      return [
+        {
+          sessionId: taskID,
+          adapter,
+          channel: binding.channel,
+          thread: binding.thread,
+        },
+      ]
+    })
+    for (const session of sessions) {
+      this.bindTask(taskID, session)
+    }
+    return sessions
   }
 
   private async sendChannelResult(adapter: ChannelAdapter, channel: string, thread: string, result: ChannelResult) {
@@ -1117,7 +1144,7 @@ export class ChannelRuntime {
     //  bare "evaluation.completed".)
     if (event.type === "evaluation.completed") {
       const info = (event as EventEvaluationCompleted).properties
-      const sessions = this.findTaskBindings(info.taskID)
+      const sessions = await this.findTaskBindingsForEvent(info.taskID)
       if (sessions.length === 0) return
       const msg = `Evaluation ${info.verdict}: ${info.summary}`
       for (const session of sessions) {

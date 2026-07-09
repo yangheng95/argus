@@ -47,12 +47,41 @@ type RuntimeCore = {
 }
 
 beforeEach(() => {
+  delete process.env.OPENCORVUS_CHANNEL_PROTOCOL
   delete process.env.OPENCORVUS_CHANNEL_TASK_MODE
   delete process.env.OPENCORVUS_CHANNEL_TASK_TIMEOUT_MS
   delete process.env.OPENCORVUS_CHANNEL_TASK_SWEEP_MS
 })
 
 describe("channel runtime submit mode", () => {
+  test("ignores OPENCORVUS_CHANNEL_PROTOCOL inside core unless constructor option enables it", async () => {
+    process.env.OPENCORVUS_CHANNEL_PROTOCOL = "1"
+    const promptCalls: PromptCall[] = []
+    const a = adapter()
+    const core = new ChannelRuntime() as unknown as RuntimeCore
+
+    core.adapters = [a]
+    core.session.bind("slack:C1:T1", {
+      sessionId: "session_1",
+      adapter: a,
+      channel: "C1",
+      thread: "T1",
+    })
+    core.client = {
+      session: {
+        promptAsync: async (input) => {
+          promptCalls.push(input)
+          return { data: { taskID: "task_env_ignored" } }
+        },
+      },
+    }
+
+    await core.handleMessage(incoming("env should not select protocol"))
+
+    expect(promptCalls).toHaveLength(1)
+    expect(promptCalls[0]?.parts[0]?.text).toBe("env should not select protocol")
+  })
+
   test("uses session.promptAsync by default", async () => {
     const promptCalls: PromptCall[] = []
     const a = adapter()

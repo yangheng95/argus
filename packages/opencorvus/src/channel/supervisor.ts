@@ -98,6 +98,7 @@ function desired(config?: Record<string, unknown>) {
       status: "unavailable" as const,
       detail: "Managed channel runtime is only available in local development installs.",
       env: undefined,
+      channelProtocol: false,
       signature: "",
       channels: [] as string[],
     }
@@ -118,13 +119,13 @@ function desired(config?: Record<string, unknown>) {
       status: "disabled" as const,
       detail: "No managed channel runtime configured.",
       env: undefined,
+      channelProtocol: false,
       signature: "",
       channels,
     }
   }
 
   env.OPENCORVUS_CHANNEL_SERVER_URL = Server.url().toString().replace(/\/+$/, "")
-  env.OPENCORVUS_CHANNEL_PROTOCOL = "1"
   env.OPENCORVUS_PROJECT_DIR = Instance.directory
   env.OPENCORVUS_CONFIG_CONTENT = JSON.stringify(config ?? {})
 
@@ -132,7 +133,8 @@ function desired(config?: Record<string, unknown>) {
     status: "starting" as const,
     detail: `Launching managed runtime for ${channels.join(", ")}.`,
     env,
-    signature: JSON.stringify({ env, channels }),
+    channelProtocol: true,
+    signature: JSON.stringify({ env, channels, channelProtocol: true }),
     channels,
   }
 }
@@ -152,7 +154,7 @@ async function syncRuntime(current: State, next: ReturnType<typeof desired>, for
   current.channels = next.channels
 
   try {
-    current.runtime = await startInProcess(next.env, current)
+    current.runtime = await startInProcess(next.env, current, next.channelProtocol)
     current.status = "running"
     current.detail = `Managed runtime active for ${next.channels.join(", ")}.`
   } catch (error) {
@@ -179,7 +181,11 @@ async function stop(current: State) {
   }
 }
 
-async function startInProcess(env: Record<string, string>, current: State): Promise<InProcessRuntime> {
+async function startInProcess(
+  env: Record<string, string>,
+  current: State,
+  channelProtocol: boolean,
+): Promise<InProcessRuntime> {
   // Dynamic import to avoid loading channel-runtime when not needed
   const { ChannelRuntime } = await import("../../../channel-runtime/src/core")
   const { registerAdapters, ADAPTER_HINT } = await import("../../../channel-runtime/src/registry")
@@ -207,6 +213,7 @@ async function startInProcess(env: Record<string, string>, current: State): Prom
   const runtime = new ChannelRuntime({
     baseUrl: serverUrl,
     directory: env.OPENCORVUS_PROJECT_DIR,
+    channelProtocol,
     sharedMode: process.env.OPENCORVUS_SHARED_SESSION_MODE === "1",
     sharedFile: process.env.OPENCORVUS_SHARED_SESSION_FILE,
   })
