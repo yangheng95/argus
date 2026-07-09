@@ -43,7 +43,7 @@ runs:
 
     - name: Install dependencies
       if: ${{ inputs.install_dependencies == 'true' }}
-      run: bun install --frozen-lockfile --no-progress --ignore-scripts --backend=copyfile --network-concurrency=8
+      run: bun install --frozen-lockfile --no-progress --ignore-scripts --backend=copyfile --network-concurrency=1
       shell: bash
       env:
         HUSKY: "0"
