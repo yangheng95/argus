@@ -446,8 +446,11 @@ describe("document health audit regressions", () => {
     const setupBunAction = read(".github/actions/setup-bun/action.yml")
     expect(setupBunAction).toContain("actions/setup-node@v6")
     expect(setupBunAction).toContain("actions/cache@v6")
-    expect(setupBunAction).toContain("bun install --frozen-lockfile --no-progress")
+    expect(setupBunAction).toContain("bun install --frozen-lockfile --no-progress --ignore-scripts")
     expect(setupBunAction).toContain('HUSKY: "0"')
+    expect(read(".github/workflows/build.yml")).toContain(
+      "bun install --frozen-lockfile --no-progress --ignore-scripts && bun run script/build.ts --single --baseline --musl-only --no-clean",
+    )
     const actionDefinition = read("github/action.yml")
     expectPublishedGitHubActionDefinition(actionDefinition)
     expect(actionDefinition).toContain("oven-sh/setup-bun@v2")
