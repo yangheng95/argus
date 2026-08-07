@@ -80,6 +80,7 @@
 9. GitHub Actions build 36 proved Bun 1.3.14 plus the official registry completed dependency installation on all five native runners. Both macOS rows then reached the canonical packager and failed independently during the Vite transform: Node exhausted its default approximately 2 GB heap. Homebrew's untrusted `aws/tap` message was only a runner warning and not the failed command's cause.
 10. Build 37's completed row uploads measured 545-612 MB because each row artifact aggregates three distributable forms. The Windows directory contains a roughly 211 MiB bare executable, 202 MiB Microsoft Installer package, and 202 MiB Nullsoft Scriptable Install System setup executable; an existing local 0.0.34-beta staging tree has the same sizes, so this aggregate is neither a single installer nor a Bun 1.3.14 regression.
 11. The underlying Windows server payload is roughly 493 MiB before gzip embedding: the Bun-compiled server is 168 MiB, the Browser Node sidecar is 187 MiB, the Host `node_modules` closure is 102 MiB, and tool binaries are 36 MiB. The sidecar's 187 MiB included an 83 MiB Node executable plus another 102 MiB copy of the full Host dependency closure, although its runtime contract resolves only Playwright. This is a real duplicate owner independent of the aggregate-upload presentation.
+12. Build 37 packaged all three Linux ARM64 bundles, then staging rejected the generated `OpenCorvus_0.0.35-beta_aarch64.AppImage` because the shared release asset contract incorrectly expected an `arm64` AppImage suffix. Tauri uses `aarch64` for that AppImage and RPM, while Debian correctly uses `arm64`; the other four matrix rows succeeded.
 
 ## Implementation Plan
 
@@ -93,6 +94,7 @@
 8. Run documentation health, version, workflow syntax/contract, typecheck, diff, and cached-diff checks; then manually review the final source and live Actions result.
 9. Run Vite through the package-owned Node entrypoint with an explicit 8 GB heap so every local, Tauri, and matrix caller shares the same memory contract; rerun the full native matrix rather than retrying only macOS.
 10. Give the Browser Node sidecar an explicit Playwright runtime-module closure, use that closure in both production builders and packaged-runtime validation, and rebuild the Windows package to measure the resulting installer rather than estimating from source.
+11. Correct the Linux ARM64 AppImage architecture mapping at the shared release asset contract, add a positive filename-contract test covering all three Tauri outputs, then rerun the full matrix on the new exact source tree.
 
 ## Verification Evidence
 

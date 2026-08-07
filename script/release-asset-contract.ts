@@ -20,7 +20,7 @@ export function overlayBundleArchitecture(platform: string): OverlayBundleArchit
   if (platform === "darwin-x64") return { mac: "x64" }
   if (platform === "darwin-arm64") return { mac: "aarch64" }
   if (platform === "linux-x64") return { linuxDeb: "amd64", linuxAppImage: "amd64", linuxRpm: "x86_64" }
-  if (platform === "linux-arm64") return { linuxDeb: "arm64", linuxAppImage: "arm64", linuxRpm: "aarch64" }
+  if (platform === "linux-arm64") return { linuxDeb: "arm64", linuxAppImage: "aarch64", linuxRpm: "aarch64" }
   throw new Error(`Unsupported overlay bundle platform: ${platform}`)
 }
 
