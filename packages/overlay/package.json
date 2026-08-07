@@ -9,7 +9,7 @@
     "dev": "tauri dev",
     "dev:vite": "vite --config vite.config.ts",
     "build": "bun run build:vite",
-    "build:vite": "vite build --config vite.config.ts",
+    "build:vite": "node --max-old-space-size=8192 ./node_modules/vite/bin/vite.js build --config vite.config.ts",
     "build:overlay": "bun run script/build-overlay.ts",
     "build:docker": "bun run script/build-docker.ts",
     "typecheck": "tsc --noEmit",

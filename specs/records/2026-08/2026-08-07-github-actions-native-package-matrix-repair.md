@@ -69,6 +69,7 @@
 6. GitHub Actions build 35 checked out the exact delivery commit and acquired all five hosted runners, but every row stalled in the shared Bun 1.3.13 cold install. Linux x64 reached `Resolved, downloaded and extracted [346]` in nine seconds, then produced no output for 22 minutes and left an orphan Bun process when cancelled; no package command started.
 7. An isolated Windows cold-cache reproduction reached the same `[346]` boundary. Bun 1.3.13 then emitted an `EPERM` cache-move error and remained alive, while official stable Bun 1.3.14 returned explicit `InstallFailed` errors instead of silently retaining the process. The lockfile also contained approximately 1,900 tarball URLs pinned to `registry.npmmirror.com`, whereas Bun's documented default registry is `registry.npmjs.org`.
 8. The first Bun 1.3.14 pre-push review exposed two stale local/generated boundaries before publication: Overlay's package-local SDK junction pointed at an older isolated worktree, and the tracked OpenAPI/SDK artifacts differed from the current server route generator. Correcting the local junction made Overlay typecheck pass; running the canonical transactional SDK build regenerated the tracked artifacts instead of weakening the checks.
+9. GitHub Actions build 36 proved Bun 1.3.14 plus the official registry completed dependency installation on all five native runners. Both macOS rows then reached the canonical packager and failed independently during the Vite transform: Node exhausted its default approximately 2 GB heap. Homebrew's untrusted `aws/tap` message was only a runner warning and not the failed command's cause.
 
 ## Implementation Plan
 
@@ -80,6 +81,7 @@
 6. Repair only evidenced canonical owners. Add or restore focused positive non-User Interface contract coverage when implementation changes are required.
 7. Commit with the required `dsw-33987` prefix, push the ordinary history to `git-cc`, update the GitHub delivery commit, rerun the exact workflow, and record terminal job/artifact evidence here.
 8. Run documentation health, version, workflow syntax/contract, typecheck, diff, and cached-diff checks; then manually review the final source and live Actions result.
+9. Run Vite through the package-owned Node entrypoint with an explicit 8 GB heap so every local, Tauri, and matrix caller shares the same memory contract; rerun the full native matrix rather than retrying only macOS.
 
 ## Verification Evidence
 
