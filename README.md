@@ -135,6 +135,26 @@ your long-horizon outcome
 
 ## Quick Start
 
+### Download the desktop app
+
+Download one installer for your operating system from the
+[latest GitHub Release](https://github.com/yangheng95/opencorvus/releases/latest),
+or browse [all releases](https://github.com/yangheng95/opencorvus/releases).
+The large per-platform artifacts shown on a GitHub Actions run are build
+containers that hold several formats; public Releases expose every installer
+as a separate download.
+
+| Operating system | Recommended asset | Alternatives |
+| ---------------- | ----------------- | ------------ |
+| Windows x64 | `OpenCorvus_<version>_x64-setup.exe` | `.msi` for managed installation |
+| macOS Apple silicon | `OpenCorvus_<version>_aarch64.dmg` | `.app.tar.gz` archive |
+| macOS Intel | `OpenCorvus_<version>_x64.dmg` | `.app.tar.gz` archive |
+| Linux x64 | `OpenCorvus_<version>_amd64.AppImage` | `.deb` for Debian/Ubuntu or `.rpm` for Fedora/RHEL |
+| Linux ARM64 | `OpenCorvus_<version>_aarch64.AppImage` | `_arm64.deb` or `.aarch64.rpm` |
+
+Replace `<version>` with the version shown on the release, for example
+`0.0.35-beta`. Download only the file you intend to install.
+
 ### Install from source
 
 ```bash
@@ -145,9 +165,9 @@ bun run --cwd packages/opencorvus build
 bun packages/opencorvus/src/index.ts doctor
 ```
 
-The source build above is the repository-local, verifiable installation path.
-Other distribution commands should not be treated as verified until this
-repository owns automated checks for them.
+The source build above is the repository-local installation path. Desktop
+downloads are verified by the native GitHub Actions package matrix attached to
+their release; a development Actions artifact is not a public installer feed.
 
 ### Start your assistant
 
@@ -289,6 +309,7 @@ planned integration.
 ## Documentation and contributing
 
 - Documentation: <https://opencorvus.ai/docs>
+- Changelog: [`CHANGELOG.md`](./CHANGELOG.md)
 - GitHub Action: [`github/README.md`](./github/README.md)
 - Contributing: [`CONTRIBUTING.md`](./CONTRIBUTING.md)
 

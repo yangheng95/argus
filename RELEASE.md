@@ -24,6 +24,13 @@ Validate:
 bun run version:check
 ```
 
+## Changelog
+
+- [CHANGELOG.md](/CHANGELOG.md) is the single user-facing version history from `0.0.35beta` onward. It is a release record, not a second version source.
+- Record user-visible work under `未发布` as it lands. Use the standard `Added`, `Changed`, `Fixed`, `Removed`, and `Security` categories when they apply.
+- Before dispatching a release, move the accumulated entries into a dated compact product version such as `0.0.36beta - YYYY-MM-DD`, then leave a new empty `未发布` section.
+- Keep compact product versions in the changelog; package and native metadata continue to use canonical SemVer such as `0.0.36-beta`.
+
 ## Canonical CI Workflow
 
 - Canonical workflow: `.github/workflows/build.yml`
@@ -46,6 +53,32 @@ The portable CLI matrix and Linux remote-service bundles remain explicit
 operational commands. They are validated package surfaces, but they are not
 inputs to the canonical GUI-only GitHub release workflow. Their artifact shapes
 and commands are documented in [docs/packaging.md](/docs/packaging.md).
+
+## Public Downloads
+
+- Latest release: <https://github.com/yangheng95/opencorvus/releases/latest>
+- All releases: <https://github.com/yangheng95/opencorvus/releases>
+
+The matrix first uploads one temporary GitHub Actions artifact per platform.
+That artifact aggregates the executable and all installer formats for transfer
+between jobs, so its displayed size is not one installer's size.
+
+For a real release, `publish-release-assets` downloads those temporary
+artifacts, validates and flattens the installer files with
+`script/stage-release-upload-assets.ts`, and passes every file separately to
+`gh release upload`. The GitHub Release page therefore exposes MSI, Nullsoft
+Scriptable Install System (NSIS) setup, Disk Image (DMG), AppImage, Debian
+package (DEB), Red Hat Package Manager (RPM), and macOS application archives as
+independent downloads. The temporary row artifact is never the public download
+contract.
+
+| Platform | Recommended download |
+| -------- | -------------------- |
+| Windows x64 | `OpenCorvus_<version>_x64-setup.exe`, or `.msi` for managed installation |
+| macOS Apple silicon | `OpenCorvus_<version>_aarch64.dmg` |
+| macOS Intel | `OpenCorvus_<version>_x64.dmg` |
+| Linux x64 | `OpenCorvus_<version>_amd64.AppImage`, `.deb`, or `.rpm` for the target distribution |
+| Linux ARM64 | `OpenCorvus_<version>_aarch64.AppImage`, `_arm64.deb`, or `.aarch64.rpm` |
 
 ## Local Release Command
 

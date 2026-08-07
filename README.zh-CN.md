@@ -117,6 +117,25 @@ Agent 停止运行不等于 Task 完成。OpenCorvus 会保存 Typed、内容寻
 
 ## 快速开始
 
+### 下载桌面安装包
+
+从 [GitHub 最新 Release](https://github.com/yangheng95/opencorvus/releases/latest)
+下载适合当前系统的一个安装包，也可以查看
+[全部版本](https://github.com/yangheng95/opencorvus/releases)。GitHub Actions 运行页里
+体积较大的平台 artifact 是同时容纳多种格式的构建中转容器；公开 Release 会把每个
+安装包作为独立文件提供下载。
+
+| 操作系统 | 推荐文件 | 其他格式 |
+| -------- | -------- | -------- |
+| Windows x64 | `OpenCorvus_<version>_x64-setup.exe` | 适合集中部署的 `.msi` |
+| macOS Apple 芯片 | `OpenCorvus_<version>_aarch64.dmg` | `.app.tar.gz` 压缩包 |
+| macOS Intel | `OpenCorvus_<version>_x64.dmg` | `.app.tar.gz` 压缩包 |
+| Linux x64 | `OpenCorvus_<version>_amd64.AppImage` | Debian/Ubuntu 使用 `.deb`，Fedora/RHEL 使用 `.rpm` |
+| Linux ARM64 | `OpenCorvus_<version>_aarch64.AppImage` | `_arm64.deb` 或 `.aarch64.rpm` |
+
+把 `<version>` 替换成 Release 页面显示的版本，例如 `0.0.35-beta`。只需下载实际要
+安装的那一个文件。
+
 ### 从源码安装
 
 ```bash
@@ -127,8 +146,8 @@ bun run --cwd packages/opencorvus build
 bun packages/opencorvus/src/index.ts doctor
 ```
 
-上面的源码构建是当前仓库内可验证的安装路径。其他分发命令只有在本仓库拥有对应的
-自动化验证后，才能被视为已经验证的安装渠道。
+上面的源码构建是仓库内安装路径。桌面下载由对应 Release 的 GitHub Actions 原生
+打包矩阵验证；开发运行里的 Actions artifact 不是公开安装包下载渠道。
 
 ### 启动你的助手
 
@@ -262,6 +281,7 @@ bun ./packages/sdk/js/script/build.ts
 ## 文档与贡献
 
 - 产品文档：<https://opencorvus.ai/docs>
+- 更新日志：[`CHANGELOG.md`](./CHANGELOG.md)
 - GitHub Action：[`github/README.md`](./github/README.md)
 - 贡献指南：[`CONTRIBUTING.md`](./CONTRIBUTING.md)
 

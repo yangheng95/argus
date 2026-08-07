@@ -7,6 +7,7 @@
 - Change the repository's default Git remote address to `https://github.com/yangheng95/opencorvus`.
 - Repair and test the package matrix through GitHub Actions.
 - Upgrade Bun to 1.3.14 and explain or repair the observed 500-plus MB package artifact size at its demonstrated owner.
+- Ensure public GitHub Release assets remain independently downloadable, then update the documentation and bilingual README files with download links and platform choices.
 
 ### Acceptance Criteria
 
@@ -17,6 +18,7 @@
 - A real GitHub Actions run on the delivered commit reaches terminal success for every required matrix row. Local workflow checks alone do not count as matrix acceptance.
 - The final workflow, scripts, logs, and produced artifact inventory receive a second review before delivery.
 - Artifact reporting distinguishes one installer's size from a matrix row's aggregate upload, and the Browser Node sidecar contains its own exact runtime closure rather than a duplicate of the Host server closure.
+- A release publishes each validated installer as an individual GitHub Release asset; documentation links users to the latest release and explains the correct asset per operating system.
 
 ### Hard Constraints
 
@@ -47,6 +49,11 @@
 - `packages/opencorvus/script/build.local.ts`
 - `packages/opencorvus/src/browser/runtime/node-sidecar.ts`
 - `packages/overlay/src-tauri/build.rs`
+- `script/stage-release-upload-assets.ts`
+- `docs/packaging.md`
+- `RELEASE.md`
+- `README.md`
+- `README.zh-CN.md`
 - `specs/records/2026-07/2026-07-09-github-overlay-package-ci.md`
 - `specs/records/2026-07/2026-07-16-gui-installer-matrix-and-db-schema-backup.md`
 - `specs/records/2026-08/2026-08-05-v0.0.32beta-windows-native-matrix-package.md`
@@ -81,6 +88,7 @@
 10. Build 37's completed row uploads measured 545-612 MB because each row artifact aggregates three distributable forms. The Windows directory contains a roughly 211 MiB bare executable, 202 MiB Microsoft Installer package, and 202 MiB Nullsoft Scriptable Install System setup executable; an existing local 0.0.34-beta staging tree has the same sizes, so this aggregate is neither a single installer nor a Bun 1.3.14 regression.
 11. The underlying Windows server payload is roughly 493 MiB before gzip embedding: the Bun-compiled server is 168 MiB, the Browser Node sidecar is 187 MiB, the Host `node_modules` closure is 102 MiB, and tool binaries are 36 MiB. The sidecar's 187 MiB included an 83 MiB Node executable plus another 102 MiB copy of the full Host dependency closure, although its runtime contract resolves only Playwright. This is a real duplicate owner independent of the aggregate-upload presentation.
 12. Build 37 packaged all three Linux ARM64 bundles, then staging rejected the generated `OpenCorvus_0.0.35-beta_aarch64.AppImage` because the shared release asset contract incorrectly expected an `arm64` AppImage suffix. Tauri uses `aarch64` for that AppImage and RPM, while Debian correctly uses `arm64`; the other four matrix rows succeeded.
+13. The canonical release job downloads aggregate CI row artifacts only as an internal transfer step. `stage-release-upload-assets.ts` then flattens and validates the installer filenames, and `gh release upload` receives each staged file as its own argument. GitHub Release users therefore download one installer asset, not the 500-plus MB CI row artifact.
 
 ## Implementation Plan
 
@@ -95,11 +103,22 @@
 9. Run Vite through the package-owned Node entrypoint with an explicit 8 GB heap so every local, Tauri, and matrix caller shares the same memory contract; rerun the full native matrix rather than retrying only macOS.
 10. Give the Browser Node sidecar an explicit Playwright runtime-module closure, use that closure in both production builders and packaged-runtime validation, and rebuild the Windows package to measure the resulting installer rather than estimating from source.
 11. Correct the Linux ARM64 AppImage architecture mapping at the shared release asset contract, add a positive filename-contract test covering all three Tauri outputs, then rerun the full matrix on the new exact source tree.
+12. Add a positive release-staging test proving multiple installers become independent files, document the CI-artifact versus public-release distinction, and add current GitHub Releases download links and operating-system selection guidance to both README languages and the release documentation.
 
 ## Verification Evidence
 
-Pending implementation and live GitHub Actions execution.
+- Bun 1.3.14 focused contracts pass: `bun test script/release-asset-contract.test.ts script/stage-release-upload-assets.test.ts packages/opencorvus/test/browser-mcp-node-bundle.test.ts` reports four passing tests and nine assertions.
+- The rebuilt Windows Browser Node sidecar resolves the exact `playwright` and `playwright-core` closure, and its packaged Node executable successfully loads Playwright's Chromium export.
+- The uncompressed Windows embedded server payload fell from roughly 493 MiB to 406 MiB. The Browser Node sidecar fell from roughly 187 MiB to 98 MiB.
+- A full local `bun run package:gui-installer-matrix` completed SDK generation, the 7,087-module Vite production build, embedded backend construction, Tauri executable linking, MSI and NSIS bundling, staging, and release-asset validation.
+- The resulting Windows MSI is 178.98 MiB and the NSIS setup executable is 178.48 MiB, down from roughly 202 MiB each. The staged bare executable is 186.46 MiB; their aggregate staging directory remains larger because it deliberately contains all three files.
+- Build 37 on delivery snapshot `581a49f84c6e70dd0154550d472e6520bc59a28b` proved Windows x64, both macOS architectures, and Linux x64. Linux ARM64 produced all three native bundles before the now-corrected AppImage filename contract rejected staging.
+- Final acceptance remains bound to a new public five-platform workflow run on the post-fix exact delivery tree; no earlier run substitutes for that evidence.
 
 ## Second Review
 
-Pending final candidate review.
+- The public release path uploads individual flattened installer files; the large per-row Actions artifact remains an internal transfer container.
+- Browser sidecar dependencies are owned by one explicit runtime-closure function shared by both builders and the packaged-runtime validator.
+- Linux ARM64 naming follows the three actual Tauri formats rather than a platform-wide guessed suffix.
+- Bilingual README guidance and `RELEASE.md` point to the canonical GitHub Releases pages and tell users which single file to download.
+- Final diff, repository checks, public run result, artifact inventory, and both remote pushes remain required before delivery.

@@ -62,12 +62,26 @@ The canonical release publishes the Tauri GUI installers only:
 - `script/package-linux-binary.ts` remains the remote/container overlay-server bundle with embedded UI under `dist/binary/*`; it is not the public terminal CLI archive.
 - `build:overlay` remains the developer-facing bound Tauri build command. Release installers use `packages/overlay/script/build.ts` through the GUI matrix owner.
 
+### CI transfer artifacts and public release assets
+
+Each `package-overlay` row uploads its whole validated staging directory as one
+short-lived GitHub Actions artifact. Its displayed byte count is the aggregate
+of the executable and every installer format for that platform; it is not the
+size of one installer.
+
+`publish-release-assets` downloads those row artifacts, then
+`script/stage-release-upload-assets.ts` validates and flattens the installer
+files into a temporary directory. The workflow passes the resulting file list
+to `gh release upload`, so each installer is an independently downloadable
+asset on <https://github.com/yangheng95/opencorvus/releases>. The release upload
+does not publish the aggregate Actions artifact or the staged bare executable.
+
 ## Validation Commands
 
-Run the script and route tests after changing packaging logic:
+Run the focused packaging contract tests after changing packaging logic:
 
 ```bash
-bun test packages/opencorvus/test/script/package-native-binary.test.ts packages/opencorvus/test/script/package-linux-binary.test.ts packages/opencorvus/test/script/package-binary-matrix.test.ts packages/opencorvus/test/script/package-gui-installer-matrix.test.ts packages/opencorvus/test/script/release-overlay-contract.test.ts packages/opencorvus/test/script/install-script.test.ts
+bun test script/release-asset-contract.test.ts script/stage-release-upload-assets.test.ts packages/opencorvus/test/browser-mcp-node-bundle.test.ts
 ```
 
 Build the complete native CLI package on the current supported host:
