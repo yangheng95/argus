@@ -20,7 +20,7 @@ Status: implemented; isolated model-backed end-to-end acceptance passed.
 5. The package projects the same acceptance contract to the Orchestrator and every worker that defines, implements, or reviews fidelity. No global core prompt, duplicate hard-coded threshold, compatibility path, Host gate, or second runtime evaluator is introduced.
 6. Package discovery, manifest validation, runtime projection, generated payload parity, and a real model-backed Frontend Replica Task are verified end to end.
 7. Real desktop Browser evidence and fresh screenshots are personally inspected. No User Interface automated test is added, modified, or run.
-8. Focused non-User-Interface checks, documentation health, diff review, a `dsw-33987` commit, and a push to `git-cc` complete delivery.
+8. Focused non-User-Interface checks, documentation health, diff review, a `dsw-33987` commit, and a push to legacy remote complete delivery.
 
 ### Hard constraints
 
@@ -74,7 +74,7 @@ The package-local single source is a shared Frontend Replica acceptance Skill pr
 3. Add focused positive package-contract coverage that validates the manifest, exact Skill projection, and composed content for every fidelity-owning participant.
 4. Run focused contract tests, payload generation parity, typecheck, API/document checks, and Git whitespace/staged checks.
 5. Run a real isolated Frontend Replica Task through the current source runtime, inspect streamed sessions and Task Artifacts, open the produced desktop page in the real Browser, capture fresh Task-scoped screenshots, and manually compare the source and target evidence.
-6. Perform a second code/diff/evidence review, update this record with exact commands and identities, commit with the required prefix, and push to `git-cc`.
+6. Perform a second code/diff/evidence review, update this record with exact commands and identities, commit with the required prefix, and push to legacy remote.
 
 ## Planned validation
 

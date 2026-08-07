@@ -25,7 +25,7 @@
 - Preserve Goal status/result derivation and active execution evidence ownership.
 - Preserve unrelated concurrent left-Dock tooltip changes and stage only task-owned differences.
 - Do not restart, refresh, close, or otherwise interfere with the user's running OpenCorvus/Overlay process.
-- Commit subjects use the `dsw-33987` prefix and delivery pushes only the current main worktree branch to `myhexin`.
+- Commit subjects use the `dsw-33987` prefix and delivery pushes only the current main worktree branch to `legacy-remote`.
 
 ### Read sources
 

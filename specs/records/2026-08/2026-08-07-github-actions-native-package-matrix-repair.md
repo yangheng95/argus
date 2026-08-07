@@ -11,7 +11,7 @@
 
 ### Acceptance Criteria
 
-- `origin` fetch and push URLs equal the requested GitHub repository, and ordinary pushes from `v0.0.35beta` target that GitHub branch rather than `git-cc`.
+- `origin` fetch and push URLs equal the requested GitHub repository, and ordinary pushes from `v0.0.35beta` target that GitHub branch rather than legacy remote.
 - The exact current source commit is published before packaging; a stale local snapshot or an older GitHub branch is not accepted as evidence.
 - The canonical GitHub Actions workflow fans out to native Linux x64, Linux ARM64 (Advanced RISC Machines 64-bit), macOS x64, macOS ARM64, and Windows x64 runners.
 - Each row runs the repository-owned matrix packager, validates the final staged artifacts, and uploads only that row's verified output.
@@ -65,7 +65,7 @@
 - Root `package.json` exposes `package:gui-installer-matrix` and `package:binary-matrix` as separate canonical commands.
 - `.github/workflows/build.yml` and the manual `.github/workflows/build-overlays.yml` call `package:gui-installer-matrix`; the current public release workflow intentionally publishes graphical installer artifacts rather than portable command-line interface archives.
 - The graphical installer packager already maps the five native platform rows, stages platform installers under `packages/overlay/dist-artifacts/<platform>`, and invokes `check-release-assets.ts overlay --require-bundle` after staging.
-- The GitHub remote already has the requested URL, but local `v0.0.35beta` tracks `git-cc/v0.0.35beta`; therefore URL inspection alone does not satisfy the default-push request.
+- The GitHub remote already has the requested URL, but local `v0.0.35beta` tracks `legacy-remote/v0.0.35beta`; therefore URL inspection alone does not satisfy the default-push request.
 - GitHub's default branch is `candidate`, and its latest public successful package matrix is build 34 on the older `v0.0.2beta` line. Current `v0.0.35beta` has no remote branch or live Actions evidence yet.
 - The failed public build 33 was a GitHub-hosted-runner acquisition incident affecting all rows, not evidence of a repository packaging defect. Build 34 subsequently completed all ten then-declared command-line interface and Overlay rows successfully.
 - Searches used: `rg --files .github script specs`; `rg 'package:gui-installer-matrix|package:binary-matrix|check-release-assets|matrix'`; `git remote -v`; `git remote show origin`; `git ls-remote --symref origin HEAD`; and current branch/status/log inspection.
@@ -76,8 +76,8 @@
 
 ## Evidence Timeline
 
-1. The workspace began clean on `v0.0.35beta` at `8d336b8db4`, one commit ahead of `git-cc/v0.0.35beta`.
-2. `origin` already resolved to the requested GitHub URL, while branch upstream remained `git-cc/v0.0.35beta` and no `remote.pushDefault` existed.
+1. The workspace began clean on `v0.0.35beta` at `8d336b8db4`, one commit ahead of `legacy-remote/v0.0.35beta`.
+2. `origin` already resolved to the requested GitHub URL, while branch upstream remained `legacy-remote/v0.0.35beta` and no `remote.pushDefault` existed.
 3. GitHub's public Actions history showed build 34 succeeded on July 9, 2026 at old commit `85599f9`; it does not validate current source.
 4. The locally installed GitHub Command Line Interface had no authentication, while a Git dry-run proved the existing Git credential path can publish a new `v0.0.35beta` branch and the repository pre-push checks pass.
 5. The first full push was rejected by GitHub `GH001`: historical and current generated package outputs contained executable and installer blobs above GitHub's 100 MB per-file limit. The current tree still tracked ten files under root `opencorvus-dist/`, including 121-128 MB Linux executables, while only Overlay's generated `dist-artifacts/` directory was ignored.
@@ -93,12 +93,12 @@
 ## Implementation Plan
 
 1. Remove the tracked root `opencorvus-dist/` generated package tree and add its root path to `.gitignore`; the canonical matrix remains the regeneration source.
-2. Set repository-local `remote.pushDefault=origin`. Because published `git-cc` history contains rejected large package objects and cannot be rewritten, create a GitHub delivery commit whose parent is GitHub `candidate` and whose tree is the exact cleaned current source tree; publish it as `v0.0.35beta` without changing the local or `git-cc` history.
+2. Set repository-local `remote.pushDefault=origin`. Because published legacy remote history contains rejected large package objects and cannot be rewritten, create a GitHub delivery commit whose parent is GitHub `candidate` and whose tree is the exact cleaned current source tree; publish it as `v0.0.35beta` without changing the local or legacy remote history.
 3. Dispatch `.github/workflows/build.yml` explicitly at that branch with an empty release version so the run creates retained development artifacts without creating a release or mutating the release branch.
 4. Replace the stale Bun 1.3.13 cold-install workaround with the current official stable Bun release, official npm registry authority, and Bun's native platform backend/concurrency defaults. Synchronize all active runtime requirement documentation and the Overlay Docker builder.
 5. Inspect every matrix job and artifact from the exact dispatched commit. Distinguish runner-service failures from repository workflow or packager failures.
 6. Repair only evidenced canonical owners. Add or restore focused positive non-User Interface contract coverage when implementation changes are required.
-7. Commit with the required `dsw-33987` prefix, push the ordinary history to `git-cc`, update the GitHub delivery commit, rerun the exact workflow, and record terminal job/artifact evidence here.
+7. Commit with the required `dsw-33987` prefix, push the ordinary history to legacy remote, update the GitHub delivery commit, rerun the exact workflow, and record terminal job/artifact evidence here.
 8. Run documentation health, version, workflow syntax/contract, typecheck, diff, and cached-diff checks; then manually review the final source and live Actions result.
 9. Run Vite through the package-owned Node entrypoint with an explicit 8 GB heap so every local, Tauri, and matrix caller shares the same memory contract; rerun the full native matrix rather than retrying only macOS.
 10. Give the Browser Node sidecar an explicit Playwright runtime-module closure, use that closure in both production builders and packaged-runtime validation, and rebuild the Windows package to measure the resulting installer rather than estimating from source.

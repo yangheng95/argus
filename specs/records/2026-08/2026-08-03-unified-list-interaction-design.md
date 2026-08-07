@@ -64,7 +64,7 @@ Each primitive owns its own rendering but reads the common token family:
 2. Run targeted non-UI typecheck/build and `git diff --check` after implementation.
 3. Launch the real desktop client in light and dark themes. Manually inspect and screenshot the sidebar project/task list, settings navigation, automated Mission list, Composer recommendations, model/reference selections, a dropdown menu, select/listbox options, and the file tree.
 4. Confirm no pointer entry causes row movement, action-track reflow, double hover paint, or selected-state loss; confirm keyboard focus remains visible.
-5. Run the required spec health test after this record/index update, then commit with the `dsw-33987` prefix and push main to `myhexin` through hooks.
+5. Run the required spec health test after this record/index update, then commit with the `dsw-33987` prefix and push main to `legacy-remote` through hooks.
 
 ## Spec Self-Review
 

@@ -58,7 +58,7 @@ OpenCorvus 是 **TypeScript ESM** 单体仓库（monorepo），包管理器 **bu
 | 近期 reflog 窗口  | 2026-07-13 .. 2026-08-01（≈51 commits/天，researcher 复核） |
 | 提交 subject 前缀 | `dsw-33987`                                                 |
 | 分支链            | v0.0.1beta .. v0.0.27beta                                   |
-| 远端              | git-cc（myhexin）+ GitHub upstream（yangheng95/opencorvus） |
+| 远端              | legacy remote（legacy-remote）+ GitHub upstream（yangheng95/opencorvus） |
 
 ### 1.4 Issue 与典型任务
 

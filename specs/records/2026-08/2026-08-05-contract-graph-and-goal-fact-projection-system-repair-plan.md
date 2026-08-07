@@ -1,7 +1,7 @@
 # ContractGraph 与 Goal 事实投影系统修复方案
 
 日期：2026-08-05  
-状态：已完成并发布到 `git-cc/v0.0.30beta`
+状态：已完成并发布到 `legacy-remote/v0.0.30beta`
 范围：Architect ContractGraph、Delivery Slice revision、dispatch lineage、review Artifact、Workbench Board、Overlay Goal 面板、相关 Prompt、文档和非 UI 契约测试
 
 ## Recall
@@ -382,7 +382,7 @@ Requirement不能从Session、workflow或整体review获得failed状态。Requir
 ## 七、提交与发布顺序
 
 1. 先提交本方案和索引，建立可追踪基线。
-2. 每个独立 Phase形成以 `dsw-33987` 开头的提交并推送 `git-cc/v0.0.30beta`；不混入现存用户文件。
+2. 每个独立 Phase形成以 `dsw-33987` 开头的提交并推送 `legacy-remote/v0.0.30beta`；不混入现存用户文件。
 3. 每阶段独立复审完成后再进入下一 Phase；Reviewer不产生代码提交。
 4. 最终运行focused tests、typecheck、API route check、docs check、package parity和真实页面人工验收。
 5. 主 Agent做最终diff review，独立Reviewer再做全量只读review。

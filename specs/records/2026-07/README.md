@@ -258,7 +258,7 @@
 
 - [2026-07-28-landing-demo-description-restraint.md](2026-07-28-landing-demo-description-restraint.md) keeps the real-client demo claim while removing internal project, research-scope, and roadmap details from the localized promotional description.
 
-- [2026-07-28-landing-cta-contrast-and-gitcc-source.md](2026-07-28-landing-cta-contrast-and-gitcc-source.md) stabilizes the architecture CTA text contrast and replaces visible GitHub branding with the localized git-cc source entry.
+- [2026-07-28-landing-cta-contrast-and-legacy-remote-source.md](2026-07-28-landing-cta-contrast-and-legacy-remote-source.md) stabilizes the architecture CTA text contrast and replaces visible GitHub branding with the localized legacy remote source entry.
 
 - [2026-07-28-landing-image-preview.md](2026-07-28-landing-image-preview.md) adds one localized native-dialog preview interaction to the landing page's four real product screenshots.
 
@@ -501,7 +501,7 @@ Latest v0.0.21beta work-branch convergence: [`2026-07-27-v0.0.21beta-work-branch
 
 - [2026-07-23-mirror-prism-single-squad-cutover.md](2026-07-23-mirror-prism-single-squad-cutover.md) cuts Mission delivery over to one clone-first `mirror/prism` Task, documents its virtual workflow and Goal decomposition, and retires the superseded PRD, Design, and Code packages.
 
-- [2026-07-23-mirror-prism-scaffold-bootstrap-restoration.md](2026-07-23-mirror-prism-scaffold-bootstrap-restoration.md) restores the credential-free git-cc scaffold clone as a mandatory Mission-owned prerequisite before Mirror Prism delivery dispatch.
+- [2026-07-23-mirror-prism-scaffold-bootstrap-restoration.md](2026-07-23-mirror-prism-scaffold-bootstrap-restoration.md) restores the credential-free legacy remote scaffold clone as a mandatory Mission-owned prerequisite before Mirror Prism delivery dispatch.
 
 - [2026-07-27-prism-generic-directory-bootstrap-repair.md](2026-07-27-prism-generic-directory-bootstrap-repair.md) removes the invented scaffold remote and clean-worktree prerequisites from generic Prism delivery while preserving the explicit AInvest scaffold clone contract.
 
@@ -555,11 +555,11 @@ Latest v0.0.21beta work-branch convergence: [`2026-07-27-v0.0.21beta-work-branch
 
 - [2026-07-24-v0.0.18beta-matrix-packaging.md](2026-07-24-v0.0.18beta-matrix-packaging.md) records native macOS ARM64 GUI-first/CLI-second packaging, artifact verification, and the portable CLI code-signing repair for `v0.0.18beta`.
 
-- [2026-07-24-v0.0.18beta-branch-bump.md](2026-07-24-v0.0.18beta-branch-bump.md) records the preservation-safe release-family synchronization and git-cc delivery of the `v0.0.18beta` branch.
+- [2026-07-24-v0.0.18beta-branch-bump.md](2026-07-24-v0.0.18beta-branch-bump.md) records the preservation-safe release-family synchronization and legacy remote delivery of the `v0.0.18beta` branch.
 
-- [2026-07-26-v0.0.19beta-branch-bump.md](2026-07-26-v0.0.19beta-branch-bump.md) records the preservation-safe release-family synchronization and git-cc delivery of the `v0.0.19beta` branch.
+- [2026-07-26-v0.0.19beta-branch-bump.md](2026-07-26-v0.0.19beta-branch-bump.md) records the preservation-safe release-family synchronization and legacy remote delivery of the `v0.0.19beta` branch.
 
-- [2026-07-23-v0.0.17beta-branch-bump.md](2026-07-23-v0.0.17beta-branch-bump.md) records the preservation-safe release-family synchronization and git-cc delivery of the `v0.0.17beta` branch.
+- [2026-07-23-v0.0.17beta-branch-bump.md](2026-07-23-v0.0.17beta-branch-bump.md) records the preservation-safe release-family synchronization and legacy remote delivery of the `v0.0.17beta` branch.
 
 - [2026-07-23-mirror-design-visual-evidence-projection-repair.md](2026-07-23-mirror-design-visual-evidence-projection-repair.md) repairs Mirror Design visual acceptance by projecting the formal Browser Preview comparison tools and requiring their durable evidence refs instead of interactive artifact IDs.
 
@@ -584,7 +584,7 @@ Latest v0.0.21beta work-branch convergence: [`2026-07-27-v0.0.21beta-work-branch
 
 - [2026-07-23-goal-scoped-research-session-ownership-repair.md](2026-07-23-goal-scoped-research-session-ownership-repair.md) records the single-owner repair that lets the shared runner create fresh Goal-scoped research sessions with exact Goal identity while preserving strict continuation validation.
 
-- [2026-07-23-v0.0.16beta-branch-bump.md](2026-07-23-v0.0.16beta-branch-bump.md) records the preservation-safe release-family synchronization and git-cc delivery of the `v0.0.16beta` branch.
+- [2026-07-23-v0.0.16beta-branch-bump.md](2026-07-23-v0.0.16beta-branch-bump.md) records the preservation-safe release-family synchronization and legacy remote delivery of the `v0.0.16beta` branch.
 - [2026-07-23-expert-squad-builtin-update-version-recovery.md](2026-07-23-expert-squad-builtin-update-version-recovery.md) records the installed-versus-bundled expert-squad version contract and catalog-failure update recovery repair.
 
 - [2026-07-23-mirror-prism-debug-recovery-integration.md](2026-07-23-mirror-prism-debug-recovery-integration.md) integrates Review & Debug into Mirror Prism's Mission-owned product-defect recovery and keeps non-visual and visual repair/retest contracts explicit.
@@ -708,7 +708,7 @@ Latest v0.0.21beta work-branch convergence: [`2026-07-27-v0.0.21beta-work-branch
 
 - [2026-07-21-task-expert-squad-selector-live-discovery.md](2026-07-21-task-expert-squad-selector-live-discovery.md) records the runtime-proven stale wake-owned Expert Squad selector snapshot, removal of host keyword filtering, live selection-only discovery, and Orchestrator absence-proof contract.
 
-- [2026-07-21-v0.0.13beta-latest-macos-repackage.md](2026-07-21-v0.0.13beta-latest-macos-repackage.md) records the latest git-cc fast-forward and canonical native macOS ARM64 GUI installer rebuild and verification.
+- [2026-07-21-v0.0.13beta-latest-macos-repackage.md](2026-07-21-v0.0.13beta-latest-macos-repackage.md) records the latest legacy remote fast-forward and canonical native macOS ARM64 GUI installer rebuild and verification.
 
 - [2026-07-21-chat-mission-inline-conversation-handoff.md](2026-07-21-chat-mission-inline-conversation-handoff.md) records the typed Chat-to-Mission handoff and in-place Conversation source switch that preserves independent Mission runtime ownership without opening a second visible conversation surface.
 
@@ -781,7 +781,7 @@ Latest v0.0.21beta work-branch convergence: [`2026-07-27-v0.0.21beta-work-branch
 
 - [2026-07-20-opentest-builtin-execution-evidence-integrity.md](2026-07-20-opentest-builtin-execution-evidence-integrity.md) records the tracked Expert Squad authoring root, package-owned real case harness, stdout projection reconciliation, and recoverable execution-history semantics.
 
-- [2026-07-20-mirror-watch-namespace-convergence.md](2026-07-20-mirror-watch-namespace-convergence.md) records the direct replacement of the residual `myhexin/mirror-watch` package provenance with the single canonical `tanzeqi/mirror-watch` namespace while preserving `mirror-watch` as the active profile identity.
+- [2026-07-20-mirror-watch-namespace-convergence.md](2026-07-20-mirror-watch-namespace-convergence.md) records the direct replacement of the residual `legacy-remote/mirror-watch` package provenance with the single canonical `tanzeqi/mirror-watch` namespace while preserving `mirror-watch` as the active profile identity.
 
 - [2026-07-20-chat-browser-preview-task-binding.md](2026-07-20-chat-browser-preview-task-binding.md) records the task-scoped Chat binding repair that projects explicit Chat-created tasks into `browser_preview` and the right-side Browser without parsing shell or message URLs.
 
@@ -882,7 +882,7 @@ Latest v0.0.21beta work-branch convergence: [`2026-07-27-v0.0.21beta-work-branch
 
 - [2026-07-18-environment-popover-goal-and-dock-convergence.md](2026-07-18-environment-popover-goal-and-dock-convergence.md) records the single Environment Information parent surface for Goals and non-empty Right Dock child features, including hover-open and click-pin behavior.
 
-- [2026-07-18-v0.0.9beta-yr-0718-merge.md](2026-07-18-v0.0.9beta-yr-0718-merge.md) records preservation, integration, conflict resolution, validation, and git-cc delivery of the latest yr-0718 work line into `v0.0.9beta`.
+- [2026-07-18-v0.0.9beta-yr-0718-merge.md](2026-07-18-v0.0.9beta-yr-0718-merge.md) records preservation, integration, conflict resolution, validation, and legacy remote delivery of the latest yr-0718 work line into `v0.0.9beta`.
 
 - [2026-07-18-squad-skill-update-sources.md](2026-07-18-squad-skill-update-sources.md) records the single-source builtin/server update protocol for Expert Squads and Skills, atomic identity-preserving replacement, and the undeployed-server fixture boundary.
 
@@ -921,7 +921,7 @@ Latest v0.0.21beta work-branch convergence: [`2026-07-27-v0.0.21beta-work-branch
 - [2026-07-18-work-ledger-hover-and-right-dock-visible-multi-tabs.md](2026-07-18-work-ledger-hover-and-right-dock-visible-multi-tabs.md) records full-row right-opening Work Ledger hover placement and compact content-sized Right Dock tabs that remain visibly multi-tab before genuine overflow.
 
 - [2026-07-17-conversation-fade-brand-guide-retirement-and-goal-density.md](2026-07-17-conversation-fade-brand-guide-retirement-and-goal-density.md) records the top conversation occlusion fade, complete Quick Guide retirement, and compact non-stretching Goals row contract.
-- [2026-07-18-v0.0.8beta-latest-work-merge.md](2026-07-18-v0.0.8beta-latest-work-merge.md) records the latest active work-line integration into the `v0.0.8beta` git-cc delivery branch.
+- [2026-07-18-v0.0.8beta-latest-work-merge.md](2026-07-18-v0.0.8beta-latest-work-merge.md) records the latest active work-line integration into the `v0.0.8beta` legacy remote delivery branch.
 
 - [2026-07-17-cross-platform-mailbox-notification-repair.md](2026-07-17-cross-platform-mailbox-notification-repair.md) records the backend-owned Mailbox eligibility convergence and permission/delivery repair across Tauri desktop, browser, and Visual Studio Code hosts.
 
@@ -956,7 +956,7 @@ Latest v0.0.21beta work-branch convergence: [`2026-07-27-v0.0.21beta-work-branch
 
 - [2026-07-17-composer-mention-cascade.md](2026-07-17-composer-mention-cascade.md) records the stable `@skill` / `@squad` placeholder hint and automatically expanded category-to-entity Composer menu repair.
 
-- [2026-07-17-v0.0.8beta-remote-merge-and-matrix-build.md](2026-07-17-v0.0.8beta-remote-merge-and-matrix-build.md) records the latest git-cc work-branch integration and native GUI-first/CLI-second package matrix acceptance for `v0.0.8beta`.
+- [2026-07-17-v0.0.8beta-remote-merge-and-matrix-build.md](2026-07-17-v0.0.8beta-remote-merge-and-matrix-build.md) records the latest legacy remote work-branch integration and native GUI-first/CLI-second package matrix acceptance for `v0.0.8beta`.
 
 - [2026-07-17-environment-resource-visibility-and-flat-hover.md](2026-07-17-environment-resource-visibility-and-flat-hover.md) records canonical Browser/Review/Files/Screenshots information-owned visibility and transparent Changes/resource-row pointer hover in the Environment information popover.
 
@@ -1003,7 +1003,7 @@ Latest global model, expert-squad lifecycle, and Composer stop convergence: [`20
 
 - [2026-07-17-frontend-replica-package-protocol-e2e.md](2026-07-17-frontend-replica-package-protocol-e2e.md) records the evidence-backed convergence plan for latest-protocol Frontend replica projection, source-algorithm parity, Browser MCP ownership, observable terminal flow, and real package-to-preview E2E acceptance.
 
-- [2026-07-17-v0.0.8beta-latest-matrix-build.md](2026-07-17-v0.0.8beta-latest-matrix-build.md) records the latest git-cc alignment and native macOS ARM64 GUI/CLI production-matrix rebuild from the `v0.0.8beta` source line.
+- [2026-07-17-v0.0.8beta-latest-matrix-build.md](2026-07-17-v0.0.8beta-latest-matrix-build.md) records the latest legacy remote alignment and native macOS ARM64 GUI/CLI production-matrix rebuild from the `v0.0.8beta` source line.
 
 - [2026-07-17-iwc-opentest-futures-e2e.md](2026-07-17-iwc-opentest-futures-e2e.md) records current-manifest MirrorTest package parity, an out-of-scope parallel main-database Mission retained as historical 9/9 evidence, and the status snapshot repair found during that run; it is not current Goal acceptance.
 
@@ -1021,7 +1021,7 @@ Latest global model, expert-squad lifecycle, and Composer stop convergence: [`20
 
 - [2026-07-16-global-new-chat-implicit-project-and-visible-provider-errors.md](2026-07-16-global-new-chat-implicit-project-and-visible-provider-errors.md) records the root repair for project-leaking menu New Chat creation and hidden part-less Provider errors.
 
-- [2026-07-16-remote-latest-macos-arm64-repackage.md](2026-07-16-remote-latest-macos-arm64-repackage.md) records the fast-forward to the latest git-cc `v0.0.7beta` source and the subsequent native macOS ARM64 GUI package verification.
+- [2026-07-16-remote-latest-macos-arm64-repackage.md](2026-07-16-remote-latest-macos-arm64-repackage.md) records the fast-forward to the latest legacy remote `v0.0.7beta` source and the subsequent native macOS ARM64 GUI package verification.
 
 - [2026-07-16-single-visible-titlebar.md](2026-07-16-single-visible-titlebar.md) records the construction-order repair that guarantees one visible application titlebar on macOS, Windows, and Linux while allowing AppKit traffic lights to overlay that same row.
 
@@ -1049,7 +1049,7 @@ Latest global model, expert-squad lifecycle, and Composer stop convergence: [`20
 
 - [2026-07-16-squad-mailbox-and-right-dock.md](2026-07-16-squad-mailbox-and-right-dock.md) records the single-source squad-to-scheduler/operator Mailbox protocol, Multica-informed right-Dock visual contract, durable read/archive projection, and desktop GUI acceptance plan.
 
-- [2026-07-16-v0.0.7beta-latest-repackage.md](2026-07-16-v0.0.7beta-latest-repackage.md) records the latest git-cc fast-forward, local GUI embedded-sidecar version divergence, single-source version projection repair, and repeated native packaging evidence.
+- [2026-07-16-v0.0.7beta-latest-repackage.md](2026-07-16-v0.0.7beta-latest-repackage.md) records the latest legacy remote fast-forward, local GUI embedded-sidecar version divergence, single-source version projection repair, and repeated native packaging evidence.
 
 - [2026-07-16-mission-disclosure-row-inset-alignment.md](2026-07-16-mission-disclosure-row-inset-alignment.md) records the Projects-row repair that keeps Mission glyphs on one shared left inset whether or not child Tasks mount the count disclosure.
 
@@ -1073,7 +1073,7 @@ Latest global model, expert-squad lifecycle, and Composer stop convergence: [`20
 
 - [2026-07-16-provider-catalog-fresh-install-repair.md](2026-07-16-provider-catalog-fresh-install-repair.md) records the root repair that embeds one production bootstrap catalog, provisions a durable canonical provider catalog on fresh installs without network access or runtime fallback, and verifies real provider routes plus the compiled Overlay surface.
 
-- [2026-07-16-v0.0.7beta-package-matrix-convergence.md](2026-07-16-v0.0.7beta-package-matrix-convergence.md) records the git-cc branch integration evidence, dependency-toolchain recovery, embedded Overlay UI compilation repair, and real native CLI/GUI matrix acceptance for `v0.0.7beta`.
+- [2026-07-16-v0.0.7beta-package-matrix-convergence.md](2026-07-16-v0.0.7beta-package-matrix-convergence.md) records the legacy remote branch integration evidence, dependency-toolchain recovery, embedded Overlay UI compilation repair, and real native CLI/GUI matrix acceptance for `v0.0.7beta`.
 
 - [2026-07-16-expert-squad-package-tool-runtime-dependencies.md](2026-07-16-expert-squad-package-tool-runtime-dependencies.md) records the expert-squad package-tool runtime dependency drift that allowed `typescript` imports while omitting them from packaged sidecar node_modules, plus the single packaged-runtime repair and regression test.
 
@@ -1137,7 +1137,7 @@ Latest global model, expert-squad lifecycle, and Composer stop convergence: [`20
 
 - [2026-07-15-task-progress-empty-goal-body-repair.md](2026-07-15-task-progress-empty-goal-body-repair.md) records the GOALS floating-window geometry repair that makes every normal legal size render at least one goal pill and verifies task switching clears the previous board projection.
 
-- [2026-07-15-current-wip-batched-push.md](2026-07-15-current-wip-batched-push.md) records the complete current-worktree WIP snapshot, functional commit batches, active parallel-write reconciliation, verification, and git-cc delivery evidence.
+- [2026-07-15-current-wip-batched-push.md](2026-07-15-current-wip-batched-push.md) records the complete current-worktree WIP snapshot, functional commit batches, active parallel-write reconciliation, verification, and legacy remote delivery evidence.
 
 - [2026-07-15-workspace-search-mission-disclosure-and-launcher-copy.md](2026-07-15-workspace-search-mission-disclosure-and-launcher-copy.md) records the far-right workspace search, left-attached low-contrast Mission task disclosure, and consistent file-manager launcher copy with real browser acceptance.
 
@@ -1161,7 +1161,7 @@ Latest global model, expert-squad lifecycle, and Composer stop convergence: [`20
 
 - [2026-07-15-multica-import-agent-responsibility-and-installed-skill-action.md](2026-07-15-multica-import-agent-responsibility-and-installed-skill-action.md) records the Prompt-only Multica Agent repair responsibility and the authoritative removal of repeat install actions for already installed Skill market sources.
 
-- [2026-07-15-work-v0.0.4beta-yr-0715-merge-and-v0.0.5beta-bump.md](2026-07-15-work-v0.0.4beta-yr-0715-merge-and-v0.0.5beta-bump.md) records the evidence-backed git-cc branch merge, concurrent Agent checkpoint, SDK identifier-checker repair, release-family version bump, and `v0.0.5beta` delivery verification.
+- [2026-07-15-work-v0.0.4beta-yr-0715-merge-and-v0.0.5beta-bump.md](2026-07-15-work-v0.0.4beta-yr-0715-merge-and-v0.0.5beta-bump.md) records the evidence-backed legacy remote branch merge, concurrent Agent checkpoint, SDK identifier-checker repair, release-family version bump, and `v0.0.5beta` delivery verification.
 
 - [2026-07-15-composer-skill-squad-mentions.md](2026-07-15-composer-skill-squad-mentions.md) records the visible `@skill` / `@squad` Composer completion contract, bounded in-memory suggestions, exact Skill loading, Mission routing through manifest identity, and unified visual/keyboard acceptance plan.
 
@@ -1253,7 +1253,7 @@ Latest global model, expert-squad lifecycle, and Composer stop convergence: [`20
 - [2026-07-09-browser-preview-header-project-action-visibility.md](2026-07-09-browser-preview-header-project-action-visibility.md) records the Browser Preview header height repair and the Projects row new-Mission action visibility fix.
 - [2026-07-08-project-actions-budget-capsule-repair.md](2026-07-08-project-actions-budget-capsule-repair.md) records the Overlay Projects row repair that keeps project counts visible with new-project actions and moves Hexin remaining budget display into the composer model capsule.
 - [2026-07-08-message-pane-rail-header-scrollbar-repair.md](2026-07-08-message-pane-rail-header-scrollbar-repair.md) records the Overlay message-pane repair that keeps the agent rail from shifting the message lane off the composer center, moves token usage before the IDE launcher, widens the transcript lane, and changes the primary transcript scrollbar to hover/focus visibility.
-- [2026-07-08-v0.0.2-yerui-0707-merge.md](2026-07-08-v0.0.2-yerui-0707-merge.md) records the git-cc branch merge plan for bringing `myhexin/v0.0.2-yerui-0707` into `v0.0.2beta` while preserving the already-dirty local worktree and verifying browser-preview, transport, generated API, and docs surfaces.
+- [2026-07-08-v0.0.2-yerui-0707-merge.md](2026-07-08-v0.0.2-yerui-0707-merge.md) records the legacy remote branch merge plan for bringing `legacy-remote/v0.0.2-yerui-0707` into `v0.0.2beta` while preserving the already-dirty local worktree and verifying browser-preview, transport, generated API, and docs surfaces.
 - [2026-07-08-project-directory-new-chat-icon.md](2026-07-08-project-directory-new-chat-icon.md) records the Projects panel directory-row action that creates a real Coding Assistant chat for the opened project directory through the existing session lifecycle.
 - [2026-07-08-overlay-codex-milk-tea-light-theme.md](2026-07-08-overlay-codex-milk-tea-light-theme.md) records the Overlay light-theme palette update that replaces pure-white materials with a Codex-like warm milk-tea off-white token ramp.
 - [2026-07-08-evidence-delivery-and-architect-reentry-systemic-repair.md](2026-07-08-evidence-delivery-and-architect-reentry-systemic-repair.md) records the independent-agent systemic repair plan for replacing diff-based success assumptions with goal evidence contracts, unifying dependency readiness, constraining Architect structural re-entry, and modeling final verification as structured continuation evidence.
@@ -1298,7 +1298,7 @@ Latest global model, expert-squad lifecycle, and Composer stop convergence: [`20
 - [2026-07-12-work-ledger-pin-unpin.md](2026-07-12-work-ledger-pin-unpin.md) records the single-source Session-domain pin/unpin design and full backend, Work Ledger, Overlay, pagination, API, and visual acceptance benchmark for Mission and Coding Assistant chat rows.
 - [2026-07-13-project-pin-unpin-and-icon-repair.md](2026-07-13-project-pin-unpin-and-icon-repair.md) corrects the Work Ledger pin model by replacing the static current-project shortcut with persistent Project pin/unpin and deleting the duplicate ad-hoc row-leading pin marker.
 - [2026-07-14-right-dock-panel-ownership-and-browser-draft.md](2026-07-14-right-dock-panel-ownership-and-browser-draft.md) records the single-title Dock ownership, last-tab close behavior, empty-state removal, and Browser native node-comment projection into the mounted scoped composer draft.
-- [2026-07-14-v0.0.3beta-branch-sync.md](2026-07-14-v0.0.3beta-branch-sync.md) records the evidence-backed merge of the latest git-cc `v0.0.3beta` history into `work-v0.0.3beta-yr-0714` and the required post-merge verification.
+- [2026-07-14-v0.0.3beta-branch-sync.md](2026-07-14-v0.0.3beta-branch-sync.md) records the evidence-backed merge of the latest legacy remote `v0.0.3beta` history into `work-v0.0.3beta-yr-0714` and the required post-merge verification.
 - [2026-07-15-v0.0.4beta-workspace-version-bump.md](2026-07-15-v0.0.4beta-workspace-version-bump.md) records the protected primary-workspace branch cut, release-family version single source, synchronized package/native/lock metadata, and Overlay-visible `v0.0.4beta` acceptance.
 - [2026-07-15-composer-budget-hover-and-home-cards-authority.md](2026-07-15-composer-budget-hover-and-home-cards-authority.md) records the user-authoritative restoration of hover-only Hexin budget details and the three-card empty-home examples after a merge revert replaced both surfaces.
 - [2026-07-15-empty-home-layout-state-ownership.md](2026-07-15-empty-home-layout-state-ownership.md) records the intermittent empty-home mixed-state repair that makes one Solid projection own both home content and scoped centered layout.

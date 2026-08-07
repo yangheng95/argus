@@ -20,7 +20,7 @@
 - Preserve the existing uncommitted Chinese-copy hunk in `packages/web/src/content/landing.ts`; stage the final file only after reviewing the combined diff.
 - Do not add, modify, or run User Interface (UI) automated tests. UI acceptance uses a real visible browser and manually inspected screenshots.
 - Desktop-only scope at approximately 1,440 pixels. No mobile or responsive redesign.
-- Commit subjects start with `dsw-33987`; push to `myhexin` without bypassing hooks.
+- Commit subjects start with `dsw-33987`; push to `legacy-remote` without bypassing hooks.
 
 ## Recall
 
@@ -32,7 +32,7 @@
 | Latest selection | Windows example contains `v0.0.26` with a later `mtime` than `1.0.0`; therefore `mtime` is authoritative. |
 | Existing owners | `landing.ts` owns localized copy; `Lander.astro` owns hero actions, native dialog precedent, interaction script, and local styles. |
 | Existing work | `landing.ts` contains an unrelated uncommitted Chinese scenario-title change. It must remain intact through implementation and delivery. |
-| Hard constraints | One current source per platform, no package fallback, no UI tests, real browser/download-request evidence, root `specs/` records and indexes, git-cc push. |
+| Hard constraints | One current source per platform, no package fallback, no UI tests, real browser/download-request evidence, root `specs/` records and indexes, legacy remote push. |
 | Independent agent feedback | None; side-conversation rules prohibit sub-Agent delegation. |
 
 ---
@@ -180,7 +180,7 @@ Capture focused task screenshots for the open English and Chinese dialogs. Inspe
 
 **Interfaces:**
 - Consumes: final diff, commands, API responses, real browser facts, and screenshots.
-- Produces: indexed evidence, scoped commits, and git-cc delivery.
+- Produces: indexed evidence, scoped commits, and legacy remote delivery.
 
 - [x] **Step 1: Run documentation-contract tests**
 
@@ -197,7 +197,7 @@ Record exact focused/static/docs results, live URLs, platform recommendations, r
 
 - [x] **Step 3: Commit and push scoped delivery**
 
-Stage the resolver, positive test, component, complete reviewed `landing.ts`, this plan/indexes, and task screenshots. Explicitly record that the existing Chinese scenario-title hunk was preserved and included with user work. Commit with a `dsw-33987` subject and push to `myhexin` without bypassing hooks.
+Stage the resolver, positive test, component, complete reviewed `landing.ts`, this plan/indexes, and task screenshots. Explicitly record that the existing Chinese scenario-title hunk was preserved and included with user work. Commit with a `dsw-33987` subject and push to `legacy-remote` without bypassing hooks.
 
 ## Implementation evidence
 
@@ -212,7 +212,7 @@ Stage the resolver, positive test, component, complete reviewed `landing.ts`, th
 - Visual review: the first English screenshot exposed a theme reset that positioned the native dialog at the top-left. Adding explicit `inset: 0` and `margin: auto` corrected the root layout issue. The corrected English dialog measured 832 by approximately 433 pixels and was centered at approximately `(296, 284)` in a 1,425 by 1,000 viewport. Windows alone carried the current-device recommendation on the Windows browser. English and Chinese copies, two-column hierarchy, versions, architectures, package types, actions, focus ring, and clipping were personally inspected.
 - Screenshot evidence: [`landing-download-dialog-en.png`](../../artifacts/landing-download-dialog-en.png) and [`landing-download-dialog-zh-cn.png`](../../artifacts/landing-download-dialog-zh-cn.png).
 - Source review: production source contains no resolved package URL; the two history endpoints and package types exist only in `landingDownloadPlatforms`, and `Lander.astro` consumes the shared resolver. The pre-existing Chinese scenario title `沿着当前上下文，把问题一次查清。` remains intact in the combined `landing.ts` diff. No User Interface (UI) automated test, fixture, or screenshot baseline was added or run.
-- Delivery: feature commit `e865df867c` (`dsw-33987 add landing platform downloads`) passed the git-cc pre-push typecheck, route inventory, documentation generation, i18n, and secret-scan hooks and was pushed to `myhexin/work-lcx-v0.0.30beta`.
+- Delivery: feature commit `e865df867c` (`dsw-33987 add landing platform downloads`) passed the legacy remote pre-push typecheck, route inventory, documentation generation, i18n, and secret-scan hooks and was pushed to `legacy-remote/work-lcx-v0.0.30beta`.
 
 ## Plan self-review
 

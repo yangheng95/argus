@@ -6,7 +6,7 @@
 | --- | --- |
 | User request | Diagnose and repair the API 500 raised when TaskArtifact recovery finds an invalid Engine Artifact resource reference. The user clarified that moving bytes to another directory does not solve deletion and that deleting one Artifact must not make the whole product fail. |
 | Acceptance criteria | A missing or corrupt TaskArtifact remains an exact, visible failure when that Artifact/resource is read; project `InstanceBootstrap`, VCS, Task events, Session events, and unrelated Artifacts remain available; recovery never deletes or fabricates corrupt evidence; focused positive non-User Interface (UI) contracts, typecheck, document health, and diff review pass. |
-| Hard constraints | Preserve strict manifest/path/media-type/byte-count/SHA-256 verification. Do not add a fallback reader, compatibility path, automatic repair, database mutation, runtime restart, UI automated test, new worktree, or unrelated cleanup. Preserve all concurrent work. Commit with the `dsw-33987` prefix and push `v0.0.26beta` to `myhexin`. |
+| Hard constraints | Preserve strict manifest/path/media-type/byte-count/SHA-256 verification. Do not add a fallback reader, compatibility path, automatic repair, database mutation, runtime restart, UI automated test, new worktree, or unrelated cleanup. Preserve all concurrent work. Commit with the `dsw-33987` prefix and push `v0.0.26beta` to `legacy-remote`. |
 | Sources read | `AGENTS.md`; `specs/current/architecture/02-data.md`; `specs/records/2026-07/2026-07-26-unified-task-artifact-catalog-protocol.md`; `specs/records/2026-07/2026-07-30-settings-control-plane-attachment-authority-isolation.md`; `packages/opencorvus/src/{project/bootstrap.ts,project/open-lifecycle.ts,task-artifact/recovery.ts,task-artifact/store.ts}`; focused recovery, project-open, frontend-research resource, and cross-Task import contracts. |
 | Whole-repository search evidence | `rg -n "removeUnreferencedTaskArtifactRoots" packages/opencorvus/src packages/opencorvus/test specs`; `rg -n "listTaskArtifactSnapshots\\(|readTaskArtifactRef\\(|discardEngineArtifactResources\\(" packages/opencorvus/src packages/opencorvus/test`; `rg -n "task-artifact\\.recover-unreferenced|TaskArtifact recovery" packages/opencorvus/src packages/opencorvus/test specs`; `rg -n "TaskArtifact|task_artifact|EngineArtifactTable|engine_artifact" packages/opencorvus/src`; read-only SQLite enumeration of every resource-bearing current/history Engine Artifact and its registered Project. |
 | Independent agent feedback | No independent Agent was requested or used. The user's direct review rejected storage relocation as the causal fix and established per-Artifact failure isolation as the required boundary. |
@@ -87,7 +87,7 @@ allowed.
 - Historical links, document health, and product-document single-source
   checks required for an architecture change.
 - `git diff --check`, task-owned diff review, current-HEAD/staged-path audit,
-  commit, and hook-verified push to `myhexin/v0.0.26beta`.
+  commit, and hook-verified push to `legacy-remote/v0.0.26beta`.
 
 ## Verification results
 

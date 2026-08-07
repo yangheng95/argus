@@ -140,7 +140,7 @@ The mandatory pre-change push found the branch already synchronized, then the ho
 ### Recall
 
 - User reports that the merged build's left Dock row spacing is still slightly too large and supplied a focused screenshot covering the Project, Mission, nested Task, and Chat rows.
-- The user has identified `myhexin/work-v0.0.8beta-yr-0717` as the correct remote visual baseline for the surrounding merged UI. The current main branch and that remote branch share the same enlarged Dock tokens, so this follow-up is an additional density correction rather than a missing branch merge.
+- The user has identified `legacy-remote/work-v0.0.8beta-yr-0717` as the correct remote visual baseline for the surrounding merged UI. The current main branch and that remote branch share the same enlarged Dock tokens, so this follow-up is an additional density correction rather than a missing branch merge.
 - Acceptance: Project, Mission, nested Task, and Chat retain their current information architecture, typography, icons, indentation, selected state, action rail, and keyboard behavior while returning to the already-established compact Dock rhythm.
 - Hard constraints: `sidebar.css` remains the single height authority; `work-ledger.css` only consumes its semantic properties; no selector-local override, compatibility path, responsive scope, or intervention in the user's running OpenCorvus window.
 - Sources read: this record; the supplied screenshot; `sidebar.css`; `work-ledger.css`; `WorkLedger.tsx`; `ProjectLedgerGroup.tsx`; `LedgerRowMainButton.tsx`; `overlay-left-rail-density.test.ts`; `project-ledger-group-browser.test.ts`; commits `26b0e9d654` and `0e8ae64d5a`; and the complete browser-skill instructions.
@@ -156,7 +156,7 @@ Commit `0e8ae64d5a` enlarged the four semantic Dock tokens from the previously a
 - Restore the existing four `.sidebar` properties to 30/24/26/24px; do not change consumer selectors or introduce a second density source.
 - Update the source contract to protect those exact semantic values.
 - Extend the existing Node-driven left-Dock fixture to measure Project, Mission, nested Task, and Chat rows together, assert non-overlap and the scaled 36/39px geometry at UI scale 1.5, and write a task-scoped screenshot.
-- Pass conditions: focused source tests, Overlay typecheck/build, the real Node Playwright fixture, manual screenshot review, document-health checks, scoped diff review, commit, and push to `myhexin/v0.0.8beta`.
+- Pass conditions: focused source tests, Overlay typecheck/build, the real Node Playwright fixture, manual screenshot review, document-health checks, scoped diff review, commit, and push to `legacy-remote/v0.0.8beta`.
 
 ### 2026-07-17 Popup and hover-radius addition
 

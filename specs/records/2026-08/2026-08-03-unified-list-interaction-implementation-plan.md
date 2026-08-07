@@ -125,7 +125,7 @@
 - [ ] Launch the real desktop client and manually inspect in light, dark, and VS Code Dark: sidebar project/task list; settings navigation; Mission automation list; Composer recommendations/model/reference choices; a dropdown/select; file tree; right dock; mailbox.
 - [ ] Capture and personally review one screenshot per light and dark theme that shows representative hover and selected states. Do not create screenshot baselines or test files.
 - [ ] Run `bun run --cwd packages/overlay typecheck`, `bun run --cwd packages/overlay build`, `bun test packages/opencorvus/test/script/historical-docs-links.test.ts`, and `git diff --check`.
-- [ ] Update the record/index with the verified light/dark evidence, commit all remaining work with a `dsw-33987` subject, and push the current delivery branch to `myhexin` through hooks.
+- [ ] Update the record/index with the verified light/dark evidence, commit all remaining work with a `dsw-33987` subject, and push the current delivery branch to `legacy-remote` through hooks.
 
 ## Plan Self-Review
 

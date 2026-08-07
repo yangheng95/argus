@@ -49,7 +49,7 @@ minutes. The final GeckoTerminal session completed at `03:20:11Z` and a real
 - Preserve concurrent Expert Squad installation-scope work and the untracked `C:/` tree.
 - Do not restart, cancel, refresh, or otherwise interfere with the running OpenCorvus Task
   or Overlay.
-- Commit subjects use the `dsw-33987` prefix and delivery pushes to `myhexin/v0.0.11beta`
+- Commit subjects use the `dsw-33987` prefix and delivery pushes to `legacy-remote/v0.0.11beta`
   without bypassing hooks.
 
 ### Sources read
@@ -205,4 +205,4 @@ session/artifact evidence that would have made this behavior obvious.
   this repair's commit remains restricted to its own record and index entries.
 - The mandatory pre-push hook passed repository TypeScript checks, API route
   inventory, generated API documentation, Overlay internationalization, and
-  tracked-source secret scanning before delivery to `myhexin/v0.0.11beta`.
+  tracked-source secret scanning before delivery to `legacy-remote/v0.0.11beta`.

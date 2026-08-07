@@ -27,7 +27,7 @@
   message discriminator. Canonical task-event projections in the same Mailbox
   must not drive the badge or native notifications.
 - Add negative regression coverage proving the retired UI and automatic behavior cannot reappear; pass type, i18n, document, browser and visual verification.
-- Commit with the `dsw-33987` prefix and push `v0.0.7beta` to git-cc remote `myhexin` without bypassing hooks.
+- Commit with the `dsw-33987` prefix and push `v0.0.7beta` to legacy remote without bypassing hooks.
 
 ### Hard constraints
 

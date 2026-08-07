@@ -61,7 +61,7 @@ Owner: Codex
 - Browser verification uses Node, not Bun. Desktop is the only visual target.
 - UI verification is interactive and visual only; existing UI test files are
   not changed or executed.
-- Delivery commits use the `dsw-33987` prefix and push to `myhexin`.
+- Delivery commits use the `dsw-33987` prefix and push to `legacy-remote`.
 
 ### Material read before implementation
 
@@ -160,7 +160,7 @@ needed for its trailing revision metadata.
    real desktop page and screenshot manually, then repair any remaining
    mismatch without creating an automated UI fixture or assertion.
 7. Perform a second diff/test/screenshot review, commit only task-owned changes,
-   reconcile the shared branch, and push to `myhexin`.
+   reconcile the shared branch, and push to `legacy-remote`.
 
 ## Status
 

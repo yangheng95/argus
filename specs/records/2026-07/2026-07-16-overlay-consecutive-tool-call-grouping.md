@@ -23,7 +23,7 @@
 2. Simplify `CardParts` to render the projected body parts directly; the projection, not a second render-time condition, owns whether a boundary is visible.
 3. Extend focused unit coverage for multiple tool-only message boundaries, aggregate counts, visible narrative separation, disabled disclosure behavior, and exact execution order.
 4. Extend the isolated chronology fixture/browser assertions so repeated tool-only messages collapse into one aggregate disclosure while expansion exposes all original tools in order.
-5. Run focused tests, Overlay typecheck/build/i18n, document-health checks, and Node-launched browser acceptance; inspect fresh desktop screenshots, iterate if needed, review the diff twice, commit only task-owned files with the `dsw-33987` prefix, and push the git-cc tracking branch.
+5. Run focused tests, Overlay typecheck/build/i18n, document-health checks, and Node-launched browser acceptance; inspect fresh desktop screenshots, iterate if needed, review the diff twice, commit only task-owned files with the `dsw-33987` prefix, and push the legacy remote tracking branch.
 
 ## Verification plan
 

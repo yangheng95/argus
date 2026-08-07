@@ -58,4 +58,4 @@
 - Negative topology assertions proving Design, Code, or MirrorTest cannot start from a pre-recheck node.
 - Registry, Manager, Resolver, payload generation, catalog, tool projection, source capability, collaboration, and SDK authoring suites.
 - Repository-wide live-reference scan excluding historical records and generated payload sources.
-- SDK/OpenCorvus typechecks, documentation health, staged diff review, commit, and normal git-cc push.
+- SDK/OpenCorvus typechecks, documentation health, staged diff review, commit, and normal legacy remote push.

@@ -19,7 +19,7 @@
 - Launch Playwright only through Node when performing one-off visual inspection.
 - Do not restart, close, refresh, or reuse a currently running OpenCorvus/Overlay process. Build and launch a separate isolated validation client/process.
 - Preserve and do not stage the pre-existing `packages/web`, landing resolver-test, and landing screenshot changes.
-- Commit subjects start with `dsw-33987`; push the current delivery branch to `myhexin` without bypassing hooks.
+- Commit subjects start with `dsw-33987`; push the current delivery branch to `legacy-remote` without bypassing hooks.
 
 ## Recall
 
@@ -200,7 +200,7 @@ observation as a Playwright test or pass/fail script.
 - Modify: `specs/README.md`
 
 **Interfaces:**
-- Produces fresh verification evidence, a second review verdict, scoped commits, and git-cc delivery.
+- Produces fresh verification evidence, a second review verdict, scoped commits, and legacy remote delivery.
 
 - [x] **Step 1: Run required documentation and diff checks**
 
@@ -226,7 +226,7 @@ limitations, and the second-review verdict.
 - [ ] **Step 4: Commit and push only task-owned files**
 
 Stage exact paths, review the staged diff, commit with a `dsw-33987` subject,
-and push `HEAD` to `myhexin/work-lcx-v0.0.30beta` without bypassing hooks.
+and push `HEAD` to `legacy-remote/work-lcx-v0.0.30beta` without bypassing hooks.
 
 ## Plan self-review
 

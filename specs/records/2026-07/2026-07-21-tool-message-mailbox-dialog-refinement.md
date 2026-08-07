@@ -74,7 +74,7 @@ remains square.
 4. Increase the shared Dialog primitive radius and assert every non-fullscreen consumer inherits it.
 5. Regenerate OpenAPI, SDK, and API docs; update current architecture and spec indexes.
 6. Run focused tests, typecheck, i18n, route/docs/document-health checks, build, and Node browser scenarios. Inspect task-scoped Tool/message/Mailbox/Dialog screenshots and iterate until visually correct.
-7. Re-fetch git-cc, reconcile any concurrent commits without overwriting dirty work, review the complete scoped diff, commit only task-owned files/hunks with `dsw-33987`, push `myhexin`, and verify local/remote equality.
+7. Re-fetch legacy remote, reconcile any concurrent commits without overwriting dirty work, review the complete scoped diff, commit only task-owned files/hunks with `dsw-33987`, push `legacy-remote`, and verify local/remote equality.
 
 ## Progress
 
@@ -84,4 +84,4 @@ remains square.
 - [x] Implemented durable single/batch Mailbox deletion with regression coverage.
 - [x] Updated the shared Dialog primitive radius with regression coverage.
 - [x] Completed generated artifacts, focused/full checks, real browser screenshots, visual review, and second review.
-- [x] Commit the scoped diff, push it to git-cc, and verify local/remote equality.
+- [x] Commit the scoped diff, push it to legacy remote, and verify local/remote equality.

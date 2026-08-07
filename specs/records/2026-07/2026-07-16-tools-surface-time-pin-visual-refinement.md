@@ -42,7 +42,7 @@ The pin registry already exposes one Lucide-backed `pin-tilted` glyph to every W
 1. Route the expanded Tools surface through a conversation-canvas-derived semantic color and strengthen its source/browser color contract.
 2. Remove the Tool subtitle's competing native title and expose the precise persisted call start time from the existing duration chip while preserving the rich Kobalte timing tooltip.
 3. Rotate the shared pin glyph to the right and update its static and real-browser visual contract.
-4. Run focused tests, Node browser fixtures, inspect current-goal screenshots, run Overlay typecheck/i18n plus spec/document checks, then perform a second diff review, commit with the required prefix, fetch/merge the delivery branch if needed, and push to `myhexin`.
+4. Run focused tests, Node browser fixtures, inspect current-goal screenshots, run Overlay typecheck/i18n plus spec/document checks, then perform a second diff review, commit with the required prefix, fetch/merge the delivery branch if needed, and push to `legacy-remote`.
 
 ## Verification
 

@@ -11,7 +11,7 @@
 | Sources read | Root `AGENTS.md`; Browser control skill; the supplied reference image; `specs/current/architecture/07-panel.md`; `2026-07-08-projects-panel-and-codex-composer-polish.md`; `ChatComposer.tsx`; `App.tsx`; `conversation.css`; `composer.css`; light, dark, and Visual Studio Code dark palette token owners. |
 | Whole-repository grep | Production search found `ChatComposer.tsx` as the sole `.chat-input` and `.chat-composer-stack` renderer; `App.tsx` as the sole `#solidChatComposer` mount; `composer.css` as the sole `.chat-input` paint owner; `conversation.css` as the sole mount/grid/backdrop owner; and `index.html` as the single production stylesheet load. The palette files are the only `--shadow-md`, `--shadow-lg`, `--ui-shadow-tone`, and `--ui-highlight-tone` theme owners. Historical UI tests consume these sources but remain untouched and unrun under the current prohibition. No backend, state, route, locale, database, transport, component, or responsive change is required. |
 | Independent agent feedback | No review result was available. The required Claude Code v2.1.147 read-only invocation was attempted with only `Read,Grep,Glob`, no session persistence, and streaming output, but the installed CLI returned `Not logged in` before reading the repository. The user did not request sub-agents, so the primary agent owns the evidence-based design challenge and final second review. |
-| Git baseline | `baa2d9a703` and `myhexin/work-v0.0.24beta-yr-0729` were verified converged before this task. Existing uncommitted Composer-model, Conversation/Dock, rename-dialog, locale, workspace-style, and spec-index changes are preserved and excluded from this task. |
+| Git baseline | `baa2d9a703` and `legacy-remote/work-v0.0.24beta-yr-0729` were verified converged before this task. Existing uncommitted Composer-model, Conversation/Dock, rename-dialog, locale, workspace-style, and spec-index changes are preserved and excluded from this task. |
 
 ## Cause Chain
 
@@ -59,7 +59,7 @@
    muddy, clipped, or visually detached.
 6. Re-grep the owners, inspect the exact diff and rendered evidence a second
    time, update this record with verification evidence, fetch/converge, commit
-   only task-owned hunks with the `dsw-33987` prefix, and push to `myhexin`.
+   only task-owned hunks with the `dsw-33987` prefix, and push to `legacy-remote`.
 
 ## Progress
 

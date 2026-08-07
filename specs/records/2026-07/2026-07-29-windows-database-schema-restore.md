@@ -21,7 +21,7 @@
 - Follow `AGENTS.md`; no database deletion, reset, migration, compatibility reader, fallback database, platform branch, route gate, or second active data source.
 - Keep the current DDL (Data Definition Language) as the only active schema and the existing shared-table/shared-column projection as the only restore policy.
 - Open the backup through Bun SQLite's constructor-level read-only mode; do not depend on `ATTACH` URI handling.
-- Preserve all unrelated files and commits. Commit subjects start with `dsw-33987` and delivery is pushed to `myhexin`.
+- Preserve all unrelated files and commits. Commit subjects start with `dsw-33987` and delivery is pushed to `legacy-remote`.
 
 ### Sources Read
 

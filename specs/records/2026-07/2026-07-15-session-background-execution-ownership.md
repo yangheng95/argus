@@ -27,7 +27,7 @@ Status: complete
 - Preserve unrelated dirty-worktree changes and stage only this repair.
 - Use inactivity-based timeouts, not wall-clock time measured from process start.
 - Every behavior change requires a regression test. New records remain under the root `specs/` single source and must pass document-health checks.
-- Commit and push the finished repair to the git-cc remote `myhexin` with a `dsw-33987` subject prefix.
+- Commit and push the finished repair to the legacy remote with a `dsw-33987` subject prefix.
 
 ### Sources read before implementation
 
@@ -129,5 +129,5 @@ The user's running OpenCorvus/Overlay process was not stopped, restarted, refres
 ### Delivery
 
 - Implementation commit: `a31fa3b133f6e62d922a843a7dee3f6b02ed84d2` (`dsw-33987 fix background message execution ownership`).
-- Pushed to git-cc branch `myhexin/v0.0.6beta`; `git ls-remote` returned the same commit hash.
+- Pushed to legacy remote branch `legacy-remote/v0.0.6beta`; `git ls-remote` returned the same commit hash.
 - The successful pre-push hook ran all 10 package typechecks, API route checks, generated documentation checks, Overlay i18n validation, and the tracked-source secret scan without bypasses.

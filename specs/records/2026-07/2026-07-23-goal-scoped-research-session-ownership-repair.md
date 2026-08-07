@@ -17,7 +17,7 @@ Repair the defect that made a newly dispatched Goal-scoped frontend-research wor
 - The stage observer receives the fresh session ID only after the runner has installed the projected worker descriptor and runtime contract.
 - The strict existing-session kind, Goal, directory, and projected-identity checks remain unchanged.
 - A regression test covers fresh Goal-scoped research dispatch ownership; continuation behavior and the shared runner's Goal binding remain covered.
-- Focused tests, TypeScript checks, document-health checks, and a final diff review pass before the repair is committed and pushed to `myhexin/v0.0.16beta`.
+- Focused tests, TypeScript checks, document-health checks, and a final diff review pass before the repair is committed and pushed to `legacy-remote/v0.0.16beta`.
 
 ### Hard constraints
 

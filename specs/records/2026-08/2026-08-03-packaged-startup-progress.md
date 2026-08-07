@@ -111,7 +111,7 @@
 - [ ] Run targeted Rust startup-contract tests, `cargo fmt --check`, Overlay typecheck/build, `git diff --check`, and all three required document-health tests.
 - [ ] Build the Windows GUI installer/package and perform a real cold launch after clearing only the test installation’s payload directory; manually inspect the immediate Loading page, determinate extraction progress, ready transition, and a second warm launch.
 - [ ] Perform a second manual screenshot review of the Loading surface and normal client handoff.
-- [ ] Commit only task-owned files with a `dsw-33987` subject and push the active main delivery branch to `myhexin` without bypassing hooks.
+- [ ] Commit only task-owned files with a `dsw-33987` subject and push the active main delivery branch to `legacy-remote` without bypassing hooks.
 
 ## Verification Ledger
 

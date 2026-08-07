@@ -22,7 +22,7 @@
 - Do not add, modify, update, or run UI automation tests. The three existing Overlay UI automation files reached by the exhaustive search must be deleted under the repository-wide UI-test prohibition.
 - Pure deletion does not receive a negative regression test. Retained non-UI tests must assert the current positive catalog, runtime, route, package, and source-capability contracts.
 - Regenerate the canonical payload with the repository generator rather than editing generated content by hand.
-- Commit subjects use the required `dsw-33987` prefix and push only to `myhexin` on `v0.0.27beta`.
+- Commit subjects use the required `dsw-33987` prefix and push only to `legacy-remote` on `v0.0.27beta`.
 
 ### Existing records and architecture read
 
@@ -64,7 +64,7 @@ The pre-change search used the exact identity plus directory-name variants, excl
 3. Regenerate the built-in Mission Skill payload.
 4. Rewrite only current non-UI contracts and documentation that directly referenced the deleted package.
 5. Run focused non-UI tests, generated-artifact checks, document health, repository typecheck, and a second diff/reference review.
-6. Stage only task-owned paths, commit with `dsw-33987`, and push `v0.0.27beta` to `myhexin` without bypassing hooks.
+6. Stage only task-owned paths, commit with `dsw-33987`, and push `v0.0.27beta` to `legacy-remote` without bypassing hooks.
 
 ## Verification target
 

@@ -16,7 +16,7 @@ Status: complete
 4. Collection removes only a non-current payload that participates in the lease protocol and whose exclusive lease can be acquired; live or legacy-unproven directories remain untouched.
 5. A crashed owner releases its operating-system file lock automatically, allowing later collection.
 6. Tests cover live ownership, collectible stale payloads, legacy unproven payloads, unrelated files, and current-payload preservation.
-7. Rebuild and verify the macOS package, commit with the `dsw-33987` prefix, merge current `myhexin/v0.0.8beta`, and push without force.
+7. Rebuild and verify the macOS package, commit with the `dsw-33987` prefix, merge current `legacy-remote/v0.0.8beta`, and push without force.
 
 ### Hard constraints
 

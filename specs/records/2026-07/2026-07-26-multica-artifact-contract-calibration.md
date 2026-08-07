@@ -51,7 +51,7 @@ calibration.
 - Do not restart, refresh, close, or otherwise interfere with the running
   OpenCorvus or Overlay.
 - Commit subjects use the `dsw-33987` prefix and delivery targets the current
-  `v0.0.19beta` branch on the `myhexin` remote.
+  `v0.0.19beta` branch on the `legacy-remote` remote.
 
 ### Sources read
 

@@ -38,7 +38,7 @@
 2. Run the Node-started three-theme workspace-continuity browser benchmark with inactivity-based timeout.
 3. Inspect all three screenshots and iterate until the corner, left/top diffusion, and right-dock continuity are visually correct.
 4. Run Overlay typecheck, i18n, build, historical/document health, and scoped diff checks.
-5. Review the final source and screenshots a second time before commit and git-cc push.
+5. Review the final source and screenshots a second time before commit and legacy remote push.
 
 ## Progress
 
@@ -47,7 +47,7 @@
 - [x] Implement the material topology and independent edge diffusion.
 - [x] Add and pass source/browser regressions.
 - [x] Complete visual and code second review.
-- [ ] Commit with `dsw-33987` prefix and push to `myhexin`.
+- [ ] Commit with `dsw-33987` prefix and push to `legacy-remote`.
 
 ## Result
 
@@ -69,4 +69,4 @@ The in-app Browser rejected a local `file:` preview because of its URL security 
 
 ## Delivery Status
 
-Implementation commit `9535bb7808` and the earlier plan commit `e26e4b749f` are complete locally. The required `git push myhexin v0.0.3beta` was attempted without bypassing hooks, but the repository-wide pre-push typecheck failed in concurrent uncommitted `packages/opencorvus` browser-preview and frontend-design changes. The failures are missing contract members such as `sourcePackageAbsolute`, `sourcePackageRelative`, `webpageEvidenceAbsolute`, and `primaryWebpageEvidenceArtifacts`; none originates in this task's staged or committed files. The push therefore remains honestly incomplete. The shared dirty changes were not stashed, overwritten, staged, or folded into this repair.
+Implementation commit `9535bb7808` and the earlier plan commit `e26e4b749f` are complete locally. The required `git push legacy-remote v0.0.3beta` was attempted without bypassing hooks, but the repository-wide pre-push typecheck failed in concurrent uncommitted `packages/opencorvus` browser-preview and frontend-design changes. The failures are missing contract members such as `sourcePackageAbsolute`, `sourcePackageRelative`, `webpageEvidenceAbsolute`, and `primaryWebpageEvidenceArtifacts`; none originates in this task's staged or committed files. The push therefore remains honestly incomplete. The shared dirty changes were not stashed, overwritten, staged, or folded into this repair.

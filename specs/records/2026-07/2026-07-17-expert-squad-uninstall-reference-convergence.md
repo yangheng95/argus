@@ -69,7 +69,7 @@ No sub-agent was started because the current execution policy permits delegation
 1. Define the explicit uninstall replacement contract and a structured replacement summary.
 2. Converge exact global/project/root-session references through their canonical writers, then call the existing exact-scope Manager deletion.
 3. Update Overlay confirmation/result handling and focused tests, including a real rendered confirm/delete/refetch path.
-4. Regenerate API/SDK artifacts, run type/API/docs tests, visually review screenshots, inspect the final diff, commit with `dsw-33987`, and push `myhexin/v0.0.8beta`.
+4. Regenerate API/SDK artifacts, run type/API/docs tests, visually review screenshots, inspect the final diff, commit with `dsw-33987`, and push `legacy-remote/v0.0.8beta`.
 
 ## Verification ledger
 

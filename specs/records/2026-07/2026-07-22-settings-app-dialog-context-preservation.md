@@ -28,7 +28,7 @@ open and after it settles.
 - Do not restart, stop, refresh, or reuse the running OpenCorvus/Overlay. Browser validation uses the
   isolated repository fixture and Node runner; Playwright is not launched through Bun.
 - Preserve unrelated dirty-worktree changes, create no worktree, use the `dsw-33987` commit prefix, and
-  push the current delivery branch to `myhexin`.
+  push the current delivery branch to `legacy-remote`.
 
 ### Sources read
 
@@ -102,7 +102,7 @@ prohibits unsolicited sub-agents. The primary Agent owns the implementation and 
    exact uninstall request, and visible completion state. Verify cancellation separately at the shared
    service boundary and preserve the handler guard before its uninstall call.
 4. Run `git diff --check`, review every changed hunk against the call-point table, record any corrections,
-   then commit only this task's files and push the current branch to `myhexin`.
+   then commit only this task's files and push the current branch to `legacy-remote`.
 
 ## Verification results
 

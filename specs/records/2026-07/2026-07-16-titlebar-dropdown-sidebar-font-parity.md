@@ -40,7 +40,7 @@
 - [x] Record the cause chain and call-site plan.
 - [x] Implement the single typography source.
 - [x] Add regression coverage and run focused verification.
-- [x] Inspect screenshot, perform second review, commit, and push to git-cc.
+- [x] Inspect screenshot, perform second review, commit, and push to legacy remote.
 
 ## Verification Evidence
 

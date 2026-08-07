@@ -145,4 +145,4 @@ script.
 - No second window, readiness source, geometry source, fallback, UI automation,
   or resize feedback loop exists.
 - Static/non-UI verification, real client screenshots, second review, scoped
-  commit, and `myhexin` push complete without touching the landing work.
+  commit, and `legacy-remote` push complete without touching the landing work.

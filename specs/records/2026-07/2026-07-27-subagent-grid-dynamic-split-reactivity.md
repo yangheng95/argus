@@ -39,7 +39,7 @@
 - Keep canonical `sessionID` as the child identity and the existing
   conversation-agent projection as the single progress-card source.
 - Commit subjects use the required `dsw-33987` prefix and push only to
-  `myhexin` through normal hooks.
+  `legacy-remote` through normal hooks.
 
 ### Sources read
 
@@ -128,4 +128,4 @@ remains responsible for row content.
 4. Run Overlay typecheck plus required historical-doc and document-health
    checks.
 5. Review the complete diff and current `HEAD`, stage only task-owned hunks,
-   commit with `dsw-33987`, fetch/reconcile `myhexin`, and push with hooks.
+   commit with `dsw-33987`, fetch/reconcile `legacy-remote`, and push with hooks.

@@ -7,12 +7,12 @@ Status: complete
 | Item | Detail |
 | --- | --- |
 | User request | Hide the Terminal component from the right-side Tools surface. In the Mailbox list, stop showing the row selection and action buttons when the row is not hovered. |
-| Acceptance criteria | Terminal is absent from the right Dock empty chooser, add menu, open-tab collection, Environment resource shortcuts, and mounted panel DOM. A resting Mailbox row hides its checkbox and Open Task/Delete actions after pointer-triggered focus remains on the row; pointer hover reveals them; keyboard `:focus-visible` still reveals the focused control and keeps it operable. Focused source tests, Overlay typecheck/build, isolated Node-launched browser checks, task-scoped screenshots, original-resolution visual review, second review, commit, and git-cc push pass. |
-| Hard constraints | Desktop-only scope. Keep the existing Button, Checkbox, Accordion, Tabs, and Dock primitives. Do not use CSS masking, a feature gate, a parallel visible-panel registry, responsive work, or a fallback route. Preserve system-terminal launch APIs and the retained embedded-terminal implementation; this task removes its right-Dock exposure and mount, not backend terminal capability. Do not restart, refresh, close, or reuse the user's running OpenCorvus/Overlay. Preserve unrelated dirty files and stage only this task. Commit subjects start with `dsw-33987`; push to `myhexin`. |
+| Acceptance criteria | Terminal is absent from the right Dock empty chooser, add menu, open-tab collection, Environment resource shortcuts, and mounted panel DOM. A resting Mailbox row hides its checkbox and Open Task/Delete actions after pointer-triggered focus remains on the row; pointer hover reveals them; keyboard `:focus-visible` still reveals the focused control and keeps it operable. Focused source tests, Overlay typecheck/build, isolated Node-launched browser checks, task-scoped screenshots, original-resolution visual review, second review, commit, and legacy remote push pass. |
+| Hard constraints | Desktop-only scope. Keep the existing Button, Checkbox, Accordion, Tabs, and Dock primitives. Do not use CSS masking, a feature gate, a parallel visible-panel registry, responsive work, or a fallback route. Preserve system-terminal launch APIs and the retained embedded-terminal implementation; this task removes its right-Dock exposure and mount, not backend terminal capability. Do not restart, refresh, close, or reuse the user's running OpenCorvus/Overlay. Preserve unrelated dirty files and stage only this task. Commit subjects start with `dsw-33987`; push to `legacy-remote`. |
 | Supplied evidence | `codex-clipboard-79e20ccf-f90c-4c00-bfb4-c2dd21814ee4.png` shows a Mailbox row outside pointer hover with both the left checkbox and right Open Task/Delete action cluster still visible. The original image was inspected. |
 | Sources read | Root `AGENTS.md`; Browser control skill; `2026-07-22-mailbox-reading-and-compact-controls.md`; `2026-07-21-mailbox-global-project-grouping-and-action-geometry.md`; `2026-07-21-tools-context-spacing-consistency.md`; current `main.tsx`, `App.tsx`, `RightDock.tsx`, `TaskDirBar.tsx`, `MailboxPanel.tsx`, `mailbox.css`, terminal and Mailbox source tests, and the Node browser fixtures. |
 | Whole-repository grep | `RightDock.tsx` is the only right-Dock catalog/meta/tab collection owner and lists `terminal`. `main.tsx` is the only embedded `TerminalPanel` importer/mounter and the only owner of `CenterWorkbenchPanel`, its order, view lookup, and terminal-session-count signal. `App.tsx` only forwards that count to `TaskDirBar.tsx`; `TaskDirBar.tsx` only uses it to project a Terminal Environment shortcut. `terminal-panel.test.ts`, `acceptance-panel-mount.test.ts`, `task-cwd-row-layout.test.ts`, `titlebar-toolbar-toggle-browser.test.ts`, and `terminal-reference-visual-browser.test.ts` cover those visibility paths. `mailbox.css` is the only row disclosure owner: its checkbox, avatar substitution, and action cluster use `:focus-within`; `mailbox-panel.test.ts` and `mailbox-left-sidebar-browser.test.ts` are the direct regression owners. No route, persistence schema, service contract, or second Mailbox renderer is involved. |
-| Git baseline | After `git fetch myhexin`, `HEAD...myhexin/work-v0.0.15beta-yr-0722` is `0 0`. The task-owned files are clean. Unrelated Expert Squad/build/Cargo changes and their record are present in the shared worktree and remain untouched. |
+| Git baseline | After `git fetch legacy-remote`, `HEAD...legacy-remote/work-v0.0.15beta-yr-0722` is `0 0`. The task-owned files are clean. Unrelated Expert Squad/build/Cargo changes and their record are present in the shared worktree and remain untouched. |
 | Independent agent feedback | None. The user did not request sub-agents, and the active collaboration boundary forbids unrequested delegation. |
 
 ## Causal chain
@@ -41,7 +41,7 @@ Status: complete
 2. Remove Terminal at all visible right-Dock projection edges and change Mailbox control disclosure to `:focus-visible` semantics.
 3. Run focused source tests, Overlay typecheck and production build, then isolated Node browser fixtures.
 4. Inspect task-scoped screenshots at original resolution and iterate until resting, hover, keyboard focus, and Terminal absence match the requested behavior.
-5. Run required documentation health checks, re-grep all owners, review the exact diff and visual evidence a second time, commit only task-owned files, fetch/converge, and push the current branch to `myhexin`.
+5. Run required documentation health checks, re-grep all owners, review the exact diff and visual evidence a second time, commit only task-owned files, fetch/converge, and push the current branch to `legacy-remote`.
 
 ## Progress
 
@@ -49,7 +49,7 @@ Status: complete
 - [x] Failing regressions added.
 - [x] Production repair complete.
 - [x] Focused verification and original-resolution visual acceptance complete.
-- [x] Second review complete; commit and git-cc push are evidenced by Git history rather than asserted before execution.
+- [x] Second review complete; commit and legacy remote push are evidenced by Git history rather than asserted before execution.
 
 ## Codex review feedback
 
@@ -57,7 +57,7 @@ The first browser pass rejected two fixture assumptions rather than product beha
 
 The broad second review then exposed two stale fixed-count assertions after Terminal removal, one existing duplicate `.mailbox-item__task` selector that exceeded the architecture budget, and one import-format-coupled Composer assertion already invalidated by `createResource`. The panel counts now require eight mounts, the Mailbox declarations were merged without raising the debt limit, and the Composer regression validates individual Solid primitives rather than one obsolete single-line import. The related titlebar keyboard fixture replaced a fixed 50-millisecond delay with the real `ArrowDown`/`End` menu path and a state-based wait.
 
-The first git-cc pre-push run then correctly rejected the two now-unused `right_dock.tool.terminal` locale keys. Both English and Chinese keys were removed, the Terminal projection regression now asserts their absence, and the real i18n checker passes; no hook was bypassed.
+The first legacy remote pre-push run then correctly rejected the two now-unused `right_dock.tool.terminal` locale keys. Both English and Chinese keys were removed, the Terminal projection regression now asserts their absence, and the real i18n checker passes; no hook was bypassed.
 
 ## Verification results
 

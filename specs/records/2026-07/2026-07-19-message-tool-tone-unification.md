@@ -7,13 +7,13 @@ Status: complete
 | Item | Detail |
 | --- | --- |
 | User requirement | Make message-card and Tool background colors follow one unified design-language tone. |
-| Acceptance criteria | The Agent message card remains the single hue source; expanded Tool container, header, hover, and border preserve that stage hue and differ only by restrained lightness/contrast. Collapsed Tools remain transparent. Light and dark real-page screenshots, focused source/browser tests, typecheck, build, internationalization, document health, commit, and `myhexin/v0.0.9beta` push pass. |
+| Acceptance criteria | The Agent message card remains the single hue source; expanded Tool container, header, hover, and border preserve that stage hue and differ only by restrained lightness/contrast. Collapsed Tools remain transparent. Light and dark real-page screenshots, focused source/browser tests, typecheck, build, internationalization, document health, commit, and `legacy-remote/v0.0.9beta` push pass. |
 | Hard constraints | Preserve `--conversation-card-background` and `--card-stage` as the existing single sources, and preserve Card/Tool render ownership and interaction. Use native theme tokens and `color-mix`/`light-dark`; no hardcoded colors, new palette, duplicate renderer, fallback, compatibility branch, mobile scope, worktree, or intervention in the running Overlay. Browser acceptance uses an isolated build and Node-launched fixture. Preserve unrelated `C:/`. |
 | Evidence | The accepted Agent card is `color-mix(card-stage 7%, surface)`. The current expanded Tool is independently `surface-inset`; its header mixes neutral `surface` and its hover mixes `surface-hover/surface-inset`. This creates a stage-tinted message containing a neutral-gray Tool. |
 | Sources read | `AGENTS.md`; Browser skill; current architecture/spec indexes; 2026-07-15 Agent message-card surface, 2026-07-16 Tool surface refinement, 2026-07-17 density/card-tone alignment, and 2026-07-19 Tool panel records; `chat-bubble.css`; `messages.css`; Card/Tool owners; focused source and browser tests. |
 | Whole-repository search | `rg` enumerated every `--conversation-card-background`, `--card-stage`, expanded Tool selector, Tool background assertion, `surface-inset`, and light/dark computed-color wait. Production ownership is singular: Agent row owns the message hue and the scoped expanded Tool rules consume it. Direct test consumers are `message-embed.test.ts`, `message-part-chronology-browser.test.ts`, `chat-bubble-disclosure-button-browser.test.ts`, and architecture/chat-bubble guards. |
 | Independent agent feedback | None; the user did not request delegation. |
-| Git baseline | `ec86d8d2e`; local and `myhexin/v0.0.9beta` were converged after the previous delivery. Only unrelated untracked `C:/` exists. |
+| Git baseline | `ec86d8d2e`; local and `legacy-remote/v0.0.9beta` were converged after the previous delivery. Only unrelated untracked `C:/` exists. |
 
 ## Cause and repair
 
@@ -36,7 +36,7 @@ The mismatch is a color-provenance error, not an opacity problem. The message su
 1. Add failing source and computed-color contracts for single-source color projection.
 2. Implement only the scoped semantic variables and expanded Tool consumers.
 3. Run Node browser fixtures, inspect light/dark screenshots at original resolution, and iterate on contrast.
-4. Run focused tests, Overlay typecheck/i18n/build, docs health, second diff/call-site review, reconcile git-cc, commit with `dsw-33987`, and push.
+4. Run focused tests, Overlay typecheck/i18n/build, docs health, second diff/call-site review, reconcile legacy remote, commit with `dsw-33987`, and push.
 
 ## Progress
 

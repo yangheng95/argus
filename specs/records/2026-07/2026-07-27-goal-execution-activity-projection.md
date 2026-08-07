@@ -40,8 +40,8 @@ explanation, the operator explicitly requested the problem be fixed.
   running OpenCorvus or Overlay process.
 - Run Playwright-compatible browser coverage through Node.js, never Bun.
 - Preserve all unrelated parallel worktree modifications.
-- Commit subjects start with `dsw-33987` and push through the `myhexin`
-  git-cc remote without bypassing hooks.
+- Commit subjects start with `dsw-33987` and push through the `legacy-remote`
+  legacy remote without bypassing hooks.
 
 ### Disk sources read
 

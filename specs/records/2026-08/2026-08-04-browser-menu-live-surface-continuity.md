@@ -10,7 +10,7 @@
 | Sources read | Root `AGENTS.md`; Browser control skill; both supplied screenshots; `specs/current/architecture/07-panel.md`; `2026-08-03-browser-chrome-control-and-menu-occlusion.md`; `2026-07-29-browser-tab-task-preview-separation.md`; `2026-07-29-right-dock-codex-parity-and-browser-tab-instances.md`; `BrowserPreviewPanel.tsx`; shared DropdownMenu primitive and menu styles; Browser native transport; native-surface occlusion service; Tauri Browser WebView lifecycle; official Tauri JavaScript `Menu.popup` and Rust `ContextMenu::popup_at` documentation; installed Tauri 2.11.1 menu plugin source. |
 | Whole-repository grep | Searched production code, current architecture, August/July records, native contracts, and directly related tests for the two reported errors, Browser menu/selection labels, native lease commands, occlusion ownership, WebView bounds/show/hide/close, menu layering, and selection callbacks. The reported disappearance is caused by the August 3 menu owner calling global occlusion, whose Browser hook detaches the current lease and hides the WebView before Kobalte opens. Selection can then be queued without a current lease while dismissal begins a replacement lease. Host CSS cannot cover the child WebView, while Tauri already exposes a native popup layer. No UI test is to be run. |
 | Independent agent feedback | None. The user did not request sub-agents, so the primary agent owns implementation and second review. |
-| Git baseline | `work-v0.0.29beta-yr-0803` was clean at `a84962d89d`, synchronized with `myhexin/work-v0.0.29beta-yr-0803` (`0 0` divergence), and already pushed through the normal hook before this plan was created. |
+| Git baseline | `work-v0.0.29beta-yr-0803` was clean at `a84962d89d`, synchronized with `legacy-remote/work-v0.0.29beta-yr-0803` (`0 0` divergence), and already pushed through the normal hook before this plan was created. |
 
 ## Causal chain
 
@@ -57,7 +57,7 @@
    activation, selection highlight/comment surface, and absence of visible
    lease or cleanup errors. Repeat visual review after the first pass.
 7. Record evidence here, commit with the `dsw-33987` prefix, fetch/reconcile the
-   tracked git-cc branch, and push through the normal hook.
+   tracked legacy remote branch, and push through the normal hook.
 
 ## Real-page evidence
 
@@ -82,7 +82,7 @@
 - [x] Product and architecture changes complete.
 - [x] Non-UI/static verification complete.
 - [x] Real-page visual acceptance and second review complete.
-- [x] Commit and git-cc push complete.
+- [x] Commit and legacy remote push complete.
 
 ## Static verification
 
@@ -97,5 +97,5 @@
 
 ## Delivery
 
-- Implementation commit `1ad8666366` was pushed to git-cc branch
+- Implementation commit `1ad8666366` was pushed to legacy remote branch
   `work-v0.0.29beta-yr-0803` through the normal pre-push hook.

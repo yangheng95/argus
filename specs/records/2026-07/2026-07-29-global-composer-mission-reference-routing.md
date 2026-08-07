@@ -27,7 +27,7 @@
 - Do not create a fallback catalog, temporary Project, hidden message, synthetic route, keyword gate, second active Squad field, or inferred identity.
 - `prompt_profile.active` remains the only Task Expert Squad identity. Mission itself has no active Expert Squad.
 - Do not add, modify, update, or run UI automation tests. Delete the directly encountered obsolete Composer/Mission UI tests and use isolated real-page interaction plus manual screenshot review.
-- New commits use the `dsw-33987` prefix and push through normal hooks to `myhexin`.
+- New commits use the `dsw-33987` prefix and push through normal hooks to `legacy-remote`.
 
 ### Sources read
 
@@ -97,7 +97,7 @@ reintroduce the empty-project persistence defect.
    run typecheck/build, then inspect Code and Work reference routing in an
    isolated real page with screenshots.
 8. Review the exact diff and staged-path ownership, commit only this task through
-   a current-HEAD temporary index, push normally to `myhexin`, and verify remote
+   a current-HEAD temporary index, push normally to `legacy-remote`, and verify remote
    convergence.
 
 ## Implemented

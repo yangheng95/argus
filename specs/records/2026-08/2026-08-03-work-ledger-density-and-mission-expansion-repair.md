@@ -32,7 +32,7 @@
 2. 运行历史文档链接、产品文档单源和 document-health 非 UI 契约检查。
 3. 不运行任何 UI 自动化测试。
 4. 在真实页面中分别检查静止 running Mission、hover Mission、hover child Task、键盘 focus 和 selected child：截图并人工确认标题宽度、右侧空白、action rail、spinner、drawer 和相邻行位置。
-5. 二次 review task-owned diff，fetch `myhexin/v0.0.29beta`，提交并推送主交付分支。
+5. 二次 review task-owned diff，fetch `legacy-remote/v0.0.29beta`，提交并推送主交付分支。
 
 ## Progress
 
@@ -41,7 +41,7 @@
 - [x] Implement the single-owner CSS repair and architecture update.
 - [x] Complete static/build/document verification.
 - [x] Complete real-page interaction, screenshots, and manual visual review.
-- [x] Complete second review, commit, and git-cc push.
+- [x] Complete second review, commit, and legacy remote push.
 
 ## Validation record
 

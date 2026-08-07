@@ -20,7 +20,7 @@
 - Preserve all unrelated dirty worktree changes.
 - Do not restart, refresh, close, or otherwise disturb the user's running OpenCorvus or Overlay processes.
 - Keep the task desktop-only. Run browser automation through Node, not Bun.
-- Commit with the `dsw-33987` subject prefix and push the current delivery branch to `myhexin` after verification.
+- Commit with the `dsw-33987` subject prefix and push the current delivery branch to `legacy-remote` after verification.
 
 ### Material read from disk and runtime
 

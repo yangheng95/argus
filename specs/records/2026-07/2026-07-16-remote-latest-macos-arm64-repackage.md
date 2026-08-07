@@ -3,8 +3,8 @@
 ## Recall
 
 - User request: update to the latest remote code and package the macOS application again.
-- Acceptance criteria: local `v0.0.7beta` is fast-forwarded to `myhexin/v0.0.7beta`; the native macOS ARM64 GUI package is rebuilt from that exact commit; the compiled sidecar self-host and backend health regressions remain fixed; package contracts, signatures, disk image, architecture, hashes, and a second review are recorded.
-- Hard constraints: use `myhexin` as the git-cc source; do not overwrite unrelated work; do not restart, close, or refresh the user's running Overlay; do not claim unsupported platform rows as verified; keep generated artifacts untracked; commit subjects use `dsw-33987` and push records to the delivery branch.
+- Acceptance criteria: local `v0.0.7beta` is fast-forwarded to `legacy-remote/v0.0.7beta`; the native macOS ARM64 GUI package is rebuilt from that exact commit; the compiled sidecar self-host and backend health regressions remain fixed; package contracts, signatures, disk image, architecture, hashes, and a second review are recorded.
+- Hard constraints: use `legacy-remote` as the legacy remote source; do not overwrite unrelated work; do not restart, close, or refresh the user's running Overlay; do not claim unsupported platform rows as verified; keep generated artifacts untracked; commit subjects use `dsw-33987` and push records to the delivery branch.
 - Sources read: `AGENTS.md`, `script/package-gui-installer-matrix.ts`, `packages/overlay/package.json`, the prior packaged-sidecar repair record, branch/remote history, and the fast-forward diff from `f5b544b423` to `464536b8cd`.
 - Whole-repository search: root `package.json` owns `package:gui-installer-matrix`; `script/package-gui-installer-matrix.ts` owns SDK preparation, Overlay/Tauri build, staging, and release-contract validation; focused contract tests are `package-gui-installer-matrix.test.ts` and `release-overlay-contract.test.ts`; backend health is `/global/health`; `BunExecutable.resolve()` remains the sole dependency command executable authority.
 - Independent agent feedback: none; the user did not request sub-agent work.

@@ -11,7 +11,7 @@
 | Sources read | `AGENTS.md`；Browser 技能；`specs/current/architecture/99-principles.md`；2026-07-14 Agent Rail hover input、2026-07-19 compact right tooltip、bounded preview 与 gutter density 记录；当前 `ConversationAgentRail.tsx`、`conversation.css`、源契约测试和真实 hover 浏览器夹具。 |
 | Whole-repository grep | `ConversationAgentRail.tsx` 是唯一 `.conversation-agent-rail-tooltip__header` 生产者，且唯一可见状态节点是头部的 `<span>{agentRailStatusLabel(record().status)}</span>`。`conversation.css` 是唯一头部布局、单行省略和 header-status 样式所有者。`conversation-agent-rail.test.ts` 是直接源码/CSS 契约测试；`conversation-agent-rail-hover-context-browser.test.ts` 是真实 hover/focus、几何和截图所有者；scroll 浏览器测试只统计 tooltip 数量。`AGENT_RAIL_STATUS_LABELS`、`agentRailStatusLabel`、状态本地化、`compactLabel`、诊断详情与 `data-status` 仍服务无障碍标签、错误诊断和短线视觉状态，不属于可见卡片头部状态，必须保留。 |
 | Independent agent feedback | None. 用户未要求子 Agent，当前协作策略禁止未请求委托。 |
-| Git baseline | 当前分支 `work-v0.0.11beta-yr-0720`、本地 `HEAD` 与 `myhexin/work-v0.0.11beta-yr-0720` 均为 `9e63b5fe5`；工作区在改动前干净，已 fetch git-cc。 |
+| Git baseline | 当前分支 `work-v0.0.11beta-yr-0720`、本地 `HEAD` 与 `legacy-remote/work-v0.0.11beta-yr-0720` 均为 `9e63b5fe5`；工作区在改动前干净，已 fetch legacy remote。 |
 
 ## Causal chain
 
@@ -37,14 +37,14 @@
 2. 删除现有可见状态节点并收敛唯一头部 CSS，不改变数据投影、短线状态、定位或 tooltip primitive。
 3. 运行聚焦单元测试、Overlay TypeScript 与国际化检查、Node 浏览器夹具、历史链接和文档健康测试。
 4. 按原始分辨率检查任务截图；若长名称换行、状态残留或内容几何回归则继续修复和重跑。
-5. 二次检查 diff、截图和 Git 状态，使用 `dsw-33987` 前缀提交并推送当前分支到 `myhexin`。
+5. 二次检查 diff、截图和 Git 状态，使用 `dsw-33987` 前缀提交并推送当前分支到 `legacy-remote`。
 
 ## Progress
 
 - [x] 检查用户截图、历史决策、当前实现、测试和完整调用面。
 - [x] 更新测试与生产实现。
 - [x] 完成真实浏览器和视觉验收。
-- [x] 完成二次审查；提交和 git-cc 收敛由最终交付命令验证。
+- [x] 完成二次审查；提交和 legacy remote 收敛由最终交付命令验证。
 
 ## Verification evidence
 

@@ -53,7 +53,7 @@
    tooltip wrapping and placement, and absence of clipping or transcript
    occlusion. Iterate until visually correct.
 5. Re-read the complete diff and verification evidence, fetch the tracked
-   git-cc branch, then commit and push through the normal hooks with the
+   legacy remote branch, then commit and push through the normal hooks with the
    required `dsw-33987` subject prefix.
 
 ## Result

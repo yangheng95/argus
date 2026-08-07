@@ -219,7 +219,7 @@ tab.
    Vite browser fixture.
 4. Inspect the fresh overflow/menu screenshot at original resolution.
 5. Run required documentation health checks, review the task-owned diff, commit
-   only task-owned paths, and push the current delivery branch to `myhexin`.
+   only task-owned paths, and push the current delivery branch to `legacy-remote`.
 
 ### Verification
 

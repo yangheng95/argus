@@ -10,7 +10,7 @@
 | Sources read              | `AGENTS.md`; Browser control skill; W3C CSS Overflow Module Level 3; W3C CSS Scrollbars Styling Module Level 1; `specs/current/architecture/07-panel.md`; `2026-07-21-chat-message-scroll-repair.md`; `2026-07-22-environment-goals-density-and-chat-scrollbar.md`; `2026-07-24-conversation-composer-scrollbar-occlusion.md`; `App.tsx`; `Conversation.tsx`; `main.tsx`; `cascade/base.css`; `surfaces/conversation.css`; source and browser scrollbar regressions.                                                                                                                                                                                                                  |
 | Whole-repository grep     | `rg` enumerated all `chatScroll`, `.chat-scroll`, `#chatScroll`, `scrollbar-gutter`, and `--ui-chat-scrollbar-gutter-x` references. Production ownership is singular: `App.tsx` owns the element; `conversation.css` owns bounded overflow geometry; `base.css` owns scrollbar chrome; `main.tsx` measures its native gutter; `Conversation.tsx` owns transcript scrolling and follow behavior. Direct visibility assertions are confined to `visible-scrollbar-whitelist.test.ts` and `conversation-scroll-bottom-button-browser.test.ts`; geometry and interaction remain covered by the Agent Rail scroll, Composer density, architecture, autoscroll, and long-transcript suites. |
 | Independent feedback      | The user did not request independent agents, and the active collaboration policy forbids unsolicited delegation. The primary agent will perform the required second review.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| Baseline/version evidence | The worktree was clean. `git fetch myhexin v0.0.21beta` showed zero divergence between local and remote, and the pre-change `git push myhexin HEAD:v0.0.21beta` completed through normal hooks with everything up to date.                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Baseline/version evidence | The worktree was clean. `git fetch legacy-remote v0.0.21beta` showed zero divergence between local and remote, and the pre-change `git push legacy-remote HEAD:v0.0.21beta` completed through normal hooks with everything up to date.                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 ## Causal chain
 
@@ -60,7 +60,7 @@ selectors.
 4. Run documentation health, inspect the final diff, and repeat the focused
    checks as the required second review.
 5. Stage only task-owned files, commit with the `dsw-33987` prefix, fetch and
-   converge with `myhexin`, then push the current `v0.0.21beta` branch.
+   converge with `legacy-remote`, then push the current `v0.0.21beta` branch.
 
 ## Status
 
@@ -68,7 +68,7 @@ selectors.
 - [x] Regression expectations and implementation complete.
 - [x] Focused source, type, build, and browser verification pass.
 - [x] Screenshot inspection and second review pass.
-- [x] Task-owned commit and `myhexin` push complete.
+- [x] Task-owned commit and `legacy-remote` push complete.
 
 ## Verification evidence
 
@@ -99,7 +99,7 @@ selectors.
   was staged or edited to mask that evidence.
 - The task-owned diff was committed with subject
   `dsw-33987 keep conversation scrollbar persistent` and pushed to
-  `myhexin/v0.0.21beta` through the normal hooks.
+  `legacy-remote/v0.0.21beta` through the normal hooks.
 
 ## Second review
 

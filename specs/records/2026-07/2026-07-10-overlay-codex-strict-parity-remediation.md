@@ -36,7 +36,7 @@ Hard constraints:
 - Do not restart, close, refresh, or kill the user's running OpenCorvus / Overlay process.
 - Browser verification uses Node.js Playwright on Windows, not Bun.
 - Code changes require targeted tests plus real screenshot inspection.
-- Commit subjects must start with `dsw-33987`; push must go to `myhexin`.
+- Commit subjects must start with `dsw-33987`; push must go to `legacy-remote`.
 - The current worktree has many unrelated dirty files; do not stage, revert, or overwrite unrelated work.
 
 Reference screenshots:

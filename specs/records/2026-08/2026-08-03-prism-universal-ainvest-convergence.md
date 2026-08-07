@@ -11,7 +11,7 @@ Owner: Codex
 The operator inspected Task `tsk_fc5d63f37001NjovcJDQEZahFW`, rejected its
 unrelated Orbit Spaces result, clarified that the purpose of the Prism Expert
 Squad is to converge **every referenced page into the AInvest product and
-visual system**, and asked to synchronize the git-cc remote code and begin the
+visual system**, and asked to synchronize the legacy remote code and begin the
 repair.
 
 ### Acceptance criteria
@@ -47,7 +47,7 @@ repair.
 - Do not add, modify, update, or run User Interface automation tests. Real-page
   validation uses a live desktop page, screenshots, and personal inspection.
 - Do not overwrite, stage, or commit unrelated working-tree changes.
-- Commit subjects use `dsw-33987`; push the delivery branch to `git-cc` without
+- Commit subjects use `dsw-33987`; push the delivery branch to legacy remote without
   bypassing hooks.
 
 ### Sources read

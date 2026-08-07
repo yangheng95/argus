@@ -7,13 +7,13 @@ Status: complete
 | Item | Detail |
 | --- | --- |
 | User requirement | Fix the visibly different hover/selected bar heights in Projects, Mission, and Phase rows and make them use one primitive contract. |
-| Acceptance criteria | Project, Mission, standalone Task/Chat, and Mission-owned Phase rows use one navigation-row compact-height primitive and render equal bounding-box and hover/selected wash heights in light and dark themes. Static top navigation and non-ledger navigation rows retain their own geometry. No nested feedback surface, clipping, action-rail regression, or hierarchy change is introduced. Focused source/browser tests, real screenshots, typecheck, build, internationalization, document health, commit, and `myhexin/v0.0.9beta` push pass. |
+| Acceptance criteria | Project, Mission, standalone Task/Chat, and Mission-owned Phase rows use one navigation-row compact-height primitive and render equal bounding-box and hover/selected wash heights in light and dark themes. Static top navigation and non-ledger navigation rows retain their own geometry. No nested feedback surface, clipping, action-rail regression, or hierarchy change is introduced. Focused source/browser tests, real screenshots, typecheck, build, internationalization, document health, commit, and `legacy-remote/v0.0.9beta` push pass. |
 | Hard constraints | Preserve `.oc-navigation-row` as the only hover/selected/radius owner and use a data-attribute primitive variant rather than a feature-local override. Remove the Project/Work/nested height sources instead of retaining aliases. Use the design-language density scale; no fallback, compatibility rule, second renderer, mobile scope, worktree, or intervention in the running Overlay. Browser acceptance uses Node-launched isolated fixtures plus an isolated production preview. Preserve unrelated `C:/`. |
 | Evidence | The screenshot shows the Project wash at 26px and the selected Phase wash at 34px. Source and production CSS Object Model evidence agree: both elements opt into `.oc-navigation-row`, but the primitive explicitly owns no geometry; `.sidebar` defines Project 26px, Work 34px, and nested 26px, while `.work-row` overrides every Work Ledger row to 34px. |
 | Sources read | `AGENTS.md`; Browser control skill; supplied screenshot; `2026-07-14-left-dock-vertical-density.md`; `2026-07-17-work-ledger-hover-pin-row-parity.md`; `2026-07-17-workspace-search-project-plus-alignment.md`; current card-system architecture; `ProjectLedgerGroup.tsx`; `WorkLedger.tsx`; Button and row owners; `design-language.css`; `navigation-row.css`; `sidebar.css`; `work-ledger.css`; density/primitive/source tests and left-Dock/project-ledger browser fixtures. |
 | Whole-repository search | `rg` enumerated every `oc-navigation-row` production and fixture consumer, every `--sidebar-*-row-height` declaration/consumer, every Work Ledger height assertion, and all hover/selected browser measurements. Only Project group heads and Work Ledger rows enter the compact ledger-height variant. Static navigation, Config back, Task runtime shortcuts, Goals, and Card headers keep feedback-only `.oc-navigation-row` behavior. Left-Dock and neutral-chrome fixtures are updated to mirror the production variant. |
 | Independent agent feedback | None; the user did not request delegation. |
-| Git baseline | `6b5bbcf41`; local and `myhexin/v0.0.9beta` are converged. Only unrelated untracked `C:/` exists. |
+| Git baseline | `6b5bbcf41`; local and `legacy-remote/v0.0.9beta` are converged. Only unrelated untracked `C:/` exists. |
 
 ## Causal chain
 
@@ -39,7 +39,7 @@ Status: complete
 1. Update focused source and browser contracts first and record the expected baseline failure.
 2. Implement the primitive token/variant and remove the superseded surface geometry sources.
 3. Run the isolated left-Dock and production-shaped Project Ledger browser fixtures, inspect light/dark screenshots at original resolution, and iterate.
-4. Run focused tests, architecture guards, Overlay typecheck/i18n/build, documentation health, second diff/call-site review, reconcile git-cc, commit with `dsw-33987`, and push.
+4. Run focused tests, architecture guards, Overlay typecheck/i18n/build, documentation health, second diff/call-site review, reconcile legacy remote, commit with `dsw-33987`, and push.
 
 ## Progress
 

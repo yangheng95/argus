@@ -42,7 +42,7 @@ Move the panel slightly toward the right edge so it no longer covers the dialog.
   running OpenCorvus/Overlay process. Visual verification uses an isolated Vite
   process and Node-driven real browser interaction.
 - Do not create, update, or run UI automation tests.
-- Commit subjects use `dsw-33987`; delivery goes to `myhexin`.
+- Commit subjects use `dsw-33987`; delivery goes to `legacy-remote`.
 
 ### Material read before implementation
 
@@ -106,7 +106,7 @@ placement-offset defect, not a panel-width or clearance-width defect.
 3. Run non-UI validation, launch an isolated real Overlay page at the supplied
    desktop geometry, and correct any visible clipping or overlap.
 4. Perform a second diff review, update this record's status and evidence, commit
-   only this task's files, reconcile the branch, and push to `myhexin`.
+   only this task's files, reconcile the branch, and push to `legacy-remote`.
 
 ## Status
 

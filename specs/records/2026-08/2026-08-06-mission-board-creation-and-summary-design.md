@@ -36,7 +36,7 @@ Date: 2026-08-06
 - Expert Squad selection is the existing immutable Mission-held snapshot, not a new person/assignee model.
 - Use one shared Overlay Mission record source for the board and navigation summary.
 - Do not add, change, or run User Interface automation tests. Positive route, projection, service, and protocol contracts remain allowed.
-- Do not create a worktree. Preserve `.superpowers/` and unrelated changes. Commit subjects begin with `dsw-33987` and push to `myhexin`.
+- Do not create a worktree. Preserve `.superpowers/` and unrelated changes. Commit subjects begin with `dsw-33987` and push to `legacy-remote`.
 
 ### Sources read
 

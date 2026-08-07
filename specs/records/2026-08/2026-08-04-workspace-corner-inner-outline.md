@@ -48,7 +48,7 @@
    and exact corner crop, enlarge the crop, and personally compare the outside
    arc pixels with the previous evidence.
 5. Run a bounded Codex read-only review, commit with the required prefix, push
-   to `myhexin`, and verify local/remote convergence.
+   to `legacy-remote`, and verify local/remote convergence.
 
 ## Progress
 
@@ -58,7 +58,7 @@
 - [x] Record the revised cause, call-site disposition, and verification plan.
 - [x] Commit and push the pre-change correction plan.
 - [x] Implement and visually verify the inner outline.
-- [x] Complete independent review, final commit, and git-cc push.
+- [x] Complete independent review, final commit, and legacy remote push.
 
 ## Real-Page Visual Evidence
 

@@ -36,7 +36,7 @@ an independent row despite the catalog container itself being correctly centered
 - Overlay TypeScript check and production Vite build.
 - Node-driven browser fixture at desktop size, with DOM geometry assertions and screenshots for Review and the empty catalog.
 - Visual inspection of current-goal screenshots, followed by a second diff review.
-- Selective commit with `dsw-33987` prefix and push to the git-cc remote.
+- Selective commit with `dsw-33987` prefix and push to the legacy remote.
 
 ## Progress
 
@@ -90,7 +90,7 @@ left`, Review opens with `data-active-view="changes"`, and no secondary
 
 - Implementation commit: `3241f1498` (`dsw-33987 simplify Review changes
   surface alignment`).
-- The git-cc `work-v0.0.6beta-yr-0716` branch was fetched at the same commit
+- The legacy remote `work-v0.0.6beta-yr-0716` branch was fetched at the same commit
   after the focused tests, TypeScript, i18n, production build, dedicated
   browser fixture, screenshot inspection, and second review passed.
 - Concurrent unstaged additions in the two shared spec indexes were preserved

@@ -14,7 +14,7 @@ Repair the Mailbox surface that shows `Cannot read properties of undefined
 - The Overlay consumes the backend `evidenceLocators` field directly and does
   not retain the retired `evidenceRefs` field or add a compatibility fallback.
 - Focused unit, type, real Vite browser, screenshot, documentation, second
-  review, commit, and git-cc push checks pass.
+  review, commit, and legacy remote push checks pass.
 
 ### Hard constraints
 
@@ -75,7 +75,7 @@ could not expose the contract mismatch.
 3. Run focused unit/type checks and the real Node/Vite Mailbox browser fixture;
    inspect the resulting screenshot and browser diagnostics.
 4. Run documentation health and second-review the complete task diff.
-5. Commit only task-owned paths with the `dsw-33987` prefix, fetch git-cc, and
+5. Commit only task-owned paths with the `dsw-33987` prefix, fetch legacy remote, and
    push the current main delivery branch through normal hooks.
 
 ## Progress
@@ -84,7 +84,7 @@ could not expose the contract mismatch.
 - [x] Contract repair and regression fixtures implemented.
 - [x] Focused and visual verification complete.
 - [x] Second review complete.
-- [ ] Commit and git-cc push complete.
+- [ ] Commit and legacy remote push complete.
 
 ## Verification evidence
 

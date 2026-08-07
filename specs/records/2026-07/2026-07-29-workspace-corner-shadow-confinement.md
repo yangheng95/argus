@@ -11,7 +11,7 @@
 | Sources read | Root `AGENTS.md`; Browser control skill; `2026-07-28-workspace-top-left-radius-restoration.md`; `2026-07-27-overlay-header-plane-and-brand-alignment.md`; `2026-07-27-overlay-radius-and-input-weight-convergence.md`; `2026-07-24-light-rail-reference-gradient.md`; `2026-07-17-left-rail-scrollbar-width-workspace-shadow-parity.md`; `2026-07-14-overlay-workspace-surface-continuity.md`; current `App.tsx`, `workspace.css`, `activity.css`, `titlebar.css`, `design-language.css`, all three theme cascades, and relevant historical UI-test references. |
 | Whole-repository grep | The complete search for `.workspace-main`, `--ui-workspace-left-shadow-*`, `--ui-workspace-top-shadow-*`, `--ui-workspace-edge-shadow-*`, `--rail-background-image`, and `--workspace-ambient-fill` found one production surface composer in `workspace.css`, one geometry/token owner in `design-language.css`, and the two visible rail-paint owners in `activity.css` and `titlebar.css`. Existing source/browser UI tests still pin the earlier broad-shadow contract; the 2026-07-29 prohibition requires leaving those historical UI tests untouched and unrun. |
 | Independent agent feedback | None. The user did not request sub-agents, and this task has one tightly coupled visual owner. |
-| Git baseline | Branch `work-v0.0.24beta-yr-0729` at `49c40cff1b`, exactly aligned with `myhexin/work-v0.0.24beta-yr-0729` after fetch. The unrelated tracked modification remains unstaged and outside this task. |
+| Git baseline | Branch `work-v0.0.24beta-yr-0729` at `49c40cff1b`, exactly aligned with `legacy-remote/work-v0.0.24beta-yr-0729` after fetch. The unrelated tracked modification remains unstaged and outside this task. |
 
 ## Cause chain
 
@@ -39,7 +39,7 @@
 2. Constrain the existing left shadow at its token and `.workspace-main` composition owners.
 3. Run Overlay typecheck and production Vite build only; do not run UI automated tests.
 4. Start an isolated real Vite page with Node-backed tooling, open it in the browser, capture a task-scoped desktop screenshot, and personally inspect the corner. Iterate if the rail does not remain continuous or the workspace edge becomes visually detached.
-5. Re-grep every shadow token/consumer, review the exact diff, run documentation health and `git diff --check`, then commit with the `dsw-33987` prefix and push the current branch to `myhexin`.
+5. Re-grep every shadow token/consumer, review the exact diff, run documentation health and `git diff --check`, then commit with the `dsw-33987` prefix and push the current branch to `legacy-remote`.
 
 ## Progress
 
@@ -47,7 +47,7 @@
 - [x] Record Recall, root-cause chain, complete call-site disposition, and verification plan.
 - [x] Implement the single-owner shadow confinement.
 - [x] Complete real-page screenshot review and non-UI verification.
-- [x] Complete second review and prepare the exact task-owned commit for git-cc push.
+- [x] Complete second review and prepare the exact task-owned commit for legacy remote push.
 
 ## Verification
 

@@ -20,7 +20,7 @@
 - Non-UI tests must assert positive catalog and file-copy results; do not add negative tests.
 - Start Playwright or browser inspection through Node, never Bun.
 - Preserve all unrelated Overlay working-tree modifications and stage only exact task files.
-- Every commit subject starts with `dsw-33987`; push to `myhexin/work-lcx-v0.0.30beta` without bypassing hooks.
+- Every commit subject starts with `dsw-33987`; push to `legacy-remote/work-lcx-v0.0.30beta` without bypassing hooks.
 
 ## Recall
 
@@ -509,7 +509,7 @@ If either screenshot shows weak hierarchy, clipping, excessive empty space, inco
 
 **Interfaces:**
 - Consumes: focused/static/docs results, real artifact inventories, preview URLs, request paths, screenshots, and source review.
-- Produces: final evidence, scoped commits, and pushed git-cc branch.
+- Produces: final evidence, scoped commits, and pushed legacy remote branch.
 
 - [ ] **Step 1: Run required documentation checks**
 
@@ -546,14 +546,14 @@ git add -- specs/README.md specs/records/2026-08/README.md specs/records/2026-08
 git commit -m "dsw-33987 record landing windows distribution evidence"
 ```
 
-- [ ] **Step 5: Reconcile the remote and push git-cc**
+- [ ] **Step 5: Reconcile the remote and push legacy remote**
 
-Fetch `myhexin/work-lcx-v0.0.30beta`, confirm the branch relationship, integrate any remote commits without overwriting the unrelated dirty Overlay work, and push normally:
+Fetch `legacy-remote/work-lcx-v0.0.30beta`, confirm the branch relationship, integrate any remote commits without overwriting the unrelated dirty Overlay work, and push normally:
 
 ```powershell
-git fetch myhexin work-lcx-v0.0.30beta
-git rev-list --left-right --count HEAD...myhexin/work-lcx-v0.0.30beta
-git push myhexin work-lcx-v0.0.30beta
+git fetch legacy-remote work-lcx-v0.0.30beta
+git rev-list --left-right --count HEAD...legacy-remote/work-lcx-v0.0.30beta
+git push legacy-remote work-lcx-v0.0.30beta
 ```
 
 Do not use `--no-verify`. If the pre-push Overlay internationalization check still observes the unrelated in-progress panel revision mismatch, report that exact external working-tree blocker and retry after its owner finishes; do not edit, stash, reset, or discard that work.
@@ -576,7 +576,7 @@ Do not use `--no-verify`. If the pre-push Overlay internationalization check sti
 
 ## Plan self-review
 
-- Spec coverage: existing-directory-only input, no rebuild, complete copy, current-version NSIS link, inline English/Chinese UI, macOS omission, build command, positive tests, real artifact verification, visual screenshots, second review, commits, and git-cc push all have exact tasks.
+- Spec coverage: existing-directory-only input, no rebuild, complete copy, current-version NSIS link, inline English/Chinese UI, macOS omission, build command, positive tests, real artifact verification, visual screenshots, second review, commits, and legacy remote push all have exact tasks.
 - Placeholder scan: every implementation, test, command, copy path, public path, user-visible string, acceptance action, and commit is concrete.
 - Type consistency: `LandingWindowsDownload`, `landingWindowsDownload`, `LandingArtifactCopyResult`, and `copyLandingWindowsArtifacts` use identical names and fields across test, producer, assembler, and Astro consumer.
 - Test boundary: automated checks cover catalog/filesystem/static contracts only. No DOM, TSX, HTML, CSS, i18n string, snapshot, browser fixture, or screenshot assertion is added or run.

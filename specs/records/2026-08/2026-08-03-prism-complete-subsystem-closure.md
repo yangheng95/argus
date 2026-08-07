@@ -27,7 +27,7 @@ Owner: Codex
 - 子系统成员必须由真实产品结构、业务依赖、导航、数据/状态关系和用户旅程证据决定，不设页面数量配额，也不从常见网站惯例虚构范围。
 - 不新增、修改、更新或运行 UI 自动化测试。Package、Registry、Resolver、payload 和 prompt ownership 使用正向非 UI 契约测试；实际页面视觉验收留给真实 Prism 交付运行。
 - 不触碰未跟踪的 `packages/vscode-extension/` 或其他无关修改。
-- 提交标题使用 `dsw-33987` 前缀，并推送当前主交付分支到 `myhexin`。
+- 提交标题使用 `dsw-33987` 前缀，并推送当前主交付分支到 `legacy-remote`。
 
 ### Sources read
 

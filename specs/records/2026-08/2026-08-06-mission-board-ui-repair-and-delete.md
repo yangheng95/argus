@@ -29,7 +29,7 @@ Date: 2026-08-06
 - Use the existing Dialog, ContextMenu, Button, Icon, localization, and diagnostic primitives.
 - Do not add, modify, or run User Interface automation tests. The two existing context-menu source-assertion tests encountered during investigation are removed under the repository User Interface test prohibition.
 - No database schema change, migration, worktree, fallback, or persisted presentation state.
-- Preserve unrelated work. Commit subjects begin with `dsw-33987` and delivery is pushed to `myhexin`.
+- Preserve unrelated work. Commit subjects begin with `dsw-33987` and delivery is pushed to `legacy-remote`.
 
 ### Sources read
 
@@ -78,7 +78,7 @@ None requested. No sub-agent was used.
 3. Add localized Mission-card delete copy, context-menu composition, confirmation, existing delete-service invocation, diagnostics, and shared refresh.
 4. Run localization, Overlay typecheck, production build, documentation health, historical links, and `git diff --check`; do not run User Interface tests.
 5. Start the real page, exercise all four surfaces, capture and personally inspect screenshots, then correct any remaining visual defect.
-6. Perform a second diff review, commit exact files, push `myhexin`, and rebuild the Windows desktop client package because the last package predates this repair.
+6. Perform a second diff review, commit exact files, push `legacy-remote`, and rebuild the Windows desktop client package because the last package predates this repair.
 
 ## Implementation result
 

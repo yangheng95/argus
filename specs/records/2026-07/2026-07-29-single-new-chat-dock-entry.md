@@ -24,7 +24,7 @@
 - Do not add a replacement launcher, compatibility path, hidden action, state machine, or route gate.
 - Use the existing `WorkLedgerNavigationAction`, shared global launcher, and Composer `SegmentedControl`.
 - Run Playwright through Node.js, never Bun.
-- Commit only task-owned paths with a `dsw-33987` subject and push the current `v0.0.24beta` branch to `myhexin`.
+- Commit only task-owned paths with a `dsw-33987` subject and push the current `v0.0.24beta` branch to `legacy-remote`.
 
 ### Hard-disk sources read
 
@@ -60,7 +60,7 @@ Repository-wide searches covered `work-ledger-new-chat`, `work-ledger-new-work`,
 ### Git baseline
 
 - Branch: `v0.0.24beta`.
-- Starting `HEAD`: `905e3e05ee2fe80b1dd1ed13aedea7c52304ee81`, aligned with `myhexin/v0.0.24beta`.
+- Starting `HEAD`: `905e3e05ee2fe80b1dd1ed13aedea7c52304ee81`, aligned with `legacy-remote/v0.0.24beta`.
 - During verification, the concurrent Mirror Watch owner committed and pushed
   `6b15b261a0130345de4c765b129d4da7fbd8f008`; this task continued from that
   current `HEAD` without rewriting or restaging those changes.
@@ -80,7 +80,7 @@ capability or creating a new abstraction.
 1. Remove the Work Ledger Work/Mission action nodes and their now-dead props, wrappers, and main-call-site callbacks.
 2. Update current architecture and focused source/browser tests to assert one Dock entry while preserving Composer mode switching and Mission routing.
 3. Run focused tests, typecheck, internationalization, documentation health, and a Node-started real Vite browser flow with an inspected screenshot.
-4. Perform a second diff review, commit only task-owned paths, push `v0.0.24beta` to `myhexin`, and verify remote alignment.
+4. Perform a second diff review, commit only task-owned paths, push `v0.0.24beta` to `legacy-remote`, and verify remote alignment.
 
 ## Progress
 
@@ -110,4 +110,4 @@ capability or creating a new abstraction.
   changed to bypass that independent failure.
 - Implementation commit `a02f137666` passed the normal pre-push typecheck,
   API-route, documentation, internationalization, and secret-scan hooks and was
-  pushed to `myhexin/v0.0.24beta`.
+  pushed to `legacy-remote/v0.0.24beta`.

@@ -32,7 +32,7 @@ arrow and other function keys must not insert unreadable characters.
 - Do not filter private-use characters in `ChatComposer`.
 - Do not update the conflicted spec indexes until their current owner resolves
   them.
-- Delivery commits use the `dsw-33987` prefix and push to `myhexin` only when
+- Delivery commits use the `dsw-33987` prefix and push to `legacy-remote` only when
   the existing merge state permits a safe task-owned commit.
 
 ### Disk sources read
@@ -128,7 +128,7 @@ delegation policy forbids spawning them for this task.
 - [x] Implementation and regression tests.
 - [x] Vite browser and native build verification.
 - [x] Second review.
-- [x] Delivery commit and git-cc push.
+- [x] Delivery commit and legacy remote push.
 
 ## Verification result
 
@@ -156,7 +156,7 @@ delegation policy forbids spawning them for this task.
 - Historical documentation health passed 22 tests, and task-owned
   `git diff --check` passed.
 - Product and test changes were committed as `af9779d391` and pushed to
-  `myhexin/v0.0.20beta`; the normal pre-push SDK, AI runtime, package
+  `legacy-remote/v0.0.20beta`; the normal pre-push SDK, AI runtime, package
   typecheck, route, API documentation, localization, and secret-scan hooks all
   passed.
 

@@ -10,7 +10,7 @@
 | Sources read | Root `AGENTS.md`; Browser control skill; supplied screenshot; `specs/current/architecture/07-panel.md`; `2026-07-21-settings-extension-runtime-repairs.md`; `2026-08-03-right-dock-message-link-navigation.md`; `BrowserPreviewPanel.tsx`; `inspector.css`; Button/TextField/DropdownMenu primitives; native Browser service and Tauri WebView lifecycle; native-surface occlusion service. |
 | Whole-repository grep | Searched the Browser panel, Right Dock, Overlay styles, native host commands, transport contracts, current architecture, records, and focused tests for address controls, ellipsis/context menus, guest selection, pointer handling, WebView bounds/layering, `z-index`, and native occlusion. The address field is `24px` while its submit button is overridden to `28px`. The live page retains `7px + 3px + border` frame decoration. The ellipsis menu portals into host HTML above an operating-system child WebView, and only Settings/app dialogs currently acquire the existing occlusion owner. The existing guest selection runtime already owns real Document Object Model (DOM) hit-testing and its comment panel, so the right-click action must reuse that owner. Directly encountered Rust tests that assert guest UI script strings are prohibited UI/source-string tests and must be deleted without running; focused native/service/transport data contracts remain eligible. |
 | Independent agent feedback | None. The user did not request sub-agents, so the primary agent owns implementation and second review. |
-| Git baseline | `work-v0.0.29beta-yr-0803` was clean, synchronized with `myhexin/work-v0.0.29beta-yr-0803`, and pushed through the normal pre-push hook at `52360a9570` before implementation. |
+| Git baseline | `work-v0.0.29beta-yr-0803` was clean, synchronized with `legacy-remote/work-v0.0.29beta-yr-0803`, and pushed through the normal pre-push hook at `52360a9570` before implementation. |
 
 ## Causal chain
 
@@ -65,14 +65,14 @@
    right-click annotation flow, three-second pointer hint, and native surface
    restoration in screenshots, then repeat the diff and visual review.
 8. Record evidence here, commit with the `dsw-33987` prefix, fetch/reconcile the
-   tracked git-cc branch, and push through the normal hook.
+   tracked legacy remote branch, and push through the normal hook.
 
 ## Progress
 
 - [x] Recall, causal chain, and call-site inventory recorded.
 - [x] Product and architecture changes complete.
 - [x] Non-UI/static verification and real-page visual acceptance complete.
-- [x] Second review complete; commit and git-cc push follow this recorded evidence.
+- [x] Second review complete; commit and legacy remote push follow this recorded evidence.
 
 ## Delivered behavior and evidence
 

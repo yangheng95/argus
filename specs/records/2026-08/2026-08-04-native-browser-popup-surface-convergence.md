@@ -11,7 +11,7 @@
 | Whole-repository grep | Enumerated every Overlay DropdownMenu, Popover, HoverCard, Tooltip, Dialog, native-menu call, and native-surface occlusion owner. Browser ellipsis, Right Dock add, and Environment branch already use the parent-owned native menu. Dialog and Settings surfaces use the full-surface occlusion owner. Left-sidebar and center-workbench menus are geometrically contained outside the Browser child, while panel-local split/sub-agent menus cannot coexist with an active Browser body. The remaining menus that can cross the native child while it stays active are Environment `Local` (`TaskDirBar.tsx`) and Right Dock hidden-tab overflow (`RightDock.tsx`); both still use host Kobalte portals. Current architecture also retains one stale sentence naming the add surface as a Kobalte menu. |
 | Existing-test disposition | The prior task already removed the directly encountered prohibited Right Dock UI/source-string tests. No additional UI test is added, modified, or run. Positive non-UI transport and native-surface contracts remain untouched. |
 | Independent agent feedback | None. The user did not request sub-agents, so the primary agent owns implementation and second review. |
-| Git baseline | Branch `work-v0.0.29beta-yr-0803` is synchronized with `myhexin/work-v0.0.29beta-yr-0803` at `0 0`. Existing Browser annotation changes belong to parallel work and must remain outside this delivery. |
+| Git baseline | Branch `work-v0.0.29beta-yr-0803` is synchronized with `legacy-remote/work-v0.0.29beta-yr-0803` at `0 0`. Existing Browser annotation changes belong to parallel work and must remain outside this delivery. |
 
 ## Causal chain
 
@@ -41,7 +41,7 @@
    Local and overflow menus above it, exercise actions/dismissal, capture fresh
    screenshots, and personally review both results twice.
 7. Record evidence here, commit with the `dsw-33987` prefix, fetch/reconcile the
-   git-cc branch, and push through the normal hook without including parallel
+   legacy remote branch, and push through the normal hook without including parallel
    worktree changes.
 
 ## Progress
@@ -50,7 +50,7 @@
 - [x] Product and architecture changes complete.
 - [x] Non-UI/static verification complete.
 - [x] Real-page visual acceptance and second review complete.
-- [x] Commit and git-cc push complete.
+- [x] Commit and legacy remote push complete.
 
 ## Acceptance evidence
 

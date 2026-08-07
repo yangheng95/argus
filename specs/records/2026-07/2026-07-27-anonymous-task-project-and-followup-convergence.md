@@ -42,7 +42,7 @@
 11. Persist the dispatch Goal subject on complete and partial Deep Research / Frontend Research artifacts, validate same-Task ownership, and preserve that exact subject in Artifact Catalog filtering when no Build attempt exists.
 12. Move unresolved-attempt rejection ahead of durable child Session creation where the current dispatch architecture permits; otherwise prove the rejected preparation has a visible terminal failure and cannot masquerade as executed work.
 13. Add regressions for direct-primary commit publication, managed-worktree non-publication/publication, no-op and uncommitted current-project outcomes, exact rejection followed by retry, stale completion rejection, Goal-filtered research discovery, and the full terminal-refill decision chain.
-14. Run targeted engine/orchestrator/research/catalog tests, package typecheck, document-health suites, and a second source/diff review before committing only repair-owned files and pushing through normal hooks to `myhexin`.
+14. Run targeted engine/orchestrator/research/catalog tests, package typecheck, document-health suites, and a second source/diff review before committing only repair-owned files and pushing through normal hooks to `legacy-remote`.
 
 ## Independent review feedback
 

@@ -21,7 +21,7 @@
 - 使用现有 Kobalte Tooltip、Button 和现有 Hexin budget resource，不手搓新的交互系统。
 - 不重启、刷新或干预用户正在运行的 OpenCorvus/Overlay；视觉验证使用隔离测试服务。
 - 保留当前工作区所有无关未提交修改；禁止 reset、stash、整仓回退或新增 worktree。
-- Playwright 只能由 Node 启动。所有提交以 `dsw-33987` 开头并推送 `myhexin`。
+- Playwright 只能由 Node 启动。所有提交以 `dsw-33987` 开头并推送 `legacy-remote`。
 
 ### 已读取的落盘资料与历史证据
 

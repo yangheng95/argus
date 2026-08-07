@@ -60,7 +60,7 @@ on that projection.
 - [x] Shared active Tool motion and chevron removal implemented.
 - [x] Focused, type, document, and real Vite visual verification complete.
 - [x] Second review complete.
-- [x] Commit and git-cc synchronization complete.
+- [x] Commit and legacy remote synchronization complete.
 
 ## Verification
 
@@ -88,7 +88,7 @@ on that projection.
   diagram SVG geometry, duplicate Workflow glyph registration, and retired
   color aliases; this task does not rewrite those owners.
 - `git diff --check` passes.
-- Commit `144347fb5f` passed the complete git-cc pre-push hook: SDK import
+- Commit `144347fb5f` passed the complete legacy remote pre-push hook: SDK import
   integrity, AI runtime integrity, all-package TypeScript checks, API route
   inventory, generated API documentation, Overlay i18n, and secret scan. The
-  branch was synchronized to `myhexin/v0.0.19beta`.
+  branch was synchronized to `legacy-remote/v0.0.19beta`.

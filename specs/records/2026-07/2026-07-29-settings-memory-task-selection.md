@@ -73,7 +73,7 @@ Settings is full-screen, so its Memory page hides the Work Ledger while continui
 
 ## Verification Log
 
-- Baseline `git push myhexin HEAD:work-v0.0.24beta-yr-0729`: passed; pre-push SDK import, AI runtime, and workspace typechecks passed.
+- Baseline `git push legacy-remote HEAD:work-v0.0.24beta-yr-0729`: passed; pre-push SDK import, AI runtime, and workspace typechecks passed.
 - `bun run --cwd packages/overlay check:i18n`: passed.
 - `bunx turbo run typecheck --filter=@opencorvus-ai/overlay`: passed after concurrent unrelated worktree changes settled.
 - `bun run build:vite`: passed; Vite transformed 7,057 modules and emitted only existing bundle-size warnings.
@@ -88,4 +88,4 @@ Settings is full-screen, so its Memory page hides the Work Ledger while continui
   - Manually reviewed the closed selector, open selector, and post-search desktop screenshots. The selector, option metadata, search field, and empty-result state were aligned, readable, and free of the original unavailable-scope warning.
 - UI automated tests were intentionally neither modified nor run.
 - Second source review confirmed that `MemoryPanel` remains the only memory HTTP owner, the Settings composition owns only the inspection target, and no new backend API, fallback identity, active-conversation mutation, or duplicate picker primitive was introduced.
-- Implementation commit `8a7cc8f715` passed the git-cc pre-push SDK import, AI runtime, full-workspace typecheck, API route inventory, generated API documentation, Overlay i18n, and secret-scan checks, then pushed to `myhexin/work-v0.0.24beta-yr-0729`.
+- Implementation commit `8a7cc8f715` passed the legacy remote pre-push SDK import, AI runtime, full-workspace typecheck, API route inventory, generated API documentation, Overlay i18n, and secret-scan checks, then pushed to `legacy-remote/work-v0.0.24beta-yr-0729`.

@@ -10,7 +10,7 @@
 | Sources read | `AGENTS.md`; Browser control skill; user screenshot; official OpenAI Codex product/help search results; `specs/current/architecture/07-panel.md`; `2026-07-14-right-dock-panel-ownership-and-browser-draft.md`; `2026-07-15-right-dock-embedded-terminal.md`; `2026-07-16-terminal-reference-visual-parity.md`; `2026-07-16-review-changes-and-empty-dock-alignment.md`; `2026-07-17-overlay-primitive-system-convergence.md`; current `RightDock.tsx`, `TerminalPanel.tsx`, Tabs primitive, workspace/terminal CSS, focused tests, and Node browser fixture. |
 | Whole-repository grep | `RightDock.tsx` 是 `.right-dock-tab`、可见一级 label、tab close、全局 add/close 与 overflow 的唯一 DOM owner；`workspace.css` 是这些一级标签布局的唯一 surface owner，当前注释声明 underline/quiet chrome 但未覆盖 Tabs primitive 的 selected background；`TerminalPanel.tsx` 是 `.terminal-panel__toolbar`、session tab/close/add 与 xterm mount 的唯一 DOM owner；`terminal.css` 是二级栏唯一视觉 owner；`terminal-panel.test.ts` 与 `browser/terminal-reference-visual-browser.test.ts` 明确把二级栏固定为旧验收；`main.tsx` 是 Terminal 唯一 mount；`services/terminal.ts` 与后端 PTY owner 无需改变。 |
 | Independent agent feedback | None. 用户未要求子 Agent，当前协作约束禁止主动委托。 |
-| Git baseline | 当前交付分支为 `work-v0.0.8beta-yr-0717`，任务开始时 `HEAD`/`myhexin` 均为 `eda14ccbe`。工作区已有其他 owner 的左栏宽度、workspace shadow、scrollbar、相关测试和 spec/index 改动；本任务只修改独立组件/测试文件以及 `workspace.css` 的 Right Dock tab 区块，并选择性提交本任务 hunk。 |
+| Git baseline | 当前交付分支为 `work-v0.0.8beta-yr-0717`，任务开始时 `HEAD`/`legacy-remote` 均为 `eda14ccbe`。工作区已有其他 owner 的左栏宽度、workspace shadow、scrollbar、相关测试和 spec/index 改动；本任务只修改独立组件/测试文件以及 `workspace.css` 的 Right Dock tab 区块，并选择性提交本任务 hunk。 |
 
 ## Root Cause
 
@@ -47,7 +47,7 @@ selected fill。
 3. 同步修改 focused tests 与真实 Node browser fixture，使旧双层标题不能回归。
 4. 运行 focused Bun tests、Overlay typecheck/i18n、production Vite build、历史文档链接与相关 document-health 检查。
 5. 通过 Node 启动隔离 browser fixture；查看当前 task-scoped Right Dock/Terminal 截图，按视觉反馈修改并重跑，绝不刷新正在运行的 Overlay。
-6. 二次 review 全部 diff 与全仓 grep，更新本记录的结果，选择性 commit 本任务文件/hunk，并 push `myhexin`。
+6. 二次 review 全部 diff 与全仓 grep，更新本记录的结果，选择性 commit 本任务文件/hunk，并 push `legacy-remote`。
 
 ## Progress
 
@@ -112,8 +112,8 @@ Right Dock surface 直接声明 `background: transparent`，没有通过调浅�
 ## Delivery Result
 
 - Implementation commit `a564fca92` (`dsw-33987 flatten dock tabs and terminal
-  title`) 已通过 git-cc pre-push hook 并推到
-  `myhexin/work-v0.0.8beta-yr-0717`。
+  title`) 已通过 legacy remote pre-push hook 并推到
+  `legacy-remote/work-v0.0.8beta-yr-0717`。
 - Pre-push hook 的 repository typecheck、API route inventory、generated docs、
   Overlay i18n 与 secret scan 全部通过。
 - 另一项并发 Work Ledger CSS 仍保留在共享 index/worktree 中，没有进入

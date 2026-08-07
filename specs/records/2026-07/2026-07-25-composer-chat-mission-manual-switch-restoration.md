@@ -66,7 +66,7 @@ The direct-entry change correctly added separate New Chat and New Mission button
 3. Restore request-scoped expert-squad selection state, catalog validation, pruning, and submit projection without changing explicit `@squad` / `@mission` precedence.
 4. Restore locale and component surface styles.
 5. Correct the affected source assertions and extend the real direct-entry browser test to cover Chat → Mission and Mission → Chat.
-6. Run real Vite and Node Playwright interaction with screenshots, focused source tests, typecheck, i18n, document-health checks, second diff review, precise commit, and normal-hook git-cc push.
+6. Run real Vite and Node Playwright interaction with screenshots, focused source tests, typecheck, i18n, document-health checks, second diff review, precise commit, and normal-hook legacy remote push.
 
 ## Verification record
 

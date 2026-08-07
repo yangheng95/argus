@@ -20,7 +20,7 @@
   Configuration-like facts must have one provider-owned declaration instead of
   being repeated at call sites. Non-User Interface (UI) behavior requires
   positive contract tests. Commit subjects start with `dsw-33987`, and delivery
-  pushes the current branch to `myhexin`.
+  pushes the current branch to `legacy-remote`.
 - Sources read:
   - `specs/current/architecture/06-provider.md`;
   - `specs/records/2026-07/2026-07-16-provider-tls-routing-and-visible-error.md`;

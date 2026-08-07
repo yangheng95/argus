@@ -15,7 +15,7 @@ The user supplied a real Overlay screenshot showing `POST /mission/wake` failing
 5. The backend keeps strict `PromptProfileResolver.assertKnownProfileID` validation. No unknown-ID fallback, alias, auto-install, auto-activation, or cross-project package lookup is introduced.
 6. Focused regressions cover the Windows Git command contract, real long-path staging on Windows, catalog identity projection, canonical project-directory scope, and terminal-edge invalidation.
 7. An isolated real Overlay page is exercised with Node-launched browser tooling and a task-scoped screenshot is manually reviewed. The user's running OpenCorvus/Overlay process is not restarted, refreshed, or stopped.
-8. Specs indexes, document health, focused typechecks/tests, `git diff --check`, a second review, a `dsw-33987` commit, and a `myhexin` push are completed without staging unrelated worktree changes.
+8. Specs indexes, document health, focused typechecks/tests, `git diff --check`, a second review, a `dsw-33987` commit, and a `legacy-remote` push are completed without staging unrelated worktree changes.
 
 ### Hard constraints
 
@@ -73,7 +73,7 @@ No independent agent was commissioned. The user did not request sub-agents, and 
 ### Baseline and delivery state
 
 - Branch: `work-v0.0.7beta-yr-0716`; initial task HEAD: `d8d857fd5`.
-- `git fetch myhexin work-v0.0.7beta-yr-0716` showed the local branch two commits ahead of the git-cc branch.
+- `git fetch legacy-remote work-v0.0.7beta-yr-0716` showed the local branch two commits ahead of the legacy remote branch.
 - The required pre-change push reached the repository hook. Workspace typechecks passed, but `api:routes-check` rejected unrelated, already-dirty Mailbox routes because their generated OpenAPI/SDK surface was not yet committed. This repair will not overwrite or absorb that parallel batch; final push must be retried after the shared hook surface converges.
 
 ## Repair design
@@ -96,7 +96,7 @@ The request identity already includes directory, project/session ownership, and 
 4. Add pure catalog-snapshot tests for exact identity, mismatch-to-empty behavior, and selection isolation.
 5. Extend scope tests for canonical active-project directory ownership and source tests for terminal-edge invalidation.
 6. Run focused OpenCorvus/Overlay tests and typechecks, document-health checks, `git diff --check`, then an isolated Node-launched rendered browser regression with a goal-scoped screenshot and manual visual review.
-7. Re-read the Recall and diff, inspect overlap with the Mailbox batch, commit only this repair with `dsw-33987`, and push the current branch to `myhexin` after hooks pass.
+7. Re-read the Recall and diff, inspect overlap with the Mailbox batch, commit only this repair with `dsw-33987`, and push the current branch to `legacy-remote` after hooks pass.
 
 ## Implementation and verification record
 

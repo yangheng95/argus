@@ -35,7 +35,7 @@ The repository already depends on `tauri-plugin-opener`, whose `open_path(path, 
 1. Replace the Tauri editor process launcher with the already-installed opener plugin and add target-specific mapping tests.
 2. Run Rust formatting and focused native tests, then the existing Overlay workspace/transport tests and type check.
 3. Run required spec link/document single-source checks, `git diff --check`, and a second source/diff review.
-4. Commit only task-owned files with the required `dsw-33987` subject and push the current main branch to `myhexin`; do not include unrelated dirty files.
+4. Commit only task-owned files with the required `dsw-33987` subject and push the current main branch to `legacy-remote`; do not include unrelated dirty files.
 
 ## Validation record
 

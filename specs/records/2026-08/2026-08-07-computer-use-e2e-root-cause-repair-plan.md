@@ -1,7 +1,7 @@
 # Computer Use End-to-End Root-Cause Repair Plan
 
 Date: 2026-08-07
-Status: Host-native correction and real Windows/Luna acceptance complete; commit and git-cc push pending
+Status: Host-native correction and real Windows/Luna acceptance complete; commit and legacy remote push pending
 Owner: Codex
 
 ## Recall
@@ -27,8 +27,8 @@ Owner: Codex
 
 - Work continues only in the user-authorized isolated worktree `D:\myhexin-local\opencorvus\.scratch\computer-lifecycle-e2e`.
 - The original checkout contains unrelated work and remains outside this task.
-- The continuation worktree was clean before correction and moved from `1a4ac332a5` to current git-cc `v0.0.33beta` commit `4e603b7a705a8c0add768f57ad242fba073f5f5e`; the latter contains the former plus unrelated already-pushed commits.
-- The first refresh attempt hit a transient git-cc TLS handshake failure; the already-current remote-tracking ref was used only after the clean-tree evidence was recorded. Remote freshness must be rechecked before the next push.
+- The continuation worktree was clean before correction and moved from `1a4ac332a5` to current legacy remote `v0.0.33beta` commit `4e603b7a705a8c0add768f57ad242fba073f5f5e`; the latter contains the former plus unrelated already-pushed commits.
+- The first refresh attempt hit a transient legacy remote TLS handshake failure; the already-current remote-tracking ref was used only after the clean-tree evidence was recorded. Remote freshness must be rechecked before the next push.
 
 ### Material read
 
@@ -124,7 +124,7 @@ The earlier three-Agent review accepted a VM design because every reviewer inher
 4. Observe the current desktop, perform one reversible action in a dedicated real application, and observe the proven result.
 5. Open the persisted Computer Tool Part in the real Overlay, take over, interact physically, return control, and require Luna to observe again.
 6. Destroy the Computer session, then run a second exact Session to prove separate logical ownership on the shared desktop.
-7. Retain screenshots and durable Tool/Attachment/backend evidence, perform a separate manual code/visual review, commit with the `dsw-33987` prefix, and push to git-cc without bypassing hooks.
+7. Retain screenshots and durable Tool/Attachment/backend evidence, perform a separate manual code/visual review, commit with the `dsw-33987` prefix, and push to legacy remote without bypassing hooks.
 
 ## Release boundary
 
@@ -160,4 +160,4 @@ The current `1a4ac332a5` VM-based runtime implementation is not accepted as the 
 - Final Overlay production build and local package build pass. The final build was reopened in the real page; Agent ownership, human takeover, return ownership, and the attach-then-observe notice were manually reviewed and recaptured.
 - Full repository typecheck, focused package typecheck, API route checker, docs checker, evidence JSON parsing, and diff whitespace checks pass. The AGENTS.md historical-docs-links command has no corresponding test file in this checkout, so no historical UI or document test was invented to replace it.
 - Second code review removed the final unused VM runtime error codes and corrected destroy semantics so adapter authority and native session destruction remain separate.
-- Remaining before delivery: successful remote refresh, exact commit, pre-push hooks, and git-cc push.
+- Remaining before delivery: successful remote refresh, exact commit, pre-push hooks, and legacy remote push.

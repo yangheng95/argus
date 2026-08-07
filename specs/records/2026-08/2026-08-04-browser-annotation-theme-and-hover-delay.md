@@ -10,7 +10,7 @@
 | Sources read | Root `AGENTS.md`; in-app Browser control skill; supplied screenshot; `specs/current/architecture/07-panel.md`; `2026-08-03-browser-chrome-control-and-menu-occlusion.md`; `BrowserPreviewPanel.tsx`; `browser-preview-native.ts`; shared transport protocol; Tauri guest-selection runtime; light/dark/VS Code Dark palette sources; theme observation service. |
 | Whole-repository grep | The localized hint text and all guest annotation surfaces converge in `BROWSER_PREVIEW_SELECTION_RUNTIME`. Its HUD, panel, context menu, hint, textarea, and buttons use fixed dark `rgba`/white colors, while the client already exposes canonical `--surface`, `--surface-inset`, `--surface-hover`, `--text-strong`, `--text-muted`, `--border`, and `--accent` values. The stationary-pointer timer is the single literal `3000` in that runtime. The existing selection command carries only localized labels, so exact client-theme parity requires extending that single presentation contract rather than recreating palette values in Rust or guest code. Related UI automation files were not opened or run. |
 | Independent agent feedback | None. The user did not request sub-agents; the primary agent owns implementation and second review. |
-| Git baseline | The branch matched `myhexin/work-v0.0.29beta-yr-0803`. An empty pre-change checkpoint was committed and pushed at `e3a14380bf`; unrelated pre-existing working-tree changes remain unstaged and preserved. |
+| Git baseline | The branch matched `legacy-remote/work-v0.0.29beta-yr-0803`. An empty pre-change checkpoint was committed and pushed at `e3a14380bf`; unrelated pre-existing working-tree changes remain unstaged and preserved. |
 
 ## Causal chain
 
@@ -46,7 +46,7 @@
    hint before/after 1.5 seconds, right-click menu, and comment panel, capture
    task-scoped screenshots, inspect them manually, and correct any mismatch.
 7. Perform a second code/visual review, record evidence here, commit only this
-   task's files with the `dsw-33987` prefix, reconcile the git-cc branch, and
+   task's files with the `dsw-33987` prefix, reconcile the legacy remote branch, and
    push through the normal hook.
 
 ## Progress

@@ -17,7 +17,7 @@
   with the runtime configuration.
 - Pass the focused non-UI packaging tests and the original
   `bun run build:overlay` command.
-- Commit with the `dsw-33987` prefix and push the current branch to `myhexin`.
+- Commit with the `dsw-33987` prefix and push the current branch to `legacy-remote`.
 
 ### Hard constraints
 

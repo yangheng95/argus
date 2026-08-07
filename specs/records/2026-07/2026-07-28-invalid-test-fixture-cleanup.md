@@ -23,7 +23,7 @@
 - Do not weaken the unresolved-Goal-attempt product invariant.
 - Do not restart or interfere with a running OpenCorvus/Overlay process.
 - Use Node for any Playwright execution.
-- Commit with the `dsw-33987` prefix and push through normal hooks to `myhexin`.
+- Commit with the `dsw-33987` prefix and push through normal hooks to `legacy-remote`.
 
 ### Sources read
 

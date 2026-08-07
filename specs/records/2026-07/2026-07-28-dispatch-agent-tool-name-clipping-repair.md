@@ -6,7 +6,7 @@
 | --- | --- |
 | User requirement | The supplied Overlay screenshot shows a running Tool row as `disp…`; after the read-only diagnosis, the user explicitly requested “修复”. |
 | Acceptance criteria | A persisted `dispatch_agent` part with the canonical nested input renders the complete `dispatch_agent` label and `target=<agent-id>` detail in the collapsed execution disclosure; the compact row remains one line and only genuinely overlong content ellipsizes; ordinary Agent and exact-session Sub-agent conversations inherit the same shared repair; focused unit, typecheck, document-health, and real desktop Vite browser checks pass; the browser screenshot is personally reviewed. |
-| Hard constraints | Preserve `CardParts` as the single execution-disclosure renderer and `tool.ts` as the single Tool display projection. Do not add fallback input shapes, a second renderer, local UI state, query overrides, iframe fixtures, or gates. Do not restart, refresh, or otherwise operate the user’s running OpenCorvus/Overlay. Use Node for Playwright/browser execution. Preserve every unrelated dirty-worktree change and stage only task-owned files/hunks. Commit subjects use `dsw-33987` and delivery pushes to the current `myhexin/v0.0.22beta` branch. |
+| Hard constraints | Preserve `CardParts` as the single execution-disclosure renderer and `tool.ts` as the single Tool display projection. Do not add fallback input shapes, a second renderer, local UI state, query overrides, iframe fixtures, or gates. Do not restart, refresh, or otherwise operate the user’s running OpenCorvus/Overlay. Use Node for Playwright/browser execution. Preserve every unrelated dirty-worktree change and stage only task-owned files/hunks. Commit subjects use `dsw-33987` and delivery pushes to the current `legacy-remote/v0.0.22beta` branch. |
 | Supplied evidence | `/var/folders/bj/6vby7ld11796l5bfdmc7s8l40000gn/T/codex-clipboard-25a324de-9858-4f74-8ad2-b0adf51a6567.png` was inspected at original resolution. It shows the Tool glyph followed by an ellipsized `disp…` label while the surrounding transcript has ample width. |
 | Persisted runtime evidence | Read-only inspection of `/Users/yangheng/.local/share/opencorvus/opencorvus.db` found the complete Tool identity `dispatch_agent` and the canonical input shape `state.input.dispatch.target`; the backend did not truncate the name. |
 | Sources read | `AGENTS.md`; Browser skill; the supplied screenshot; `specs/records/2026-07/2026-07-15-tool-call-single-line-authority.md`; `specs/records/2026-07/2026-07-16-overlay-codex-tool-disclosure-visual-repair.md`; `specs/records/2026-07/2026-07-26-agent-card-live-tool-activity.md`; `packages/opencorvus/src/orchestrator/dispatch-agent-tool.ts`; `packages/opencorvus/src/orchestrator/tools.ts`; `packages/overlay/src/utils/tool.ts`; `packages/overlay/src/components/CardParts.tsx`; `packages/overlay/src/styles/surfaces/messages.css`; focused Tool and browser tests. |
@@ -60,7 +60,7 @@ name itself is clipped.
    clipping.
 4. Run required spec/document-health checks, review the complete diff and
    staged paths, commit only task-owned files/hunks, and push
-   `v0.0.22beta` to `myhexin`.
+   `v0.0.22beta` to `legacy-remote`.
 
 ## Codex review feedback
 

@@ -24,7 +24,7 @@
 - Desktop scope only. Do not add tablet or mobile work.
 - Do not restart, refresh, stop, or otherwise interfere with the user's running OpenCorvus/Overlay. Visual verification uses an isolated Node-started browser fixture.
 - Preserve unrelated dirty-worktree changes and stage only this task's attributable hunks.
-- Commit subjects start with `dsw-33987` and the delivery branch is pushed to the git-cc remote.
+- Commit subjects start with `dsw-33987` and the delivery branch is pushed to the legacy remote.
 
 ### Sources read before implementation
 

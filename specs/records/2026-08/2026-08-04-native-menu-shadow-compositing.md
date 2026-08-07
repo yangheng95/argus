@@ -46,7 +46,7 @@
    the left/right/bottom fade, rounded boundary, anchoring, and page continuity.
 5. Perform a second code and visual review, update this record with evidence,
    commit only the shadow repair with the `dsw-33987` prefix, reconcile the
-   tracked git-cc branch, and push through the normal hook.
+   tracked legacy remote branch, and push through the normal hook.
 
 ## Progress
 
@@ -54,7 +54,7 @@
 - [x] Product and architecture changes complete.
 - [x] Non-UI/static verification complete.
 - [x] Real-page visual acceptance and second review complete.
-- [x] Commit and git-cc push complete.
+- [x] Commit and legacy remote push complete.
 
 ## Acceptance evidence
 

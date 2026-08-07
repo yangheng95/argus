@@ -37,7 +37,7 @@
 2. 恢复 `ce7cfffefc` 已验证过的单 scroll-owner sibling 几何，同时保留此后落地的 Environment 左右 inset 修正。
 3. 删除本任务已触及的 conversation scroll/Composer UI 自动化测试；只运行 TypeScript、build、i18n 与 docs 等非 UI 验证。
 4. 启动隔离真实 Overlay 页面并通过 Node/Browser 操作长会话，人工检查滚轮、键盘、scroll-to-bottom、Composer resize 与截图；不得把验收保存成自动化测试。
-5. 检查最终 diff、重复真实页面复核，精确提交任务 owned paths 并 push `myhexin/v0.0.28beta`。
+5. 检查最终 diff、重复真实页面复核，精确提交任务 owned paths 并 push `legacy-remote/v0.0.28beta`。
 
 ## Status
 

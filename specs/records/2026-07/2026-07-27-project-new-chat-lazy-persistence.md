@@ -83,7 +83,7 @@ instead of fixing that boundary.
    switching, while retaining Project-directory Mission ownership coverage.
 4. Run focused unit/source tests, Overlay typecheck, i18n, real Vite/Node browser
    interaction, screenshot review, documentation-health tests, and a second
-   diff review before committing and pushing through normal git-cc hooks.
+   diff review before committing and pushing through normal legacy remote hooks.
 
 ## Verification record
 

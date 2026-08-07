@@ -54,7 +54,7 @@
     pass.
 11. Only task-owned files and exact task-owned hunks are committed. The commit
     subject starts with `dsw-33987` and the result is pushed to
-    `myhexin/v0.0.21beta`.
+    `legacy-remote/v0.0.21beta`.
 
 ### Hard constraints
 
@@ -152,7 +152,7 @@ collaboration rule prohibits unsolicited delegation.
 
 - Branch: `v0.0.21beta`.
 - Baseline `HEAD`: `4ca7e81b2f44b8455d6410b5daf2e8068ab2948b`.
-- Baseline was equal to `myhexin/v0.0.21beta` (`0 0`).
+- Baseline was equal to `legacy-remote/v0.0.21beta` (`0 0`).
 - Existing unrelated edits:
   `specs/README.md`, `specs/records/2026-07/README.md`, and untracked
   `specs/records/2026-07/2026-07-28-conversational-expert-squad-runtime-authoring-repair.md`.

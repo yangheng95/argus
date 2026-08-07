@@ -26,7 +26,7 @@
 2. Implement the icon-only trigger and focused regression.
 3. Run the focused test, Overlay typecheck, internationalization check, and Vite build.
 4. Render the existing isolated Right Dock fixture, inspect the exact trigger geometry and screenshot, then correct any visual issue.
-5. Re-run whole-repository search, perform a second diff/screenshot review, selectively commit only task-owned hunks, and push through normal git-cc hooks.
+5. Re-run whole-repository search, perform a second diff/screenshot review, selectively commit only task-owned hunks, and push through normal legacy remote hooks.
 
 ## Result
 

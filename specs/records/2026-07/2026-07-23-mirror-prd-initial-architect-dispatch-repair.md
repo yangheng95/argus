@@ -24,7 +24,7 @@ Determine why the Mirror PRD scheduler repeatedly failed to dispatch Architect i
 - Keep `PromptProfileResolver` projection and the manifest workflow as the single runtime sources.
 - Do not restart or otherwise disturb the running OpenCorvus/overlay process.
 - Preserve the unrelated user edit in `2026-07-22-mirror-prism-full-workflow-distillation.md` and stage only this repair.
-- Commit subjects use `dsw-33987`; delivery is pushed from the current main worktree to `myhexin/v0.0.15beta`.
+- Commit subjects use `dsw-33987`; delivery is pushed from the current main worktree to `legacy-remote/v0.0.15beta`.
 
 ### Evidence read
 

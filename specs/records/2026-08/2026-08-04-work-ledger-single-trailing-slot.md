@@ -6,7 +6,7 @@
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | User requirement        | 左侧 Work Ledger 的执行中 spinner 与普通 hover 操作图标都使用行的最右侧；禁止 spinner、Pin、Archive 三个图标并排占位而让任务描述过早截断。                                                                                                                                                                                                                                            |
 | Acceptance criteria     | 静止 active 行只为一个最右侧 spinner 保留空间；静止 inactive 行不为透明 action rail 保留空间；hover、focus 或键盘 action-open 时，完整 action rail 终止于同一个最右侧轴并临时覆盖 spinner，标题只为当前可见 rail 让位；行高、相邻行位置、左侧类型图标和 Mission child drawer 不移动。真实桌面页面必须覆盖 active 静止、active hover、inactive 静止与 inactive hover，截图并人工复核。 |
-| Hard constraints        | 保留并行改动；桌面端单端修复；不新增、修改、更新或运行 User Interface（UI，用户界面）自动化测试；不增加 fallback、第二状态源、持久化状态或 gate；使用现有 `workLedgerPresentationStatus`、spinner、action rail 和键盘契约；提交主题使用 `dsw-33987` 前缀并推送当前交付分支到 `myhexin`。                                                                                              |
+| Hard constraints        | 保留并行改动；桌面端单端修复；不新增、修改、更新或运行 User Interface（UI，用户界面）自动化测试；不增加 fallback、第二状态源、持久化状态或 gate；使用现有 `workLedgerPresentationStatus`、spinner、action rail 和键盘契约；提交主题使用 `dsw-33987` 前缀并推送当前交付分支到 `legacy-remote`。                                                                                              |
 | Read material           | 用户截图；`AGENTS.md`；`specs/current/architecture/07-panel.md`；2026-08-03 Work Ledger spinner、pointer jitter、density/mission expansion 记录；当前 `WorkLedger.tsx`、`work-ledger.css`、`sidebar.css` 与 `navigation-row.css`。                                                                                                                                                    |
 | Whole-repository search | `WorkLedgerRowView` 是 Mission、Chat、Task 与 Mission child Task 的唯一 spinner/action DOM owner；`work-ledger.css` 是 `data-action-count`、spinner、action rail 和标题让位的唯一局部几何 owner；`sidebar.css` 的 `.task-row-right` 默认参与第三列；`useTaskRowActionsKeyboard.ts` 只负责 action focus，不拥有几何；其他 `.task-row-right` 消费者不受 Work Ledger 局部覆盖影响。      |
 | Independent feedback    | 已启动一个只读子 Agent 调查相同范围，但工具只返回 terminal-success Session 证据而未返回可用文本结论。随后按规则调用 Claude Code 2.1.147，只开放 Read/Grep/Glob；CLI 因本机未登录返回 `authentication_failed` / `Not logged in`，未产生审查结论。当前 Agent 已逐项复核 DOM、grid/absolute containing block、选择器特异性及全部调用点；外部认证阻塞不伪装为通过。                       |
@@ -45,7 +45,7 @@
 4. 删除本次发现的两份旧 UI 自动化测试。
 5. 运行 formatter、Overlay TypeScript、internationalization（i18n，国际化）、Vite build、文档健康和 `git diff --check` 等非 UI 检查；不运行 Overlay UI 测试。
 6. 启动隔离真实页面，用真实 Work Ledger 数据检查 active/inactive 的静止和 hover/focus 组合，截图并人工复核。
-7. 二次审查 task-owned diff，fetch 远端，提交并推送当前交付分支到 `myhexin`。
+7. 二次审查 task-owned diff，fetch 远端，提交并推送当前交付分支到 `legacy-remote`。
 
 ## Progress
 

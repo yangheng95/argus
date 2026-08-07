@@ -22,7 +22,7 @@
 - The Overlay owns one explicit basemap configuration and one MapLibre renderer. No empty-style fallback or payload-selected provider is retained.
 - The basemap provider, style endpoint, and attribution are declared outside the component rather than hard-coded across rendering branches.
 - Provider attribution is always visible.
-- Preserve all parallel work. Commit only task-owned paths with the `dsw-33987` prefix and push the current main delivery branch to `myhexin`.
+- Preserve all parallel work. Commit only task-owned paths with the `dsw-33987` prefix and push the current main delivery branch to `legacy-remote`.
 
 ### Materials read
 

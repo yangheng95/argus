@@ -44,5 +44,5 @@
 - Regenerate and verify the built-in Expert Squad payload.
 - Re-import the canonical Prism package through the real project package manager.
 - Start a new unpolluted real Mission only after the current failed Task is formally settled; verify first source dispatch, exact directories, repository inspection, and current-run Artifact production.
-- Run document-health checks, relevant typecheck, `git diff --check`, focused commit, and push to `myhexin`.
+- Run document-health checks, relevant typecheck, `git diff --check`, focused commit, and push to `legacy-remote`.
 

@@ -11,7 +11,7 @@
 | Sources read | Root `AGENTS.md`; Browser control skill; supplied screenshot; `specs/current/architecture/12-overlay-card-system.md`; `2026-07-24-agent-card-palette-and-running-tool-wave.md`; `2026-07-27-active-tool-wave-all-agent-surfaces.md`; `2026-07-28-subagent-running-surface-wave-and-selection-stability.md`; `2026-07-29-conversation-streaming-text-wave.md`; `TextPart.tsx`; `text-part-model.ts`; `CardParts.tsx`; `ConversationCard.tsx`; `ChatBubble.tsx`; `Card.tsx`; `SubagentProgressGrid.tsx`; `messages.css`; `markdown.css`; `chat-bubble.css`; `conversation.css`; palette and motion tokens; current Git history and dirty-worktree diff. |
 | Whole-repository grep | `TextPart.tsx` alone emits `.md-active-text`; `CardParts.tsx` passes one Agent-card running flag to every narrative part. `messages.css` alone masks `.conversation-body .chat-bubble .md-active-text` together with status-driven Tool text. `.msg-text` already uses `--text` (`#343a3d` in light theme), while compact Tool disclosure uses the lighter `--transcript-tool-foreground` derived from `--text-muted`. `ConversationCard.tsx` routes every `agent` node through `ChatBubble`; the top-level row and bubble both expose canonical status. `SubagentProgressGrid.tsx` is the only compact child-Agent renderer and exposes the same status. `conversation.css` previously owned the shared directional Agent-surface wave, but the 2026-07-29 refinement deleted it when ordinary narrative was added to the Tool text mask. |
 | Independent review feedback | No sub-agent was spawned because the user did not request delegation. Claude Code `2.1.147` was invoked from the repository root with only `Read,Grep,Glob`, no session persistence, and no worktree/delegation capability, but exited before reading the repository because the local CLI is not authenticated (`Not logged in`). The primary agent therefore owns both evidence reviews and records that unavailable review honestly. |
-| Git baseline | Delivery branch is `work-v0.0.24beta-yr-0729`. The concurrently authored plan commit `baa2d9a703` was reviewed and pushed to `myhexin` before this task's files changed. Unrelated user-owned working-tree changes remain unstaged and must be preserved. |
+| Git baseline | Delivery branch is `work-v0.0.24beta-yr-0729`. The concurrently authored plan commit `baa2d9a703` was reviewed and pushed to `legacy-remote` before this task's files changed. Unrelated user-owned working-tree changes remain unstaged and must be preserved. |
 
 ## Causal chain
 
@@ -52,17 +52,17 @@
    narrative contrast and computed motion, and iterate until correct.
 5. Re-grep every owner, perform a second exact-diff and visual review, update
    this record, run documentation-health checks, selectively commit only
-   task-owned hunks, fetch/converge with `myhexin`, and push through normal hooks.
+   task-owned hunks, fetch/converge with `legacy-remote`, and push through normal hooks.
 
 ## Progress
 
 - [x] Screenshot, architecture, history, render chain, colour/motion sources,
       dirty-worktree boundaries, and all call sites inspected.
 - [x] Root cause and implementation plan recorded.
-- [x] Recall commit and git-cc push complete.
+- [x] Recall commit and legacy remote push complete.
 - [x] Implementation and static/build validation complete.
 - [x] Real desktop integrated page inspected and corrected.
-- [x] Second review, documentation evidence, implementation commit, and git-cc
+- [x] Second review, documentation evidence, implementation commit, and legacy remote
       push complete.
 
 ## Visual evidence

@@ -26,7 +26,7 @@
 - No HTML/file-extension inference, compatibility branch, fallback renderer, or second application surface.
 - No hand-built replacement for established libraries such as TanStack Table, Vega-Lite, Mermaid, CodeMirror, PDF.js, MapLibre, Reveal.js, Univer, vis-timeline, Cytoscape, xterm, model-viewer, or the MCP Apps bridge.
 - Product tokens own visual theme; durable payloads own data semantics.
-- Preserve all parallel work. Commit with `dsw-33987` and push `myhexin`.
+- Preserve all parallel work. Commit with `dsw-33987` and push `legacy-remote`.
 
 ### Materials read
 

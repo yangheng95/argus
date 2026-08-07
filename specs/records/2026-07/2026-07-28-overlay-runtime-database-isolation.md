@@ -29,7 +29,7 @@
 - Do not weaken `Database.Client()` schema validation, lossless-refresh validation, foreign-key verification, or immutable backup retention.
 - Do not create a worktree, reset the repository, restore unrelated files, or overwrite concurrent edits.
 - Every code change requires regression coverage.
-- Commit subjects use `dsw-33987`; delivery is the current `v0.0.22beta` branch pushed to `myhexin`.
+- Commit subjects use `dsw-33987`; delivery is the current `v0.0.22beta` branch pushed to `legacy-remote`.
 
 ### Runtime Evidence
 

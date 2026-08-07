@@ -44,7 +44,7 @@
 2. Implement the root material owner without changing platform budgets, DOM, native configuration, or pane state.
 3. Run the focused Bun source suite, the Node-launched platform browser test, Overlay typecheck/internationalization/build, historical links, and document health.
 4. Inspect the Windows light screenshot at original resolution, then inspect the real isolated Overlay preview in the controlled browser. Iterate if any seam, wrong elbow fill, titlebar regression, or clipped workspace corner remains.
-5. Re-read the final diff and screenshot as a second review, fetch/merge any newer git-cc state, commit with the required `dsw-33987` prefix, push the current tracked branch to `myhexin`, and verify remote convergence.
+5. Re-read the final diff and screenshot as a second review, fetch/merge any newer legacy remote state, commit with the required `dsw-33987` prefix, push the current tracked branch to `legacy-remote`, and verify remote convergence.
 
 ## Progress
 
@@ -53,7 +53,7 @@
 - [x] Regression tests and implementation complete.
 - [x] Real browser and isolated Overlay visual acceptance complete.
 - [x] Second visual and code review complete.
-- [ ] Commit and git-cc push complete.
+- [ ] Commit and legacy remote push complete.
 
 ## Verification evidence
 

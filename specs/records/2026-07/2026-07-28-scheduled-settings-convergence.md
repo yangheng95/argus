@@ -90,7 +90,7 @@ colors, borders, spacing, typography, and control primitives.
 4. Compose project, automation collection, detail/form, empty, loading, and error states with the canonical Settings components; reduce Automation CSS to domain layout over Settings tokens.
 5. Update source contracts and add a Settings navigation regression that proves there is exactly one owner and no retired event/Dialog residue.
 6. Run focused unit/type/i18n/build checks, start an isolated Vite/browser target, exercise Settings → Scheduled and representative states, inspect screenshots, repair, and rerun.
-7. Re-read the final diff, run documentation health checks, commit only task-owned changes with the required `dsw-33987` prefix, and push the current main delivery branch to `myhexin`.
+7. Re-read the final diff, run documentation health checks, commit only task-owned changes with the required `dsw-33987` prefix, and push the current main delivery branch to `legacy-remote`.
 
 ## Implemented convergence
 

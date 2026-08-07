@@ -157,7 +157,7 @@ Tool return-field documentation, complete tool inventories, and product-specific
 4. Rewrite the focused positive prompt contracts around the new stage record, backward planning, parallel frontier, Squad choice, and reusable production criteria.
 5. Run focused non-UI Mission, Panel, resolver, primary-assistant, typecheck, and documentation-health checks.
 6. Perform a second source/diff review against all three independent proposals and the six adversarial scenarios.
-7. Commit only task-owned hunks with the required `dsw-33987` prefix and push the current delivery branch to `myhexin` after the overlapping parallel task is settled.
+7. Commit only task-owned hunks with the required `dsw-33987` prefix and push the current delivery branch to `legacy-remote` after the overlapping parallel task is settled.
 
 ## Second independent review
 

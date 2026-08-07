@@ -133,7 +133,7 @@ contain the exact selected model.
    existing launch tooling permits it without touching the packaged runtime.
 5. Re-read the diff and persisted test evidence, update this verification
    record, commit with the required `dsw-33987` prefix, and push the main
-   delivery branch to `myhexin`.
+   delivery branch to `legacy-remote`.
 
 ## Verification record
 

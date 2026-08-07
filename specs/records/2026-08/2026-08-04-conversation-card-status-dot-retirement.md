@@ -14,7 +14,7 @@ UI means User Interface. CSS means Cascading Style Sheets.
 | Sources read            | `AGENTS.md`; `CLAUDE.md`; supplied screenshot; `specs/records/2026-07/2026-07-30-conversation-running-dot-and-hover-time.md`; `specs/records/2026-08/2026-08-04-conversation-error-indicator-title-adjacency.md`; `ChatBubble.tsx`; `Conversation.tsx`; `StatusIndicator.tsx`; `chat-bubble.css`; Overlay and root `package.json` files.                                                                 |
 | Whole-repository search | `chat-bubble__status` has one JSX mount in `ChatBubbleIdentity` and one dedicated CSS rule. `ChatBubbleIdentity` has one compact nested-Agent call site and two mutually exclusive top-level header call sites. Other `StatusIndicator` mounts belong to the Conversation empty state, Application shell, Sub-agent panel, Board, and Work Ledger surfaces and are outside the marked card-title target. |
 | Independent review      | Claude Code CLI 2.1.147 was invoked read-only with only `Read,Grep,Glob`, but authentication failed before inspection with `Not logged in`; its terminal result reported `is_error: true`. No independent conclusion is claimed, and the primary Agent retains implementation and second-review responsibility.                                                                                          |
-| Git baseline            | Branch `work-v0.0.29beta-yr-0803` was clean at `9c7bb6626f38aeef41dc10d2d1ac4815728656f7`, equal to `myhexin/work-v0.0.29beta-yr-0803`, before this plan.                                                                                                                                                                                                                                                |
+| Git baseline            | Branch `work-v0.0.29beta-yr-0803` was clean at `9c7bb6626f38aeef41dc10d2d1ac4815728656f7`, equal to `legacy-remote/work-v0.0.29beta-yr-0803`, before this plan.                                                                                                                                                                                                                                                |
 
 ## Causal Chain
 
@@ -50,7 +50,7 @@ UI means User Interface. CSS means Cascading Style Sheets.
    OpenCorvus or Overlay process, open a real Conversation card, capture a screenshot,
    and personally verify that the title flows directly to duration with no point.
 5. Re-read the scoped diff and rendered evidence, commit task-owned files with the
-   `dsw-33987` prefix, push `myhexin`, and verify local and remote equality.
+   `dsw-33987` prefix, push `legacy-remote`, and verify local and remote equality.
 
 ## Verification Evidence
 

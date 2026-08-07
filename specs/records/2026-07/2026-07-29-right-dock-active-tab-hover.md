@@ -11,7 +11,7 @@
 | Existing design records read | `specs/current/architecture/07-panel.md`; `2026-07-29-right-dock-chrome-adaptive-tab-width.md`; current `RightDock.tsx`; shared `primitives/tabs.css`; `workspace.css`; and the light, dark, and VS Code dark theme token sources.                                                                                                                                                                                                                                                                                                                                                                                                       |
 | Whole-repository grep        | `RightDock.tsx` is the only production DOM owner of `.right-dock-tab`. `workspace.css` is the only production Right Dock paint owner and contains the sole selected and hover selectors. Shared `tabs.css` changes `--oc-tab-bg` on hover, but the Right Dock selected selector separately hard-sets the concrete `background`, so the variable mutation cannot repaint an active tab. `light.css`, `dark.css`, and `vscode-dark.css` are the only relevant palette owners: every palette already defines `--surface-hover` and `--surface-strong`. Existing UI tests mention these selectors but are intentionally untouched and unrun. |
 | Independent review feedback  | No sub-agent was spawned because the user did not request delegation. Claude Code `2.1.147` was invoked from the repository root with only `Read,Grep,Glob`, no session persistence, and no edit/worktree/delegation tools, but stopped before repository inspection because the installed CLI is not authenticated (`Not logged in`). This unavailable review is recorded rather than represented as completed.                                                                                                                                                                                                                         |
-| Git baseline                 | Delivery branch is `work-v0.0.24beta-yr-0729`; `HEAD` and `myhexin/work-v0.0.24beta-yr-0729` had zero divergence before task changes. The normal pre-push hook passed and the remote was already current. The worktree contains unrelated user-owned changes, so only task-owned hunks may be staged.                                                                                                                                                                                                                                                                                                                                    |
+| Git baseline                 | Delivery branch is `work-v0.0.24beta-yr-0729`; `HEAD` and `legacy-remote/work-v0.0.24beta-yr-0729` had zero divergence before task changes. The normal pre-push hook passed and the remote was already current. The worktree contains unrelated user-owned changes, so only task-owned hunks may be staged.                                                                                                                                                                                                                                                                                                                                    |
 
 ## Causal chain
 
@@ -55,7 +55,7 @@
    theme.
 5. Perform a separate task-owned diff review, run the required documentation
    health checks, commit only the task-owned changes with the `dsw-33987`
-   prefix, fetch/converge with `myhexin`, and push through normal hooks.
+   prefix, fetch/converge with `legacy-remote`, and push through normal hooks.
 
 ## Progress
 
@@ -68,7 +68,7 @@
       inspected, but strict hover screenshot evidence remains unavailable
       because the Browser control layer cleared CSS `:hover` after every
       pointer operation.
-- [x] Second task-owned diff review, documentation health, commit, and git-cc
+- [x] Second task-owned diff review, documentation health, commit, and legacy remote
       push complete.
 
 ## Verification evidence
@@ -98,4 +98,4 @@
 - Task-owned implementation commit `43341c108b` passed the normal pre-push
   TypeScript, route inventory, documentation, internationalization, and secret
   scan hooks and was pushed to
-  `myhexin/work-v0.0.24beta-yr-0729`.
+  `legacy-remote/work-v0.0.24beta-yr-0729`.

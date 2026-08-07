@@ -45,7 +45,7 @@ again. The affected runtime remains:
   `2026-07-22-mirror-prism-full-workflow-distillation.md` and the untracked
   `expert-squads/.DS_Store`.
 - Commit subjects use `dsw-33987`; push the OpenCorvus source repair to
-  `myhexin/v0.0.16beta`.
+  `legacy-remote/v0.0.16beta`.
 
 ### Sources read
 

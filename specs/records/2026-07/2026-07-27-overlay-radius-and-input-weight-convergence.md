@@ -45,7 +45,7 @@ Owner: Codex
   second text-entry recipe.
 - Desktop is the only visual acceptance target.
 - Playwright runs under Node, never Bun.
-- Commit subjects use `dsw-33987`; delivery goes to the `myhexin` remote.
+- Commit subjects use `dsw-33987`; delivery goes to the `legacy-remote` remote.
 
 ### Material read before implementation
 
@@ -118,7 +118,7 @@ textareas; Composer's duplicate declaration must be removed.
    Node browser path. Inspect the screenshot at original resolution and correct
    any visual defect.
 5. Perform a second source/diff/screenshot review, commit only task-owned
-   changes, reconcile the remote branch, and push to `myhexin`.
+   changes, reconcile the remote branch, and push to `legacy-remote`.
 
 ## Status
 

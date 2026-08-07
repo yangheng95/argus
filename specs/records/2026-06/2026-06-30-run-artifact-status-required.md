@@ -40,7 +40,7 @@ Current worktree facts:
   - `Reclaim completed goal worktrees immediately`
   - `Require goal run attempt status`
 - There are unrelated dirty files and an unrelated untracked MCP worktree-convergence spec record. This increment must stage only its own hunks.
-- Previous push attempts were blocked by network failure to `origin` and a `myhexin` pre-receive requirement for a real `dsw-*` task id. Do not invent a task id to bypass the remote hook.
+- Previous push attempts were blocked by network failure to `origin` and a `legacy-remote` pre-receive requirement for a real `dsw-*` task id. Do not invent a task id to bypass the remote hook.
 
 Whole-repository grep evidence:
 

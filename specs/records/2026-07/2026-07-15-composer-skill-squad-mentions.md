@@ -36,7 +36,7 @@
 - Non-`general` squads remain project packages; no built-in profile, alias, second active field, inactive package scan, or UI-only filter is added.
 - Playwright on Windows is started by Node, never Bun. Browser waits use activity-reset inactivity timeout through the repository runner.
 - Existing unrelated auth/plugin modifications and the dashboard draft remain untouched.
-- Commit subjects use the `dsw-33987` prefix and delivery targets `myhexin/v0.0.4beta` without bypassing hooks.
+- Commit subjects use the `dsw-33987` prefix and delivery targets `legacy-remote/v0.0.4beta` without bypassing hooks.
 
 ### Hard-disk sources read before implementation
 
@@ -95,7 +95,7 @@ Findings and call-site dispositions:
 
 ### Baseline delivery evidence
 
-- Before implementation, `v0.0.4beta` was one commit ahead of `myhexin/v0.0.4beta`.
+- Before implementation, `v0.0.4beta` was one commit ahead of `legacy-remote/v0.0.4beta`.
 - The required baseline push ran the repository pre-push hook. Typecheck passed, but `api:routes-check` rejected generated OpenAPI drift caused by pre-existing uncommitted auth/plugin changes (`Auth.ApiAuth.metadata`, `OAuth.enterpriseUrl`, and related plugin contract changes).
 - Those unrelated files are preserved and excluded from this task. The failed push is not represented as successful delivery and will be retried after implementation.
 
@@ -128,7 +128,7 @@ selection remain outside the component.
 4. Route exact Squad directives through the existing new-Mission wake path from every current center-panel context; keep the toolbar selector behavior unchanged for non-mention submissions.
 5. Extend the runtime Skill policy and tests so an explicit exact Skill directive is loaded before execution without excluding other relevant Skills.
 6. Run focused unit/integration tests, Overlay typecheck/i18n/build, Node browser interaction and screenshots, inspect both themes, iterate on visual defects, then run docs health and `git diff --check`.
-7. Re-read this Recall, review the final diff independently, correct any discrepancy, commit only task-owned files, and retry git-cc push without bypassing hooks.
+7. Re-read this Recall, review the final diff independently, correct any discrepancy, commit only task-owned files, and retry legacy remote push without bypassing hooks.
 
 ## Progress
 
@@ -139,7 +139,7 @@ selection remain outside the component.
 - [x] Implement atomic directive editing, Composer interaction, and exact Mission routing.
 - [x] Implement the explicit Skill-load prompt contract.
 - [x] Complete rendered browser acceptance and screenshot review.
-- [x] Complete second review, commit, and git-cc delivery.
+- [x] Complete second review, commit, and legacy remote delivery.
 
 ## Verification evidence
 
@@ -148,4 +148,4 @@ selection remain outside the component.
 - Node-started visible browser acceptance passed with exact category/entity keyboard selection, focus retention, atomic Arrow Left / Arrow Right / Backspace behavior, unchanged catalog/mount request counts while typing, an exact `promptProfile: "frontend-replica"` Mission wake body, and successful session conversation hydration.
 - Light and registered dark-theme screenshots were inspected at 1440×900. The popup follows the existing Composer menu material, token radius, typography, row density, selected accent, and elevation in both themes.
 - The broader legacy `packages/opencorvus/test/mission/wake-route.test.ts` run did not provide valid additional evidence: its Windows process-supervisor Git helpers repeatedly exited before readiness and caused unrelated 500/5-second timeout failures. The task-owned browser fixture exercised the real Overlay Mission client request and successful post-wake session hydrate without mocked UI state.
-- Git-cc accepted the rewritten all-`dsw-33987` incoming history after the full pre-push hook passed. Concurrent checkpoint `5982bdcfac` contains the same task-file tree as the reviewed atomic-mention commit.
+- legacy remote accepted the rewritten all-`dsw-33987` incoming history after the full pre-push hook passed. Concurrent checkpoint `5982bdcfac` contains the same task-file tree as the reviewed atomic-mention commit.

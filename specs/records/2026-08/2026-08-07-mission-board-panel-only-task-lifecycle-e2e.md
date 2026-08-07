@@ -20,7 +20,7 @@ Date: 2026-08-07
 5. Task outputs are discoverable from their real assistant Turn, open in the existing Artifact inspector, and expose the authoritative Goal/completion-decision acceptance facts.
 6. Pending questions, search, Project filtering, refresh, card opening, rename/archive/download/delete, and all fact-derived lanes are covered where real lifecycle evidence permits them.
 7. Missing panel-only management controls discovered by the real run are repaired at their canonical service/component owner and visually reverified on the running Overlay.
-8. No User Interface automated test is added, modified, or run. Focused non-User-Interface contracts, typecheck/build, documentation health, diff review, a `dsw-33987` commit, and git-cc push complete the delivery.
+8. No User Interface automated test is added, modified, or run. Focused non-User-Interface contracts, typecheck/build, documentation health, diff review, a `dsw-33987` commit, and legacy remote push complete the delivery.
 
 ### Hard constraints
 
@@ -28,7 +28,7 @@ Date: 2026-08-07
 - Reuse the existing Kobalte-backed primitives, Work Ledger/Task header actions, Conversation Artifact inspector, and backend lifecycle routes; do not introduce a second source or fallback.
 - User Interface acceptance uses only a real page, real interaction, screenshots tied to this record, and manual visual review.
 - Playwright is driven by Node.js, never Bun. The Browser surface must remain the real native page.
-- Preserve unrelated worktree changes. Commit subjects start with `dsw-33987` and push to `myhexin`.
+- Preserve unrelated worktree changes. Commit subjects start with `dsw-33987` and push to `legacy-remote`.
 
 ### Sources read
 
@@ -68,7 +68,7 @@ None requested. No sub-agent is used.
 - [x] Recover the same backend and database without creating a replacement Mission or Task.
 - [x] Finish the terminal Artifact/completion-decision panel review and record the actual missing facts instead of treating cancellation as acceptance.
 - [x] Repair and reverify the real Task ZIP download response contract.
-- [x] Record exact Mission, Task, Artifact, screenshot, validation, commit, and git-cc evidence here.
+- [x] Record exact Mission, Task, Artifact, screenshot, validation, commit, and legacy remote evidence here.
 
 ## Real backend identities
 
@@ -155,6 +155,6 @@ This delivery does **not** claim a complete panel-only end-to-end pass. It prove
 ## Publication
 
 - Authored implementation commit: `6efc0422a3` (`dsw-33987 fix Task recovery and archive download authority`).
-- The first push ran and passed package typecheck, API route inventory, documentation generation, Overlay internationalization, and secret scan, then was rejected only because git-cc had advanced to concurrent Computer commit `1a4ac332a5`.
+- The first push ran and passed package typecheck, API route inventory, documentation generation, Overlay internationalization, and secret scan, then was rejected only because legacy remote had advanced to concurrent Computer commit `1a4ac332a5`.
 - The implementation commit was cherry-picked onto that exact remote tip in an isolated detached worktree, producing `f124f66f677244317445aeb749334a99c6729f90` without touching the current worktree's unrelated changes.
-- `git ls-remote git-cc refs/heads/v0.0.33beta` returned `f124f66f677244317445aeb749334a99c6729f90` after the successful push.
+- `git ls-remote legacy remote refs/heads/v0.0.33beta` returned `f124f66f677244317445aeb749334a99c6729f90` after the successful push.

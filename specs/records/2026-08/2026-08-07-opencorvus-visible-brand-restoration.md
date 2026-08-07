@@ -22,7 +22,7 @@ Existing tests that inspect TSX, CSS, HTML, native menu labels, or visible error
 1. Replace every active visible `MOSA` occurrence and regenerate derived Expert Squad payloads.
 2. Remove discovered UI source/string tests from touched paths and run only non-UI checks.
 3. Open the real Overlay page, inspect the titlebar/sidebar/settings surfaces, and capture a fresh screenshot.
-4. Review the focused diff, commit only this task, and push `v0.0.33beta` to git-cc.
+4. Review the focused diff, commit only this task, and push `v0.0.33beta` to legacy remote.
 
 ## Visual acceptance
 

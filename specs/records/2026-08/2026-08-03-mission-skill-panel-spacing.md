@@ -66,7 +66,7 @@ The information state is rendered flush inside a group body even though the shar
 - `bun run --cwd packages/overlay build:vite`
 - `bun test packages/opencorvus/test/script/historical-docs-links.test.ts`
 - Isolated desktop preview and current screenshot reviewed manually.
-- Final diff review and required git-cc commit/push.
+- Final diff review and required legacy remote commit/push.
 
 ## Delivery evidence
 

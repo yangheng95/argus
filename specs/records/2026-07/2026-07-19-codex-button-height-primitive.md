@@ -6,12 +6,12 @@
 | --- | --- |
 | User request | “这些按钮太高了，调整成和 codex 一致；在 primitve 中统一修改。” Five supplied screenshots cover Skill Market install/policy actions, Provider refresh/add actions, Network save, and the app quit confirmation. |
 | Acceptance criteria | Canonical text buttons use a compact 28 CSS-pixel medium height, producing 49 physical pixels at the current Windows 175% display scale instead of the current 56. Compact text buttons remain 24 CSS pixels and icon-only controls remain 32 CSS pixels. Search, text, select, segmented, and other form controls retain their existing 32 CSS-pixel contract. All affected surfaces inherit the change from `Button` primitive CSS; feature pages add no height overrides. |
-| Hard constraints | Desktop-only; preserve the Solid `Button` API, semantic variants, keyboard focus, disabled behavior, and icon geometry. No feature-level patches, fallback component, duplicate height source, new worktree, temporary iframe, Bun-launched Playwright, or interference with the user's running OpenCorvus/Overlay. Use an isolated Vite target, Node/Playwright regression coverage, and in-app Browser screenshots. Commit subject starts with `dsw-33987` and delivery pushes to `myhexin`. |
+| Hard constraints | Desktop-only; preserve the Solid `Button` API, semantic variants, keyboard focus, disabled behavior, and icon geometry. No feature-level patches, fallback component, duplicate height source, new worktree, temporary iframe, Bun-launched Playwright, or interference with the user's running OpenCorvus/Overlay. Use an isolated Vite target, Node/Playwright regression coverage, and in-app Browser screenshots. Commit subject starts with `dsw-33987` and delivery pushes to `legacy-remote`. |
 | Sources read | Root `AGENTS.md`; Browser skill; `2026-07-16-codex-settings-button-format.md`; `2026-07-18-codex-control-primitives-convergence.md`; `2026-07-19-left-rail-navigation-row-height-primitive.md`; `Button.tsx`; `button.css`; `design-language.css`; Button/density/Settings/browser tests; all five supplied screenshots at original resolution. |
 | Baseline visual evidence | The supplied dark button regions are 55–56 physical pixels high. Windows reports `AppliedDPI=168`, or 175%, which proves the rendered source is the current 32 CSS-pixel medium Button contract (`32 × 1.75 = 56`). The target 28 CSS-pixel medium height renders as 49 physical pixels at the same scale and removes the extra vertical bulk without shrinking 32 CSS-pixel fields or circular icon actions. |
 | Whole-repository grep | `Button` has 53 TSX import owners and 182 literal mounts: 83 `md`, 49 `sm`, 16 `mini`, and 61 `icon` size declarations occur in those owners (conditional branches account for declarations exceeding literal mounts). `button.css` is the only default size owner. Surface CSS contains explicit task-specific height projections in `card.css`, `chat-bubble.css`, `composer.css`, `conversation.css`, `inspector.css`, `mailbox.css`, `markdown.css`, `messages.css`, `sidebar.css`, `titlebar.css`, `work-ledger.css`, and `workspace.css`; those specialized projections remain unchanged. Settings has layout-only Button selectors and no height override for the photographed controls. |
 | Independent agent feedback | None. The user did not request sub-agents, and the active collaboration policy forbids unrequested delegation. |
-| Git baseline | Branch `work-v0.0.10beta-yr-0719`; clean `HEAD` `e789b09da` is synchronized with `myhexin/work-v0.0.10beta-yr-0719` after fetch (`0 0` divergence). |
+| Git baseline | Branch `work-v0.0.10beta-yr-0719`; clean `HEAD` `e789b09da` is synchronized with `legacy-remote/work-v0.0.10beta-yr-0719` after fetch (`0 0` divergence). |
 
 ## Diagnosis
 
@@ -38,7 +38,7 @@ The Button size scale also leaves `mini` without its own height declaration, so 
 3. Update focused unit and Node/Playwright regressions for semantic height ownership and rendered geometry.
 4. Run focused tests, Overlay TypeScript/i18n/build, historical-document health, and `git diff --check`.
 5. Start only an isolated Vite verification target, inspect the photographed Settings and quit-dialog surfaces in the in-app Browser, correct any visual discrepancy, then perform a second diff review.
-6. Record final evidence here, commit with the required prefix, push the current branch to `myhexin`, and confirm remote synchronization.
+6. Record final evidence here, commit with the required prefix, push the current branch to `legacy-remote`, and confirm remote synchronization.
 
 ## Verification Plan
 

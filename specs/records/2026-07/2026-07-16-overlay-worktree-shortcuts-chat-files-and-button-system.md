@@ -113,7 +113,7 @@ The runtime panel models Worktree as a section but models the three task-scope p
 2. Restyle the Worktree row to the reference geometry and update source/browser regression expectations.
 3. Run focused Bun tests, Overlay TypeScript and i18n checks, then launch the existing browser suite with Node.
 4. Inspect the task-scoped runtime screenshots at normal and constrained desktop widths, correct discrepancies, rerun, and complete a second code/diff review.
-5. Run spec/document health checks, commit only task-owned files with the `dsw-33987` prefix, and push the current branch to `myhexin`.
+5. Run spec/document health checks, commit only task-owned files with the `dsw-33987` prefix, and push the current branch to `legacy-remote`.
 
 ### Follow-up result
 

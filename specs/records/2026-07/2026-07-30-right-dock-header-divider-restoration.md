@@ -54,7 +54,7 @@
    the divider, alignment, color, and unaffected controls personally.
 5. Re-grep production owners, review the exact diff and rendered evidence a
    second time, update this record, commit only task-owned hunks with the
-   `dsw-33987` prefix, fetch/converge, push to `myhexin`, and verify the remote.
+   `dsw-33987` prefix, fetch/converge, push to `legacy-remote`, and verify the remote.
 
 ## Progress
 
@@ -65,7 +65,7 @@
 - [x] Commit and push the pre-change Recall.
 - [x] Restore the canonical Dock header/body divider.
 - [x] Complete static/build verification and real-page visual acceptance.
-- [x] Complete the final task-owned commit and git-cc push.
+- [x] Complete the final task-owned commit and legacy remote push.
 
 ## Real-Page Visual Evidence
 
@@ -125,9 +125,9 @@ source, geometry constant, fallback, gate, or interaction change.
 ## Delivery
 
 - Pre-change Recall commit `0b6254dac6` was pushed to
-  `myhexin/work-v0.0.24beta-yr-0729`.
+  `legacy-remote/work-v0.0.24beta-yr-0729`.
 - Product, architecture, record, and visual-evidence commit `5fbcfd5fb8` was
-  pushed to `myhexin/work-v0.0.24beta-yr-0729`.
+  pushed to `legacy-remote/work-v0.0.24beta-yr-0729`.
 - The push hook passed Software Development Kit (SDK) import validation,
   Artificial Intelligence (AI) runtime validation, monorepo typecheck, route
   inventory, generated Application Programming Interface (API) documentation,

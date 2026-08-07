@@ -11,7 +11,7 @@
 | Sources read | Root `AGENTS.md`; Browser control skill; supplied screenshot; `RightDock.tsx`; shared `ui/Tabs.tsx` and `primitives/tabs.css`; `main.tsx`; `BrowserPreviewPanel.tsx`; `workspace.css`; `2026-07-14-right-dock-panel-ownership-and-browser-draft.md`; `2026-07-28-right-dock-subagent-tab-standard-typography.md`; focused source and Node-launched browser tests. |
 | Whole-repository grep | Production tab identity and rendering are singular: `RightDock.tsx` owns `RIGHT_DOCK_CATALOG`, the tab collection, Kobalte triggers, close/add/overflow actions, and empty launcher; `main.tsx` owns `centerWorkbenchPanels`, open/select/close functions, the one Browser `TabPanel`, and the dynamic Browser title; `BrowserPreviewPanel.tsx` owns the missing-target `New tab` view; `workspace.css` is the only Right Dock tab geometry owner; shared `Tabs.tsx`/`tabs.css` remain unchanged. Direct source assertions are concentrated in `right-dock-panel-ownership.test.ts`, `right-panel-tabs-flat.test.ts`, `tabs-primitive.test.ts`, and `overlay-startup-chrome-parity.test.ts`. Real interaction/overflow/visual coverage is concentrated in `titlebar-toolbar-toggle-browser.test.ts`; adjacent Browser close behavior is covered by `browser-preview-live-input-batch.test.ts`, and other browser tests only select or close existing panel tabs. |
 | Independent agent feedback | None. The user did not request sub-agents, so the primary agent owns implementation and the required second review. |
-| Git baseline | `work-v0.0.23beta-yr-0728` and `myhexin/work-v0.0.23beta-yr-0728` are both at `b0754fdc0c` with zero divergence. Three pre-existing specification/index changes are unrelated and remain unstaged. |
+| Git baseline | `work-v0.0.23beta-yr-0728` and `legacy-remote/work-v0.0.23beta-yr-0728` are both at `b0754fdc0c` with zero divergence. Three pre-existing specification/index changes are unrelated and remain unstaged. |
 
 ## Causal chain
 
@@ -54,14 +54,14 @@
 4. Run documentation health checks, inspect the exact task diff, and repeat
    focused checks for the required second review.
 5. Stage only task-owned hunks, commit with the `dsw-33987` prefix, fetch and
-   converge with `myhexin`, then push through normal hooks.
+   converge with `legacy-remote`, then push through normal hooks.
 
 ## Progress
 
 - [x] Recall, causal chain, and full call-site inventory recorded.
 - [x] Regression expectations and implementation complete.
 - [x] Real browser interaction and screenshot acceptance complete.
-- [x] Second review, commit, convergence, and git-cc push complete.
+- [x] Second review, commit, convergence, and legacy remote push complete.
 
 ## Verification evidence
 
@@ -74,7 +74,7 @@
 | Rendered geometry | The browser fixture asserted the selected tab and Dock body share the active surface token, the selected tab ends at the header bottom, both lower radii are zero, and both lower-shoulder pseudo-elements render their connecting shadows. |
 | Visual review | Dark and light task-scoped screenshots were inspected at original resolution: `.scratch/right-dock-dark-chrome-active-tab.png`, `.scratch/right-dock-light-active-tab-layer.png`, and `.scratch/right-dock-browser-double-click-new-tab.png`. The active tab reads as a raised Chrome tab connected to the Dock body in both themes, and the double-click result is the existing blank `New tab` Browser surface. |
 | Documentation health | `historical-docs-links.test.ts` and `product-docs-single-source.test.ts` passed. `document-health.test.ts` has one concurrent-worktree failure because the shared July README currently links six untracked records owned by other active tasks; this task's tracked record is not an offender. |
-| Git delivery | Implementation commit `09aace4251` (`dsw-33987 implement Right Dock Chrome tabs`) passed the normal pre-push SDK import, AI runtime, workspace typecheck, API route, generated docs, Overlay i18n, and secret-scan checks, then pushed to `myhexin/work-v0.0.23beta-yr-0728`. |
+| Git delivery | Implementation commit `09aace4251` (`dsw-33987 implement Right Dock Chrome tabs`) passed the normal pre-push SDK import, AI runtime, workspace typecheck, API route, generated docs, Overlay i18n, and secret-scan checks, then pushed to `legacy-remote/work-v0.0.23beta-yr-0728`. |
 
 ## Second review
 

@@ -2,7 +2,7 @@
 
 ## Recall
 
-- User request: comprehensively calibrate and update every documentation, README, API, and SDK surface, then continue autonomously through verification and git-cc delivery.
+- User request: comprehensively calibrate and update every documentation, README, API, and SDK surface, then continue autonomously through verification and legacy remote delivery.
 - Acceptance criteria:
   - current product and architecture documentation describes the live Task, Mission, Agent, Expert Squad, API, and SDK contracts without retired fixed-pipeline or external-executor claims;
   - every tracked README is audited, and proven stale README content is replaced rather than preserved as compatibility prose;
@@ -12,7 +12,7 @@
   - focused documentation, route, OpenAPI, SDK, package, type, and build checks pass, followed by a second audit pass;
   - every public HTTP request schema describes only fields that the corresponding caller is authorized to use, every directly implemented error branch is represented in OpenAPI, and generated SDK examples compile;
   - every tracked monthly record is indexed exactly once by its month README, while `specs/README.md` remains a root/month/current-architecture index instead of a second copy of monthly history;
-  - only task-owned files are staged, committed with the `dsw-33987` prefix, and pushed from `v0.0.21beta` to the git-cc remote.
+  - only task-owned files are staged, committed with the `dsw-33987` prefix, and pushed from `v0.0.21beta` to the legacy remote.
 - Hard constraints:
   - preserve the existing untracked `.codex-cache/`, `.codex-screenshots/`, `opencorvus-dist/`, `packages/opencorvus/test/script/web-docs-repository.test.ts`, `packages/overlay/src/services/browser-preview-link.ts`, and `packages/overlay/test/browser/message-url-preview-browser.test.ts`;
   - do not restart, refresh, stop, or otherwise interfere with a running OpenCorvus or Overlay process;
@@ -43,7 +43,7 @@
 
 ## Baseline and ownership
 
-`HEAD` and `git-cc/v0.0.21beta` both resolved to `87a2c5dc49` after fetch (`0 0` divergence), satisfying the pre-change remote checkpoint without creating an empty commit.
+`HEAD` and `legacy-remote/v0.0.21beta` both resolved to `87a2c5dc49` after fetch (`0 0` divergence), satisfying the pre-change remote checkpoint without creating an empty commit.
 
 | Surface or call site                                                                                 | Evidence                                                                                                                                    | Disposition                                                                                                                                                                          |
 | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -79,11 +79,11 @@
 3. Replace stale README/ACP/Quickstart/CLI/Mission-Task/SDK/Automation content in English and Chinese, correct QuickNote/Contributing commands, and rewrite/compile the SDK example.
 4. Run the SDK and bilingual API-doc generators from their canonical owners, inspect every generated diff, and verify path/method/body/response/security/version parity.
 5. Build the docs site, launch an isolated preview, inspect desktop screenshots for the changed shell/pages, correct visual defects, and rerun document/API/SDK/type checks.
-6. Dispatch a fresh read-only diff review, update this verification ledger, stage only owned files, commit with `dsw-33987`, and push `v0.0.21beta` through normal git-cc hooks.
+6. Dispatch a fresh read-only diff review, update this verification ledger, stage only owned files, commit with `dsw-33987`, and push `v0.0.21beta` through normal legacy remote hooks.
 
 ## Verification ledger
 
-- Pre-change git-cc checkpoint: `87a2c5dc49`, local/remote divergence `0 0`.
+- Pre-change legacy remote checkpoint: `87a2c5dc49`, local/remote divergence `0 0`.
 - Baseline `api:routes-check`: passed, six rules across 33 route files.
 - Baseline `docs:check`: passed, 306 operations across 24 groups.
 - Baseline focused documentation run:

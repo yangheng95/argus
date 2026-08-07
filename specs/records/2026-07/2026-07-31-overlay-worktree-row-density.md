@@ -11,7 +11,7 @@
 | Sources read | `AGENTS.md`; Browser control skill; `specs/current/architecture/07-panel.md`; `specs/records/2026-07/2026-07-16-overlay-worktree-shortcuts-chat-files-and-button-system.md`; `packages/overlay/src/components/TaskDirBar.tsx`; `packages/overlay/src/styles/tokens/design-language.css`; `packages/overlay/src/styles/primitives/button.css`; and `packages/overlay/src/styles/surfaces/conversation.css`. |
 | Whole-repository grep | `ProjectRuntimeStatusPanel` is the only production Worktree renderer. `ProjectRuntimeToolbarActions` is its only production component call site. `conversation.css` is the only owner of `project-worktree-*` geometry. The shared bounded-list rule consumes `--project-runtime-list-row-height` and `--project-runtime-list-row-gap`. The peer Tools list already uses a 28-pixel row and 2-pixel gap, and the canonical `--oc-density-button-height` token resolves to the same 28-pixel control height. Exact prior project-Worktree test files named in the July 16 record are absent. Troubleshooting later touched `task-deep-link-browser.test.ts`, and the initial Worktree test search surfaced `goal-group-worktree.test.ts`; both were existing user interface automation tests and were deleted without execution under the repository-wide ban. Their shared browser infrastructure remains because other surfaces still own it. |
 | Independent agent feedback | None. The user did not request sub-agents, and the active collaboration policy forbids unrequested delegation. |
-| Git baseline | After fetching git-cc, the current branch was fast-forwarded from `96b6d5c508` to pushed `d05d4f48f1` on `myhexin/v0.0.26beta`. The existing modified `specs/artifacts/opencorvus-workbuddy-qoderwork-multica-codex-benchmark-catalog.md` belongs to other work and remains unstaged. |
+| Git baseline | After fetching legacy remote, the current branch was fast-forwarded from `96b6d5c508` to pushed `d05d4f48f1` on `legacy-remote/v0.0.26beta`. The existing modified `specs/artifacts/opencorvus-workbuddy-qoderwork-multica-codex-benchmark-catalog.md` belongs to other work and remains unstaged. |
 
 ## Root cause and call-site disposition
 
@@ -35,7 +35,7 @@ The Worktree list defines a 34-pixel row and a 4-pixel inter-row gap while its i
 2. Run formatting/diff checks, Overlay TypeScript type checking, internationalization checking, and the production Vite build. These checks do not assert user interface presentation.
 3. Open the real Overlay page through the Browser integration, inspect computed and visible Worktree geometry, capture `specs/artifacts/2026-07-31-overlay-worktree-row-density.png`, and manually review the Worktree region.
 4. Correct any visual discrepancy, repeat the real-page screenshot review, then perform a second source/diff review.
-5. Update this record with results, run required documentation health checks, commit only task-owned files with the `dsw-33987` prefix, and push `v0.0.26beta` to `myhexin`.
+5. Update this record with results, run required documentation health checks, commit only task-owned files with the `dsw-33987` prefix, and push `v0.0.26beta` to `legacy-remote`.
 
 ## Result
 

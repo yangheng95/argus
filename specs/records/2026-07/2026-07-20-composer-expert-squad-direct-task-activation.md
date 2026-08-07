@@ -4,7 +4,7 @@
 
 ## Recall
 
-- User request: after selecting Mirror Watch directly, OpenCorvus unexpectedly discussed missing Multica configuration and retained `myhexin`; the user challenged the hidden Mission inheritance explanation, requested an independent Mission-activation audit, then asked to repair the problem and push the whole repository.
+- User request: after selecting Mirror Watch directly, OpenCorvus unexpectedly discussed missing Multica configuration and retained `legacy-remote`; the user challenged the hidden Mission inheritance explanation, requested an independent Mission-activation audit, then asked to repair the problem and push the whole repository.
 - Acceptance: choosing an expert squad or submitting an exact `@squad` directive creates one Task directly with that exact manifest `id` in `promptProfile`; no generic Mission is created, no host-hidden Mission-to-Task profile inheritance is involved, and no Multica catalog is consulted. The dedicated Work Ledger Multica import remains an explicit `general` Mission workflow. The visible Composer layout remains stable and the created Task becomes the selected conversation.
 - Hard constraints: `prompt_profile.active` remains the only active expert-squad field; `PromptProfileResolver` remains the only runtime projection; no gate, keyword router, fallback, alias, hidden message, shadow state, or compatibility branch; preserve unrelated Hexin work and finish it before the requested whole-repository push; do not restart the user's running OpenCorvus/Overlay; use a real browser and screenshot for frontend acceptance.
 - Sources read: `AGENTS.md`; `specs/current/architecture/04-extensions.md`; the superseded `2026-07-20-mission-selected-expert-squad-prompt-boundary.md`; `2026-07-15-composer-skill-squad-mentions.md`; `2026-07-15-multica-mission-multi-squad-parallel-import.md`; `ChatComposer.tsx`; Overlay `main.tsx`; direct Task and Mission services; Mission wake route; panel `create_task`; Mission core prompt; focused Overlay and OpenCorvus tests.
@@ -39,7 +39,7 @@ Why the previous prompt repair was insufficient: it narrated the hidden inherita
 2. Focused OpenCorvus prompt/panel/profile tests proving no inaccurate Composer inheritance contract remains and explicit Mission child inheritance still uses one active field.
 3. Overlay and OpenCorvus typechecks plus spec link/document-health suites.
 4. A Node-driven real browser run against an isolated Overlay fixture: select Mirror Watch, submit once, observe a Task POST containing the exact profile and no Mission wake, verify the resulting Task is selected, capture and inspect the desktop screenshot.
-5. Independent diff review, fetch/merge the latest `myhexin` branch, run hooks, commit every completed workspace change with the required `dsw-33987` prefix, and push the current main delivery branch.
+5. Independent diff review, fetch/merge the latest `legacy-remote` branch, run hooks, commit every completed workspace change with the required `dsw-33987` prefix, and push the current main delivery branch.
 
 ## Implementation and Verification
 

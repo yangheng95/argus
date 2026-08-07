@@ -6,7 +6,7 @@
 | --- | --- |
 | User requirement | “把子agent缩略卡片的脉冲呼吸效果减弱，现在有点浓妆艳抹了” — keep the running pulse, but make the compact Sub-agent card visibly quieter. |
 | Acceptance criteria | A running compact card still breathes as one paint-only surface; the peak uses only a light role-colour tint and restrained perimeter halo; text and nested Tool rows remain visually stable; terminal cards and reduced-motion rendering remain static. |
-| Hard constraints | Preserve canonical Agent status as the sole activity source, exact-session routing, compact-card geometry, the shared motion duration token, and all unrelated dirty-worktree changes. Do not add a second state source, fallback, local signal, geometry animation, temporary iframe, mobile scope, or interfere with the running OpenCorvus/Overlay process. Playwright runs through Node. Commit subjects start with `dsw-33987` and delivery pushes to `myhexin`. |
+| Hard constraints | Preserve canonical Agent status as the sole activity source, exact-session routing, compact-card geometry, the shared motion duration token, and all unrelated dirty-worktree changes. Do not add a second state source, fallback, local signal, geometry animation, temporary iframe, mobile scope, or interfere with the running OpenCorvus/Overlay process. Playwright runs through Node. Commit subjects start with `dsw-33987` and delivery pushes to `legacy-remote`. |
 | Sources read | Root `AGENTS.md`; Browser skill; memory note and rollout summary for `SubagentProgressGrid`; `2026-07-27-subagent-card-pulse-and-tool-status-removal.md`; `SubagentProgressGrid.tsx`; `conversation.css`; `running-tool-wave.test.ts`; focused Node/Vite pulse fixture; current peak screenshot. |
 | Whole-repository grep | `SubagentProgressGrid.tsx` remains the sole compact-card renderer. `conversation.css` owns the only `subagent-progress-card-running-pulse` keyframes. `running-tool-wave.test.ts`, `subagent-card-pulse-browser.test.ts`, and `subagent-progress-dock-browser.test.ts` are the only focused pulse assertions. `--card-stage` remains the existing role-colour projection and `--ui-duration-loop-pulse` remains the shared 1.6-second loop token. |
 | Independent Agent feedback | None. The user did not request sub-agents or parallel agent work. |
@@ -41,7 +41,7 @@ are correct; only the paint amplitude needs recalibration.
 4. Launch the real Vite fixture with Node, inspect the target-region screenshot at
    original resolution, and iterate if the result is still too loud or too faint.
 5. Run documentation health checks, review the exact diff twice, commit only
-   task-owned hunks, reconcile the delivery branch, and push to `myhexin`.
+   task-owned hunks, reconcile the delivery branch, and push to `legacy-remote`.
 
 ## Progress
 
@@ -49,7 +49,7 @@ are correct; only the paint amplitude needs recalibration.
 - [x] Pulse amplitude and regression updated.
 - [x] Real Vite screenshot inspected and accepted.
 - [x] Focused checks and second review complete.
-- [x] Commit and git-cc synchronization complete.
+- [x] Commit and legacy remote synchronization complete.
 
 ## Verification
 

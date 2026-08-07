@@ -21,7 +21,7 @@
 - Do not restart, refresh, close, or otherwise interfere with the user's running OpenCorvus/Overlay process.
 - Browser validation uses an isolated local target and Node on Windows, never Bun.
 - No duplicate renderer, compatibility alias, fallback, gate, hidden state, iframe, query override, or handwritten substitute interaction.
-- Commit subjects start with `dsw-33987`; delivery pushes the current branch to the `myhexin` git-cc remote.
+- Commit subjects start with `dsw-33987`; delivery pushes the current branch to the legacy remote.
 
 ### Sources read
 
@@ -79,7 +79,7 @@
 2. Add the top conversation fade in the existing scroll-shell owner and pin its non-interactive, empty-home, and token-backed behavior in focused tests.
 3. Make Goals rows consume the existing 26px geometry contract without `1fr` stretching and add computed-geometry coverage.
 4. Run focused tests, typecheck, build, and isolated browser screenshots; inspect the three delivery regions and iterate from visual evidence.
-5. Run documentation health and a separate diff review, then commit only owned hunks and push the current branch to `myhexin`.
+5. Run documentation health and a separate diff review, then commit only owned hunks and push the current branch to `legacy-remote`.
 
 ## Implementation result
 

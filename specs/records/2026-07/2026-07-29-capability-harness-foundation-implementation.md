@@ -14,7 +14,7 @@ Status: implemented and validated
   boundary, with existing once-only approval and permanently persisted
   approval choices.
 - Create a new Git worktree, implement the design, test it, merge it back into
-  `v0.0.24beta`, and push to the `myhexin` git-cc remote.
+  `v0.0.24beta`, and push to the legacy remote.
 
 ### Acceptance criteria
 

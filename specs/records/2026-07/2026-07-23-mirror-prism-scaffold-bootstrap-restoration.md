@@ -4,17 +4,17 @@
 
 | Item | Requirement or evidence |
 | --- | --- |
-| User requirement | The Mirror Prism flow must clone the git-cc scaffold before starting the delivery collaboration. The prior unified-squad audit must distinguish the complete cluster contract from the narrower 29-agent successful-delivery graph. |
-| Acceptance | An explicitly loaded `mirror-prism-cluster` Mission Skill requires a credential-free, verified scaffold clone before the first delivery Task; AInvest uses the canonical git-cc scaffold `master` branch, another named team supplies its approved scaffold contract, and an explicitly authorized existing-scaffold run is the only no-clone variant. Every stage receives the exact cloned repository path, baseline commit, branch, and remote evidence. The unified squad rejects fresh-mirror dispatch without that bootstrap evidence. |
+| User requirement | The Mirror Prism flow must clone the legacy remote scaffold before starting the delivery collaboration. The prior unified-squad audit must distinguish the complete cluster contract from the narrower 29-agent successful-delivery graph. |
+| Acceptance | An explicitly loaded `mirror-prism-cluster` Mission Skill requires a credential-free, verified scaffold clone before the first delivery Task; AInvest uses the canonical legacy remote scaffold `master` branch, another named team supplies its approved scaffold contract, and an explicitly authorized existing-scaffold run is the only no-clone variant. Every stage receives the exact cloned repository path, baseline commit, branch, and remote evidence. The unified squad rejects fresh-mirror dispatch without that bootstrap evidence. |
 | Hard constraints | Use Mission's existing Bash execution surface and ordinary Git commands; do not add a host gate, project-provisioning API, fallback URL, embedded credential, hidden state, second repository identity, retry state machine, or automatic existing-project override. Preserve existing squads and running OpenCorvus/Overlay processes. |
 | Source evidence read | `/Users/yangheng/Documents/output/mirror-prism-pipeline/SKILL.md` v2.21.4 lines 101–110 and 227–264; current Mission Skill and all references; Mission tool projection; `panel.create_task`; unified package selector/scheduler/tests; source-capability contract and both SDK/OpenCorvus validation suites. |
 | Whole-repository grep | `fresh-project-provisioning` was declared unavailable only because the earlier Mission surface was treated as panel-only. Mission now owns Bash, but the cluster Skill still requires only `panel`, contains no clone instruction, rewrites source Step 2 to reuse the selected repository, and the unified selector explicitly refuses to load the Mission Skill. `panel.create_task` has no directory parameter and creates work in the Mission project, so a fresh scaffold must be cloned into one project-owned child directory and that exact path must be carried in every Task request. |
-| Live repository evidence | `git ls-remote --heads https://git-cc.myhexin.com:6443/10jqka/llm/ainvest-02/vibe-7x24-scaffolding.git master` resolved `fbe2159c00b73f0480663fa51129fbdb2a473edc`; no credential-bearing URL was required. |
+| Live repository evidence | `git ls-remote --heads https://legacy remote.myhexin.com:6443/10jqka/llm/ainvest-02/vibe-7x24-scaffolding.git master` resolved `fbe2159c00b73f0480663fa51129fbdb2a473edc`; no credential-bearing URL was required. |
 | Independent-agent feedback | None. The user did not request sub-agents or parallel agents. |
 
 ## Causal chain
 
-1. Observable behavior: loading the cluster Skill does not clone git-cc before dispatch.
+1. Observable behavior: loading the cluster Skill does not clone legacy remote before dispatch.
 2. Direct trigger: the installed Skill has no clone contract and maps source Step 2 to reuse of the current repository.
 3. Deeper cause: the source-capability port marked fresh project provisioning unavailable based on the old panel-only Mission model.
 4. Current contradiction: Mission now has the canonical Bash execution surface, so it can safely perform the source-owned Git bootstrap itself.
@@ -40,7 +40,7 @@
 - SDK collaboration and authoring tests.
 - Historical documentation links and document health.
 - Relevant typechecks and `git diff --check`.
-- Second exact-diff and credential scan before commit and git-cc push.
+- Second exact-diff and credential scan before commit and legacy remote push.
 
 ## Validation evidence
 

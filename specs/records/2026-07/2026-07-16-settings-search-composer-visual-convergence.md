@@ -20,7 +20,7 @@
 - Empty-home title, composer, and suggestion cards derive width from the canonical message-content token. Suggestion cards are shorter and quieter.
 - An unselected model is represented by a semantic DOM state and a stable highlighted treatment; it is not detected from translated copy and does not continuously flash.
 - Expert Squad installation and detail pages have different semantic Lucide-backed icons while the canonical Expert Squad identity icon remains unchanged elsewhere.
-- Focused unit tests, Overlay type checking, i18n checking, Node-launched Playwright browser tests, fresh desktop screenshots, documentation health, diff review, commit, and git-cc push complete.
+- Focused unit tests, Overlay type checking, i18n checking, Node-launched Playwright browser tests, fresh desktop screenshots, documentation health, diff review, commit, and legacy remote push complete.
 
 ### Hard constraints
 
@@ -29,7 +29,7 @@
 - No fallback, compatibility branch, second visual source, keyword matching, state machine, or hidden/synthetic message path.
 - Do not restart, refresh, close, or interfere with the user's running OpenCorvus/Overlay. Visual verification uses an isolated Node-launched browser fixture.
 - Preserve unrelated dirty worktree changes. Do not create a worktree, reset the repository, or stage unrelated hunks.
-- Every code change receives regression coverage. Commit subjects start with `dsw-33987` and push to the configured git-cc remote.
+- Every code change receives regression coverage. Commit subjects start with `dsw-33987` and push to the configured legacy remote.
 
 ### Sources read
 
@@ -70,7 +70,7 @@
 3. Bind empty-home composition width to the canonical conversation content width, reduce suggestion-card geometry, and add the stable unselected-model highlight.
 4. Add distinct Expert Squad Install/Details navigation icon mappings.
 5. Update focused unit/browser regressions, render fresh desktop screenshots through the Node browser runner, inspect them at original resolution, and iterate.
-6. Run second review and documentation health checks, update this record with evidence, stage only task-owned hunks, commit, and push to git-cc.
+6. Run second review and documentation health checks, update this record with evidence, stage only task-owned hunks, commit, and push to legacy remote.
 
 ## Result
 

@@ -16,7 +16,7 @@ Status: complete
 4. 旧 payload 只有在存在协议 lease 且能立即取得 exclusive lease 时才可删除；live lease 必须保留但不得阻止当前 payload 启动。
 5. 已中断的 `.sidecar-*-extract-*` unpublished 目录继续在 lifecycle lock 内清理；无关目录保持不变。
 6. Rust 行为测试覆盖 legacy-unproven、live、collectible、current、unpublished 与 unrelated 路径；Overlay source-contract、typecheck、文档健康和 release build 通过。
-7. 不删除用户 AppData 中的历史 payload，不停止、刷新或重启当前 OpenCorvus / Overlay 进程；提交以 `dsw-33987` 开头并推送 git-cc `myhexin` 远端。
+7. 不删除用户 AppData 中的历史 payload，不停止、刷新或重启当前 OpenCorvus / Overlay 进程；提交以 `dsw-33987` 开头并推送 legacy remote 远端。
 
 ### Hard constraints
 
@@ -81,7 +81,7 @@ Repository-wide `rg` covered `ensure_embedded_server_path`, `prepare_embedded_pa
 2. Replace strict prepublication cleanup with one lifecycle-locked collector that removes unpublished residues and only exclusively leasable stale protocol payloads while preserving live/unproven paths.
 3. Order `ensure_embedded_server_path` as current validate/publish, current shared lease acquisition, then stale collection; remove strict clean-parent error strings and tests.
 4. Update this record and documentation indexes, run targeted Rust/Overlay tests, full Rust suite, typecheck, document health and release build, then inspect the final diff.
-5. Commit and push the completed repair to `myhexin`; do not alter runtime state or user payload directories.
+5. Commit and push the completed repair to `legacy-remote`; do not alter runtime state or user payload directories.
 
 ## Verification ledger
 

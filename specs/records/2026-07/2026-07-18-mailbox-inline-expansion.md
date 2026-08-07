@@ -31,7 +31,7 @@
 - Do not restart or alter the user's running OpenCorvus/Overlay. Visual
   acceptance uses an isolated browser fixture.
 - Work in the current main worktree, preserve unrelated changes, use the
-  `dsw-33987` commit prefix, and push the completed commit to `myhexin`.
+  `dsw-33987` commit prefix, and push the completed commit to `legacy-remote`.
 
 ### Sources read before implementation
 
@@ -108,7 +108,7 @@ acknowledgement protocol remain the single data source.
   complete body wrapping, action placement, row separation, and Dock containment
   passed visual review.
 - [x] Second code/data/visual review found no competing source, scope leak,
-  overflow, keyboard failure, or unrelated change; commit and git-cc delivery
+  overflow, keyboard failure, or unrelated change; commit and legacy remote delivery
   follow this record update.
 
 ## Verification evidence

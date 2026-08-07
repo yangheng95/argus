@@ -43,7 +43,7 @@ Hard constraints retained from project instructions:
   Node-started Playwright/Browser tooling.
 - Preserve unrelated dirty worktree changes. Do not reset, restore, or create a
   worktree. Stage only this task's exact files.
-- New commits use the `dsw-33987` subject prefix and push to the actual git-cc
+- New commits use the `dsw-33987` subject prefix and push to the actual legacy remote
   remote after hooks pass.
 
 Sources read before implementation:
@@ -90,7 +90,7 @@ Whole-repository grep evidence:
   automatic Yes semantics and must not redefine generic question timeout
   behavior.
 - At implementation start, the current branch was exactly aligned with
-  `git-cc/v0.0.19beta`. Before delivery, the remote acquired a same-parent
+  `legacy-remote/v0.0.19beta`. Before delivery, the remote acquired a same-parent
   variant of the latest local commit, so delivery must preserve both histories
   with an explicit merge. The worktree already contains unrelated tracked and
   untracked changes, including
@@ -178,7 +178,7 @@ nor the popup can represent “Yes after 10 seconds” honestly.
    components; add unit/browser coverage and inspect a real screenshot.
 5. Run focused tests, typecheck/build, docs health, `git diff --check`, and an
    exact-tree second review. Commit only task files with `dsw-33987` and push
-   the main branch to git-cc.
+   the main branch to legacy remote.
 
 ## Verification Commands
 

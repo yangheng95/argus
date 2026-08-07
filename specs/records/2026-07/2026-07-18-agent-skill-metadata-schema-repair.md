@@ -74,7 +74,7 @@ Owner: Codex
 2. Add table-driven schema tests for valid descriptive metadata and invalid metadata/unknown/permission-bearing fields; add real route coverage for global Codex system Skill-shaped fixtures and the combined catalog projection.
 3. Run focused tests under the repository inactivity timeout runner, then typecheck and required document/API health checks.
 4. Start a new isolated backend without touching existing processes, query `/global/health`, `/skill`, `/expert-squad/catalog` and `/mcp`, and stop only that owned process after evidence is captured.
-5. Review the exact diff and test evidence, update this record, commit with `dsw-33987`, and push `v0.0.9beta` to `myhexin`.
+5. Review the exact diff and test evidence, update this record, commit with `dsw-33987`, and push `v0.0.9beta` to `legacy-remote`.
 
 ## Implementation and verification
 

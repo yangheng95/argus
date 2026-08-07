@@ -13,7 +13,7 @@
 - Desktop-only acceptance; do not add mobile or responsive scope.
 - Do not add, modify, update, or run User Interface automated tests, source-string assertions, DOM assertions, snapshots, or visual baselines.
 - Preserve the current download catalog, external anchor behavior, video source, poster, controls, caption, and accessible label.
-- Commit subjects begin with `dsw-33987`; push the completed `v0.0.30beta` state to `myhexin` without bypassing hooks.
+- Commit subjects begin with `dsw-33987`; push the completed `v0.0.30beta` state to `legacy-remote` without bypassing hooks.
 
 ## Recall
 
@@ -61,7 +61,7 @@ The complete request, screenshot evidence, alternatives, approved layout, and ve
 - Modify: `specs/records/2026-08/README.md`
 
 **Interfaces:**
-- Produces compiler/build evidence, task-scoped screenshots, manual review, and git-cc delivery.
+- Produces compiler/build evidence, task-scoped screenshots, manual review, and legacy remote delivery.
 
 - [x] Run `bun run --cwd packages/web check` and confirm zero errors.
 - [x] Run the canonical landing distribution build; resolve or explicitly report any missing release input without bypassing its validation.
@@ -69,7 +69,7 @@ The complete request, screenshot evidence, alternatives, approved layout, and ve
 - [x] Capture and inspect the three task-scoped screenshots for card contrast, video width, copy hierarchy, title wrapping, and unchanged native cards.
 - [x] Run `bun test packages/opencorvus/test/script/historical-docs-links.test.ts` and `bun test --timeout 60000 packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/product-docs-single-source.test.ts`.
 - [x] Append exact verification results and a second-review verdict to this plan.
-- [x] Commit with a `dsw-33987` subject, fetch/merge current git-cc changes, push without bypassing hooks, and verify local/remote identity.
+- [x] Commit with a `dsw-33987` subject, fetch/merge current legacy remote changes, push without bypassing hooks, and verify local/remote identity.
 
 ### Task 4: Remove runtime imagery and compact the four surface cards
 
@@ -121,7 +121,7 @@ The complete request, screenshot evidence, alternatives, approved layout, and ve
 - Documentation verification passed: 2 historical-link contracts and 68 document-health/product-single-source contracts, with zero failures. Workspace type checking completed successfully across all 8 participating package tasks.
 - Evidence: [`landing-hero-video-wide-zh.png`](../../artifacts/landing-hero-video-wide-zh.png), [`landing-web-card-green.png`](../../artifacts/landing-web-card-green.png), and [`landing-hero-video-wide-en.png`](../../artifacts/landing-hero-video-wide-en.png).
 - The compact-card refinement rebuilt the same 105-page distribution with the full Windows, macOS, and Linux inventory. At 1920×1080, all four cards render at 299×248 px, each copy block is bottom-aligned with a 25 px inset, and the card row contains zero image elements. Manual review confirmed equal card heights, unobstructed numbering, readable text, and no residual image surface. Evidence: [`landing-surface-cards-compact.png`](../../artifacts/landing-surface-cards-compact.png).
-- Git-cc delivery completed in `bb73c19020` (`dsw-33987 style landing Web card and full-width hero`) and `a7a4096159` (`dsw-33987 compact landing surface cards`). The pre-push hook reran type checking, Application Programming Interface (API) route checks, documentation checks, internationalization checks, and secret scanning successfully. A post-push fetch confirmed local `HEAD` and `myhexin/v0.0.30beta` were identical at `a7a4096159346aeac4454eb8f1938a2d7cb16bd9` before this record-only closure.
+- legacy remote delivery completed in `bb73c19020` (`dsw-33987 style landing Web card and full-width hero`) and `a7a4096159` (`dsw-33987 compact landing surface cards`). The pre-push hook reran type checking, Application Programming Interface (API) route checks, documentation checks, internationalization checks, and secret scanning successfully. A post-push fetch confirmed local `HEAD` and `legacy-remote/v0.0.30beta` were identical at `a7a4096159346aeac4454eb8f1938a2d7cb16bd9` before this record-only closure.
 - The approved-image refinement rebuilt the 105-page distribution with the full three-platform download inventory. Visible Edge review at 1920×1080 measured four equal 299×298 px cards with 297×198 px media areas. All images decoded successfully and use `object-fit: contain`, so the small source-ratio differences remain uncropped. The first white-canvas pass was rejected after real-page inspection; the final deep-charcoal canvases merge into the `rgb(10, 10, 10)` section while preserving blue/cyan state paths and readable module edges. Evidence: [`landing-surface-cards-agent-images.png`](../../artifacts/landing-surface-cards-agent-images.png).
 - Final built-in image-generation assets: `runtime-desktop-continuity-agent-v2.png`, `runtime-headless-agent-v2.png`, `runtime-channel-reach-agent-v2.png`, and `runtime-repository-automation-agent-v2.png` under `packages/web/src/assets/lander/`.
 

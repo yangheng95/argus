@@ -24,7 +24,7 @@
 - Legacy-only tables remain in the backup but are not projected into the current database.
 - Constraint, type, required-column, or foreign-key incompatibility aborts restore visibly.
 - Preserve unrelated `C:/` worktree content and do not touch running OpenCorvus/Overlay processes.
-- Commit subjects use `dsw-33987`; push the current main branch to `myhexin`.
+- Commit subjects use `dsw-33987`; push the current main branch to `legacy-remote`.
 
 ### Sources Read
 

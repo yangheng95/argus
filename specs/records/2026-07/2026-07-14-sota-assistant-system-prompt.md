@@ -35,7 +35,7 @@
 - narrative 通过 prompt 约束模型在自然 assistant turn 中输出；禁止按墙钟计时注入 synthetic progress message，也禁止要求模型公开私密逐 token 推理。
 - 修改前读取落盘方案并全仓 grep；修改配测试；测试超时使用 `run-with-inactivity.ts` 且 Bun `--timeout=0`。
 - 当前 worktree 有大量其他未提交改动；不得回退、覆盖或把无关改动混入本任务提交。
-- commit subject 以 `dsw-33987` 开头并 push 到 `myhexin`。
+- commit subject 以 `dsw-33987` 开头并 push 到 `legacy-remote`。
 
 ### Sources Read
 

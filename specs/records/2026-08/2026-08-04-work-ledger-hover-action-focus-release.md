@@ -6,7 +6,7 @@
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | User requirement        | 左侧任务栏的 Pin 与 Archive 按钮只能在鼠标 hover 时展示；点击后鼠标离开且不点击其他区域时，按钮也必须隐藏。                                                                                                                                                                                                                                                                         |
 | Acceptance criteria     | 指针进入行时 Pin/Archive 显示；点击 Pin 后指针离开该行，即使焦点仍停在按钮上，操作区、标题让位和 spinner 替换都恢复静止态；显式键盘 ArrowRight 打开的操作区仍可见并可通过 Escape/ArrowLeft 关闭；真实桌面页面完成点击、移出和键盘路径截图人工复核。                                                                                                                                 |
-| Hard constraints        | 桌面端单端修复；保留并行改动；不以 `blur()`、点击状态、fallback、第二状态源或 gate 掩盖问题；不新增、修改或运行 User Interface（UI，用户界面）自动化测试；提交主题使用 `dsw-33987` 前缀并推送当前交付分支到 `myhexin`。                                                                                                                                                             |
+| Hard constraints        | 桌面端单端修复；保留并行改动；不以 `blur()`、点击状态、fallback、第二状态源或 gate 掩盖问题；不新增、修改或运行 User Interface（UI，用户界面）自动化测试；提交主题使用 `dsw-33987` 前缀并推送当前交付分支到 `legacy-remote`。                                                                                                                                                             |
 | Read material           | 用户截图；`AGENTS.md`；`2026-08-03-unified-list-interaction-design.md`；`2026-08-03-unified-list-interaction-implementation-plan.md`；`2026-08-04-work-ledger-single-trailing-slot.md`；当前 `WorkLedger.tsx`、`useTaskRowActionsKeyboard.ts` 与 `work-ledger.css`。                                                                                                                |
 | Whole-repository search | `WorkLedgerRowView` 是 Mission、Chat、Task 与 Mission child Task 的唯一 action DOM owner；`useTaskRowActionsKeyboard` 是 `data-actions-keyboard-open` 的唯一 owner；`work-ledger.css` 的三组 `.work-row:is(:hover, :focus-within)` 分别控制 action rail/body padding、spinner opacity 与每个 action button opacity/pointer-events。没有第二个 Work Ledger action visibility owner。 |
 | Independent feedback    | 只读子 Session 返回 terminal-success 会话证据但没有文本结论。按规则调用 Claude Code 2.1.147，只开放 Read/Grep/Glob；本机未登录，返回 `authentication_failed` / `Not logged in`，没有产生可用审查结论。当前 Agent 已独立核对浏览器焦点语义、全部选择器与键盘路径。                                                                                                                   |
@@ -45,7 +45,7 @@
 2. 删除 scoped obsolete UI tests 与只为其服务的 fixture。
 3. 运行 Overlay TypeScript、internationalization（i18n，国际化）、Vite build、文档健康和 `git diff --check` 等非 UI 检查；不运行 Overlay UI 测试。
 4. 启动隔离真实页面，用真实 Work Ledger 数据点击 Pin，将指针移到行外但不点击其他位置，截图并人工确认 action rail 隐藏；再以 ArrowRight 打开 actions，确认键盘路径仍可见且 Escape/ArrowLeft 可关闭。
-5. 二次审查 task-owned diff，fetch 远端，提交并推送当前交付分支到 `myhexin`。
+5. 二次审查 task-owned diff，fetch 远端，提交并推送当前交付分支到 `legacy-remote`。
 
 ## Progress
 

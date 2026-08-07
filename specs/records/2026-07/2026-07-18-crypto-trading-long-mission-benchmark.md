@@ -104,7 +104,7 @@ Expected output:
 
 ### Initial environment evidence
 
-- Git branch: `v0.0.9beta` at `01e9a8eed5` after fetching `myhexin`.
+- Git branch: `v0.0.9beta` at `01e9a8eed5` after fetching `legacy-remote`.
 - Formal database exists at `C:/Users/chuan/.local/share/opencorvus/opencorvus.db` and was 36,032,512 bytes at recall time.
 - No OpenCorvus/Bun listener was found on 7878 and no Vite listener was found on 5173 before startup.
 - The worktree already contains unrelated staged and unstaged changes, including the v0.0.9 beta version line and Artificial Intelligence Software Development Kit adapter work. They are not benchmark changes and must not be overwritten or included in benchmark commits.
@@ -115,7 +115,7 @@ Expected output:
 2. Add focused harness tests proving persistent-directory preservation, exact prompt/profile submission, canonical mailbox-only progress detection, inactivity reset, and honest rejected verdicts.
 3. Start the dev backend on 7878 against the formal database and Vite on 5173. Inspect startup output only for readiness or startup failure, then stop reading logs during Mission progress.
 4. Create the task-C Mission under the General squad. Drive it only from mailbox messages: acknowledge information, answer genuine attention requests, resume a settled incomplete Mission, or repair a proven defect and restart only the benchmark-owned process when required.
-5. For each failure, reconstruct mailbox chronology and authoritative session/task/database/code evidence before classification. Add the correct regression test, repair the owning infrastructure or squad package without fallback or task-specific gates, commit with `dsw-33987`, push to `myhexin`, restart only owned processes if code reload is required, and rerun.
+5. For each failure, reconstruct mailbox chronology and authoritative session/task/database/code evidence before classification. Add the correct regression test, repair the owning infrastructure or squad package without fallback or task-specific gates, commit with `dsw-33987`, push to `legacy-remote`, restart only owned processes if code reload is required, and rerun.
 6. Require the Mission to select MirrorTest explicitly for final acceptance. Validate package projection and artifacts through Registry/Manager/Resolver and MirrorTest protocol/runner paths.
 7. Run focused tests, relevant full suites, TypeScript checks, API/document health checks, and `git diff --check` for every touched surface.
 8. Open the real generated application with Node Playwright, capture and personally inspect desktop screenshots and interaction states, repair and recapture until accepted.
@@ -250,7 +250,7 @@ Expected output:
 
 ### Live application and recovery evidence
 
-- Repair commit `508222655d` passed the full pre-push hook and was pushed to `myhexin/v0.0.9beta`.
+- Repair commit `508222655d` passed the full pre-push hook and was pushed to `legacy-remote/v0.0.9beta`.
 - The benchmark-owned backend was replaced from PID 24540 to PID 22220; the restarted health endpoint remained `healthy=true` against `C:/Users/chuan/.local/share/opencorvus/opencorvus.db`. Vite and unrelated processes were not restarted.
 - Operational error: the last pre-stop snapshot showed no active child worker, but the old Orchestrator dispatched goal 2 during the short interval between that snapshot and process stop. The restart therefore interrupted newly-created worker `ses_08e61b0dcffe2pfpP0MpnVRXCp` / goal run `c60ac84d`. This interruption is not attributed to the product squad or scheduler.
 - Startup recovery recorded `server_restart_active_task_recovered`, marked only the dead-owner attempt aborted with reason `Directory queue: previous owner process died before interruption`, and preserved the task record as active with no task error.
@@ -659,7 +659,7 @@ Expected output:
 ### Recall
 
 - Original requirement: run the long Mission autonomously from canonical mailbox evidence, distinguish infrastructure scheduling stability from expert-squad functional quality, repair every exposed defect without task-specific infrastructure overfitting, and never monitor verbose logs.
-- Acceptance retained: Phase 06 realtime/API/simulator corrections must independently satisfy the Iteration 23 contract before frontend work begins; the full desktop frontend, real browser evidence, MirrorTest coverage, final audit, commit, and `myhexin` push remain unfinished required work.
+- Acceptance retained: Phase 06 realtime/API/simulator corrections must independently satisfy the Iteration 23 contract before frontend work begins; the full desktop frontend, real browser evidence, MirrorTest coverage, final audit, commit, and `legacy-remote` push remain unfinished required work.
 - Hard constraints retained: no fallback, gate, state machine, keyword rule, serial-test workaround, duplicate source, process-exit patch, benchmark-specific scheduler branch, or unapproved OpenCorvus/overlay process intervention. Benchmark-owned backend restart is allowed only after a verified infrastructure repair requires code reload.
 - Landed evidence reread before repair: this record through Iteration 25; `benchmark-debug-template/SKILL.md`; `opencorvus-debug-evidence/SKILL.md`; `opencorvus-debug-evidence/references/evidence-surfaces.md`; `specs/current/architecture/01-agents.md`; `specs/current/architecture/02-data.md`; and `specs/current/architecture/13-agent-communication-matrix.md`.
 - Full-repository call-site audit: `OrchestratorNoDecisionStopError`, `orchestrator_wake_failure`, `recordOrchestratorDecisionContractFailure`, no-decision recovery notes, `dispatchTaskLoop`, task-wake composition, and scheduler-decision wording were grepped across `packages/opencorvus/src`, `packages/opencorvus/test`, and `specs/current/architecture`. The only production no-decision self-wake is `packages/opencorvus/src/orchestrator/agent.ts::recordOrchestratorSessionErrorEnvelope`; `packages/opencorvus/src/orchestrator/event.ts::noDecisionRecovery` exists only for that path. Artifact persistence/listing and describe projection are the single evidence path in `engine/persist.ts`, `engine/store.ts`, and `engine/describe.ts`. Behavioural coverage is concentrated in `test/orchestrator/no-decision-stop-process.test.ts`; stream-error and general queue tests are separate.
@@ -683,7 +683,7 @@ Expected output:
 ### Repair and runtime verification
 
 - Commit `a8e535b119` removes the no-decision self-dispatch path and dedicated recovery note, keeps one decision-contract-failure artifact, excludes no-decision from `task.error`, and updates the task-loop contract plus regression coverage. It introduces no retry counter, fuse, cooldown, status gate, Task/Goal special case, or fallback.
-- Focused no-decision/describe regression passed 20 tests; the broader affected Orchestrator prompt, queue, and describe batch passed 55 tests; package TypeScript typecheck passed; historical docs health passed 21 tests. The `myhexin` pre-push SDK/runtime, all-package typecheck, route, docs, i18n, and secret checks passed.
+- Focused no-decision/describe regression passed 20 tests; the broader affected Orchestrator prompt, queue, and describe batch passed 55 tests; package TypeScript typecheck passed; historical docs health passed 21 tests. The `legacy-remote` pre-push SDK/runtime, all-package typecheck, route, docs, i18n, and secret checks passed.
 - The exact benchmark backend PID 22220 was verified by command line and unique ownership of port 7878, then replaced with PID 12464 using the same Bun dev serve command. `/global/health` remained healthy against `C:/Users/chuan/.local/share/opencorvus/opencorvus.db`; Vite and unrelated processes were untouched.
 - After reload, a two-point public trace sample separated by thirty seconds remained exactly `216 -> 216`; the last trace event and recovery-Orchestrator session timestamp did not change, and session status was no longer `streaming`. The former roughly ten-second `orchestrator_wake_failure` / `llm_request` storm therefore stopped without a timer, retry limit, or task-specific branch.
 - One real external injection resumed the existing Phase 06 Task with the exact unmet strict API, ownership, transactional support persistence, integrated PostgreSQL simulator, continuous realtime, WebSocket cursor/snapshot/account protocol, persistence/concurrency/network-test, mailbox, and frontend-blocking contract. The route returned `appended=true`, `orchestratorWoken=true`, `executorResumed=false`, `status=active`; no parallel Task or duplicate correction Task was created.
@@ -786,7 +786,7 @@ Expected output:
 - `startNewAttempt` and its internal terminal-tip annotation must not call `syncGoalStatus`, because retry intent does not change the current Goal lifecycle projection. The actual next attempt boundary (`beginBuildAttempt`) remains the single transition emitter. Add an engine regression proving a completed/failed terminal tip annotated for retry produces no new `goal.passed` / `goal.failed` protocol event, while a subsequent real attempt projects running normally.
 - In the managed-worktree selection path, a terminal successful prior run with no workspace pointer may create one new managed worktree from the current project HEAD. This is the next attempt's single implementation source after the previous successful contribution was already committed/merged and its workspace reclaimed, or after a caller-owned current-project run. Keep the existing structural error unchanged for failed/aborted terminal attempts whose workspace pointer is missing; do not hide lost diagnostic state.
 - Add orchestrator regressions proving: completed current-project/no-workspace Goal + explicit managed redispatch creates a fresh worktree and fresh build session; completed managed Goal after immediate cleanup can likewise redispatch; failed Goal with missing workspace still returns the structural error; existing failed Goal with recorded workspace still reuses it.
-- Run focused engine and orchestrator tests, affected worktree lifecycle tests, package typecheck, document health, and `git diff --check`; commit with `dsw-33987`, push `myhexin`, then reload only the benchmark-owned backend so production uses the repair. Re-inject the same existing Goal contract once and return to canonical mailbox observation. No frontend dispatch is allowed until the Terra worker and independent PostgreSQL proofs pass.
+- Run focused engine and orchestrator tests, affected worktree lifecycle tests, package typecheck, document health, and `git diff --check`; commit with `dsw-33987`, push `legacy-remote`, then reload only the benchmark-owned backend so production uses the repair. Re-inject the same existing Goal contract once and return to canonical mailbox observation. No frontend dispatch is allowed until the Terra worker and independent PostgreSQL proofs pass.
 
 ## Iteration 31 — first Terra implementation worker lands and independently passes PostgreSQL isolation proofs
 
@@ -907,7 +907,7 @@ Expected output:
   new agent invocation must use `hexin/gpt-5.6-terra`; canonical mailbox remains the sole progress-monitoring
   surface; the dev backend must use the formal database and the existing Vite process must remain untouched.
 - The landed Iteration 33 infrastructure repair was committed as `c3192543b5` and pushed to
-  `myhexin/v0.0.9beta`. The benchmark-owned backend was replaced from PID 12464 to PID 27608 using the same Bun dev
+  `legacy-remote/v0.0.9beta`. The benchmark-owned backend was replaced from PID 12464 to PID 27608 using the same Bun dev
   serve command. `/global/health` confirms
   `C:/Users/chuan/.local/share/opencorvus/opencorvus.db`; Vite remains PID 3360 on port 5173.
 
@@ -1580,7 +1580,7 @@ Expected output:
 
 ### Environment and identity evidence
 
-- Git `v0.0.9beta` was clean and exactly aligned with `myhexin/v0.0.9beta` at `be72eb452`. Ports 7878 and 5173 had
+- Git `v0.0.9beta` was clean and exactly aligned with `legacy-remote/v0.0.9beta` at `be72eb452`. Ports 7878 and 5173 had
   no listeners before startup. The benchmark-owned backend now serves 7878 and `/global/health` identifies the
   formal database `/Users/yangheng/.local/share/opencorvus/opencorvus.db`; the benchmark-owned Vite process serves
   `http://localhost:5173/`.
@@ -1836,7 +1836,7 @@ Expected output:
 - The generic silent-error boundary in `runTaskLoopInner` was repaired in OpenCorvus commit `2b604a3d5c` so an
   unexpected Orchestrator decision exception terminalizes the Task with durable failure evidence instead of leaving
   an invisible active stall. Its focused five-test suite, package typecheck and the complete pre-push hook passed.
-  The commit remains local because `myhexin/v0.0.9beta` advanced by six overlapping commits; integration is deferred
+  The commit remains local because `legacy-remote/v0.0.9beta` advanced by six overlapping commits; integration is deferred
   until the concurrent executor-removal refactor can be preserved and the overlapping remote scheduler changes are
   fully reviewed. The benchmark runtime remains the coherent `109fd61a01` snapshot, so this source repair is not yet
   active in the running backend.
@@ -2001,7 +2001,7 @@ Expected output:
   tool result in the same model loop, every model turn must receive the latest durable Task/Goal snapshot. The final
   persisted task request and its visible streaming representation must agree. Fixes require focused regressions,
   typecheck, runtime reload of only benchmark-owned processes when necessary, browser reinspection, commit and
-  `myhexin` push.
+  `legacy-remote` push.
 - Hard constraints retained: no duplicate-dispatch gate, retry counter, cooldown, keyword rule, task-C branch,
   compatibility path, UI-only text de-duplication, hidden message, state machine, or log monitoring. The General
   package owns cryptocurrency implementation quality; host wake/context and message projection correctness belong
@@ -2392,7 +2392,7 @@ Expected output:
   `REQUIRED_CRYPTO_TRADING_EXPERT_SQUAD_IDS`, consumed only by `provisionRequiredExpertSquads` before
   `startMission`; its focused tests are all in
   `packages/opencorvus/test/benchmark/crypto-trading-long-mission.test.ts`. Package manifests prove canonical
-  namespaces `builtin/frontend-innovate`, `myhexin/mirror-watch`, and `wujiang/opentest`; installation continues
+  namespaces `builtin/frontend-innovate`, `legacy-remote/mirror-watch`, and `wujiang/opentest`; installation continues
   through the sole `ExpertSquadPackageManager.installPayloadPackage` route.
 - No independent sub-agent was used because the operator did not request delegation and current collaboration policy
   does not authorize it.
@@ -2535,7 +2535,7 @@ Expected output:
 4. Add incremental-tool regressions for nonexistent and cross-task Browser Preview refs, plus a readable failed
    evidence case. Run focused package/resolver/Visual-QA suites, payload trackedness/generation tests, OpenCorvus
    typecheck, document health and `git diff --check`.
-5. Commit only benchmark-owned files with the `dsw-33987` prefix and push to `myhexin`. At the next true task idle
+5. Commit only benchmark-owned files with the `dsw-33987` prefix and push to `legacy-remote`. At the next true task idle
    boundary, reload only the benchmark-owned backend, retry the Visual QA stage, and require an actual Browser MCP
    screenshot/observe interaction in durable tool-call evidence before accepting G5.
 
@@ -2713,7 +2713,7 @@ Expected output:
    by the package, update its Skill contract and package tests, regenerate payload, and prove the released package
    invokes no absent `markitdown` binary. Do not retain a dual-path compatibility branch.
 5. Run focused session and Mirror Watch tests, the complete expert-squad suite, payload freshness, typecheck, historical
-   document health and diff checks. Commit only owned paths with `dsw-33987`, push to `myhexin`, build a coherent
+   document health and diff checks. Commit only owned paths with `dsw-33987`, push to `legacy-remote`, build a coherent
    runtime, canonically update the installed Mirror Watch package, then resume the Mission with a fresh Task while
    preserving both terminal failures as evidence.
 
@@ -2731,7 +2731,7 @@ Expected output:
   and a real retrieval of `https://example.com` returned Markdown successfully.
 - Mirror Watch and generated-payload tests pass 20 tests with 564 assertions; the complete expert-squad suite is
   green, historical document health passes 21 tests with 70 assertions, and touched-file whitespace checks pass.
-- The repair commit `1182427fce` and concurrent-safe merge commit `b36801dc95` were pushed to git-cc after the full
+- The repair commit `1182427fce` and concurrent-safe merge commit `b36801dc95` were pushed to legacy remote after the full
   pre-push typecheck, route inventory, API document, Overlay internationalization and secret checks passed. Persistent
   runtime `C:/Users/chuan/myhexin-local/benchmark-runtimes/opencorvus-b36801dc95` was built from that exact tree with
   frozen dependencies, generated SDK and release Windows process supervisor.
@@ -2904,7 +2904,7 @@ Expected output:
 
 ### Runtime proof and supervised continuation
 
-- Repair commit `f014a4426` and concurrent-safe merge commit `774324388` were pushed to git-cc after the full pre-push
+- Repair commit `f014a4426` and concurrent-safe merge commit `774324388` were pushed to legacy remote after the full pre-push
   typecheck, route inventory, API docs, Overlay internationalization and secret checks passed. Only benchmark-owned
   backend PID `97899` was stopped; Vite PID `28172` remained live. The replacement backend reports healthy and names
   `/Users/yangheng/.local/share/opencorvus/opencorvus.db` as its database.
@@ -3043,7 +3043,7 @@ Expected output:
   field. Its package-tool provider test also timed out after an MCP connection closed. These are not evidence against the
   greenfield repair and must remain owned by that concurrent refactor; they currently prevent a truthful repository-wide
   green typecheck and prevent committing through the occupied index without mixing owners.
-- Required continuation: commit only the owned frontend-design/package/record paths with `dsw-33987`, push to git-cc,
+- Required continuation: commit only the owned frontend-design/package/record paths with `dsw-33987`, push to legacy remote,
   build a coherent runtime, restart only the benchmark backend, replace the project Frontend Innovate package through the
   official project-scope import protocol, and create a fresh Phase 09 Task preserving the failed Task. Then continue G5-G9,
   General G10, final MirrorTest acceptance, and independent secondary review.
@@ -3096,7 +3096,7 @@ Expected output:
   the same concurrently owned browser/frontend-design refactor and must not be dismissed as a proven transient flake.
 - Once the concurrent owner commits or clears the overlapping paths, inspect the landed diff rather than recreating it.
   Verify greenfield `render_review`, strict parity `reference_comparison`, focused frontend-design suites, package
-  typecheck and payload freshness. Then commit only benchmark-owned follow-up paths with `dsw-33987`, push to `myhexin`,
+  typecheck and payload freshness. Then commit only benchmark-owned follow-up paths with `dsw-33987`, push to `legacy-remote`,
   build a coherent runtime, restart only the benchmark backend, update the project Frontend Innovate package through the
   official project-scope import protocol, resume the same Mission, and allow ordinary correction/finalization.
 - Until ownership clears, continue read-only verification and report the semantic overlap. Do not edit the loaded runtime,
@@ -3168,7 +3168,7 @@ Expected output:
 - Update the core prompt/tool result only to remove the discovered semantic ambiguity; prompt wording is a probability
   improvement, while the durable fail-stop detector is the observable safety boundary. Run focused no-decision,
   goal-lifecycle, describe and prompt suites; OpenCorvus typecheck; historical-document health; then commit with
-  `dsw-33987` and push `v0.0.9beta` to `myhexin`. Do not restart the currently running backend without explicit user
+  `dsw-33987` and push `v0.0.9beta` to `legacy-remote`. Do not restart the currently running backend without explicit user
   authorization.
 
 ### Independent review and implementation evidence
@@ -3235,7 +3235,7 @@ Expected output:
   retry behavior.
 - Add regression coverage proving replay construction and prompt rendering expose canonical current-task messages, do
   not expose another task's messages, and round-trip the strict packet schema. Run focused Mailbox/Integrity/Orchestrator
-  tests, package typecheck and document health, then commit with `dsw-33987` and push `myhexin/v0.0.9beta`. A runtime
+  tests, package typecheck and document health, then commit with `dsw-33987` and push `legacy-remote/v0.0.9beta`. A runtime
   reload, if needed for the active Mission, requires separate authorization.
 
 ### Independent review corrections and verification
@@ -3259,7 +3259,7 @@ Expected output:
   projection and data-integrity constraints. Its bounded-window wording advisory is closed by labelling the prompt as
   the newest selected messages rendered oldest-first. A pre-merge combined documentation run passed 116 of 117 tests;
   the sole selector-catalog assertion is stale against the remote expert-squad repair and is expected to resolve when
-  the three already-fetched `myhexin/v0.0.9beta` commits are merged, then must be rerun rather than waived.
+  the three already-fetched `legacy-remote/v0.0.9beta` commits are merged, then must be rerun rather than waived.
 - Post-merge verification proved the remote production resolver intentionally consumes
   `discoverExternalPackages(projectDirectory)`, the strict Registry snapshot that combines project and user-global
   packages. The homogeneity test alone still asserted the removed project-only discovery name. Its assertion now pins
@@ -3284,7 +3284,7 @@ Expected output:
 - Repository-wide searches enumerated every General `implementation-engineer` and `system-integrity-reviewer`
   projection/virtual-workflow node, every common independent-review and non-pass repair instruction, the failed-goal
   diagnostic rendering path, and all tests that assert the General scheduler prompt or projected descriptions.
-- Git baseline is `v0.0.10beta` at `64e5ce2b9`, already synchronized with `myhexin/v0.0.10beta`. The unrelated untracked
+- Git baseline is `v0.0.10beta` at `64e5ce2b9`, already synchronized with `legacy-remote/v0.0.10beta`. The unrelated untracked
   `C:/` path remains untouched. Backend PID `24378` and Vite PID `28172` must not be restarted by this repair.
 
 ### Causal evidence
@@ -3318,7 +3318,7 @@ Expected output:
   projected identities. Existing package-isolation tests must continue proving external squads do not inherit General.
 - Run the focused General package and scheduler prompt suites, package TypeScript typecheck, historical document links,
   document health, and `git diff --check`; obtain independent read-only review; then commit with `dsw-33987` and push
-  `myhexin/v0.0.10beta`. The running backend remains unchanged until separate authorization.
+  `legacy-remote/v0.0.10beta`. The running backend remains unchanged until separate authorization.
 - The first combined focused run exposed an unrelated stale scheduler-schema fixture: its Figma dispatch supplied a
   reference URL but omitted the now-required explicit `mode`. Update that test input to `reference_parity`; production
   dispatch validation remains unchanged and strict.

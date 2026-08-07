@@ -12,7 +12,7 @@
 2. Agent Rail record 始终使用 `sessionAgentID` 作为执行 session owner；消息卡仍保留 `agentID` 作为真实消息参与者。
 3. 两个不同的真实 session owner 仍必须严格失败；不得过滤 helper 消息、放宽 owner invariant 或添加 fallback。
 4. 使用用户提供的正式 Task/SQLite 证据复核真实响应契约，并通过 focused tests、Overlay typecheck/build、文档健康检查和 Node 启动的真实桌面页面截图验收。
-5. 不重启、刷新、停止或干预用户正在运行的 OpenCorvus/Overlay；commit subject 以 `dsw-33987` 开头并 push 到 `myhexin/v0.0.12beta`。
+5. 不重启、刷新、停止或干预用户正在运行的 OpenCorvus/Overlay；commit subject 以 `dsw-33987` 开头并 push 到 `legacy-remote/v0.0.12beta`。
 
 ### Hard constraints
 
@@ -78,7 +78,7 @@ Repository-wide `rg` enumerated all `sessionAgentID`, `ConversationAgentMessageV
 2. Route hydrate/history/live message/live part target ownership through that canonical owner while preserving strict participant-author checks.
 3. Add exact helper interleaving and negative owner-contract tests across all four paths.
 4. Add a Node-run browser fixture or extend the existing Agent Rail browser fixture with the same payload, capture the desktop conversation, and inspect the screenshot at original resolution.
-5. Run focused tests, Overlay typecheck/build, historical links/document health, `git diff --check`, and a second diff review; update this verification ledger, commit owned files and push `myhexin/v0.0.12beta`.
+5. Run focused tests, Overlay typecheck/build, historical links/document health, `git diff --check`, and a second diff review; update this verification ledger, commit owned files and push `legacy-remote/v0.0.12beta`.
 
 ## Verification ledger
 
@@ -89,4 +89,4 @@ Repository-wide `rg` enumerated all `sessionAgentID`, `ConversationAgentMessageV
 - PASS: the Node-launched real browser Agent Rail fixture hydrates a worker session containing an interleaved `compaction` message, retains one Rail owner for that session, reports no unexpected browser errors and passes its complete long-history locate/geometry suite.
 - PASS: screenshots `.scratch/conversation-agent-rail-scroll-browser/single-activity-left-rail.png` and `.scratch/conversation-agent-rail-scroll-browser/chat-section-after-locate.png` were opened at original resolution. The helper renders as its truthful `compaction` card, the worker card and Rail remain present, and no task-load error, blank conversation or duplicate owner is visible.
 - PASS: 82 historical-link/document-health tests with 1,356 expectations pass after the new record entered the tracked monthly index.
-- PASS: final second review removed the test adapter's implicit owner fallback, made every retained fixture state its canonical `sessionAgentID`, and reran the six-suite projection set at 138/138 plus the Node browser test. `git diff --check` is clean; the owned diff is ready for commit and git-cc push.
+- PASS: final second review removed the test adapter's implicit owner fallback, made every retained fixture state its canonical `sessionAgentID`, and reran the six-suite projection set at 138/138 plus the Node browser test. `git diff --check` is clean; the owned diff is ready for commit and legacy remote push.

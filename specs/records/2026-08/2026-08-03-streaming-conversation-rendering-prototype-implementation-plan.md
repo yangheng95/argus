@@ -67,7 +67,7 @@ Open the HTML in a real browser. Inspect dark and light modes, expanded and coll
 
 - [ ] **Step 7: Commit and push the task-owned artifacts**
 
-Stage only the new HTML, this plan, and the two indexes. Commit with subject `dsw-33987 add streaming conversation rendering prototype`, push to `myhexin`, and verify that unrelated modifications remain unstaged.
+Stage only the new HTML, this plan, and the two indexes. Commit with subject `dsw-33987 add streaming conversation rendering prototype`, push to `legacy-remote`, and verify that unrelated modifications remain unstaged.
 
 ## Plan Self-Review
 

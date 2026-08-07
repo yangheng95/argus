@@ -42,7 +42,7 @@ contract change with a high risk of missed call sites.
   they were written. They are not active contracts and must not be rewritten.
 - Do not restart or otherwise disturb a running OpenCorvus/Overlay process.
 - Commits on the beta delivery line use the `dsw-33987` subject prefix and push
-  to the `myhexin` remote.
+  to the `legacy-remote` remote.
 
 ### Read from disk before implementation
 
@@ -146,7 +146,7 @@ process start is not itself a timeout condition.
 - [x] Regression benchmark implementation, including escaped-regex and Windows-literal detection.
 - [x] Targeted verification and iterative repair for the `.r` contract.
 - [x] Manual second review.
-- [x] Isolated commit and git-cc push without unrelated worktree changes.
+- [x] Isolated commit and legacy remote push without unrelated worktree changes.
 
 ## Dead or obsolete code
 

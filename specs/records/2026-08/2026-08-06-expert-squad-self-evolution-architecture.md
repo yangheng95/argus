@@ -20,11 +20,11 @@ Agent 反复审查直到达成共识；随后继续回答自进化的触发、�
 ### 实施 Goal Recall
 
 - Goal：在独立 worktree 中完成 P0–P6，实现专家团自进化的版本固定、原子安装、证据、评测、
-  `evolution-lab` package、benchmark 和只读操作面，最终合并回 `v0.0.33beta` 并推送 `myhexin`。
+  `evolution-lab` package、benchmark 和只读操作面，最终合并回 `v0.0.33beta` 并推送 `legacy-remote`。
 - 用户随后把最终收敛顺序明确为：先合入 `v0.0.33beta`，再合入 `v0.0.34beta`。本地 `0.33`
   合并提交为 `377d7587a9`，本地 `0.34` 合并提交为 `dcb6a90e04`；`0.34` 合并后重新通过全仓
   8/8 typecheck、29 个聚焦非 UI 测试文件、API route inventory、双语 API docs 与 overlay i18n 检查。
-  两个分支的 push 均被 git-cc Stargate 在 receive-pack 阶段返回的 HTTP 200 `application/json`
+  两个分支的 push 均被 legacy remote Stargate 在 receive-pack 阶段返回的 HTTP 200 `application/json`
   非 Git pkt-line 响应阻塞；固定长度、HTTP/1.1、chunked 和缩小到 `7edf52b1e1` 的快进推送结果一致，
   远端 refs 仍分别停在 `4e603b7a70` 与 `4c168c9c9e`。在远端实际接收前不得称为已推送交付。
 - 输入：当前 `v0.0.33beta` 源码、本文冻结的架构与验收指标、显式选择的目标 Expert Squad、
@@ -43,7 +43,7 @@ Agent 反复审查直到达成共识；随后继续回答自进化的触发、�
   P4 `evolution-lab` → P5 benchmark → P6 UI。每一阶段先跑聚焦非 UI 正向契约，再由独立 Agent 只读审查；
   审查问题修复并复测后才能提交该 milestone。
 - UI 验收：P6 只使用真实应用、真实交互、截图和人工复核；禁止新增、修改或运行 UI 自动化测试。
-- 当前同步事实：`git pull --ff-only myhexin v0.0.33beta` 返回 `Already up to date`；主工作区在创建
+- 当前同步事实：`git pull --ff-only legacy-remote v0.0.33beta` 返回 `Already up to date`；主工作区在创建
   worktree 前为 clean。远端此前曾在 push 阶段返回 Git 协议错误，因此最终 push 必须再次验证，不能把
   本地提交称为远端交付。
 - P5b 继续实施基线为提交 `8146b66d3b`；其后的 Task 进程权限、Engine Git、evidence、comparison 与

@@ -182,7 +182,7 @@ Changing either dropdown before submission preserves the shared draft, attachmen
 4. Submit and inspect all four combinations against fresh isolated data. Verify source headers, Work Ledger rows, persisted identities, streamed messages, and active-source read-only badges.
 5. Submit exact `@mission` and `@squad` directives from both pillars and verify Mission opens directly with the selected pillar and no intermediate conversation.
 6. Capture fresh goal-bound screenshots for the resting default, each open menu, and the four hydrated source identities; manually review and correct the page until it matches the approved design.
-7. Perform a second code, schema, workflow, and visual review before commit and normal-hook push to `myhexin`.
+7. Perform a second code, schema, workflow, and visual review before commit and normal-hook push to `legacy-remote`.
 
 ## Delivery boundary
 

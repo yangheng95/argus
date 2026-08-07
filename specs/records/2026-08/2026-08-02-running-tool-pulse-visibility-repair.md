@@ -11,7 +11,7 @@
 | Sources read | Root `AGENTS.md`; Browser control skill; supplied screenshot; `2026-07-29-conversation-streaming-text-wave.md`; `2026-07-30-parent-execution-wave-scope.md`; `2026-07-30-overlay-runtime-efficiency-root-repair.md`; `App.tsx`; `Card.tsx`; `CardHeader.tsx`; `CardParts.tsx`; `InlineToolPart.tsx`; `SubagentProgressGrid.tsx`; `messages.css`; `conversation.css`; `markdown.css`; and motion tokens. |
 | Whole-repository grep | `App.tsx` is the sole owner of `data-conversation-execution-status`. `Card.tsx`, `InlineToolPart.tsx`, and `CardParts.tsx` are the production Tool-status renderers. `messages.css` is the sole Tool-text animation owner and covers full Tool cards, inline Tool rows, and collapsed execution disclosures. `conversation.css` separately owns compact Agent surface motion and thinking text. `--ui-duration-loop-tool-wave` has exactly three consumers: running Tool text, compact Agent surface wave, and retry-thinking color wave. No second Tool-text keyframe or animation owner exists. |
 | Independent agent feedback | None. The user did not request sub-agents, so the primary agent owns implementation and second review. |
-| Git baseline | Local and `myhexin/v0.0.28beta` both pointed to `1f16481df3ca401d6dba470c2527e3d9dd13694c` after fetch. The worktree already contained unrelated orchestration, Expert Squad, test, and specification changes; none may be staged or rewritten by this task. |
+| Git baseline | Local and `legacy-remote/v0.0.28beta` both pointed to `1f16481df3ca401d6dba470c2527e3d9dd13694c` after fetch. The worktree already contained unrelated orchestration, Expert Squad, test, and specification changes; none may be staged or rewritten by this task. |
 
 ## Causal chain
 
@@ -55,7 +55,7 @@
    desktop UI through the Browser, inspect computed animation state over time,
    capture the affected region, and personally review the screenshot.
 6. Re-grep owners, review the exact diff, update this record, selectively
-   commit only task-owned content, push through normal hooks to `myhexin`, and
+   commit only task-owned content, push through normal hooks to `legacy-remote`, and
    verify remote convergence.
 
 ## Progress
@@ -66,7 +66,7 @@
 - [x] Product correction and obsolete UI-test cleanup complete.
 - [x] Static, type, build, localization, and documentation verification complete.
 - [x] Real-page visual acceptance and second review complete.
-- [x] Implementation commit `1ab744c190` and git-cc push complete; final
+- [x] Implementation commit `1ab744c190` and legacy remote push complete; final
       delivery-record convergence follows this recorded verification.
 
 ## Visual evidence

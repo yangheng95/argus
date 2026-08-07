@@ -22,11 +22,11 @@ visual and terminal workflow acceptance deliberately remain open.
 | --- | --- |
 | User request | Diagnose the cancelled Prism Task `tsk_fb6c3605c001BMuxy3LyKiQtgA`, separate infrastructure defects from Expert Squad defects, then decide whether `Goal.depends_on` should be deleted and package a complete systemic repair plan. The user explicitly removed network failures from this repair scope. |
 | Acceptance criteria | Remove Goal-to-Goal whole-lifecycle blocking as a concept, not merely as one stored field. Preserve binding Expert Squad workflow-node evidence order. Contract, ownership, bootstrap, integration, acceptance, scheduling, public schema, generated payload, Software Development Kit (SDK), documentation, and real-task verification must converge on one source per responsibility. The repaired Prism workflow must have no Goal/workflow composition deadlock and must retain complete end-to-end evidence. |
-| Hard constraints | No fallback, compatibility alias, hidden migration, Host admission gate, workflow engine, state machine, automatic dispatch, keyword rule, second readiness source, or versioned ContractGraph protocol. The project is unpublished: there is exactly one strict current ContractGraph shape, and the Database (DB) is rebuilt rather than migrated from old Goal or graph artifacts. Keep all Large Language Model (LLM) interaction streaming. Do not add, modify, update, or run User Interface (UI) automated tests. Non-UI tests must assert positive current contracts. Preserve unrelated worktree files. The user explicitly authorized the isolated `codex/goal-dependency-retirement` worktree after the initial plan draft; do not create another worktree. Commit subjects use `dsw-33987` and delivery pushes to `git-cc/v0.0.26beta`. |
+| Hard constraints | No fallback, compatibility alias, hidden migration, Host admission gate, workflow engine, state machine, automatic dispatch, keyword rule, second readiness source, or versioned ContractGraph protocol. The project is unpublished: there is exactly one strict current ContractGraph shape, and the Database (DB) is rebuilt rather than migrated from old Goal or graph artifacts. Keep all Large Language Model (LLM) interaction streaming. Do not add, modify, update, or run User Interface (UI) automated tests. Non-UI tests must assert positive current contracts. Preserve unrelated worktree files. The user explicitly authorized the isolated `codex/goal-dependency-retirement` worktree after the initial plan draft; do not create another worktree. Commit subjects use `dsw-33987` and delivery pushes to `legacy-remote/v0.0.26beta`. |
 | Runtime evidence | The Prism Task created three serial delivery Goals and one dependent system-acceptance Goal. Prism's binding workflow required a Task-scoped design integrator to wait for every applicable delivery Goal's design review, while each delivery Goal's implementation waited for that integrator. Goal 2 could not start before Goal 1 terminal completion, but Goal 1 could not reach implementation or terminal completion before Goal 2's design evidence. The Orchestrator detected this composed cycle only after Goal 1 design review. |
 | Sources read | `specs/current/architecture/02-data.md`, `03-control.md`, `99-principles.md`; `2026-07-07-dependency-contract-single-source-repair.md`; `2026-07-25-virtual-workflow-goal-applicability-repair.md`; `2026-07-30-orchestrator-ready-frontier-parallel-dispatch.md`; `2026-07-31-prism-requirement-topology-and-coordination-lifecycle-repair.md`; the current Goal schema, Engine persistence/projection, Architect tools and validators, Orchestrator prompt and adapters, Expert Squad manifests/prompts, Mission payload sources, SDK authoring schemas, generated Application Programming Interface (API) surfaces, and directly affected non-UI tests. |
 | Whole-repository search | `rg -n --hidden --glob '!node_modules/**' --glob '!dist/**' --glob '!opencorvus-dist/**' "depends_on|dependsOn" .`; focused searches across `packages/opencorvus/src`, `packages/opencorvus/test`, `packages/sdk`, `expert-squads`, `specs/current`, and `specs/records/2026-07`; exact searches for `GoalDependencyContractSchema`, `register_dependency_contract`, `contract_producer_not_ancestor`, `dependency_contract_missing_depends_on`, Goal readiness, bootstrap dependencies, owned-path overlap, workflow frontier, system-acceptance Goal, and every manifest `depends_on`. The unbounded first scan timed out on repository volume, so the same search was completed by owned source/spec directory and file type. |
-| Git baseline | The initial branch was four commits behind `git-cc/v0.0.26beta`. The remote delta did not overlap any untracked user path, and the main worktree was fast-forwarded from `7166d27978` to `0505eeb126` before this plan was written. After the user's explicit authorization, the plan was moved to branch `codex/goal-dependency-retirement` at `D:\myhexin-local\opencorvus-goal-dependency-retirement`; the main worktree returned to zero task-owned tracked changes. Existing untracked cache, distribution, Overlay, test, and July record files remain untouched. |
+| Git baseline | The initial branch was four commits behind `legacy-remote/v0.0.26beta`. The remote delta did not overlap any untracked user path, and the main worktree was fast-forwarded from `7166d27978` to `0505eeb126` before this plan was written. After the user's explicit authorization, the plan was moved to branch `codex/goal-dependency-retirement` at `D:\myhexin-local\opencorvus-goal-dependency-retirement`; the main worktree returned to zero task-owned tracked changes. Existing untracked cache, distribution, Overlay, test, and July record files remain untouched. |
 | Independent agent feedback | The user later explicitly requested an independent residual audit. Newton's first audit rejected completion with four P1 and two P2 findings. Its second audit found active Build/General wording, nested ContractGraph silent stripping, remaining positive-coverage gaps, a Windows payload command-length failure, and this record's contradictory status. Those findings drove the final prompt, strict-schema, test, payload-tooling, and record repairs. |
 
 ## Independent residual-audit amendment
@@ -275,7 +275,7 @@ tests are deleted or rewritten as positive current contracts.
 1. Add this record and both required indexes.
 2. Run historical links, document health, product-document single-source, and
    diff checks.
-3. Commit with the `dsw-33987` prefix and push to git-cc before product code.
+3. Commit with the `dsw-33987` prefix and push to legacy remote before product code.
 
 ### Phase 1 — retire the Core Goal field
 
@@ -374,7 +374,7 @@ fixture, or screenshot baseline.
 7. Final acceptance-record commit.
 
 Every commit subject starts with `dsw-33987`. Each meaningful repair commit is
-pushed to `git-cc/v0.0.26beta` after the relevant checks pass. Concurrent remote
+pushed to `legacy-remote/v0.0.26beta` after the relevant checks pass. Concurrent remote
 changes are fetched and incorporated on the main branch before the next push;
 no additional worktree or second delivery branch is created.
 
@@ -418,7 +418,7 @@ This repair is complete only when all of the following are true:
   fresh Prism, and fresh Mirror Watch acceptance all pass;
 - real Prism UI acceptance includes current screenshots and personal visual
   review without a persisted UI automation test;
-- every Task/Session is terminal and git-cc contains the complete main-branch
+- every Task/Session is terminal and legacy remote contains the complete main-branch
   delivery.
 
 ## Second review

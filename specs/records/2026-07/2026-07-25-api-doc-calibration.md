@@ -13,7 +13,7 @@
   - preserve every concurrent tracked and untracked change in the shared worktree;
   - do not restore compatibility or fallback contracts, especially the retired `routing.evaluation` path;
   - do not restart, stop, refresh, or otherwise interfere with a running OpenCorvus or Overlay process;
-  - use the canonical generation owners, normal hooks, and the `myhexin` git-cc remote;
+  - use the canonical generation owners, normal hooks, and the legacy remote;
   - stage only calibration-owned files.
 - Sources read:
   - `AGENTS.md` and `packages/opencorvus/test/AGENTS.md`;

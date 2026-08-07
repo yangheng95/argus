@@ -26,7 +26,7 @@
 - Reuse the existing Kobalte `Dialog`, `ComboboxControl`, `DropdownMenu`, `Button`, and `Icon` primitives.
 - Remove the inline Work Ledger search path instead of retaining two search experiences.
 - Do not restart or refresh a running OpenCorvus/Overlay process. Visual validation must use an isolated preview and Node-launched Playwright/browser control.
-- Do not create a worktree, bypass hooks, or push anywhere other than the configured git-cc remote.
+- Do not create a worktree, bypass hooks, or push anywhere other than the configured legacy remote.
 
 ### Supplied visual evidence
 
@@ -158,7 +158,7 @@ Search has two independent products: a sidebar-only filtered ledger and the glob
 - Read `AGENTS.md`, this record's original Recall and responsive-menu follow-up, `2026-07-08-right-toolbar-runtime-status-panel-merge.md`, and the current `TaskDirBar` source/browser regression before editing.
 - Do not refresh, restart, resize, or otherwise mutate the running OpenCorvus Overlay. Reproduce and validate through the isolated Node-launched browser fixture.
 - Preserve unrelated dirty files under `packages/opencorvus`; this repair owns only this record, `TaskDirBar.tsx`, and the focused environment browser/source tests.
-- Pre-change git-cc push was attempted after fetch. All local hooks passed, but the remote rejected the pre-existing unpushed `23f31cd0bb` commit because its subject lacks the required `dsw-*` task prefix. That non-tip history is not rewritten without user authorization.
+- Pre-change legacy remote push was attempted after fetch. All local hooks passed, but the remote rejected the pre-existing unpushed `23f31cd0bb` commit because its subject lacks the required `dsw-*` task prefix. That non-tip history is not rewritten without user authorization.
 
 ### Whole-repository search evidence
 
@@ -263,7 +263,7 @@ The previous responsive follow-up translated an edge-triggered requirement—tem
 - Desktop-only repair; no tablet/mobile scope.
 - Do not restart, refresh, or close the user's running OpenCorvus/Overlay process. Use an isolated browser fixture.
 - Do not create a worktree or retain the fixed-column implementation as a compatibility path.
-- New commit subjects use the required `dsw-33987` prefix and push to the configured git-cc remote.
+- New commit subjects use the required `dsw-33987` prefix and push to the configured legacy remote.
 
 ### Sources read
 

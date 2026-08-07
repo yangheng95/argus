@@ -15,7 +15,7 @@ CSS means Cascading Style Sheets. UI means User Interface.
 | Sources read          | Root `AGENTS.md`; `CLAUDE.md`; supplied screenshot; `2026-08-04-neutral-codex-tool-wave.md`; `2026-08-04-conversation-card-border-and-tool-disclosure-repair.md`; `2026-08-04-long-tool-title-timing-contraction-repair.md`; `2026-07-29-agent-wave-and-trailing-tool-disclosure.md`; `CardParts.tsx`; `Card.tsx`; `CardHeader.tsx`; `InlineToolPart.tsx`; `messages.css`; and `card.css`.                                                                                                                                                                                                                                                               |
 | Whole-repository grep | `messages.css` is the single Tool text-wave owner. `ExecutionDisclosureRun` renders the outer disclosure title and places expanded events under `.msg-work-details__body`. Each Tool event then renders a nested `Card`; its header is selected independently by the current `.card[data-kind="tool"] ... .card__main` wave consumer. The outer `.msg-work-details__tool-name` and `__tool-detail` consumers already identify the requested title text. `InlineToolPart(mode="body")` owns complete expanded input/output and has no wave selector. Other wave keyframes belong to streaming status, thinking text, or Agent surfaces and are unrelated. |
 | Independent feedback  | Claude Code `2.1.147` was invoked read-only with `Read,Grep,Glob`, no session persistence, bounded budget, and explicit prohibitions on edits, delegation, worktrees, UI tests, process control, commit, and push. It returned `authentication_failed` / `Not logged in` before reading the repository, so no Claude finding is claimed. A bounded read-only child Session was also created for selector review without file-write authority; the primary Agent independently rechecked the complete DOM and selector chain before implementation.                                                                                                       |
-| Git baseline          | `work-v0.0.30beta-yr-0804` has a clean worktree and is one existing commit ahead of `myhexin/work-v0.0.30beta-yr-0804`. That pre-existing commit concerns Conversation pointer visibility and remains intact.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Git baseline          | `work-v0.0.30beta-yr-0804` has a clean worktree and is one existing commit ahead of `legacy-remote/work-v0.0.30beta-yr-0804`. That pre-existing commit concerns Conversation pointer visibility and remains intact.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 ## Causal Chain
 
@@ -57,7 +57,7 @@ CSS means Cascading Style Sheets. UI means User Interface.
    region, and personally review the outer title and expanded text in motion.
 5. Re-read the exact diff and rendered evidence, update this record, selectively
    commit task-owned files with the `dsw-33987` prefix, reconcile the remote, and
-   push to `myhexin`.
+   push to `legacy-remote`.
 
 ## Progress
 
@@ -66,7 +66,7 @@ CSS means Cascading Style Sheets. UI means User Interface.
 - [x] Tool disclosure title-only wave implemented and statically verified.
 - [x] Real-page expansion and visual review completed.
 - [x] Static second review and implementation checkpoint completed.
-- [x] git-cc push completed.
+- [x] legacy remote push completed.
 
 ## Verification Record
 
@@ -132,7 +132,7 @@ path, layout rule, or duplicate animation implementation was added.
 
 The Recall commit is `bc62fc0eba`. Creating the preview Task automatically
 checkpointed the implementation as `5a7cf2b65b`. A normal push ran every
-pre-push check successfully but the git-cc pre-receive hook rejected the branch
+pre-push check successfully but the legacy remote pre-receive hook rejected the branch
 because the pre-existing unpushed commit `942fbc50da` has the subject
 `Checkpoint before 验证会话鼠标可见性` rather than the mandatory `dsw-33987`
 prefix. Both checkpoint commits were created outside this Agent's commit action.
@@ -145,5 +145,5 @@ be used.
 The source branch and consolidated delivery tree both resolved to exact tree
 hash `43ea74fac30304e16b94bd783919964a7684ccea` before publication. Delivery
 commit `08ab7b5106` passed the complete pre-push hook and advanced
-`myhexin/work-v0.0.30beta-yr-0804` by ordinary fast-forward push. No remote
+`legacy-remote/work-v0.0.30beta-yr-0804` by ordinary fast-forward push. No remote
 history was rewritten.

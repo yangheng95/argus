@@ -130,7 +130,7 @@ policy and remove its client-side directory query entirely.
    architecture and documentation indexes.
 6. Run focused non-UI tests, typecheck/build/document health, perform real
    isolated-page interaction with an inspected screenshot, then complete a
-   second diff review before commit and git-cc push.
+   second diff review before commit and legacy remote push.
 
 ## Verification record
 
@@ -163,7 +163,7 @@ policy and remove its client-side directory query entirely.
   review confirmed that the New Chat persistence boundary, first-submit
   creation, and directory-free Mailbox contract remain single-sourced; no UI
   test or unrelated parallel change is part of this delivery.
-- Commit `3b551dc072` records the implementation. The git-cc pre-push hook
+- Commit `3b551dc072` records the implementation. The legacy remote pre-push hook
   passed the full workspace typecheck, route inventory, API documentation,
   Overlay internationalization, and secret scan before pushing
-  `v0.0.24beta` to `myhexin`.
+  `v0.0.24beta` to `legacy-remote`.

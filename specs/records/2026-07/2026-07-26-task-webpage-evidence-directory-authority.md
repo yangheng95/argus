@@ -65,7 +65,7 @@ Resolve the Task row after determining the owning Task ID and pass `taskRootDire
 
 ### Real canonical-database verification
 
-- Commit `143fa1bf8a` was pushed to `myhexin/v0.0.18beta`; the push hook passed repository typechecks, route inventory, API documentation, Overlay internationalization, and secret scanning.
+- Commit `143fa1bf8a` was pushed to `legacy-remote/v0.0.18beta`; the push hook passed repository typechecks, route inventory, API documentation, Overlay internationalization, and secret scanning.
 - The 6888 backend was reloaded from the Prism project directory against `/Users/yangheng/.local/share/opencorvus/opencorvus.db`; health remained true and `PRAGMA quick_check` remained `ok`.
 - Fresh Mission `c3c74a65eaf04ed7`, Task `tsk_f9b8c62c50013fZLDnmBoHnE1n`, and researcher Session `ses_06472904effdMVI9GbaSzIL0sw` were bound to fresh-17.
 - Tool part `prt_f9b8dcbf8001MJxxDeVdX09Euy` wrote `webpage_extract` evidence below fresh-17.

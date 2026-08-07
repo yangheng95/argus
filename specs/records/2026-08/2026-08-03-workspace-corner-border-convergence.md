@@ -49,7 +49,7 @@
 4. Start an isolated current-source desktop page, capture the exact corner, and
    personally inspect the arc, top line, left line, and surrounding rail.
 5. Perform a second diff and visual review, then commit and push the verified
-   result to `myhexin` with the required `dsw-33987` prefix.
+   result to `legacy-remote` with the required `dsw-33987` prefix.
 
 ## Progress
 
@@ -59,7 +59,7 @@
 - [x] Commit and push the pre-change plan.
 - [x] Implement the single-owner border convergence and retire UI-test debt.
 - [x] Complete build/static checks and real-page visual acceptance.
-- [x] Complete the earlier Codex read-only review and recorded git-cc push.
+- [x] Complete the earlier Codex read-only review and recorded legacy remote push.
 - [ ] Complete the required Claude Code read-only re-review; the current attempt
       stopped before repository reads because Claude Code was not logged in.
 

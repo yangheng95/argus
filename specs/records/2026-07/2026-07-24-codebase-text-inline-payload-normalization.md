@@ -32,7 +32,7 @@
   `AttachmentStore`.
 - Existing unrelated worktree changes and the running OpenCorvus/Overlay processes remain
   untouched.
-- Commit subjects start with `dsw-33987`; pushes use `myhexin` and do not bypass hooks.
+- Commit subjects start with `dsw-33987`; pushes use `legacy-remote` and do not bypass hooks.
 
 ### Evidence read
 

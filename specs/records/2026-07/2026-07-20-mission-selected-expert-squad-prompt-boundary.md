@@ -37,4 +37,4 @@ Why earlier work did not root-fix it: Orchestrator core separates `expert_squad_
 - Dedicated Multica path: the two focused `panel.test.ts` cases passed and prove the exact-project catalog remains callable by a real Mission session while selected import Tasks still use an explicit `general` override.
 - Prompt hygiene and request-language suites passed 14 tests / 152 expectations.
 - Historical-link and document-health suites passed 82 tests / 1,356 expectations.
-- Full OpenCorvus typecheck and git-cc push remain pending because unrelated user-owned Hexin limit edits currently remove `HexinModelProfile.context/input/output` before their `hexin-discovery.ts` consumers are updated. This task does not overwrite that concurrent work.
+- Full OpenCorvus typecheck and legacy remote push remain pending because unrelated user-owned Hexin limit edits currently remove `HexinModelProfile.context/input/output` before their `hexin-discovery.ts` consumers are updated. This task does not overwrite that concurrent work.

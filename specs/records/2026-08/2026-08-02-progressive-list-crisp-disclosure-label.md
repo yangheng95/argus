@@ -19,7 +19,7 @@ Owner: Codex
 | Sources read | Root `AGENTS.md`; Browser control skill; supplied screenshot; `2026-07-30-project-goal-requirement-progressive-lists.md`; `2026-07-30-progressive-list-indentation-and-occlusion.md`; current `ProgressiveList.tsx` and `button.css`. |
 | Whole-repository grep | `ProgressiveList` has three production consumers: `GoalGroup`, `RequirementsPanel`, and `LedgerList`. `.oc-progressive-list__toggle-label` has one style owner in `button.css`; its collapsed selector is the only production owner of the `blur()` and gradient masks. |
 | Independent feedback | No sub-agent was started because the user did not request delegation. Codex retains implementation and second-review responsibility. |
-| Git baseline | Branch `v0.0.28beta` and `myhexin/v0.0.28beta` both resolve to `ca1b06ebb4159f3e56fee60f1bd2dee31c44d2d2`; the worktree is clean. |
+| Git baseline | Branch `v0.0.28beta` and `legacy-remote/v0.0.28beta` both resolve to `ca1b06ebb4159f3e56fee60f1bd2dee31c44d2d2`; the worktree is clean. |
 
 ## Causal Analysis And Call-site Decisions
 
@@ -47,7 +47,7 @@ longer matches.
    labels for crisp rendering.
 5. Perform a second exact-diff and call-site review, update this record with the
    verified result, commit only task-owned files, reconcile the remote branch,
-   and push `v0.0.28beta` to `myhexin`.
+   and push `v0.0.28beta` to `legacy-remote`.
 
 ## Delivered Result
 

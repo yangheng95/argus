@@ -24,7 +24,7 @@
 - Do not redesign tablet/mobile surfaces; this is desktop-only visual acceptance.
 - Do not overwrite or stage the unrelated concurrent dirty worktree changes in App, ChatBubble, docks, Work Ledger, shared file rows, styles, tests, or other July records.
 - Playwright/browser fixtures run through Node on Windows. No Bun-started Playwright process is allowed.
-- Commit subjects start with `dsw-33987` and delivery is pushed to the current git-cc tracking branch.
+- Commit subjects start with `dsw-33987` and delivery is pushed to the current legacy remote tracking branch.
 
 ### Sources read before implementation
 
@@ -97,7 +97,7 @@ git diff --check
 - Personally reviewed `.scratch/overlay-codex-tool-reasoning-expanded.png`, `.scratch/overlay-transcript-dark-expanded.png`, and `.scratch/overlay-transcript-dark-default.png`: the compact disclosure survives the real Chat surface and dark palette without becoming a nested card or losing focus visibility.
 - In-app Browser inspection against an isolated Node-started Vite fixture confirmed one expanded group, two exact chronological events, zero rule elements, zero body left border, left-aligned summary, and correct `aria-expanded` state. The first visual pass caught and corrected inherited centered Button alignment before final screenshots.
 - The user's running OpenCorvus/Overlay was not restarted, refreshed, killed, or reused for validation. Only the isolated fixture server and task-owned browser sidecars were stopped after testing.
-- The first git-cc pre-push run passed the full workspace typecheck but correctly rejected a pre-existing OpenAPI drift introduced by baseline commit `aaa616377`: the session update route allowed `time.archived: null` while tracked `packages/sdk/openapi.json` still declared only `number`. Regenerating the tracked artifact with the repository generator changed that exact field to `number | null`; `bun run api:routes-check` then passed. No route behavior was changed.
+- The first legacy remote pre-push run passed the full workspace typecheck but correctly rejected a pre-existing OpenAPI drift introduced by baseline commit `aaa616377`: the session update route allowed `time.archived: null` while tracked `packages/sdk/openapi.json` still declared only `number`. Regenerating the tracked artifact with the repository generator changed that exact field to `number | null`; `bun run api:routes-check` then passed. No route behavior was changed.
 - Historical-doc links and product-doc single-source checks passed. The combined document-health run reported four concurrent July records that other worktree changes already linked but had not yet tracked; this task did not stage or publish those unrelated records. An intermediate Overlay i18n run likewise observed five titlebar hint keys temporarily made unused by concurrent uncommitted Titlebar work. Those external edits stabilized before delivery, and the final mandatory pre-push hook passed Overlay i18n, full workspace typecheck, API route inventory, generated API docs, and secret scan.
 
 ## Second review

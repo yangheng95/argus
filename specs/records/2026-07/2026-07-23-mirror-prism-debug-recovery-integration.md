@@ -27,7 +27,7 @@ Continue the repair after confirming that the Mission-level `mirror-prism-cluste
 - A graphical product defect must use `visual-debug-repair` and fresh rendered evidence. A non-visual defect must use `debug-repair`. The selected contract is exact after MirrorTest evidence classification.
 - Virtual workflow nodes and declared collaboration stages remain mandatory and ordered. Conditional recovery paths are separate collaboration definitions rather than optional nodes.
 - Preserve the unrelated user edit in `2026-07-22-mirror-prism-full-workflow-distillation.md` and do not restart the running OpenCorvus process.
-- Commits use the `dsw-33987` prefix and push to the current delivery branch `myhexin/v0.0.16beta` through hooks. The repository release line advanced from `v0.0.15beta` to `v0.0.16beta` while this implementation was active; the committed plan remains an ancestor of the current single delivery line.
+- Commits use the `dsw-33987` prefix and push to the current delivery branch `legacy-remote/v0.0.16beta` through hooks. The repository release line advanced from `v0.0.15beta` to `v0.0.16beta` while this implementation was active; the committed plan remains an ancestor of the current single delivery line.
 
 ### Sources read
 

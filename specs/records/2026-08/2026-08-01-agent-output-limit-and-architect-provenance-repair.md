@@ -60,7 +60,7 @@ Read-only reconstruction of the immutable runtime database proved this causal ch
   changing the formatter or product surface.
 - Preserve every unrelated dirty path; do not stash, reset, restore, clean, or create a
   worktree.
-- Commit subjects use the `dsw-33987` prefix and push to `myhexin/v0.0.27beta` without
+- Commit subjects use the `dsw-33987` prefix and push to `legacy-remote/v0.0.27beta` without
   bypassing hooks.
 
 ### Sources read
@@ -127,7 +127,7 @@ commit, and push ownership.
    assertions; retain only current positive error/result contracts.
 6. Run focused tests, package typecheck, document health, and an independent code review.
 7. Re-query HEAD and staged paths, create an isolated current-HEAD index commit containing
-   only task-owned paths if the shared index/worktree remains dirty, then push `myhexin`.
+   only task-owned paths if the shared index/worktree remains dirty, then push `legacy-remote`.
 
 ## Verification plan
 

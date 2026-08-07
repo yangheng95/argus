@@ -23,7 +23,7 @@ Status: Complete.
 - 复用成熟 `SettingsSegmented` / Kobalte primitive，不修改按钮交互原语来掩盖配置作用域错误。
 - 保留并发 frontend-replica 文件、现有未跟踪打包产物和其他任务记录，不纳入本任务提交。
 - 不干预用户运行中的 OpenCorvus/Overlay；仅使用本任务隔离的 Vite/fixture。
-- 提交以 `dsw-33987` 开头并 push 到 `myhexin/v0.0.8beta`，不绕过 hooks。
+- 提交以 `dsw-33987` 开头并 push 到 `legacy-remote/v0.0.8beta`，不绕过 hooks。
 
 ### Sources read before implementation
 
@@ -83,7 +83,7 @@ The Providers failure has a separate, deeper packaged-runtime cause. The current
 - Type/i18n: repository typecheck completed 10/10 tasks; Overlay panel i18n passed at revision `8086d1b8b04d6219`.
 - Documentation: historical links, product single-source, and document-health passed 81/81 with 1,282 assertions after the new record was staged.
 - Formatting and focused directory/config tests passed; the exact source diff passed pre-commit review.
-- Source delivery: commit `8bbe8c451` passed git-cc pre-push typecheck, route, generated-doc, i18n, and secret hooks and was pushed to `myhexin/v0.0.8beta`.
+- Source delivery: commit `8bbe8c451` passed legacy remote pre-push typecheck, route, generated-doc, i18n, and secret hooks and was pushed to `legacy-remote/v0.0.8beta`.
 - Native matrix: `darwin-arm64` rebuilt successfully from `8bbe8c451`; Vite built 2,489 modules, the production sidecar and Rust/Tauri application linked, and the matrix staged the executable, DMG, and application archive.
 - Real packaged extraction: a task-owned portable launch extracted immutable root `sidecar-cbed8f1c...`; `bin/rg` was `-rwxr-xr-x`. `/global/health` returned healthy version `0.0.8-beta`, `/global/providers` returned 87 catalog entries, and the user's exact `/provider?directory=/Users/yangheng/Documents/OpenCorvus-Demos/nova-project` shape returned 87 entries without `Load failed`.
 - Native integrity: staged GUI is Mach-O ARM64; both bundle versions are `0.0.8-beta`; strict deep code-sign verification and DMG checksum verification pass.

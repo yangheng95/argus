@@ -76,7 +76,7 @@ Owner: Codex
    panels, inspect active destination and open state, and personally review
    collapsed/expanded screenshots.
 7. Perform a second diff and visual review, commit only task-owned changes,
-   fetch/reconcile the shared branch, and push to `myhexin`.
+   fetch/reconcile the shared branch, and push to `legacy-remote`.
 
 ## Status
 
@@ -115,8 +115,8 @@ Owner: Codex
   focus visibility, chevron, and readable expanded body without overlap or
   clipping.
 - No UI automated test was added, modified, deleted, or run.
-- The isolated implementation commit is `9e3460454a` and the git-cc remote
-  `myhexin/work-v0.0.24beta-yr-0729` resolved to the same commit after the
+- The isolated implementation commit is `9e3460454a` and the legacy remote
+  `legacy-remote/work-v0.0.24beta-yr-0729` resolved to the same commit after the
   required pre-push checks passed.
 - The document-health suite reached 62/63; its only failure is the shared
   worktree's unrelated, untracked

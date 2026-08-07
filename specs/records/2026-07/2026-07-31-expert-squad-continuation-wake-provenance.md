@@ -39,7 +39,7 @@ that the repair avoid side effects.
 - Add no host gate, workflow state, automatic dispatch, fallback, synthetic user
   message, hidden message, or untyped instruction channel.
 - Add and run only non-UI positive contract tests. Do not run UI automation.
-- Commit subject must start with `dsw-33987`; push only to `myhexin/v0.0.27beta`.
+- Commit subject must start with `dsw-33987`; push only to `legacy-remote/v0.0.27beta`.
 
 ### Sources read
 

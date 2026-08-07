@@ -28,7 +28,7 @@
   reviewed in an isolated Node-launched browser target. The running user
   OpenCorvus/Overlay process is not restarted, refreshed, or reused for testing.
 - Focused tests, type checks, build, API/document checks, second review, commit,
-  and git-cc push complete on `v0.0.8beta`.
+  and legacy remote push complete on `v0.0.8beta`.
 
 ### Hard constraints
 
@@ -113,7 +113,7 @@
 5. Run focused and package checks, build, isolated Node browser Settings visual
    acceptance, and a second source/diff review; record exact evidence here.
 6. Commit only task-owned paths with the `dsw-33987` prefix, fetch/merge the
-   latest git-cc branch if needed, rerun affected checks, and push
+   latest legacy remote branch if needed, rerun affected checks, and push
    `v0.0.8beta` through hooks.
 
 ## Result

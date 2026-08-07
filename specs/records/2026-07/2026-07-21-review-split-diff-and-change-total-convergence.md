@@ -41,7 +41,7 @@ same values, so it could not detect drift.
 2. Run the Node browser fixtures for Review and Environment, capture the task
    surface, inspect it directly and correct visual/interaction defects.
 3. Run docs health and diff checks, perform a second owner/caller review,
-   commit with `dsw-33987`, and push the current primary branch to `myhexin`.
+   commit with `dsw-33987`, and push the current primary branch to `legacy-remote`.
 
 ## Verification results
 

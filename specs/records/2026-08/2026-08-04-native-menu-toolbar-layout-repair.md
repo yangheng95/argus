@@ -10,7 +10,7 @@
 | Sources read | Root `AGENTS.md`; Browser control skill; both supplied screenshots, including `codex-clipboard-f2a80f7b-5949-4d9f-a1d1-f3665d9cb6de.png`; `2026-08-04-shared-native-styled-menu-surface.md`; `2026-08-04-browser-menu-live-surface-continuity.md`; current panel architecture; `BrowserPreviewPanel.tsx`; `native-menu.tsx`; native-menu surface contract/service; `native-menu.css`; recent native-menu Git history. |
 | Whole-repository grep | `BrowserPreviewPanel.tsx` supplies one `toolbar` group with a visible heading and three zoom items. `native-menu.css` fixes the standard card at 208 scaled pixels, gives the toolbar heading `flex: 1 1 auto; min-width: 0; white-space: nowrap`, and keeps the three-item group non-shrinking. The heading therefore shrinks below its rendered text width while its un-clipped glyphs continue under the first button. No second Browser zoom-menu renderer exists. |
 | Independent agent feedback | None. The user did not request sub-agents, so the primary agent owns implementation and second review. |
-| Git baseline | `work-v0.0.30beta-yr-0804` was clean at `c385f8d8bb`, synchronized with `myhexin/work-v0.0.30beta-yr-0804` (`0 0` divergence), and fetched before implementation. |
+| Git baseline | `work-v0.0.30beta-yr-0804` was clean at `c385f8d8bb`, synchronized with `legacy-remote/work-v0.0.30beta-yr-0804` (`0 0` divergence), and fetched before implementation. |
 
 ## Causal chain
 
@@ -41,7 +41,7 @@
    controls, capture and personally review screenshots, correct any remaining
    visual issue, and repeat the review.
 6. Record evidence here, commit with the `dsw-33987` prefix, fetch/reconcile the
-   tracked git-cc branch, and push through the normal hook.
+   tracked legacy remote branch, and push through the normal hook.
 
 ## Progress
 
@@ -49,7 +49,7 @@
 - [x] Product and architecture changes complete.
 - [x] Non-UI/static verification complete.
 - [x] Real-page visual acceptance and second review complete.
-- [x] Commit and git-cc push complete.
+- [x] Commit and legacy remote push complete.
 
 ## Real-page visual evidence
 
@@ -87,7 +87,7 @@
 ## Delivery
 
 Implementation commit `fe76947728` was pushed to
-`myhexin/work-v0.0.30beta-yr-0804`. The pre-push hook passed Software
+`legacy-remote/work-v0.0.30beta-yr-0804`. The pre-push hook passed Software
 Development Kit (SDK) imports, Artificial Intelligence (AI) runtime validation,
 all scoped package typechecks, route inventory, generated documentation,
 Overlay internationalization, and secret scanning. The task-owned commit

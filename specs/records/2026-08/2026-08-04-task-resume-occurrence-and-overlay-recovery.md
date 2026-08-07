@@ -23,7 +23,7 @@
 - Do not add fallback, compatibility, keyword routing, a host workflow gate, a second lifecycle source, database migration, or reset the production database.
 - Do not add, modify, or run UI automation tests. Add only positive non-UI contract tests.
 - Preserve unrelated dirty Dispatch Turn work. Do not reset, stash, overwrite, or create a worktree.
-- Commit subjects use `dsw-33987`; delivery is pushed to the `git-cc` remote after hooks pass.
+- Commit subjects use `dsw-33987`; delivery is pushed to the legacy remote after hooks pass.
 
 ### Evidence and sources read
 

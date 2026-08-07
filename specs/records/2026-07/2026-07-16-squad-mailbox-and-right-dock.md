@@ -84,7 +84,7 @@
   Playwright is started with Node on Windows.
 - Work only in the current main worktree, preserve concurrent user changes, do
   not create a worktree, do not use Git reset, and do not bypass hooks. Commit
-  subjects use the `dsw-33987` prefix and delivery goes to `myhexin`.
+  subjects use the `dsw-33987` prefix and delivery goes to `legacy-remote`.
 
 ### Sources read before implementation
 
@@ -218,7 +218,7 @@ flowchart LR
    and iterate until the desktop visual contract is met.
 7. Re-read this Recall, complete a second code/data/visual review, update current
    architecture and verification evidence, commit only task-owned files, run
-   the full pre-push hook, and push the branch to `myhexin`.
+   the full pre-push hook, and push the branch to `legacy-remote`.
 
 ## Progress
 
@@ -228,7 +228,7 @@ flowchart LR
 - [x] Right Dock Mailbox and transient-toast ownership convergence implemented.
 - [x] Focused tests, generated contracts, typechecks, i18n, build, and docs checks passed.
 - [x] Real desktop browser hydrate, archive/restore interactions, and 360px light / 280px dark screenshots accepted.
-- [x] Second review, scoped commit, pre-push hook, and git-cc delivery completed.
+- [x] Second review, scoped commit, pre-push hook, and legacy remote delivery completed.
 
 ## Implementation revision
 
@@ -262,6 +262,6 @@ unsolicited responsive deliverable.
   proves that the prior `ERR_ABORTED` diagnostics are gone without an error
   allow-list.
 - Implementation commit `8858182fa` (`dsw-33987 add squad mailbox and right
-  dock`) was pushed to `myhexin/work-v0.0.7beta-yr-0716`. The pre-push hook
+  dock`) was pushed to `legacy-remote/work-v0.0.7beta-yr-0716`. The pre-push hook
   passed repository typechecks, route inventory, generated API docs, Overlay
   i18n, and the tracked-source secret scan.

@@ -9,7 +9,7 @@
 | Acceptance criteria | Every selected Task whose canonical lifecycle is queued, active, completed, failed, or cancelled renders the existing title `StatusIndicator` point and localized label. A Task nested under a Mission must behave exactly like a top-level Task. Existing Task elapsed-time behavior and Mission/Chat title status behavior remain intact. A Node-launched real Overlay fixture must render and capture the Mission-child Task title region. |
 | Hard constraints | Preserve the Work Ledger presentation service as the single Task/Mission/Chat lifecycle projection. Do not add a title-side fallback, second status store, keyword inference, compatibility route, gate, or new status primitive. Reuse `StatusIndicator`, lifecycle labels, and the existing conversation-header geometry. Preserve unrelated dirty changes in `work-ledger.css`, `agent-card-separation-browser.test.ts`, `task-dirbar-keyboard.test.ts`, and `navigation-row-primitive.test.ts`. Do not restart or refresh the user's running OpenCorvus/Overlay; visual verification uses an isolated server. Playwright must run through Node. Desktop-only scope. |
 | Architecture and records read | `specs/current/architecture/07-panel.md`; `specs/current/architecture/07-panel-reactivity.md`; `2026-07-23-settings-menu-skill-hub-and-work-status-semantics.md`; `2026-07-24-work-ledger-child-status-and-mission-loading.md`; `2026-07-26-work-ledger-chat-running-indicator-repair.md`; current Work Ledger projection/service/component, Task selection/store, conversation-title, status-label, status-mapping, and browser-test sources. |
-| Repository state | Branch `work-v0.0.19beta-yr-0727` is at `47674e9748`, matching the fetched `myhexin` tracking ref after another process concurrently completed the same baseline push. Pre-push typecheck, route, docs, i18n, and secret checks passed. Four pre-existing dirty files are preserved. |
+| Repository state | Branch `work-v0.0.19beta-yr-0727` is at `47674e9748`, matching the fetched `legacy-remote` tracking ref after another process concurrently completed the same baseline push. Pre-push typecheck, route, docs, i18n, and secret checks passed. Four pre-existing dirty files are preserved. |
 | Independent-agent feedback | No subagent was launched because the user did not request delegation; the primary agent owns the required second review. |
 
 ## Causal chain
@@ -55,7 +55,7 @@ problem and not a missing backend lifecycle fact.
    title-region screenshot at original resolution, correct any visual mismatch,
    rerun acceptance, and perform a second source/diff review.
 6. Commit only attributable files with the required `dsw-33987` prefix and push
-   the current delivery branch to `myhexin`.
+   the current delivery branch to `legacy-remote`.
 
 ## Result
 

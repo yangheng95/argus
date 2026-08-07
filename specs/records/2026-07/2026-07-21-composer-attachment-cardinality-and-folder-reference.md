@@ -49,7 +49,7 @@ paths then carry the same one attachment URL already used for ordinary files.
 6. Update index-only provider wording and the current data architecture.
 7. Run focused tests, typecheck, route/OpenAPI, locale, docs health, build, and diff checks.
 8. Launch an isolated Node-backed Overlay fixture, inspect goal-scoped desktop screenshots for 10 file chips plus 3 single folder chips and the over-limit error state, and iterate on visual defects.
-9. Perform a second diff review, update this verification record, commit with the required `dsw-33987` prefix, fetch/reconcile git-cc, and push.
+9. Perform a second diff review, update this verification record, commit with the required `dsw-33987` prefix, fetch/reconcile legacy remote, and push.
 
 ## Verification Record
 

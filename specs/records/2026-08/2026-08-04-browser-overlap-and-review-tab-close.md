@@ -11,7 +11,7 @@
 | Whole-repository grep | Searched production Overlay, native host, current architecture, August/July records, and focused test names for Browser WebView ownership, native occlusion, Environment Information, branch menus, Right Dock tabs, Review/diff close, and menu placement. The branch list is still a Kobalte portal in the main HTML WebView and therefore cannot cover the operating-system child Browser WebView. The Review close handler returns immediately after clearing `workspaceOpen`, leaving the `diff` tab in `centerWorkbenchPanels`. |
 | Existing-test disposition | `right-panel-tabs-flat.test.ts` and `right-panel-tier2-labels.test.ts` are prohibited UI/source-string tests. `right-panel-defaults.test.ts` contains retained-source absence assertions prohibited by the negative-test rule. They were directly encountered in the touched Right Dock path and will be deleted without running. Positive VCS transport/store and native-surface service contracts remain untouched. |
 | Independent agent feedback | None. The user did not request sub-agents, so the primary agent owns implementation and second review. |
-| Git baseline | Branch `work-v0.0.29beta-yr-0803` was clean and synchronized with `myhexin/work-v0.0.29beta-yr-0803` at `0 0`; the normal pre-push hook passed before implementation. |
+| Git baseline | Branch `work-v0.0.29beta-yr-0803` was clean and synchronized with `legacy-remote/work-v0.0.29beta-yr-0803` at `0 0`; the normal pre-push hook passed before implementation. |
 
 ## Causal chain
 
@@ -45,7 +45,7 @@
    branch popup above a live Browser page, close the Review tab, capture fresh
    screenshots, and personally review both outcomes twice.
 7. Record evidence here, commit with the `dsw-33987` prefix, fetch/reconcile the
-   tracked git-cc branch, and push through the normal hook.
+   tracked legacy remote branch, and push through the normal hook.
 
 ## Progress
 
@@ -53,7 +53,7 @@
 - [x] Product and architecture changes complete.
 - [x] Overlay typecheck, localization check, and production build complete.
 - [x] Real-page visual acceptance and second review complete.
-- [x] Commit and git-cc push complete.
+- [x] Commit and legacy remote push complete.
 
 ## Acceptance evidence
 

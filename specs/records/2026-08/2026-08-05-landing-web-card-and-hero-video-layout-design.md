@@ -28,7 +28,7 @@ The user supplied current Chinese desktop screenshots for both regions. This req
 - Do not add, modify, update, or run User Interface automated tests, DOM assertions, source-string assertions, snapshots, screenshot baselines, or pixel comparisons.
 - Use the existing `Lander.astro` renderer, existing download catalog, and existing video source as the only runtime owners.
 - Complete real-page interaction and screenshot review before delivery.
-- Commit subjects begin with `dsw-33987` and push `v0.0.30beta` to `myhexin` without bypassing hooks.
+- Commit subjects begin with `dsw-33987` and push `v0.0.30beta` to `legacy-remote` without bypassing hooks.
 
 ### Sources reviewed
 

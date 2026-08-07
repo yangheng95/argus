@@ -60,7 +60,7 @@ Configure and run a real end-to-end (E2E) test for the newly ported Mirror Prism
 - [x] Remove the fresh `--project-dir` path's recursive `.opencorvus` and project-config deletion; assert the isolated config override remains the benchmark config owner.
 - [ ] Obtain source URL/page scope and model substitution decision from the user.
 - [ ] Create the isolated target, request artifact and verification command, then execute the live benchmark.
-- [ ] Inspect screenshots and traces, fix every in-scope defect, rerun, record evidence, commit and push to git-cc.
+- [ ] Inspect screenshots and traces, fix every in-scope defect, rerun, record evidence, commit and push to legacy remote.
 
 ## Known environment facts
 

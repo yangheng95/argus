@@ -36,7 +36,7 @@ buttons or creating a second component.
 
 1. Add the canonical body-weight token to the existing empty-launcher Button rule and add focused source/computed-style regressions.
 2. Run the focused ownership test, Overlay TypeScript check, and the dedicated Node browser test, then open its current-goal screenshot and correct any visual mismatch.
-3. Run documentation-health checks required for this new record, review the complete diff a second time, update this record with evidence, commit with the required prefix, and push the current branch to `myhexin`.
+3. Run documentation-health checks required for this new record, review the complete diff a second time, update this record with evidence, commit with the required prefix, and push the current branch to `legacy-remote`.
 
 ## Progress
 
@@ -93,7 +93,7 @@ buttons or creating a second component.
 
 - Implementation commit `5ed6e1faa` (`dsw-33987 use regular right dock
   launcher labels`) is present on
-  `myhexin/work-v0.0.8beta-yr-0717`.
-- The git-cc pre-push hook passed the SDK import check, AI runtime check,
+  `legacy-remote/work-v0.0.8beta-yr-0717`.
+- The legacy remote pre-push hook passed the SDK import check, AI runtime check,
   repository typechecks, route inventory, generated API documentation,
   Overlay i18n check, and tracked-source secret scan without bypasses.

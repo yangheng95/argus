@@ -63,7 +63,7 @@ The title is also an imperative integration point for selected-task text and dia
 2. Keep `#chatViewTitle` as the trigger, disable the Tooltip when the formatted aggregate is empty, and expose the aggregate through hover and keyboard focus.
 3. Remove the persistent `chatUsage` header-meta element, its imperative writer, retired native debug title, and obsolete lane styling.
 4. Update focused source tests and the real browser usage-header scenario.
-5. Inspect the real Vite screenshot, run focused tests plus documentation health, review the exact task diff, then commit only task-owned files and push `v0.0.19beta` to `myhexin`.
+5. Inspect the real Vite screenshot, run focused tests plus documentation health, review the exact task diff, then commit only task-owned files and push `v0.0.19beta` to `legacy-remote`.
 
 ## Validation
 

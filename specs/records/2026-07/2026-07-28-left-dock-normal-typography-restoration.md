@@ -43,7 +43,7 @@
 - [x] Implement the single normal-size token chain.
 - [x] Add regression coverage and run focused verification.
 - [x] Inspect the screenshot and perform second review.
-- [x] Commit and push to git-cc.
+- [x] Commit and push to legacy remote.
 
 ## Verification Evidence
 

@@ -14,7 +14,7 @@ Date: 2026-07-29
 - Implement the missing capability rather than stopping at a proposal.
 - Use independent Agents to find omissions before implementation and to review
   the final implementation.
-- Commit and push the finished change to the git-cc `v0.0.23beta` line.
+- Commit and push the finished change to the legacy remote `v0.0.23beta` line.
 
 ### Acceptance criteria
 

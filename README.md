@@ -313,6 +313,67 @@ planned integration.
 - GitHub Action: [`github/README.md`](./github/README.md)
 - Contributing: [`CONTRIBUTING.md`](./CONTRIBUTING.md)
 
+## Open-source acknowledgements
+
+OpenCorvus evolved from the [OpenCode](https://github.com/anomalyco/opencode)
+codebase and still carries explicitly synchronized OpenCode work in its model
+provider, GitHub Copilot, and provider-plugin surfaces. We are grateful to the
+OpenCode maintainers and contributors for that foundation.
+
+The current product also depends on many excellent open-source projects. The
+following list highlights the projects that provide major product boundaries or
+ship as key capabilities; it is intentionally not a copy of the complete
+dependency graph.
+
+- **Runtime and agent core:** [Bun](https://github.com/oven-sh/bun),
+  [Vercel AI SDK](https://github.com/vercel/ai),
+  [Hono](https://github.com/honojs/hono), and
+  [Drizzle ORM](https://github.com/drizzle-team/drizzle-orm) power the runtime,
+  streaming model integration, Hypertext Transfer Protocol (HTTP) application
+  programming interface (API), and SQLite persistence layers.
+- **Open interoperability:** the official
+  [Model Context Protocol TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk),
+  [MCP Apps](https://github.com/modelcontextprotocol/ext-apps), and
+  [Agent Client Protocol TypeScript SDK](https://github.com/agentclientprotocol/typescript-sdk)
+  connect OpenCorvus to tools, interactive applications, and external coding
+  agents.
+- **Desktop application:** [Tauri](https://github.com/tauri-apps/tauri),
+  [SolidJS](https://github.com/solidjs/solid), and
+  [Kobalte](https://github.com/kobaltedev/kobalte) provide the native shell,
+  reactive renderer, and accessible User Interface (UI) primitives.
+- **Execution and evidence:** [Playwright](https://github.com/microsoft/playwright),
+  [CUA](https://github.com/trycua/cua), and
+  [OfficeCLI](https://github.com/iOfficeAI/OfficeCLI) underpin browser evidence,
+  host-native Computer Use, and editable Office Artifact inspection and
+  rendering.
+- **Packaged command-line runtime:** [Node.js](https://github.com/nodejs/node)
+  and [ripgrep](https://github.com/BurntSushi/ripgrep) are included in supported
+  release closures for Node-based sidecars and fast repository search.
+- **Interactive workbench:** [CodeMirror](https://github.com/codemirror/dev),
+  [xterm.js](https://github.com/xtermjs/xterm.js),
+  [Mermaid](https://github.com/mermaid-js/mermaid),
+  [MapLibre GL JS](https://github.com/maplibre/maplibre-gl-js),
+  [PDF.js](https://github.com/mozilla/pdf.js),
+  [Reveal.js](https://github.com/hakimel/reveal.js),
+  [Vega-Lite](https://github.com/vega/vega-lite),
+  [Cytoscape.js](https://github.com/cytoscape/cytoscape.js), and
+  [Univer](https://github.com/dream-num/univer) make the editor and interactive
+  Artifact surfaces possible.
+- **Built-in capability sources:** the bundled design and interview Skills
+  adapt ideas and protocols from
+  [Taste Skill](https://github.com/Leonxlnx/taste-skill) and
+  [Matt Pocock's Skills](https://github.com/mattpocock/skills); their local
+  provenance and license files remain with the adapted Skills.
+- **Documentation:** [Astro](https://github.com/withastro/astro) and
+  [Starlight](https://github.com/withastro/starlight) power the documentation
+  site.
+
+Thank you to every maintainer and contributor behind these projects and the
+many smaller dependencies recorded in the repository manifests. Each upstream
+project remains governed by its own license and trademarks. This acknowledgement
+does not replace the license and notice files that accompany source and release
+artifacts, and it does not imply endorsement or affiliation.
+
 ## License
 
 [MIT](./LICENSE)

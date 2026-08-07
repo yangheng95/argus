@@ -10,7 +10,7 @@
 | Sources read               | Root `AGENTS.md`; Browser control skill; `specs/current/architecture/07-panel.md`; `2026-07-28-browser-preview-manual-address-navigation.md`; `2026-07-28-right-dock-chrome-tabs-and-blank-tab.md`; `BrowserPreviewPanel.tsx`; Overlay Browser preview services and HostTransport; transport protocol; Tauri transport and Rust child-WebView implementation; Browser Preview route/target/evidence sources and focused non-UI protocol tests.                                                                                                                                                                                                                                                                     |
 | Whole-repository grep      | Searched production, tests, generated SDK/API, active architecture, and historical records for `BrowserPreviewPanel`, `browser_preview_target`, `/browser-preview/target`, `setTaskBrowserPreviewAddress`, `activeBrowserPreviewTaskID`, `addressSubmissionAvailable`, `browserPreview.sync`, `browserPreview.navigate`, native child-WebView commands, and every target/evidence consumer. The call-site disposition below covers all production owners and direct protocol consumers.                                                                                                                                                                                                                            |
 | Independent agent feedback | None. The user did not request sub-agents; the primary agent owns implementation and the required second review.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| Git baseline               | Current branch `work-v0.0.24beta-yr-0729` and `myhexin/work-v0.0.24beta-yr-0729` were both at `75bf982296`. The only pre-existing worktree edit is `packages/opencorvus/src/skill/builtin-payload.ts`, which is outside this task and remains untouched. The earlier trace commit `2f47c7d525` was already pushed before implementation began.                                                                                                                                                                                                                                                                                                                                                                     |
+| Git baseline               | Current branch `work-v0.0.24beta-yr-0729` and `legacy-remote/work-v0.0.24beta-yr-0729` were both at `75bf982296`. The only pre-existing worktree edit is `packages/opencorvus/src/skill/builtin-payload.ts`, which is outside this task and remains untouched. The earlier trace commit `2f47c7d525` was already pushed before implementation began.                                                                                                                                                                                                                                                                                                                                                                     |
 
 ## Causal chain
 
@@ -63,7 +63,7 @@
    ordinary Work/Chat conversation, type a URL, navigate, capture a
    task-scoped screenshot, inspect it, and iterate if needed.
 6. Perform an exact-diff and call-site second review, then commit and push
-   through the normal `myhexin` hooks.
+   through the normal `legacy-remote` hooks.
 
 ## Codex review feedback
 
@@ -102,5 +102,5 @@ repeated bounds synchronization cannot reapply the Task URL.
 - [x] Recall, causal chain, and whole-repository call-site inventory recorded.
 - [x] Native Browser tab and Task Preview responsibilities separated.
 - [x] Non-UI verification and real-page visual acceptance complete.
-- [x] Second review and implementation commit complete; git-cc push is verified
+- [x] Second review and implementation commit complete; legacy remote push is verified
       by the delivery history.

@@ -24,7 +24,7 @@
 - Do not restart, refresh, close, or otherwise interact with the user's running OpenCorvus/Overlay process.
 - Reuse the existing textarea, shared exact directive parser, and atomic edit functions; do not add a second editable source, parser, hidden message, fallback, compatibility path, route gate, or state machine.
 - Visual acceptance uses a real page and inspected screenshots; Playwright is started by Node.js, never Bun.
-- Commit subjects begin with `dsw-33987` and the completed current branch is pushed to `myhexin`.
+- Commit subjects begin with `dsw-33987` and the completed current branch is pushed to `legacy-remote`.
 
 ### Hard-disk sources read
 
@@ -69,7 +69,7 @@ Searches covered `applyComposerMentionOption`, `composerMentionDirectiveRanges`,
 
 - Branch: `v0.0.25beta`.
 - Starting commit: `18d3ba34dec798ce1ffd2a895671877e72400c75`.
-- `HEAD` matched `myhexin/v0.0.25beta` before implementation.
+- `HEAD` matched `legacy-remote/v0.0.25beta` before implementation.
 - Existing unrelated edits to the spec indexes and Task-title record are preserved and excluded from this task's commit.
 
 ## Root cause
@@ -93,7 +93,7 @@ atomic deletion cannot diverge.
 3. Correct exact-reference insertion so it always leaves a whitespace boundary after the selected entity.
 4. Run the focused pure service contract, typecheck/build, internationalization, document health, and `git diff --check`.
 5. Use a real isolated page to select a mention, inspect the pill and appended space, delete the entity, and review screenshots.
-6. Perform a second exact-diff review, commit only task-owned paths, push to `myhexin`, and verify remote convergence.
+6. Perform a second exact-diff review, commit only task-owned paths, push to `legacy-remote`, and verify remote convergence.
 
 ## Progress
 
@@ -124,7 +124,7 @@ atomic deletion cannot diverge.
   `@skill("grill-me")`, `@mission("mirror-prism-cluster")`, and
   `@squad("general")` pills on the canonical Composer line.
 - Implementation commit `e945335a16` passed the complete pre-push hook and was
-  pushed to `myhexin/v0.0.25beta`; the immediate remote convergence check
+  pushed to `legacy-remote/v0.0.25beta`; the immediate remote convergence check
   matched that commit.
 
 ## Follow-up: letter filtering after `@`
@@ -204,7 +204,7 @@ valid entity searches such as `@gri`.
   inspected screenshot, and computed geometry. No UI automated test may be
   added, modified, updated, or run.
 - The current branch had no unique commits and was fast-forwarded to the latest
-  `myhexin/v0.0.26beta` before this plan was written.
+  `legacy-remote/v0.0.26beta` before this plan was written.
 
 ### Sources and whole-repository search
 
@@ -261,7 +261,7 @@ caret offset or parser range.
    any displacement remains.
 5. Perform a second exact-diff review, commit with the required `dsw-33987`
    prefix, merge the completed work into the current delivery branch, push
-   `myhexin`, and verify remote convergence.
+   `legacy-remote`, and verify remote convergence.
 
 ### Progress
 
@@ -305,8 +305,8 @@ caret offset or parser range.
   retirement of the directly related UI source test, and this task record.
 - Implementation commit `a4451ecce8` was integrated with the concurrent remote
   delivery update through `95b8f9f77a`, pushed first to
-  `myhexin/work-v0.0.26beta-yr-0730`, fast-forwarded into the local
-  `v0.0.26beta` delivery branch, and pushed to `myhexin/v0.0.26beta`.
+  `legacy-remote/work-v0.0.26beta-yr-0730`, fast-forwarded into the local
+  `v0.0.26beta` delivery branch, and pushed to `legacy-remote/v0.0.26beta`.
 - Both pushes passed the repository pre-push hook: complete workspace
   typecheck, API route inventory, generated API documentation check, Overlay
   internationalization check, and secret scan.

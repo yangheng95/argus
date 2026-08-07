@@ -11,7 +11,7 @@
 | Whole-repository grep | Searched production Overlay, current architecture, August records, and focused test paths for Review, `FileChangesView`, split-pane, filter, list, and diff scroll owners. `changes-review-workspace` is the split owner; `changes-diff-pane` currently clips the diff without a vertical scroll owner; `changes-status-strip` keeps every control in one row and horizontally hides the segmented control; the 58/42 split leaves the file pane below its readable content width in the reported Dock. |
 | Existing-test disposition | `packages/overlay/test/virtualizer-api-contract.test.ts` is a prohibited UI/source-string test directly encountered through `FileChangesView.tsx`; delete it without running it. No replacement UI test is allowed. Allowed verification is typecheck, build, localization, documentation health, and real-page manual visual acceptance. |
 | Independent agent feedback | None. The user did not request sub-agents, so the primary agent owns implementation and second review. |
-| Git baseline | Branch `work-v0.0.29beta-yr-0803` is synchronized with `myhexin/work-v0.0.29beta-yr-0803`. Existing uncommitted Browser/native-menu/Review-tab work does not touch the Review workspace component or stylesheet and remains excluded from this delivery. |
+| Git baseline | Branch `work-v0.0.29beta-yr-0803` is synchronized with `legacy-remote/work-v0.0.29beta-yr-0803`. Existing uncommitted Browser/native-menu/Review-tab work does not touch the Review workspace component or stylesheet and remains excluded from this delivery. |
 
 ## Causal chain
 
@@ -48,7 +48,7 @@
    repository changes, interact with the filters and both scroll regions,
    capture fresh screenshots, and personally review the result twice.
 8. Commit only task-owned files with the `dsw-33987` prefix, fetch/reconcile the
-   tracked git-cc branch, and push through the normal hook.
+   tracked legacy remote branch, and push through the normal hook.
 
 ## Progress
 
@@ -56,7 +56,7 @@
 - [x] Product and architecture changes complete.
 - [x] Allowed verification complete.
 - [x] Real-page visual acceptance and second review complete.
-- [x] Commit and git-cc push complete.
+- [x] Commit and legacy remote push complete.
 
 ## Verification evidence
 
@@ -85,6 +85,6 @@
   its remaining timeout and untracked Browser-annotation record belong to the
   concurrent Browser task and do not originate in this Review change.
 - Product commit `01d96becd0` reached
-  `myhexin/work-v0.0.29beta-yr-0803`; the normal pre-push SDK import, AI runtime,
+  `legacy-remote/work-v0.0.29beta-yr-0803`; the normal pre-push SDK import, AI runtime,
   monorepo typecheck, API route, documentation, Overlay localization, and secret
   checks all passed.

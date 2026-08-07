@@ -146,4 +146,4 @@ Empty states distinguish scope unavailable, catalog loading failure, no installe
 - Node-started Playwright browser test against an isolated overlay server.
 - Desktop light and dark screenshots inspected at original resolution.
 - Required spec index and document-health tests.
-- Final diff review, focused independent review, commit with `dsw-33987`, and push to `myhexin`.
+- Final diff review, focused independent review, commit with `dsw-33987`, and push to `legacy-remote`.

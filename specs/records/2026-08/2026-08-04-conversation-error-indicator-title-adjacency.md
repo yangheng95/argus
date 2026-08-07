@@ -14,7 +14,7 @@ UI means User Interface. DOM means Document Object Model.
 | Sources read            | `AGENTS.md`; `CLAUDE.md`; supplied screenshot; `specs/records/2026-08/2026-08-03-conversation-error-indicator.md`; `ChatBubble.tsx`; `CardHeaderChrome.tsx`; `chat-bubble.css`; and `card.css`.                                                                                                                                                                                                                                                                        |
 | Whole-repository search | `CardErrorReasonIndicator` has one definition in `CardHeaderChrome.tsx` and three mounts: shared structured-card chrome, top-level Conversation identity row, and nested Agent identity row. `ChatBubbleIdentity` is local to `ChatBubble.tsx`. The top-level indicator is already the immediate DOM sibling after the title/disclosure owner, but `.chat-bubble__head-main` or `.chat-bubble__head-static` grows across the available row, producing the visible gap. |
 | Independent review      | This is a single-owner CSS geometry correction. The primary Agent will perform the required scoped diff review and real-page screenshot review.                                                                                                                                                                                                                                                                                                                        |
-| Git baseline            | `work-v0.0.29beta-yr-0803` is clean and equal to `myhexin/work-v0.0.29beta-yr-0803` at `7c8d961de5` before this plan.                                                                                                                                                                                                                                                                                                                                                  |
+| Git baseline            | `work-v0.0.29beta-yr-0803` is clean and equal to `legacy-remote/work-v0.0.29beta-yr-0803` at `7c8d961de5` before this plan.                                                                                                                                                                                                                                                                                                                                                  |
 
 ## Causal Chain
 
@@ -50,7 +50,7 @@ UI means User Interface. DOM means Document Object Model.
    Conversation card, and personally inspect a screenshot showing the title,
    error indicator, timestamp, and overflow action together.
 5. Re-read the scoped diff and rendered evidence, commit task-owned files with
-   the `dsw-33987` prefix, push `myhexin`, and verify remote equality.
+   the `dsw-33987` prefix, push `legacy-remote`, and verify remote equality.
 
 ## Visual Review Correction
 

@@ -5,12 +5,12 @@
 | Item | Detail |
 | --- | --- |
 | User requirement | Remove the Task / Mission / chat pin feature. |
-| Acceptance criteria | Task, Mission, and right-sidebar Coding Assistant chat rows expose no pin control or pinned presentation state; the Session domain no longer stores or mutates Work Ledger pin state; the Session pin route, generated SDK operation, public API documentation, and transport allowlist entry are absent; Work Ledger Task/Mission/chat ordering is activity-based; Project pinning remains intact as the separately requested Project shortcut; focused backend, Overlay, generated-contract, type, build, browser, screenshot, document-health, review, commit, and git-cc push checks pass. |
-| Hard constraints | Remove the old Session pin path instead of retaining compatibility or fallback logic. Do not add a gate, state machine, second source, migration, mobile/tablet scope, or worktree. Preserve Project `time_pinned` and `/work-ledger/project/{projectID}/pin`. Use existing Button/Dropdown primitives and the real Work Ledger projection. Run Playwright through Node.js and do not restart, refresh, close, or otherwise interfere with the user's running OpenCorvus/Overlay. Commit subjects start with `dsw-33987`; push only to `myhexin`. |
+| Acceptance criteria | Task, Mission, and right-sidebar Coding Assistant chat rows expose no pin control or pinned presentation state; the Session domain no longer stores or mutates Work Ledger pin state; the Session pin route, generated SDK operation, public API documentation, and transport allowlist entry are absent; Work Ledger Task/Mission/chat ordering is activity-based; Project pinning remains intact as the separately requested Project shortcut; focused backend, Overlay, generated-contract, type, build, browser, screenshot, document-health, review, commit, and legacy remote push checks pass. |
+| Hard constraints | Remove the old Session pin path instead of retaining compatibility or fallback logic. Do not add a gate, state machine, second source, migration, mobile/tablet scope, or worktree. Preserve Project `time_pinned` and `/work-ledger/project/{projectID}/pin`. Use existing Button/Dropdown primitives and the real Work Ledger projection. Run Playwright through Node.js and do not restart, refresh, close, or otherwise interfere with the user's running OpenCorvus/Overlay. Commit subjects start with `dsw-33987`; push only to `legacy-remote`. |
 | Sources read | Root `AGENTS.md`; Browser control skill; `specs/current/architecture/02-data.md`; `2026-07-12-work-ledger-pin-unpin.md`; `2026-07-13-project-pin-unpin-and-icon-repair.md`; `2026-07-18-work-ledger-pin-and-automatic-right-dock-reveal.md`; current Session/Project schema and writers, Work Ledger projection/routes/service/component/styles, generated SDK/OpenAPI/docs, and focused backend/Overlay/transport/browser tests. |
 | Whole-repository search evidence | `SessionTable.time_pinned`, `Session.Info.time.pinned`, and `Session.setPinned` are the only Session persistence/writer chain. `/work-ledger/session/:sessionID/pin` is the only server mutation route and `setWorkLedgerPinned` is its only production client. `mission-row-pin` and `chat-row-pin` are the only Task/Mission/chat row controls; Task is already rejected by the shared action handler and has no persisted pin state. Mission/Chat `pinned` fields and `rowPinned` supply only client pin-first sorting and `data-pinned`. SQL candidates currently read Session pin state for Mission/Chat, while the shared `pinned` candidate/cursor partition is also required by the separate Project pin feature. Generated OpenAPI/SDK/API docs and the transport/directory path inventories contain the Session pin route. The Project pin chain is separate (`ProjectTable.time_pinned`, `Project.setPinned`, project route/client/group action/Pinned section) and remains in scope only as a non-regression boundary. |
 | Independent agent feedback | None. The user did not request sub-agents and the active collaboration boundary forbids unrequested delegation. |
-| Git baseline | `work-v0.0.11beta-yr-0720` at `7a6d2bbd2`, equal to `myhexin/work-v0.0.11beta-yr-0720` after fetch. The worktree contains unrelated uncommitted Overlay/spec changes; they must be preserved and excluded from this task's commits. |
+| Git baseline | `work-v0.0.11beta-yr-0720` at `7a6d2bbd2`, equal to `legacy-remote/work-v0.0.11beta-yr-0720` after fetch. The worktree contains unrelated uncommitted Overlay/spec changes; they must be preserved and excluded from this task's commits. |
 
 ## Root Cause And Replacement Design
 
@@ -53,7 +53,7 @@ ordering uses queued-Task order followed by activity time.
    task-scoped screenshot, inspect it at original resolution, and correct any
    action-rail/layout regression.
 6. Re-run exact whole-repository searches, review the final diff and screenshot,
-   fetch the latest git-cc branch, commit only this task's files, and push through
+   fetch the latest legacy remote branch, commit only this task's files, and push through
    hooks.
 
 ## Progress
@@ -66,7 +66,7 @@ ordering uses queued-Task order followed by activity time.
 - [x] Implement the end-to-end Session pin retirement and regressions.
 - [x] Regenerate contracts and complete focused/static verification.
 - [x] Complete real desktop browser/screenshot acceptance and second review.
-- [x] Prepare the verified implementation for its task-scoped commit and git-cc
+- [x] Prepare the verified implementation for its task-scoped commit and legacy remote
   push; the resulting commit and remote reference are recorded in Git history.
 
 ## Verification And Second Review

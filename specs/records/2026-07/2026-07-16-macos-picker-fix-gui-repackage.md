@@ -6,10 +6,10 @@
 | --- | --- |
 | User request | Repackage the macOS Overlay after repairing the Finder-style project-folder picker freeze. |
 | Acceptance criteria | Produce a fresh macOS ARM64 Graphical User Interface (GUI) executable, Apple Disk Image (DMG), and `.app` archive from current `v0.0.7beta`; prove the picker fix is in source HEAD; validate release contracts, architecture, version, DMG integrity, hashes, and artifact timestamps. |
-| Hard constraints | Use `package:gui-installer-matrix` as the single production packager; package only the native host row; do not restart or interfere with the running Overlay; do not add a second packaging path or commit generated artifacts; push documentation commits to `myhexin/v0.0.7beta` with `dsw-33987`. |
+| Hard constraints | Use `package:gui-installer-matrix` as the single production packager; package only the native host row; do not restart or interfere with the running Overlay; do not add a second packaging path or commit generated artifacts; push documentation commits to `legacy-remote/v0.0.7beta` with `dsw-33987`. |
 | Sources read | `AGENTS.md`; `specs/records/2026-07/2026-07-16-macos-native-picker-main-thread-freeze.md`; `specs/records/2026-07/2026-07-16-v0.0.7beta-latest-repackage.md`; `script/package-gui-installer-matrix.ts`; `packages/overlay/script/build.ts`; root and Overlay package manifests. |
 | Whole-repository search evidence | The root `package:gui-installer-matrix` command is the sole GUI matrix entrypoint. On `darwin-arm64` it builds through the Overlay production build, stages `opencorvus-overlay`, one matching DMG, and one generated `.app.tar.gz`, then runs `check-release-assets.ts --require-bundle`. The current HEAD contains `async fn overlay_pick_dir` and `async fn overlay_pick_files`; blocking picker methods have no other native owners. |
-| Git baseline | `v0.0.7beta` and `myhexin/v0.0.7beta` both point to `a53c95d642`; tracked worktree is clean. The existing untracked `packages/overlay/dist-artifacts/darwin-arm64/` contains the prior package and is the canonical matrix staging destination to be replaced. |
+| Git baseline | `v0.0.7beta` and `legacy-remote/v0.0.7beta` both point to `a53c95d642`; tracked worktree is clean. The existing untracked `packages/overlay/dist-artifacts/darwin-arm64/` contains the prior package and is the canonical matrix staging destination to be replaced. |
 | Independent agent feedback | None. The user did not request delegation, and the active collaboration policy forbids unrequested sub-agents. |
 
 ## Execution plan

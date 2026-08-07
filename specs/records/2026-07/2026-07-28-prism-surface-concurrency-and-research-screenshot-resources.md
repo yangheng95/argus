@@ -22,7 +22,7 @@
 - Keep one source of screenshot bytes: the existing `AttachmentStore` blob is copied into the current Task runtime and published once as an immutable Engine resource snapshot.
 - Keep workflow ordering in the Prism manifest. Parallelism is only across semantically applicable disjoint Goals; within a surface, declared dependencies remain unchanged.
 - Playwright must use Node, not Bun, if browser acceptance becomes necessary.
-- Every source change requires focused regression coverage, then the normal repository checks, a second review, a `dsw-33987` commit, and a normal-hook push to `myhexin`.
+- Every source change requires focused regression coverage, then the normal repository checks, a second review, a `dsw-33987` commit, and a normal-hook push to `legacy-remote`.
 
 ### Records read
 
@@ -120,4 +120,4 @@ The Architect may cite only scoped refs projected from exact selected Research A
 - Replaced duplicated Frontend Research producer declarations with one canonical Core constant shared by publication, persistence, envelope validation, and Catalog metadata.
 - Tightened the persistence input to require resources for `frontend_research_brief` while making them impossible for ordinary `research_brief`.
 - Added cross-field validation so a corrupt or mismatched screenshot cannot be published as readable evidence.
-- Confirmed the fetched `myhexin/v0.0.22beta` tip and local `HEAD` were identical before commit.
+- Confirmed the fetched `legacy-remote/v0.0.22beta` tip and local `HEAD` were identical before commit.

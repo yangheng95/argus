@@ -140,7 +140,7 @@ overlay z-index.
    resolution and correct any visual defect.
 5. Perform a second diff review, commit only this task's files with the required
    `dsw-33987` prefix, fetch/reconcile the delivery branch, and push to
-   `myhexin`.
+   `legacy-remote`.
 
 ## Validation-discovered repository defect
 

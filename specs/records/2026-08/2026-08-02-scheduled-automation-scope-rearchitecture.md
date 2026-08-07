@@ -84,7 +84,7 @@ match these observable semantics, not copy Codex's internal names.
   and manual visual inspection. Do not add, modify, or run UI automation tests.
 - Non-UI contracts use positive results. Do not add or retain negative tests.
 - Any implementation commit uses the `dsw-33987` prefix and is pushed to
-  `myhexin` through normal hooks.
+  `legacy-remote` through normal hooks.
 
 ### Acronyms
 
@@ -462,7 +462,7 @@ After confirmation:
 9. Re-read this Recall section, the full diff, and the generated contracts;
    run document health, package typechecks, API/docs checks, and focused
    positive non-UI tests.
-10. Commit task-owned paths with `dsw-33987`, fetch `myhexin`, preserve unrelated
+10. Commit task-owned paths with `dsw-33987`, fetch `legacy-remote`, preserve unrelated
     work, and push the main delivery branch through normal hooks.
 
 ## Required positive verification

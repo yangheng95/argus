@@ -12,7 +12,7 @@
 | External primary-source check | Chromium's `TabStrip` computes a preferred width and distinct minimum active/inactive widths, fitting the strip before tabs collapse or scroll. `TabStyleViews` documents that active tabs keep their close button and therefore require a larger minimum. This supports a preferred-to-minimum compression contract rather than the current preferred-width-or-overflow jump. |
 | Whole-repository grep | `RightDock.tsx` is the only DOM/measurement owner of `.right-dock-tab-shell`, `data-overflowed`, active-tab preservation, and the overflow menu. `workspace.css` is the only production width owner through `--right-dock-tab-max-width` and the shell recipe. `main.tsx` only owns tab identity/open/select/close and menu signals and must remain unchanged. `07-panel.md` is the current architecture contract. Existing files under `packages/overlay/test/**` contain historical source/browser assertions for fixed tab widths and overflow, but the current rule explicitly forbids changing or running them for a UI task. |
 | Independent review feedback | No sub-agent was spawned because the user did not request delegation. Claude Code `2.1.147` was invoked from the repository root with only `Read,Grep,Glob`, no session persistence, and no worktree/delegation capability, but exited before reading the repository because the local CLI is not authenticated (`Not logged in`). The primary agent therefore owns two separate evidence reviews and must record this unavailable external review honestly. |
-| Git baseline | Delivery branch is `work-v0.0.24beta-yr-0729`; `HEAD` and `myhexin/work-v0.0.24beta-yr-0729` are both `b2f82a5c46` with zero divergence. The worktree is already dirty with unrelated user-owned work, including an adjacent `workspace.css` background hunk and modified spec indexes, so this task must stage only its own hunks. |
+| Git baseline | Delivery branch is `work-v0.0.24beta-yr-0729`; `HEAD` and `legacy-remote/work-v0.0.24beta-yr-0729` are both `b2f82a5c46` with zero divergence. The worktree is already dirty with unrelated user-owned work, including an adjacent `workspace.css` background hunk and modified spec indexes, so this task must stage only its own hunks. |
 
 ## Causal chain
 
@@ -53,7 +53,7 @@
    overflow remain coherent.
 5. Ask Claude Code for a read-only second review of the task-owned diff, repair
    substantiated findings, run document-health checks, selectively commit only
-   task-owned hunks, fetch/converge with `myhexin`, and push through normal hooks.
+   task-owned hunks, fetch/converge with `legacy-remote`, and push through normal hooks.
 
 ## Progress
 
@@ -70,10 +70,10 @@
   made it active and visible while moving a non-active tab into overflow.
   Manual review found no overlap, close-button displacement, clipped controls,
   or active-tab loss.
-- [x] Second review, documentation health, implementation commit, and git-cc push
+- [x] Second review, documentation health, implementation commit, and legacy remote push
   complete. The three documentation-health suites passed `93/93`; implementation
   commit `9182b6fe87` passed the normal pre-push TypeScript, route, documentation,
-  internationalization, and secret-scan hooks and reached `myhexin`.
+  internationalization, and secret-scan hooks and reached `legacy-remote`.
 
 ## Implementation evidence
 

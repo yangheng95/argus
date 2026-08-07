@@ -59,7 +59,7 @@ Owner: Codex
   and shared Overlay tokens. Do not introduce a second renderer, local state
   copy, fallback, compatibility branch, gate, or state machine.
 - Do not delete canonical capabilities to simplify the screenshot.
-- New delivery commits use the `dsw-33987` prefix and push to `myhexin`.
+- New delivery commits use the `dsw-33987` prefix and push to `legacy-remote`.
 
 ### Material read before implementation
 
@@ -126,7 +126,7 @@ already canonical.
    fixture with Node, inspect the real screenshot, correct any remaining visual
    inconsistency, and repeat.
 6. Perform a second diff and screenshot review, commit only task-owned changes,
-   fetch/reconcile the main delivery branch, and push to `myhexin`.
+   fetch/reconcile the main delivery branch, and push to `legacy-remote`.
 
 ## Status
 

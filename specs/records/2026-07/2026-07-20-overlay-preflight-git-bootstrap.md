@@ -44,7 +44,7 @@ The missing startup consumption—not the `crypto` name and not a missing databa
 1. Add a focused startup-order contract proving Git initialization is awaited after directory/API binding and before every project-scoped startup load, with a negative assertion for `initGit=false`.
 2. Extend the Git utility test so startup initialization posts only the canonical endpoint and does not clear/reload project scope or show a dialog.
 3. Run focused Overlay tests, Overlay typecheck, `git diff --check`, historical-doc links, and document-health tests.
-4. Perform a second exact-diff review, update this record with implementation/evidence, commit with the `dsw-33987` prefix, fetch/merge if needed, and push `v0.0.12beta` to `myhexin`.
+4. Perform a second exact-diff review, update this record with implementation/evidence, commit with the `dsw-33987` prefix, fetch/merge if needed, and push `v0.0.12beta` to `legacy-remote`.
 
 ## Implementation
 

@@ -166,7 +166,7 @@ The repeated value eight is a separate observation: the inspected Mirror Watch t
 2. Move the absolute surface from layout-driven `left/top` placement to `translate3d` while preserving the same frame variables, then add containment and interaction-scoped `will-change`.
 3. Make only the background semi-transparent through existing surface tokens; keep content opacity at full and backdrop blur disabled.
 4. Update unit and Node browser tests to assert right docking, one initial column, translucency, compositor positioning, containment, and transient `will-change`; capture and inspect new right-rail screenshots.
-5. Run focused tests, typecheck, production build, document health, scoped diff review, commit with `dsw-33987`, and attempt the required git-cc push without rewriting the pre-existing nonconforming checkpoint.
+5. Run focused tests, typecheck, production build, document health, scoped diff review, commit with `dsw-33987`, and attempt the required legacy remote push without rewriting the pre-existing nonconforming checkpoint.
 
 ### Follow-up implementation
 

@@ -11,7 +11,7 @@
 | Sources read | Root `AGENTS.md`; Browser control skill; supplied screenshot; `specs/current/architecture/07-panel.md`; `2026-07-29-conversation-dock-surface-convergence.md`; `2026-07-29-workspace-corner-shadow-confinement.md`; `2026-07-28-workspace-top-left-radius-restoration.md`; `App.tsx`; `workspace.css`; `conversation.css`; `composer.css`; `cascade/base.css`; relevant Git history and blame. |
 | Whole-repository grep | Production search found `App.tsx` as the sole `.workspace-main`, `.chat-conversation-activity`, `.conversation-workspace`, and Right Dock renderer. `workspace.css` is the sole Workbench radius/shadow, Conversation activity, Right Dock, and separator geometry owner. `conversation.css` owns only internal transcript/message insets. `titlebar.css`, `design-language.css`, `activity.css`, `sidebar.css`, and `pane.ts` were inspected and must remain unchanged. Historical specs and UI tests consume or describe these selectors but are not runtime owners and remain untouched and unrun. No component, backend, route, locale, database, or transport change is required. |
 | Independent review feedback | Claude Code CLI 2.1.147 was checked through command discovery, version, and help, then invoked from the repository root with the required read-only `Read,Grep,Glob` boundary, streaming output, and no session persistence. It returned `Not logged in · Please run /login` before reading code, so no Claude review evidence is available. The primary agent owns the selector-level challenge and second review; no sub-agent was created because the user did not request delegation. |
-| Git baseline | The inner Conversation correction shipped in `8343307f09` and was pushed to `myhexin/work-v0.0.24beta-yr-0729`. The shared branch subsequently advanced through unrelated commits to `a9cf207cf1`; the remote is aligned. The later, incorrect outer-shell flattening experiment was fully reverted before any commit. Unrelated uncommitted files remain excluded from this task commit. |
+| Git baseline | The inner Conversation correction shipped in `8343307f09` and was pushed to `legacy-remote/work-v0.0.24beta-yr-0729`. The shared branch subsequently advanced through unrelated commits to `a9cf207cf1`; the remote is aligned. The later, incorrect outer-shell flattening experiment was fully reverted before any commit. Unrelated uncommitted files remain excluded from this task commit. |
 
 ## Cause Chain
 
@@ -63,7 +63,7 @@
    iterate if any top/left gutter or second child radius remains.
 5. Re-grep all production owners, review the exact diff and rendered evidence a
    second time, update this record with verification evidence, fetch/converge,
-   commit with the `dsw-33987` prefix, and push to `myhexin`.
+   commit with the `dsw-33987` prefix, and push to `legacy-remote`.
 
 ## Progress
 
@@ -79,7 +79,7 @@
 - [x] Complete the exact-diff and rendered-evidence second review against the
   user's final target.
 - [x] Prepare the corrected evidence/record for the final `dsw-33987` commit
-  and git-cc push.
+  and legacy remote push.
 
 ## Final Real-Page Visual Evidence
 

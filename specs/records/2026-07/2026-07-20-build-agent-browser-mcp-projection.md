@@ -18,7 +18,7 @@ The user confirmed that the build agent must also support the built-in Browser M
 - Do not add host-side role inference, fallback, compatibility logic, a gate, or a second capability source.
 - Preserve explicit per-Agent Expert Squad capability projection.
 - Update the generated Expert Squad payload from repository authoring sources before delivery.
-- Commit subjects must start with `dsw-33987`; push the completed change to `myhexin/v0.0.12beta` without bypassing hooks.
+- Commit subjects must start with `dsw-33987`; push the completed change to `legacy-remote/v0.0.12beta` without bypassing hooks.
 
 ### Read records
 

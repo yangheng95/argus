@@ -11,7 +11,7 @@
 | Sources read | `AGENTS.md`；Browser 技能；`specs/current/architecture/12-overlay-card-system.md`；`2026-07-14-delegated-context-agent-ownership.md`；`2026-07-15-borderless-conversation-and-seamless-project-loading.md`；当前 `CardParts.tsx`、`ReasoningPart.tsx`、`messages.css`、`button.css` 及消息时序/折叠浏览器测试。 |
 | Whole-repository grep | `CardParts.tsx` 是 `delegated-context-toggle` 与 `work-details-toggle` 的唯一生产 owner；`ReasoningPart.tsx` 是 `reasoning-toggle` 的唯一生产 owner。推理与工具摘要都声明 `data-chrome="text-disclosure"` 且把 `--oc-button-padding-x` 设为 `0`；调度上下文缺少该 chrome 声明，并在唯一 CSS selector 中独立设置 `8px` 横向 padding、`26px` 高度与重复的透明/hover 颜色变量。`message-card-chronological-turns-browser.test.ts` 是真实中英文调度上下文、展开交互和截图 owner；`message-part-chronology-browser.test.ts`、`chat-bubble-disclosure-button-browser.test.ts` 与 `agent-card-separation-browser.test.ts` 读取工作摘要 marker/label class。现有断言没有比较调度上下文与工作摘要的可见箭头/文字左边界。 |
 | Independent agent feedback | None。用户未要求子 Agent，当前协作策略禁止未请求委托；主 Agent 负责二次审查。 |
-| Git baseline | 当前分支 `work-v0.0.11beta-yr-0720`；变更前空检查点 `08c3016e6` 已通过 hooks 并推送到 `myhexin/work-v0.0.11beta-yr-0720`。工作区同时存在其他任务的代码和文档修改，必须原样保留且不混入本提交。 |
+| Git baseline | 当前分支 `work-v0.0.11beta-yr-0720`；变更前空检查点 `08c3016e6` 已通过 hooks 并推送到 `legacy-remote/work-v0.0.11beta-yr-0720`。工作区同时存在其他任务的代码和文档修改，必须原样保留且不混入本提交。 |
 
 ## Causal chain
 
@@ -38,14 +38,14 @@
 2. 将调度上下文按钮投影到共享 text-disclosure chrome，并收敛 `messages.css` 的 transcript 行几何。
 3. 运行聚焦单元测试、Overlay TypeScript、i18n 与构建检查。
 4. 通过 Node 启动隔离真实 Overlay fixture，检查中英文折叠/展开、键盘语义、按钮几何和任务截图；亲自查看桌面截图，不干预用户运行态。
-5. 运行历史链接和文档健康测试，二次审查 diff 与截图，仅提交本任务文件，再按 `dsw-33987` 前缀推送 git-cc。
+5. 运行历史链接和文档健康测试，二次审查 diff 与截图，仅提交本任务文件，再按 `dsw-33987` 前缀推送 legacy remote。
 
 ## Progress
 
 - [x] 检查用户截图、架构/历史记录、当前实现、primitive 与完整调用面。
 - [x] 落地测试和生产修复。
 - [x] 完成真实浏览器与视觉验收。
-- [ ] 完成二次审查、提交和 git-cc 推送。
+- [ ] 完成二次审查、提交和 legacy remote 推送。
 
 ## Codex review feedback
 

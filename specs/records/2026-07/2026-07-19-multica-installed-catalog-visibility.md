@@ -77,7 +77,7 @@ No sub-agent is used because the user did not request delegation and the active 
 3. Regenerate built-in payload, OpenAPI, JavaScript Software Development Kit and API docs; update current architecture and indexes.
 4. Run focused backend/Overlay suites, document-health checks, generators, typechecks, route/i18n checks, and diff review.
 5. Run a real authenticated read-only `5/5` source-to-catalog probe, then a Node-launched headed browser acceptance and inspect the task-scoped screenshots.
-6. Fetch/merge the latest git-cc delivery branch, rerun affected acceptance, commit with `dsw-33987`, push `v0.0.10beta`, and confirm local/remote pointers agree.
+6. Fetch/merge the latest legacy remote delivery branch, rerun affected acceptance, commit with `dsw-33987`, push `v0.0.10beta`, and confirm local/remote pointers agree.
 
 ## Verification ledger
 
@@ -96,6 +96,6 @@ No sub-agent is used because the user did not request delegation and the active 
 - A later full generator rerun exposed repeatable Windows `EUNKNOWN` while truncating the already-current English API document. File attributes and access-control lists were writable, Restart Manager reported no locking process, and both Node and Bun could open the file with `r+`. The renderer now leaves byte-identical output untouched and still performs the same strict write for changed content; a fixed-mtime behavior regression proves both branches without retry or fallback.
 - The renderer behavior regression passed, and the original full `bun script/generate.ts` command subsequently completed successfully.
 - The combined renderer/OpenAPI tool test run briefly terminated the existing CLI-generation child with exit 143 under load; immediate isolated rerun of `routes-check-openapi.test.ts` passed all 10 cases, including byte-identical CLI/direct generation.
-- The latest two git-cc delivery commits were merged without conflicts. The combined tree reran the full generator and headed Multica browser acceptance successfully; the post-merge screenshot retained all five rows, three disabled installed states, two selectable states, and clean geometry.
+- The latest two legacy remote delivery commits were merged without conflicts. The combined tree reran the full generator and headed Multica browser acceptance successfully; the post-merge screenshot retained all five rows, three disabled installed states, two selectable states, and clean geometry.
 - The post-merge Multica/Question/Skill/renderer batch passed every task-scoped case. Two unrelated generic Skill directory tests hit Windows process-supervisor startup failures only in the long combined run and then each passed in isolated reruns; this evidence is not represented as a full generic Skill-suite pass.
 - Final complete call-point grep contains no active silent-exclusion wording, `member_preview` remains confined to the upstream schema/normalization boundary, `git diff --check` passed, the worktree is clean, and final diff review found no second catalog, replacement path, custom dialog, or UI-side Multica request.

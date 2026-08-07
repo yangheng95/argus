@@ -13,7 +13,7 @@
 - The inset is the existing `--settings-content-inset` value; no page-specific spacing constant or duplicate primitive is added.
 - A focused source regression proves the Agent Models call point opts into the shared primitive contract.
 - A Node-launched real browser fixture renders the failed-load state, asserts at least one shared inset between the outer border and the alert on every side, saves a task-scoped screenshot, and the screenshot is visually reviewed.
-- Focused tests, Overlay typecheck, documentation health, diff review, commit, and git-cc push complete.
+- Focused tests, Overlay typecheck, documentation health, diff review, commit, and legacy remote push complete.
 
 ### Hard constraints
 
@@ -22,7 +22,7 @@
 - Keep `SettingsGroup.contentInset` and `--settings-content-inset` as the single semantic and visual sources.
 - Do not restart, refresh, close, or interfere with the user's running OpenCorvus/Overlay. Use the isolated Node browser fixture and task-scoped screenshot.
 - Preserve all pre-existing and concurrently appearing worktree changes. Stage only this task's files and hunks; do not reset or create a worktree.
-- Commit subjects start with `dsw-33987`; push the current branch to `myhexin`.
+- Commit subjects start with `dsw-33987`; push the current branch to `legacy-remote`.
 
 ### Sources read
 
@@ -69,7 +69,7 @@ The Agent Models panel mounts every state directly inside the bordered `.s-group
 1. Opt the sole Agent Models `SettingsGroup` into the existing `contentInset` contract.
 2. Extend focused source coverage so the call point cannot silently lose the shared inset.
 3. Add a real failed-load browser fixture that measures four-sided geometry and captures the Agent Models group.
-4. Run focused tests, Overlay typecheck, documentation health, inspect the screenshot at original resolution, review the diff, commit only task-owned files, and push to git-cc.
+4. Run focused tests, Overlay typecheck, documentation health, inspect the screenshot at original resolution, review the diff, commit only task-owned files, and push to legacy remote.
 
 ## Codex review feedback
 

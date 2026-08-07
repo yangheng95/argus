@@ -52,7 +52,7 @@
 4. Run Overlay typecheck plus document link/health checks required by the
    architecture and index changes.
 5. Re-read the complete diff and task-owned file list, commit with the
-   git-cc-required `dsw-33987` prefix, fetch, and push through normal hooks.
+   legacy remote-required `dsw-33987` prefix, fetch, and push through normal hooks.
 
 ## Result
 

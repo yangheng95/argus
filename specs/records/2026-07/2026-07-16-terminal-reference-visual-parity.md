@@ -50,7 +50,7 @@ missing visual feedback loop.
 5. Run the browser fixture through Node, inspect the task-scoped screenshot,
    correct visible mismatches, and rerun until accepted.
 6. Perform a second diff/code review, update this record and indexes, commit only
-   task-owned changes, and push the branch to git-cc.
+   task-owned changes, and push the branch to legacy remote.
 
 ## Progress
 
@@ -60,7 +60,7 @@ missing visual feedback loop.
 - [x] Terminal visual hierarchy implemented.
 - [x] Focused unit/browser coverage passing.
 - [x] Real screenshot inspected and accepted.
-- [x] Second review, implementation/index commits, and git-cc push complete (`cbaa2de21`, `5b751b019`).
+- [x] Second review, implementation/index commits, and legacy remote push complete (`cbaa2de21`, `5b751b019`).
 
 ## Visual Review
 
@@ -90,7 +90,7 @@ banner, project prompt, and focused cursor on an opaque light-theme canvas.
 | `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/terminal-reference-visual-browser.test.ts` | Passed through the required Node runner; real built Overlay opened Terminal, rendered PTY output, verified geometry, and wrote keyboard input.                                                  |
 | `bun run --cwd packages/overlay build:vite`                                                                             | Passed as part of the browser fixture; 2,456 modules transformed. The existing large-chunk warning remains informational.                                                                       |
 | `bun test packages/opencorvus/test/script/historical-docs-links.test.ts`                                                | Passed: 20 tests.                                                                                                                                                                               |
-| git-cc pre-push hook                                                                                                    | Passed after the concurrent Work Ledger locale owner finished its in-worktree repair: repository typecheck, API route inventory, generated docs check, Overlay i18n, and secret scan all green. |
+| legacy remote pre-push hook                                                                                                    | Passed after the concurrent Work Ledger locale owner finished its in-worktree repair: repository typecheck, API route inventory, generated docs check, Overlay i18n, and secret scan all green. |
 
 The broader `document-health.test.ts` run reached 73 passing tests but its
 tracked-monthly-index check observed a separate concurrent Settings record

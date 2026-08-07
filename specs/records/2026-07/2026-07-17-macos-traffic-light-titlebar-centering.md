@@ -44,7 +44,7 @@ Application actions remain single-source: macOS custom native items emit a stabl
 1. Add config/native-menu ownership regressions first, then the Tauri menu and shared action-event bridge.
 2. Run focused window/titlebar/menu source tests, the Node browser titlebar suite for retained Web hosts, Overlay typecheck/i18n, Tauri configuration and Rust tests, document health, formatting, and whitespace checks.
 3. Build the macOS application through the repository toolchain, launch an isolated instance without touching the user's running Overlay, capture and personally inspect the system menu bar, opened native menu, and titlebar; measure the traffic-light/navigation center delta at Retina scale.
-4. Perform a second repository/diff review, commit only task-owned files, merge any newer remote branch state, and push the main branch to git-cc.
+4. Perform a second repository/diff review, commit only task-owned files, merge any newer remote branch state, and push the main branch to legacy remote.
 
 ## Progress
 

@@ -19,7 +19,7 @@ Date: 2026-08-07
 4. The real Task Board page is opened from the running Overlay, both modes are exercised through real interaction, and screenshots are personally reviewed without creating or running User Interface automation tests.
 5. A real model-backed Mission is submitted through `POST /mission/wake` on the running managed backend, then its canonical board record, conversation, and lifecycle facts are inspected through backend/Application Programming Interface reads and the real board.
 6. Existing management features are exercised: navigation summary, lane counts, search, Project filter, refresh, card open, manual draft creation, draft dispatch, and deletion. Destructive cleanup is limited to records created by this verification.
-7. Focused non-User-Interface checks, Overlay typecheck/build, documentation health, diff review, commit, and git-cc push pass.
+7. Focused non-User-Interface checks, Overlay typecheck/build, documentation health, diff review, commit, and legacy remote push pass.
 
 ### Hard constraints
 
@@ -28,7 +28,7 @@ Date: 2026-08-07
 - Do not add, modify, or run User Interface automation tests or screenshot baselines.
 - Do not add a viewport-specific layout branch, fallback, duplicate create path, or lifecycle state.
 - Backend publication must use the canonical streaming Mission wake route and create an ordinary visible user message.
-- Commit subjects start with `dsw-33987`; push only to git-cc.
+- Commit subjects start with `dsw-33987`; push only to legacy remote.
 
 ### Sources read
 
@@ -65,7 +65,7 @@ None requested. No sub-agent was used.
 - [x] Run formatting/static checks, Overlay typecheck, localization check, production build, documentation health, and `git diff --check`.
 - [x] Open the real development page, exercise the Task Board and both create modes, capture current screenshots, inspect them, and correct any observed visual defect.
 - [x] Publish the all-feature end-to-end Mission through the managed backend, inspect its Task Board/conversation facts, exercise management actions, and record exact evidence. Mission `c17f455354d98ebe` and child Task `tsk_fd9d8b857001GF6jao0D5grRs6` ran the complete Base workflow.
-- [x] Perform a second diff/status review, update this record with outcomes, commit, and push to git-cc.
+- [x] Perform a second diff/status review, update this record with outcomes, commit, and push to legacy remote.
 
 ## Verified implementation and runtime evidence
 
@@ -84,4 +84,4 @@ None requested. No sub-agent was used.
 - A resumed Developer pass on the current page explicitly reversed the manual-mode finding: the manual title, Description, and Create draft controls rendered immediately at stable width. The Mission reconciler also recorded that the no-model verdict conflicts with the later successful selected-model Mission/session evidence and must not be treated as the final product conclusion.
 - The same Mission moved through real Running, Attention, and Review projections; its failed child Task displayed one-of-one terminal progress and the failure badge in Review. A Completed-lane card was not manufactured merely to populate the lane.
 - The Mission reconciler attempted to resume the same terminal Task for another Tester pass, but the Host did not expose the required `terminal_lifecycle_reference`; the schema-correct recovery could therefore not be dispatched. This is a remaining backend orchestration defect, not a failure of the repaired create, draft, or Dispatch paths.
-- Commit `22b3bd1fad` contains the model-selection repair and this evidence record. Overlay typecheck, localization completeness, production build, documentation health, Application Programming Interface route inventory, diff checks, pre-push checks, and the git-cc push all passed.
+- Commit `22b3bd1fad` contains the model-selection repair and this evidence record. Overlay typecheck, localization completeness, production build, documentation health, Application Programming Interface route inventory, diff checks, pre-push checks, and the legacy remote push all passed.

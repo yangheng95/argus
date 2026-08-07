@@ -116,7 +116,7 @@
 5. Run focused unit, route, source-contract, type, API, docs, and historical
    document checks; review the final diff.
 6. Update both spec indexes, stage only task-owned paths, commit with the
-   `dsw-33987` prefix, and push the current delivery branch to `myhexin`.
+   `dsw-33987` prefix, and push the current delivery branch to `legacy-remote`.
 
 ## Implemented repair
 

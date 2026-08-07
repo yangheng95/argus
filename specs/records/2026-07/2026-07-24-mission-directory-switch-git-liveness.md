@@ -52,7 +52,7 @@ The directory-switch preflight omission is the identity-drift root trigger. Non-
 2. Extract the canonical exact-directory Overlay Git primitive, apply it to startup, directory switching, and manual init, then implement owner-keyed LLM activity pauses and exact tool-call owners.
 3. Run focused activity, processor, Overlay Git, workspace, server task-create, and strict Engine tests; run OpenCorvus and Overlay typechecks.
 4. Run `git diff --check`, historical-doc links, document health, route/docs checks required by the changed spec/API-adjacent surfaces, and a second exact-diff/call-site review.
-5. Commit only task-owned files with the `dsw-33987` prefix and push `v0.0.18beta` to `myhexin` through normal hooks.
+5. Commit only task-owned files with the `dsw-33987` prefix and push `v0.0.18beta` to `legacy-remote` through normal hooks.
 
 ## Implementation
 

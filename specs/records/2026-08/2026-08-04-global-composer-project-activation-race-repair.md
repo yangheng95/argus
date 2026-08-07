@@ -65,7 +65,7 @@
 2. Keep first-message directives as the single launch-reference source; do not conflate default active Expert Squad state with explicit selection.
 3. Add positive non-User-Interface regression coverage for the directory-free workspace intent while retaining the existing newer-selection contract.
 4. Run focused Overlay tests, relevant typechecks, the production build, required documentation-health checks, and inspect the final diff.
-5. Exercise the real first-submission and read-only launch-reference surfaces, inspect fresh screenshots, update this record with verification evidence, then commit and push the current main delivery branch to `git-cc`.
+5. Exercise the real first-submission and read-only launch-reference surfaces, inspect fresh screenshots, update this record with verification evidence, then commit and push the current main delivery branch to legacy remote.
 
 ## Verification record
 

@@ -156,7 +156,7 @@ Expected: both pass.
 
 Commit subject: `dsw-33987 implement terminal conversation activity feedback`
 
-Push the current branch to `myhexin` without bypassing hooks.
+Push the current branch to `legacy-remote` without bypassing hooks.
 
 ## Self-review
 

@@ -35,7 +35,7 @@ The running desktop process is idle when no interaction arrives, so persistent p
 1. Write and run positive store publication tests before the production change.
 2. Run the focused non-UI test file, Overlay typecheck, and production Vite build using Node.
 3. Start the real desktop client; manually exercise hover, scroll, click, and streamed content, then inspect screenshots bound to the conversation region.
-4. Review the final diff, update the specs index, commit with `dsw-33987`, and push the current delivery branch to `myhexin` through hooks.
+4. Review the final diff, update the specs index, commit with `dsw-33987`, and push the current delivery branch to `legacy-remote` through hooks.
 
 ## Result
 

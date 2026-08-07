@@ -13,7 +13,7 @@
   - visual acceptance uses real-page interaction and manually reviewed screenshots;
   - no Task-state cursor branch or fallback path;
   - do not restart or close the operator's running OpenCorvus client;
-  - preserve the current branch and push the git-cc `myhexin` remote with a `dsw-33987` commit subject.
+  - preserve the current branch and push the legacy remote with a `dsw-33987` commit subject.
 - Read records and architecture evidence:
   - `AGENTS.md` and `CLAUDE.md`;
   - `specs/current/architecture/12-overlay-card-system.md`;
@@ -51,7 +51,7 @@
 1. Change only the Conversation scroll owner's cursor from the canvas-wide text I-beam to the default arrow.
 2. Run Overlay typecheck, locale/static checks, Vite production build, spec-link health checks, and `git diff --check`; do not run UI automation tests.
 3. Start an isolated Vite page backed by the existing application data path, inspect the running Conversation at desktop size, capture a screenshot with the visible pointer context, and perform a second manual visual review.
-4. Record verification evidence here, independently review the final diff, commit, fetch/merge the current git-cc branch when necessary, and push `myhexin/work-v0.0.30beta-yr-0804`.
+4. Record verification evidence here, independently review the final diff, commit, fetch/merge the current legacy remote branch when necessary, and push `legacy-remote/work-v0.0.30beta-yr-0804`.
 
 ## Verification record
 

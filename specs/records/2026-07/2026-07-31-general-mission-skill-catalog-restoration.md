@@ -22,7 +22,7 @@
 - Keep `@squad` as the independent exact Expert Squad reference.
 - Do not add, modify, update, or run UI automation tests. Visual acceptance uses a real page, interaction, screenshot, and personal inspection only.
 - Add positive non-UI catalog, payload, runtime, and route contracts for the current built-in identity.
-- Commit subjects use the required `dsw-33987` prefix and push only to `myhexin/v0.0.27beta`.
+- Commit subjects use the required `dsw-33987` prefix and push only to `legacy-remote/v0.0.27beta`.
 
 ### Existing sources read
 
@@ -74,7 +74,7 @@ This is not a fallback: Mission loads it only after the operator visibly selects
 3. Update positive generator, catalog, runtime, Mission Skill route, and global Composer-reference contracts.
 4. Run focused non-UI tests, generated payload checks, typecheck, API route/docs checks, document health, and diff/reference audits.
 5. Start an isolated real Overlay page, open the Composer `@mission` result, select `general`, inspect the inserted exact directive, capture a current screenshot, and personally review it.
-6. Stage only task-owned paths, commit with `dsw-33987`, and push the current main branch to `myhexin` after reconciling remote changes.
+6. Stage only task-owned paths, commit with `dsw-33987`, and push the current main branch to `legacy-remote` after reconciling remote changes.
 
 ## Verification evidence
 

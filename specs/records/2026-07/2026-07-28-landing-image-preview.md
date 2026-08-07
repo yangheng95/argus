@@ -38,7 +38,7 @@
 - `bun run --cwd packages/web build`
 - Start one isolated Web Docs preview and inspect the English and Simplified Chinese desktop pages through the supported browser.
 - Capture and inspect the closed and open preview states, exercise click, explicit close, backdrop close, Escape, and keyboard activation, and check focus, overflow, image dimensions, and console output.
-- Run `git diff --check`, inspect the exact diff, perform a second review, commit with a `dsw-33987` subject, and push the current delivery branch to `myhexin`.
+- Run `git diff --check`, inspect the exact diff, perform a second review, commit with a `dsw-33987` subject, and push the current delivery branch to `legacy-remote`.
 
 ## Verification evidence
 

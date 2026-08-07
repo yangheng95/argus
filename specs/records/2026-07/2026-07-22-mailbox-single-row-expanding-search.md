@@ -28,7 +28,7 @@
 - Keep `MailboxPanel`, `SearchField`, `SegmentedControl`, `Button`, and `mailbox.css` as the only existing owners; add no duplicate renderer, local durable state, fallback, gate, responsive/mobile branch, or handwritten substitute primitive.
 - Keep `/mailbox` plus acknowledgement events as the single durable Mailbox source. Search open/query remain ephemeral component presentation state.
 - Desktop-only scope. Playwright runs through Node.js, not Bun.
-- Preserve unrelated dirty work, do not create a worktree or restart/refresh/close the user's live OpenCorvus/Overlay, and push only task-owned changes to `myhexin` with the `dsw-33987` prefix.
+- Preserve unrelated dirty work, do not create a worktree or restart/refresh/close the user's live OpenCorvus/Overlay, and push only task-owned changes to `legacy-remote` with the `dsw-33987` prefix.
 
 ### Supplied evidence
 
@@ -84,7 +84,7 @@ The missing total was caused by presentation removal, not missing data: the sing
 2. Refactor the canonical Mailbox header into mutually exclusive resting and expanded projections, retire the Archived/view-switch state, and simplify its sole CSS geometry owner.
 3. Update current architecture wording and this record with the independent review and verification result.
 4. Run focused tests, Overlay typecheck/build, required documentation checks, and the Node-launched Mailbox browser fixture; inspect task-scoped screenshots at original resolution and iterate on any mismatch.
-5. Review the final diff and exact call-site grep, commit only task-owned files, push to `myhexin`, and verify local/remote equality.
+5. Review the final diff and exact call-site grep, commit only task-owned files, push to `legacy-remote`, and verify local/remote equality.
 6. Extend the same canonical projector to all new unread active Mailbox items, acquire default host permission on demand, and rerun notification projection/transport regression tests.
 7. Restore the canonical active total beside the Inbox icon, then repeat compact-header geometry and screenshot verification.
 
@@ -96,7 +96,7 @@ The missing total was caused by presentation removal, not missing data: the sing
 - [x] Production implementation and architecture wording updated.
 - [x] Static, browser, and screenshot verification passed.
 - [x] Follow-up system-notification regressions and production implementation complete.
-- [x] Second review complete; commit and git-cc push follow this recorded verification.
+- [x] Second review complete; commit and legacy remote push follow this recorded verification.
 - [x] Inbox active-total correction and focused visual verification complete.
 
 ## Verification evidence

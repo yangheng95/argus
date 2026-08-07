@@ -11,7 +11,7 @@
 | Sources read               | Root `AGENTS.md`; Browser control skill; supplied screenshot; `specs/current/architecture/07-panel.md`; `2026-07-30-right-dock-new-tab-active-selection.md`; `2026-07-29-right-dock-active-tab-hover.md`; `2026-07-29-right-dock-chrome-adaptive-tab-width.md`; `2026-07-29-right-dock-codex-parity-and-browser-tab-instances.md`; `packages/overlay/src/main.tsx`; `RightDock.tsx`; shared `Tabs.tsx`; and Right Dock styles in `workspace.css` and `design-language.css`.                                                                                                                  |
 | Whole-repository grep      | `main.tsx` is the sole production owner of `centerWorkbenchPanels`, `selectedCenterWorkbenchTab`, `activateCenterWorkbenchTab`, fixed-panel open/close, Browser-instance open/close, and the `RightDock` active projection. `RightDock.tsx` preserves parent tab order in `props.tabs()` and forwards the controlled active ID to Kobalte. `workspace.css` is the sole production owner of `--right-dock-tab-active-bg` and the selected Right Dock tab paint. Existing source-string, DOM, browser, and screenshot tests were identified but are prohibited from modification or execution. |
 | Independent agent feedback | None. The user did not request sub-agents, and the behavior has one tightly coupled state/style ownership path.                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| Git baseline               | Branch `work-v0.0.24beta-yr-0729` and `myhexin/work-v0.0.24beta-yr-0729` were aligned at `e0ac759ab6` before this record. Existing Overlay, architecture, record, and screenshot changes belong to other ongoing work and remain excluded from this task's selective commits.                                                                                                                                                                                                                                                                                                                |
+| Git baseline               | Branch `work-v0.0.24beta-yr-0729` and `legacy-remote/work-v0.0.24beta-yr-0729` were aligned at `e0ac759ab6` before this record. Existing Overlay, architecture, record, and screenshot changes belong to other ongoing work and remain excluded from this task's selective commits.                                                                                                                                                                                                                                                                                                                |
 
 ## Cause Chain
 
@@ -59,7 +59,7 @@
    the screenshot.
 6. Re-grep all owners, review the exact diff and screenshot a second time,
    update this record with evidence, selectively commit task-owned hunks, fetch,
-   push to `myhexin`, and verify remote convergence.
+   push to `legacy-remote`, and verify remote convergence.
 
 ## Progress
 
@@ -69,7 +69,7 @@
 - [x] Pre-change plan committed and pushed.
 - [x] Stable selection ownership and active surface implemented.
 - [x] Static checks and real-page visual acceptance completed.
-- [x] Second review, final commit, git-cc push, and remote convergence completed.
+- [x] Second review, final commit, legacy remote push, and remote convergence completed.
 
 ## Visual Evidence
 
@@ -126,14 +126,14 @@ second visual selector was introduced.
 
 ## Delivery Evidence
 
-- Pre-change Recall commit `d7d72f7aa1` was pushed to the git-cc branch before
+- Pre-change Recall commit `d7d72f7aa1` was pushed to the legacy remote branch before
   product edits.
 - Product commit `9b3dac9ad7` contains only the state owner, selected-surface
   token, current architecture statement, this record, and the reviewed Dock
   screenshot.
-- The normal git-cc pre-push hook passed full-repository TypeScript,
+- The normal legacy remote pre-push hook passed full-repository TypeScript,
   Application Programming Interface (API) route inventory, generated
   documentation, Overlay localization, and secret scanning without bypass.
-- `myhexin/work-v0.0.24beta-yr-0729` converged to product commit
+- `legacy-remote/work-v0.0.24beta-yr-0729` converged to product commit
   `9b3dac9ad7`. Unrelated dirty-worktree edits remained unstaged and unmodified
   by this delivery.

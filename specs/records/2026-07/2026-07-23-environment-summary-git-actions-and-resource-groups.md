@@ -39,7 +39,7 @@ The supplied references are:
 - No fallback remote, implicit upstream creation, hidden force push, compatibility route, state-machine gate, or second change-count source.
 - Do not restart, refresh, resize, or close the user's running OpenCorvus/Overlay. Visual validation uses an isolated Node-launched preview.
 - Preserve unrelated dirty files. No worktree creation, reset, hook bypass, or GitHub push.
-- Commit subjects use the required `dsw-33987` prefix and delivery targets `myhexin/work-v0.0.16beta-yr-0723`.
+- Commit subjects use the required `dsw-33987` prefix and delivery targets `legacy-remote/work-v0.0.16beta-yr-0723`.
 
 ### Sources read
 
@@ -87,7 +87,7 @@ None. The user did not request sub-agents, and the active repository instruction
 
 - The worktree began dirty with unrelated backend, Overlay, SDK, and spec changes.
 - While this investigation was running, the shared branch advanced from `2b1ba7baf` to `e45121639`; the latter committed the pre-existing section-heading typography slice.
-- Pre-change git-cc hooks passed, but the first push transport ended with a connection error. A later local remote-tracking ref showed `e7382ae05`; direct `ls-remote` then failed because `git-cc.myhexin.com:6443` was unreachable. No remote delivery is claimed until a final remote-ref check succeeds.
+- Pre-change legacy remote hooks passed, but the first push transport ended with a connection error. A later local remote-tracking ref showed `e7382ae05`; direct `ls-remote` then failed because `legacy remote.myhexin.com:6443` was unreachable. No remote delivery is claimed until a final remote-ref check succeeds.
 
 ## Root cause
 
@@ -104,7 +104,7 @@ The repair keeps one Environment owner and one VCS owner. Internal disclosure ch
 3. Extend `Vcs` with exact add/commit and upstream push operations and expose typed routes. Refresh generated OpenAPI/SDK/docs.
 4. Extend the Overlay VCS service and replace the inert row with an auto-generating, editable commit surface plus Commit, Commit & Push, and Push actions.
 5. Add backend, service, source, and real-browser regressions. Render and personally inspect expanded, collapsed, grouped, and Git editor screenshots.
-6. Run the required document, type, i18n, route, build, and diff checks; perform a second exact-diff review; selectively commit only this task and push to git-cc.
+6. Run the required document, type, i18n, route, build, and diff checks; perform a second exact-diff review; selectively commit only this task and push to legacy remote.
 
 ## Delivery evidence
 

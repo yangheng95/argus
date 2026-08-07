@@ -14,7 +14,7 @@ Status: Accepted
 | Prior decisions read | `2026-07-21-chat-message-scroll-repair.md`; `2026-07-28-conversation-persistent-scrollbar.md`; `2026-07-28-conversation-fullscreen-scrollbar-repair.md`; `2026-07-28-conversation-full-height-scrollbar-composer-alignment.md`; `2026-07-30-conversation-projection-atomic-source-switch.md`; `specs/current/architecture/07-panel.md`. |
 | Whole-repository grep | `rg` enumerated every `#chatScroll`, `.chat-scroll`, `.conversation-scroll-shell`, overflow declaration, scrollbar/gutter projection, Composer clearance, Mission selection/hydration, projection reset, auto-scroll controller, and `contentChanged` call. Production ownership remains singular: `App.tsx` owns the shared Chat/Mission DOM; `workspace.css` and `conversation.css` own the bounded height chain; `base.css` owns native scrollbar paint; `main.tsx` measures the platform gutter; `Conversation.tsx` and `dom-utils.ts` own input/follow behavior; `main.tsx::openMissionSession` owns Mission source transition and hydration. Existing CSS/source/browser UI tests encountered in this exact surface are obsolete under the current UI-test prohibition and must not be run. |
 | Independent agent feedback | None. The user did not request sub-agents, and active policy forbids unsolicited delegation. |
-| Git baseline | Before changes, `HEAD` `eb96c556ca0f75b16cc21ee01645aa461857feb0` matched `myhexin/v0.0.26beta`; the normal pre-push hooks passed. Unrelated modified and untracked files remain preserved. |
+| Git baseline | Before changes, `HEAD` `eb96c556ca0f75b16cc21ee01645aa461857feb0` matched `legacy-remote/v0.0.26beta`; the normal pre-push hooks passed. Unrelated modified and untracked files remain preserved. |
 
 ## Proven regression chain
 
@@ -65,7 +65,7 @@ Status: Accepted
    and manually inspect task-scoped screenshots at original resolution.
 5. Update this record and the active architecture with exact evidence, perform
    a second diff review, commit only task-owned files, converge with
-   `myhexin/v0.0.26beta`, and push through normal hooks.
+   `legacy-remote/v0.0.26beta`, and push through normal hooks.
 
 ## Result
 

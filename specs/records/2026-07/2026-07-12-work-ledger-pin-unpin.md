@@ -10,7 +10,7 @@
   - The canonical Work Ledger response carries pin state and pagination does not duplicate or omit rows across the pinned boundary.
   - Actions update through one Session-domain writer, emit the existing visible Session update event, and survive reload.
   - English and Chinese labels, keyboard-focusable mature button primitives, focused backend/frontend tests, generated API/docs checks, a real isolated Overlay screenshot, and a second manual review all pass.
-- Hard constraints: no fallback or compatibility path; no database migration (the unreleased database schema is rebuilt directly); no second pin source; no state machine/gate; no interference with a running OpenCorvus/overlay process; preserve unrelated dirty changes; use Node rather than Bun for Playwright; commit subject starts with `dsw-33987` and push to `myhexin` only after verification.
+- Hard constraints: no fallback or compatibility path; no database migration (the unreleased database schema is rebuilt directly); no second pin source; no state machine/gate; no interference with a running OpenCorvus/overlay process; preserve unrelated dirty changes; use Node rather than Bun for Playwright; commit subject starts with `dsw-33987` and push to `legacy-remote` only after verification.
 - Sources read: `AGENTS.md`, the user-opened untracked product-roadmap draft (not adopted as a repository dependency), `specs/current/architecture/02-data.md`, `specs/README.md`, `specs/records/2026-07/README.md`, `packages/opencorvus/src/session/{session.sql.ts,index.ts}`, `packages/opencorvus/src/work-ledger/projection.ts`, `packages/opencorvus/src/server/routes/work-ledger.ts`, `packages/overlay/src/{services/work-ledger.ts,components/WorkLedger.tsx,main.tsx}`, and related Work Ledger tests.
 - Whole-repository search evidence: searches for `pin|unpin|pinned|置顶|取消置顶` found no product pin persistence or action. Existing `work_ledger.pinned` is only the static current-project section. Searches for Work Ledger schemas/routes/types/callers identify the server route registration, projection, Overlay service, WorkLedger component, main action wiring, command palette consumer, SSE refresh, and backend/frontend tests.
 - Independent agent feedback: none; the user did not request sub-agents and the active multi-agent policy forbids spawning them otherwise.
@@ -53,7 +53,7 @@ Add nullable `session.time_pinned` as the sole pin source. A non-null timestamp 
 - [x] Focused and repository-level verification.
 - [x] Isolated real-page screenshot and visual correction (the first screenshot exposed a 0px pin marker; corrected to a visible 10px accent marker and re-reviewed).
 - [x] Final manual implementation review.
-- [ ] Commit and git-cc push (blocked because core touched files already contain unrelated user changes; committing whole files would violate ownership preservation).
+- [ ] Commit and legacy remote push (blocked because core touched files already contain unrelated user changes; committing whole files would violate ownership preservation).
 
 ## Codex review feedback — 2026-07-13
 

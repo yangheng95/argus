@@ -46,7 +46,7 @@ the only local state indicators.
   from process start.
 - Pass criteria: focused source tests, Overlay typecheck/build, real rendered
   height/border assertions, dark screenshot review, spec health, diff review,
-  task-owned commit, and git-cc push.
+  task-owned commit, and legacy remote push.
 
 ## Progress
 
@@ -67,9 +67,9 @@ the only local state indicators.
 - PASS: `workspace-surface-continuity-browser.test.ts`; exact header-height
   equality and zero Dock border passed in light, dark, and VS Code dark themes.
 - PASS: `historical-docs-links.test.ts` and `git diff --check`.
-- PASS: git-cc pre-push SDK import, AI runtime, monorepo typecheck,
+- PASS: legacy remote pre-push SDK import, AI runtime, monorepo typecheck,
   API route inventory, generated API docs, Overlay i18n, and secret scan;
-  functional commit `e63ae02a14` reached `myhexin/v0.0.3beta`.
+  functional commit `e63ae02a14` reached `legacy-remote/v0.0.3beta`.
 - Visual review PASS: `.scratch/codex-message-header-toolbar-open.png` shows the
   real Dock action row aligned with the Chat header and no horizontal seam;
   `.scratch/workspace-surface-continuity-dark.png` confirms the aligned fused

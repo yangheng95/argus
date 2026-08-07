@@ -38,7 +38,7 @@ Owner: Codex
 - Do not add, modify, update, or run User Interface automation tests.
 - Preserve the unrelated local modification in
   `packages/opencorvus/src/skill/builtin-payload.ts`.
-- Commit subjects begin with `dsw-33987`; push only to `myhexin/v0.0.30beta`.
+- Commit subjects begin with `dsw-33987`; push only to `legacy-remote/v0.0.30beta`.
 
 ### Sources read
 
@@ -130,7 +130,7 @@ whose current model authority belongs to the Task root Session.
    suites, OpenCorvus typecheck, required documentation checks, and
    `git diff --check`.
 6. Review the full diff, obtain a read-only Claude Code review, resolve every
-   finding, commit only task-owned files, fetch/converge, and push to git-cc.
+   finding, commit only task-owned files, fetch/converge, and push to legacy remote.
 
 ## Implementation progress
 

@@ -38,8 +38,8 @@ The user supplied two current Overlay screenshots and requested:
 - Do not restart, refresh, close, or otherwise disturb the user's running
   OpenCorvus/Overlay process. Playwright runs through Node, not Bun.
 - No mobile or tablet scope is authorized.
-- Commit subjects start with `dsw-33987`; deliver through the `myhexin`
-  git-cc remote.
+- Commit subjects start with `dsw-33987`; deliver through the `legacy-remote`
+  legacy remote.
 
 ### Sources read
 
@@ -175,7 +175,7 @@ Primary references:
    visual mismatch, and rerun the affected checks.
 5. Run documentation health, `git diff --check`, and a second source review;
    update this record with exact evidence, commit, fetch/converge, and push to
-   `myhexin`.
+   `legacy-remote`.
 
 ## Verification Plan
 

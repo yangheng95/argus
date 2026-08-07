@@ -31,7 +31,7 @@ Status: implemented and verified on 2026-08-01.
 - Preserve manifest v1 and the existing `depends_on` DAG semantics. Do not add `parallel`, phase, optional-node, active-workflow, step-state, auto-advance, fallback, or Host scheduling gates.
 - Keep `prompt_profile.active` as the only active expert-squad selection source.
 - Increment the renamed package version using the canonical daily revision format.
-- Commit subject starts with `dsw-33987` and push the current main delivery branch to `myhexin`.
+- Commit subject starts with `dsw-33987` and push the current main delivery branch to `legacy-remote`.
 
 ### Read material and full-repository search
 

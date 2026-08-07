@@ -1,6 +1,6 @@
 # Conversation Artifact interaction and file-review design
 
-Status: Implementation verified; git-cc push pending
+Status: Implementation verified; legacy remote push pending
 Date: 2026-08-06
 Owner: Codex
 
@@ -21,7 +21,7 @@ Owner: Codex
 5. The terminal Conversation file-change card keeps one canonical change-group projection, shows compact per-file statistics, and makes each row open Review with that exact group and path selected.
 6. Hydration and live terminal refresh use the same server projection and the same Artifact/file identities.
 7. Positive non-User Interface (UI) contracts cover exact Task ownership, Engine Artifact reads, snapshot inventory reads, resource reads, and exact file-focus intent. UI behavior is accepted only through a real running page, interaction, screenshot inspection, correction, and retest.
-8. Typecheck, production build, route/document generation, localization, document health, final diff review, commit, and git-cc push succeed.
+8. Typecheck, production build, route/document generation, localization, document health, final diff review, commit, and legacy remote push succeed.
 
 ### Hard constraints
 
@@ -65,7 +65,7 @@ The user requested an independent audit after the first implementation. Three re
 - The Conversation route exposes the general reader's `materialized_file` write mode even though this surface is read-only.
 - Exact Review focus uses one transient global event; missing/not-yet-resolved rows throw outside a visible error surface and the intent is not replayed.
 - The recorded positive contract covers only one Engine Artifact read although acceptance requires exact ownership, snapshot, text-resource, binary-resource, pagination, and file-focus contracts.
-- The recorded implementation status overstates delivery while git-cc has not accepted the branch.
+- The recorded implementation status overstates delivery while legacy remote has not accepted the branch.
 
 The audit also raised two points that are not accepted as root defects: canonical Task media types forbid parameters, so parameterized media dispatch is outside this contract; Task-scoped Artifact read is an existing catalog authority rather than a new confidentiality boundary, so Completion Decision remains the Conversation selection authority and is not converted into a host workflow gate.
 
@@ -78,7 +78,7 @@ The audit also raised two points that are not accepted as root defects: canonica
 5. The Overlay consumes the backend-validated snapshot manifest contract without introducing a second handwritten schema; the on-disk design wording matches the actual trust boundary.
 6. Positive non-UI tests cover Engine Artifact, snapshot manifest, UTF-8 paginated text resource, binary resource transport, exact Task ownership, and durable file-focus resolution. No UI or negative tests are added or run.
 7. Real-page manual verification explicitly covers text → binary → text switching, rapid resource switching/collapse, and exact Review focus from a freshly closed Review surface.
-8. Only after all checks, second review, commit, and git-cc push succeed may this record return to `Implemented and verified`.
+8. Only after all checks, second review, commit, and legacy remote push succeed may this record return to `Implemented and verified`.
 
 ## Root cause
 
@@ -112,13 +112,13 @@ Render each terminal file row with the shared button/file-row primitives. Its ac
 
 ## Implementation and verification order
 
-1. Commit this design and attempt the required git-cc baseline push.
+1. Commit this design and attempt the required legacy remote baseline push.
 2. Add the strict read response schema, route, service, and positive backend contracts for Engine Artifact, snapshot, text resource, and binary resource reads.
 3. Add the inline inspector, exact resource navigation, localization, and styles using existing primitives.
 4. Extend Review focus intent and convert terminal file rows to exact buttons.
 5. Run focused non-UI contracts, package typechecks, Overlay production build, route/document checks, localization, and document-health checks.
 6. Start an isolated real complete Overlay page with real Task data, open an Engine Artifact, inspect a snapshot resource, activate an exact changed file, capture screenshots, inspect them manually, correct the implementation, and repeat.
-7. Perform a second source/diff review, update this record with evidence, commit with the `dsw-33987` prefix, and push the current branch to `myhexin` without bypassing hooks.
+7. Perform a second source/diff review, update this record with evidence, commit with the `dsw-33987` prefix, and push the current branch to `legacy-remote` without bypassing hooks.
 
 ## Delivered implementation
 
@@ -169,6 +169,6 @@ An isolated real OpenCorvus server, database, Task, Mission, and Vite Overlay we
 ### Delivery state
 
 - Implementation commit `1290d85b91` and remote-convergence merge commit `9ddf300e81` both use the required `dsw-33987` prefix.
-- The latest `myhexin/v0.0.33beta` changes were fetched and merged without conflict before the final push attempts.
+- The latest `legacy-remote/v0.0.33beta` changes were fetched and merged without conflict before the final push attempts.
 - The full pre-push hook passed Software Development Kit (SDK) imports, Artificial Intelligence (AI) runtime ownership, all-package typechecks, route inventory, generated documentation, Overlay internationalization, and secret scanning.
-- Two post-merge push attempts, including an explicit Hypertext Transfer Protocol version 1.1 (HTTP/1.1) attempt, were rejected after the successful hooks because the git-cc endpoint emitted `protocol error: bad line length character: {"co` and closed the connection. A subsequent `git ls-remote` confirmed that the remote remained at `09814d2fe2`; therefore remote delivery is not claimed and this record remains `git-cc push pending`.
+- Two post-merge push attempts, including an explicit Hypertext Transfer Protocol version 1.1 (HTTP/1.1) attempt, were rejected after the successful hooks because the legacy remote endpoint emitted `protocol error: bad line length character: {"co` and closed the connection. A subsequent `git ls-remote` confirmed that the remote remained at `09814d2fe2`; therefore remote delivery is not claimed and this record remains `legacy remote push pending`.

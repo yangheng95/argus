@@ -47,7 +47,7 @@
 - Expert-squad manifest `id` remains the sole installed Squad identity. Display names, directory labels, source digests, and similar strings are not used to guess duplicates.
 - Existing unrelated dirty-worktree changes are user-owned. No reset, stash, new worktree, or destructive recovery may overwrite them.
 - Frontend verification uses Playwright through Node, not Bun, and does not restart or interfere with a running OpenCorvus/Overlay process.
-- Commit subjects use `dsw-33987`; delivery targets the current primary branch on the `myhexin` git-cc remote without bypassing hooks.
+- Commit subjects use `dsw-33987`; delivery targets the current primary branch on the legacy remote without bypassing hooks.
 
 ### Sources read
 
@@ -104,7 +104,7 @@ The change has three direct parts. First, the existing Prompt assigns the Agent 
 3. Overlay focused source/interaction tests.
 4. Node-launched browser test with a real Skill Market screenshot, followed by visual inspection.
 5. Historical-doc links, document health, relevant typechecks, and `git diff --check`.
-6. Independent final diff review, then a scoped commit and `myhexin` push without including unrelated dirty-worktree changes.
+6. Independent final diff review, then a scoped commit and `legacy-remote` push without including unrelated dirty-worktree changes.
 7. Multica adapter/tool/server tests prove exact-ID catalog exclusion, absent `replace`, and duplicate rejection without replacement.
 
 ## Verification results

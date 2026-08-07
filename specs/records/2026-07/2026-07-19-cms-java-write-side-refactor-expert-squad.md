@@ -15,7 +15,7 @@ The supplied delivery scope is four legacy PHP modules and their operations user
 ### Acceptance Criteria
 
 - Instantiate `C:/Users/chuan/myhexin-local/cms-system-refactor` as a Git superproject whose explicit submodules are `flashcms`, `server-seed`, `media-source-server`, and `dictionary-server`.
-- Install one project Expert Squad package with manifest ID `cms-java-refactor` under `C:/Users/chuan/myhexin-local/cms-system-refactor/.opencorvus/expert-squads/myhexin/cms-java-refactor/`.
+- Install one project Expert Squad package with manifest ID `cms-java-refactor` under `C:/Users/chuan/myhexin-local/cms-system-refactor/.opencorvus/expert-squads/legacy-remote/cms-java-refactor/`.
 - Create the package through `@opencorvus-ai/sdk/expert-squad-authoring`; do not hand-build a second schema, loader, installer, or active selection path.
 - Provide concrete selector guidance, Orchestrator coordination, dynamic cross-repository roles, immutable virtual-workflow guidance, and one package-owned Skill named `cms-java-refactor-method`.
 - Make the Skill define an evidence-first, vertical-slice migration method covering legacy PHP behavior, Java read/write contracts, persistence and side effects, the operations frontend, tests, cutover, deletion of the retired PHP write path, and post-change review.
@@ -32,7 +32,7 @@ The supplied delivery scope is four legacy PHP modules and their operations user
 - Do not create or switch worktrees. Do not restart, reload, close, or otherwise interfere with a running OpenCorvus or Overlay process.
 - Preserve the existing OpenCorvus dirty worktree. The new package is project-local and must not alter the repository payload or the concurrently edited `packages/opencorvus/src/expert-squad/payload.ts`.
 - Any code/package change requires focused regression tests. Specs remain under `specs/`, and indexes plus documentation-health checks must stay synchronized.
-- New commits on `v0.0.9beta` must start with `dsw-33987` and push to `myhexin`, subject to the repository hooks.
+- New commits on `v0.0.9beta` must start with `dsw-33987` and push to `legacy-remote`, subject to the repository hooks.
 
 ### Sources Read
 
@@ -50,7 +50,7 @@ The supplied delivery scope is four legacy PHP modules and their operations user
 - `specs/artifacts/portable-expert-squad-template/**`
 - `packages/sdk/js/src/expert-squad-authoring.ts`
 - `packages/web/src/content/docs/zh-cn/agents.mdx`
-- Current project packages under `.opencorvus/expert-squads/**`, especially the package-owned Skill and projection patterns in `myhexin/mirror-watch`.
+- Current project packages under `.opencorvus/expert-squads/**`, especially the package-owned Skill and projection patterns in `legacy-remote/mirror-watch`.
 
 ### Whole-Repository Search Evidence
 
@@ -71,7 +71,7 @@ The supplied delivery scope is four legacy PHP modules and their operations user
 | `ExpertSquadRegistry` | Use unchanged to validate both source and installed package manifests/resources. |
 | `ExpertSquadPackageManager` | Use unchanged for explicit project-scope installation; installation must not activate the package. |
 | `PromptProfileResolver` | Use unchanged to prove active scheduler/worker/Skill projection and inactive isolation. |
-| `cms-system-refactor/.opencorvus/expert-squads/myhexin/cms-java-refactor` | Add as the canonical installed project package. |
+| `cms-system-refactor/.opencorvus/expert-squads/legacy-remote/cms-java-refactor` | Add as the canonical installed project package. |
 | `packages/opencorvus/src/expert-squad/payload.ts` | Leave untouched; a project-local package is not an application-distributed payload source. |
 | Package-focused tests | Add a concrete target-project contract test and run it against the current Registry/Resolver implementation. |
 | Overlay/catalog | No implementation change; validate through existing catalog/resolver tests rather than adding a UI-only path. |
@@ -115,7 +115,7 @@ The shared `cms-java-refactor-method` Skill is the single model-readable method 
 
 ## Initial Non-Accepted Boundary
 
-The four supplied repositories and their build manifests are now present in the target superproject. The parent-object Java repository is still an explicit missing Task input. Full runtime acceptance additionally depends on access to MyHexin's private Maven, Composer, Docker, configuration, database, and service infrastructure; each unavailable dependency must remain visible rather than being substituted.
+The four supplied repositories and their build manifests are now present in the target superproject. The parent-object Java repository is still an explicit missing Task input. Full runtime acceptance additionally depends on access to legacy-remote's private Maven, Composer, Docker, configuration, database, and service infrastructure; each unavailable dependency must remain visible rather than being substituted.
 
 ## Implementation Evidence
 
@@ -123,7 +123,7 @@ The four supplied repositories and their build manifests are now present in the 
 - Committed the complete target-project closure locally as `0da4597` (`dsw-33987 instantiate CMS Java refactor project`).
 - Committed this OpenCorvus delivery record locally as `01ea00f01c` (`dsw-33987 record CMS refactor expert squad`).
 - Authored the package through `writeExpertSquadPackage`, validated the generated source through `ExpertSquadPackageManager.validateDirectory`, and installed it with `ExpertSquadPackageManager.importDirectory` at explicit project scope with `replace: false`.
-- Installed manifest ID `cms-java-refactor`, ten dynamic agents, Orchestrator guidance, selector guidance, the immutable `dictionary-first-write-migration` virtual workflow, and the package-owned `cms-java-refactor-method` Skill under `.opencorvus/expert-squads/myhexin/cms-java-refactor/`.
+- Installed manifest ID `cms-java-refactor`, ten dynamic agents, Orchestrator guidance, selector guidance, the immutable `dictionary-first-write-migration` virtual workflow, and the package-owned `cms-java-refactor-method` Skill under `.opencorvus/expert-squads/legacy-remote/cms-java-refactor/`.
 - Selected the package only through `.opencorvus/opencorvus.jsonc` → `prompt_profile.active`. Runtime Registry/Resolver validation observed the exact active identity, all ten agents, the declared Skill projection, and no CMS package leakage when `general` was selected.
 - Installed Eclipse Temurin Java Development Kit (JDK) 8u492 and Apache Maven 3.9.16. Maven 3.9.16 was downloaded from the official Apache distribution, its SHA-512 digest was verified, and its `bin` directory was added to the user path.
 - Configured Maven's single mirror at the Nexus repository reported by the internal service API: `http://repositories.myhexin.com:8081/repository/maven-public`. No credentials, alternate repository, or fallback mirror were invented.
@@ -146,10 +146,10 @@ The first source-package validation rejected two non-canonical `depends_on` arra
 Full application-environment and migration acceptance is **not achieved** in this preparation task:
 
 1. The parent-object Java repository URL has not been supplied, so that domain cannot be inventoried or built.
-2. The reachable Nexus `maven-public` group does not contain `com.myhexin.b2cweb.boot:hexin-boot-starters:pom:2.3.4-M3` or `2.3.5-M1`. The repository-provided legacy Nexus endpoint timed out, and the exact-artifact Nexus search returned no item. Consequently all three Java deploy builds remain externally blocked.
+2. The reachable Nexus `maven-public` group does not contain `com.legacy-remote.b2cweb.boot:hexin-boot-starters:pom:2.3.4-M3` or `2.3.5-M1`. The repository-provided legacy Nexus endpoint timed out, and the exact-artifact Nexus search returned no item. Consequently all three Java deploy builds remain externally blocked.
 3. `flashcms` requires the private Docker base `hub-dev.hexin.cn/website/flashcms:latest` plus private configuration, database, and service dependencies. Docker, PHP, and Composer were not installed as substitutes for that declared runtime, and the legacy Vue 2/Webpack projects have not yet produced executable evidence for a safe Node version.
 4. The new superproject has no configured delivery remote. Its local commit can be created, but it cannot be pushed until an authorized remote is supplied.
-5. OpenCorvus push hooks passed SDK import, AI runtime, eleven-package typecheck, API route, documentation, Overlay internationalization, and secret-scan checks, but git-cc rejected the push as non-fast-forward because `myhexin/v0.0.9beta` is three commits ahead. The current worktree also contains more than one hundred unrelated staged files. Merging now would risk including another task's staged changes, so no merge, force push, reset, stash, or index rewrite was performed.
+5. OpenCorvus push hooks passed SDK import, AI runtime, eleven-package typecheck, API route, documentation, Overlay internationalization, and secret-scan checks, but legacy remote rejected the push as non-fast-forward because `legacy-remote/v0.0.9beta` is three commits ahead. The current worktree also contains more than one hundred unrelated staged files. Merging now would risk including another task's staged changes, so no merge, force push, reset, stash, or index rewrite was performed.
 
 These blockers affect runtime/build readiness, not the completed project structure, Expert Squad package, active selection, package contract tests, or SDK-path validation.
 
@@ -385,9 +385,9 @@ These blockers affect runtime/build readiness, not the completed project structu
   results; an explicit authorization seam; a Goal 2 command port; controller orchestration; and nine positive/negative
   test methods. The API module clean-compiled 12 Java 8 sources.
 - Deploy focused tests did not enter `testCompile`: the original private repository still lacks
-  `com.myhexin.b2cweb.boot:hexin-boot-starters:pom:2.3.5-M1`, and the POM for
-  `com.myhexin.zixun.boot:response-spring-boot-starter:1.3.3.RELEASE` is unavailable. A forced `-U` retry against the
-  unchanged `myhexin-maven-public` configuration reproduced the blocker. Actual executed test count is zero; the worker
+  `com.legacy-remote.b2cweb.boot:hexin-boot-starters:pom:2.3.5-M1`, and the POM for
+  `com.legacy-remote.zixun.boot:response-spring-boot-starter:1.3.3.RELEASE` is unavailable. A forced `-U` retry against the
+  unchanged `legacy-remote-maven-public` configuration reproduced the blocker. Actual executed test count is zero; the worker
   explicitly did not claim authorization enforcement, persistence, DB writes, or migration completion.
 - Reported worktree state is one tracked modification plus fourteen untracked files, all under accepted Goal 1 paths, with
   no commit, push, or worktree creation. This remains an implementation result with an explicit private-dependency
@@ -611,7 +611,7 @@ restart remains a separate action and is not authorized by this heartbeat.
   correction of two real implementation defects: update SQL incorrectly changed `ctime`, and Redis invalidation occurred
   before generated-hash finalization. The final focused API matrix passes 9/9.
 - This Task does not complete the dictionary vertical slice. Deploy tests still execute zero tests because private Maven
-  parent `com.myhexin.b2cweb.boot:hexin-boot-starters:pom:2.3.5-M1` is unavailable. Spring assembly, real DB/MyISAM and
+  parent `com.legacy-remote.b2cweb.boot:hexin-boot-starters:pom:2.3.5-M1` is unavailable. Spring assembly, real DB/MyISAM and
   Redis effects, production authorization wiring, the operations UI, FlashCMS writer retirement and PHP cutover remain
   unproved or undone. These are explicit later acceptance owners, not hidden success.
 - The project Expert Squad was repaired at local superproject commit `26bc92c` (`dsw-33987 refine CMS squad blocker
@@ -872,7 +872,7 @@ restart remains a separate action and is not authorized by this heartbeat.
   execution entries; the installed package manifest, README, method Skill, Orchestrator, Architect, Workload, frontend,
   verifier and integrity overlays; and `test/cms-java-refactor-package.test.ts`.
 - Whole-package search command:
-  `rg -n --hidden "temporal ownership lease|live owner|authoritative|redispatch|project-scoped|mailbox|owned-path|contract" .opencorvus/expert-squads/myhexin/cms-java-refactor test/cms-java-refactor-package.test.ts`.
+  `rg -n --hidden "temporal ownership lease|live owner|authoritative|redispatch|project-scoped|mailbox|owned-path|contract" .opencorvus/expert-squads/legacy-remote/cms-java-refactor test/cms-java-refactor-package.test.ts`.
   It found Goal-local temporal lease language on every relevant prompt, but no rule that one overlapping product surface
   belongs to exactly one active Task across the project, no pre-dispatch reconciliation of project Mailbox evidence, and
   no rule preventing a new Phase/Task from duplicating an unfinished domain surface. Generic Registry, Manager, Resolver,
@@ -953,7 +953,7 @@ restart remains a separate action and is not authorized by this heartbeat.
 - Callpoint searches:
   `rg -n "manage_task|ManageTask|OrchestratorNoDecisionStopError|NoDecision" packages/opencorvus/src packages/opencorvus/test`
   and
-  `rg -n --hidden "freeze|root Mission|manage_task|calling any tool|decision contract|project-wide product-surface ownership" .opencorvus/expert-squads/myhexin/cms-java-refactor test/cms-java-refactor-package.test.ts`.
+  `rg -n --hidden "freeze|root Mission|manage_task|calling any tool|decision contract|project-wide product-surface ownership" .opencorvus/expert-squads/legacy-remote/cms-java-refactor test/cms-java-refactor-package.test.ts`.
   They show the exact package gap: `manage_task` is projected, the host contract is already explicit, but the CMS package
   never says that root-Mission reconciliation must end in a real lifecycle tool result.
 - No independent Agent is used. No host core, Task schema, scheduler decision contract, retry gate, state machine, fallback
@@ -1030,7 +1030,7 @@ restart remains a separate action and is not authorized by this heartbeat.
   `specs/README.md`; `specs/current/architecture/04-extensions.md`; the July record index; the installed package README,
   method Skill, Orchestrator, behavior-verifier and integrity-reviewer overlays; manifest; and focused package tests.
 - Whole-package inventory command:
-  `rg -n --hidden "fact-check|fact check|cross-goal|material|correction|invalidate|falsif|block|reopen|pass|fail|complete_goal|modify_goal" .opencorvus/expert-squads/myhexin/cms-java-refactor test/cms-java-refactor-package.test.ts`.
+  `rg -n --hidden "fact-check|fact check|cross-goal|material|correction|invalidate|falsif|block|reopen|pass|fail|complete_goal|modify_goal" .opencorvus/expert-squads/legacy-remote/cms-java-refactor test/cms-java-refactor-package.test.ts`.
   It finds current-Goal scoping and visible cross-goal reporting, but no acceptance propagation rule. No independent Agent
   is used for this focused correction.
 
@@ -1224,14 +1224,14 @@ restart remains a separate action and is not authorized by this heartbeat.
   No second wake is issued while the same Mission may still be processing; the next heartbeat must compare for a new
   verifier dispatch/current-Goal matrix before deciding wait, retry or further infrastructure investigation.
 
-### Git-CC convergence and continued bounded wait
+### legacy remote convergence and continued bounded wait
 
-- The local branch was clean but `myhexin/v0.0.10beta` was two commits ahead. After fetch and review, the remote inline
+- The local branch was clean but `legacy-remote/v0.0.10beta` was two commits ahead. After fetch and review, the remote inline
   retry-evidence repair was merged without conflict; the unpushed merge subject was amended to the required `dsw-33987`
   prefix. The remote increment did not overwrite the CMS retry/projection paths or record.
 - Post-merge validation passes all eleven workspace typechecks and 102 focused merged-change/retry/queue/dispatch/deletion
   tests with 4,694 assertions. The formal pre-push hook then passed SDK imports, AI runtime, eleven-package typecheck, API
-  route inventory, generated docs, Overlay internationalization and secret scan. Git-CC advanced from `61ffd58366` to
+  route inventory, generated docs, Overlay internationalization and secret scan. legacy remote advanced from `61ffd58366` to
   merge commit `ac5d1af5ed`; no force push or hook bypass was used.
 - A later bounded Mailbox snapshot still reports zero items newer than `pev_f7c34d6ab0016TWse9488ctksG` (`unread=147`,
   `active=147`). The same Mission wake has not yet emitted a visible recovery decision. This remains a wait condition for
@@ -1314,7 +1314,7 @@ restart remains a separate action and is not authorized by this heartbeat.
 
 ### Mission compaction repair deployment
 
-- Commit `8864532e3b` (`dsw-33987 make compaction handoffs convergent`) was pushed to git-cc `myhexin/v0.0.10beta` after
+- Commit `8864532e3b` (`dsw-33987 make compaction handoffs convergent`) was pushed to legacy remote `legacy-remote/v0.0.10beta` after
   the full pre-push hook passed SDK imports, AI runtime, eleven-package typecheck, API route inventory, generated docs,
   Overlay internationalization and secret scan.
 - The archive runtime retained its exact `fde22206db` source baseline plus the previously deployed retry/projection hunks.
@@ -1358,7 +1358,7 @@ restart remains a separate action and is not authorized by this heartbeat.
   full-selection failure was an isolated temporary Git-index synchronization failure while test/typecheck/docs commands ran
   concurrently; the exact original test passed alone and the entire selection then passed serially. OpenCorvus TypeScript,
   document health 82/82 with 1,354 assertions, and diff checks pass.
-- Commit `324718cf34` (`dsw-33987 preserve captured compaction handoff`) was pushed to git-cc after the full pre-push hook
+- Commit `324718cf34` (`dsw-33987 preserve captured compaction handoff`) was pushed to legacy remote after the full pre-push hook
   passed. Only its tested `compaction.ts` semantic hunk was applied to the archive runtime; archive TypeScript passed.
 - Exact process verification preceded stopping Codex-owned PID `17204`. Replacement backend PID `1176` is healthy on the
   same port and formal database; Vite and Overlay were not touched.
@@ -1413,8 +1413,8 @@ restart remains a separate action and is not authorized by this heartbeat.
 
 ### Streamed StructuredOutput single-object repair deployment
 
-- Commit `55e2ea4264` (`dsw-33987 keep streamed compaction input singular`) was pushed to git-cc
-  `myhexin/v0.0.10beta`. The full pre-push hook passed SDK imports, AI runtime, all eleven package typechecks, API route
+- Commit `55e2ea4264` (`dsw-33987 keep streamed compaction input singular`) was pushed to legacy remote
+  `legacy-remote/v0.0.10beta`. The full pre-push hook passed SDK imports, AI runtime, all eleven package typechecks, API route
   inventory, generated docs, Overlay internationalization and secret scan.
 - Only the tested three-line prompt-contract hunk was applied to the persistent `fde22206db` archive runtime. Archive
   OpenCorvus TypeScript passed. Port 7878 and command-line identity both proved Codex-owned PID `1176`; only that backend
@@ -1498,7 +1498,7 @@ restart remains a separate action and is not authorized by this heartbeat.
 
 ### Cross-session Orchestrator context repair deployment
 
-- Commit `9b16a1e677` (`dsw-33987 bind cross-session orchestrator continuation`) was pushed to git-cc after the full pre-push
+- Commit `9b16a1e677` (`dsw-33987 bind cross-session orchestrator continuation`) was pushed to legacy remote after the full pre-push
   hook passed SDK imports, AI runtime, eleven-package typecheck, API routes, generated docs, Overlay internationalization
   and secret scan. Only the tested prompt/loop session-scope hunk was applied to the persistent archive runtime; archive
   OpenCorvus TypeScript passed.
@@ -1578,7 +1578,7 @@ restart remains a separate action and is not authorized by this heartbeat.
 
 ### Durable lifecycle repair deployment
 
-- Commit `e6b927bef0` (`dsw-33987 restore durable worker terminal evidence`) was pushed to git-cc. The full pre-push hook
+- Commit `e6b927bef0` (`dsw-33987 restore durable worker terminal evidence`) was pushed to legacy remote. The full pre-push hook
   passed SDK imports, AI runtime, all eleven package typechecks, API routes, generated docs, Overlay internationalization
   and secret scan.
 - Only the tested `Session.snapshotLatestAssistant` production hunk was applied to the persistent archive runtime; archive
@@ -1709,7 +1709,7 @@ restart remains a separate action and is not authorized by this heartbeat.
 
 ### Historical terminal fact-check target repair deployment
 
-- Commit `e776aa5f83` (`dsw-33987 admit durable fact check targets`) was pushed to git-cc `myhexin/v0.0.10beta`.
+- Commit `e776aa5f83` (`dsw-33987 admit durable fact check targets`) was pushed to legacy remote `legacy-remote/v0.0.10beta`.
   The complete pre-push hook passed SDK imports, AI runtime, all eleven package typechecks, API routes, generated docs,
   Overlay internationalization and secret scan.
 - Only the tested fact-check target-resolution production hunk was applied to the persistent `fde22206db` archive
@@ -1786,8 +1786,8 @@ restart remains a separate action and is not authorized by this heartbeat.
 
 ### Durable Orchestrator decision-epoch repair deployment
 
-- Commit `61774ce0db` (`dsw-33987 preserve orchestrator decision epochs`) was pushed to git-cc
-  `myhexin/v0.0.10beta`. The full pre-push hook passed SDK imports, AI runtime, all eleven package typechecks, API routes,
+- Commit `61774ce0db` (`dsw-33987 preserve orchestrator decision epochs`) was pushed to legacy remote
+  `legacy-remote/v0.0.10beta`. The full pre-push hook passed SDK imports, AI runtime, all eleven package typechecks, API routes,
   generated docs, Overlay internationalization and secret scan.
 - Only the tested lifecycle helper, fact-check snapshot refactor and Orchestrator epoch-selection hunk were applied to the
   persistent `fde22206db` archive runtime. Archive OpenCorvus TypeScript passed. Port and command-line identity proved PID

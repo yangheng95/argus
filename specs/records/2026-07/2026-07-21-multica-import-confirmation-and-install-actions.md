@@ -16,7 +16,7 @@
 4. Market install actions remain two explicit scopes, retain their exact global/project request values, expose full localized accessible labels, and use concise visible labels in English.
 5. The two market actions use the existing `Button` and `Icon` primitives with clear surface hierarchy and bounded desktop-row geometry; no new primitive, alternate install path, responsive scope, or direct API call is introduced.
 6. Unit, browser, localization, type, document-health, screenshot, and second-review evidence cover the changed behavior.
-7. Commit subjects use `dsw-33987`; only this task's changes are committed and pushed to `myhexin/v0.0.13beta`.
+7. Commit subjects use `dsw-33987`; only this task's changes are committed and pushed to `legacy-remote/v0.0.13beta`.
 
 ### Hard constraints
 
@@ -80,7 +80,7 @@ The Expert Squad Market already renders real `Button` primitives, but the `sm` o
 3. Render the market scope actions inside one dedicated group with existing `Button`/`Icon` primitives and unchanged scope callbacks.
 4. Add focused unit and real browser acceptance coverage, including request-count, keyboard focus, accessible-name, geometry, and screenshot assertions.
 5. Run Overlay unit tests, targeted Node browser tests, i18n, typecheck, spec health, and visual review; fix any mismatch and repeat.
-6. Review the exact task diff, append verification evidence here, commit only task-owned hunks, and push the current branch to git-cc.
+6. Review the exact task diff, append verification evidence here, commit only task-owned hunks, and push the current branch to legacy remote.
 
 ## Verification ledger
 

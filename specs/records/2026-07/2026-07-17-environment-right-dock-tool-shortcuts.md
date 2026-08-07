@@ -6,12 +6,12 @@
 | --- | --- |
 | User request | Put every Right Dock component tool except Terminal and Mailbox in the environment-information popover shown by the supplied Codex reference, with the same presentation and opening behavior as Goals, Architecture, and Requirements. |
 | Acceptance criteria | Browser, Review, Files, and Screenshots appear as peer environment navigation rows beside the existing task-scope shortcuts. Activating any row closes the popover, opens the canonical Right Dock, and selects the existing panel. Requirements, Architecture, and Goals retain their data-owned visibility and summaries. Terminal and Mailbox remain excluded from the environment list. No second panel state, panel body, catalog, or navigation event is introduced. Focused source tests, Overlay TypeScript/internationalization/build, Node-launched browser behavior, a task-scoped screenshot, manual visual review, document health, and a second diff review pass. |
-| Hard constraints | Desktop-only. Keep `RIGHT_DOCK_CATALOG`, `centerWorkbenchPanels`, `openRightActivity`, Kobalte Popover, and shared Button as the only catalog/state/interaction owners. Reuse the existing environment row geometry; do not add a second Dock registry, duplicated component body, fallback, temporary iframe, or synthetic UI state. Playwright runs with Node. Do not restart, refresh, close, or otherwise interfere with the user's running OpenCorvus/Overlay. Preserve unrelated dirty worktree changes and stage only task-owned files/hunks. Commit subjects use `dsw-33987`; push only to `myhexin`. |
+| Hard constraints | Desktop-only. Keep `RIGHT_DOCK_CATALOG`, `centerWorkbenchPanels`, `openRightActivity`, Kobalte Popover, and shared Button as the only catalog/state/interaction owners. Reuse the existing environment row geometry; do not add a second Dock registry, duplicated component body, fallback, temporary iframe, or synthetic UI state. Playwright runs with Node. Do not restart, refresh, close, or otherwise interfere with the user's running OpenCorvus/Overlay. Preserve unrelated dirty worktree changes and stage only task-owned files/hunks. Commit subjects use `dsw-33987`; push only to `legacy-remote`. |
 | Supplied evidence | `C:/Users/10132/AppData/Local/Temp/codex-clipboard-9dcaeddc-df53-4f39-b075-4a9250f4a16c.png` shows the compact Environment information surface and the navigation/resource region immediately before Sources. |
 | Sources read | `AGENTS.md`; Browser skill; `specs/current/architecture/{07-panel,99-principles}.md`; `2026-07-08-right-toolbar-runtime-status-panel-merge.md`; `2026-07-15-codex-sidebar-search-environment-parity.md`; `2026-07-16-overlay-worktree-shortcuts-chat-files-and-button-system.md`; `2026-07-17-environment-popover-codex-completion.md`; `2026-07-17-right-dock-add-menu-disabled-state-color.md`; current `App`, `main`, `RightDock`, `TaskDirBar`, environment styles, source tests, and browser tests. |
 | Whole-repository grep | Enumerated every `onOpenTaskScopePanel`, `ProjectTaskScopePanel`, `taskScopeShortcuts`, `project-task-scope-*`, `RIGHT_DOCK_CATALOG`, `RightDockPanel`, `openRightActivity`, `openCenterWorkbenchPanel`, environment-popover style/test selector, and Browser/Review/Files/Screenshots locale label call site. `TaskDirBar` is the only environment renderer; `RightDock` owns the only user-addable catalog; `main.openRightActivity` owns the canonical open/select path. |
 | Independent agent feedback | None. The user did not request sub-agents, and current collaboration policy does not authorize unrequested delegation. |
-| Git baseline | After fetching `myhexin`, `HEAD` and `myhexin/work-v0.0.8beta-yr-0717` are equal (`0 0`) at `0b0c686c8`. The worktree already contains unrelated Overlay style/browser/spec changes; they are preserved and excluded from this task's commit. |
+| Git baseline | After fetching `legacy-remote`, `HEAD` and `legacy-remote/work-v0.0.8beta-yr-0717` are equal (`0 0`) at `0b0c686c8`. The worktree already contains unrelated Overlay style/browser/spec changes; they are preserved and excluded from this task's commit. |
 
 ## Root cause
 
@@ -36,7 +36,7 @@ The environment popover currently models only task-scope navigation as shortcuts
 2. Replace task-scope-only shortcut naming with one generic environment tool list and widen the existing callback type through `TaskDirBar`, `App`, and `main`.
 3. Update source and Node-launched browser regressions for all visible tools, exclusions, board-owned task-scope visibility, static-tool navigation, and screenshot evidence.
 4. Run focused tests, Overlay type/i18n/build checks, document health, and the real browser scenario; inspect the screenshot and correct visual defects before acceptance.
-5. Perform a second source/diff review, update this record with evidence, selectively commit task files with `dsw-33987`, and push the current branch to `myhexin`.
+5. Perform a second source/diff review, update this record with evidence, selectively commit task files with `dsw-33987`, and push the current branch to `legacy-remote`.
 
 ## Verification plan
 
@@ -57,7 +57,7 @@ git diff --check
 - [x] Implemented the single-source environment tool projection.
 - [x] Updated focused and real-browser regressions.
 - [x] Completed screenshot review; the accepted row geometry required no further visual correction.
-- [x] Completed second diff/source review and isolated the task-owned index for git-cc delivery.
+- [x] Completed second diff/source review and isolated the task-owned index for legacy remote delivery.
 
 ## Verification evidence
 

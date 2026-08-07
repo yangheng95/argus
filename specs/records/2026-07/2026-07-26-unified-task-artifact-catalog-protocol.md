@@ -38,7 +38,7 @@ long-horizon orchestration:
 - an independent Agent must review the technical route and final implementation
   repeatedly until no known issue remains;
 - the completed work must be committed with the `dsw-33987` prefix and pushed
-  to `myhexin`.
+  to `legacy-remote`.
 
 The user also asked why Artifacts are not stored on disk. The verified answer is
 that they already are persisted in two forms:
@@ -1127,7 +1127,7 @@ These are evidence-flow repairs, not retry gates or automatic acceptance.
   resources;
 - distinguish valid defaults from missing/corrupt/wrong/stuck evidence;
 - repeat independent review until no known issue remains;
-- commit task-owned files and push through normal hooks to `myhexin`.
+- commit task-owned files and push through normal hooks to `legacy-remote`.
 
 ## Test matrix
 

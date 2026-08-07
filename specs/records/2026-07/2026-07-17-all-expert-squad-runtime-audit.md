@@ -70,7 +70,7 @@ The repository-wide grep for `expert-squad`, `packageTools`, `package_tool_refs`
 2. For all five identities, resolve scheduler and all workers; materialize package tools and provider-prepare every materialized instance.
 3. Assert exact package-tool reference/provider-name parity and collect an aggregate set proving all five declared tool refs were reached.
 4. Run focused and complete expert-squad suites, typecheck, and documentation health tests.
-5. Record final evidence, commit with the required `dsw-33987` prefix, and push the current main delivery branch to `myhexin`.
+5. Record final evidence, commit with the required `dsw-33987` prefix, and push the current main delivery branch to `legacy-remote`.
 
 ## Final evidence
 

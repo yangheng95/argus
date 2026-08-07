@@ -51,7 +51,7 @@
 - Do not touch the unrelated dirty database, route-context, test, or teardown-record files already
   present in the shared worktree.
 - Do not create a worktree. Start browser control with Node.js, never Bun.
-- Commit subjects begin with `dsw-33987`; push the completed task-owned commit to `myhexin`.
+- Commit subjects begin with `dsw-33987`; push the completed task-owned commit to `legacy-remote`.
 
 ### Hard-disk sources read
 
@@ -148,7 +148,7 @@ which means removing only the fresh bootstrap injection would not fix already-ru
 7. Start the real page, interact with every acceptance state, capture task-scoped screenshots,
    inspect them, and tune if needed.
 8. Re-read the final diff and screenshots, fetch/converge, commit only task-owned paths, push to
-   `myhexin`, and verify local/remote convergence.
+   `legacy-remote`, and verify local/remote convergence.
 
 ## Progress
 

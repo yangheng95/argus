@@ -11,7 +11,7 @@
 | Sources read | `AGENTS.md`; Browser control skill and complete selected-browser documentation; `specs/README.md`; `specs/records/2026-07/README.md`; the 2026-07-17 Chat scroll-owner and fixed-layer records; `App.tsx`; `Conversation.tsx`; `main.tsx`; `conversation.css`; composer/layout source tests; `chat-default-assistant-browser.test.ts`; `conversation-agent-rail-scroll-browser.test.ts`; mailbox fixture/error collector; relevant blame and commits `56dd872c3` and `617c824f1`. |
 | Whole-repository search | `rg` enumerated every `chatHomeComposition`, `solidChatComposer`, `data-empty-chat-home`, `conversation-composer-block-size`, `composerMount`, launcher-home computation, Mailbox fixture route, and short/long browser geometry consumer. Production ownership remains singular: `App.tsx` owns DOM order, `main.tsx` derives launcher-home activity, `Conversation.tsx` measures the real composer and projects transcript clearance, and `conversation.css` owns the bottom layer plus the distinct empty-home override. The long task fixture already proves scroll-position invariance; the sparse Assistant fixture is the missing user-visible regression surface and currently has stale Mailbox routes. |
 | Independent agent feedback | None. The user did not request sub-agents, and active policy forbids unrequested delegation. |
-| Git baseline | `HEAD` `edc8e9897` matched `myhexin/work-v0.0.8beta-yr-0717`; the clean pre-change push completed with typecheck, route, docs, i18n, and secret-scan hooks passing and reported everything up to date. |
+| Git baseline | `HEAD` `edc8e9897` matched `legacy-remote/work-v0.0.8beta-yr-0717`; the clean pre-change push completed with typecheck, route, docs, i18n, and secret-scan hooks passing and reported everything up to date. |
 
 ## Causal chain
 
@@ -59,7 +59,7 @@ assertion produces contrary evidence.
    health checks, and `git diff --check`.
 4. Inspect the current-goal sparse-chat and long-chat screenshots at original
    resolution, perform a second source/diff review, record exact results here,
-   then commit and push the completed work to `myhexin`.
+   then commit and push the completed work to `legacy-remote`.
 
 ## Result
 
@@ -100,10 +100,10 @@ Verification results:
   assertions.
 - Historical-links, product-docs single-source, and document-health coverage
   passed: 81 passed, 0 failed, 1,282 assertions.
-- Overlay TypeScript checking passed independently and again in the git-cc
+- Overlay TypeScript checking passed independently and again in the legacy remote
   pre-push hook. The production Vite build passed with only the existing
   large-chunk advisory.
-- The git-cc pre-push hook also passed the full workspace typecheck, route
+- The legacy remote pre-push hook also passed the full workspace typecheck, route
   inventory, API documentation, Overlay i18n, panel i18n, and secret scan.
 
 The adjacent long-conversation Agent Rail browser scenario was also attempted

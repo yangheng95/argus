@@ -10,7 +10,7 @@
 | Sources read               | `AGENTS.md`; Browser skill; supplied screenshot; `specs/current/architecture/12-overlay-card-system.md`; `specs/records/2026-07/2026-07-08-overlay-finished-message-collapse-scroll-bottom.md`; `specs/records/2026-07/2026-07-08-collapsed-card-dynamic-latest-activity.md`; `specs/records/2026-07/2026-07-22-card-expansion-ownership-repair.md`; `ChatBubble.tsx`; `Card.tsx`; `CardHeader.tsx`; `Conversation.tsx`; `conversation-ui.ts`; `card-tree.ts`; `utils/card-tree.ts`; `chat-bubble.css`; focused source and browser tests.                                                                                                                                                                                                                                                                                                                                                                         |
 | Whole-repository grep      | `defaultExpandedForNode` is implemented only in `utils/card-tree.ts` and currently consumed only by `Card.tsx`; `ChatBubble.tsx` is the sole message/Agent bubble renderer and currently has no fold-store calls. `cardExpanded`/`setCardExpanded` are owned by `conversation-ui.ts`; production callers are `Card.tsx`, `GoalGroup.tsx`, `ConversationAgentRail.tsx`, `goal-locate.ts`, plus the new ChatBubble call. `renderAsBubble` routes only `message` and `agent` nodes from `Conversation.tsx`; direct browser-fixture uses are explicit tests. `collapsedActivityPreviewText` and `collectLatestActivityText` are the existing compact-preview pipeline; `agentSummary` is projected by `tree-writer.ts`. Existing regression owners are `card-collapsed-preview.test.ts`, `card-expand-collapse-contract.test.ts`, `chat-bubble.test.ts`, and `browser/chat-bubble-disclosure-button-browser.test.ts`. |
 | Independent agent feedback | None requested; no sub-agent was used.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| Baseline delivery evidence | `git fetch myhexin v0.0.17beta` found the branch two commits ahead. The required pre-change push ran the repository hook but was blocked by nine pre-existing `RunOutput.result` type errors in dirty `packages/opencorvus/src/orchestrator/build-tool.ts`; no task file had been modified at that point.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Baseline delivery evidence | `git fetch legacy-remote v0.0.17beta` found the branch two commits ahead. The required pre-change push ran the repository hook but was blocked by nine pre-existing `RunOutput.result` type errors in dirty `packages/opencorvus/src/orchestrator/build-tool.ts`; no task file had been modified at that point.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 ## Diagnosis
 
@@ -70,7 +70,7 @@ The repair is a projection correction, not a new lifecycle mechanism:
 5. Run focused Bun tests, Overlay typecheck/build, the Node browser test,
    relevant document-health tests, and inspect every produced screenshot.
 6. Perform a second diff review, record validation here, then create a
-   `dsw-33987` scoped commit and retry the git-cc push.
+   `dsw-33987` scoped commit and retry the legacy remote push.
 
 ## Validation
 
@@ -125,10 +125,10 @@ without a header or border shift.
 
 ### Baseline And Residual Dirty-Worktree Evidence
 
-- The mandatory pre-change git-cc push hook was initially blocked by nine
+- The mandatory pre-change legacy remote push hook was initially blocked by nine
   existing `RunOutput.result` type errors in dirty
   `packages/opencorvus/src/orchestrator/build-tool.ts`. Those owning changes
-  converged before final delivery; the final git-cc push passed all package
+  converged before final delivery; the final legacy remote push passed all package
   typechecks, API route checks, docs checks, Overlay i18n, and secret scan.
 - After staging the new record, the combined document-health run passed 81
   assertions and failed only because tracked

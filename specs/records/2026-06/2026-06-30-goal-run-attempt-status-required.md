@@ -39,7 +39,7 @@ Current worktree facts:
   - `dsw-0000 Centralize goal run state projections`
   - `dsw-0000 Reclaim completed goal worktrees immediately`
 - There are unrelated dirty files and one unrelated untracked spec record. This increment must stage only its own hunks.
-- Previous push attempts were blocked by network failure to `origin` and a `myhexin` pre-receive requirement for a real `dsw-*` task id. Do not invent a task id to bypass the remote hook.
+- Previous push attempts were blocked by network failure to `origin` and a `legacy-remote` pre-receive requirement for a real `dsw-*` task id. Do not invent a task id to bypass the remote hook.
 
 Whole-repository grep evidence:
 

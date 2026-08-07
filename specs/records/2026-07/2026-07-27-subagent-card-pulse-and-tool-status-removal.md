@@ -75,7 +75,7 @@ of that later, unrelated virtual-list assertion.
 4. Update the real Vite fixture assertions and capture the target Sub-agent
    card region for visual review.
 5. Run focused tests, Overlay typecheck, required document checks, and a second
-   diff review before committing and synchronizing the branch to git-cc.
+   diff review before committing and synchronizing the branch to legacy remote.
 
 ## Progress
 
@@ -83,11 +83,11 @@ of that later, unrelated virtual-list assertion.
 - [x] Production implementation and regressions complete.
 - [x] Real Vite visual verification and screenshot review complete.
 - [x] Second review complete.
-- [x] Commit and git-cc synchronization complete.
+- [x] Commit and legacy remote synchronization complete.
 - [x] Follow-up evidence and original screenshot re-reviewed.
 - [x] Strengthened whole-surface pulse implemented and regression-tested.
 - [x] Follow-up real Vite screenshot inspected.
-- [x] Follow-up commit and git-cc synchronization complete.
+- [x] Follow-up commit and legacy remote synchronization complete.
 
 ## Verification
 

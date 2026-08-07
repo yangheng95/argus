@@ -239,7 +239,7 @@ makes pointer and keyboard activation equivalent.
    Task navigation, bulk selection, empty/error states, keyboard/focus paths,
    and live updates. Capture and personally inspect task-scoped screenshots.
 8. Correct every visual or interaction mismatch, repeat real-page review, then
-   perform a second source/diff/ownership review before commit and `myhexin`
+   perform a second source/diff/ownership review before commit and `legacy-remote`
    push.
 
 ## Visual Acceptance

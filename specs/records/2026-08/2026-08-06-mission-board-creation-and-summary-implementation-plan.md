@@ -17,7 +17,7 @@
 - Expert Squad selection uses the immutable Mission-held snapshot.
 - Do not add, change, or run User Interface automation tests.
 - Positive non-User-Interface contracts must fail before production implementation is written.
-- Use exact-file staging; preserve unrelated `.superpowers/`; commit subjects begin with `dsw-33987`; push to `myhexin`.
+- Use exact-file staging; preserve unrelated `.superpowers/`; commit subjects begin with `dsw-33987`; push to `legacy-remote`.
 
 ---
 
@@ -136,7 +136,7 @@ function workLedgerProjectDirectories(): string[]
 
 **Interfaces:**
 - Consumes: a real local OpenCorvus server, current compiled Overlay, and isolated current-schema database.
-- Produces: manually inspected desktop evidence and verified git-cc delivery.
+- Produces: manually inspected desktop evidence and verified legacy remote delivery.
 
 - [x] Start the real page against an isolated current-schema database.
 - [x] Confirm the left row shows the running Mission count and hover shows all five counts; capture and personally inspect a desktop screenshot.
@@ -144,7 +144,7 @@ function workLedgerProjectDirectories(): string[]
 - [ ] Open Artificial Intelligence mode, submit a request, and confirm the created Mission conversation opens immediately. The complete form was verified on the real page; live model-backed submission remains unverified because the isolated runtime intentionally has no credentials or model configuration.
 - [x] Correct every observed layout, clipping, focus, loading, token, or interaction defect and capture fresh screenshots.
 - [x] Run focused non-User-Interface tests, package typechecks, localization, generated route check, documentation checks, historical links, document health, production build, and `git diff --check`.
-- [x] Remove one-off browser scripts, complete a second diff/status review, commit exact files, and push the branch to `myhexin` (`7a18b893c5`).
+- [x] Remove one-off browser scripts, complete a second diff/status review, commit exact files, and push the branch to `legacy-remote` (`7a18b893c5`).
 
 ### Task 6: Rebuild the Windows desktop client package
 
@@ -162,7 +162,7 @@ function workLedgerProjectDirectories(): string[]
 
 ## Final package evidence
 
-- Immutable source: local `HEAD` and `myhexin/work-lcx-0.0.31beta-0806` both remained `7a18b893c5eb3c2d4f277a23af997f188a1cf614` before and after packaging.
+- Immutable source: local `HEAD` and `legacy-remote/work-lcx-0.0.31beta-0806` both remained `7a18b893c5eb3c2d4f277a23af997f188a1cf614` before and after packaging.
 - The canonical GUI installer matrix completed the Software Development Kit build, 7,077-module production Overlay build, embedded backend and runtime payload, Tauri executable, Microsoft Installer, Nullsoft Scriptable Install System installer, staging, and its real Windows x64 checker. Non-host Linux and macOS rows were explicitly skipped.
 - A separate `check-release-assets.ts ... --require-bundle` invocation accepted the staged Windows x64 directory.
 

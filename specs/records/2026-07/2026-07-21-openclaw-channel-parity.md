@@ -20,7 +20,7 @@
 - Unit tests cover catalog membership, official-plugin loading, runtime bridging, configuration failures, inbound projection, outbound delivery, and removal of the old `qq` automatic path.
 - The real Channels settings page is rendered and inspected in an isolated process; screenshots must show the newly supported catalog and usable configuration forms.
 - Documentation health, typecheck, route checks, targeted channel suites, and the original relevant acceptance commands pass before delivery.
-- Changes are committed with the `dsw-33987` prefix, merged into the current delivery branch, and pushed to `myhexin` without bypassing hooks.
+- Changes are committed with the `dsw-33987` prefix, merged into the current delivery branch, and pushed to `legacy-remote` without bypassing hooks.
 
 ### Hard constraints
 
@@ -33,7 +33,7 @@
 
 ### Baselines and evidence read
 
-- OpenCorvus worktree base: `e3b9eea657a50fe1333d917c8975e901c75d13a4` (`myhexin/v0.0.13beta`).
+- OpenCorvus worktree base: `e3b9eea657a50fe1333d917c8975e901c75d13a4` (`legacy-remote/v0.0.13beta`).
 - OpenClaw investigation snapshot: `a230f742f2516e3d1799237bd345c9b325bbf0f3`, whose root package reports version `2026.7.2`.
 - Stable packages observed during investigation report `2026.7.1` (the root stable tag resolves to `2026.7.1-2`); the exact root prerelease `openclaw@2026.7.2-beta.1` is used because it contains the pinned source revision's iMessage and Reef runtime entries.
 - Read architecture sources:
@@ -109,7 +109,7 @@ The correct reuse boundary is therefore an OpenClaw plugin host adapter, not 14 
 5. Update channel documentation and the Overlay settings page to consume catalog documentation metadata. Do not create new hand-written settings forms.
 6. Add tests at the bridge, registry, config, route, and Overlay boundaries. Use official plugin fakes only at external network/CLI boundaries; do not call such tests real E2E.
 7. Run the real settings page in a new isolated service, capture desktop screenshots with Node-launched Playwright, inspect them, and correct any catalog/form layout defects.
-8. Perform a separate full-diff review, run targeted and repository-required checks, commit on the worktree branch, fetch the delivery branch, merge in the same worktree, rerun hooks/checks, and push the delivery branch to `myhexin`.
+8. Perform a separate full-diff review, run targeted and repository-required checks, commit on the worktree branch, fetch the delivery branch, merge in the same worktree, rerun hooks/checks, and push the delivery branch to `legacy-remote`.
 
 ## Validation commands
 
@@ -121,7 +121,7 @@ The correct reuse boundary is therefore an OpenClaw plugin host adapter, not 14 
 - `bun run typecheck`
 - `bun run api:routes-check`
 - `bun run docs:check`
-- The repository pre-push hook through a normal `git push myhexin ...`.
+- The repository pre-push hook through a normal `git push legacy-remote ...`.
 
 ## Delivery record
 
@@ -157,4 +157,4 @@ The final design requires the OpenClaw payload at packaging time, uses the same 
 - Node-launched Playwright rendered the real Channels settings surface with 27 rows and the QQ Bot provider-owned form. Screenshots were inspected at `.scratch/openclaw-channel-catalog.png` and `.scratch/openclaw-qqbot-channel-dialog.png`; the catalog density, controls, dialog fields, focus, and documentation affordance were visually accepted.
 - No live external channel credentials were available, so external-provider network delivery is not claimed as real E2E evidence. Official plugin loading/configuration and the local runtime/sidecar/package paths are verified; credentialed provider smoke tests remain an operational deployment check.
 
-Final documentation health passed 87 tests with 1,409 assertions. The `dsw-33987` commit and delivery-branch integration are recorded by the Git history pushed to `myhexin`.
+Final documentation health passed 87 tests with 1,409 assertions. The `dsw-33987` commit and delivery-branch integration are recorded by the Git history pushed to `legacy-remote`.

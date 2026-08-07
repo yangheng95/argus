@@ -31,7 +31,7 @@
 - “Installation directory” means writable `Global.Path.data`, not an application bundle or executable directory.
 - Conversion may refuse live prompt ownership as a data-integrity constraint; it must not stop or cancel work implicitly.
 - Use Node, not Bun, for Playwright.
-- Commit subjects use the `dsw-33987` prefix and push through normal hooks to `myhexin/v0.0.18beta`.
+- Commit subjects use the `dsw-33987` prefix and push through normal hooks to `legacy-remote/v0.0.18beta`.
 
 ### Sources read
 

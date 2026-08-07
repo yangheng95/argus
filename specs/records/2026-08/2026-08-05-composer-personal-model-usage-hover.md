@@ -16,7 +16,7 @@
 - Loading, terminal upstream failure, and successful data are visibly distinct without exposing either provider credential to the Overlay.
 - The visible success state contains only the balance label and normalized `remaining / total` value: OpenAI rate limits use `remaining% / 100%`, while monetary providers use `currency remaining / limit`.
 - The implementation is verified through positive non-UI contract tests plus a real running page, pointer hover, screenshot, and manual visual review.
-- The delivered branch is committed with the `dsw-33987` prefix and pushed to `myhexin`.
+- The delivered branch is committed with the `dsw-33987` prefix and pushed to `legacy-remote`.
 
 ### Hard constraints
 

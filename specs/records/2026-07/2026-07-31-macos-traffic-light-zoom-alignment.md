@@ -11,7 +11,7 @@
 | Sources read               | Root `AGENTS.md`; Browser skill; `specs/current/architecture/07-panel.md`; the July 16 single-visible-titlebar and July 17 traffic-light centering records; memory summary and the prior single-titlebar rollout; current `tauri.conf.json`, Rust startup, `App.tsx`, `WindowControls.tsx`, `TitlebarNavigation.tsx`, theme/zoom service, titlebar/design/button/icon CSS, and the read-only Overlay settings file.                                                                                                                                                                                                                                                                                    |
 | Whole-repository grep      | `rg` enumerated every `trafficLightPosition`, `titleBarStyle`, `hiddenTitle`, `data-native-titlebar`, `--ui-titlebar-height`, `--ui-scale`, `applyZoom`, titlebar component, and window-control occurrence. `tauri.conf.json` is the sole native traffic-light coordinate owner. `theme.ts::applyZoom` is the CSS scale writer and is called by hydrated settings, titlebar zoom actions, hotkeys, and resize projection. `App.tsx` owns the one titlebar row. `titlebar.css` owns its geometry. `design-language.css` currently multiplies the 36px titlebar height and all titlebar control dimensions by `--ui-scale`. Existing UI test files were identified but will neither be modified nor run. |
 | Independent feedback       | The user did not request multiple independent agents, so the primary Agent owns implementation and second review.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| Baseline                   | `HEAD` and `myhexin/v0.0.27beta` both resolved to `463d534bee3e3b04fdf95a6b4870447ae1695f8c`; the pre-change push passed repository hooks and reported everything up to date.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Baseline                   | `HEAD` and `legacy-remote/v0.0.27beta` both resolved to `463d534bee3e3b04fdf95a6b4870447ae1695f8c`; the pre-change push passed repository hooks and reported everything up to date.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 ## Root cause
 
@@ -60,7 +60,7 @@ canonical native 36px geometry while application content continues to zoom.
    running Overlay.
 5. Re-read every changed file and complete-diff, update this record with exact
    evidence, then commit only task-owned paths with the `dsw-33987` prefix and
-   push `v0.0.27beta` to `myhexin`.
+   push `v0.0.27beta` to `legacy-remote`.
 
 ## Progress
 
@@ -68,7 +68,7 @@ canonical native 36px geometry while application content continues to zoom.
       plan recorded before implementation.
 - [x] macOS titlebar scale boundary implemented.
 - [x] Compilation, real-page, and isolated native visual acceptance completed.
-- [x] Second review completed; the task-owned commit and git-cc push follow
+- [x] Second review completed; the task-owned commit and legacy remote push follow
       this saved review.
 
 ## Verification

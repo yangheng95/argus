@@ -8,7 +8,7 @@ Status: Implemented; final repository-health verification and delivery pending
 | Item | Details |
 | --- | --- |
 | User request | Diagnose and fix Task `tsk_f84698520001BGTT0xNRhvBL8t`, where real world-economy files existed but goal attempts repeatedly persisted `no_project_diff(actual_changed_files_empty)` and delayed downstream dispatch. |
-| Acceptance criteria | A goal-scoped `current_project` Build must attribute files created, modified, or deleted during that exact attempt even when the task forbids Git commits; staged and untracked files must be included; unchanged files from earlier attempts must not be re-attributed; the user Git index must remain untouched; managed-worktree commit attribution must remain unchanged; focused tests, typecheck, document health, review, commit, and `myhexin` push must pass. |
+| Acceptance criteria | A goal-scoped `current_project` Build must attribute files created, modified, or deleted during that exact attempt even when the task forbids Git commits; staged and untracked files must be included; unchanged files from earlier attempts must not be re-attributed; the user Git index must remain untouched; managed-worktree commit attribution must remain unchanged; focused tests, typecheck, document health, review, commit, and `legacy-remote` push must pass. |
 | Hard constraints | No fallback, compatibility path, host workflow gate, status machine, keyword classifier, Git reset, new worktree, or OpenCorvus/Overlay restart. Reuse the existing snapshot tree toolchain and keep Orchestrator as lifecycle decision-maker. Preserve unrelated dirty Overlay/spec work. |
 | Runtime evidence | Both goal 1 and goal 2 wrote non-empty files but persisted `diff_base_ref=diff_head_ref=5f5b5f62e51d` and `actual_changed_files=[]`. Goal 2 still produced 19 staged files and 1745 insertions. Source investigation then incurred repeated three-minute provider idle retries before Orchestrator manually completed the goal. |
 | Sources read | `AGENTS.md`; `specs/current/architecture/99-principles.md`; `specs/records/2026-07/2026-07-06-current-project-goal-diff-and-graph-repair.md`; `specs/records/2026-07/2026-07-08-evidence-delivery-and-architect-reentry-systemic-repair.md`; `packages/opencorvus/src/orchestrator/build-tool.ts`; `packages/opencorvus/src/build/agent.ts`; `packages/opencorvus/src/snapshot/index.ts`; focused Build and Snapshot tests. |
@@ -46,7 +46,7 @@ Status: Implemented; final repository-health verification and delivery pending
 4. `bun run --cwd packages/opencorvus typecheck`.
 5. Historical links and document-health tests.
 6. `git diff --check` and a second code review against this Recall.
-7. Commit with the `dsw-33987` prefix and push branch `v0.0.13beta` to `myhexin` without bypassing hooks.
+7. Commit with the `dsw-33987` prefix and push branch `v0.0.13beta` to `legacy-remote` without bypassing hooks.
 
 ## Implemented Repair
 

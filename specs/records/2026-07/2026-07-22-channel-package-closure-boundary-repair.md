@@ -29,7 +29,7 @@
 
 ### Baseline and observed evidence
 
-- Branch/remote baseline: `v0.0.14beta` and `myhexin/v0.0.14beta` both resolve to `ee60b90c76114198d11dd8dd369bb4a4165101c9`.
+- Branch/remote baseline: `v0.0.14beta` and `legacy-remote/v0.0.14beta` both resolve to `ee60b90c76114198d11dd8dd369bb4a4165101c9`.
 - The pre-repair macOS ARM64 GUI matrix passes, producing a 274 MB DMG and a 295 MB App whose only material file is the 295 MB executable.
 - `build.rs` embeds `embedded_sidecar.tar.gz` byte-for-byte into the Tauri executable.
 - The current sidecar source tree is 1.1 GB; `browser-mcp-node` is 915 MB. The resulting embedded gzip archive is 263 MB.
@@ -70,7 +70,7 @@ The audit covered every case-insensitive `openclaw` reference outside generated 
 3. Delete recursive OpenClaw package copying from native artifact builders and delete the associated package-list API/tests.
 4. Update channel/runtime and native-package tests to prove all entries load from the closed bundle and copied package trees are absent.
 5. Run targeted tests, full typecheck and documentation health, then the original GUI installer matrix. Inspect archive contents, hashes, architecture, signature, DMG validity, and measured size.
-6. Perform a second source/artifact review, update this record with results, commit with the required `dsw-33987` prefix, and push `v0.0.14beta` to `myhexin` without bypassing hooks.
+6. Perform a second source/artifact review, update this record with results, commit with the required `dsw-33987` prefix, and push `v0.0.14beta` to `legacy-remote` without bypassing hooks.
 
 ## Delivery evidence
 

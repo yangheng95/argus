@@ -21,7 +21,7 @@ The user rejected global uniqueness of an Expert Squad manifest `id`, establishe
 9. Each resolved scheduler/worker Turn and produced Artifact records the exact package revision used, while explicit later install/update/uninstall actions may affect later Turns without introducing a second Task selection source.
 10. Existing unrelated Expert Squads and unrelated malformed packages remain isolated according to the current partial-catalog contract.
 11. Non-UI contracts use positive tests. UI acceptance uses the real Overlay, interaction, screenshots, and manual review without adding, changing, or running UI automation tests.
-12. The exact implementation tree passes focused runtime contracts, generation freshness, typechecks, route/docs health, and a fresh independent review before a `dsw-33987` commit and `myhexin` push.
+12. The exact implementation tree passes focused runtime contracts, generation freshness, typechecks, route/docs health, and a fresh independent review before a `dsw-33987` commit and `legacy-remote` push.
 
 ### Hard constraints
 
@@ -200,7 +200,7 @@ Global context discovers only global packages and cannot emit a project-override
 7. Update routes and all backend consumers; regenerate OpenAPI, JavaScript SDK, and English/Chinese API docs from the real schemas.
 8. Update Overlay services and Settings/Composer consumers. Delete obsolete UI automation encountered in task-owned paths; validate the UI only through a real Overlay page, interaction, screenshots, and manual visual review.
 9. Replace obsolete negative/cross-scope rejection tests with the positive matrix below. Run focused non-UI checks, generation freshness, typechecks, docs checks, and an exact-tree independent review.
-10. Commit only task-owned files with a `dsw-33987` subject and push the verified main branch to `myhexin` without bypassing hooks.
+10. Commit only task-owned files with a `dsw-33987` subject and push the verified main branch to `legacy-remote` without bypassing hooks.
 
 ## Positive verification matrix
 

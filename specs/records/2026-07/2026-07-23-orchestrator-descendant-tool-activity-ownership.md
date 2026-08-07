@@ -25,7 +25,7 @@ Determine why Task `tsk_f8a970abb001eDUEwNJjE7TgVK` remains active after all fou
 - Do not mark a merely persisted `running` tool part as live; ownership must remain process-local and tied to the active prompt's registered activity monitor.
 - Do not stop, restart, refresh, cancel, or mutate the user's running OpenCorvus Task/process.
 - Preserve the unrelated dirty edit in `2026-07-22-mirror-prism-full-workflow-distillation.md`.
-- Commit with the `dsw-33987` prefix and push the current `v0.0.16beta` branch to `myhexin` after verification.
+- Commit with the `dsw-33987` prefix and push the current `v0.0.16beta` branch to `legacy-remote` after verification.
 
 ### Sources read
 

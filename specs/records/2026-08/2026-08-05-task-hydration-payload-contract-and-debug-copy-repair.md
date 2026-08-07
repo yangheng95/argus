@@ -16,7 +16,7 @@
 - A selected Task whose hydrate failed can still produce a copyable diagnostic blob from the exact selection failure without requiring another failing board request.
 - Focused non-User Interface contracts, typecheck, documentation health, and whitespace checks pass.
 - Any User Interface acceptance uses a real page and manually inspected screenshot; no User Interface automated test, fixture, or screenshot baseline is created, modified, or run.
-- The completed change is reviewed, committed with the `dsw-33987` prefix, and pushed to `git-cc/v0.0.30beta` without disturbing unrelated worktree files.
+- The completed change is reviewed, committed with the `dsw-33987` prefix, and pushed to `legacy-remote/v0.0.30beta` without disturbing unrelated worktree files.
 
 ### Hard constraints
 
@@ -45,7 +45,7 @@
 - Commit `4c54e42028` made `adapter_input` required by `DispatchLineagePayloadSchema` and by continuation authority, but the durable database DDL did not receive a structural breakpoint. The exact-schema open path therefore accepted the old database and deferred failure to business readers.
 - `copyActiveConversationDebug()` forces `loadBoard({ sync: true, requireFresh: true })` before building the Task blob. On this surface that request repeats the same `HTTP 500`, so `writeDebugClipboard()` is never reached.
 - The selected Task failure is already retained as one typed `boardStore.taskSelectionError` containing Task identity, directory, title, and formatted server error details; it is the exact diagnostic source while board hydration is unavailable.
-- The branch is synchronized with `git-cc/v0.0.30beta`; unrelated untracked files were present before this work and remain outside the repair.
+- The branch is synchronized with `legacy-remote/v0.0.30beta`; unrelated untracked files were present before this work and remain outside the repair.
 
 ### Whole-repository search evidence
 

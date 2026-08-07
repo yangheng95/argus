@@ -39,4 +39,4 @@ Each target paints one immediate `--hover-wash` / border feedback state. CSS no 
 1. Do not create, modify, or run UI automated tests. The changed behavior is rendered hover and Tooltip timing.
 2. Run Overlay typecheck and production Vite build using the repository toolchain.
 3. Launch the real packaged desktop client. Manually hover Project rows, task rows, recommendation buttons, the model trigger, and model options; inspect screenshots for immediate wash, no vertical jump/shadow expansion, and 200 ms Tooltip intent delay.
-4. Review `git diff --check`, run the required spec-health checks, commit with the required `dsw-33987` subject prefix, and push the current main delivery branch to `myhexin` through hooks.
+4. Review `git diff --check`, run the required spec-health checks, commit with the required `dsw-33987` subject prefix, and push the current main delivery branch to `legacy-remote` through hooks.

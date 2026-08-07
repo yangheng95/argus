@@ -40,7 +40,7 @@ Owner: Codex
 - Do not restart, refresh, stop or otherwise modify the user's running OpenCorvus/Overlay process.
   Runtime and visual verification must use separately owned isolated processes.
 - Do not create a worktree or edit the Windows Subsystem for Linux mirror. Commit subjects use the
-  required `dsw-33987` prefix and pushes go to `myhexin`.
+  required `dsw-33987` prefix and pushes go to `legacy-remote`.
 
 ### Sources read
 
@@ -118,7 +118,7 @@ Owner: Codex
 6. Run an isolated real OpenCorvus backend and Overlay with Node/Playwright against the repaired
    input, inspect the task-scoped screenshot and rerun after any visual discrepancy.
 7. Record verification evidence here, commit the completed repair with `dsw-33987`, push the current
-   delivery branch to `myhexin`, and confirm the remote branch contains the commit.
+   delivery branch to `legacy-remote`, and confirm the remote branch contains the commit.
 
 ## Implementation
 

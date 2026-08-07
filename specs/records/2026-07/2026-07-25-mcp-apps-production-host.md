@@ -80,7 +80,7 @@ Completion requires all of the following:
 - Database compatibility is not retained; this unreleased project adopts the
   new strict payload directly and resets obsolete local data when needed.
 - New commits use the `dsw-33987` prefix and are pushed through normal hooks to
-  `myhexin/v0.0.18beta`.
+  `legacy-remote/v0.0.18beta`.
 
 ### Sources read before implementation
 
@@ -145,7 +145,7 @@ review.
 ### Git and shared-worktree baseline
 
 - Branch: `v0.0.18beta`.
-- Local HEAD began one commit ahead of `myhexin/v0.0.18beta`.
+- Local HEAD began one commit ahead of `legacy-remote/v0.0.18beta`.
 - The required baseline push ran normal hooks and was rejected before network
   transfer because unrelated in-progress Subagent Dock files currently have
   two TypeScript errors. The errors and their files remain visible; this task
@@ -380,7 +380,7 @@ git diff --check
 - [x] Focused unit, integration, ownership, protocol, and security coverage.
 - [x] Real MCP Server + SessionLoop + Node/Playwright E2E and visual review.
 - [x] Full repository checks and second review; this record is the pre-commit
-      evidence used by the normal commit and git-cc push.
+      evidence used by the normal commit and legacy remote push.
 
 ## Calibration evidence
 

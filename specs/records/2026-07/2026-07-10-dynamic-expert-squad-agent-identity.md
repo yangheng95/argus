@@ -101,7 +101,7 @@ rg -n "PromptCatalog\.list\(\{" packages/opencorvus/src packages/opencorvus/test
 - Overlay production catalog types had drifted from generated OpenAPI: the hand-written response exposed `virtual_agents`, `projected_agents`, `dynamic_attributes`, and `skills[].mounted_agents`. The current implementation replaces that response type with SDK `ExpertSquadCatalogResponse`, enumerates summary agents only from `capability_projection.agents`, and renders active rows by `agent_id` with `base_role` as template metadata.
 - A whole-file run of `test/expert-squad/prompt-profile-resolver.test.ts` produced 12 pass, 45 skip, and 33 fail under the 120-second inactivity wrapper. Failures cluster around removed `manifest.agents`, `virtual-agents/**`, `dynamicAttributes`, package workflow/default-workflow assertions, local-process MCP fixtures, base-role worker IDs, removed resolver result fields, missing exact Orchestrator projection, and missing Instance context.
 - Current replacement coverage already exists in `dynamic-agent-registry.test.ts`, `dynamic-agent-resolver.test.ts`, `projection-hash.test.ts`, `package-tool-bundle.test.ts`, `skill-mount-projection.test.ts`, repository package tests, and focused runtime/runner/A2A tests. The legacy resolver file must retain only unique current catalog/selector/inactive-isolation/hash/provider rejection coverage, migrated to dynamic agent fixtures. Tests whose only subject is a deleted schema, virtual root, workflow policy, result shape, or base-role runtime identity are deletion candidates; production compatibility code is forbidden.
-- Local `dev` is the only available branch matching the user's comparison baseline; `myhexin` has no `dev` ref. `git diff --numstat dev --` currently reports 889,365 additions and 529,235 deletions across 7,009 paths. Generated SDK/OpenAPI account for a material portion, while large handwritten orchestrator/tests/resolver files and tracked QA/spec artifacts require later reachability and provenance review rather than line-count-based deletion.
+- Local `dev` is the only available branch matching the user's comparison baseline; `legacy-remote` has no `dev` ref. `git diff --numstat dev --` currently reports 889,365 additions and 529,235 deletions across 7,009 paths. Generated SDK/OpenAPI account for a material portion, while large handwritten orchestrator/tests/resolver files and tracked QA/spec artifacts require later reachability and provenance review rather than line-count-based deletion.
 - Overlay continuation audit proved the dynamic Tool projection renderer exists as `ToolsPanel`, but it is not registered in the single `CONFIG_SECTIONS` settings source. The only browser coverage still targets the retired, unreachable left `ExtensionActivityPanel`. The accepted correction is to register Tool as a normal Settings section, render the existing panel through `ConfigDialogHost`, delete the unreachable combined activity component, and rewrite the browser proof against the real Tool/Skills/MCP settings pages. Reintroducing the retired left activity or keeping both entrypoints would violate the single-source constraint.
 - Independent prompt/domain review accepted the production prompt relocation but blocked closure on four residual surfaces: `test/tool/skill.test.ts` still assumes implicit/base-role mounts and production selector discovery; the full pre-terminal reflection hook is mock-only dead code carrying ambiguous `agentName`; several generic prompt invariants were deleted with domain-specific assertions; and document health still guesses `agents/build` / `virtual-agents/build` while requiring retired mount fields. Whole-repository call search confirms `SkillTool` now requires a turn-resolved `skillSurface`, selector use is independently covered by `expert_squad_selector`, no production caller supplies `takePreTerminalReflection`, `preTerminalToolInputStart`, or either optional reflection callback, and the live terminal reminder is separately covered in `terminal-tool-recovery.test.ts`. The accepted disposition is current-surface SkillTool tests, deletion of the unreachable reflection chain, restoration of concise generic prompt invariants, manifest-driven dynamic prompt-path health checks, and explicit selector-versus-production-grant documentation.
 
@@ -114,7 +114,7 @@ rg -n "PromptCatalog\.list\(\{" packages/opencorvus/src packages/opencorvus/test
 - Make each key under `capability_projection.agents.<agent_id>` the dynamic agent identity used by dispatch, runtime messages, tools, skills, MCP, catalog, and mounts.
 - Keep `base_role` only as the seed for an existing OpenCorvus agent/model/tool/session/finalizer/runtime template.
 - Remove non-general preset prompt residue and prove package loading through registry, resolver, dispatch, runner, catalog, mounts, payload, and template paths.
-- Continue autonomously until tests and independent reviews find no known issue; commit and push to `myhexin`.
+- Continue autonomously until tests and independent reviews find no known issue; commit and push to `legacy-remote`.
 - After the core refactor passes, compare against `dev` and perform a repository-wide reachability/debt audit. Remove proven legacy code, obsolete tests, and tracked intermediate/generated residue rather than accepting the branch's large net line growth.
 
 ### Acceptance Criteria
@@ -136,7 +136,7 @@ rg -n "PromptCatalog\.list\(\{" packages/opencorvus/src packages/opencorvus/test
 15. Registry, manager, resolver, dispatch, runner, catalog, mounts, routes, payload freshness, template freshness, docs health, typecheck, and diff checks pass under stdout/stderr inactivity timeouts.
 16. Tests that measure timeout from process/test start, while observable work continues, are repaired before being used as evidence.
 17. After benchmark success, a second source review and independent agent review find no base-role identity fallback, same-name guessing, duplicate schema source, stale legacy test, or unexplained generated/intermediate artifact.
-18. The final commit uses the `dsw-33987` prefix and is pushed to `myhexin/v0.0.2beta` without bypassing hooks.
+18. The final commit uses the `dsw-33987` prefix and is pushed to `legacy-remote/v0.0.2beta` without bypassing hooks.
 
 ### Hard Constraints
 
@@ -514,7 +514,7 @@ Codex and legacy Claude providers remain usable through the generic executor pat
    - Compare `dev...HEAD` by path/line growth, run reachability/unused-code tools, inspect generated-source ownership, stale tests, temporary artifacts, and historical process teardown.
    - Delete only evidence-backed legacy/residue, rerun the full matrix, then independently review.
 8. **Delivery**
-   - Fetch `myhexin`, verify branch ancestry and hooks, commit with `dsw-33987`, push, and confirm remote ref.
+   - Fetch `legacy-remote`, verify branch ancestry and hooks, commit with `dsw-33987`, push, and confirm remote ref.
 
 ## Baseline Failures
 

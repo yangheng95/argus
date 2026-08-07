@@ -27,7 +27,7 @@ preserving the normal conversation title content.
 - Do not add a second error surface or hide the failure behind hover.
 - Do not refresh, restart, or interfere with the user's running Overlay.
 - Playwright browser verification runs through Node, not Bun.
-- Commit subjects start with `dsw-33987`; delivery uses the `myhexin` remote.
+- Commit subjects start with `dsw-33987`; delivery uses the `legacy-remote` remote.
 
 ### Sources read
 

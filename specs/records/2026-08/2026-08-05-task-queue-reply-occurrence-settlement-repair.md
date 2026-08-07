@@ -34,7 +34,7 @@ Owner: Codex
   settlement, persisted-reply attachment, exact-owner cancellation ordering,
   and the existing two-occurrence recovery contract.
 - Relevant focused tests, package typecheck, document health checks, and a
-  second code review pass complete before commit and git-cc push.
+  second code review pass complete before commit and legacy remote push.
 
 ### Hard constraints
 
@@ -46,7 +46,7 @@ Owner: Codex
   authority. The queue row remains the only queue terminal authority.
 - Successful occurrence settlement and destructive owner cleanup are distinct
   facts. Only destructive or exceptional settlement waits for owner teardown.
-- Commit subjects start with `dsw-33987` and push to the `myhexin` git-cc
+- Commit subjects start with `dsw-33987` and push to the legacy remote
   remote without bypassing hooks.
 
 ### Sources read
@@ -150,7 +150,7 @@ by that setup.
 - `bun test packages/opencorvus/test/script/historical-docs-links.test.ts`
 - applicable document-health and product-doc single-source checks.
 - `git diff --check`, exact staged-diff review, commit, hook-driven push to
-  `myhexin/v0.0.31beta`, and post-push status verification.
+  `legacy-remote/v0.0.31beta`, and post-push status verification.
 
 ## Verification result
 

@@ -20,7 +20,7 @@ The user asked to repair the `ZodError` that terminated Goal #4 of Task `tsk_f83
 - Do not add a gate or host-side routing rule.
 - Preserve `AttachmentStore.Reference` as the byte-store contract and `Message.FilePart` as the persisted conversation contract.
 - Cover the real projected runtime-tool execution and persisted Tool Part update path, not only a helper unit test.
-- Commit subjects must start with `dsw-33987`; push the completed repair to `myhexin/v0.0.13beta` without bypassing hooks.
+- Commit subjects must start with `dsw-33987`; push the completed repair to `legacy-remote/v0.0.13beta` without bypassing hooks.
 
 ### Read records
 

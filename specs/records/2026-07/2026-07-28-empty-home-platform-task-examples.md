@@ -41,7 +41,7 @@ fills the visible Composer, where the user can refine and submit the request.
    label clipping, density, or alignment regression.
 4. Run Overlay typecheck and the required historical-document link test.
 5. Review only task-owned paths, commit with the `dsw-33987` prefix, and push
-   the current delivery branch to `myhexin` through normal hooks.
+   the current delivery branch to `legacy-remote` through normal hooks.
 
 ## Codex review feedback
 

@@ -13,7 +13,7 @@
   - do not add component-local color overrides, fallback palettes, gates, or a second theme source;
   - use Node, not Bun, for Playwright/browser execution;
   - do not restart or interfere with the running OpenCorvus/Overlay application;
-  - commit with the `dsw-33987` subject prefix and push only the task-owned result to `myhexin`.
+  - commit with the `dsw-33987` subject prefix and push only the task-owned result to `legacy-remote`.
 - Materials read:
   - `AGENTS.md`;
   - `specs/current/architecture/99-principles.md` is the referenced architecture source for prompt-over-host and single-source principles, but this token-only change does not alter those architectural contracts;
@@ -54,4 +54,4 @@ not to scatter per-component overrides.
 2. Run Overlay typecheck and Vite build.
 3. Start an isolated Vite server without touching the running native Overlay.
 4. Capture and inspect before/after desktop screenshots of the same delivery surface in all three themes.
-5. Recheck the diff, worktree status, staged paths, and `HEAD`; commit only task-owned files and push to `myhexin`.
+5. Recheck the diff, worktree status, staged paths, and `HEAD`; commit only task-owned files and push to `legacy-remote`.

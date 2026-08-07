@@ -10,7 +10,7 @@
 | Sources read | Root `AGENTS.md`; Browser control skill; supplied menu screenshot; current panel architecture; the August 3 Browser occlusion record; the August 4 Browser live-surface record; `RightDock.tsx`; `BrowserPreviewPanel.tsx`; `main.tsx`; Overlay cascade and token styles; Tauri configuration/capabilities; installed Tauri `WebviewWindow`, Window parent, focus, positioning, and event application programming interface (API) declarations. |
 | Whole-repository grep | The Right Dock `+` still uses a host Kobalte DropdownMenu, and `main.tsx` makes every Browser panel inactive while that host menu is open. Browser `...` uses Tauri's operating-system Menu, which preserves the page but cannot render the supplied product styling. Tauri Window options support an owned parent, transparent/undecorated surface, taskbar exclusion, focus, and screen positioning. The default capability does not yet authorize WebviewWindow creation or mutation and covers only `main`. |
 | Independent agent feedback | None. The user did not request sub-agents, so the primary agent owns implementation and second review. |
-| Git baseline | `work-v0.0.29beta-yr-0803` was clean at `58919be3ce`, synchronized with `myhexin/work-v0.0.29beta-yr-0803` (`0 0` divergence), and fetched before implementation. |
+| Git baseline | `work-v0.0.29beta-yr-0803` was clean at `58919be3ce`, synchronized with `legacy-remote/work-v0.0.29beta-yr-0803` (`0 0` divergence), and fetched before implementation. |
 
 ## Causal chain
 
@@ -49,7 +49,7 @@
    capture screenshots, personally review geometry/style/page continuity and
    action/dismiss behavior, then perform a second code and visual review.
 7. Record evidence, commit with the `dsw-33987` prefix, fetch/reconcile the
-   tracked git-cc branch, and push through the normal hook.
+   tracked legacy remote branch, and push through the normal hook.
 
 ## Progress
 
@@ -57,7 +57,7 @@
 - [x] Product and architecture changes complete.
 - [x] Non-UI/static verification complete.
 - [x] Real-page visual acceptance and second review complete.
-- [x] Commit and git-cc push complete (`6bf0a07592`, `myhexin/work-v0.0.29beta-yr-0803`).
+- [x] Commit and legacy remote push complete (`6bf0a07592`, `legacy-remote/work-v0.0.29beta-yr-0803`).
 
 ## Real-page acceptance evidence
 

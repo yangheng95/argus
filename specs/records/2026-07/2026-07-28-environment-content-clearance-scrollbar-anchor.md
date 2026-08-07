@@ -51,7 +51,7 @@ anchored at the far-right edge of the conversation viewport.
   variables, and shared design-language tokens.
 - Preserve all unrelated worktree changes. Do not reset, restore, stash, or
   create another worktree.
-- New commits use the `dsw-33987` prefix and push to `myhexin`.
+- New commits use the `dsw-33987` prefix and push to `legacy-remote`.
 
 ### Material read before implementation
 
@@ -147,7 +147,7 @@ content in the remaining lane.
    Node-launched browser scenario. Inspect the screenshot, correct visual
    discrepancies, and repeat.
 6. Perform a second diff, geometry, and screenshot review; commit task-owned
-   changes, fetch/reconcile the delivery branch, and push to `myhexin`.
+   changes, fetch/reconcile the delivery branch, and push to `legacy-remote`.
 
 ## Status
 
@@ -157,7 +157,7 @@ content in the remaining lane.
 - [x] Original-resolution visual review and correction.
 - [x] Second code, geometry, and original-resolution screenshot review.
 - [x] The accepted implementation is ready for its traceable commit and
-      `myhexin` push.
+      `legacy-remote` push.
 
 ## Verification evidence
 

@@ -1,6 +1,6 @@
 # Work Ledger Tooltip Compact Summary
 
-Status: completed and delivered to git-cc
+Status: completed and delivered to legacy remote
 
 ## Recall
 
@@ -8,12 +8,12 @@ Status: completed and delivered to git-cc
 | --- | --- |
 | User request | The supplied Work Ledger hover popup is much too tall because it renders a long task request; make it compact like the popup shown for a short-title task. |
 | Acceptance criteria | The existing Kobalte Tooltip remains the only hover surface. Its title remains one-line ellipsized; a Task request remains the canonical description and stays present in the accessible document, but its visible summary is limited to two lines. Task ID, project name, and the complete unlabeled path remain visible. A long multi-section request cannot push the popup beyond the desktop viewport or block row actions. |
-| Hard constraints | Reuse `WorkLedger`, `Tooltip`, and the existing Work Ledger response as their current single owners. Do not remove the canonical Task description, add a second summary field/source, synthesize prose, parse Markdown, restore a native `title` tooltip, add a popup primitive, create a worktree, or touch the running OpenCorvus/Overlay. Desktop-only scope. Launch Playwright through Node and visually inspect task-scoped screenshots. Preserve the unrelated local scrollbar/rail/shadow changes. Commit subjects use `dsw-33987` and push to `myhexin/work-v0.0.8beta-yr-0717`. |
+| Hard constraints | Reuse `WorkLedger`, `Tooltip`, and the existing Work Ledger response as their current single owners. Do not remove the canonical Task description, add a second summary field/source, synthesize prose, parse Markdown, restore a native `title` tooltip, add a popup primitive, create a worktree, or touch the running OpenCorvus/Overlay. Desktop-only scope. Launch Playwright through Node and visually inspect task-scoped screenshots. Preserve the unrelated local scrollbar/rail/shadow changes. Commit subjects use `dsw-33987` and push to `legacy-remote/work-v0.0.8beta-yr-0717`. |
 | Supplied evidence | `C:/Users/10132/AppData/Local/Temp/codex-clipboard-95553b07-1168-4efb-bfe2-37ab8339036b.png`, inspected at original resolution. The popup is taller than the viewport because the exact Task request contains multiple Markdown sections and has no visual line limit. |
 | Sources read | `AGENTS.md`; Browser control skill; current Overlay card architecture; `2026-07-17-task-hover-description-and-borderless-worktree.md`; `2026-07-17-work-ledger-tooltip-identity-path-integration.md`; current `WorkLedger.tsx`, `work-ledger.css`, `work-ledger-consolidation.test.ts`, and `project-ledger-group-browser.test.ts`. |
 | Whole-repository search evidence | `WorkLedger.tsx` is the only producer of `work-row-summary-tooltip__description`; it reads the exact Task-only `row.description`. `work-ledger.css` has the only presentation rule and currently uses unrestricted `white-space: pre-wrap`. The focused source and Node browser fixtures are the only direct regression owners. Backend projection, OpenAPI, Software Development Kit, localization, and tooltip composition do not need to change. |
 | Independent agent feedback | None. The user did not request sub-agents, and the active collaboration policy forbids unrequested delegation. |
-| Git baseline | Work began from `a7c38dccc` on `work-v0.0.8beta-yr-0717`, synchronized with `myhexin`. Concurrent Right Dock planning advanced the same local branch through `17b81e916` and included this record's README index links; this implementation remains a separate exact patch on top. Existing unrelated dirty files remain excluded. |
+| Git baseline | Work began from `a7c38dccc` on `work-v0.0.8beta-yr-0717`, synchronized with `legacy-remote`. Concurrent Right Dock planning advanced the same local branch through `17b81e916` and included this record's README index links; this implementation remains a separate exact patch on top. Existing unrelated dirty files remain excluded. |
 
 ## Causal chain
 
@@ -38,7 +38,7 @@ Status: completed and delivered to git-cc
 2. Apply the feature-local two-line description clamp without changing tooltip content or data flow.
 3. Run the focused Work Ledger suite, Overlay typecheck/internationalization, and the Node-launched desktop browser fixture.
 4. Inspect the scoped and full-page screenshots at original resolution, correct any remaining overflow, then run documentation health and exact diff review.
-5. Commit only task-owned files and CSS hunks, push to git-cc, and record the delivery result.
+5. Commit only task-owned files and CSS hunks, push to legacy remote, and record the delivery result.
 
 ## Verification commands
 
@@ -69,7 +69,7 @@ git diff --check
 | Visual review | Passed for `.scratch/work-ledger-row-integrated-tooltip-detail.png` (`300x214`) and `.scratch/work-ledger-row-time-tooltip.png` (`1180x760`). The popup now matches short-request density and no longer extends outside the visible desktop. |
 | Documentation health | Passed: 81 tests on the isolated rerun. The earlier parallel run was invalidated by a concurrently untracked Right Dock record and system-load timeout; after that record became tracked, the same checks passed without product changes. |
 | Diff health | Passed: `git diff --cached --check`; staged files are limited to the feature CSS hunk, the two direct regression owners, and this record. |
-| Delivery | Implementation commit `ca19ba619` passed the git-cc pre-push repository typecheck, route inventory, generated documentation, Overlay internationalization, and secret scan, then pushed to `myhexin/work-v0.0.8beta-yr-0717`. |
+| Delivery | Implementation commit `ca19ba619` passed the legacy remote pre-push repository typecheck, route inventory, generated documentation, Overlay internationalization, and secret scan, then pushed to `legacy-remote/work-v0.0.8beta-yr-0717`. |
 
 ## Progress
 
@@ -78,4 +78,4 @@ git diff --check
 - [x] Compact description implemented and visually accepted.
 - [x] Focused/typecheck/i18n/browser/docs verification passed.
 - [x] Exact diff review completed.
-- [x] Commit and git-cc push completed.
+- [x] Commit and legacy remote push completed.

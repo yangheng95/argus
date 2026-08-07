@@ -46,7 +46,7 @@ expanded state through `aria-expanded`, so duplicating the entire summary into
    preview, expand it, inspect the screenshots, and perform a second diff
    review.
 5. Commit only task-owned files with the required `dsw-33987` prefix and push
-   the current delivery branch to `myhexin`.
+   the current delivery branch to `legacy-remote`.
 
 ## Validation
 

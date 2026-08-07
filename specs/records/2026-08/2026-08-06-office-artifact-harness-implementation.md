@@ -158,7 +158,7 @@ the normalized modes.
    pinned binary, run the integration slice, then run release-quality checks.
 6. Perform a second diff/package review, update this record with evidence,
    commit with the required `dsw-33987` prefix, and push `v0.0.31beta` to
-   `git-cc`.
+   legacy remote.
 
 ## Delivered implementation
 

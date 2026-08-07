@@ -6,7 +6,7 @@
 | --- | --- |
 | User requirement | Restore copying Task debug information by double-clicking the selected Task name. |
 | Acceptance criteria | Double-clicking the selected Task title in the Conversation header refreshes the Task board, writes the canonical `buildTaskDebugBlob` result to the clipboard, and shows visible success or failure feedback; standalone Chat title copying keeps using `buildChatDebugBlob`; Work Ledger row double-click continues to open Rename; the real Overlay page is exercised and visually inspected. |
-| Hard constraints | Keep `debug-info.ts` as the single debug-payload source; do not add fallback clipboard paths, a second title renderer, a gate, a UI automated test, a fixture, or a screenshot baseline; use the existing Solid title component and browser clipboard API; do not restart or mutate the user's running packaged Overlay; preserve concurrent work; commit subjects use `dsw-33987` and push to `myhexin`. |
+| Hard constraints | Keep `debug-info.ts` as the single debug-payload source; do not add fallback clipboard paths, a second title renderer, a gate, a UI automated test, a fixture, or a screenshot baseline; use the existing Solid title component and browser clipboard API; do not restart or mutate the user's running packaged Overlay; preserve concurrent work; commit subjects use `dsw-33987` and push to `legacy-remote`. |
 | Sources read | Root `AGENTS.md`; Browser control skill; `packages/overlay/src/components/App.tsx`; `packages/overlay/src/main.tsx`; `packages/overlay/src/components/WorkLedger.tsx`; `packages/overlay/src/utils/debug-info.ts`; the 2026-06-13 debug-blob record; the 2026-07-29 Task-header/Work-Ledger record; the 2026-07-29 rename-dialog-title record; commit `1d3352faad` and its parent. |
 | Whole-repository search evidence | `debug-info.ts` still owns `buildTaskDebugBlob`, `buildChatDebugBlob`, and `writeDebugClipboard`; no production caller remains. `App.tsx` is the sole Conversation-header title renderer. `main.tsx` owns board refresh and active source state. `WorkLedger.tsx` is the sole row renderer and intentionally maps row double-click to Rename. `packages/overlay/test/task-debug-info.test.ts` contains stale UI source-string assertions for the removed production calls alongside non-UI payload tests. |
 | Independent agent feedback | None; the user did not request sub-agents. |
@@ -47,7 +47,7 @@
    and confirm row double-click still opens Rename without turning this
    acceptance flow into a UI test.
 5. Re-grep all owners, review the diff and screenshot a second time, commit only
-   task-owned paths, fetch/converge the current branch, and push to `myhexin`.
+   task-owned paths, fetch/converge the current branch, and push to `legacy-remote`.
 
 ## Progress
 
@@ -55,7 +55,7 @@
 - [x] Commit and push the Recall.
 - [x] Implement the root repair and stale UI-test cleanup.
 - [x] Complete non-UI verification and real-page visual acceptance.
-- [x] Complete second review, commit, and git-cc push.
+- [x] Complete second review, commit, and legacy remote push.
 
 ## Verification Evidence
 

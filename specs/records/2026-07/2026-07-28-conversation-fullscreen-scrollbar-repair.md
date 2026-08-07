@@ -10,7 +10,7 @@
 | Sources read | `AGENTS.md`; Browser control skill; `specs/current/architecture/07-panel.md`; `2026-07-28-conversation-persistent-scrollbar.md`; `App.tsx`; `Conversation.tsx`; `main.tsx`; `cascade/base.css`; `surfaces/conversation.css`; the source and headed-browser scrollbar regressions; W3C CSS Overflow Module Level 3; W3C CSS Scrollbars Styling Module Level 1. |
 | Whole-repository grep | `rg` enumerated every `#chatScroll`, `.chat-scroll`, `overflow-y`, scrollbar selector/token, fullscreen/maximize, viewport-size, and gutter measurement reference. Production ownership is singular: `App.tsx` owns the element; `conversation.css` owns bounded vertical overflow and stable geometry; `base.css` owns theme scrollbar paint; `main.tsx` measures the actual platform gutter; `Conversation.tsx` owns follow/scroll interactions. Direct persistence assertions are in `visible-scrollbar-whitelist.test.ts`, `conversation-scroll-bottom-button-browser.test.ts`, and `chat-default-assistant-browser.test.ts`; adjacent geometry contracts remain in the Composer, auto-scroll, window-size, and architecture suites. |
 | Independent feedback | The user did not request independent agents, and the active collaboration policy forbids unsolicited delegation. The primary agent performs the required second review. |
-| Baseline/version evidence | The worktree was clean on `work-v0.0.23beta-yr-0728`; `git fetch` showed zero divergence from `myhexin/work-v0.0.23beta-yr-0728`; the required pre-change push passed all normal hooks and reported everything up to date. |
+| Baseline/version evidence | The worktree was clean on `work-v0.0.23beta-yr-0728`; `git fetch` showed zero divergence from `legacy-remote/work-v0.0.23beta-yr-0728`; the required pre-change push passed all normal hooks and reported everything up to date. |
 
 ## Causal chain
 
@@ -65,7 +65,7 @@ the existing theme token order remains correct.
 4. Run documentation health, inspect the final diff, and repeat focused checks
    for the required second review.
 5. Stage only task-owned files, commit with the `dsw-33987` prefix, fetch and
-   converge with `myhexin`, then push the current branch through normal hooks.
+   converge with `legacy-remote`, then push the current branch through normal hooks.
 
 ## Status
 
@@ -73,7 +73,7 @@ the existing theme token order remains correct.
 - [x] Regression expectations and implementation complete.
 - [x] Focused source, type, build, and browser verification pass.
 - [x] Screenshot inspection and second review pass.
-- [x] Task-owned commit and `myhexin` push complete.
+- [x] Task-owned commit and `legacy-remote` push complete.
 
 ## Verification evidence
 
@@ -105,7 +105,7 @@ the existing theme token order remains correct.
   unrelated record was staged or modified to hide that evidence.
 - Commit `3379d3f226` (`dsw-33987 hide inactive fullscreen conversation
   scrollbar`) is an ancestor of
-  `myhexin/work-v0.0.23beta-yr-0728`. The normal pre-push hooks passed SDK
+  `legacy-remote/work-v0.0.23beta-yr-0728`. The normal pre-push hooks passed SDK
   import, Artificial Intelligence (AI) runtime, all-package typecheck, route
   inventory, generated API documentation, Overlay localization, and secret
   scan checks. A concurrent push advanced the remote during the final ref

@@ -5,7 +5,7 @@
 | Item | Details |
 | --- | --- |
 | User request | Explain why `@squad("base")` could not be sent, delete the reported `.authority.json`, and prevent the same class of failure from blocking messages again. |
-| Acceptance criteria | A foreign Database attachment authority keeps attachment mutation and garbage collection closed, while text-only Project runtime, Expert Squad catalog, Mission Skill catalog, and Chat capability reads remain available; the exact Composer pre-submit catalog no longer becomes empty because attachment sweeping failed; focused non-User Interface (UI) contracts, typecheck, document health, live route evidence, review, commit, and git-cc push succeed. |
+| Acceptance criteria | A foreign Database attachment authority keeps attachment mutation and garbage collection closed, while text-only Project runtime, Expert Squad catalog, Mission Skill catalog, and Chat capability reads remain available; the exact Composer pre-submit catalog no longer becomes empty because attachment sweeping failed; focused non-User Interface (UI) contracts, typecheck, document health, live route evidence, review, commit, and legacy remote push succeed. |
 | Hard constraints | Do not adopt, rewrite, delete, or sweep foreign blobs; do not reset the Database; do not add fallback, compatibility, gate, state-machine, or UI automation test behavior; preserve unrelated files; use the current DDL (Data Definition Language, data definition language) only; commit subjects start with `dsw-33987`. |
 | Sources read | `AGENTS.md`; `specs/current/architecture/02-data.md`; `specs/current/architecture/99-principles.md`; `specs/records/2026-07/2026-07-30-settings-control-plane-attachment-authority-isolation.md`; deleted pre-August record `2026-07-31-empty-attachment-authority-rebind`; `packages/opencorvus/src/storage/attachment-store.ts`; `packages/opencorvus/src/project/instance.ts`; `packages/opencorvus/src/project/open-lifecycle.ts`; `packages/opencorvus/src/server/project-route-context.ts`; Composer catalog and submit services; focused storage, project lifecycle, and Settings route tests. |
 | Whole-repository search evidence | `rg -n "AttachmentStoreAuthority|database authority|database_instance_id|\\.authority\\.json|assertAuthority|attachment-store\\.sweep" packages specs`; `rg -n "AttachmentStore\\.sweep|claimAuthority|AttachmentStore\\.write|AttachmentStore\\.read" packages/opencorvus/src packages/opencorvus/test`; `rg -n "composer-references|mentionCatalog|resolveComposerMentionDirectives|unknown_squad" packages/overlay packages/opencorvus`; Git history and blame show empty-store rebinding existed only on another non-ancestor branch and cannot solve the observed non-empty store. |
@@ -34,7 +34,7 @@
 2. Update the storage authority contract to prove generic Project runtime opens while `claimAuthority` still returns the typed foreign-authority error and preserves the original bytes.
 3. Isolate the typed authority error around bootstrap-time sweep, retain lifecycle failure evidence, and emit one explicit runtime-isolation warning.
 4. Update current data architecture and the obsolete project-open stage expectation.
-5. Run focused contracts, production typecheck, required documentation checks, and read-only live route verification; then perform a second diff review, commit, and push `v0.0.29beta` to `git-cc`.
+5. Run focused contracts, production typecheck, required documentation checks, and read-only live route verification; then perform a second diff review, commit, and push `v0.0.29beta` to legacy remote.
 
 ## Verification
 

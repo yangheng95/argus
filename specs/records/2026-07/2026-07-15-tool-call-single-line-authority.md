@@ -17,7 +17,7 @@
 - Use one composer-owned font-size token for the editable text/placeholder, Chat intent, model value, `+` menu item labels, parallelism value, and parallelism panel heading. Secondary metadata and explanatory copy retain the existing smaller metadata tier.
 - Assert the primary composer text surfaces resolve to the same computed pixel size in the real rendered composer, including the open `+` menu, and inspect a browser screenshot with that menu open.
 - Add static regression coverage and a Node-started browser screenshot, then inspect the screenshot personally.
-- Run focused tests, Overlay typecheck, i18n/document health, final diff review, commit with `dsw-33987`, merge current `myhexin/v0.0.3beta`, and push.
+- Run focused tests, Overlay typecheck, i18n/document health, final diff review, commit with `dsw-33987`, merge current `legacy-remote/v0.0.3beta`, and push.
 
 ### Hard constraints
 

@@ -20,7 +20,7 @@ After a Mission is published, later AI interaction content is rendered at the to
 - `Identifier.timestamp()` must not be used as wall-clock time: an ascending identifier retains only the low 36 timestamp bits.
 - Do not restart, refresh, close, or otherwise interfere with the user's running OpenCorvus or Overlay processes.
 - Browser acceptance uses the existing Node-launched, headful Playwright fixture; Bun must not launch Playwright.
-- Every behavior change has a regression assertion, and delivery is committed with the `dsw-33987` prefix and pushed to `myhexin`.
+- Every behavior change has a regression assertion, and delivery is committed with the `dsw-33987` prefix and pushed to `legacy-remote`.
 
 ### Sources read
 

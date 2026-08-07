@@ -1061,7 +1061,7 @@ The plan is accepted only when:
    evidence;
 3. documentation indexes and health checks pass;
 4. only plan/index files are committed; and
-5. the commit is pushed to the git-cc `myhexin` remote with the required
+5. the commit is pushed to the legacy remote with the required
    `dsw-33987` subject prefix.
 
 ## Independent review of the on-disk plan
@@ -1218,7 +1218,7 @@ review exception.
 - Validated historical links, document health, product-doc single source, and
   `docs:check`.
 - Committed and pushed the baseline plus the concurrent review-record merge to
-  git-cc.
+  legacy remote.
 
 ### Batch 1A — typed ingress and terminal conversation (complete)
 

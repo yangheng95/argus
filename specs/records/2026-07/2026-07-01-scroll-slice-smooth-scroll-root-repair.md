@@ -61,6 +61,6 @@ Make the sidecar perform an exact instant window scroll independent of page CSS:
 
 ## Push Status
 
-Local commit and pre-push checks completed, but `git push myhexin coding-assistant` is blocked by the remote pre-receive hook requiring a real `dsw-*` task id. The attached OpenCorvus task debug info contains `tsk_f1c509906001gSUp1zTzui0s3t`, not a `dsw-*` id. Existing records explicitly say not to invent a `dsw-*` id to bypass this hook.
+Local commit and pre-push checks completed, but `git push legacy-remote coding-assistant` is blocked by the remote pre-receive hook requiring a real `dsw-*` task id. The attached OpenCorvus task debug info contains `tsk_f1c509906001gSUp1zTzui0s3t`, not a `dsw-*` id. Existing records explicitly say not to invent a `dsw-*` id to bypass this hook.
 
-The current local `coding-assistant` branch is also 334 commits ahead of `myhexin/coding-assistant`, so a current-branch push would submit historical unpushed commits with messages that predate the remote hook requirement. This repair remains committed locally and verified; git-cc push needs a real `dsw-*` id and branch-history convergence decision.
+The current local `coding-assistant` branch is also 334 commits ahead of `legacy-remote/coding-assistant`, so a current-branch push would submit historical unpushed commits with messages that predate the remote hook requirement. This repair remains committed locally and verified; legacy remote push needs a real `dsw-*` id and branch-history convergence decision.

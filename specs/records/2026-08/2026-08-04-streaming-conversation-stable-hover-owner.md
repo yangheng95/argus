@@ -6,7 +6,7 @@
 | --- | --- |
 | User request | When the current Conversation keeps rendering live data, hovering a Conversation card makes the trailing time and icons alternate between hover and non-hover presentation. Keep the trailing controls visually stable without stopping the Conversation stream. The user explicitly requested multiple Agents. |
 | Acceptance criteria | While live Conversation content continues to render, a pointer held over the same canonical Conversation item keeps its trailing time, metadata, and overflow controls continuously visible. Non-hovered cards stay unchanged, keyboard focus retains the same disclosure, and stream rendering plus bottom-follow continue. A real desktop page and target-region screenshot must be inspected manually. |
-| Hard constraints | Preserve `tree-writer.ts` and `cardTreeStore` as the single streaming source; do not add a running flag, timer, local hover latch, state machine, gate, fallback, second action surface, or throttled rendering; do not add, update, or run User Interface (UI) automation tests; use Node rather than Bun for Browser/Playwright work; preserve unrelated shared-worktree changes; commit with the `dsw-33987` prefix and push to `myhexin`. |
+| Hard constraints | Preserve `tree-writer.ts` and `cardTreeStore` as the single streaming source; do not add a running flag, timer, local hover latch, state machine, gate, fallback, second action surface, or throttled rendering; do not add, update, or run User Interface (UI) automation tests; use Node rather than Bun for Browser/Playwright work; preserve unrelated shared-worktree changes; commit with the `dsw-33987` prefix and push to `legacy-remote`. |
 | Sources read | `AGENTS.md`; `specs/current/architecture/12-overlay-card-system.md`; `specs/records/2026-08/2026-08-03-running-conversation-action-flicker-repair.md`; `specs/records/2026-08/2026-08-04-streaming-conversation-dom-identity.md`; `packages/overlay/src/components/{Conversation,ConversationCard,StoreCardNode,ChatBubble,CardHeaderChrome}.tsx`; `packages/overlay/src/styles/surfaces/{conversation,chat-bubble}.css`; installed Virtua Solid adapter. |
 | Whole-repository search evidence | `ChatBubbleActions` is the only trailing time/action mount and is unconditional. `.chat-bubble__hover-actions` reserves layout space and only changes opacity and pointer events. The current disclosure selector is owned by the inner `.chat-bubble`, while the main Conversation already mounts a longer-lived `.conversation-virtual-item` keyed by canonical projected item ID. Structural item equality preserves that host for content-only publications, but real insertion, removal, reorder, sub-agent membership change, hydrate, or virtual-window reconstruction can still replace inner card nodes. The existing `data-status=running` selector reads message-local status, which can already be `completed` during a live Chat and therefore cannot represent hover continuity. |
 | Independent agent feedback | Three user-requested read-only Agents independently traced render identity, CSS geometry, and the real visual path. All agreed that the stable canonical virtual item must own main-Conversation hover, that the right-side DOM and stream should remain unchanged, and that the `running` selector is an invalid workaround. Agents were explicitly prohibited from editing files, running UI automation tests, or delegating further. |
@@ -49,7 +49,7 @@ incorrect disclosure rule.
 - [x] No UI automation test is added, updated, or run; discovered prohibited tests are removed.
 - [ ] A target-region screenshot is inspected manually.
 - [x] The final diff receives an independent second review.
-- [x] Scoped changes are committed and pushed to `myhexin`.
+- [x] Scoped changes are committed and pushed to `legacy-remote`.
 
 ## Verification Evidence
 
@@ -72,4 +72,4 @@ incorrect disclosure rule.
   fixture, source assertion, or alternate automation path.
 - The implementation was independently re-reviewed with no code, test, or
   documentation blocker beyond the pending real-page visual evidence, then
-  committed as `ac5914b7af` and pushed to `myhexin/work-v0.0.30beta-yr-0804`.
+  committed as `ac5914b7af` and pushed to `legacy-remote/work-v0.0.30beta-yr-0804`.

@@ -9,7 +9,7 @@
 | Hard constraints | Desktop-only scope; preserve `WorkLedger` as the single Projects projection owner and existing project-row actions; reuse `DropdownMenu`, `Button`, `Icon`, `browseDirectory`, `openGlobalChatLauncher`, and `settings.save`; no duplicate launcher, hidden menu, fallback storage, host gate, temporary iframe, or interference with the running OpenCorvus process; browser fixtures must run through Node. |
 | Supplied evidence | `/var/folders/bj/6vby7ld11796l5bfdmc7s8l40000gn/T/codex-clipboard-76ab9b0e-cdfd-4c30-aa9d-61279d2002b3.png` and `/var/folders/bj/6vby7ld11796l5bfdmc7s8l40000gn/T/codex-clipboard-76ff6212-103d-42ca-8fe6-32242dddfbe9.png`, both inspected in the request. They show a compact gray `Projects` title, an ellipsis action, a plus action, sectioned menu copy, and leading checkmarks/icons. |
 | Sources read | `AGENTS.md`; Browser skill; `specs/current/architecture/05-config.md`; `specs/records/2026-07/2026-07-16-project-actions-secondary-menu.md`; `WorkLedger.tsx`; `ProjectLedgerGroup.tsx`; `WorkspaceSplitLauncher.tsx`; `CommandPalette.tsx`; `workspace.ts`; `settings.ts`; transport-protocol settings contract; Tauri `OverlaySettings`; Work Ledger and sidebar styles; focused source/browser tests. |
-| Git baseline | `v0.0.11beta` at `c338e0d5f`, synchronized with `myhexin/v0.0.11beta`. The pre-change push and hook suite passed. The unrelated untracked `C:/` path remains outside this task. |
+| Git baseline | `v0.0.11beta` at `c338e0d5f`, synchronized with `legacy-remote/v0.0.11beta`. The pre-change push and hook suite passed. The unrelated untracked `C:/` path remains outside this task. |
 | Independent agent feedback | None. The user did not request delegation, and current collaboration policy forbids unrequested sub-agents. |
 
 ## Whole-repository search evidence
@@ -41,7 +41,7 @@
 2. Add a compact Projects toolbar in `WorkLedger` using two Kobalte dropdowns and existing Button/Icon primitives; wire create actions to the canonical workspace service functions.
 3. Project the existing Work Ledger rows through the selected grouping and ordering without duplicating row rendering or backend data. Priority uses Task priority, last updated uses canonical timestamps, and manual preserves backend/queue order while retaining the existing queued-Task reorder interaction.
 4. Add localized labels, focused source/contract tests, and Node-launched browser interaction coverage for menu geometry, checked state, persistence, list-mode changes, keyboard use, and both create actions.
-5. Run focused tests, Overlay/transport typecheck and build, documentation health, inspect fresh desktop screenshots at original resolution, correct visual issues, perform a second diff review, commit with `dsw-33987`, and push `myhexin/v0.0.11beta`.
+5. Run focused tests, Overlay/transport typecheck and build, documentation health, inspect fresh desktop screenshots at original resolution, correct visual issues, perform a second diff review, commit with `dsw-33987`, and push `legacy-remote/v0.0.11beta`.
 
 ## Verification plan
 

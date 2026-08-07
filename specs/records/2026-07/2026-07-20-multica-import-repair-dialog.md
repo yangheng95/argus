@@ -111,7 +111,7 @@ A local declaration is a candidate only when it is structurally inspectable with
 3. Run existing Mission/Overlay Multica source tests to prove catalog selection and Task dispatch remain unchanged.
 4. Run the Node-launched Multica browser fixture and inspect a task-scoped screenshot of the real `InteractionCard` repair/cancel question. Then use the in-app browser connection for independent rendered visual inspection without touching a running OpenCorvus process.
 5. Run OpenCorvus/Overlay typechecks, API route schema checks if the exported contract changes, historical-doc links, document health, generated-artifact freshness, `git diff --check`, and focused lint/format checks.
-6. Perform a second complete diff/call-point review, record any correction in this file, commit with the `dsw-33987` prefix, and push the current main delivery branch to `myhexin`.
+6. Perform a second complete diff/call-point review, record any correction in this file, commit with the `dsw-33987` prefix, and push the current main delivery branch to `legacy-remote`.
 
 ## Verification results
 

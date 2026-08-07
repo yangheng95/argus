@@ -24,7 +24,7 @@
 - Desktop only. Do not add tablet/mobile scope.
 - Do not restart, refresh, stop, or otherwise interfere with the user's running OpenCorvus/Overlay. Visual validation uses the existing isolated Node-started browser fixture.
 - Preserve the large unrelated dirty worktree. This task may stage and commit only its scoped Overlay/spec files.
-- Commit subjects start with `dsw-33987`; push the current `v0.0.5beta` branch to the `myhexin` git-cc remote.
+- Commit subjects start with `dsw-33987`; push the current `v0.0.5beta` branch to the legacy remote.
 
 ### Hard-disk sources read before implementation
 
@@ -71,7 +71,7 @@ The existing July redesign is structurally correct but visually points in the op
 3. Update focused source guards to assert the new visible border/tint/radius contract while retaining all no-logic-change assertions.
 4. Extend the isolated Agent-card fixture with real reasoning/tool/patch parts, expand it through the real disclosure button, and verify light/dark geometry, status contrast, header alignment, and chronological row rendering.
 5. Run focused unit tests, Overlay typecheck/build/i18n, spec health, and the Node browser fixture. Inspect both screenshots, correct any visual mismatch, then rerun and perform a second diff review.
-6. Commit only task files with a `dsw-33987` subject and push `v0.0.5beta` to `myhexin`.
+6. Commit only task files with a `dsw-33987` subject and push `v0.0.5beta` to `legacy-remote`.
 
 ## Verification plan
 
@@ -146,7 +146,7 @@ git diff --check
 - `.msg-work-details` and `work-details-toggle` presentation is owned only by `messages.css`. Other browser tests consume the selector, but do not own a second renderer or state source.
 - The current defect is structural: `ChronologicalCollapsedParts` conditionally emits every `ExecutionEventRun` during the run loop, then appends the sole toggle after that loop. CSS cannot make this DOM ownership expand downward without reordering the timeline.
 - The unrelated dirty Orchestrator/prompt files remain untouched. No sub-agent is used because the user did not request delegation.
-- The required pre-change git-cc push was attempted after a successful fetch and full pre-push checks, but the remote rejected an unrelated ahead commit whose subject is `Checkpoint before Mirror Watch...` rather than the required `dsw-*` format. This follow-up will not rewrite or amend that unrelated commit.
+- The required pre-change legacy remote push was attempted after a successful fetch and full pre-push checks, but the remote rejected an unrelated ahead commit whose subject is `Checkpoint before Mirror Watch...` rather than the required `dsw-*` format. This follow-up will not rewrite or amend that unrelated commit.
 
 ### Implementation plan
 
@@ -154,7 +154,7 @@ git diff --check
 2. Replace the turn-wide disclosure state and trailing appendix with one disclosure component at each execution run position. Keep the existing narrative/boundary projection and boundary suppression source.
 3. Restyle the canonical control in `messages.css` as a thin full-width bar with no fill, pill radius, or hover block; use existing design tokens only.
 4. Update chronology browser coverage for three independent bars, first-run-only expansion, all-run expansion, downward geometry, source chronology, and screenshot evidence. Update static presentation guards to assert the bar contract.
-5. Run focused unit/browser tests, Overlay typecheck/i18n/build, inspect the rendered screenshot, perform a second diff review, then commit only scoped files with a `dsw-33987` subject. Retry git-cc push without rewriting unrelated history.
+5. Run focused unit/browser tests, Overlay typecheck/i18n/build, inspect the rendered screenshot, perform a second diff review, then commit only scoped files with a `dsw-33987` subject. Retry legacy remote push without rewriting unrelated history.
 
 ### Follow-up implementation and validation
 
@@ -209,7 +209,7 @@ git diff --check
 - `Avatar.tsx` is the canonical role-to-icon/accent renderer and already supports `user`. No new avatar mapping, asset, or color source is required.
 - `agent-card-separation-browser.test.ts` is the canonical light/dark Agent-surface screenshot owner. Extending its real `ChatBubble` fixture with a user message and a lane wider than 960px proves all three reported defects without a parallel renderer.
 - Scoped production/test files were clean before this follow-up. The large unrelated dirty worktree remains out of scope. No sub-agent is used because the user did not request delegation.
-- The pre-change git-cc push ran all hooks successfully but lost a concurrent remote ref race after fetch; no unrelated history was rewritten.
+- The pre-change legacy remote push ran all hooks successfully but lost a concurrent remote ref race after fetch; no unrelated history was rewritten.
 
 ### Implementation plan
 
@@ -217,7 +217,7 @@ git diff --check
 2. Make the base shell the only Agent-width owner by deleting the `960px` override and obsolete Agent row padding. Make the user shell span the lane and constrain only the bubble with the existing conversation user-width variable.
 3. Replace the historical row-padding assertion with shared-lane and user-avatar source guards; retain ring styling on the avatar itself.
 4. Extend the Agent-card fixture to include a real user message at a width above 960px. Assert Agent edge parity, user avatar presence/role, trailing alignment, bubble/avatar order and gap, then inspect light/dark screenshots.
-5. Run focused unit tests, Overlay typecheck/i18n/build, Node browser regression tests, docs health, scoped diff review, commit only task files with `dsw-33987`, fetch current git-cc state, and push without overwriting concurrent work.
+5. Run focused unit tests, Overlay typecheck/i18n/build, Node browser regression tests, docs health, scoped diff review, commit only task files with `dsw-33987`, fetch current legacy remote state, and push without overwriting concurrent work.
 
 ### Follow-up implementation and validation
 
@@ -262,13 +262,13 @@ git diff --check
 - Whole-repository grep finds one boundary renderer: `CardParts.tsx` emits `.card-boundary` for `isBoundaryMessagePart`. Its role and timestamp are semantic content and must not be removed.
 - The complete line ownership is two CSS declarations: the generic `.card-boundary:not(:first-child)` dashed border in `card.css`, and the more-specific `.chat-bubble .card-boundary:not(:first-child)` solid override in `chat-bubble.css`. Removing only one would expose the other, so both must be changed together.
 - `CardParts` is consumed by both `Card.tsx` and `ChatBubble.tsx`; the generic and chat-specific surfaces therefore need one consistent no-line contract rather than a chat-only override or fallback.
-- The existing large unrelated dirty worktree remains out of scope. The pre-change git-cc fetch confirms the current branch and remote are synchronized. No sub-agent is used because the user did not request delegation.
+- The existing large unrelated dirty worktree remains out of scope. The pre-change legacy remote fetch confirms the current branch and remote are synchronized. No sub-agent is used because the user did not request delegation.
 
 ### Implementation plan
 
 1. Remove the two boundary `border-top` declarations while preserving their existing margin and padding.
 2. Add static guards for the generic and chat-specific no-line contract, and extend the real Agent-card browser test to measure every rendered boundary's top-border width.
-3. Run focused tests, Overlay typecheck/i18n/build, Node browser visual regression, inspect light/dark screenshots, review the scoped diff, commit with a `dsw-33987` subject, and push to git-cc.
+3. Run focused tests, Overlay typecheck/i18n/build, Node browser visual regression, inspect light/dark screenshots, review the scoped diff, commit with a `dsw-33987` subject, and push to legacy remote.
 
 ### Follow-up implementation and validation
 
@@ -313,14 +313,14 @@ git diff --check
 - The visible user card is `.chat-bubble__body`, which owns padding, border, radius, and background. Mounting the avatar anywhere outside that element cannot satisfy visual containment.
 - The external topology also forces duplicated width arithmetic in `chat-bubble.css`: the shell gap and the bubble's subtraction of avatar width plus gap. Moving the avatar into the body allows both to be deleted rather than hidden with positioning.
 - `--chat-avatar-inline-size`, the canonical `Avatar`, `--chat-avatar-gap`, and `--conversation-user-card-inline-size` remain the sole size and spacing sources. No new token or renderer is required.
-- The pre-change git-cc fetch confirms the current branch and remote are synchronized. The unrelated dirty worktree remains out of scope. No sub-agent is used because the user did not request delegation.
+- The pre-change legacy remote fetch confirms the current branch and remote are synchronized. The unrelated dirty worktree remains out of scope. No sub-agent is used because the user did not request delegation.
 
 ### Implementation plan
 
 1. Move the canonical user `Avatar` into `.chat-bubble__body` after `.chat-bubble__body-inner` and remove the external sibling mount.
 2. Make the user body the content/avatar flex owner; delete the shell's external gap and the bubble's external-avatar width subtraction.
 3. Replace browser assertions for lane-edge adjacency with strict body containment and internal gap assertions, retaining count/role/no-identity coverage.
-4. Run focused static and browser regressions, typecheck/i18n/build, inspect light/dark and full-page screenshots, review the scoped diff, commit with `dsw-33987`, and push to git-cc.
+4. Run focused static and browser regressions, typecheck/i18n/build, inspect light/dark and full-page screenshots, review the scoped diff, commit with `dsw-33987`, and push to legacy remote.
 
 ### Follow-up implementation and validation
 
@@ -395,7 +395,7 @@ git diff --check
 1. Restore only the Agent surface border, background, and shadow declarations from the last accepted colored-card design; retain all newer density and metadata declarations in the same selector.
 2. Update static guards to reject the neutral flattening declarations and extend browser assertions from distinct borders to distinct backgrounds derived from each rendered stage.
 3. Run focused static tests, Overlay typecheck/i18n/build, the real light/dark Agent-card browser test, and the broader conversation browser regression; personally inspect screenshots.
-4. Review the scoped diff, record validation here, commit with a `dsw-33987` subject, reconcile the current release branch without overwriting concurrent work, and push to git-cc.
+4. Review the scoped diff, record validation here, commit with a `dsw-33987` subject, reconcile the current release branch without overwriting concurrent work, and push to legacy remote.
 
 ### Implementation and validation
 

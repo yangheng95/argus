@@ -10,8 +10,8 @@ Owner: Codex
 | --- | --- |
 | User request | “Task 应该是闭包，不准工作量逃逸，一个 Mission 典型 Task 少于 3 个”；用户确认已经做过相关改动，要求基于当前代码继续调查、优化，并由独立 Agent 审查残留问题。 |
 | Acceptance target | A Mission defaults to one outcome-complete Task. A second Task requires a different fixed Expert Squad, an already accepted external Task Artifact/real operator-authority boundary, or an explicit operator request for a separate lifecycle. Repair, retry, replan, retest, review, provider/process recovery, evidence publication, and final assembly retain the original Task ID. |
-| Hard constraints | Preserve every parallel change; no stash/reset/restore/new worktree. Do not mutate or restart the live OpenCorvus process or database. Do not add, modify, or run User-Interface automation tests. Use prompt/root-cause repair rather than a Task-count Host gate. Commit subject starts with `dsw-33987`; push to `myhexin/v0.0.28beta`. |
-| Current repository state | Work resumed after coordinated parallel merges at clean HEAD `46445954b9de047a9cbba02241f63c1cd91a2b2a`, equal to `myhexin/v0.0.28beta`. |
+| Hard constraints | Preserve every parallel change; no stash/reset/restore/new worktree. Do not mutate or restart the live OpenCorvus process or database. Do not add, modify, or run User-Interface automation tests. Use prompt/root-cause repair rather than a Task-count Host gate. Commit subject starts with `dsw-33987`; push to `legacy-remote/v0.0.28beta`. |
+| Current repository state | Work resumed after coordinated parallel merges at clean HEAD `46445954b9de047a9cbba02241f63c1cd91a2b2a`, equal to `legacy-remote/v0.0.28beta`. |
 | Prior records read | `2026-08-02-mission-task-delivery-closure-granularity.md`, `2026-08-02-phase-local-build-closure-orchestration.md`, `specs/current/architecture/03-control.md`, `04-extensions.md`, `13-agent-communication-matrix.md`, and `15-agent-facts-and-turns.md`. |
 | Whole-repository search | Enumerated every `propose_task`, `auto_confirm_proposed_tasks`, scheduler child-Task writer/reader, `parent_task_id`, Mission `create_task` description, `Phase NN` title formatter, Retry/Replan occurrence assertion, Goal-mutation occurrence assertion, `send_task_message`, dispatch continuation, process-recovery, relevant current docs, generated contracts, and focused non-UI tests. |
 | Live read-only evidence | The latest five large single-`base` Missions created 41 Tasks: 5/8/8/9/11 (mean 8.2, median 8). Sixteen of 41 (39%) were repair/resume/retest/review/closure/snapshot Tasks. Every row was Mission-created with `prompt_profile.active=base`, so cross-Squad ownership does not explain the split. The running sidecar predates the latest closure commits, so this data proves the old failure pattern but is not acceptance evidence for current source. |
@@ -59,7 +59,7 @@ Owner: Codex
 2. Run `bun run --cwd packages/opencorvus typecheck`, route/API generation checks, docs single-source checks, historical links, document health, and `git diff --check`.
 3. Perform a second source and test review against every independent-agent finding and the full call-point search.
 4. Do not claim live acceptance from the stale packaged sidecar. A fresh build/relaunch and new Mission benchmark require separate authorization because they mutate the active runtime.
-5. Commit only task-owned paths, push `v0.0.28beta` to `myhexin`, and verify remote containment.
+5. Commit only task-owned paths, push `v0.0.28beta` to `legacy-remote`, and verify remote containment.
 
 ## Atomic batch 1
 

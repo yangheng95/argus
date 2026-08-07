@@ -11,7 +11,7 @@
 | Sources read | Root `AGENTS.md`; Browser control skill; `2026-07-27-overlay-header-plane-and-brand-alignment.md`; `2026-07-20-desktop-left-rail-and-mailbox-refinement.md`; `2026-07-14-overlay-workspace-surface-continuity.md`; current `App.tsx`, `workspace.css`, `titlebar.css`, `activity.css`, design-language radius tokens, focused source tests, and existing Node browser fixtures. |
 | Whole-repository grep | `rg` enumerated every `.workspace-main`, `workspaceRadius`, `--oc-radius-xl`, top-left-radius assertion, and production border-radius owner across Overlay source, tests, current architecture, and July records. `App.tsx` mounts one `#workspaceMain`; `workspace.css` is the sole production root owner; `design-language.css` is the sole radius-token owner. Existing source and browser tests overwhelmingly require `var(--oc-radius-xl) 0 0 0`; only the latest header-plane test and one assertion in `titlebar-toolbar-toggle-browser.test.ts` require the conflicting zero radius. |
 | Independent agent feedback | None. The user did not request sub-agents and this tightly coupled CSS/test correction remains with the primary agent. |
-| Git baseline | `work-v0.0.23beta-yr-0728` at `f3c1b38948`, already aligned with `myhexin/work-v0.0.23beta-yr-0728`. The main worktree contains extensive pre-existing uncommitted Overlay and spec changes, including `App.tsx`, shared styles, tests, and indexes. A pre-change commit/push would incorrectly absorb unrelated work, so this repair must remain hunk-scoped and preserve that baseline. |
+| Git baseline | `work-v0.0.23beta-yr-0728` at `f3c1b38948`, already aligned with `legacy-remote/work-v0.0.23beta-yr-0728`. The main worktree contains extensive pre-existing uncommitted Overlay and spec changes, including `App.tsx`, shared styles, tests, and indexes. A pre-change commit/push would incorrectly absorb unrelated work, so this repair must remain hunk-scoped and preserve that baseline. |
 
 ## Cause chain
 
@@ -44,7 +44,7 @@
 3. Run the focused unit contracts, Overlay TypeScript, production Vite build, required spec link health, and document-health checks.
 4. Run the existing Node-launched real Vite browser fixtures for the header plane, collapse geometry, and three-theme workspace continuity.
 5. Inspect fresh task-scoped desktop screenshots at original resolution; if the corner is still visually square or child paint covers it, continue repairing the sole owner and rerun the same evidence path.
-6. Review the final task-owned diff against every call site, then commit with the required `dsw-33987` prefix and push the current branch to `myhexin` without staging unrelated pre-existing changes.
+6. Review the final task-owned diff against every call site, then commit with the required `dsw-33987` prefix and push the current branch to `legacy-remote` without staging unrelated pre-existing changes.
 
 ## Progress
 
@@ -52,7 +52,7 @@
 - [x] Record Recall, causal chain, complete call-site disposition, and verification plan.
 - [x] Restore the single top-left macro corner and correct contradictory tests/architecture.
 - [x] Complete focused unit, type, build, documentation, and real-browser visual acceptance.
-- [x] Perform the second review and prepare the exact hunk-scoped commit; commit and git-cc push are the next repository actions.
+- [x] Perform the second review and prepare the exact hunk-scoped commit; commit and legacy remote push are the next repository actions.
 
 ## Verification
 

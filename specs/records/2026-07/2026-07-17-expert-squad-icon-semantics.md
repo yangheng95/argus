@@ -23,7 +23,7 @@
 - Do not add a second icon source, inline SVG, raw character icon, feature-owned geometry, fallback, compatibility alias, or duplicate-glyph semantic.
 - Do not restart, refresh, close, or otherwise interfere with the user's running OpenCorvus/Overlay process. Rendered validation uses an isolated local page/browser fixture.
 - Preserve unrelated dirty documentation work and stage only this task's changes.
-- Commit subjects use the required `dsw-33987` prefix and push to `myhexin`.
+- Commit subjects use the required `dsw-33987` prefix and push to `legacy-remote`.
 
 ### Sources read
 

@@ -31,7 +31,7 @@
 - 禁止无脑 git reset / checkout / worktree。当前工作区已有用户改动，不能回退。
 - 所有方案、历史记录、任务 artifact 只能落在 `specs/` 统一结构。
 - 代码改动必须配测试；benchmark / 测试通过后仍要二次 review。
-- commit subject 必须以 `dsw-33987` 开头，最终 push 到 `myhexin` remote。
+- commit subject 必须以 `dsw-33987` 开头，最终 push 到 `legacy-remote` remote。
 
 ### Existing Records Read
 
@@ -108,7 +108,7 @@
 5. Run validation and independent review loop.
    - Run focused tests after each slice.
    - Re-run independent read-only reviews after prompt and schema changes.
-   - Run final focused suite, self-review changed files, commit with `dsw-33987` prefix, and push to `myhexin`.
+   - Run final focused suite, self-review changed files, commit with `dsw-33987` prefix, and push to `legacy-remote`.
 
 ## Implementation Record
 

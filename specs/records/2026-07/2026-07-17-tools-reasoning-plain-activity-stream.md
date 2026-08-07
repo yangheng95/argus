@@ -56,7 +56,7 @@ The independent chronology fixture then proved that the Tool override was incorr
 - `bun test packages/overlay/test/{message-embed,reasoning-part,chat-bubble,card-duration-single-source,card-header-title,work-details-muted-label}.test.ts` — 27 passed, 0 failed.
 - `node packages/overlay/test/browser/browser-runner.mjs packages/overlay/test/browser/reasoning-toggle-button-browser.test.ts packages/overlay/test/browser/message-part-chronology-browser.test.ts packages/overlay/test/browser/chat-bubble-disclosure-button-browser.test.ts` — 3 passed, 0 failed through the required Node runner. Coverage includes transparent rest/hover/focus backgrounds, stable text/icon/duration colour, focus-ring retention, chronological order and refresh persistence, timing tooltip, transparent aggregate/Reasoning surfaces, expanded Tool output background/border/radius, and light/dark full-page rendering.
 - `bun run --cwd packages/overlay typecheck` — passed before final documentation update.
-- Final document-health, i18n, formatting, whitespace, repository-diff, commit, and git-cc push checks are recorded after completion.
+- Final document-health, i18n, formatting, whitespace, repository-diff, commit, and legacy remote push checks are recorded after completion.
 
 ## Visual review
 

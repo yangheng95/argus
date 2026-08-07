@@ -40,7 +40,7 @@ hover-open menu from tracking the launcher-to-content path.
 3. Extend the existing Node browser fixture to prove mouse and keyboard behavior plus the canonical native file-manager action.
 4. Run focused unit tests, Overlay typecheck, production Vite build, historical-document link tests, and relevant document-health checks.
 5. Use an isolated browser surface, capture the current chat-header/menu delivery region, inspect it at original resolution, and correct any visual or interaction mismatch before re-running verification.
-6. Review the final diff against this Recall, commit only task-owned changes with the required `dsw-33987` prefix, and push `v0.0.13beta` to the git-cc `myhexin` remote.
+6. Review the final diff against this Recall, commit only task-owned changes with the required `dsw-33987` prefix, and push `v0.0.13beta` to the legacy remote.
 
 ## Validation record
 

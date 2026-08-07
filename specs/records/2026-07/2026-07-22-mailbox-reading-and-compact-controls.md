@@ -50,7 +50,7 @@
 - Desktop-only scope. Do not add responsive/mobile variants, compatibility
   paths, fallback logic, gates, or a second Mailbox renderer.
 - Preserve unrelated dirty work, use the current worktree, use the
-  `dsw-33987` commit prefix, and push the finished commit to `myhexin`.
+  `dsw-33987` commit prefix, and push the finished commit to `legacy-remote`.
 
 ### Sources read before implementation
 
@@ -125,7 +125,7 @@ and selection as three visibly and semantically independent facts.
 3. Update focused and headed browser regressions, translations only where a new
    accessible label is required, and current architecture wording.
 4. Run tests, typecheck, build, docs health, real headed interaction, screenshot
-   review, and a second diff review; iterate before commit and git-cc push.
+   review, and a second diff review; iterate before commit and legacy remote push.
 
 ## Status
 
@@ -138,7 +138,7 @@ and selection as three visibly and semantically independent facts.
   `bun-windows-opentest-package-tool-build`). This Mailbox record is staged and
   no longer appears in that failure.
 - [x] Headed browser interaction and screenshot review pass.
-- [x] Second review, commit, and `myhexin` push complete.
+- [x] Second review, commit, and `legacy-remote` push complete.
 
 ## Verification evidence
 
@@ -175,7 +175,7 @@ and selection as three visibly and semantically independent facts.
   SearchField, Accordion, and request owner; do not add optimistic read shadow
   state, fallback data, responsive scope, a new renderer, or any process restart.
   Preserve unrelated dirty work and deliver from the current branch with the
-  `dsw-33987` prefix to `myhexin`.
+  `dsw-33987` prefix to `legacy-remote`.
 - Sources read: the original and follow-up screenshots; this record;
   `2026-07-21-mailbox-global-project-grouping-and-action-geometry.md`;
   `2026-07-20-desktop-left-rail-and-mailbox-refinement.md`;
@@ -222,7 +222,7 @@ exists yet. No read fact is guessed locally.
    existing row/disclosure remains mounted and visible throughout the request.
 4. Run focused tests, Overlay typecheck/build, document health, headed Node
    browser interaction, screenshot inspection, and second diff review before
-   commit and git-cc push.
+   commit and legacy remote push.
 
 ### Follow-up verification evidence
 
@@ -247,4 +247,4 @@ exists yet. No read fact is guessed locally.
 - Delivery commit `44a199dd6` passed the repository pre-push typecheck,
   route-inventory, generated API documentation, Overlay i18n, and secret-scan
   hooks, then pushed successfully to
-  `myhexin/work-v0.0.15beta-yr-0722`.
+  `legacy-remote/work-v0.0.15beta-yr-0722`.

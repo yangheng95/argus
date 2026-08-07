@@ -28,7 +28,7 @@ Owner: Codex
 7. Existing production database rows, the running backend on port 7878, and the running Overlay remain untouched during implementation and verification.
 8. Focused tests assert positive current contracts. No UI automated test is added, changed, or run.
 9. Real Desktop/browser acceptance uses a fresh isolated project, manual interaction, screenshots bound to the affected Conversation region, and a second visual review.
-10. Task-owned changes are committed with the `dsw-33987` subject prefix and pushed to `myhexin/v0.0.28beta` without bypassing hooks.
+10. Task-owned changes are committed with the `dsw-33987` subject prefix and pushed to `legacy-remote/v0.0.28beta` without bypassing hooks.
 11. A worker continued after an Agent coordination handoff cannot bypass the
     owning dispatch adapter's typed-output validation and persistence.
 12. Context diagnostics distinguish the model context window, catalog output
@@ -310,7 +310,7 @@ input estimate is present in the same diagnostic record.
 13. Build/package a fresh Desktop target and manually verify healthy and
     controlled-failure Conversation screenshots without touching production.
 14. Perform a second scoped review, update this record with results, commit,
-    and push `myhexin/v0.0.28beta`.
+    and push `legacy-remote/v0.0.28beta`.
 
 ## Positive verification plan
 

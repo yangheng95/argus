@@ -20,7 +20,7 @@ The user asked to make Superpowers and Grill Me built into OpenCorvus, then test
 - Runtime availability has one path: the active expert squad manifest grants ordinary Skills and `PromptProfileResolver` projects them into the exact Agent's Skill surface. Inventory or slash-command registration must not bypass that projection.
 - The built-in `general` scheduler grants the new Skills to the Orchestrator only. `general-developer` remains unchanged so no second worker grant is introduced.
 - A real isolated Mission is first published through `POST /mission/wake` with `promptProfile: "general"`, dispatches a normal Task, loads a named new Skill through the visible `skill` tool, reaches terminal status, and passes an explicit local acceptance command.
-- Focused tests, documentation health checks, TypeScript typecheck, build, generated-source freshness, `git diff --check`, independent review, commit, and git-cc push all pass.
+- Focused tests, documentation health checks, TypeScript typecheck, build, generated-source freshness, `git diff --check`, independent review, commit, and legacy remote push all pass.
 
 ### Hard Constraints
 
@@ -161,7 +161,7 @@ The repair therefore changes the built-in distribution model once, removes the b
 3. Run the isolated real-model Mission benchmark with `promptProfile=general`, a request that requires `superpowers:verification-before-completion`, named Skill evidence, and an explicit artifact verification command.
 4. Inspect the report, persisted tool part, Task/Mission terminal states, and produced artifact manually.
 5. Run documentation health tests, OpenCorvus typecheck, build, and `git diff --check`.
-6. Perform an independent exact-diff review, repair findings, rerun affected checks, commit with `dsw-33987`, and push `v0.0.4beta` to `myhexin`.
+6. Perform an independent exact-diff review, repair findings, rerun affected checks, commit with `dsw-33987`, and push `v0.0.4beta` to `legacy-remote`.
 
 ## Progress
 
@@ -173,7 +173,7 @@ The repair therefore changes the built-in distribution model once, removes the b
 - [x] Extend Mission benchmark evidence and add regressions.
 - [x] Pass focused built-in, projection, Skill tool, generator freshness, and benchmark regressions.
 - [ ] Run real isolated Mission publish acceptance and secondary review.
-- [ ] Commit and push the completed delivery to git-cc.
+- [ ] Commit and push the completed delivery to legacy remote.
 
 ### Real Mission iteration evidence
 

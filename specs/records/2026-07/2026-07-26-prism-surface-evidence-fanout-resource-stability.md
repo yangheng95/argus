@@ -26,7 +26,7 @@
 - No host-side concurrency gate, cap, fallback, retry loop, state machine, or Prism-specific core-prompt rule.
 - No compatibility path or second evidence source.
 - Preserve all unrelated dirty-worktree changes and stage only task-owned paths.
-- Record tests and push the exact repair to `myhexin` with a `dsw-33987` commit subject.
+- Record tests and push the exact repair to `legacy-remote` with a `dsw-33987` commit subject.
 
 ### Materials read
 

@@ -11,7 +11,7 @@
 | Sources read               | Root `AGENTS.md`; Browser control skill; memory notes for compact Sub-agent card visual acceptance; `specs/current/architecture/12-overlay-card-system.md`; `2026-07-30-main-message-card-gradient.md`; `2026-07-30-conversation-neutral-surface-colors.md`; current `chat-bubble.css`, `conversation.css`, `messages.css`, `card.css`, and theme surface tokens.                                                                                                                            |
 | Whole-repository grep      | Production searches enumerated every `--conversation-card-background`, `.subagent-progress-card`, `--surface`, and `--surface-inset` owner/consumer. `chat-bubble.css` is the sole ordinary Agent-message fill owner. `conversation.css` defines the compact card as the same gradient over `--surface`. `messages.css` inherits the main-card token for expanded Tool material. `ChatBubble` is shared by main and exact-session conversations. User cards retain their independent branch. |
 | Independent agent feedback | None. The user did not request multiple independent agents, and the task has one CSS ownership point.                                                                                                                                                                                                                                                                                                                                                                                        |
-| Git baseline               | `cd64867bc75a3121de4fdb4664a88357852e1681` on `v0.0.26beta`; `myhexin/v0.0.26beta` was `1325db251d5b41c18a788a2c2eb3ff7af6abe28e` after fetch. Existing screenshot deletions are unrelated and must remain unstaged.                                                                                                                                                                                                                                                                         |
+| Git baseline               | `cd64867bc75a3121de4fdb4664a88357852e1681` on `v0.0.26beta`; `legacy-remote/v0.0.26beta` was `1325db251d5b41c18a788a2c2eb3ff7af6abe28e` after fetch. Existing screenshot deletions are unrelated and must remain unstaged.                                                                                                                                                                                                                                                                         |
 
 ## Cause And Ownership
 
@@ -43,7 +43,7 @@ second styling branch.
    boundaries.
 5. Re-grep all owners, review the exact diff a second time, record evidence,
    commit only task-owned paths with the required `dsw-33987` prefix, and push
-   `v0.0.26beta` to `myhexin`.
+   `v0.0.26beta` to `legacy-remote`.
 
 ## Verification Evidence
 

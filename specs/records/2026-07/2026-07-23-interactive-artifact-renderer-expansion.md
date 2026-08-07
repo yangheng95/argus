@@ -6,11 +6,11 @@
 | --- | --- |
 | User requirement | 当前 `interactive_artifacts` 支持类型过少；在完成业界能力调查后，用户要求直接支持前述 features。 |
 | Acceptance criteria | 保留 session/message-owned artifact 单一来源；用严格、版本化 renderer 覆盖通用声明式图表、图与流程图、代码、Diff、高级数据表，以及可由现有 attachment 单一来源安全承载的媒体、文件、地图和 Notebook 展示；任意应用界面继续由 MCP Apps 承担；真实 publisher 工具可声明全部类型；Overlay 对每种新增类型存在真实渲染与交互测试；前端改动通过隔离页面截图并亲自复核。 |
-| Hard constraints | 不新增 raw URL iframe、任意 HTML fallback、客户端影子 payload、隐藏消息或不可见业务动作；不把 bar/line/pie 等拆成独立 renderer；成熟工具链优先；不干预正在运行的 OpenCorvus/Overlay；Playwright 只由 Node 启动；不创建 worktree；不覆盖当前工作区与本任务无关的 orchestrator/cancellation 修改；提交前缀使用 `dsw-33987` 并推送 `myhexin/v0.0.17beta`。 |
+| Hard constraints | 不新增 raw URL iframe、任意 HTML fallback、客户端影子 payload、隐藏消息或不可见业务动作；不把 bar/line/pie 等拆成独立 renderer；成熟工具链优先；不干预正在运行的 OpenCorvus/Overlay；Playwright 只由 Node 启动；不创建 worktree；不覆盖当前工作区与本任务无关的 orchestrator/cancellation 修改；提交前缀使用 `dsw-33987` 并推送 `legacy-remote/v0.0.17beta`。 |
 | Sources read | `AGENTS.md`；`specs/current/architecture/07-panel.md`；`specs/records/2026-07/2026-07-19-inline-interactive-artifact-protocol.md`；interactive-artifact schema/persist/tool/route；Overlay artifact dispatch、四个 renderer、styles、browser fixture；AttachmentStore、attachment route、resource URL resolver；SDK/OpenAPI generation scripts；Vega-Lite、Mermaid、CodeMirror、TanStack Table、Jupyter MIME bundle、MapLibre、PDF.js 和 MCP Apps 官方资料。 |
 | Whole-repository search evidence | `InteractiveArtifactPayload` 的生产 schema 唯一位于 `packages/opencorvus/src/interactive-artifact/schema.ts`；唯一写入口为 `publishInteractiveArtifact` 和 `publish_interactive_artifact`；唯一读取路由为 session-scoped interactive-artifact route；唯一客户端读取 service 为 `packages/overlay/src/services/interactive-artifact.ts`；唯一 renderer dispatch 为 `InteractiveArtifactPart.tsx`；publisher 描述只在 `publish-interactive-artifact.ts` 两处重复字面量；现有 browser coverage 集中于 `inline-interactive-artifacts-browser.test.ts`；现有 attachment bytes 单一来源是 `AttachmentStore` 与 `/attachment/<projectID>/<name>`；Overlay 资源 URL 转换单一入口是 `resolveResourceUrl` / blob cache；SDK types 与 OpenAPI 为生成物。 |
 | Independent agent feedback | None；用户未要求子 Agent，当前 multi-agent 约束禁止自行委托。 |
-| Baseline | `637480e933556f4f86d5a5b49fd0eb6fd6f1c2db` 与 `myhexin/v0.0.17beta` 一致。工作区已有无关未提交修改，本任务只按路径精确暂存自己的变更。 |
+| Baseline | `637480e933556f4f86d5a5b49fd0eb6fd6f1c2db` 与 `legacy-remote/v0.0.17beta` 一致。工作区已有无关未提交修改，本任务只按路径精确暂存自己的变更。 |
 
 ## Root Cause
 
@@ -82,7 +82,7 @@ user/tool/result 消息流。
 3. Node 启动的 Playwright 隔离 browser suite，覆盖所有新增交付面与交互。
 4. 查看绑定当前 conversation card region 的 light/dark screenshots；发现视觉问题继续修复并复测。
 5. SDK/OpenAPI generation check、route/docs/i18n/document-health、`git diff --check`。
-6. 二次代码与视觉复核；只暂存本记录列出的本任务文件；commit 后推送 `myhexin/v0.0.17beta`。
+6. 二次代码与视觉复核；只暂存本记录列出的本任务文件；commit 后推送 `legacy-remote/v0.0.17beta`。
 
 ## Progress
 
@@ -93,7 +93,7 @@ user/tool/result 消息流。
 - [x] Browser/visual acceptance。
 - [x] SDK generation、route inventory、document-health、focused tests、Overlay/root typecheck 和 production build。
 - [ ] `docs:check`：当前工作区另一项 Task Run 删除尚未同步 API reference，差异仅涉及 `/run/*` 路由；本变更没有新增或删除 route。
-- [ ] Commit and git-cc push。
+- [ ] Commit and legacy remote push。
 
 ## Verification Evidence
 

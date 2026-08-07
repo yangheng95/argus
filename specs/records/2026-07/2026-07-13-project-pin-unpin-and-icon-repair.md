@@ -10,7 +10,7 @@
   - `project.time_pinned` is the only Project pin source, does not mutate recent-activity time, survives reload, emits the existing Project update event, and participates in Work Ledger pin-first ordering and cursor pagination.
   - Task rows remain non-pinnable.
   - Focused backend, API, Overlay, keyboard/action, real browser interaction, screenshot inspection, generated contract/docs, and second review pass.
-- Hard constraints: no fallback, compatibility path, local shadow state, state machine, gate, database migration, or running OpenCorvus/overlay restart/refresh; use Node for Playwright; preserve unrelated dirty work; commit subject begins `dsw-33987` and push the current branch to `myhexin` after verification.
+- Hard constraints: no fallback, compatibility path, local shadow state, state machine, gate, database migration, or running OpenCorvus/overlay restart/refresh; use Node for Playwright; preserve unrelated dirty work; commit subject begins `dsw-33987` and push the current branch to `legacy-remote` after verification.
 - Sources read: `AGENTS.md`; `specs/records/2026-07/2026-07-12-work-ledger-pin-unpin.md`; `specs/current/architecture/02-data.md`; `ProjectLedgerGroup.tsx`; `WorkLedger.tsx`; `Icon.tsx`; `work-ledger.css`; `sidebar.css`; Overlay Work Ledger service/tests/browser fixture; Project schema/domain; Work Ledger projection/route/tests; generated OpenAPI/SDK/docs surfaces.
 - Whole-repository search evidence: `work-ledger-pinned-current-project` exists only in `WorkLedger.tsx` and one browser layout test; `work-row-pinned-mark` exists only in `WorkLedger.tsx`, its CSS, and consolidation assertions; `time_pinned` exists only on Session and its Work Ledger projection; Project has no pin field/writer; `setWorkLedgerPinned` is the only Overlay mutation; generated SDK/docs expose only the Session pin route. Project group actions are centralized by `ProjectLedgerGroup`.
 - Independent agent feedback: none; the user did not request sub-agents and the active policy forbids spawning them otherwise.
@@ -52,7 +52,7 @@ Project pinning belongs to the Project domain. Add nullable `project.time_pinned
 - [x] Overlay action/visual repair and regression tests.
 - [x] Real browser interaction and screenshot review.
 - [x] Second implementation and visual review.
-- [x] Hunk-only commit and `myhexin/v0.0.3beta` push completed.
+- [x] Hunk-only commit and `legacy-remote/v0.0.3beta` push completed.
 
 ## Verification record
 

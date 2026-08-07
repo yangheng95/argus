@@ -64,7 +64,7 @@ CSS means Cascading Style Sheets. UI means User Interface.
    overlap.
 6. Re-read the exact diff and visual evidence, update this record, commit only
    task-owned paths with the required `dsw-33987` prefix, fetch/reconcile
-   `git-cc`, push `v0.0.30beta`, and confirm the remote tip.
+   legacy remote, push `v0.0.30beta`, and confirm the remote tip.
 
 ## Progress
 
@@ -73,7 +73,7 @@ CSS means Cascading Style Sheets. UI means User Interface.
 - [x] Commit and push the pre-change Recall.
 - [x] Implement the single-owner border and Tool disclosure convergence.
 - [x] Complete non-UI verification and real-page visual acceptance.
-- [x] Complete final implementation commit and git-cc push.
+- [x] Complete final implementation commit and legacy remote push.
 
 ## Verification Evidence
 
@@ -134,5 +134,5 @@ left outside this task's staged paths.
 The implementation commit is `c573b2234ea43f0175c636fa7d27b5020bb6a690`.
 The initiating push completed every required pre-push check but lost a final
 compare-and-swap race because a concurrent publisher had already advanced
-`git-cc/v0.0.30beta` to that exact commit. A subsequent fetch confirmed local
-`HEAD` and the git-cc remote tip were byte-identical with a `0 0` divergence.
+`legacy-remote/v0.0.30beta` to that exact commit. A subsequent fetch confirmed local
+`HEAD` and the legacy remote tip were byte-identical with a `0 0` divergence.

@@ -34,7 +34,7 @@ The workspace split launcher renders only `PROJECT_EDITORS`. The operating-syste
 3. Add or extend a Node Playwright browser check that opens the dropdown, verifies keyboard/click interaction and the emitted native `overlay_open_path` command, and captures the current delivery surface.
 4. Run focused tests, overlay typecheck/build checks, and spec/document-health checks.
 5. Start an isolated preview without touching the user's running overlay, inspect the screenshot, correct any visual mismatch, then re-run verification.
-6. Commit only the files owned by this task with the required `dsw-33987` prefix and push to the git-cc remote.
+6. Commit only the files owned by this task with the required `dsw-33987` prefix and push to the legacy remote.
 
 ## Validation record
 

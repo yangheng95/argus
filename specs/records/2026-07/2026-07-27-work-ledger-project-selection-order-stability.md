@@ -68,7 +68,7 @@ The list sorter is behaving according to its contract; freezing the Overlay orde
 4. For a new project or a real worktree/sandbox-set change, persist once with a fresh `time_updated` and emit the existing canonical event.
 5. Add focused Project tests for timestamp/event idempotence and structural-change publication.
 6. Strengthen the real Work Ledger browser fixture to capture project order before selection, click another project, wait for the real project reload, assert unchanged order, and save the left-rail screenshot.
-7. Run targeted tests, typechecks, Vite/browser verification, documentation health checks, visual review, diff review, commit with the required prefix, fetch, and push to `myhexin`.
+7. Run targeted tests, typechecks, Vite/browser verification, documentation health checks, visual review, diff review, commit with the required prefix, fetch, and push to `legacy-remote`.
 
 ## Validation plan
 

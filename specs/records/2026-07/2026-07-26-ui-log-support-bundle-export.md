@@ -26,7 +26,7 @@ Add a UI log-export action that produces a ZIP file, with detailed and formatted
 - Preserve raw evidence. Formatting is an additional archive representation, not a replacement or compatibility path.
 - Do not restart, stop, refresh, or otherwise interfere with the user's running OpenCorvus/Overlay process.
 - Playwright/browser verification must run through Node, not Bun.
-- Stage only task-owned files/hunks and push only to the `myhexin` git-cc remote.
+- Stage only task-owned files/hunks and push only to the legacy remote.
 
 ### Read material
 
@@ -90,7 +90,7 @@ The archive contract is:
 4. Add English and Simplified Chinese strings.
 5. Add backend ZIP-content and route/OpenAPI regressions, Overlay service/UI contract tests, and a focused Node-launched Vite browser test with a screenshot.
 6. Regenerate/check OpenAPI and SDK artifacts, run targeted tests/typechecks/i18n/docs checks, inspect the screenshot, and perform a second diff review.
-7. Commit only task-owned files/hunks with the required `dsw-33987` subject prefix and push to `myhexin/v0.0.18beta`.
+7. Commit only task-owned files/hunks with the required `dsw-33987` subject prefix and push to `legacy-remote/v0.0.18beta`.
 
 ## Verification log
 

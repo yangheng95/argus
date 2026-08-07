@@ -53,7 +53,7 @@ scrolling inside that collection.
   running OpenCorvus/Overlay process. Browser verification uses an isolated
   fixture launched with Node.
 - Preserve unrelated working-tree changes and do not create a worktree.
-- Commit subjects use `dsw-33987`; delivery goes to `myhexin`.
+- Commit subjects use `dsw-33987`; delivery goes to `legacy-remote`.
 
 ### Material read before implementation
 
@@ -124,7 +124,7 @@ window is exactly 10 items without forcing short lists to grow.
 5. Run focused tests, Overlay typecheck/build, document health, and the
    Node-launched browser fixture. Inspect the screenshot at original resolution,
    perform a second diff review, commit only task-owned files, and push to
-   `myhexin`.
+   `legacy-remote`.
 
 ## Status
 

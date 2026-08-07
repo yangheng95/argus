@@ -43,7 +43,7 @@ font size and make the menu slightly more compact.
 - Do not change components, data sources, application routes, accessibility
   primitives, responsive scope, or the running OpenCorvus/Overlay process.
 - Preserve unrelated working-tree changes and do not create a worktree.
-- Commit subjects use `dsw-33987`; delivery goes to `myhexin`.
+- Commit subjects use `dsw-33987`; delivery goes to `legacy-remote`.
 
 ### Material read before implementation
 
@@ -111,7 +111,7 @@ global tokens or adding feature-by-feature font fixes.
    typography, exact geometry, 10-row scrolling, and screenshot assertions.
 4. Run focused tests, typecheck, i18n, documentation health, formatting, and
    the Node-launched Vite browser scenario; inspect the screenshot, conduct a
-   second diff review, commit only task-owned files, and push to `myhexin`.
+   second diff review, commit only task-owned files, and push to `legacy-remote`.
 
 ## Status
 

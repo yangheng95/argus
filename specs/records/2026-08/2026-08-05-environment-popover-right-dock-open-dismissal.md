@@ -42,7 +42,7 @@ is visible, opening the right-side component Panel must close that HoverCard.
   running OpenCorvus/Overlay process. Visual verification uses an isolated Vite
   process and Node-driven browser interaction.
 - Do not add, modify, update, or run UI automation tests.
-- Commit subjects use `dsw-33987`; delivery goes to `myhexin`.
+- Commit subjects use `dsw-33987`; delivery goes to `legacy-remote`.
 
 ### Material read before implementation
 
@@ -112,7 +112,7 @@ the established ability to reopen Environment while Dock remains visible.
    capture and inspect the dismissed state, then reopen Environment while the
    Dock remains open and inspect coexistence.
 5. Perform a second source/spec/diff and screenshot review, commit only this
-   task's files, fetch/reconcile the delivery branch, and push to `myhexin`.
+   task's files, fetch/reconcile the delivery branch, and push to `legacy-remote`.
 
 ## Status
 

@@ -11,7 +11,7 @@
 | Sources read | 根目录 `AGENTS.md`；浏览器控制 Skill；`specs/current/architecture/07-panel.md`、`07-panel-reactivity.md`；2026-07-23 Settings 菜单图层修复记录；2026-07-26 Settings 搜索/反馈提交 `1ec6b7568f`；当前 `App.tsx`、`ConfigDialogHost.tsx`、`Dialog.tsx`、`TitlebarMenubar.tsx`、`titlebar.css`、`settings.css`、设计语言 z-index token 与相关 source/browser tests。 |
 | Whole-repository grep | `TitlebarMenubar.tsx` 是 File/Edit/View/Help 的唯一生产 producer；`titlebar.css` 是触发器和 portalled panel 的唯一 surface owner；`ConfigDialogHost.tsx` 是 Settings Dialog 的唯一生产 owner；`Dialog.tsx` 是 modal/non-modal pointer/focus 语义的唯一 primitive owner。`rg` 找到 Settings 的 `modal={true}` 生产调用点仅一处，静态契约断言在 `config-panel-sizing.test.ts`，真实 focus-trap 断言在 `config-dialog-resizer.test.ts`，Settings 中菜单命中回归在 `titlebar-menubar.test.ts`。现有 `--ui-z-overlay=100`、`--ui-z-dialog=10000` 已保证视觉层级，无需新增 token。 |
 | Independent agent feedback | 无。用户没有要求子 Agent，当前协作规则禁止主动委托；主 Agent 负责实现与二次复核。 |
-| Repository state | `work-v0.0.21beta-yr-0728` 在调查开始时工作区干净；`git fetch myhexin` 后与 `myhexin/work-v0.0.21beta-yr-0728` 为 `0/0` 同步，基线 HEAD 为 `eb34614b97`。 |
+| Repository state | `work-v0.0.21beta-yr-0728` 在调查开始时工作区干净；`git fetch legacy-remote` 后与 `legacy-remote/work-v0.0.21beta-yr-0728` 为 `0/0` 同步，基线 HEAD 为 `eb34614b97`。 |
 
 ## Evidence-backed cause chain
 
@@ -40,7 +40,7 @@
 3. 运行聚焦单元测试、Node browser tests、Overlay typecheck、i18n check 与 Vite production build。
 4. 用隔离 Vite 页面和浏览器控制技能打开真实 Settings，逐项点击四个顶部菜单，保存并亲自检查任务截图；不触碰用户正在运行的 Overlay。
 5. 运行 `historical-docs-links`, `document-health`, `product-docs-single-source`, `git diff --check`；二次 review diff 和全仓 residue。
-6. 以 `dsw-33987` 前缀提交并 push 当前主工作分支到 `myhexin`。
+6. 以 `dsw-33987` 前缀提交并 push 当前主工作分支到 `legacy-remote`。
 
 ## Final implementation record
 
@@ -96,7 +96,7 @@
 - [x] Production Vite build passed.
 - [x] Screenshot inspected and visual layer relationship accepted.
 - [x] Typecheck, documentation health, and final diff review passed.
-- [x] Implementation commit and git-cc push completed.
+- [x] Implementation commit and legacy remote push completed.
 
 ## Progress
 
@@ -105,4 +105,4 @@
 - [ ] 记录未修复 browser failure。
 - [ ] 实施 Settings non-modal 单一语义修复和回归。
 - [ ] 完成真实浏览器截图、视觉复核和二次代码 review。
-- [ ] 完成所有验证、commit 和 git-cc push。
+- [ ] 完成所有验证、commit 和 legacy remote push。

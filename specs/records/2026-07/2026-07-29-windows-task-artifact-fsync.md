@@ -5,16 +5,16 @@
 ### User request
 
 - Synchronize the current `work-v0.0.24beta-yr-0729` branch with the latest
-  remote `myhexin/v0.0.24beta` code.
+  remote `legacy-remote/v0.0.24beta` code.
 - Preserve local work, complete the existing merge, and push the synchronized
-  result to the git-cc remote.
+  result to the legacy remote.
 - The preceding packaging-failure repair was superseded by the synchronization
   request.
 
 ### Acceptance criteria
 
 - The current branch contains remote commit `24725c27da` and is pushed to
-  `myhexin/work-v0.0.24beta-yr-0729`.
+  `legacy-remote/work-v0.0.24beta-yr-0729`.
 - Both branches' July 29 spec index entries survive merge resolution.
 - Non-UI contract tests introduced or exercised by the synchronized Artifact
   changes pass on the Windows host.
@@ -30,7 +30,7 @@
   platform failure into a gate.
 - Keep plans and investigation records under the root `specs/` tree and update
   both required indexes.
-- New commits use the `dsw-33987` subject prefix and push to `myhexin`.
+- New commits use the `dsw-33987` subject prefix and push to `legacy-remote`.
 
 ### Read records and primary evidence
 
@@ -86,7 +86,7 @@ delegation or parallel agents.
    the Task Artifact store suite, the required historical-doc links test, and
    repository typechecking.
 4. Review the final diff, commit with the required prefix, and push through all
-   git-cc hooks.
+   legacy remote hooks.
 
 ## Verification
 

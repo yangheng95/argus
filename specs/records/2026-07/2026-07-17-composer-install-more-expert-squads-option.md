@@ -19,7 +19,7 @@
 - Preserve the strict expert-squad identity/catalog contract. Do not fabricate an `ExpertSquadOption`, add an alias ID, mutate `prompt_profile.active`, duplicate the install UI, or add a second marketplace source.
 - Reuse `openConfigDialog("expert-squad-install")`, `SelectControl`, and the existing `ExpertSquadPanel` install tab.
 - Do not restart, refresh, close, or interfere with the user's running Overlay. Visual verification uses the isolated Node browser fixture.
-- Commit subjects use `dsw-33987` and push `v0.0.8beta` to `myhexin`.
+- Commit subjects use `dsw-33987` and push `v0.0.8beta` to `legacy-remote`.
 
 ### Sources read
 
@@ -145,7 +145,7 @@ git diff --check
 2. Add localized Configure Provider copy and route its button to the canonical Providers Settings section without touching selection state.
 3. Hide installed squad descriptions from the option body while forwarding the same description as hover title; keep other option descriptions unchanged.
 4. Extend static and real browser assertions for animation, terminal ordering, unchanged model, Provider routing, single-line squad geometry, and hover copy; capture and inspect mention, squad, model, and Settings screenshots.
-5. Run focused tests, typecheck, i18n, build, document health, diff review, commit with `dsw-33987`, and push `v0.0.8beta` to `myhexin`.
+5. Run focused tests, typecheck, i18n, build, document health, diff review, commit with `dsw-33987`, and push `v0.0.8beta` to `legacy-remote`.
 
 ### Follow-up validation
 

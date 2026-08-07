@@ -52,7 +52,7 @@ squeeze or release the center Workbench instead of jumping between layouts.
 - Keep this delivery desktop-only. No tablet, mobile, or new responsive scope.
 - Preserve the existing uncommitted Work Ledger and test edits; stage only
   task-owned changes.
-- Commit subjects use `dsw-33987`; delivery targets the git-cc `myhexin`
+- Commit subjects use `dsw-33987`; delivery targets the legacy remote
   remote.
 
 ### Material read before implementation
@@ -102,8 +102,8 @@ performed the required repository-wide call-point audit.
 ### Working-tree and remote evidence
 
 The branch starts this task at `667c7e6e5b`, matches
-`myhexin/work-v0.0.19beta-yr-0727`, and already contains four unrelated
-uncommitted files. A pre-change fetch succeeded; `myhexin/v0.0.19beta` has
+`legacy-remote/work-v0.0.19beta-yr-0727`, and already contains four unrelated
+uncommitted files. A pre-change fetch succeeded; `legacy-remote/v0.0.19beta` has
 advanced independently and will be reconciled before delivery without
 overwriting the unrelated working-tree edits.
 
@@ -135,7 +135,7 @@ manually positioning the panel.
 4. Update current panel architecture and this verification ledger.
 5. Run focused tests, typecheck/build/i18n, document health, inspect screenshots
    at original resolution, perform a second diff review, commit only
-   task-owned hunks, reconcile the delivery branch, and push to `myhexin`.
+   task-owned hunks, reconcile the delivery branch, and push to `legacy-remote`.
 
 ## Verification ledger
 

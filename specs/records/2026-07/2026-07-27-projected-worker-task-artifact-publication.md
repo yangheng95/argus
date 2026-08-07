@@ -21,7 +21,7 @@ immutable Artifact refs rather than introducing per-Agent Git worktrees or
 asking downstream Agents to scan mutable directories. The repair must apply to
 all projected Agent and Expert Squad families, preserve concurrent worktree
 changes, include regression tests, use a `dsw-33987` commit subject, and push
-through normal hooks to `myhexin`.
+through normal hooks to `legacy-remote`.
 
 ### Acceptance criteria
 

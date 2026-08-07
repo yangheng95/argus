@@ -9,7 +9,7 @@
 | Hard constraints | Repair prompt-owned scheduling judgment rather than adding a Host gate, queue, workflow engine, state machine, automatic dispatch, keyword route, compatibility path, or fallback. Keep `depends_on`, `assistant.max_executor_groups`, per-agent `goal_concurrency`, `use_worktree`, and current-project Build serialization as their existing single sources. Do not change or run User Interface automated tests. Preserve all unrelated dirty-worktree changes. |
 | Sources read | `specs/current/architecture/01-agents.md`, `04-extensions.md`, `08-agent-tool-adapter.md`, and `99-principles.md`; `2026-07-20-orchestrator-tool-call-decision-epoch.md`; `2026-07-22-expert-squad-reviewer-single-concurrency.md`; `session/prompt/system.txt`; `orchestrator-core.txt`; `dispatch-agent-tool.ts`; `orchestrator/agent.ts`; `prompt-profile-resolver.ts`; `engine/describe.ts`; the General package README and manifest; and focused scheduler, workflow, prompt, and collaboration-closure tests. |
 | Whole-repository grep | Searches covered `parallel`, `concurrent`, `dispatch_agent`, `started`, `depends_on`, `goal_concurrency`, `max_executor_groups`, `dispatchable`, `Collaboration Closure`, `wait`, `virtual_workflows`, and every prompt/test occurrence of the binding workflow text. The global scheduler policy has one core source in `orchestrator-core.txt`. Package workflow scheduling guidance is appended only by `PromptProfileResolver.composeResolvedAgentPrompt`. The dynamic target catalog in `orchestrator/agent.ts` explains one call payload but does not own scheduling policy. `dispatch-agent-tool.ts` executes one exact dispatch per call and returns typed outcomes; it is not an admission controller. |
-| Git baseline | After `git fetch`, remote `myhexin/v0.0.26beta` contained the local prior HEAD and one concurrent Composer plan. The branch was safely fast-forwarded to `00ffd0f881389c1cc93e0f1a336628870e2e6875`. Existing staged/unstaged Composer edits and unrelated artifact deletions remain untouched. |
+| Git baseline | After `git fetch`, remote `legacy-remote/v0.0.26beta` contained the local prior HEAD and one concurrent Composer plan. The branch was safely fast-forwarded to `00ffd0f881389c1cc93e0f1a336628870e2e6875`. Existing staged/unstaged Composer edits and unrelated artifact deletions remain untouched. |
 | Independent agent feedback | None. The user did not request multiple agents or parallel audit, so the active collaboration policy prohibits inferred sub-agent spawning. The primary agent owns the required second review. |
 
 ## Cause Chain
@@ -62,7 +62,7 @@
    health, the required historical-document link test, and `git diff --check`.
 5. Re-grep every scheduling-policy owner, perform a second exact-diff review,
    update this record and indexes, commit only task-owned paths through a
-   current-HEAD isolated index, push through normal hooks to `myhexin`, and
+   current-HEAD isolated index, push through normal hooks to `legacy-remote`, and
    verify remote convergence.
 
 ## Progress
@@ -70,10 +70,10 @@
 - [x] Scheduler prompt, workflow projection, dependency, concurrency,
       dispatch-result, collaboration-closure, architecture, tests, Git
       baseline, and unrelated worktree state inspected.
-- [x] Recall commit `048a3e60ac` and git-cc push complete.
+- [x] Recall commit `048a3e60ac` and legacy remote push complete.
 - [x] Global and binding workflow ready-frontier contract implemented.
 - [x] Focused contracts, typecheck, document health, and diff checks pass.
-- [x] Implementation commit `cd4cdc1369`, complete pre-push hook, git-cc push,
+- [x] Implementation commit `cd4cdc1369`, complete pre-push hook, legacy remote push,
       and immediate remote convergence complete.
 
 ## Verification And Second Review

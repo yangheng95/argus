@@ -11,7 +11,7 @@
 | Sources read | `AGENTS.md`; Browser control skill; both supplied images; `specs/current/architecture/12-overlay-card-system.md`; `2026-07-12-work-ledger-pin-unpin.md`; `2026-07-14-left-dock-vertical-density.md`; `2026-07-15-work-ledger-icons-and-popup-surface-unification.md`; `2026-07-15-agent-card-time-and-action-chrome.md`; `2026-07-16-project-pin-optical-size-repair.md`; `2026-07-16-card-header-metadata-and-conversation-scale.md`; current `ChatBubble.tsx`, `CardHeaderChrome.tsx`, `WorkLedger.tsx`, `ProjectLedgerGroup.tsx`, `Icon.tsx`, `base.css`, `chat-bubble.css`, `work-ledger.css`, `sidebar.css`, and focused source/browser tests. |
 | Whole-repository search evidence | `CardDurationChip` has two production header owners: generic `CardHeader` and conversation `ChatBubble`; within `ChatBubbleIdentity` it also owns compact child-Agent timing. The top-level Agent currently suppresses that inline chip, mounts `ChatBubbleActions`, then mounts a trailing duration. `pin-tilted` has one registry entry and one shared transform; its three call sites are project-group pin, Mission/Chat row pin, and the pinned-project leading glyph. Mission/Chat row pin geometry is owned by the existing `work-ledger.css` action rail. Regression call sites are `chat-bubble.test.ts`, `card-duration-single-source.test.ts`, `agent-card-separation-browser.test.ts`, `chat-bubble-disclosure-button-browser.test.ts`, `focused-popup-surface.test.ts`, `work-ledger-consolidation.test.ts`, `command-palette.test.ts`, and `titlebar-toolbar-toggle-browser.test.ts`. |
 | Independent agent feedback | None. The user did not request sub-agents, and the active collaboration policy forbids unrequested delegation. |
-| Git baseline | Work started from `5641172a1`, equal to `myhexin/work-v0.0.6beta-yr-0716`. During verification, the parallel reasoning-terminology owner committed `1e2da8096` on the same branch; this task continued from that new local `HEAD` while preserving unrelated Expert Squad, payload, and remaining spec-index changes. |
+| Git baseline | Work started from `5641172a1`, equal to `legacy-remote/work-v0.0.6beta-yr-0716`. During verification, the parallel reasoning-terminology owner committed `1e2da8096` on the same branch; this task continued from that new local `HEAD` while preserving unrelated Expert Squad, payload, and remaining spec-index changes. |
 
 ## Diagnosis
 
@@ -39,7 +39,7 @@ The Work Ledger already consumes the requested shared angled pushpin and the Jul
 2. Change only the top-level Agent header composition and remove the duplicate trailing duration.
 3. Run focused unit tests, Overlay typecheck/i18n/build, and spec-health checks.
 4. Run the existing Agent-card and Work Ledger fixtures through the Node browser runner, capture scoped screenshots, inspect them at original resolution, and correct any visual mismatch.
-5. Review the exact task diff twice, stage only task-owned hunks, commit with the `dsw-33987` prefix, push the current branch to `myhexin`, and leave unrelated dirty files untouched.
+5. Review the exact task diff twice, stage only task-owned hunks, commit with the `dsw-33987` prefix, push the current branch to `legacy-remote`, and leave unrelated dirty files untouched.
 
 ## Progress
 
@@ -47,7 +47,7 @@ The Work Ledger already consumes the requested shared angled pushpin and the Jul
 - [x] Focused test-contract update and production implementation.
 - [x] Typecheck, i18n, production build, and focused documentation verification.
 - [x] Fresh screenshot review and second review.
-- [x] Task-only commit and git-cc push.
+- [x] Task-only commit and legacy remote push.
 
 ## Codex review feedback
 
@@ -83,5 +83,5 @@ The first full `titlebar-toolbar-toggle-browser` run reached and accepted the ne
 ## Delivery result
 
 - Implementation commit: `2e0a596fe` (`dsw-33987 align pinned actions and agent timing`).
-- The mandatory git-cc pre-push hook passed SDK import/runtime checks, typecheck across 10 packages, API route inventory, rendered API documentation, Overlay i18n, and secret scan.
-- `myhexin/work-v0.0.6beta-yr-0716` advanced from `1e2da8096` to `2e0a596fe`; unrelated dirty Expert Squad, payload, and Review-index work remained outside the delivery commit.
+- The mandatory legacy remote pre-push hook passed SDK import/runtime checks, typecheck across 10 packages, API route inventory, rendered API documentation, Overlay i18n, and secret scan.
+- `legacy-remote/work-v0.0.6beta-yr-0716` advanced from `1e2da8096` to `2e0a596fe`; unrelated dirty Expert Squad, payload, and Review-index work remained outside the delivery commit.

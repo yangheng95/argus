@@ -17,7 +17,7 @@
 2. Partition the existing flattened card parts into exact chronological message runs at boundary parts. Retain each boundary's exact message ID/time, omit its repeated role label, and render one trailing timestamp owned by that message run.
 3. Add shared message-run styling that keeps the timestamp non-layout-shifting and hidden at rest, then reveals it on the exact run's hover or keyboard focus without changing the top-level card identity.
 4. Update focused source and real browser contracts for single-line Goal geometry, absence of repeated role nodes, exact per-message timestamps, hover isolation, chronology, and both themes; inspect goal-scoped and card-scoped screenshots.
-5. Run typecheck, internationalisation validation, production build, documentation health, diff checks, commit with the required prefix, integrate the latest git-cc branch, and push without touching the running application.
+5. Run typecheck, internationalisation validation, production build, documentation health, diff checks, commit with the required prefix, integrate the latest legacy remote branch, and push without touching the running application.
 
 ## Diagnosis
 

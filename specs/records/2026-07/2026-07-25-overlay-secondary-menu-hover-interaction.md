@@ -115,7 +115,7 @@ clicking a trigger.
 5. Inspect the repaired open-titlebar-menu screenshot at original resolution, run a
    second diff review, then commit only task-owned files with the required
    `dsw-33987` subject prefix and push the current delivery branch to
-   `myhexin`.
+   `legacy-remote`.
 
 ## Implementation
 

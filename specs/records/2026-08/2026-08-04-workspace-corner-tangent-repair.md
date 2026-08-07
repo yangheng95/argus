@@ -6,7 +6,7 @@
 | --- | --- |
 | User requirement | Remove the remaining pointed mark at the Workbench upper-left corner shown inside the supplied red annotation while preserving the intended rounded desktop shell. |
 | Acceptance criteria | The pale rail must meet one smooth 24-pixel white Workbench curve. The curve-to-left-edge tangent must have no pointed pixel cluster, detached gray tip, square shadow block, or second edge. Keep a quiet border stroke and restrained depth, and leave layout coordinates, clipping, children, and interactions unchanged. |
-| Hard constraints | Desktop-only. Keep `.workspace-main` as the sole radius, fill, clipping, border-stroke, and depth owner. Do not add a wrapper, pseudo-element, mask, theme branch, fallback, state, gate, or User Interface (UI) automated test. Preserve concurrent work. Use the real current-source page, screenshots, and personal visual review. Commit subjects use the `dsw-33987` prefix and delivery pushes to `myhexin`. |
+| Hard constraints | Desktop-only. Keep `.workspace-main` as the sole radius, fill, clipping, border-stroke, and depth owner. Do not add a wrapper, pseudo-element, mask, theme branch, fallback, state, gate, or User Interface (UI) automated test. Preserve concurrent work. Use the real current-source page, screenshots, and personal visual review. Commit subjects use the `dsw-33987` prefix and delivery pushes to `legacy-remote`. |
 | Sources read | `AGENTS.md`; the supplied screenshot; `packages/overlay/src/components/App.tsx`; `workspace.css`; `design-language.css`; `header.css`; `conversation.css`; `specs/current/architecture/07-panel.md`; the August 3 workspace corner-border record; the August 4 inner-outline and depth-shadow records; and relevant Git history. |
 | Whole-repository search | `App.tsx` mounts one `#workspaceMain`. `.workspace-main` remains the only production macro-frame compositor. The pane resizer is transparent at rest and does not paint the marked curve. The current boundary combines transparent physical borders, a negative-offset `outline`, and a two-channel `box-shadow`; no child header or Conversation surface owns the marked geometry. |
 | Independent feedback | None. The user did not request sub-agents, and the current collaboration policy does not permit unsolicited delegation. |
@@ -37,7 +37,7 @@
 2. Replace the independent outline with one inset stroke inside the renamed complete Workbench frame-shadow token and update the current architecture source of truth.
 3. Run Overlay TypeScript typecheck, production build, documentation health, and static integrity checks without running UI tests.
 4. Reload the real current-source desktop page, capture the full shell and upper-left corner, inspect them personally, and tune only the single composite shadow if the tangent is still pointed or the depth/border disappears.
-5. Review the exact task-owned diff, fetch the remote branch, commit with the required prefix, push to `myhexin`, and verify local/remote convergence.
+5. Review the exact task-owned diff, fetch the remote branch, commit with the required prefix, push to `legacy-remote`, and verify local/remote convergence.
 
 ## Progress
 
@@ -104,7 +104,7 @@ high, medium, or low correctness issue remains in the reviewed diff.
 ## Delivery
 
 Implementation commit `5bb1e2548b` was pushed to
-`myhexin/work-v0.0.30beta-yr-0804`. The pre-push hook passed Software
+`legacy-remote/work-v0.0.30beta-yr-0804`. The pre-push hook passed Software
 Development Kit (SDK) imports, Artificial Intelligence (AI) runtime validation,
 all scoped package typechecks, route inventory, generated documentation,
 Overlay internationalization, and secret scanning. The final documentation-only
@@ -156,7 +156,7 @@ incomplete because it retained the negative-offset outside-left depth channel.
    paint exists outside the curve while depth remains visible inside it.
 4. Rerun Overlay typecheck/build, documentation health, static integrity, and
    the complete pre-push hook without running UI tests.
-5. Review the exact task-owned diff, commit, push to `myhexin`, and verify
+5. Review the exact task-owned diff, commit, push to `legacy-remote`, and verify
    local/remote convergence.
 
 ### Correction Progress
@@ -212,7 +212,7 @@ remaining correctness issue.
 ### Corrected Delivery
 
 Corrected diagnosis commit `ec4787f13c` and implementation commit `4fafc078a2`
-were pushed to `myhexin/work-v0.0.30beta-yr-0804`. The push hook completed its
+were pushed to `legacy-remote/work-v0.0.30beta-yr-0804`. The push hook completed its
 full SDK import, AI runtime validation, scoped typecheck, route inventory,
 generated-documentation, Overlay internationalization, and secret-scan checks.
 Local and remote implementation commit identities both resolved to
@@ -266,7 +266,7 @@ inside the white Workbench rather than outside its rounded clip.
    intermediate gray wedge is gone and only a uniform one-pixel arc remains.
 4. Rerun Overlay typecheck/build, documentation health, static integrity, and
    the complete pre-push hook without running UI tests.
-5. Review only the task-owned diff, commit and push to `myhexin`, and verify
+5. Review only the task-owned diff, commit and push to `legacy-remote`, and verify
    local/remote convergence while preserving concurrent toolbar changes.
 
 ### Final Correction Progress
@@ -377,7 +377,7 @@ shadow above and to the left of its rounded corner.
 4. Run Overlay typecheck, production build, documentation health, static
    integrity, and the pre-push hook without running UI automated tests.
 5. Review the exact task-owned diff, commit with the `dsw-33987` prefix, push to
-   `myhexin`, and verify local/remote convergence.
+   `legacy-remote`, and verify local/remote convergence.
 
 ### Corrected Progress
 
@@ -421,7 +421,7 @@ was found in the reviewed Workbench diff.
 ### Uniform-Elevation Delivery
 
 Implementation commit `a18059f47c` was pushed to
-`myhexin/work-v0.0.30beta-yr-0804`. The pre-push hook passed Software
+`legacy-remote/work-v0.0.30beta-yr-0804`. The pre-push hook passed Software
 Development Kit (SDK) imports, Artificial Intelligence (AI) runtime validation,
 all scoped package typechecks, route inventory, generated documentation,
 Overlay internationalization, and secret scanning. Local and remote branch tips
@@ -441,7 +441,7 @@ not the direction of the shadow.
 | --- | --- |
 | User requirement | Continue until the highlighted Workbench upper-left boundary no longer reads as a pointed or triangular corner. |
 | Acceptance criteria | Match the reference's single crisp quarter-circle edge with restrained nearby elevation. No broad white or gray diagonal fade, doubled curve, detached tangent, or loss of top/left depth. Preserve the 24-pixel macro radius and all layout and interaction geometry. |
-| Hard constraints | Desktop-only. Keep `.workspace-main` as the sole boundary owner. Use native Cascading Style Sheets (CSS) border and shadow composition with existing semantic theme sources. Do not add wrappers, pseudo-elements, masks, fallbacks, gates, state, local browser overrides, or UI automated tests. Use the real current-source page and exact-region screenshots for personal review. Commit subjects retain the `dsw-33987` prefix and push only to `myhexin`. |
+| Hard constraints | Desktop-only. Keep `.workspace-main` as the sole boundary owner. Use native Cascading Style Sheets (CSS) border and shadow composition with existing semantic theme sources. Do not add wrappers, pseudo-elements, masks, fallbacks, gates, state, local browser overrides, or UI automated tests. Use the real current-source page and exact-region screenshots for personal review. Commit subjects retain the `dsw-33987` prefix and push only to `legacy-remote`. |
 | Sources read | The user's latest correction and highlighted crop; supplied Codex reference crop; current `workspace.css`, `design-language.css`, current panel architecture, prior corner repair record and commit history; real-page screenshots from each earlier attempt. |
 | Whole-repository search | `.workspace-main` remains the only production Workbench radius/boundary owner. Its current outer top and left borders are transparent, while an inset box-shadow draws a second inner contour and a 24-pixel exterior blur—equal to the complete corner radius—draws the outer elevation. No child surface owns the marked geometry. |
 | Independent feedback | None. The user did not request sub-agents, and unsolicited delegation is not permitted. |
@@ -485,7 +485,7 @@ not the direction of the shadow.
    and fade directly with the Codex reference.
 4. Rerun Overlay typecheck/build, documentation health, static integrity, and
    the complete pre-push hook without running UI tests.
-5. Review the exact task diff twice, commit, push to `myhexin`, and verify local
+5. Review the exact task diff twice, commit, push to `legacy-remote`, and verify local
    and remote convergence while preserving unrelated work.
 
 ### Edge-Contour Progress
@@ -547,7 +547,7 @@ consumer. No remaining correctness issue was found in the exact task diff.
 ### Edge-Contour Delivery
 
 Implementation commit `6131ed8967` was pushed to
-`myhexin/work-v0.0.30beta-yr-0804`. The pre-push hook passed Software
+`legacy-remote/work-v0.0.30beta-yr-0804`. The pre-push hook passed Software
 Development Kit (SDK) imports, Artificial Intelligence (AI) runtime validation,
 all scoped package typechecks, route inventory, generated documentation,
 Overlay internationalization, and secret scanning. The final record commit is
@@ -566,7 +566,7 @@ steps at the packaged WebView's display scale.
 | --- | --- |
 | User requirement | Continue the repair in the latest packaged client until the highlighted upper-left Workbench arc no longer reads as pointed. |
 | Acceptance criteria | Preserve the existing 24-pixel macro radius and compact elevation. The physical arc must read as one continuous, quiet contour at desktop display scaling, without a dotted diagonal, isolated dark step, broad wedge, doubled curve, or geometry change. |
-| Hard constraints | Desktop-only. Keep `.workspace-main` as the sole boundary owner. Do not add a wrapper, pseudo-element, mask, fallback, gate, state, theme branch, or User Interface (UI) automated test. Validate the real current-source page and the packaged desktop runtime visually. Preserve concurrent database-transfer and native-menu work. Commit subjects use `dsw-33987` and push only to `myhexin`. |
+| Hard constraints | Desktop-only. Keep `.workspace-main` as the sole boundary owner. Do not add a wrapper, pseudo-element, mask, fallback, gate, state, theme branch, or User Interface (UI) automated test. Validate the real current-source page and the packaged desktop runtime visually. Preserve concurrent database-transfer and native-menu work. Commit subjects use `dsw-33987` and push only to `legacy-remote`. |
 | Sources read | Root `AGENTS.md`; Browser control skill; the user's packaged-client screenshot and nearest-neighbor enlargement; the Codex reference screenshot; current and compiled `workspace.css` / `design-language.css`; `theme.ts`; `layout-tokens.ts`; Tauri build configuration; the complete prior repair record; and current Git history. |
 | Whole-repository search | The production Vite asset contains the physical border and compact elevation, proving the previous source change entered the package. `.workspace-main` remains the single production contour owner. Radius, spacing, and typography participate in `--ui-scale`, while its current contour is the shared raw one-pixel border at 22-percent black. No child surface paints the marked arc. |
 | Independent feedback | None. The user did not request sub-agents, and unsolicited delegation is not permitted. |
@@ -616,7 +616,7 @@ steps at the packaged WebView's display scale.
    inspect a native packaged-runtime screenshot and enlarged corner crop.
 5. Run Overlay typecheck, documentation health, static integrity, and the full
    pre-push hook without running UI automated tests. Review only the task-owned
-   diff twice, commit, push to `myhexin`, and verify remote convergence.
+   diff twice, commit, push to `legacy-remote`, and verify remote convergence.
 
 ### Packaged-Runtime Progress
 
@@ -694,7 +694,7 @@ documentation work remains outside this task's delivery set.
 ### Packaged-Runtime Delivery
 
 Implementation commit `5535f2be7f` was pushed to
-`myhexin/work-v0.0.31beta-yr-0805`. Before that push, a concurrently created
+`legacy-remote/work-v0.0.31beta-yr-0805`. Before that push, a concurrently created
 scratch-only local commit and five previously staged MySQL files were removed
 from the task history without deleting or overwriting their working-tree
 content. The delivered implementation commit therefore contains exactly the
@@ -719,7 +719,7 @@ continuity but incorrectly treated that exterior paint as required depth.
 | --- | --- |
 | User requirement | Continue adjusting because the highlighted top and left areas still contain shadow. |
 | Acceptance criteria | Keep the smooth 24-pixel rounded contour, but make the complete exterior region pure rail material with no Workbench shadow, glow, haze, or directional depth above, left of, or around the corner. Preserve all geometry, clipping, children, and interactions. |
-| Hard constraints | Desktop-only. Keep `.workspace-main` as the sole radius and contour owner. Delete the obsolete elevation source instead of replacing it with a weaker shadow, `none` override, fallback, wrapper, pseudo-element, mask, gate, state, or theme branch. Do not add, modify, update, or run User Interface (UI) automated tests. Validate the real current-source page and a newly built Release desktop client visually. Preserve concurrent Provider, MySQL, Composer, Environment, Software Development Kit, web-documentation, and index work. Commit subjects use `dsw-33987`; push only to `myhexin`. |
+| Hard constraints | Desktop-only. Keep `.workspace-main` as the sole radius and contour owner. Delete the obsolete elevation source instead of replacing it with a weaker shadow, `none` override, fallback, wrapper, pseudo-element, mask, gate, state, or theme branch. Do not add, modify, update, or run User Interface (UI) automated tests. Validate the real current-source page and a newly built Release desktop client visually. Preserve concurrent Provider, MySQL, Composer, Environment, Software Development Kit, web-documentation, and index work. Commit subjects use `dsw-33987`; push only to `legacy-remote`. |
 | Sources read | Root `AGENTS.md`; the supplied annotated enlargement; current and production Workbench contour/elevation styles; current panel architecture; this complete correction record; current Git history and working-tree state. |
 | Whole-repository search | `.workspace-main` consumes exactly one `--ui-workspace-elevation`; the token resolves to the visible `0 2px 8px -2px` exterior projection. The user-marked pixels align with that projection above and left of the physical border. No child, pane resizer, or rail layer owns those pixels. |
 | Independent feedback | None. The user did not request sub-agents, and unsolicited delegation is not permitted. |
@@ -763,7 +763,7 @@ continuity but incorrectly treated that exterior paint as required depth.
    nearest-neighbor enlargement.
 5. Run typecheck, documentation contracts, static integrity, and complete
    pre-push hooks without UI automated tests. Review the task diff twice, push
-   to `myhexin`, and verify the delivered commits remain ancestors of the remote
+   to `legacy-remote`, and verify the delivered commits remain ancestors of the remote
    branch if concurrent work advances its tip.
 
 ### No-Shadow Progress
@@ -844,12 +844,12 @@ index, and unrelated record changes remain outside this delivery set.
 The corrected diagnosis was committed as `7368906b59` before product edits.
 Implementation commit `915f350e42` contains exactly the two Workbench style
 files, current panel architecture, and this record, and was pushed to
-`myhexin/work-v0.0.31beta-yr-0805`.
+`legacy-remote/work-v0.0.31beta-yr-0805`.
 
 The full pre-push hook passed Software Development Kit imports, Artificial
 Intelligence runtime validation, all scoped package typechecks, route inventory,
 generated documentation, Overlay internationalization, and secret scanning.
-No hook was bypassed. After the push, local and git-cc implementation identities
+No hook was bypassed. After the push, local and legacy remote implementation identities
 both resolved to `915f350e422931a1cd9173f509ad7658889ed834`.
 
 ## 2026-08-05 User Correction: Remove the Square Backing Corner
@@ -864,7 +864,7 @@ that region as contour antialiasing or exterior shadow. It is neither.
 | --- | --- |
 | User requirement | Identify the exact element creating the visible sharp corner and make the result genuinely rounded instead of continuing to display it. |
 | Acceptance criteria | The complete region outside the Workbench quarter-circle must continue the same left-rail ambient material without a square color boundary at the Workbench border-box origin. Preserve the 24-pixel Workbench radius, white interior, contour, transcript scrolling, layout, and interactions. |
-| Hard constraints | Fix the backing surface owner rather than changing radius, contour, shadow, chat geometry, or adding another rounded wrapper. Keep one ambient rail paint owner across the panel row. Do not add, modify, update, or run User Interface (UI) automated tests. Validate the current real page and a new production desktop build visually. Preserve unrelated work. Commit subjects use `dsw-33987`; push only to `myhexin`. |
+| Hard constraints | Fix the backing surface owner rather than changing radius, contour, shadow, chat geometry, or adding another rounded wrapper. Keep one ambient rail paint owner across the panel row. Do not add, modify, update, or run User Interface (UI) automated tests. Validate the current real page and a new production desktop build visually. Preserve unrelated work. Commit subjects use `dsw-33987`; push only to `legacy-remote`. |
 | Sources read | Root `AGENTS.md`; Browser skill; the supplied fifth enlargement; live computed style and hit-test stacks around `.workspace-main`; `App.tsx`; light/dark theme palettes; Activity, Workspace, Conversation, and current panel architecture styles; this complete record; current Git state. |
 | Whole-repository search | `.left-activity-shell` alone paints `--rail-background-image`; `.panel-body` is the direct Workbench backing but is transparent; `body` paints only solid `--body-bg`. The existing `--panel-body-bg` token has no consumer. No other panel-row owner paints the ambient rail image behind the rounded cutout. |
 | Independent feedback | None. The user did not request sub-agents, and unsolicited delegation is not permitted. |
@@ -910,7 +910,7 @@ that region as contour antialiasing or exterior shadow. It is neither.
    the real native client at the same corner.
 5. Run typecheck, documentation contracts, static integrity, and full pre-push
    hooks without UI automated tests; review the task diff twice, commit, push,
-   and verify local/git-cc convergence.
+   and verify local/legacy remote convergence.
 
 ### Square-Backing Progress
 
@@ -989,9 +989,9 @@ row below it. No unrelated files are part of this implementation.
 The corrected element-level diagnosis was committed as `535e70e3aa` before
 product edits. During the long production build, concurrent work advanced the
 shared branch; implementation commit `3172160ca2` was therefore created directly
-on the fetched git-cc tip `e68893c85d`, preserving the complete shared history.
+on the fetched legacy remote tip `e68893c85d`, preserving the complete shared history.
 It contains exactly the two surface styles, current panel architecture, and this
-record, and was pushed to `myhexin/work-v0.0.31beta-yr-0805`.
+record, and was pushed to `legacy-remote/work-v0.0.31beta-yr-0805`.
 
 The full pre-push hook passed Software Development Kit imports, Artificial
 Intelligence runtime validation, all scoped package typechecks, route inventory,

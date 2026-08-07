@@ -24,7 +24,7 @@
 - Do not restart, refresh, close, or reuse the user's running OpenCorvus/Overlay process. Validation uses only a task-scoped isolated fixture.
 - Playwright must run through Node on Windows.
 - Preserve and exclude all unrelated concurrent worktree changes. Do not create another worktree.
-- Commit subjects start with `dsw-33987`; push the delivered commit to the current `myhexin` tracking branch.
+- Commit subjects start with `dsw-33987`; push the delivered commit to the current `legacy-remote` tracking branch.
 
 ### Sources read before implementation
 
@@ -84,7 +84,7 @@ The transcript disclosure has one semantic row system but three size sources. Th
 3. Route both collapsed and expanded tool headers through the same transcript-local font-size token.
 4. Extend the static CSS regression to require the shared token and reject the hard-coded 13px marker.
 5. Extend the real chronology browser regression to compare computed summary label, summary marker/current-tool icon, tool title/summary, and tool icon dimensions in both light and dark themes; save focused screenshots.
-6. Run focused tests, Overlay typecheck/build, document-health tests, inspect screenshots, correct any visible regression, perform a second diff review, commit only task-owned hunks, and push `myhexin`.
+6. Run focused tests, Overlay typecheck/build, document-health tests, inspect screenshots, correct any visible regression, perform a second diff review, commit only task-owned hunks, and push `legacy-remote`.
 
 ## Verification plan
 

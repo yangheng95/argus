@@ -11,7 +11,7 @@
 | Existing design history | `2026-07-30-conversation-neutral-surface-colors.md` made ordinary Agent message cards neutral and preserved stage identity outside the whole surface. The current request supersedes only its “no complete-surface tint” decision: the neutral base remains, but a low-opacity directional stage wash is now requested. `2026-07-30-work-card-static-wave-scope.md` remains authoritative that ordinary message surfaces are static and do not own the running wave.                                                                                                                                |
 | Sources read            | Root `AGENTS.md`; Browser control skill; supplied screenshot; `specs/current/architecture/12-overlay-card-system.md`; the two July records above; current `ChatBubble.tsx`, `SubagentProgressGrid.tsx`, `card-color.ts`, `chat-bubble.css`, `conversation.css`, `messages.css`, `card.css`, and light/dark theme palettes.                                                                                                                                                                                                                                                                          |
 | Whole-repository grep   | Production searches enumerated all `--conversation-card-background`, `--card-stage`, `linear-gradient`, `.chat-bubble`, `.subagent-progress-card`, and exact-session consumers. `chat-bubble.css` is the sole ordinary Agent-message fill owner. `ChatBubble.tsx` is the shared main and exact-session renderer and already injects canonical `--card-stage`. `messages.css` inherits the message background for expanded Tool tone. `conversation.css` owns the sole mature compact Agent-card gradient and the separate running-wave pseudo-element. User cards have an independent token branch. |
-| Git baseline            | Before this task, the related card-identity/activity changes were verified, committed as `16a0030300`, and pushed to `myhexin/work-v0.0.24beta-yr-0729`. Unrelated concurrent Composer, Right Dock, Progressive List, workspace, token, utility, spec, and screenshot changes remain unstaged and must not be altered or committed by this task.                                                                                                                                                                                                                                                    |
+| Git baseline            | Before this task, the related card-identity/activity changes were verified, committed as `16a0030300`, and pushed to `legacy-remote/work-v0.0.24beta-yr-0729`. Unrelated concurrent Composer, Right Dock, Progressive List, workspace, token, utility, spec, and screenshot changes remain unstaged and must not be altered or committed by this task.                                                                                                                                                                                                                                                    |
 
 ## Cause And Ownership
 
@@ -52,7 +52,7 @@ the earlier uniform stage-tinted fill.
    the unchanged static behavior.
 5. Iterate from the screenshot if needed, then re-grep all owners, review the
    exact diff a second time, record evidence here, commit only task-owned files
-   with the required `dsw-33987` prefix, push to `myhexin`, and confirm remote
+   with the required `dsw-33987` prefix, push to `legacy-remote`, and confirm remote
    convergence.
 
 ## Verification Evidence

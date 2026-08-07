@@ -89,7 +89,7 @@ primitive for both session-like rows without changing status ownership.
 4. Extend the real Overlay browser fixture with active and idle Chat rows, verify
    animation and hover geometry, and inspect the captured screenshot.
 5. Run focused tests, document-health checks, typecheck/build checks, and a second
-   diff review before committing and pushing to `myhexin`.
+   diff review before committing and pushing to `legacy-remote`.
 
 ## Result
 

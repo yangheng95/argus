@@ -6,12 +6,12 @@
 | --- | --- |
 | User request | “当前项目中的组件，参考codex的风格实现；按钮/搜索等组件1比1复刻codex的.统一在primitve内修改” with reference `C:/Users/10132/AppData/Local/Temp/codex-clipboard-fc01d2f0-5305-4767-ada2-cfc633fd01e7.png`. |
 | Acceptance criteria | Ordinary buttons, text fields, SearchField, and SelectControl use the Codex reference's compact neutral control language: 32px canonical height, 8px soft corners, quiet white/neutral fill, low-contrast one-pixel border, 500 control weight, no elevation, and one focus ring. True circular/capsule controls (icon buttons, switches, radio controls, slider parts, badges, and segmented choices) retain their semantic geometry. All production callers inherit the change from primitive CSS; feature surfaces do not add replacement recipes. |
-| Hard constraints | Desktop-only; preserve Solid/Kobalte component semantics and current component APIs; no fallback, duplicate component, raw per-page color, new worktree, temporary iframe, Bun-launched Playwright, or interference with the user's running OpenCorvus/Overlay. Use the isolated Vite page and in-app Browser for task-scoped screenshots. Every production change receives focused regression coverage, a second review, a `dsw-33987` commit, and push to `myhexin`. |
+| Hard constraints | Desktop-only; preserve Solid/Kobalte component semantics and current component APIs; no fallback, duplicate component, raw per-page color, new worktree, temporary iframe, Bun-launched Playwright, or interference with the user's running OpenCorvus/Overlay. Use the isolated Vite page and in-app Browser for task-scoped screenshots. Every production change receives focused regression coverage, a second review, a `dsw-33987` commit, and push to `legacy-remote`. |
 | Sources read | `AGENTS.md`; Browser skill; the supplied reference at original resolution; `2026-07-16-codex-settings-button-format.md`; `2026-07-16-settings-search-composer-visual-convergence.md`; `2026-07-16-overlay-worktree-shortcuts-chat-files-and-button-system.md`; `2026-07-15-codex-settings-multica-expert-squad-unification.md`; Button/SearchField/TextField/SelectControl sources; primitive and field CSS; focused tests. |
 | Baseline visual evidence | The real isolated Vite Settings page at `http://127.0.0.1:5187/` shows SearchField at `31.14px` high with `999px` radius, the shared settings outline/back action at `38px` high and `8px` radius but `600` weight, and Select chrome still owned by `styles/surfaces/field.css`. The supplied reference uses softly rounded rectangular fields/actions and reserves pills for switches/choice capsules. |
 | Whole-repository grep | Button has 53 TSX import owners; SearchField has 7; TextField has 10; Select/selection/segmented/slider/tabs/menu primitives have 21 combined owners. Production literal native controls outside `components/ui` are file/hidden inputs only. `button.css` and `text-field.css` are the shared visual owners; `field.css` is the only misplaced owner of `.oc-select-*` and `.search-field-icon`. Searches also enumerated every primitive and surface use of `--oc-radius-pill` so capsule semantics can be preserved deliberately. |
 | Independent agent feedback | None. The user did not request sub-agents, and the active collaboration policy forbids unrequested delegation. |
-| Git baseline | Branch `work-v0.0.9beta-yr-0718`; clean `HEAD` `74dd31e55` is synchronized with `myhexin/work-v0.0.9beta-yr-0718` before implementation. |
+| Git baseline | Branch `work-v0.0.9beta-yr-0718`; clean `HEAD` `74dd31e55` is synchronized with `legacy-remote/work-v0.0.9beta-yr-0718` before implementation. |
 
 ## Diagnosis
 
@@ -34,7 +34,7 @@ The component architecture is already mostly correct: production JSX routes butt
 2. Move SelectControl visual ownership into one new primitive stylesheet and remove the old surface source.
 3. Update focused source regressions for geometry, typography, ownership, and primitive load order.
 4. Run focused tests, Overlay typecheck/i18n/build, documentation health, and `git diff --check`.
-5. Reload only the isolated verification tab, inspect General and Appearance at the supplied desktop viewport, correct visual discrepancies, perform a second diff review, commit, and push to `myhexin`.
+5. Reload only the isolated verification tab, inspect General and Appearance at the supplied desktop viewport, correct visual discrepancies, perform a second diff review, commit, and push to `legacy-remote`.
 
 ## Verification Plan
 

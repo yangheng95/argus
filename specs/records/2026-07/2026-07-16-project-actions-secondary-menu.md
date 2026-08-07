@@ -9,7 +9,7 @@
 | Hard constraints | Preserve `ProjectLedgerGroup` as the single project-heading owner and `WorkLedger` as its callback source; use the existing Kobalte dropdown and shared `Button`/`Icon` primitives; do not add reference-only actions without backend ownership; no fallback menu, hidden duplicate controls, mobile/tablet scope, new worktree, or interference with the running OpenCorvus process; browser fixtures run through Node. |
 | Supplied evidence | `C:/Users/10132/AppData/Local/Temp/codex-clipboard-c6dcc4e4-87ee-4cc8-b0b3-cced653947e9.png`, inspected at original resolution. It shows a project heading with ellipsis first, new-conversation second, and project management actions in the ellipsis menu. |
 | Sources read | `AGENTS.md`; Browser skill; `specs/current/architecture/07-panel.md`; `ProjectLedgerGroup.tsx`; `WorkLedger.tsx`; `Icon.tsx`; `sidebar.css`; existing Kobalte dropdown implementations in `RightDock.tsx`, `ChatComposer.tsx`, and `WorkspaceSplitLauncher.tsx`; focused source and Node browser tests. |
-| Git baseline | `work-v0.0.6beta-yr-0716` at `4d2a92d7a`; `HEAD...myhexin/work-v0.0.6beta-yr-0716` is `0 0`. The worktree contains unrelated user changes, which remain unstaged and outside this task's commit. |
+| Git baseline | `work-v0.0.6beta-yr-0716` at `4d2a92d7a`; `HEAD...legacy-remote/work-v0.0.6beta-yr-0716` is `0 0`. The worktree contains unrelated user changes, which remain unstaged and outside this task's commit. |
 | Independent agent feedback | None. The user did not request delegation, and the active collaboration policy forbids unrequested sub-agents. |
 
 ## Whole-repository search evidence
@@ -42,7 +42,7 @@
 2. Replace the pin and delete direct buttons in `ProjectLedgerGroup` with Kobalte dropdown items, and add the capability-backed file-manager plus canonical project-rename items while preserving action/error ownership and stable `data-ui` selectors.
 3. Replace the three-button rail styling with ellipsis/new-chat trigger styling and a focused-popup-token-backed menu surface whose rows align to the Codex reference.
 4. Update focused source and Node browser regression coverage for hierarchy, visibility, menu geometry, keyboard focus, pin/unpin, remove, and direct new-chat behavior.
-5. Run focused tests, Overlay typecheck/build/i18n, documentation health, a fresh Node browser fixture, inspect its screenshot at original resolution, correct visual issues, review the diff a second time, commit with `dsw-33987`, and push `myhexin`.
+5. Run focused tests, Overlay typecheck/build/i18n, documentation health, a fresh Node browser fixture, inspect its screenshot at original resolution, correct visual issues, review the diff a second time, commit with `dsw-33987`, and push `legacy-remote`.
 
 ## Verification plan
 

@@ -24,7 +24,7 @@ The user reported that interrupting a Task leads to `panel tool requires ctx.ext
 - Keep `PanelTool.resolvePanelSurface` fail-fast; the repair belongs at the dispatcher input boundary.
 - No fallback, compatibility alias, gate, keyword rule, hidden message, synthetic message, or second authorization source.
 - Mission's canonical control-plane surface is `panel`; the caller ingress surface remains provenance and does not redefine Mission authorization.
-- Preserve unrelated worktree changes, use the required `dsw-33987` commit prefix, and push only the current main delivery branch to the git-cc `myhexin` remote.
+- Preserve unrelated worktree changes, use the required `dsw-33987` commit prefix, and push only the current main delivery branch to the legacy remote.
 
 ### Sources read
 
@@ -79,7 +79,7 @@ The earlier interruption is causal only in routing: it is followed by a queued M
 2. Apply it from the shared session route overlay when the authoritative session kind is `mission`; keep right-sidebar Chat and ordinary assistant behavior unchanged.
 3. Extend the real `prompt_async` route regression to assert both stored queue input and persisted visible user-message surface.
 4. Run focused route, task-queue, Mission surface-continuity, panel authorization, typecheck, formatting, diff, historical-link, and document-health checks.
-5. Perform a second source/diff review, update this record with exact evidence, commit, fetch/reconcile, and push the current delivery branch to `myhexin`.
+5. Perform a second source/diff review, update this record with exact evidence, commit, fetch/reconcile, and push the current delivery branch to `legacy-remote`.
 
 ## Validation plan
 

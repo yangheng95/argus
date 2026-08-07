@@ -19,7 +19,7 @@ Owner: Codex
 4. The focused positive continuation contract asserts the exact `terminal_success` dispatch result, existing child Session identity, immutable continuation lineage, and completed coordination action.
 5. Focused non-User Interface tests, package typecheck, route/docs checks, document health, and diff review pass.
 6. No production database row, historical Task, running backend, or Overlay process is mutated or restarted during implementation.
-7. Changes are committed with the `dsw-33987` prefix and pushed to `myhexin/v0.0.29beta` without bypassing hooks.
+7. Changes are committed with the `dsw-33987` prefix and pushed to `legacy-remote/v0.0.29beta` without bypassing hooks.
 
 ### Hard constraints
 
@@ -93,7 +93,7 @@ This is the existing strict Session contract, not compatibility behavior. The mi
 4. Run the focused Build continuation test and relevant Build/runner contracts.
 5. Run `packages/opencorvus` typecheck, route/docs checks, historical document links, document health, product docs single source, and `git diff --check`.
 6. Review the exact diff and verify the unrelated artifact remains untouched.
-7. Update this record with results, commit, and push `myhexin/v0.0.29beta`.
+7. Update this record with results, commit, and push `legacy-remote/v0.0.29beta`.
 
 ## Implementation and verification evidence
 

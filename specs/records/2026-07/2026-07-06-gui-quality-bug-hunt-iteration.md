@@ -57,8 +57,8 @@ The user set the active goal to act as a professional GUI testing engineer, lead
 
 ### Repository State Evidence
 
-- `git status --short --branch` showed the branch is `v0.0.2beta...myhexin/v0.0.2beta` with substantial existing uncommitted changes, including deleted old flat `.opencorvus/expert-squads/<id>` package files, new `.opencorvus/expert-squads/builtin/**` and `.opencorvus/expert-squads/wujiang/**` package sources, and changes across expert-squad registry/manager/resolver/routes/tests/overlay SDK/specs.
-- `git remote -v` confirmed the git-cc remote is `myhexin` at `https://git-cc.myhexin.com:6443/yangheng/opencorvus.git`.
+- `git status --short --branch` showed the branch is `v0.0.2beta...legacy-remote/v0.0.2beta` with substantial existing uncommitted changes, including deleted old flat `.opencorvus/expert-squads/<id>` package files, new `.opencorvus/expert-squads/builtin/**` and `.opencorvus/expert-squads/wujiang/**` package sources, and changes across expert-squad registry/manager/resolver/routes/tests/overlay SDK/specs.
+- `git remote -v` confirmed the legacy remote is `legacy-remote` at `https://github.com/yangheng95/opencorvus.git`.
 - `git diff --stat` showed the current tree has 128 changed files with package-source relocation and expert-squad runtime changes. This record does not claim ownership of those existing changes.
 
 ### Repository Search Evidence
@@ -1009,7 +1009,7 @@ Validation:
 Remaining follow-up:
 
 - Stage the intended delivery set while excluding the untracked July planning draft, then run the new git-index trackedness tests.
-- Run root generation, full targeted validation, final independent-agent scan, commit, and push to `myhexin`.
+- Run root generation, full targeted validation, final independent-agent scan, commit, and push to `legacy-remote`.
 
 ### Iteration 20
 
@@ -1169,7 +1169,7 @@ Validation:
 
 Remaining follow-up:
 
-- Launch another independent-agent scan after the Iteration 22 repairs. If it finds no new high-confidence issue locations, run final staged checks, commit with `dsw-33987`, and push to `myhexin`.
+- Launch another independent-agent scan after the Iteration 22 repairs. If it finds no new high-confidence issue locations, run final staged checks, commit with `dsw-33987`, and push to `legacy-remote`.
 
 ### Iteration 23
 

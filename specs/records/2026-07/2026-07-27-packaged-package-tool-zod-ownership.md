@@ -15,7 +15,7 @@ The user reported that Task `tsk_fa3d85f45001wuFYqqzEYpyFDf` still had an empty 
 - Preserve one dependency owner: package-tool Plugin compilation must use the Zod declared by `@opencorvus-ai/plugin`.
 - Reproduce the installed runtime's conflicting root Zod 3 and nested Plugin Zod 4 layout in an executable regression test.
 - Do not restart, refresh, or terminate the running OpenCorvus or Overlay processes.
-- Preserve unrelated shared-worktree changes and push only task-owned changes through normal hooks to `myhexin`.
+- Preserve unrelated shared-worktree changes and push only task-owned changes through normal hooks to `legacy-remote`.
 
 ### Hard constraints
 

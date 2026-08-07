@@ -9,7 +9,7 @@
 | Hard constraints | Change the single default source only. Do not add a second default, fallback, compatibility alias, Host admission gate, state machine, UI-local guessed value, or generated-schema constant. Preserve all unrelated dirty-worktree changes and do not change or run User Interface automated tests. |
 | Sources read | `packages/opencorvus/src/engine/config.ts`, `engine/helpers.ts`, `engine/describe.ts`, `server/routes/config.ts`, `config/config.ts`, Overlay `composer-run-controls.ts`, current configuration architecture, public configuration docs, Engine configuration tests, and the preceding ready-frontier parallel-dispatch record. |
 | Whole-repository grep | Searches covered every `max_executor_groups`, `agent_parallelism`, and parallelism occurrence across `packages/**` and `specs/**`, excluding generated OpenAPI/JavaScript SDK bulk output after confirming they describe only the optional positive-integer field. `EngineConfig.DEFAULTS.max_executor_groups` is the sole hardcoded runtime default. `EngineConfig.get()` merges an explicit assistant value over it; `effectiveMaxAgentParallelism()` gives a Task budget first priority; `configResponse()` projects the resolved default into `GET /config`; Overlay reads that server value without a local default; `describeTask()` renders the effective Task budget. Public docs use `4` only as an explicit configuration example, not a default claim. |
-| Git baseline | Branch `v0.0.26beta` and `myhexin/v0.0.26beta` both resolve to `86947b221adbb5162c920f312521770787860e72`. Existing Overlay, Composer, screenshot, and preload changes are concurrent work and remain untouched. |
+| Git baseline | Branch `v0.0.26beta` and `legacy-remote/v0.0.26beta` both resolve to `86947b221adbb5162c920f312521770787860e72`. Existing Overlay, Composer, screenshot, and preload changes are concurrent work and remain untouched. |
 | Independent agent feedback | None. The user did not request delegated or parallel audit, so the active collaboration policy prohibits inferred sub-agent spawning. The primary agent owns the required second review. |
 
 ## Cause And Decision
@@ -62,9 +62,9 @@ The direct correction is therefore:
 
 - [x] Default owner, precedence, route/UI/runtime projections, schema/docs,
       tests, Git baseline, and unrelated worktree state inspected.
-- [x] Recall commit `6fe22b900a` and git-cc push complete.
+- [x] Recall commit `6fe22b900a` and legacy remote push complete.
 - [x] Default, positive contract, and architecture update complete.
-- [x] Implementation commit `b7ae2051c5`, complete pre-push hook, git-cc push,
+- [x] Implementation commit `b7ae2051c5`, complete pre-push hook, legacy remote push,
       and immediate remote convergence complete.
 
 ## Verification And Second Review

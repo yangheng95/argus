@@ -358,7 +358,7 @@ The final independent architecture pass confirmed that the corrected handoff Ses
    - Keep this `Codex review feedback` section current when later implementation review finds missed callers or contracts.
 6. **Spec governance and delivery**
    - Update `specs/README.md`, the monthly record index, and applicable document-health sources with every plan revision.
-   - Use the `dsw-33987` commit prefix, run hooks without bypass, and push the main branch to `myhexin` before claiming delivery.
+   - Use the `dsw-33987` commit prefix, run hooks without bypass, and push the main branch to `legacy-remote` before claiming delivery.
 
 ## Verification matrix
 

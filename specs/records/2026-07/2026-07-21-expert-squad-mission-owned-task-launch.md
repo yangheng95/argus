@@ -58,7 +58,7 @@ The session-scope correction exposed a second, previously masked transition race
 3. Run Overlay typecheck/build and the required historical-doc links plus relevant document-health tests.
 4. Run the two real Node-launched submit fixtures (`composer-mention-browser` and `project-directory-new-chat-browser`). Select or mention a non-General squad, submit a request, prove exactly one `/mission/wake` body with the exact `promptProfile`, prove no `/task` POST, hydrate/select the returned Mission, and capture task-scoped screenshots. Keep `expert-squad-selector-browser` in the focused visual regression run for selector/catalog continuity.
 5. Inspect the screenshots at original resolution and repair any visible mismatch before rerunning.
-6. Review the final diff for accidental edits, then commit only the task-owned paths with the required `dsw-33987` prefix and push the current main branch to `myhexin` if repository hooks pass without incorporating unrelated work.
+6. Review the final diff for accidental edits, then commit only the task-owned paths with the required `dsw-33987` prefix and push the current main branch to `legacy-remote` if repository hooks pass without incorporating unrelated work.
 
 ## Validation Record
 

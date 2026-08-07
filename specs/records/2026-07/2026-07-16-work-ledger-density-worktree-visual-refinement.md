@@ -11,7 +11,7 @@
 | Sources read | `AGENTS.md`; `specs/README.md`; `specs/current/architecture/07-panel.md`; July records for Mission disclosure, left-Dock density, Work Ledger icon/popup unification, Codex sidebar parity, and Worktree layout; `WorkLedger.tsx`; `TaskDirBar.tsx`; `work-ledger.css`; `conversation.css`; shared `Icon`, `Button`, Work Ledger, and runtime browser/source tests. |
 | Whole-repository search | `rg` covered every `mission-task-disclosure`, `work-row-kind-mark`, `work-row-head`, `project-worktree-*`, `loadProjectWorktrees`, `deleteProjectWorktree(s)`, and relevant screenshot/test call site. `WorkLedgerRowView` remains the only disclosure owner; `work-ledger.css` remains its only layout owner; `ProjectRuntimeStatusPanel` remains the only Worktree UI/data owner; `task-cwd-row-layout.test.ts`, `work-ledger-consolidation.test.ts`, `titlebar-toolbar-toggle-browser.test.ts`, and `task-dirbar-keyboard.test.ts` are the focused regression surfaces. |
 | Independent agent feedback | None. The user did not request sub-agents and the affected code is one tightly coupled Overlay surface. |
-| Git baseline | The current branch was clean and synchronized with git-cc before edits. The first pre-push exposed stale local SDK build output; rebuilding the existing SDK output restored the generated type exports, the full hook passed, and the generated tracked OpenAPI difference was inspected and precisely restored because the pre-task worktree was clean. |
+| Git baseline | The current branch was clean and synchronized with legacy remote before edits. The first pre-push exposed stale local SDK build output; rebuilding the existing SDK output restored the generated type exports, the full hook passed, and the generated tracked OpenAPI difference was inspected and precisely restored because the pre-task worktree was clean. |
 
 ## Root cause
 
@@ -23,7 +23,7 @@ The count/disclosure and Mission icon are separate grid cells whose DOM order cu
 2. Introduce sidebar-owned Work Ledger icon/text/line-box tokens in `work-ledger.css`, project them to row glyphs, primary labels, metadata, timestamps, and disclosures, and replace clipping-prone fixed text line-height with a centered minimum line box.
 3. Recompose the existing Worktree section with shared primitives: compact icon-only header actions, a leading Git-worktree glyph per row, the name as the full remaining target, and the existing delete action on the trailing rail. Keep the same loader, confirmation, ownership, failure, and board-refresh path.
 4. Update focused source and Node-launched browser regressions, build an isolated desktop fixture, inspect screenshots at normal and scaled/narrow desktop sizes, correct visual issues, and rerun.
-5. Run documentation health, formatting, diff review, commit with the `dsw-33987` prefix, and push the current branch to git-cc.
+5. Run documentation health, formatting, diff review, commit with the `dsw-33987` prefix, and push the current branch to legacy remote.
 
 ## Verification
 
@@ -52,7 +52,7 @@ The count/disclosure and Mission icon are separate grid cells whose DOM order cu
 | Sources read | `AGENTS.md`; Browser control skill; this record; `2026-07-16-overlay-worktree-shortcuts-chat-files-and-button-system.md`; `WorkLedger.tsx`; `Icon.tsx`; `work-ledger.css`; `focused-popup-surface.test.ts`; `work-ledger-consolidation.test.ts`; `titlebar-toolbar-toggle-browser.test.ts`; current icon/layout commit history. |
 | Whole-repository search | `rg` enumerated every `WorkLedgerKindMark`, `kindIcon`, `work-mission`, `work-task`, `work-chat`, `mission-task-disclosure`, `work-row-inline-meta`, and Work Ledger geometry assertion. `Icon.tsx` is the single glyph mapping owner; `WorkLedger.tsx` and `ArchivePanel.tsx` consume the three semantic aliases; `WorkLedgerRowView` is the only live Mission count/disclosure renderer; `work-ledger.css` is the only layout/chrome owner. Focused regressions live in `focused-popup-surface.test.ts`, `work-ledger-consolidation.test.ts`, and `titlebar-toolbar-toggle-browser.test.ts`. |
 | Independent agent feedback | None. The user did not request sub-agents and active collaboration policy forbids unrequested delegation. |
-| Git baseline | The current branch remains at pushed git-cc commit `9f670edb9`; task-local composer/ChatBubble/spec edits and unrelated pre-existing dirty files are preserved separately. |
+| Git baseline | The current branch remains at pushed legacy remote commit `9f670edb9`; task-local composer/ChatBubble/spec edits and unrelated pre-existing dirty files are preserved separately. |
 
 ### Root cause
 

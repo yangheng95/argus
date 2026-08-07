@@ -40,7 +40,7 @@ working tree.
   removing only the outer Agent-card fill.
 - Do not refresh, restart, or interfere with the user's running Overlay.
 - Playwright browser verification runs through Node, not Bun.
-- Commit subjects start with `dsw-33987`; delivery uses the `myhexin` remote.
+- Commit subjects start with `dsw-33987`; delivery uses the `legacy-remote` remote.
 
 ### Sources read
 

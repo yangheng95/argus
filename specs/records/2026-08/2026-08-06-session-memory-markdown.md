@@ -170,7 +170,7 @@ Run focused positive contracts first, then the repository-required checks:
   - post-implementation checks passed: OpenCorvus TypeScript typecheck, API route inventory, API documentation generation check (312 operations across 24 groups), release-version alignment, and staged-diff whitespace validation.
 
 - Baseline synchronization:
-  - merged `myhexin/v0.0.31beta` into `v0.0.32beta`;
+  - merged `legacy-remote/v0.0.31beta` into `v0.0.32beta`;
   - resolved Office Artifact/cancellation/test/spec conflicts by retaining both current contracts;
   - repaired the merged task queue so delayed prompt-owner cancellation preserves the typed cancellation origin;
-  - full pre-push checks passed, while three upload attempts were rejected after hooks by the git-cc HTTP endpoint with `protocol error: bad line length character: {"co`.
+  - full pre-push checks passed, while three upload attempts were rejected after hooks by the legacy remote HTTP endpoint with `protocol error: bad line length character: {"co`.

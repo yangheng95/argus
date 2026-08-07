@@ -33,7 +33,7 @@ The operator then clarified:
 - No Host gate, workflow engine, correction state, retry counter, optional
   manifest node, or compatibility path is introduced.
 - Focused non-User-Interface prompt-contract tests, typecheck, documentation
-  checks, commit, and `myhexin/v0.0.28beta` push succeed.
+  checks, commit, and `legacy-remote/v0.0.28beta` push succeed.
 
 ### Hard constraints
 

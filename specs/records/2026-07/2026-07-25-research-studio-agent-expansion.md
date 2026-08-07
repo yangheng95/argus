@@ -51,7 +51,7 @@ as Markdown.
   worktree. Do not restart, refresh, or stop a running OpenCorvus or Overlay
   process.
 - Commit subjects on the current beta delivery line start with `dsw-33987`, and
-  the completed task is pushed to `myhexin/v0.0.18beta` through normal hooks.
+  the completed task is pushed to `legacy-remote/v0.0.18beta` through normal hooks.
 
 ### Sources Read
 
@@ -133,7 +133,7 @@ an active workflow or step status.
 - Run focused Research Studio, SDK, payload, virtual-workflow, repository
   dynamic-package, historical-link, document-health, and TypeScript checks.
 - Review the exact task diff after tests, run `git diff --check`, commit only
-  task-owned changes through normal hooks, push `myhexin/v0.0.18beta`, and
+  task-owned changes through normal hooks, push `legacy-remote/v0.0.18beta`, and
   verify local/remote commit equality.
 
 ## Validation Findings
@@ -183,4 +183,4 @@ suite's dangling-process termination rather than the Research Studio package.
 ## Delivery
 
 Delivery commit subject: `dsw-33987 expand research studio common agents`.
-Target: `myhexin/v0.0.18beta` through normal repository hooks.
+Target: `legacy-remote/v0.0.18beta` through normal repository hooks.

@@ -21,7 +21,7 @@
 - Do not add a ResizeObserver, timer, DOM-derived layout signal, fallback layout, duplicate composer, duplicate home state, or host gate.
 - Preserve unrelated dirty backend session/protocol changes in the shared worktree.
 - Do not restart, refresh, close, or otherwise intervene in the user's running OpenCorvus/Overlay process.
-- New commits use the `dsw-33987` prefix and push to the configured git-cc remote.
+- New commits use the `dsw-33987` prefix and push to the configured legacy remote.
 
 ### Sources read
 
@@ -83,7 +83,7 @@ The empty-home content and empty-home layout are driven by two different update 
 
 1. Render the existing notice only for `launcherMode === "mission"` and remove the unreachable ordinary-Chat notice branches.
 2. Delete the four dead `chat.home_notice_*` keys from both locale catalogs and update source regressions to assert their absence while preserving Mission coverage.
-3. Run focused unit/type checks, launch the isolated Node browser fixture, inspect a desktop screenshot, then commit and attempt the required git-cc push.
+3. Run focused unit/type checks, launch the isolated Node browser fixture, inspect a desktop screenshot, then commit and attempt the required legacy remote push.
 
 ### Result
 

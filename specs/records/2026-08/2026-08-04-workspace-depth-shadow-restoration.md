@@ -11,7 +11,7 @@
 | Sources read | Root `AGENTS.md`; Browser control skill; supplied comparison; current `workspace.css`, `design-language.css`, `App.tsx`, and `specs/current/architecture/07-panel.md`; the July 14 workspace-continuity, July 29 shadow-confinement, August 3 border-convergence, and August 4 inner-outline records; relevant Git history before the shadow removal. |
 | Whole-repository grep | `App.tsx` mounts one `#workspaceMain`. `workspace.css::.workspace-main` is the sole production macro-frame compositor. The current `box-shadow: none` is the direct flatness trigger. The old eight workspace-shadow parameter tokens have no remaining consumers. Theme cascades already provide the shared `--ui-shadow-tone`, so a single composite semantic token can restore depth without theme-specific duplicate implementations. |
 | Independent review | None. The user did not request sub-agents, and the change has one tightly coupled visual owner. |
-| Git baseline | Branch `work-v0.0.29beta-yr-0803` began at `4f4317e38e`, exactly aligned with `myhexin/work-v0.0.29beta-yr-0803`. A pre-change push entered the repository hook but was blocked by unrelated concurrent native-menu work with an incomplete `setBranchSelectorOpen` reference; those files remain outside this task. |
+| Git baseline | Branch `work-v0.0.29beta-yr-0803` began at `4f4317e38e`, exactly aligned with `legacy-remote/work-v0.0.29beta-yr-0803`. A pre-change push entered the repository hook but was blocked by unrelated concurrent native-menu work with an incomplete `setBranchSelectorOpen` reference; those files remain outside this task. |
 
 ## Cause Chain
 
@@ -54,7 +54,7 @@
    inspect them, and tune the semantic token if the shadow is absent, too broad,
    square, or visually detached.
 5. Recheck the exact diff and task-owned files, commit with the required
-   `dsw-33987` prefix, push to `myhexin`, and verify local/remote convergence.
+   `dsw-33987` prefix, push to `legacy-remote`, and verify local/remote convergence.
 
 ## Progress
 
@@ -64,7 +64,7 @@
 - [x] Commit and push the pre-change plan.
 - [x] Implement the single-owner depth shadow and architecture update.
 - [x] Complete non-UI checks and real-page visual review.
-- [x] Complete final review, commit, and git-cc push.
+- [x] Complete final review, commit, and legacy remote push.
 
 ## Real-Page Visual Evidence
 

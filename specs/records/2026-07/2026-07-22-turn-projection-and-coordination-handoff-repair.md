@@ -35,7 +35,7 @@ runtime failures while explicitly excluding the Goal-status projection:
 - Do not change Goal status or Goal outcome behavior in this repair.
 - Do not restart or refresh the running OpenCorvus or Overlay process.
 - Preserve and do not stage unrelated dirty work in the shared worktree.
-- Commit subjects use `dsw-33987` and push to `myhexin/v0.0.13beta`.
+- Commit subjects use `dsw-33987` and push to `legacy-remote/v0.0.13beta`.
 
 ### Sources read
 

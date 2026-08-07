@@ -50,7 +50,7 @@
 2. Recompose the runtime panel worktree section around its existing loader and deletion services; add refresh/delete-all labels and interaction coverage.
 3. Extend the single settings-section registry with Expert Squad Install, turn Expert Squads into a nav group, and split one panel implementation into install/details projections.
 4. Update focused unit/browser tests, run typecheck/build/document-health checks, then open isolated desktop pages, inspect screenshots, correct visual issues, and rerun.
-5. Review the final diff, commit only task-owned files with the required `dsw-33987` prefix, and push the current branch to git-cc.
+5. Review the final diff, commit only task-owned files with the required `dsw-33987` prefix, and push the current branch to legacy remote.
 
 ## Result
 

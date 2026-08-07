@@ -10,7 +10,7 @@
 | Sources read | `AGENTS.md`; browser-control skill; supplied screenshot; memory note for canonical Right Dock ownership and Vite `networkidle0`; current `RightDock.tsx`; `workspace.css`; `right-dock-panel-ownership.test.ts`; Right Dock browser fixtures; prior capsule-tab and multi-tab records; current git status and diff. |
 | Whole-repository grep | `RightDock.tsx` is the sole tab DOM and overflow-measurement owner. `workspace.css .right-dock-tab-strip` is the sole production owner of `--right-dock-tab-max-width`, currently 240 pixels. `right-dock-panel-ownership.test.ts` is the sole exact source-contract assertion for that variable. Existing browser tests cover real open-tab measurement, overflow stability, close, and selection; no second production width source exists. Other 240-pixel values belong to unrelated Tooltip, card, message, settings, and inspector surfaces and must remain unchanged. |
 | Independent agent feedback | None. The user did not request sub-agents, so no delegation is permitted for this task. |
-| Git baseline | Delivery branch is `v0.0.19beta` at `87c7987022`, one commit ahead of `myhexin/v0.0.19beta`. The shared worktree contains unrelated concurrent source, test, i18n, and spec edits; this task must use selective staging and must not reset, stash, restore, or broadly stage them. |
+| Git baseline | Delivery branch is `v0.0.19beta` at `87c7987022`, one commit ahead of `legacy-remote/v0.0.19beta`. The shared worktree contains unrelated concurrent source, test, i18n, and spec edits; this task must use selective staging and must not reset, stash, restore, or broadly stage them. |
 
 ## Root Cause
 
@@ -37,7 +37,7 @@ already handle labels that no longer fit and require no component change.
 2. Change the one CSS maximum and its focused source contract.
 3. Run the focused unit test, Overlay typecheck, i18n check, and Vite build.
 4. Run the existing Right Dock fixture through Node, capture a task-scoped screenshot, inspect it at original resolution, and correct any visual regression.
-5. Re-run the whole-repository search, review the exact task diff, record evidence here, selectively commit only task-owned hunks, and push `v0.0.19beta` to `myhexin` through normal hooks.
+5. Re-run the whole-repository search, review the exact task diff, record evidence here, selectively commit only task-owned hunks, and push `v0.0.19beta` to `legacy-remote` through normal hooks.
 
 ## Progress
 

@@ -22,7 +22,7 @@ Investigate `C:\Users\10132\Downloads\prism\output` and start porting the Mirror
 - Author and validate the package through the existing `@opencorvus-ai/sdk/expert-squad-authoring`, `POST /expert-squad/validate-folder`, `ExpertSquadPackageManager`, `ExpertSquadRegistry`, and `PromptProfileResolver` paths.
 - Prove inactive-package isolation, exact dynamic-agent identities, Skill mounts, default tool and Browser MCP projection, project-scoped import, and explicit activation with focused tests.
 - Regenerate the checked-in expert-squad payload from the tracked package source and update the specs indexes.
-- Run focused tests, SDK typecheck, OpenCorvus typecheck, payload freshness, docs health, historical links and `git diff --check`; then perform a second code/data review before commit and git-cc push.
+- Run focused tests, SDK typecheck, OpenCorvus typecheck, payload freshness, docs health, historical links and `git diff --check`; then perform a second code/data review before commit and legacy remote push.
 
 ### Hard constraints
 
@@ -140,7 +140,7 @@ The corrected OpenCorvus-native topology uses exact dynamic identities for inten
 - [x] Extend tests from projection shape to executable tool/prompt contracts and prove asset-byte/digest behavior with a real local HTTP fixture.
 - [x] Run focused and structural validation; repair every in-scope failure. Mirror Prism focused tests, payload freshness, virtual-workflow residue, SDK authoring, Browser MCP fixture and both typechecks pass. The unrelated Windows payload-release `EPERM` remains explicitly classified below.
 - [x] Perform post-correction independent review and record its final verdict in `Codex review feedback`.
-- [x] Commit the post-review test/spec delta with a `dsw-33987` subject and push the main delivery branch to `myhexin/v0.0.13beta` without bypassing hooks.
+- [x] Commit the post-review test/spec delta with a `dsw-33987` subject and push the main delivery branch to `legacy-remote/v0.0.13beta` without bypassing hooks.
 
 ## Validation plan
 

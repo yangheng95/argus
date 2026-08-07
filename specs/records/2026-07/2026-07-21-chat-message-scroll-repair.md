@@ -5,13 +5,13 @@
 | Item | Detail |
 | --- | --- |
 | User request | Fix the Chat message interface for Coding Assistant session `ses_07f5d4cadffeAfnorqA7YfBYsP`, where the user reports that the transcript cannot scroll. |
-| Acceptance criteria | Reproduce the supplied seven-message / four-top-level-card session shape in the production Overlay; prove the canonical transcript has a bounded viewport, real overflow, visible scrollbar geometry on hover/focus, and responds to wheel, keyboard and direct-scroll input; inspect task-scoped screenshots before and after scrolling; keep the composer fixed; add regression coverage; pass focused tests, build/typecheck, document health, secondary review, commit and git-cc push. |
+| Acceptance criteria | Reproduce the supplied seven-message / four-top-level-card session shape in the production Overlay; prove the canonical transcript has a bounded viewport, real overflow, visible scrollbar geometry on hover/focus, and responds to wheel, keyboard and direct-scroll input; inspect task-scoped screenshots before and after scrolling; keep the composer fixed; add regression coverage; pass focused tests, build/typecheck, document health, secondary review, commit and legacy remote push. |
 | Hard constraints | Desktop-only scope; `#chatScroll` remains the single transcript overflow owner and `#solidChatComposer` remains the single composer; no fallback, duplicate scroll source, state machine, temporary iframe/query override, keyword workaround, worktree, Bun-launched Playwright, or refresh/restart of the user's running OpenCorvus/Overlay. Preserve unrelated dirty files in `packages/opencorvus`. |
 | Supplied evidence | Chat Debug Info generated `2026-07-21 02:09:56Z`: session title `重试`, status `active`, directory `/Users/yangheng/Documents/OpenCorvus-Demos/crypto`, selected source `session:ses_07f5d4cadffeAfnorqA7YfBYsP`, four top-level cards, four total cards, two Agent cards, two Message cards and no Tool cards. Read-only server evidence shows seven persisted messages: two User turns and five Assistant turns. |
 | Sources read | `AGENTS.md`; Browser control skill and complete selected-browser documentation; `specs/README.md`; July index; 2026-07-09 message/composer scrollbar record; 2026-07-17 fixed-composer, short-chat and scroll-owner records; `App.tsx`; `Conversation.tsx`; `conversation.css`; `workspace.css`; `base.css`; `field.css`; `coding-assistant.ts`; browser settings fixture; long-transcript and Agent Rail scroll browser suites; relevant Git blame/history. |
 | Whole-repository search | `rg` enumerated every `chatScroll`, `.chat-scroll`, `.conversation-scroll-shell`, conversation body/workbench height owner, overflow declaration, scrollbar declaration, autoscroll/history listener, direct-scroll consumer and browser assertion. Production ownership is singular: `App.tsx` owns DOM order; `workspace.css` owns the bounded workbench chain; `conversation.css` owns the scroll shell and overflow lane; `base.css` owns scrollbar chrome; `Conversation.tsx` owns wheel/history intent and the existing auto-scroll controller; `dom-utils.ts` owns follow-lock; `main.tsx` owns measured scrollbar gutter; `coding-assistant.ts` owns session selection/hydration. Existing regression consumers are the autoscroll, overflow, architecture, composer-density, visible-scrollbar, long-transcript, chronological-message, sparse Assistant and Agent Rail browser suites. |
 | Independent agent feedback | None. The user did not request sub-agents, and active policy forbids unrequested delegation. |
-| Git baseline | `HEAD` `5fe5f12eb` matches `myhexin/v0.0.12beta`. Four unrelated pre-existing modified files under `packages/opencorvus` are preserved and excluded from this task's commits. |
+| Git baseline | `HEAD` `5fe5f12eb` matches `legacy-remote/v0.0.12beta`. Four unrelated pre-existing modified files under `packages/opencorvus` are preserved and excluded from this task's commits. |
 
 ## Evidence and causal questions
 
@@ -62,7 +62,7 @@ and event evidence instead of modifying follow-lock or adding a handler.
    and build, i18n, historical-links/document-health and `git diff --check`.
 5. Inspect the task-scoped pre/post screenshots at original resolution, perform
    a second source/diff review, record exact evidence here, then commit and push
-   the completed change to `myhexin`.
+   the completed change to `legacy-remote`.
 
 ## Result
 

@@ -15,7 +15,7 @@ Status: In progress; the first remote implementation was rejected by exact-tree 
 3. Multica catalog filtering treats a globally installed package as installed from every project.
 4. Project-owned manual imports and bundled payload packages remain under `<project>/.opencorvus/expert-squads`; this task does not silently globalize all package operations.
 5. Global/project duplicate manifest IDs fail visibly. There is no precedence fallback, alias, compatibility copy, or automatic migration of old project packages.
-6. Focused Registry, Multica, Resolver, route, typecheck, document-health, diff, and second-review checks pass before a `dsw-33987` commit is pushed to `myhexin`.
+6. Focused Registry, Multica, Resolver, route, typecheck, document-health, diff, and second-review checks pass before a `dsw-33987` commit is pushed to `legacy-remote`.
 
 ### Hard constraints
 

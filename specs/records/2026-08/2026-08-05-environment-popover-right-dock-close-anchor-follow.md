@@ -42,7 +42,7 @@ without a visible delay or later catch-up.
   process.
 - Do not add, modify, update, or run UI automation tests. Browser interaction is
   manual acceptance evidence only and runs through Node.
-- Commit subjects use `dsw-33987`; delivery goes to `myhexin`.
+- Commit subjects use `dsw-33987`; delivery goes to `legacy-remote`.
 
 ### Material read before implementation
 
@@ -105,7 +105,7 @@ problem.
    is open, close the actual Dock control, capture and inspect the moving/final
    surface, and perform a second source/diff/screenshot review.
 4. Update this record with evidence, commit only task-owned changes, reconcile
-   the delivery branch with `myhexin`, and push.
+   the delivery branch with `legacy-remote`, and push.
 
 ## Status
 

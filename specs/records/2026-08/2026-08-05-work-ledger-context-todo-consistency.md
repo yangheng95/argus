@@ -16,7 +16,7 @@
   - UI acceptance is real-page interaction plus manually reviewed screenshots;
   - no fallback or parallel Todo authority; `TodoStore` remains the canonical durable snapshot and `todo.updated` is only its live projection;
   - no Work Ledger pagination button replacement that leaves older rows inaccessible;
-  - no new worktree; preserve current branch and push git-cc remote `myhexin` with `dsw-33987` commit subjects.
+  - no new worktree; preserve current branch and push legacy remote with `dsw-33987` commit subjects.
 - Read records and architecture evidence:
   - `AGENTS.md`;
   - `specs/README.md` and `specs/records/2026-08/README.md`;
@@ -45,7 +45,7 @@
 3. Extend the task message protocol bridge with a live-only `Todo.Event.Updated` projection, including cross-Instance relay and a positive non-UI contract test that observes the exact task/session payload through `ProtocolStore`.
 4. Run focused bridge/Work Ledger logic tests that do not assert UI presentation, Overlay and server typechecks, build/static checks, and required spec-link health checks.
 5. Start the real application with Node-backed browser tooling, interact with the affected surfaces, capture goal-bound screenshots, inspect them manually, correct visual issues, and repeat once for second review.
-6. Update this record with results, commit with the required prefix, fetch/merge current git-cc branch state if needed, and push `myhexin/work-v0.0.30beta-yr-0804`.
+6. Update this record with results, commit with the required prefix, fetch/merge current legacy remote branch state if needed, and push `legacy-remote/work-v0.0.30beta-yr-0804`.
 
 ## Verification record
 

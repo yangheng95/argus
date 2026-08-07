@@ -52,7 +52,7 @@
   OpenCorvus/Overlay; use the isolated Node browser fixture and headed browser.
 - Work in the current worktree without reset, stash, history rewriting or a new
   worktree. Preserve unrelated changes. Commit subjects use `dsw-33987` and
-  push to git-cc remote `myhexin`.
+  push to legacy remote.
 
 ### Sources read before implementation
 
@@ -146,12 +146,12 @@ data or read state.
 - [x] Plan committed and pushed.
 - [x] Implementation and regression tests complete.
 - [x] Real visual acceptance and second review complete.
-- [x] Final commit and git-cc push complete.
+- [x] Final commit and legacy remote push complete.
 
 ## Verification evidence
 
 - Plan commit `d3d0b19a0` (`dsw-33987 plan Mailbox contextbar attention
-  launcher`) was pushed to `myhexin/work-v0.0.9beta-yr-0718` before the code
+  launcher`) was pushed to `legacy-remote/work-v0.0.9beta-yr-0718` before the code
   change.
 - `App.tsx` now renders one shared trailing action cluster in Search-then-
   Mailbox order. Both actions use the existing 32-pixel `Button` contract; the
@@ -196,7 +196,7 @@ data or read state.
   sampling the settled theme accent, avoiding a first-frame false result.
 - Implementation commit `789d477da` (`dsw-33987 add Mailbox contextbar
   attention launcher`) was pushed to
-  `myhexin/work-v0.0.9beta-yr-0718`. The git-cc pre-push hook passed all 10
+  `legacy-remote/work-v0.0.9beta-yr-0718`. The legacy remote pre-push hook passed all 10
   typecheck tasks plus Software Development Kit (SDK) imports, artificial
   intelligence runtime, application programming interface route inventory,
   documentation rendering, Overlay localization and secret scanning.

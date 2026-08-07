@@ -30,4 +30,4 @@ The authoring tool no longer asks the model to choose an installation scope. A s
 - Assert Advanced resolves without author/import Skills or tools and `squad-sdk` is present in the repository payload/market catalog.
 - Regenerate Expert Squad and built-in Skill payloads plus the portable authoring artifact.
 - Run focused Expert Squad, authoring, Multica, payload, package-manager, Skill inventory, architecture/document-health, generated-artifact, and TypeScript checks.
-- Review the final diff independently against this Recall before commit and push to `git-cc`.
+- Review the final diff independently against this Recall before commit and push to legacy remote.

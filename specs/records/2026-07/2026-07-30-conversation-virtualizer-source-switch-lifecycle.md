@@ -37,7 +37,7 @@ Date: 2026-07-30
   gate, or imperative Document Object Model (DOM) cleanup.
 - Keep Virtua as the mature virtual-list implementation; align its component
   lifetime with the existing canonical card-tree replacement generation.
-- New commits use the `dsw-33987` prefix and push to `myhexin`.
+- New commits use the `dsw-33987` prefix and push to `legacy-remote`.
 
 ### Sources read
 
@@ -370,7 +370,7 @@ the selected row changes but the message panel stays stale or empty.
 - Overlay typecheck — passed.
 - Overlay production Vite build — passed.
 - Historical documentation health — 2 passed, 0 failed.
-- Normal git-cc pre-push hooks passed repository typecheck, route inventory,
+- Normal legacy remote pre-push hooks passed repository typecheck, route inventory,
   API documentation, Overlay i18n, and secret scanning.
 - Real Vite page against the canonical running service:
   - E08 rendered its own complete Mission conversation;

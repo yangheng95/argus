@@ -97,7 +97,7 @@ Prior repairs correctly strengthened backend settlement and prevented premature 
 4. Recognize `TaskArtifactDeletionCommittedError` only for direct Task deletion as “row deletion committed, artifact residue remains”; reconcile the row and emit a cleanup diagnostic. The same error during project deletion remains a project failure because the project transaction has not completed.
 5. Move active-selection cleanup after server confirmation and reconcile Chat/Task rows synchronously. Decouple settings persistence, list refresh, main handler cleanup, and ArchivePanel reload errors from mutation durability; keep them visible as their own diagnostics without action-failure double reporting.
 6. Add focused service/transport/handler tests for every branch, delayed server ownership, idempotent absence, 409 row preservation, committed cleanup, and post-confirmation secondary failures.
-7. Run targeted tests, typecheck, API/docs checks, real browser visual acceptance, and a second review. Commit only task-owned files and push the main branch to `myhexin`.
+7. Run targeted tests, typecheck, API/docs checks, real browser visual acceptance, and a second review. Commit only task-owned files and push the main branch to `legacy-remote`.
 
 ## Verification checklist
 

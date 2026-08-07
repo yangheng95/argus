@@ -12,7 +12,7 @@
 | Whole-repository grep | The main Overlay imports Geist, Noto Sans SC, and JetBrains Mono before rendering. The independent native-menu entry imports none of them, although its CSS asks for Geist/Noto, so the WebView falls through to a host font. All requested popups share this entry. The Environment HoverCard establishes `--ui-font-compact-row` with `--ui-line-height-tight`; native menus instead use `--ui-font-control`, and compact-list rows override line height to `1.2`. |
 | Existing test audit | `packages/overlay/test/font-family-assets.test.ts` reads frontend source files and asserts font import strings. It is a prohibited UI/source-string automation test under the current repository policy. Because this task inspected that exact path, it must be deleted and must not be run; it has no dedicated fixture, baseline, runner, or configuration. |
 | Independent agent feedback | None. The user did not request sub-agents, so the primary agent owns implementation and second review. |
-| Git baseline | `work-v0.0.31beta-yr-0805` was clean after fetch and had zero divergence from `myhexin/work-v0.0.31beta-yr-0805`. The pushed pre-change checkpoint is `4fd282c182` (`dsw-33987 checkpoint native menu typography repair`). |
+| Git baseline | `work-v0.0.31beta-yr-0805` was clean after fetch and had zero divergence from `legacy-remote/work-v0.0.31beta-yr-0805`. The pushed pre-change checkpoint is `4fd282c182` (`dsw-33987 checkpoint native menu typography repair`). |
 
 ## Causal chain
 
@@ -48,7 +48,7 @@
    interaction behavior. Iterate if visual evidence disagrees.
 6. Re-read this Recall, review the final diff and screenshots a second time,
    record evidence, commit with the `dsw-33987` prefix, reconcile the tracked
-   git-cc branch, and push to `myhexin` through normal hooks.
+   legacy remote branch, and push to `legacy-remote` through normal hooks.
 
 ## Progress
 
@@ -57,7 +57,7 @@
 - [x] Prohibited inspected UI test removed.
 - [x] Allowed static checks complete.
 - [x] Real-page visual acceptance and second review complete.
-- [x] Final commit and git-cc push complete.
+- [x] Final commit and legacy remote push complete.
 
 ## Verification evidence
 

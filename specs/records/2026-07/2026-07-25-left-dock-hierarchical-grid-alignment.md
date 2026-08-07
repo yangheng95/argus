@@ -43,7 +43,7 @@
 - Keep one token-owned hierarchy. No per-section pixel compensation.
 - Playwright runs through Node, never Bun.
 - Commit subjects start with `dsw-33987` and push the current delivery branch
-  to `myhexin`.
+  to `legacy-remote`.
 
 ### Sources read
 
@@ -123,7 +123,7 @@ axes rather than a tree.
 - [x] Implement the single left-Dock hierarchy grid.
 - [x] Complete real Vite/browser visual acceptance and correction.
 - [x] Complete second review and focused validation.
-- [x] Commit and git-cc push.
+- [x] Commit and legacy remote push.
 
 ## Codex review feedback
 

@@ -47,7 +47,7 @@ Owner: Codex
 - Preserve unrelated staged, unstaged, and untracked worktree changes. Do not
   reset, restore, stash, or create another worktree.
 - Commit subjects use the required `dsw-33987` prefix and the completed change
-  is pushed to `myhexin`.
+  is pushed to `legacy-remote`.
 
 ### Sources read
 
@@ -130,7 +130,7 @@ diff metadata rather than masquerading as the modifier.
 5. Update current panel architecture and both required spec indexes.
 6. Run focused tests, Overlay typecheck/build, documentation health, and the
    Node browser fixture; inspect the screenshot, perform a second diff review,
-   commit task-owned changes, fetch/reconcile, and push to `myhexin`.
+   commit task-owned changes, fetch/reconcile, and push to `legacy-remote`.
 
 ## Status
 
@@ -162,7 +162,7 @@ diff metadata rather than masquerading as the modifier.
   passes historical link resolution. A focused rerun of
   `historical-docs-links.test.ts` passed 22 of 22 after that transient scratch
   race; task staging cannot claim or mutate the remaining unrelated files.
-- Commit `0c03b397be` was pushed to the git-cc `myhexin` work branch. The
+- Commit `0c03b397be` was pushed to the legacy remote work branch. The
   pre-push hook passed repository SDK import checks, AI runtime checks, all
   scoped typechecks, API route inventory, generated API documentation,
   Overlay i18n, and the tracked-source secret scan.

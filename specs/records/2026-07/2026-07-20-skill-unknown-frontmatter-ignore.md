@@ -80,7 +80,7 @@ Owner: Codex
 4. Update document-health invariants and the superseded historical decision text/indexes without creating a second
    policy source.
 5. Run focused tests, document health, typecheck, API/docs checks, generated-artifact verification, exact-diff
-   review, then commit with the `dsw-33987` prefix and push `v0.0.12beta` to `myhexin`.
+   review, then commit with the `dsw-33987` prefix and push `v0.0.12beta` to `legacy-remote`.
 6. Codex review feedback: replace the earlier non-string-metadata rejection decision with one canonical metadata
    projection that preserves string entries and strips every unsupported value shape. Add both direct parser and
    real `/skill/mounts` discovery regressions for the reported `metadata.openclaw` object.

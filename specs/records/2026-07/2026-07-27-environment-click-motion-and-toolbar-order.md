@@ -62,7 +62,7 @@ limited to this control region:
   Node-launched fixture.
 - Preserve the unrelated Work Ledger, Agent-card browser, Environment
   typography, and navigation-row edits already present in the working tree.
-- Commit subjects use `dsw-33987`; delivery targets the git-cc `myhexin`
+- Commit subjects use `dsw-33987`; delivery targets the legacy remote
   remote.
 
 ### Material read before implementation
@@ -106,10 +106,10 @@ performed the required repository-wide call-point audit.
 ### Working-tree and remote evidence
 
 The branch started at `2cdf8123e8` and matched the locally known
-`myhexin/work-v0.0.19beta-yr-0727` ref. Four unrelated files were already
+`legacy-remote/work-v0.0.19beta-yr-0727` ref. Four unrelated files were already
 modified, including focused browser-test tolerance changes, so this task must
-stage only its own hunks. `git fetch myhexin` failed before implementation
-because `git-cc.myhexin.com` could not be resolved; the push will be retried
+stage only its own hunks. `git fetch legacy-remote` failed before implementation
+because `legacy remote.myhexin.com` could not be resolved; the push will be retried
 after validation without hiding or rewriting that external blocker.
 
 ## Root cause
@@ -139,7 +139,7 @@ listener, or positional transform.
    narrow floating screenshots, then run typecheck/build/i18n and document
    health.
 6. Perform a second diff review, commit only task-owned changes with
-   `dsw-33987`, reconcile the branch, and push to `myhexin`.
+   `dsw-33987`, reconcile the branch, and push to `legacy-remote`.
 
 ## Verification ledger
 

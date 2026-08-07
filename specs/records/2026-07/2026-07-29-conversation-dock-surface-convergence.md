@@ -16,7 +16,7 @@
 | Sources read | Root `AGENTS.md`; Browser control skill; both supplied screenshots; `specs/current/architecture/07-panel.md`; `2026-07-29-codex-task-header-and-ledger-actions.md`; `2026-07-29-right-dock-codex-parity-and-browser-tab-instances.md`; `2026-07-29-workspace-corner-shadow-confinement.md`; `2026-07-28-workspace-top-left-radius-restoration.md`; `App.tsx`; `RightDock.tsx`; light/dark palette owners; `header.css`; and the complete canonical `workspace.css` selectors involved in the Conversation and Right Dock composition. |
 | Whole-repository grep | Production search found `App.tsx` as the sole `.chat-conversation-activity` and `.conversation-workspace` renderer; `RightDock.tsx` as the sole `.right-dock-tabs`, `.right-dock-body`, and tab-control renderer; and `workspace.css` as the sole production geometry/paint owner for all of those selectors. `light.css` defines `--chat-canvas` and `--surface-strong` as white while `--surface-inset` is gray; dark palettes already project `--chat-canvas` to their canonical Conversation background. Historical UI tests were identified as consumers but remain untouched and unrun under the current prohibition. No backend, state, route, locale, database, transport, or component change is required. |
 | Independent review feedback | Claude Code CLI 2.1.147 was invoked once in the repository root with the required read-only `Read,Grep,Glob` tool boundary, streaming output, and no session persistence. It returned `Not logged in · Please run /login` before reading code, so no Claude review evidence is available. The primary agent therefore owns the selector-level challenge and required second review; no sub-agent was created because the user did not request delegation. |
-| Git baseline | Existing Windows database/history recovery work was verified, committed separately as `b2f82a5c46`, and pushed to `myhexin/work-v0.0.24beta-yr-0729`. The worktree was clean before this record. Concurrent Composer and rename-dialog changes appeared afterward; they are preserved and excluded from this task. |
+| Git baseline | Existing Windows database/history recovery work was verified, committed separately as `b2f82a5c46`, and pushed to `legacy-remote/work-v0.0.24beta-yr-0729`. The worktree was clean before this record. Concurrent Composer and rename-dialog changes appeared afterward; they are preserved and excluded from this task. |
 
 ## Cause Chain
 
@@ -66,7 +66,7 @@
    right inset/radius, or header color is still wrong.
 6. Re-grep all owners, review the exact diff and rendered evidence a second
    time, update this record with verification evidence, fetch/converge, commit
-   with the `dsw-33987` prefix, and push to `myhexin`.
+   with the `dsw-33987` prefix, and push to `legacy-remote`.
 
 ## Progress
 
@@ -79,7 +79,7 @@
 - [x] Replace the obsolete Conversation card geometry and Dock header paint.
 - [x] Complete real-page visual acceptance and static/build verification.
 - [x] Complete the exact-diff and rendered-evidence second review.
-- [ ] Commit, reconverge with the remote branch, and push to git-cc.
+- [ ] Commit, reconverge with the remote branch, and push to legacy remote.
 
 ## Real-Page Visual Evidence
 

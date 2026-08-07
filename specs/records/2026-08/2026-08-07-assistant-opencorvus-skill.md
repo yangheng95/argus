@@ -14,7 +14,7 @@
   - preserve `README.md`'s source-build path as the only currently documented OpenCorvus installation authority;
   - do not invent package-manager distribution commands or hide failed checks behind alternative paths;
   - do not modify, stage, or commit the unrelated working-tree changes present before this task;
-  - use the `dsw-33987` commit prefix and push only this task's commit to `git-cc`.
+  - use the `dsw-33987` commit prefix and push only this task's commit to legacy remote.
 - Sources read:
   - root `README.md`, `README.zh-CN.md`, `package.json`, `.env.example`, and `install`;
   - `packages/opencorvus/package.json`;
@@ -26,7 +26,7 @@
 - Whole-repository search evidence:
   - `rg --files -g 'SKILL.md'` established the existing skill conventions and showed no assistant-facing OpenCorvus operator skill;
   - targeted `rg` searches located installation commands, CLI registration, Task routes, Basic authentication, configuration precedence, product-pillar requirements, and current skill roots;
-  - the branch is synchronized with `git-cc/v0.0.33beta`; the pre-existing working tree is dirty in Expert Squad and architecture files unrelated to this task.
+  - the branch is synchronized with `legacy-remote/v0.0.33beta`; the pre-existing working tree is dirty in Expert Squad and architecture files unrelated to this task.
 - Independent agent feedback: not requested by the user, so no sub-agent was started.
 
 ## Design

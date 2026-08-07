@@ -34,7 +34,7 @@
 - Do not restart, refresh, close, or kill the user's running OpenCorvus/Overlay.
   Visual verification uses an isolated fixture and Node-launched Playwright.
 - Preserve unrelated dirty-worktree edits. Do not create another worktree.
-- New commits use the `dsw-33987` subject prefix and are pushed to `myhexin`.
+- New commits use the `dsw-33987` subject prefix and are pushed to `legacy-remote`.
 
 ### Sources read before implementation
 

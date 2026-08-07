@@ -28,7 +28,7 @@
 - Do not add fallback navigation, hidden links, alternate buttons, or a second content source.
 - Do not add, update, or run UI automation tests. UI acceptance is real-page interaction plus screenshots and manual review.
 - Preserve the static Windows artifact copy and direct download contract introduced by the current landing distribution work.
-- Stage only task-owned files and use the required `dsw-33987` commit prefix before pushing to the `myhexin` remote.
+- Stage only task-owned files and use the required `dsw-33987` commit prefix before pushing to the `legacy-remote` remote.
 
 ### Sources read
 

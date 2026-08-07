@@ -80,7 +80,7 @@ This record supersedes only the earlier assumption that every Multica MCP config
 2. Multica adapter tests cover public remote MCP import, agent-owned projection, Registry/Resolver availability, redaction, local process, credentials, malformed config, unreachable endpoint, and capability drift with zero writes.
 3. Multica Orchestrator tool and REST route tests prove exact project-directory binding.
 4. Run focused Registry/Manager/Resolver and built-in Skill freshness tests, OpenCorvus typecheck, generated API checks, historical/document health tests, and `git diff --check`.
-5. Perform a separate final diff/security review before a scoped `dsw-33987` commit and `myhexin` push.
+5. Perform a separate final diff/security review before a scoped `dsw-33987` commit and `legacy-remote` push.
 
 ## Verification results
 

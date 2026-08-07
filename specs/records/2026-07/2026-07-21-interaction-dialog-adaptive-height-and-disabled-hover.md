@@ -22,7 +22,7 @@ After selecting an expert squad, the shared Question dialog expands to nearly th
 - Preserve the complete Multica roster description and the `installed` disabled contract; the repair is presentation geometry and disabled interaction semantics.
 - The 2026-07-15 fixed-size dialog record remains historical evidence. This repair supersedes only its unconditional minimum/fixed height for short content and retains its maximum-height overflow behavior for long content.
 - Desktop-only acceptance. Playwright must be launched with Node. Do not restart, refresh, stop, or reuse the user's running OpenCorvus / Overlay process.
-- Work in the current worktree, preserve unrelated dirty changes, use `dsw-33987` commit subjects, and push the current delivery branch to `myhexin`.
+- Work in the current worktree, preserve unrelated dirty changes, use `dsw-33987` commit subjects, and push the current delivery branch to `legacy-remote`.
 
 ### Evidence read before implementation
 
@@ -99,5 +99,5 @@ Searches covered `interaction-dialog-form`, `interaction-card__option`, `Interac
 - `git diff --cached --check` passed.
 - The staged diff contains exactly the shared dialog stylesheet, the Multica rendered regression, the InteractionDialogHost source contract, this record, and the two required spec indexes: 6 files, 221 insertions, and 10 deletions.
 - The review confirmed there is still one Question/InteractionDialogHost/InteractionCard path, one Kobalte selection state, one long-content scroll owner, and no prompt, catalog, roster, squad identity, or runtime process change.
-- `git fetch myhexin --prune` confirmed the work branch matched `myhexin/work-v0.0.12beta-yr-0720`. The three newer `myhexin/v0.0.12beta` commits were merged after the implementation commit; only the two spec indexes conflicted, and both sides' records were retained.
+- `git fetch legacy-remote --prune` confirmed the work branch matched `legacy-remote/work-v0.0.12beta-yr-0720`. The three newer `legacy-remote/v0.0.12beta` commits were merged after the implementation commit; only the two spec indexes conflicted, and both sides' records were retained.
 - After that merge, Overlay typecheck passed, the focused source suite passed 11 tests, both Node browser suites passed, Vite rebuilt 2646 modules, and the documentation suites again passed 82 tests and 1356 expectations.

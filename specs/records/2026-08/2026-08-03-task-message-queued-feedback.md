@@ -32,7 +32,7 @@ The observable symptom is an unanswered user bubble. The direct trigger is corre
 4. Add English and Chinese copy through the existing locale catalogs and document the projection in current Panel architecture.
 5. Run formatting, Overlay typecheck/build, focused non-UI route contracts, document health checks, and `git diff --check`. Do not run UI tests.
 6. Start an isolated real Overlay through the Node browser toolchain, reach a genuine queued Task state, capture current-goal screenshots, inspect them at original resolution, and correct visual problems before delivery.
-7. Review the complete diff and evidence a second time, commit with the `dsw-33987` prefix, fetch/converge the delivery branch, and push it to `myhexin`.
+7. Review the complete diff and evidence a second time, commit with the `dsw-33987` prefix, fetch/converge the delivery branch, and push it to `legacy-remote`.
 
 ## Verification
 
@@ -44,4 +44,4 @@ The observable symptom is an unanswered user bubble. The direct trigger is corre
 - Visual evidence: [queued Task Conversation](../../artifacts/2026-08-03-task-message-queued-feedback.png).
 - Prettier passed for every touched source, locale, architecture, index, and record file.
 - Documentation checks passed: `historical-docs-links.test.ts` (`2 pass`), `document-health.test.ts` (`60 pass`), and `product-docs-single-source.test.ts` (`8 pass`).
-- `git diff --check` passed before delivery. The delivery commit and `myhexin` push provide the immutable final record.
+- `git diff --check` passed before delivery. The delivery commit and `legacy-remote` push provide the immutable final record.

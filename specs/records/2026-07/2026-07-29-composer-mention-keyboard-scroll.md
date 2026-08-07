@@ -31,7 +31,7 @@
   state machine, or a repeatable UI assertion/screenshot baseline.
 - Playwright/browser interaction is started through Node.js, never Bun.
 - Commit subjects begin with `dsw-33987`; push the completed current delivery
-  branch to `myhexin`.
+  branch to `legacy-remote`.
 
 ### Hard-disk sources read
 
@@ -70,7 +70,7 @@ Composer mention selector/class.
 - Branch: `work-v0.0.24beta-yr-0729`.
 - Starting commit: `9c6d917dc8`.
 - Before implementation, `HEAD` matched
-  `myhexin/work-v0.0.24beta-yr-0729`, the worktree was clean, and the pre-push
+  `legacy-remote/work-v0.0.24beta-yr-0729`, the worktree was clean, and the pre-push
   hook completed successfully.
 
 ## Root cause
@@ -94,7 +94,7 @@ not a missing scrollbar or incorrect overflow style.
 3. Start a real isolated page, navigate beyond both visible boundaries with
    Arrow keys, inspect screenshots, and correct any visual or focus regression.
 4. Perform a second source/diff review, record evidence here, commit, push to
-   `myhexin`, and verify zero remote divergence.
+   `legacy-remote`, and verify zero remote divergence.
 
 ## Progress
 
@@ -137,5 +137,5 @@ not a missing scrollbar or incorrect overflow style.
   requirement is the post-correction screenshot proving the upward-selected
   label is no longer obscured.
 - Implementation commit `5bd2020b33` passed the full pre-push hook and was
-  pushed to `myhexin/work-v0.0.24beta-yr-0729`; the immediate post-push
+  pushed to `legacy-remote/work-v0.0.24beta-yr-0729`; the immediate post-push
   divergence check was `0 0`.

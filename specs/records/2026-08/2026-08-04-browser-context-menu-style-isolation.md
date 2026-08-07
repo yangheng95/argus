@@ -10,7 +10,7 @@
 | Sources read | Root `AGENTS.md`; Browser control skill; supplied screenshot `codex-clipboard-7171ec75-8acf-4905-8e41-3b00b375525f.png`; current Browser panel architecture; prior Browser annotation theme record; Tauri guest-selection runtime; canonical Overlay dropdown/context-menu recipe; native-menu recipe. |
 | Whole-repository grep | The screenshot geometry matches the injected `BROWSER_PREVIEW_SELECTION_RUNTIME` menu. Its item uses inline base styles but remains in the visited page's light Document Object Model (DOM), so page selectors such as `button:focus` can supply the thick outline and other control styling. The runtime already owns all annotation chrome and receives the client semantic palette. `packages/overlay/test/context-menu.test.ts` contained prohibited frontend-source string and negative assertions; its positive event-policy contracts remain eligible. `packages/overlay/test/browser-preview-native.test.ts` is a non-UI service/transport contract and remains intact. |
 | Independent agent feedback | None. The user did not request sub-agents; the primary agent owns implementation and second review. |
-| Git baseline | `work-v0.0.30beta-yr-0804` matched `myhexin/work-v0.0.30beta-yr-0804` at `3ab118a7b6` before implementation. Pre-existing native-menu, workspace, design-token, architecture, and record edits remain unstaged and preserved. |
+| Git baseline | `work-v0.0.30beta-yr-0804` matched `legacy-remote/work-v0.0.30beta-yr-0804` at `3ab118a7b6` before implementation. Pre-existing native-menu, workspace, design-token, architecture, and record edits remain unstaged and preserved. |
 
 ## Causal chain
 
@@ -46,7 +46,7 @@
    and inspect the normal and highlighted menu states plus the resulting comment
    panel, then correct any visual mismatch.
 7. Perform a second code and visual review, record evidence here, commit only
-   this task's changes with the `dsw-33987` prefix, reconcile the git-cc branch,
+   this task's changes with the `dsw-33987` prefix, reconcile the legacy remote branch,
    and push through the normal hook.
 
 ## Progress
@@ -55,7 +55,7 @@
 - [x] Product and architecture changes complete.
 - [x] Non-UI/static verification complete.
 - [x] Real-page visual acceptance and second review complete.
-- [x] Commit and git-cc push complete.
+- [x] Commit and legacy remote push complete.
 
 ## Real-page acceptance evidence
 
@@ -104,5 +104,5 @@ run also correctly rejected another concurrent task's indexed but then-untracked
 record; that task subsequently committed its record before this delivery's
 final staged documentation verification.
 
-Implementation commit `49990a2152` passed the normal git-cc pre-push hook and
-was pushed to `myhexin/work-v0.0.30beta-yr-0804`.
+Implementation commit `49990a2152` passed the normal legacy remote pre-push hook and
+was pushed to `legacy-remote/work-v0.0.30beta-yr-0804`.

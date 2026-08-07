@@ -17,7 +17,7 @@ Server-Sent Events.
 | Whole-repository grep | `createSessionCardNode()` has four production construction sites: lifecycle, Integrity, ordinary message-turn, and timeline regrouping. `ensureMessageTurnProjection()` has live and hydrate callers and already migrates a deterministic lifecycle card into the first real message card. `materializeTerminalLifecycleCard()` has three lifecycle callers and is the source of the contentless terminal shell. `shouldHideSessionCard()` is consumed only by per-Session visibility synchronization and top-level order rebuilding. `ConversationCard` has two production consumers: main virtualized Conversation and exact-session right Dock. `chat.thinking` has one production protocol-placeholder classifier plus the two locale values. `agent-running-surface-wave` and `--ui-duration-loop-tool-wave` are the existing directional wave and shared duration owners. |
 | Existing-test audit | `packages/overlay/test/conversation-view-hydrate.test.ts` is a non-UI card-tree contract suite. Its focused user-settlement case already replays user input, `session.status`, and the first assistant message, so it is the positive lifecycle contract owner for pending-card materialization, message-card migration, and terminal settlement. No UI assertion is added or run. |
 | Independent-agent feedback | None. The user did not request sub-agents, so the primary Agent owns implementation and second review. |
-| Git baseline | Local `v0.0.26beta` was fast-forwarded from `ca8ebf64fe` to git-cc `myhexin/v0.0.26beta` at `1ffe88b6aa` before this plan. The pre-existing modification to `specs/artifacts/opencorvus-workbuddy-qoderwork-multica-codex-benchmark-catalog.md` remains outside this task. |
+| Git baseline | Local `v0.0.26beta` was fast-forwarded from `ca8ebf64fe` to legacy remote `legacy-remote/v0.0.26beta` at `1ffe88b6aa` before this plan. The pre-existing modification to `specs/artifacts/opencorvus-workbuddy-qoderwork-multica-codex-benchmark-catalog.md` remains outside this task. |
 
 ## Causal Chain
 
@@ -77,7 +77,7 @@ Server-Sent Events.
    the post-stop conversation. Use Node-backed Browser control only.
 6. Re-grep the lifecycle, visibility, renderer, localization, and animation
    owners; review the exact diff; update this record with evidence; commit,
-   reconcile with git-cc, and push `v0.0.26beta`.
+   reconcile with legacy remote, and push `v0.0.26beta`.
 
 ## Follow-up Recall: User Message Chrome And Color-Only Wave
 
@@ -91,7 +91,7 @@ Server-Sent Events.
 | Whole-repository grep | `WorkLedgerRowView.sessionLoading()` is the sole standalone Chat/Mission spinner owner and consumes the real ledger `active` status. `initialSessionCardStatus()` is the sole user-message settlement owner and is intentionally retained. `ChatBubbleIdentity()` is the sole shared bubble identity renderer and the only place that unconditionally adds both `StatusIndicator` and `CardDurationChip`; its nested callers are Agent-only. `.conversation-thinking__text::after` is the only pending-label wave consumer and currently translates a duplicate glyph layer. `agent-running-surface-wave` is also consumed by compact Agent surface motion and therefore cannot become the text-color animation owner. |
 | Existing-test audit | The requested product changes are purely visible presentation. Under the UI automated-test prohibition, no UI test is added, modified, updated, deleted, or run. Typecheck, production build, localization validation, document health, exact owner grep, computed-style inspection, real interaction, screenshots, and personal visual review remain the verification surfaces. |
 | Independent-agent feedback | None. The user did not request sub-agents, so the primary Agent owns implementation and second review. |
-| Git baseline | `v0.0.26beta` and `myhexin/v0.0.26beta` both point to `d05d4f48f1` after fetch. The pre-existing modification to `specs/artifacts/opencorvus-workbuddy-qoderwork-multica-codex-benchmark-catalog.md` remains outside this task. |
+| Git baseline | `v0.0.26beta` and `legacy-remote/v0.0.26beta` both point to `d05d4f48f1` after fetch. The pre-existing modification to `specs/artifacts/opencorvus-workbuddy-qoderwork-multica-codex-benchmark-catalog.md` remains outside this task. |
 
 ### Follow-up Causal Chain
 
@@ -142,7 +142,7 @@ Server-Sent Events.
    computed animation properties, and personally review that the user card has
    no execution status/duration while the active Work Ledger spinner remains.
 6. Perform a second diff/owner/screenshot review, update this record with
-   evidence, commit only task-owned paths, reconcile with git-cc, and push
+   evidence, commit only task-owned paths, reconcile with legacy remote, and push
    `v0.0.26beta`.
 
 ## User Correction: Preserve Completed, Repair Retry Thinking
@@ -186,11 +186,11 @@ with real output continue through ordinary `ChatBubble`.
 
 - [x] Evidence, architecture, lifecycle projection, render chain, animation owners, localization, tests, and remote baseline inspected.
 - [x] Whole-repository call-site search completed and plan recorded.
-- [x] Plan committed as `eed8aace96` and pushed to `myhexin/v0.0.26beta`.
+- [x] Plan committed as `eed8aace96` and pushed to `legacy-remote/v0.0.26beta`.
 - [x] Lifecycle, persisted-abort, shared renderer, localization, and motion implementation completed.
 - [x] Focused non-UI projection contract, Overlay typecheck, Vite build, localization check, targeted document health, and diff whitespace verification completed.
 - [x] Real waiting, immediate post-stop, and post-reload visual acceptance completed.
-- [x] Second review, final commit, remote reconciliation, and git-cc push completed.
+- [x] Second review, final commit, remote reconciliation, and legacy remote push completed.
 
 ## Verification Evidence
 
@@ -229,7 +229,7 @@ with real output continue through ordinary `ChatBubble`.
 ## Corrected Follow-up Verification Evidence
 
 - The user correction was committed as `b230672bef` and pushed to
-  `myhexin/v0.0.26beta` before product edits. The completed user-card status
+  `legacy-remote/v0.0.26beta` before product edits. The completed user-card status
   remained unchanged.
 - `renderAsPendingAgent()` now follows the canonical running status when the
   Agent has no displayable output. A retry-era `errorReason` cannot divert a

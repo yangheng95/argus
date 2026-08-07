@@ -11,7 +11,7 @@
 | Sources read          | Root `AGENTS.md`; Browser control skill; persistent Right Dock memory; `specs/current/architecture/07-panel.md`; the 2026-07-25 Sub-agent Dock record; the 2026-07-28 refresh-storm record; the 2026-07-30 incomplete scroll repair; the 2026-08-02 Conversation scroll-owner repair; `SubagentConversationPanel.tsx`; `Conversation.tsx`; `RightDock.tsx`; `subagent-conversation.ts`; `dom-utils.ts`; `inspector.css`; `workspace.css`; and Git history/blame for the scroll controller.                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | Whole-repository grep | `setupAutoScroll()` has exactly two production callers: the canonical main `Conversation` and `SubagentConversationScroll`. Both supply caller-owned follow signals, while `dom-utils.ts` alone classifies scroll movement and performs bottom pins. `SubagentConversationPanel` alone calls `contentChanged()` for exact-session resource revisions and `scrollToBottom()` for explicit Session changes. `inspector.css` alone owns the child transcript overflow element and disables native anchoring only while `data-follow-lock="true"`. The encountered `dom-utils-autoscroll.test.ts`, `long-transcript-scroll.test.ts`, `subagent-progress-presentation.test.ts`, and `subagent-conversation-tab-typography.test.ts` automate UI presentation or interaction and must be deleted without running. `subagent-conversation-service.test.ts` is a pure route/projection contract and remains untouched. |
 | Independent feedback  | The user did not request independent Agents and the active collaboration boundary forbids unsolicited delegation. The primary Agent owns implementation and second review.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| Git baseline          | Investigation started from clean `v0.0.28beta` at `d98db6aa056bf9eabdab97db1592d7400b73bd66`, equal to `myhexin/v0.0.28beta` after fetch.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Git baseline          | Investigation started from clean `v0.0.28beta` at `d98db6aa056bf9eabdab97db1592d7400b73bd66`, equal to `legacy-remote/v0.0.28beta` after fetch.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 ### Reopened after packaged-runtime rejection
 
@@ -118,7 +118,7 @@ whether they happen before or after a data notification.
 
 ## Implementation and verification plan
 
-1. Commit and push this Recall and indexed plan to `myhexin/v0.0.28beta`.
+1. Commit and push this Recall and indexed plan to `legacy-remote/v0.0.28beta`.
 2. Repair upward-input and direct-content-size ownership inside the single
    shared auto-scroll controller and delete the encountered obsolete UI
    automation tests.
@@ -135,12 +135,12 @@ whether they happen before or after a data notification.
 ## Status
 
 - [x] Recall, causal chain, full production call-site inventory, and constraints recorded.
-- [x] Plan commit `11603ff839` and git-cc push completed.
+- [x] Plan commit `11603ff839` and legacy remote push completed.
 - [x] Shared controller root repair and obsolete UI-test deletion completed.
 - [x] Non-UI checks and documentation health completed.
 - [x] Real-page interaction, screenshots, and manual visual review completed.
 - [x] Primary-Agent second review completed.
-- [x] Final implementation commit `616805e9b7` and git-cc push completed.
+- [x] Final implementation commit `616805e9b7` and legacy remote push completed.
 - [x] User rejected the packaged result; prior completion status was reopened.
 - [x] Native bundle/process provenance and dedicated child-conversation entry
       path confirmed.
@@ -152,7 +152,7 @@ whether they happen before or after a data notification.
 - [ ] Replace and restart the official packaged application, then verify the
       selected live child transcript remains selected and bottom-pinned across
       canonical record updates.
-- [ ] Complete second review, commit, and git-cc push for the reopened repair.
+- [ ] Complete second review, commit, and legacy remote push for the reopened repair.
 
 ## Real-page verification evidence
 

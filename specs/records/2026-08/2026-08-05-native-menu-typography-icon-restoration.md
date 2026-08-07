@@ -10,7 +10,7 @@
 | Sources read          | Root `AGENTS.md`; `CLAUDE.md`; current panel architecture; shared native-menu, Browser continuity, convergence, toolbar-layout, and shadow records; `native-menu.tsx`; `native-menu.css`; native-menu service and contract; `RightDock.tsx`; `TaskDirBar.tsx`; `BrowserPreviewPanel.tsx`; icon primitive/tokens; DropdownMenu primitive styles; relevant Git history.                                                                                                                                                                                                                              |
 | Whole-repository grep | The native surface has five caller paths: Right Dock add and overflow menus, Environment Local and branch child menus, and Browser zoom/element-selection. They all render through `native-menu.tsx` and `native-menu.css`. The current native label uses `--ui-font-title` (15px) while the earlier DropdownMenu primitive and Browser zoom row use `--ui-font-control` (14px). `native-menu.tsx` forces every item icon to `medium` (16px), while prior Right Dock and Browser menu icons omitted a size and therefore used the 14px `standard` tier. No second native-menu visual owner exists. |
 | Independent review    | Claude Code 2.1.147 was invoked read-only with `Read,Grep,Glob`, but local authentication returned `Not logged in` before analysis. Two bounded session-local read-only reviewers reached terminal success; this tool surface returned receipts without textual payloads, so the primary agent independently rechecked the exact scope against source and historical diffs. The source evidence confirms the two-token restoration and no caller omission.                                                                                                                                         |
-| Git baseline          | Current branch `work-v0.0.30beta-yr-0804` starts at `93c97cc41d`, matching its tracked `myhexin` branch. Existing Environment popover dismissal changes in `TaskDirBar.tsx`, panel architecture, and August indexes belong to concurrent work and must remain unmodified and outside this task's commit.                                                                                                                                                                                                                                                                                           |
+| Git baseline          | Current branch `work-v0.0.30beta-yr-0804` starts at `93c97cc41d`, matching its tracked `legacy-remote` branch. Existing Environment popover dismissal changes in `TaskDirBar.tsx`, panel architecture, and August indexes belong to concurrent work and must remain unmodified and outside this task's commit.                                                                                                                                                                                                                                                                                           |
 
 ## Causal chain
 
@@ -47,8 +47,8 @@
    above a live page; capture and personally review screenshots, then correct
    and repeat if needed.
 7. Perform an independent code review, inspect the final diff, commit only this
-   task's files with the `dsw-33987` prefix, reconcile the tracked git-cc branch,
-   and push to `myhexin` through normal hooks.
+   task's files with the `dsw-33987` prefix, reconcile the tracked legacy remote branch,
+   and push to `legacy-remote` through normal hooks.
 
 ## Progress
 
@@ -57,7 +57,7 @@
 - [x] Product changes complete.
 - [x] Non-UI/static verification complete.
 - [x] Real-page visual acceptance and second review complete.
-- [x] Delivery implementation committed; git-cc push verification follows in the delivery record.
+- [x] Delivery implementation committed; legacy remote push verification follows in the delivery record.
 
 ## Real-page visual evidence
 
@@ -106,5 +106,5 @@ File Manager`, and `Switch Folder…` labels all measured `14px`; every leading
 ## Delivery
 
 Implementation and verification were committed as `90657326e5` with the
-required `dsw-33987` subject prefix. The tracked git-cc branch is
-`myhexin/work-v0.0.30beta-yr-0804`.
+required `dsw-33987` subject prefix. The tracked legacy remote branch is
+`legacy-remote/work-v0.0.30beta-yr-0804`.

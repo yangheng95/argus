@@ -46,7 +46,7 @@ geometry checks will assert both left and right coordinates, not width alone.
 4. Run Overlay typecheck/build plus the required historical-docs and document
    health checks.
 5. Review the final task-owned diff and staged paths, commit with the
-   `dsw-33987` prefix, and push the current main delivery branch to `myhexin`
+   `dsw-33987` prefix, and push the current main delivery branch to `legacy-remote`
    through normal hooks.
 
 ## Codex review feedback

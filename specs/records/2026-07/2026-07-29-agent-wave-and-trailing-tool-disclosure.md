@@ -11,7 +11,7 @@
 | Sources read | Root `AGENTS.md`; Browser control skill; supplied screenshot; `specs/current/architecture/12-overlay-card-system.md`; `2026-07-29-running-execution-wave-scope-and-text-contrast.md`; `2026-07-29-conversation-streaming-text-wave.md`; `2026-07-29-tool-disclosure-state-icons.md`; `2026-07-28-tool-disclosure-size-parity.md`; `CardParts.tsx`; `Card.tsx`; `ChatBubble.tsx`; `ConversationCard.tsx`; `SubagentProgressGrid.tsx`; `conversation-ui.ts`; `message-part.ts`; `messages.css`; `conversation.css`; and the introducing commits `8ec16b545c` and `f96ae15f9a`. |
 | Whole-repository grep | Searches covered every wave/shimmer animation, keyframe, mask, `ExecutionDisclosureRun`, `work-details-toggle`, `msg-transcript-disclosure__marker`, `CardParts`, `collapseWorkDetails`, `executionDisclosureKey`, `conversationDisclosureExpanded`, and `setConversationDisclosureExpanded` production call site. `conversation.css` owns the sole card-surface wave and scopes it to running Agent conversation rows and compact child-Agent cards. `messages.css` owns the sole text wave and scopes it to running Tool labels/details. `CardParts.tsx` owns the sole execution disclosure renderer. `ChatBubble.tsx` has three collapsed-detail projections and `Card.tsx` has one recursive projection; all consume that same renderer. `conversation-ui.ts` remains the only expansion-state authority. |
 | Independent review | Claude Code `2.1.147` was invoked from the repository root with only `Read,Grep,Glob`, no session persistence, streaming output, and explicit prohibitions on edits, UI tests, delegation, and worktrees. It exited before reading the repository because the local command-line interface is not authenticated (`Not logged in`). No Claude finding is claimed; the primary agent owns the evidence-based diagnosis and final second review. |
-| Git baseline | Branch `work-v0.0.24beta-yr-0729` and `myhexin/work-v0.0.24beta-yr-0729` were converged at `fe5b84ca0c` after a normal pre-push hook passed. Concurrently authored changes in backend tests, Composer, Workspace, panel architecture, July records, and shared spec indexes are unrelated and must remain intact. |
+| Git baseline | Branch `work-v0.0.24beta-yr-0729` and `legacy-remote/work-v0.0.24beta-yr-0729` were converged at `fe5b84ca0c` after a normal pre-push hook passed. Concurrently authored changes in backend tests, Composer, Workspace, panel architecture, July records, and shared spec indexes are unrelated and must remain intact. |
 
 ## Cause Chain
 
@@ -59,7 +59,7 @@
    verify the trailing chevron and wave scope.
 5. Re-grep all owners, inspect the exact diff and screenshots a second time,
    update this record and both spec indexes, fetch/converge, commit only
-   task-owned paths and hunks, push to `myhexin`, and verify remote convergence.
+   task-owned paths and hunks, push to `legacy-remote`, and verify remote convergence.
 
 ## Progress
 
@@ -68,7 +68,7 @@
 - [x] Authentication-blocked Claude Code review attempt recorded honestly.
 - [x] Recall, causal chain, complete call-site disposition, and verification
       plan recorded.
-- [x] Recall commit and git-cc push complete.
+- [x] Recall commit and legacy remote push complete.
 - [x] Product implementation and static/build verification complete.
 - [x] Real-page visual acceptance and second review complete.
 - [x] Final record/index update, commit, push, and remote convergence complete.
@@ -114,5 +114,5 @@
   (`agent-running-surface-wave` and `tool-active-wave`) and no over-broad card
   selector or duplicate disclosure renderer.
 - Commit `6077721055` contains the implementation, both screenshots, completed
-  record, and both index entries and was pushed normally to `myhexin`.
+  record, and both index entries and was pushed normally to `legacy-remote`.
 - No UI automated test was added, modified, updated, deleted, or run.

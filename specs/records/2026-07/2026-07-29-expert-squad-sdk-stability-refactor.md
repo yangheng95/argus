@@ -20,7 +20,7 @@
 6. Prism and Mirror Watch share the generic exact-read/envelope/selection primitive while retaining their own domain codecs and lineage rules.
 7. Existing manifest `schema_version: 1` is the only supported manifest version. No v2, fallback, migration, alias, or dual parser exists.
 8. SDK package paths and Plugin project paths consume one canonical cross-platform path contract, including Windows device names, trailing dot/space, and Unicode NFC rejection.
-9. Targeted non-UI tests, typecheck, package generation checks, document-health checks, independent review, commit, and `myhexin` push complete.
+9. Targeted non-UI tests, typecheck, package generation checks, document-health checks, independent review, commit, and `legacy-remote` push complete.
 
 ### Hard constraints
 

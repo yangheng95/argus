@@ -12,9 +12,9 @@ Owner: Coding Assistant
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | User request               | “mailbox没有出现系统消息推送 实现下” — make system message pushes appear in Mailbox.                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | Acceptance criteria        | Persisted task protocol events with canonical user-facing system notification semantics appear in the existing global Mailbox page, counts, acknowledgement actions, change stream, badge, and native notification projector. High-frequency informational events and internal engine recovery facts do not flood Mailbox. Existing exclusions for `goal.passed`, `goal.failed`, `task.cancelled`, and `task.lifecycle` remain excluded. No second notification source or frontend event feed is introduced. |
-| Hard constraints           | Preserve `protocol_event` as the only durable Mailbox source and `BusEvent.notify` as the canonical system-notification descriptor. No fallback, compatibility alias, event-name keyword matching, state machine, hidden message store, new worktree, or restart/refresh of the running OpenCorvus/Overlay. Browser automation uses Node. Every production change receives regression coverage. Preserve unrelated dirty files. Commit subjects start with `dsw-33987`; push to `myhexin`.                   |
+| Hard constraints           | Preserve `protocol_event` as the only durable Mailbox source and `BusEvent.notify` as the canonical system-notification descriptor. No fallback, compatibility alias, event-name keyword matching, state machine, hidden message store, new worktree, or restart/refresh of the running OpenCorvus/Overlay. Browser automation uses Node. Every production change receives regression coverage. Preserve unrelated dirty files. Commit subjects start with `dsw-33987`; push to `legacy-remote`.                   |
 | Sources read               | Root `AGENTS.md`; `CLAUDE.md`; `specs/current/architecture/07-panel.md`; the 2026-07-16 Mailbox architecture, 2026-07-17 notification retirement/cross-platform repair, and 2026-07-23 Mailbox refinement records; current `BusEvent`, engine event definitions, protocol projection, Mailbox engine/routes, Overlay Mailbox/native notification projector, and focused backend/frontend tests.                                                                                                              |
-| Git baseline               | Branch `work-v0.0.17beta-yr-0723` tracks the same-named `myhexin` branch. Existing unrelated modifications are present in Overlay browser coverage, generated OpenAPI, spec indexes, and the Environment heading record; they remain untouched except that this record must be indexed at completion. `git fetch myhexin` completed before mutation.                                                                                                                                                         |
+| Git baseline               | Branch `work-v0.0.17beta-yr-0723` tracks the same-named `legacy-remote` branch. Existing unrelated modifications are present in Overlay browser coverage, generated OpenAPI, spec indexes, and the Environment heading record; they remain untouched except that this record must be indexed at completion. `git fetch legacy-remote` completed before mutation.                                                                                                                                                         |
 | Independent agent feedback | None. The change is one tightly coupled backend projection and regression surface; session-local delegation would add context cost without an independent write boundary.                                                                                                                                                                                                                                                                                                                                    |
 
 ### Whole-repository search evidence
@@ -43,7 +43,7 @@ Owner: Coding Assistant
 2. Refactor `engine/mailbox.ts` so one source predicate and presentation resolver combine dedicated Mailbox rows with tier-1/tier-2 `BusEvent.notify` system rows. Make list, count, lookup, acknowledgement, and stream invalidation consume that same predicate.
 3. Update current architecture and both spec indexes without modifying unrelated record content.
 4. Run the focused Mailbox test, protocol notification tests, affected server route tests, OpenCorvus typecheck, document health, and `git diff --check`.
-5. Perform a second full call-site and diff review, commit only task-owned paths with a `dsw-33987` subject, push the current branch to `myhexin`, and verify remote equality.
+5. Perform a second full call-site and diff review, commit only task-owned paths with a `dsw-33987` subject, push the current branch to `legacy-remote`, and verify remote equality.
 
 ## Progress
 
@@ -53,7 +53,7 @@ Owner: Coding Assistant
 - [x] Production implementation complete.
 - [x] Static and focused runtime verification complete.
 - [x] Second source/diff review complete.
-- [ ] Git-cc push blocked by a concurrently created mixed checkpoint commit with a noncompliant subject.
+- [ ] legacy remote push blocked by a concurrently created mixed checkpoint commit with a noncompliant subject.
 
 ## Implementation and verification evidence
 
@@ -101,5 +101,5 @@ packages/overlay/test/browser/mailbox-left-sidebar-browser.test.ts` passed
   subject `Checkpoint before Phase 01: OpenCorvus Dashboard 市场调研`, which
   violates the required `dsw-33987` prefix. The commit was not created by this
   Coding Assistant, so it was not amended, rewritten, or pushed. The branch is
-  one commit ahead of `myhexin/work-v0.0.17beta-yr-0723`; remaining unstaged
+  one commit ahead of `legacy-remote/work-v0.0.17beta-yr-0723`; remaining unstaged
   files belong to the concurrent Overlay task.

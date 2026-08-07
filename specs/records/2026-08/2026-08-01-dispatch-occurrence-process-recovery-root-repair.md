@@ -41,7 +41,7 @@ No same-node Host admission gate is added. Scheduling remains Orchestrator judgm
 - Cross-Task Artifact import contract test for a terminal failed source.
 - Package typecheck and relevant non-UI test suites.
 - Spec link/document-health checks, including `historical-docs-links.test.ts`.
-- Independent diff review before commit, merge back to `v0.0.28beta`, and push to `myhexin` without bypassing hooks.
+- Independent diff review before commit, merge back to `v0.0.28beta`, and push to `legacy-remote` without bypassing hooks.
 
 ## Independent implementation review
 

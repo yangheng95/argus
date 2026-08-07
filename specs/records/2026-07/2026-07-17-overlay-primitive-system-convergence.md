@@ -8,12 +8,12 @@ Status: capsule-control follow-up implemented, visually verified, and ready for 
 | --- | --- |
 | User requirement | “现在所有的按钮都不合格，跟药丸形状的开关不是一个体系，对于药丸体系的控件，现在要怎么改？”并要求“继续完善”。 |
 | Acceptance | 普通 action 使用 capsule；icon action 使用 circle；segmented/toggle 使用 pill shell；navigation row 与 suggestion tile 明确为容器 recipe，不能被粗暴改成长药丸。Button、Switch、Select、TextField 和 segmented control 共享高度、边框、状态与 focus 语言；真实桌面浅/深色截图通过。 |
-| Hard constraints | 不新增任意 feature shape 自由度，不通过 `data-ui` 继续改 control 圆角，不把导航行/卡片误归类成 pill；不操作用户运行中的 overlay；Playwright 继续由 Node sidecar 启动；提交使用 `dsw-33987` 并 push `myhexin/v0.0.7beta`。 |
+| Hard constraints | 不新增任意 feature shape 自由度，不通过 `data-ui` 继续改 control 圆角，不把导航行/卡片误归类成 pill；不操作用户运行中的 overlay；Playwright 继续由 Node sidecar 启动；提交使用 `dsw-33987` 并 push `legacy-remote/v0.0.7beta`。 |
 | Sources reread | 当前 Vite 首页；`components/ui/Button.tsx`；`styles/primitives/{button,selection-control,text-field,tabs}.css`；design-language tokens；全部 surface button/radius owners；本记录前序 primitive/icon 验收。 |
 | Whole-repository grep | 171 个 JSX Button mounts；5 个 generated HTML Button escapes，均已有 `oc-button` recipe attributes；12 个 surface CSS 文件仍在 `.oc-button` block 中声明圆角；全 surface 有 97 个 pill、50 个 large、119 个 soft radius 声明；118 个测试文件覆盖 Button/圆角相关契约。 |
 | Runtime evidence | 当前首页同屏存在 titlebar `22×22/r4`、menubar `22/r8`、workspace search `30/r8`、sidebar row `36/r8`、composer attachment `32/r999`、intent/model `32/r8`、send `38/r999`、suggestion tile `228×108/r8`。Switch primitive 是 `40×24/r999`。这证明缺陷是 shape responsibility 分散，而不是单一颜色或 token 数值错误。 |
 | Independent agent feedback | None；用户未要求子 Agent，当前协作规则禁止主动委托。 |
-| Git baseline | `fcb930ee3`，与 `myhexin/v0.0.7beta` 一致；仅有未跟踪构建产物 `packages/overlay/dist-artifacts/darwin-arm64/`，禁止纳入交付。 |
+| Git baseline | `fcb930ee3`，与 `legacy-remote/v0.0.7beta` 一致；仅有未跟踪构建产物 `packages/overlay/dist-artifacts/darwin-arm64/`，禁止纳入交付。 |
 
 ### Follow-up causal chain
 
@@ -45,13 +45,13 @@ Status: capsule-control follow-up implemented, visually verified, and ready for 
 | --- | --- |
 | User request | “现在的UI的primitive狗屎一坨，帮我整理问题，定一个goal解决”。补充终态：“最终目标是不存在任何不基于 primitive 的手搓组件和样式。” |
 | Goal | 根治 Overlay 基础控件只有统一标签、没有统一视觉与语义的问题；保留 Solid 与现有产品信息架构，以一套 Kobalte-backed primitive catalog、一套 recipe、一个视觉验收矩阵替换并行目录与 surface 私有 chrome。最终全仓不存在脱离 canonical primitive 的手搓交互组件或控件视觉样式。 |
-| Acceptance | 桌面首页、Settings、Work Ledger、conversation/composer、dialog/menu 五个代表面必须共享可辨认的一套 control geometry、state、focus、disabled 与 density；primitive gallery 和真实页面均须由 Node 启动的 Playwright 截图并人工复核；键盘、焦点、ARIA（Accessible Rich Internet Applications，无障碍富互联网应用）和现有业务行为回归通过；二次 review 后提交并 push `myhexin`。 |
+| Acceptance | 桌面首页、Settings、Work Ledger、conversation/composer、dialog/menu 五个代表面必须共享可辨认的一套 control geometry、state、focus、disabled 与 density；primitive gallery 和真实页面均须由 Node 启动的 Playwright 截图并人工复核；键盘、焦点、ARIA（Accessible Rich Internet Applications，无障碍富互联网应用）和现有业务行为回归通过；二次 review 后提交并 push `legacy-remote`。 |
 | Hard constraints | 不新增 gate、fallback、兼容 alias、第二套 design system 或手写 ARIA；不把 Kobalte 这种 unstyled behavior primitive 冒充视觉系统；不创建 worktree；不操作用户正在运行的 OpenCorvus；桌面端单端验收；保留当前未提交的 Notification UI retirement 等用户改动；新提交以 `dsw-33987` 开头。 |
 | Sources read | `AGENTS.md`; `specs/current/architecture/07-panel.md`; `2026-06-01-overlay-mature-ui-primitives-refactor.md`; `2026-06-09-overlay-ui-tech-debt-consensus.md`; `2026-07-14-overlay-neutral-codex-chrome-repair.md`; `2026-07-16-codex-settings-button-format.md`; current `components/{ui,primitives,settings/primitives.tsx}` and `styles/{tokens,primitives,surfaces}`; Kobalte official introduction/styling docs; Park UI official Solid overview; Solid styling docs. |
 | Whole-repository grep | Production currently has 55 files importing `ui/Button`, 172 `<Button>` mounts, 11 Settings owners importing the Settings composite file, 22 Kobalte-owning source files, and only five raw `<button>` escape hatches. Fifteen surface CSS files contain 500 `--oc-button-*` override declarations; `sidebar.css` alone has 92, `card.css` 82, `conversation.css` 78. Primitive sources are split between `components/ui/*`, `components/primitives/*`, and `components/settings/primitives.tsx`. |
 | Visual evidence | Isolated current-source Vite page `http://127.0.0.1:4317/` was inspected in the in-app Browser at the real desktop viewport. Home combines plain sidebar actions, a bordered model capsule, a circular send action, and oversized suggestion-card buttons. General Settings combines a full-width outlined Back action, a separately styled Search field, navigation tabs, a bordered content card, and segmented controls with a second state/chrome language. The existing `button-format-browser.test.ts` passes, proving its computed-style assertions preserve the current design rather than judge cross-surface coherence. |
 | Independent agent feedback | None. The user did not request sub-agents; current collaboration rules forbid unrequested delegation. |
-| Git baseline | `v0.0.7beta` at `ba6db427b3`, synchronized with `myhexin/v0.0.7beta` at audit start. The worktree already contains broad uncommitted Notification UI retirement changes; primitive source/style directories are clean and must remain separably reviewable. |
+| Git baseline | `v0.0.7beta` at `ba6db427b3`, synchronized with `legacy-remote/v0.0.7beta` at audit start. The worktree already contains broad uncommitted Notification UI retirement changes; primitive source/style directories are clean and must remain separably reviewable. |
 
 ## Diagnosis
 
@@ -92,7 +92,7 @@ The goal is complete only when all of the following are true:
 4. Home, General Settings, Work Ledger, populated conversation/composer, and a dialog/menu state are visually reviewed in both light and dark themes at desktop size.
 5. A task-scoped primitive gallery covers rest, hover, active/pressed, focus-visible, disabled, destructive, loading, long text and Chinese text. Screenshots are evidence only after human review; computed-style assertions remain supporting evidence.
 6. Keyboard and accessibility tests prove Kobalte remains the owner of popup, listbox, tabs, toggle group, menu and dialog behavior.
-7. Overlay typecheck, i18n, Vite build, focused unit/browser tests, docs health and second review pass; task-owned commits are pushed to `myhexin`.
+7. Overlay typecheck, i18n, Vite build, focused unit/browser tests, docs health and second review pass; task-owned commits are pushed to `legacy-remote`.
 8. 全仓 TSX（TypeScript XML，带 JSX 的 TypeScript）、生成 HTML 和 CSS 调用面逐项归属到 canonical primitive；任何保留的裸元素只承担不可复用的文档语义或布局，不得自行实现交互状态、ARIA、焦点、弹层、选择、按钮、输入框或控件 chrome。
 
 ## Implementation Phases
@@ -117,7 +117,7 @@ The goal is complete only when all of the following are true:
 
 - Run the five real-page scenarios and primitive gallery in light/dark desktop themes through Node Playwright.
 - Inspect screenshots, correct visual failures, rerun keyboard/focus state paths and perform an independent second code/diff review in the main agent.
-- Commit with `dsw-33987` prefix and push the current main delivery branch to `myhexin`.
+- Commit with `dsw-33987` prefix and push the current main delivery branch to `legacy-remote`.
 
 ## Initial Verification Commands
 
@@ -322,7 +322,7 @@ bun test packages/opencorvus/test/script/document-health.test.ts
 - The final full-suite run also exposed stale event/test contracts rather than visual failures. Mailbox events are now explicit no-card tree-writer inputs because the dedicated Mailbox stream owns their UI; performance/message fixtures use the current agent/session/channel identity contract; window, split-launcher, surface-continuity and i18n fixtures now assert the implemented single-source behavior.
 - Real Node Playwright paths passed for Composer buttons, reasoning disclosure focus in light/dark, Markdown copy success/focus, conversation scroll-to-bottom, Memory SearchField focus, and titlebar/Work Ledger/Right Dock icon geometry. Manual review covered `.scratch/chat-composer-button-primitives.png`, `.scratch/reasoning-toggle-focus-light.png`, `.scratch/reasoning-toggle-focus-dark.png`, `.scratch/markdown-code-copy-focus.png`, `.scratch/memory-search-field-focus.png`, `.scratch/conversation-scroll-button-visible.png`, `.scratch/work-ledger-mission-actions.png`, `.scratch/work-ledger-running-loading-icon.png`, `.scratch/right-dock-light-active-tab-layer.png`, `.scratch/right-dock-mailbox-compact-list-light.png`, `.scratch/right-dock-mailbox-narrow-dark.png`, `.scratch/right-dock-many-tabs-stable.png`, and `.scratch/composer-ime-complete.png`. The reviewed desktop surfaces share control density, focus language, icon hierarchy, panel rhythm, and light/dark semantics without a feature-authored visible control.
 - Final production ownership grep finds raw interactive elements only inside canonical adapters, generated HTML carrying canonical `oc-button` recipe attributes, and hidden file/ID transport inputs. Remaining surface `> svg` selectors control domain color, alignment, visibility, or animation only; no feature owns reusable icon geometry or stroke.
-- Final verification passed with explicit zero exits: complete Overlay unit suite, TypeScript, panel i18n revision `9cd81bc8a426490c`, production Vite build, 21 historical-doc link checks, and 56 document-health checks. `git diff --check` is clean and `HEAD` matches the fetched `myhexin/v0.0.7beta` baseline before delivery.
+- Final verification passed with explicit zero exits: complete Overlay unit suite, TypeScript, panel i18n revision `9cd81bc8a426490c`, production Vite build, 21 historical-doc link checks, and 56 document-health checks. `git diff --check` is clean and `HEAD` matches the fetched `legacy-remote/v0.0.7beta` baseline before delivery.
 
 ### 2026-07-17 — component, icon, and color-token single-source follow-up
 
@@ -337,7 +337,7 @@ bun test packages/opencorvus/test/script/document-health.test.ts
 | Sources reread | This convergence record; `specs/current/architecture/12-overlay-card-system.md`; `2026-07-14-overlay-neutral-codex-chrome-repair.md`; `2026-07-16-overlay-five-surface-codex-polish.md`; `components/Icon.tsx`; `components/ui/*`; `utils/icon-{size,html}.tsx`; `styles/{tokens,cascade,primitives,surfaces}`; icon, token, theme, terminal, and architecture regression tests. |
 | Whole-repository grep | 54 production source files import the current root-level Icon contract; no feature directly imports Lucide or authors inline SVG; no caller uses public `IconProps.strokeWidth`; raw color literals occur in exactly six production files: the structural/brand token source, three palette theme variants, the Icon brand-mark registry, and one Terminal fallback. Raw visible interactive elements remain only in canonical UI adapters; remaining feature inputs are hidden file/ID transport controls and generated HTML uses canonical button recipe attributes. |
 | Independent agent feedback | None. The user did not request sub-agents; current collaboration policy forbids unrequested delegation. |
-| Git baseline | Clean `work-v0.0.8beta-yr-0717` at `edc8e9897`, equal to `myhexin/work-v0.0.8beta-yr-0717`; pre-change push and hook passed. |
+| Git baseline | Clean `work-v0.0.8beta-yr-0717` at `edc8e9897`, equal to `legacy-remote/work-v0.0.8beta-yr-0717`; pre-change push and hook passed. |
 
 #### Causal chain
 

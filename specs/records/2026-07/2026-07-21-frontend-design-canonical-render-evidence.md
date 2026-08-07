@@ -23,7 +23,7 @@ Investigate and fix why Task `tsk_f802684850012OpovnGW0NRPJb` reported a visual-
 - The capture tool owns PNG materialization and digest derivation; the model supplies review semantics, not a claimed hash.
 - Use Node-launched Playwright through the existing browser sidecar. Do not use Bun to launch Playwright.
 - Preserve `greenfield_original` versus `reference_parity` as the existing explicit design-authority distinction.
-- Commit subjects use the `dsw-33987` prefix and the delivery branch is `v0.0.12beta` on `myhexin`.
+- Commit subjects use the `dsw-33987` prefix and the delivery branch is `v0.0.12beta` on `legacy-remote`.
 
 ### Sources read
 

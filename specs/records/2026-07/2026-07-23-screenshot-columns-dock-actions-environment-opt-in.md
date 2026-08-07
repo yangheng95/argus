@@ -43,7 +43,7 @@ The supplied desktop screenshots identify three Overlay defects:
 - Preserve the fixed thumbnail-size decision; width changes reflow columns
   without stretching cards.
 - The current branch and worktree remain the only delivery source. Commit
-  subjects start with `dsw-33987` and push through normal hooks to `myhexin`.
+  subjects start with `dsw-33987` and push through normal hooks to `legacy-remote`.
 
 ### Supplied evidence
 
@@ -103,7 +103,7 @@ forbids unrequested delegation.
 ### Git baseline
 
 Branch `work-v0.0.16beta-yr-0723` is clean at `5402cd65c`, equal to
-`myhexin/work-v0.0.16beta-yr-0723`. The preceding Overlay refinement was
+`legacy-remote/work-v0.0.16beta-yr-0723`. The preceding Overlay refinement was
 committed and pushed before this plan.
 
 ## Causal chain
@@ -144,7 +144,7 @@ committed and pushed before this plan.
    review.
 7. Run required historical-link/document-health checks, commit the exact
    task-owned files with `dsw-33987`, fetch/converge if the remote advanced,
-   push to `myhexin`, and verify local/remote equality.
+   push to `legacy-remote`, and verify local/remote equality.
 
 ## Progress
 
@@ -157,7 +157,7 @@ committed and pushed before this plan.
 - [x] Production implementation complete.
 - [x] Static, browser, and visual verification complete.
 - [x] Second review complete.
-- [x] Delivery commit `26cf45457` and git-cc push complete.
+- [x] Delivery commit `26cf45457` and legacy remote push complete.
 
 ## Result
 

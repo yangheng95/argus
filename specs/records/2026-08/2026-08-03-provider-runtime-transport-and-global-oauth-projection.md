@@ -36,7 +36,7 @@
   operating-system hosts file.
 - Do not add, modify, or run UI automation tests. Preserve unrelated untracked
   workspace files. Commit subjects start with `dsw-33987` and push the current
-  branch to the git-cc remote.
+  branch to the legacy remote.
 
 ### Sources read
 

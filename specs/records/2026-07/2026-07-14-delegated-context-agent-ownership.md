@@ -68,7 +68,7 @@
 ### Existing workspace and push constraint
 
 - The worktree contained extensive pre-existing modifications before this task, including the target Overlay files. They must be preserved and only task-specific hunks may be staged.
-- The required pre-change git-cc push was attempted with an exact branch ref. The pre-push hook failed on pre-existing `taskRuntimePaths` type drift (`sourcePackage*` / `webpageEvidence*` consumers), not on this repair. Hooks will not be bypassed.
+- The required pre-change legacy remote push was attempted with an exact branch ref. The pre-push hook failed on pre-existing `taskRuntimePaths` type drift (`sourcePackage*` / `webpageEvidence*` consumers), not on this repair. Hooks will not be bypassed.
 
 ## Implementation design
 

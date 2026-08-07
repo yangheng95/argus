@@ -49,7 +49,7 @@ problems.
   Overlay process.
 - Preserve unrelated dirty expert-squad runtime-loading work. This repair must not stage or
   commit those files.
-- Commit subjects use the `dsw-33987` prefix and push to `myhexin/v0.0.13beta` without
+- Commit subjects use the `dsw-33987` prefix and push to `legacy-remote/v0.0.13beta` without
   bypassing hooks.
 
 ### Sources read

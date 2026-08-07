@@ -63,7 +63,7 @@ The General package's task-scoped requirement engineer and solution architect es
 2. Real Registry package tests parse all five manifests and validate the cluster contract against their loaded production manifest values.
 3. Scheduler/package tests prove the cluster declares five distinct Goal owners and that stage prompts still contain no cross-squad route.
 4. Run focused SDK, five-package, Registry/Resolver, virtual-workflow, payload freshness, generated artifact, historical-link, document-health, product docs, typecheck, route, and docs checks.
-5. Perform a primary-agent diff review for coupled domain logic, host gates, second workflow state, inactive projection leaks, and stale generated payload. Commit with `dsw-33987`, fetch/merge current `myhexin/v0.0.15beta`, and push through hooks.
+5. Perform a primary-agent diff review for coupled domain logic, host gates, second workflow state, inactive projection leaks, and stale generated payload. Commit with `dsw-33987`, fetch/merge current `legacy-remote/v0.0.15beta`, and push through hooks.
 
 ## Follow-up protocol correction
 

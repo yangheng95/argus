@@ -20,7 +20,7 @@ key is pressed.
   characters in Composer or adding a second draft/input source.
 - Positive Rust contract tests, Overlay typecheck/build, locked Cargo checks,
   an isolated packaged native application run with physical keyboard input,
-  screenshot review, second diff review, task-owned commit, and `myhexin` push
+  screenshot review, second diff review, task-owned commit, and `legacy-remote` push
   pass.
 
 ### Hard constraints
@@ -125,7 +125,7 @@ forbids spawning them.
    review the current task-scoped screenshot.
 7. Re-read every task-owned diff and the running/built dependency evidence,
    then commit only task-owned paths and push the current main beta branch to
-   `myhexin`.
+   `legacy-remote`.
 
 ## Progress
 
@@ -133,7 +133,7 @@ forbids spawning them.
   history, open regressions, and all repository call points inspected.
 - [x] Native parent-responder repair and positive non-UI contract implemented.
 - [x] Build and isolated physical-key visual validation completed.
-- [x] Second review completed; task-owned commit and git-cc push prepared.
+- [x] Second review completed; task-owned commit and legacy remote push prepared.
 
 ## Validation evidence
 

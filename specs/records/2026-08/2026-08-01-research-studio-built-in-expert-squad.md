@@ -24,7 +24,7 @@ Status: implemented and verified on 2026-08-01.
 - Preserve unrelated dirty-worktree changes and stage only this task's files or exact hunks.
 - Keep one package source: move the self-contained package into the embedded built-in tree and remove it from payload discovery.
 - Do not add alias, fallback, migration, hidden active state, workflow state, or Host scheduling gates.
-- Commit subjects start with `dsw-33987` and push `v0.0.27beta` to `myhexin`.
+- Commit subjects start with `dsw-33987` and push `v0.0.27beta` to `legacy-remote`.
 
 ### Read material and whole-repository search
 

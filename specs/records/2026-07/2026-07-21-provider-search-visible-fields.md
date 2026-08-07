@@ -21,7 +21,7 @@ Restrict the Providers settings search to field content that is actually shown i
 - Preserve the shared `SearchField` primitive and the existing local reactive filter; do not create a backend index, fuzzy-search path, compatibility filter, or second source of row data.
 - Derive filtering from the same row projection consumed by rendering so visibility and search cannot drift again.
 - Use the isolated Node browser runner; do not launch Playwright with Bun and do not refresh, restart, or otherwise modify a running OpenCorvus/Overlay process.
-- Preserve unrelated worktree changes. Commit subjects use `dsw-33987`, and the delivery branch is pushed to `myhexin`.
+- Preserve unrelated worktree changes. Commit subjects use `dsw-33987`, and the delivery branch is pushed to `legacy-remote`.
 
 ### Sources read
 
@@ -73,7 +73,7 @@ The repair makes each memo construct the exact row view model first, including c
 1. Run the focused Providers browser test through `node packages/overlay/test/browser-runner.mjs` and inspect its task-scoped screenshots.
 2. Run focused static search/i18n tests plus Overlay typecheck and i18n validation.
 3. Run historical-document link health because this record and both indexes changed.
-4. Run `git diff --check`, inspect the scoped diff a second time, commit only task-owned paths, and push the current delivery branch to `myhexin`.
+4. Run `git diff --check`, inspect the scoped diff a second time, commit only task-owned paths, and push the current delivery branch to `legacy-remote`.
 
 ## Verification results
 

@@ -28,7 +28,7 @@ Owner: Codex
 - Keep Prism original AInvest `greenfield_original` authority and desktop-only delivery scope. Taste guidance cannot override AInvest product/design authority, Product Requirements, or accepted Prism evidence.
 - Do not add, modify, update, or run User Interface automation tests. This task changes package/Skill projection rather than a rendered product page, so acceptance uses positive non-UI inventory, Registry, Resolver, and payload contracts.
 - Preserve the proposed Prism complete-subsystem closure record and all unrelated work.
-- Commit subjects use `dsw-33987` and delivery pushes to `myhexin/v0.0.29beta` without bypassing hooks.
+- Commit subjects use `dsw-33987` and delivery pushes to `legacy-remote/v0.0.29beta` without bypassing hooks.
 
 ### Sources read
 

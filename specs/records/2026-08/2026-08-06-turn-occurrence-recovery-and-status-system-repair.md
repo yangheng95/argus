@@ -37,7 +37,7 @@ Owner: Codex
   presentation only through a real page, interaction, screenshot, and direct
   visual review; do not add, modify, or run User-Interface automation tests.
 - Perform final independent read-only review, commit with the `dsw-33987`
-  prefix, and push the main delivery branch to `git-cc` remote `myhexin`.
+  prefix, and push the main delivery branch to legacy remote.
 
 ### Hard constraints
 

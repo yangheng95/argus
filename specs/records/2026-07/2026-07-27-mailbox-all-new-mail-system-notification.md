@@ -32,7 +32,7 @@ without a system notification.
    matcher, or in-app toast center is introduced.
 6. Focused unit and host-transport tests, Overlay typecheck/build, a real
    Node-launched browser flow, task-scoped screenshot review, documentation
-   health, second review, commit, and git-cc push pass.
+   health, second review, commit, and legacy remote push pass.
 
 ### Hard constraints
 
@@ -64,7 +64,7 @@ without a system notification.
   transport protocol, focused unit tests, and real browser fixtures.
 - Git baseline `ed5d5de6e2` on
   `work-v0.0.19beta-yr-0727`, confirmed equal to
-  `myhexin/work-v0.0.19beta-yr-0727` after the required pre-change push.
+  `legacy-remote/work-v0.0.19beta-yr-0727` after the required pre-change push.
 
 ### Whole-repository search evidence
 
@@ -120,7 +120,7 @@ failing layer.
    tests, Overlay typecheck/build, API/docs health, and a second diff/call-site
    review.
 5. Stage only task-owned files, commit with the `dsw-33987` prefix, fetch and
-   reconcile the git-cc branch if needed, push to `myhexin`, and verify local
+   reconcile the legacy remote branch if needed, push to `legacy-remote`, and verify local
    and remote equality.
 
 ## Progress
@@ -154,4 +154,4 @@ failing layer.
 - [x] Implementation commit `7369ead6b8` (`dsw-33987 notify for every new
   Mailbox item`) passed the repository pre-push typecheck, API route, generated
   API documentation, Overlay internationalization, and secret-scan hooks, then
-  reached `myhexin/work-v0.0.19beta-yr-0727`.
+  reached `legacy-remote/work-v0.0.19beta-yr-0727`.

@@ -33,7 +33,7 @@ data companion is
 - Do not modify product source, create a worktree, or interfere with a running
   OpenCorvus or Overlay process.
 - Do not present conditional external guidance as a repository defect.
-- Preserve the current worktree and use `myhexin` for the required push.
+- Preserve the current worktree and use `legacy-remote` for the required push.
 
 ### Materials read
 

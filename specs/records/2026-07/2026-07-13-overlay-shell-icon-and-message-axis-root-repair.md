@@ -61,7 +61,7 @@
 
 ## Version-Control Boundary
 
-`HEAD` and `myhexin/v0.0.3beta` are synchronized at `67ef9f5907` before implementation. The main worktree contains extensive unrelated tracked and untracked changes, including overlapping intended Composer changes. A pre-change task commit cannot safely capture that dirty state without claiming unrelated work; the baseline is therefore recorded by exact `HEAD`, `git status`, targeted diffs, and file hashes. Task-owned hunks will be staged selectively after verification; no broad staging, stash, reset, or worktree is allowed.
+`HEAD` and `legacy-remote/v0.0.3beta` are synchronized at `67ef9f5907` before implementation. The main worktree contains extensive unrelated tracked and untracked changes, including overlapping intended Composer changes. A pre-change task commit cannot safely capture that dirty state without claiming unrelated work; the baseline is therefore recorded by exact `HEAD`, `git status`, targeted diffs, and file hashes. Task-owned hunks will be staged selectively after verification; no broad staging, stash, reset, or worktree is allowed.
 
 ## Progress
 
@@ -72,7 +72,7 @@
 - [x] Restore five-column geometry and strengthen contracts.
 - [x] Run real rendered benchmark and inspect screenshots.
 - [x] Complete second review and selective implementation commit (`9610f45ab4`).
-- [ ] Push the verified commits to `myhexin/v0.0.3beta`.
+- [ ] Push the verified commits to `legacy-remote/v0.0.3beta`.
 
 ## Verification Result
 
@@ -85,4 +85,4 @@
 - Visual review: `runtime-icon-workspace-shell.png`, `runtime-icon-composer-controls.png`, `chat-section-after-locate.png`, and `chat-section-ambient-dark.png` were inspected at original resolution. Light and dark views show a full-height workbench, visible workflow/assistant controls, a narrow left rail, a full-width centered message lane, and no collapse, clipping, or axis drift.
 - Documentation health: all 20 historical-doc link/storage checks passed.
 - Known unrelated dirty-worktree failures remain in the unfinished center-workbench/inspector refactor: `App.tsx` lacks legacy File Explorer mounts expected by old architecture tests, and `inspector.css` exceeds duplicate-selector/raw-pixel guards. These files were already modified outside this repair and are not used to claim this benchmark passed.
-- Push result: `myhexin/v0.0.3beta` was 0 behind / 2 commits ahead locally, but the mandatory pre-push full-repository typecheck rejected the dirty worktree. The independent in-progress source-snapshot refactor removed `sourcePackage*` and `webpageEvidence*` from `ProjectRuntimePaths.frontendDesignPaths()` and changed `prepareWebCloneContext` to `stagingRoot`, while roughly 30 call sites still use the retired contract. Restoring those fields would create forbidden compatibility/fallback; completing that unrelated architecture migration would overwrite user work outside this repair. No hook bypass or GitHub push was used, so commits `9610f45ab4` and `cc19505b51` remain local and the remote is unchanged.
+- Push result: `legacy-remote/v0.0.3beta` was 0 behind / 2 commits ahead locally, but the mandatory pre-push full-repository typecheck rejected the dirty worktree. The independent in-progress source-snapshot refactor removed `sourcePackage*` and `webpageEvidence*` from `ProjectRuntimePaths.frontendDesignPaths()` and changed `prepareWebCloneContext` to `stagingRoot`, while roughly 30 call sites still use the retired contract. Restoring those fields would create forbidden compatibility/fallback; completing that unrelated architecture migration would overwrite user work outside this repair. No hook bypass or GitHub push was used, so commits `9610f45ab4` and `cc19505b51` remain local and the remote is unchanged.

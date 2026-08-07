@@ -46,7 +46,7 @@ Owner: Codex
 - Do not restart, refresh, close, or otherwise interfere with the operator's
   running OpenCorvus or Overlay processes.
 - Browser verification uses Node, not Bun. Desktop is the only visual target.
-- Delivery commits use the `dsw-33987` prefix and push to `myhexin`.
+- Delivery commits use the `dsw-33987` prefix and push to `legacy-remote`.
 
 ### Material read before implementation
 
@@ -121,14 +121,14 @@ recipe. No task data or interaction needs a second implementation.
    and the Node browser fixture; inspect the original-resolution task-scoped
    screenshot and correct any remaining visual mismatch.
 6. Perform a second diff/test/screenshot review, commit only task-owned changes,
-   fetch/reconcile the shared delivery branch, and push to `myhexin`.
+   fetch/reconcile the shared delivery branch, and push to `legacy-remote`.
 
 ## Status
 
 - [x] Baseline screenshot diagnosis, material read, and whole-repository search.
 - [x] Architecture, component, CSS, translation, and regression changes.
 - [x] Focused tests, real browser geometry, and screenshot review.
-- [x] Second review, task-owned commits, and git-cc push.
+- [x] Second review, task-owned commits, and legacy remote push.
 
 ## Verification evidence
 

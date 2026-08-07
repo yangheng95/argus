@@ -54,7 +54,7 @@ Affected runtime identities:
 - Do not restart, stop, refresh, or reload the running OpenCorvus/Overlay
   processes without explicit user authorization.
 - Do not create a worktree. Commit subjects use `dsw-33987` and delivery is
-  pushed to `myhexin/v0.0.16beta`.
+  pushed to `legacy-remote/v0.0.16beta`.
 
 ### Sources read
 
@@ -157,7 +157,7 @@ or Author output content.
    Explore, and Integrity.
 5. Add focused unit and route regressions, then run typecheck, document-health
    checks, relevant coordination/runner tests, and `git diff --check`.
-6. Perform a second diff review, commit, push to `myhexin`, then restore the
+6. Perform a second diff review, commit, push to `legacy-remote`, then restore the
    supplied Mission without restarting the running application.
 
 ## Verification commands
@@ -224,7 +224,7 @@ document-health surfaces affected by this repair pass.
 ## Live-task recovery
 
 The source repair was committed as `81fcde049` and pushed to
-`myhexin/v0.0.16beta`. The already-running desktop sidecar uses an embedded
+`legacy-remote/v0.0.16beta`. The already-running desktop sidecar uses an embedded
 binary, so this recovery did not restart, refresh, or replace that process.
 
 An operator recovery message was injected into Task

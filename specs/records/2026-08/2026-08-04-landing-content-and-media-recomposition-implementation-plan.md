@@ -16,7 +16,7 @@
 - Linux source is `packages/overlay/dist-artifacts/linux-x64/OpenCorvus-v0.0.30beta-linux-x64`; Web entry is `https://mirror.myhexin.com/opencorvus/ui/`.
 - Generated scene images must be copied into `packages/web/src/assets/lander/`, inspected, and referenced from source before completion.
 - Keep one static package catalog and one artifact-copy path; no fallback URL/source or retained hidden markup.
-- Commit subjects begin with `dsw-33987`; push the completed main-branch state to `myhexin/v0.0.30beta` without bypassing hooks.
+- Commit subjects begin with `dsw-33987`; push the completed main-branch state to `legacy-remote/v0.0.30beta` without bypassing hooks.
 
 ## Recall
 
@@ -191,7 +191,7 @@ Re-read the user request and design record line by line, compare each requiremen
 - Modify: `specs/records/2026-08/README.md`
 
 **Interfaces:**
-- Produces indexed implementation evidence and the delivered git-cc commit.
+- Produces indexed implementation evidence and the delivered legacy remote commit.
 
 - [ ] **Step 1: Run document health contracts**
 
@@ -203,7 +203,7 @@ Record exact command results, distribution file facts, generated asset paths and
 
 - [ ] **Step 3: Commit and push**
 
-Review `git status --short` and the full scoped diff, commit with a `dsw-33987` subject, pull/fetch the current `myhexin/v0.0.30beta` state without rewriting user history, push without bypassing hooks, and verify local/remote commit identity.
+Review `git status --short` and the full scoped diff, commit with a `dsw-33987` subject, pull/fetch the current `legacy-remote/v0.0.30beta` state without rewriting user history, push without bypassing hooks, and verify local/remote commit identity.
 
 ## Plan self-review
 

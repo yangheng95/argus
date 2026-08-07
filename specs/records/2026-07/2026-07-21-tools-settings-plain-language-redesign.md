@@ -11,7 +11,7 @@
 | Sources read                     | `AGENTS.md`; Browser skill; `specs/current/architecture/07-panel.md`; the current Tools projection records; `SkillMarketPanel.tsx`; `services/expert-squad.ts`; Settings layout primitives; Select and Disclosure primitives; Settings CSS; locale sources; source tests; and `skill-mount-matrix-browser.test.ts`.                                                                                                                                                                                                                                                                                                                                                  |
 | Whole-repository search evidence | `ToolsPanel` is exported only by `SkillMarketPanel.tsx` and mounted by `ConfigDialogHost.tsx`. The capability helpers, selected-agent signal, detail renderer, and pool renderer are all in `SkillMarketPanel.tsx`. `/expert-squad/catalog` through `loadExpertSquadCatalog` is the single data source. Tool-page strings live only in both locale JSON files. Tool-specific visual rules live in `settings.css`. Real browser coverage is owned by `skill-mount-matrix-browser.test.ts`; `left-work-ledger-shell.test.ts` only checks the export remains. The canonical progressive-disclosure primitive is `components/ui/Disclosure.tsx`.                         |
 | Independent agent feedback       | None. The user did not request delegation, so no sub-agent was started.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| Git baseline                     | Local `v0.0.13beta` started at `951f4bd8f`; git-cc `myhexin/v0.0.13beta` was fetched at `c0ba4751e` and is two documentation commits ahead. Existing dirty files belong to concurrent work. Task-owned changes will be staged by exact path/hunk and reconciled with git-cc before push.                                                                                                                                                                                                                                                                                                                                                                             |
+| Git baseline                     | Local `v0.0.13beta` started at `951f4bd8f`; legacy remote `legacy-remote/v0.0.13beta` was fetched at `c0ba4751e` and is two documentation commits ahead. Existing dirty files belong to concurrent work. Task-owned changes will be staged by exact path/hunk and reconciled with legacy remote before push.                                                                                                                                                                                                                                                                                                                                                                             |
 
 ## Evidence and causal chain
 
@@ -47,7 +47,7 @@ becoming a second source or disappearing from inspectable evidence.
 3. Add scoped responsive-safe desktop CSS using existing design tokens and primitives.
 4. Run focused tests, Overlay typecheck/internationalization/build, and the Node-launched real browser fixture.
 5. Inspect closed/open desktop screenshots and computed geometry in the in-app browser; correct visual or interaction issues and rerun.
-6. Run documentation health, review the scoped diff, reconcile the fetched git-cc commits without losing concurrent changes, commit with `dsw-33987`, push `myhexin/v0.0.13beta`, and verify local/remote equality.
+6. Run documentation health, review the scoped diff, reconcile the fetched legacy remote commits without losing concurrent changes, commit with `dsw-33987`, push `legacy-remote/v0.0.13beta`, and verify local/remote equality.
 
 ## Progress
 
@@ -55,7 +55,7 @@ becoming a second source or disappearing from inspectable evidence.
 - [x] Added regression coverage and the plain-language Tools hierarchy.
 - [x] Completed real-browser visual verification and correction.
 - [x] Completed full checks and second review.
-- [x] Completed commit and git-cc reconciliation; the final push uses the same verified commit.
+- [x] Completed commit and legacy remote reconciliation; the final push uses the same verified commit.
 
 ## Continuation Recall
 
@@ -72,7 +72,7 @@ becoming a second source or disappearing from inspectable evidence.
 1. Extend the existing Node-launched browser scenario with zero-tool and long-ID geometry assertions.
 2. Add a second page in the same task-scoped backend fixture for Chinese dark-theme visual coverage, avoiding duplicated API fixtures or a second preview source.
 3. Inspect both new screenshots at original resolution, make only evidence-driven presentation corrections, then rerun source, browser, type, internationalisation, and documentation checks.
-4. Review and stage only task-owned hunks, commit with the required `dsw-33987` prefix, reconcile git-cc, push `myhexin/v0.0.13beta`, and verify remote equality.
+4. Review and stage only task-owned hunks, commit with the required `dsw-33987` prefix, reconcile legacy remote, push `legacy-remote/v0.0.13beta`, and verify remote equality.
 
 ## Continuation verification evidence
 

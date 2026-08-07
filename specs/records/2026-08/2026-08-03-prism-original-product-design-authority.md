@@ -48,7 +48,7 @@
   ownership.
 - Keep one fixed Prism Task and the existing binding workflow topology. Removing replication does
   not authorize Goal fan-out, phase Tasks, workflow loops, or a second scheduler.
-- Commit subjects use the `dsw-33987` prefix and push the delivery branch to `myhexin`.
+- Commit subjects use the `dsw-33987` prefix and push the delivery branch to `legacy-remote`.
 
 ### Read material
 

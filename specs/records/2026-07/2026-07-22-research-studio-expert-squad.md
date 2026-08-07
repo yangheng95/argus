@@ -86,7 +86,7 @@ The package contains only its manifest, README, selector, scheduler overlay, and
 - SDK authoring plus package Registry/Manager/Resolver coverage passed: `3 pass / 0 fail / 21 assertions`.
 - Repository dynamic-package coverage passed: `10 pass / 0 fail / 1,210 assertions`.
 - Payload generation, package Manager, Research Studio package, and SDK authoring coverage completed with `81 pass / 1 existing isolated skip / 1 transient fixture termination`; the exact terminated cleanup-failure case then passed alone with `1 pass / 0 fail / 5 assertions`, proving its cleanup checker rather than a Research Studio path.
-- SDK and OpenCorvus TypeScript checks passed after merging the latest `myhexin/v0.0.15beta`.
+- SDK and OpenCorvus TypeScript checks passed after merging the latest `legacy-remote/v0.0.15beta`.
 - Historical-link and document-health coverage passed: `82 pass / 0 fail / 1,362 assertions`.
 - Payload regeneration after the remote merge produced no diff, and `git diff --check` passed.
 

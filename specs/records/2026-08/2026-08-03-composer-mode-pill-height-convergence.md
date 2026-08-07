@@ -17,7 +17,7 @@
 
 - Reuse the existing density token and shared `SegmentedControl`; do not introduce a second height value or modify the global primitive.
 - Preserve unrelated work and do not restart or refresh the user's running OpenCorvus / Overlay process.
-- Commit subjects use the `dsw-33987` prefix and delivery is pushed to `myhexin`.
+- Commit subjects use the `dsw-33987` prefix and delivery is pushed to `legacy-remote`.
 
 ### Sources read
 
@@ -49,7 +49,7 @@
 1. Constrain the Composer-local mode shell to the canonical chip-height token with border-box sizing.
 2. Set the two local mode items to the shell's content height after vertical padding.
 3. Build and typecheck the Overlay, then render an isolated desktop page, inspect a screenshot, and correct any remaining mismatch.
-4. Run documentation health, review the final diff, commit task-owned files, push to `myhexin`, and verify remote alignment.
+4. Run documentation health, review the final diff, commit task-owned files, push to `legacy-remote`, and verify remote alignment.
 
 ## Progress
 

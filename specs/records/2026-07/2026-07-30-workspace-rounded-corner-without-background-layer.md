@@ -59,7 +59,7 @@
    gray band, pointed remnant, or missing curve remains.
 5. Re-grep the compositor and all consumers, review the exact task-owned diff
    and screenshot a second time, commit with the required `dsw-33987` prefix,
-   fetch/converge, push to `myhexin`, and verify the remote branch.
+   fetch/converge, push to `legacy-remote`, and verify the remote branch.
 
 ## Progress
 
@@ -71,7 +71,7 @@
 - [x] Implement the single-owner rounded/clipped compositor correction.
 - [x] Complete static/build verification and real-page visual acceptance.
 - [x] Complete second review and the final delivery record.
-- [x] Commit and prepare the final verified correction for git-cc push.
+- [x] Commit and prepare the final verified correction for legacy remote push.
 
 ## Real-Page Visual Evidence
 

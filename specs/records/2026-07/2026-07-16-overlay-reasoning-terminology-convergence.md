@@ -20,7 +20,7 @@
 - Keep `CardParts.tsx` as the single execution-summary owner and the existing i18n catalogs as the visible terminology source.
 - Preserve unrelated dirty worktree changes and do not restart or refresh the user's running OpenCorvus/Overlay.
 - Run browser acceptance through Node on Windows, not Bun.
-- Commit subjects start with `dsw-33987` and push the current delivery branch to `myhexin`.
+- Commit subjects start with `dsw-33987` and push the current delivery branch to `legacy-remote`.
 
 ### Sources read before implementation
 
@@ -57,7 +57,7 @@ The provider stream creates a `reasoning` part, the Overlay chronological projec
 2. Update the two production-shaped Node browser assertions to require `Reasoning 1` and explicitly reject visible `Thinking` in the aggregate control.
 3. Repair any stale browser assertions exposed by the production-shaped checks only when component ownership and current design-token evidence prove the expected behavior changed.
 4. Run focused i18n and browser checks, Overlay typecheck/build, required documentation checks, and `git diff --check`.
-5. Inspect the isolated browser screenshots at original resolution, perform a second scoped diff review, commit only task-owned hunks, and push `myhexin`.
+5. Inspect the isolated browser screenshots at original resolution, perform a second scoped diff review, commit only task-owned hunks, and push `legacy-remote`.
 
 ## Verification plan
 
@@ -121,7 +121,7 @@ git diff --check
 - Treat the parent execution disclosure as the only state owner while a reasoning part is inside its body; `ReasoningPart` may project that ownership but must not create another button there.
 - Preserve unrelated dirty expert-squad, Settings, and spec-index edits.
 - Do not restart, refresh, close, or reuse the user's running OpenCorvus/Overlay. Browser acceptance uses isolated Node-started fixtures on Windows.
-- Commit subjects start with `dsw-33987` and the task commit is pushed to `myhexin`.
+- Commit subjects start with `dsw-33987` and the task commit is pushed to `legacy-remote`.
 
 #### Sources read before implementation
 
@@ -158,7 +158,7 @@ git diff --check
 2. Thread parent ownership only through `ExecutionEventRun`; normal body rendering continues to request self ownership. Keep all Markdown rendering inside `ReasoningPart`.
 3. Scope expanded reasoning chrome to self-owned disclosure so structured cards do not retain a visual inner container after the nested control is removed. Update the store comments without changing reactivity.
 4. Add focused source regressions for both ownership modes and production-shaped browser assertions for one control, direct content visibility, chronology, keyboard behavior, and light/dark presentation.
-5. Run focused unit/browser tests, Overlay typecheck/build/i18n, required documentation health checks, inspect the generated desktop screenshot, perform a second diff review, commit only task-owned files, and push `myhexin`.
+5. Run focused unit/browser tests, Overlay typecheck/build/i18n, required documentation health checks, inspect the generated desktop screenshot, perform a second diff review, commit only task-owned files, and push `legacy-remote`.
 
 ### Verification plan
 

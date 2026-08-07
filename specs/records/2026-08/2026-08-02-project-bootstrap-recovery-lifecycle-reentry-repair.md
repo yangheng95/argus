@@ -32,7 +32,7 @@ Owner: Codex
    running OpenCorvus process is restarted, terminated, or rewritten as part of
    implementation verification.
 8. The task-owned change is committed with the `dsw-33987` subject prefix and
-   pushed to `myhexin/v0.0.28beta` without bypassing hooks.
+   pushed to `legacy-remote/v0.0.28beta` without bypassing hooks.
 
 ### Hard constraints
 
@@ -150,7 +150,7 @@ fallback, or duplicating persistence logic.
 5. Run focused process-recovery and Instance lifecycle tests, OpenCorvus
    typecheck, document health, and scoped diff checks.
 6. Re-read the plan and diff, review lifecycle ownership and all callers, commit,
-   fetch, verify the current branch, and push to `myhexin`.
+   fetch, verify the current branch, and push to `legacy-remote`.
 
 ## Implementation
 

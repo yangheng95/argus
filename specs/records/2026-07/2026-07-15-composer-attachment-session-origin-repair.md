@@ -22,7 +22,7 @@
 - File and folder selection already converge through `ChatComposer.addAttachment`; do not fork their transport or message projection.
 - Message content remains sourced from the message/part tables; live message events remain ephemeral.
 - No new worktree and no interference with the user's running OpenCorvus/overlay process.
-- Commits use the `dsw-33987` prefix and the delivery branch is pushed to the git-cc remote configured as `origin`.
+- Commits use the `dsw-33987` prefix and the delivery branch is pushed to the legacy remote configured as `origin`.
 
 ### Sources read
 

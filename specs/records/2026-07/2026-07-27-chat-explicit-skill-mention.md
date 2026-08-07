@@ -19,7 +19,7 @@ The user corrected the current Chat Skill behavior: Skills assigned by default s
 - An unassigned and unmentioned installed Skill remains unavailable to Chat automatic discovery and cannot be loaded.
 - Explicit mention does not mutate project config, create a session override, activate an expert squad, or persist a second default assignment.
 - Unknown or malformed exact mentions fail visibly before model execution.
-- Focused backend, Overlay unit, real Vite browser, screenshot, typecheck, document health, diff review, commit, and git-cc push complete successfully.
+- Focused backend, Overlay unit, real Vite browser, screenshot, typecheck, document health, diff review, commit, and legacy remote push complete successfully.
 
 ### Hard Constraints
 
@@ -133,7 +133,7 @@ The repair must preserve the intended distinction: persistent default assignment
 3. Run focused Chat capability, composer catalog, composer mention, and system Skill directive tests.
 4. Run the real Node-launched Vite browser test, inspect its goal-scoped screenshot, correct visual/interaction defects, and rerun.
 5. Run package typechecks, document-health tests, `git diff --check`, and a second exact-diff review.
-6. Commit with the required `dsw-33987` prefix and push `v0.0.20beta` to `myhexin` through normal hooks.
+6. Commit with the required `dsw-33987` prefix and push `v0.0.20beta` to `legacy-remote` through normal hooks.
 
 ## Progress
 
@@ -144,7 +144,7 @@ The repair must preserve the intended distinction: persistent default assignment
 - [x] Implement the repair.
 - [x] Complete focused and visual verification.
 - [x] Complete second review.
-- [ ] Commit and push to git-cc.
+- [ ] Commit and push to legacy remote.
 
 ## Verification Evidence
 

@@ -15,7 +15,7 @@
 - Empty Settings surfaces use the same content inset instead of the current narrow horizontal padding.
 - Empty-state copy sizes to its content within the available width; Providers no longer draws the full-width dashed `.provider-empty` card.
 - The shared `SettingsGroup` primitive expresses custom-body inset semantics. No page-specific margin patch, structural selector guess, fallback, parallel surface, or duplicated spacing constant is introduced.
-- Focused source tests, Overlay type checking, Node-launched Playwright browser tests, fresh light/dark desktop screenshots for every Settings tab, documentation health, diff review, commit, and git-cc push complete.
+- Focused source tests, Overlay type checking, Node-launched Playwright browser tests, fresh light/dark desktop screenshots for every Settings tab, documentation health, diff review, commit, and legacy remote push complete.
 
 ### Hard constraints
 
@@ -24,7 +24,7 @@
 - Keep `SettingsGroup` and `settings.css` as the single semantic and visual sources for card-body inset.
 - Do not restart, refresh, close, or interfere with the user's running OpenCorvus/Overlay. Use the isolated Node browser fixture and task-scoped screenshots.
 - Preserve the pre-existing uncommitted Expert Squad, Button, payload, Settings segmented-control, test, and spec-index changes. Do not create a worktree, reset the repository, or stage unrelated hunks.
-- Commit subjects start with `dsw-33987`; push the current branch to the configured git-cc remote.
+- Commit subjects start with `dsw-33987`; push the current branch to the configured legacy remote.
 
 ### Sources read
 
@@ -68,7 +68,7 @@
 ### Git baseline
 
 - Current branch: `work-v0.0.6beta-yr-0716`.
-- Baseline commit `2aa7aeee2` is already present on `myhexin/work-v0.0.6beta-yr-0716` before this task.
+- Baseline commit `2aa7aeee2` is already present on `legacy-remote/work-v0.0.6beta-yr-0716` before this task.
 - Pre-existing uncommitted files were enumerated before implementation and remain outside this task's staging boundary.
 
 ## Root cause
@@ -82,7 +82,7 @@
 3. Migrate the pre-existing handwritten Archive Settings surface to the same primitives after the focused guard exposed it during implementation.
 4. Add focused source regressions for the primitive contract and every enabled call point.
 5. Extend the existing isolated Settings browser matrix to every tab and assert real computed inset geometry, then inspect fresh light/dark screenshots at original resolution.
-6. Run focused tests, Overlay typecheck/i18n, production build, documentation-health checks, second diff review, commit only task-owned hunks, and push to git-cc.
+6. Run focused tests, Overlay typecheck/i18n, production build, documentation-health checks, second diff review, commit only task-owned hunks, and push to legacy remote.
 
 ## Codex review feedback
 

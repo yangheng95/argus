@@ -16,7 +16,7 @@
 1. Change only the canonical populated-message token from 1280px to 853px, the nearest whole-pixel two-thirds value.
 2. Pin the retired value's absence and the new single-source value in the focused source contract.
 3. Extend the large-desktop browser geometry check to prove the rendered card width equals `853px × --ui-scale`, while retaining exact composer/card/input alignment assertions.
-4. Build and run the real Node-launched browser fixture, inspect the refreshed 1902×1110 screenshot, run document health, commit with `dsw-33987`, merge current `myhexin`, and push.
+4. Build and run the real Node-launched browser fixture, inspect the refreshed 1902×1110 screenshot, run document health, commit with `dsw-33987`, merge current `legacy-remote`, and push.
 
 ## Validation note
 

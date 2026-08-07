@@ -29,7 +29,7 @@
 - Preserve all concurrent Prism / Mirror Watch changes and their untracked
   artifacts.
 - Commit subjects start with `dsw-33987`; push only the task-owned governance
-  and spec paths to `myhexin/v0.0.24beta`.
+  and spec paths to `legacy-remote/v0.0.24beta`.
 
 ### Hard-disk sources read
 
@@ -65,7 +65,7 @@ Repository-wide searches covered `前端视觉验收`, `UI`, `test`, `测试`,
 ### Git baseline
 
 - Branch: `v0.0.24beta`.
-- Starting `HEAD`: `02a66fd3e7`, aligned with `myhexin/v0.0.24beta`.
+- Starting `HEAD`: `02a66fd3e7`, aligned with `legacy-remote/v0.0.24beta`.
 - Concurrent Prism / Mirror Watch source and untracked spec changes remain
   outside this task.
 
@@ -95,7 +95,7 @@ location.
 2. Rewrite every conflicting rule found by the full-repository search.
 3. Index this record and run documentation-health verification only.
 4. Review the final diff, commit task-owned governance paths, and push through
-   normal git-cc hooks.
+   normal legacy remote hooks.
 
 ## Progress
 
@@ -120,4 +120,4 @@ location.
   frontend, backend, SDK, or expert-squad runtime source belongs to this change.
 - Governance commit `3c9b7cd071` passed the normal pre-push typecheck,
   API-route, documentation, internationalization, and secret-scan hooks and was
-  pushed to `myhexin/v0.0.24beta`.
+  pushed to `legacy-remote/v0.0.24beta`.

@@ -6,7 +6,7 @@
 | --- | --- |
 | User request | Sync latest local code to GitHub, make the GitHub repository public, and ensure a unified-version overlay package can be produced. |
 | Acceptance | GitHub has the latest `v0.0.2beta` code, repository visibility is public, and the official `build.yml` workflow can reach overlay package artifacts for `darwin-arm64`, `darwin-x64`, Linux, and Windows. |
-| Hard constraints | No fallback/retry masking; fix CI tooling when it fails; do not reset user code; push git-cc and GitHub; keep package versions unified. |
+| Hard constraints | No fallback/retry masking; fix CI tooling when it fails; do not reset user code; push legacy remote and GitHub; keep package versions unified. |
 | Records and docs read | `docs/packaging.md`, `.github/workflows/build.yml`, `.github/workflows/build-overlays.yml`, `.github/actions/setup-bun/action.yml`, `script/check-release-assets.ts`, `script/release-asset-contract.ts`, `specs/records/2026-07/README.md`. |
 | Full grep | `rg -n "setup-bun\|workflow\|GitHub Actions\|actions/setup\|bun install\|HUSKY\|action\\.yml" .github packages script specs`; `rg -n ".github/actions/setup-bun\|setup-bun/action.yml\|action.yml" packages/opencorvus/test packages/overlay/test packages`. |
 | Secret/public check | `bun run script/secret-scan.ts` passed with 0 tracked-source hits before making the GitHub repository public. |

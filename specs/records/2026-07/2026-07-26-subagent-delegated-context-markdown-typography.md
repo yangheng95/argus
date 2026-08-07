@@ -47,7 +47,7 @@ create a second source while leaving the renderer defect intact.
    equality in the Node/Vite browser test.
 6. Run focused tests, Overlay type/build checks, screenshot review,
    documentation health, and second diff review before committing only owned
-   files and synchronizing git-cc.
+   files and synchronizing legacy remote.
 
 ## Progress
 
@@ -55,7 +55,7 @@ create a second source while leaving the renderer defect intact.
 - [x] Shared scheduler/Subagent disclosure implemented with regressions.
 - [x] Focused and visual verification complete.
 - [x] Second review complete.
-- [ ] Commit and git-cc synchronization complete.
+- [ ] Commit and legacy remote synchronization complete.
 
 ## Verification
 

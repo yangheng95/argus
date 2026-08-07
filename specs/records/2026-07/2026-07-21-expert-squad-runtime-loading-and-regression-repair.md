@@ -84,7 +84,7 @@ Status: completed
 3. Repair Frontend Innovate/Replica authoring-source test imports through the OpenCorvus-owned dependency boundary.
 4. Align the stale Skill regression and both session fixtures with current canonical contracts.
 5. Run focused tests, then the full non-Mirror-Prism Expert Squad suite, packaged runtime tests, Overlay Expert Squad tests, typecheck, document health, and diff review.
-6. Update this record with final evidence, commit with `dsw-33987`, and push the current main delivery branch to `myhexin`.
+6. Update this record with final evidence, commit with `dsw-33987`, and push the current main delivery branch to `legacy-remote`.
 
 ## Final evidence
 

@@ -11,7 +11,7 @@
   - the Work Ledger row, session board envelope, and Agent Rail session projection agree;
   - tests cover hydrate plus live lifecycle mutation, and the real reported session is visually rechecked with a Node Playwright sidecar without restarting the user's running OpenCorvus process.
 - Hard constraints: one lifecycle source; no fallback, gate, compatibility branch, state machine, temporary iframe, or process restart; preserve unrelated Visual QA worktree edits; use the Browser skill and screenshot review for frontend acceptance.
-- Baseline: `d95ea2ac4` on `v0.0.12beta`, already equal to `myhexin/v0.0.12beta` when investigation began.
+- Baseline: `d95ea2ac4` on `v0.0.12beta`, already equal to `legacy-remote/v0.0.12beta` when investigation began.
 - Existing unrelated edits observed and excluded from this work: `packages/opencorvus/src/orchestrator/visual-qa-stage.ts`, `packages/opencorvus/src/tool/task-tool-execution-scope.ts`, `packages/opencorvus/src/visual-qa/**`, and their Visual QA tests/fixtures.
 - Read architecture and records: `specs/current/architecture/07-panel-reactivity.md`, `specs/records/2026-07/2026-07-21-chat-message-scroll-repair.md`, `packages/opencorvus/src/session/status.ts`, `packages/opencorvus/src/session/lifecycle.ts`, `packages/opencorvus/src/protocol/session-mirror.ts`, `packages/opencorvus/src/conversation/view.ts`, and the session route/Overlay hydrate/writer paths listed below.
 - Full-repository grep covered `SessionConversationHydration`, `SessionBoardEnvelope`, `resolveSessionLifecycle`, `SessionStatus.get`, `listConversationAgentSessionsForSessionTree`, `session.status`, `session.idle`, `sessionBoard`, `selectedTaskStatus`, `board.status`, and every literal `status: "active"` in the server, Overlay services/components, and relevant tests.
@@ -51,7 +51,7 @@ The deeper cause is duplicated status ownership. `SessionStatus` / `resolveSessi
 2. Centralize the three-state Chat activity projection beside `resolveSessionLifecycle`, then replace every parallel session Chat projection listed above.
 3. Run focused Bun tests for session conversation routes, Work Ledger, conversation hydrate/replay, tree writer, and status labels; run package typechecks and document-health/link tests.
 4. Build the Overlay and use an isolated copied-database backend plus the in-app Browser/Playwright surface to capture and inspect the reported session. Acceptance requires Work Ledger `Idle`, Agent Rail `Idle`, latest assistant card `Completed`, an 11-second persisted duration, and no cancel action. Do not restart or refresh the user's running OpenCorvus window.
-5. Perform a second diff review, commit with the `dsw-33987` prefix, and push `v0.0.12beta` to `myhexin` after hooks pass.
+5. Perform a second diff review, commit with the `dsw-33987` prefix, and push `v0.0.12beta` to `legacy-remote` after hooks pass.
 
 ## Verification evidence
 

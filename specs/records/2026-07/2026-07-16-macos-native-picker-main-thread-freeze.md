@@ -6,10 +6,10 @@
 | --- | --- |
 | User request | Diagnose and fix Overlay freezing on macOS when opening a project folder. |
 | Acceptance criteria | Opening the native project-folder picker must not block the Tauri main thread on macOS; folder and file picker commands must use one consistent safe scheduling model; cancel and malformed-path behavior must remain unchanged; focused tests, Rust compilation/tests, Overlay typecheck, documentation health, and a second diff review must pass. |
-| Hard constraints | Fix the native scheduling root cause without UI fallback, a second picker source, a route gate, or a state machine; preserve `HostTransport` and `workspace.pickDir` / `workspace.pickFiles` as the canonical contracts; do not restart or interfere with the running Overlay; preserve unrelated worktree changes; commit with `dsw-33987` and push `myhexin/v0.0.7beta`. |
+| Hard constraints | Fix the native scheduling root cause without UI fallback, a second picker source, a route gate, or a state machine; preserve `HostTransport` and `workspace.pickDir` / `workspace.pickFiles` as the canonical contracts; do not restart or interfere with the running Overlay; preserve unrelated worktree changes; commit with `dsw-33987` and push `legacy-remote/v0.0.7beta`. |
 | Sources read | `AGENTS.md`; `packages/overlay/src/services/workspace.ts`; `packages/overlay/src/services/tauri-transport.ts`; `packages/overlay/src-tauri/src/main.rs`; `packages/overlay/src-tauri/Cargo.toml`; `packages/overlay/test/host-transport-capabilities.test.ts`; Tauri dialog plugin API and source documentation. |
 | Whole-repository search evidence | `rg` found one folder-picker native owner (`overlay_pick_dir`), one file-picker native owner (`overlay_pick_files`), their two `TauriHostTransport` dispatch arms, the `workspace.pickDir` / `workspace.pickFiles` protocol variants, and all UI/test callers. Only the two Rust owners call `blocking_pick_folder`, `blocking_pick_files`, or `blocking_pick_file`; both are synchronous Tauri commands. |
-| Git baseline | `v0.0.7beta` matched `myhexin/v0.0.7beta` (`0 0`) before task edits and a pre-change push completed. The worktree already contained unrelated Provider UI/spec changes and a Darwin artifact directory; they remain outside this task's commit. |
+| Git baseline | `v0.0.7beta` matched `legacy-remote/v0.0.7beta` (`0 0`) before task edits and a pre-change push completed. The worktree already contained unrelated Provider UI/spec changes and a Darwin artifact directory; they remain outside this task's commit. |
 | Independent agent feedback | None. The user did not request delegation, and the active collaboration policy forbids unrequested sub-agents. |
 
 ## Root-cause chain
@@ -36,7 +36,7 @@
 1. Convert both native picker command functions to asynchronous Tauri commands, without adding a parallel callback implementation or changing transport payloads.
 2. Extend the focused source contract test to reject a regression back to synchronous blocking picker commands.
 3. Run the focused Bun test, Rust formatting/check/tests, Overlay typecheck, documentation-health tests, and `git diff --check`.
-4. Review the exact task diff separately from unrelated worktree changes, record validation, commit only task files, and push `myhexin/v0.0.7beta`.
+4. Review the exact task diff separately from unrelated worktree changes, record validation, commit only task files, and push `legacy-remote/v0.0.7beta`.
 
 ## Verification plan
 

@@ -42,7 +42,7 @@ Date: 2026-07-31
   click workaround.
 - Delete touched legacy UI source/fixture tests without running them.
 - New commits use the `dsw-33987` prefix and push through normal hooks to
-  `myhexin`.
+  `legacy-remote`.
 
 ### Sources read
 

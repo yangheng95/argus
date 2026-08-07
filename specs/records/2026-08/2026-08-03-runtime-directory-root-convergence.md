@@ -213,7 +213,7 @@ not be opened, copied, or structurally modified during this implementation.
    page, capture a screenshot, and manually review window/layout behavior and the
    resulting on-disk tree.
 8. Review the final diff and resolved-path inventory a second time, commit with the
-   required prefix, and push `v0.0.29beta` to `git-cc`.
+   required prefix, and push `v0.0.29beta` to legacy remote.
 
 ## Implementation Status
 

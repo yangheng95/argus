@@ -6,7 +6,7 @@
 | --- | --- |
 | User request | “这个 hover 的弹框不要放在左侧，调整到右侧展示。” The supplied 1041×600 screenshot marks the Agent Rail hover detail currently opening over the left-side conversation list. |
 | Acceptance criteria | Hover and keyboard focus open the existing Agent Rail detail to the right of the active tick with the existing gutter; the card stays within the desktop viewport, preserves the compact bounded input preview, and keeps tick proximity plus click-to-locate behavior. A real Node-launched desktop browser screenshot must be inspected after the change. |
-| Hard constraints | Reuse the canonical Kobalte Tooltip and Button; replace the old side contract directly without a fallback, custom positioning code, gate, second popup, alternate activity source, mobile/tablet scope, or worktree. Do not restart, refresh, close, or otherwise interfere with the user's running OpenCorvus/Overlay. Preserve unrelated dirty-worktree changes. Use Node for Playwright. Commit subjects use `dsw-33987`; delivery pushes the current branch to `myhexin`. |
+| Hard constraints | Reuse the canonical Kobalte Tooltip and Button; replace the old side contract directly without a fallback, custom positioning code, gate, second popup, alternate activity source, mobile/tablet scope, or worktree. Do not restart, refresh, close, or otherwise interfere with the user's running OpenCorvus/Overlay. Preserve unrelated dirty-worktree changes. Use Node for Playwright. Commit subjects use `dsw-33987`; delivery pushes the current branch to `legacy-remote`. |
 | Supplied evidence | `C:/Users/10132/AppData/Local/Temp/codex-clipboard-adde1a9f-cff7-49df-a2a4-a21fe9a61bb1.png`, inspected at original resolution. The red box shows the compact `multica-agent-*` detail occupying the left side of the Agent Rail tick; the requested destination is the tick's right side. |
 | Sources read | Root `AGENTS.md`; Browser control skill; supplied screenshot; current `ConversationAgentRail.tsx`, shared `Tooltip.tsx`, feature `conversation.css`, focused source and Node-browser tests; `2026-07-14-agent-rail-hover-input-context.md`; `2026-07-19-agent-rail-hover-tooltip-right-compact.md`; `2026-07-24-agent-rail-tooltip-transcript-occlusion.md`; current panel architecture and spec indexes. |
 | Whole-repository grep | `App.tsx` owns the sole `<ConversationAgentRail />` mount. `ConversationAgentRail.tsx` is the only `.conversation-agent-rail-tooltip` producer and currently hard-codes `placement="left"`, `gutter={8}`, and `flip={false}`. `conversation-agent-rail.test.ts` is the only source-contract test that requires left placement. `conversation-agent-rail-hover-context-browser.test.ts` is the only real-browser owner of the left-of-tick, transcript-exclusion, card-intersection, compact-bounds, viewport, focus, proximity, and screenshot assertions. `conversation.css` owns compact geometry and side-sensitive horizontal enter/exit motion. The scroll fixture observes Tooltip count but does not own side placement. Shared Tooltip chrome, projection/store/schema/routes/localization, and Software Development Kit surfaces do not require changes. Historical records remain immutable evidence of the superseded decisions. |
@@ -49,7 +49,7 @@
    clipping or visual drift, and rerun the browser path.
 5. Update current architecture and this record with evidence, run document
    health plus diff checks, perform a second review, selectively commit this
-   repair, and push the current branch to git-cc.
+   repair, and push the current branch to legacy remote.
 
 ## Implementation result
 

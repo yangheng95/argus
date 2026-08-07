@@ -49,7 +49,7 @@ requested a repair plan.
 - Do not restart, refresh, stop, or otherwise interfere with the running OpenCorvus or
   Overlay process.
 - Preserve unrelated worktree changes. Any implementation commit subject must start
-  with `dsw-33987` and be pushed to the `myhexin` remote without bypassing hooks.
+  with `dsw-33987` and be pushed to the `legacy-remote` remote without bypassing hooks.
 
 ### Sources read
 

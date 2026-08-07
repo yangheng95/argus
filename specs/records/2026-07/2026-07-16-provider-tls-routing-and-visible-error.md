@@ -22,7 +22,7 @@
 - Preserve the existing natural message/error-part flow and the single Provider error signal.
 - Do not touch the pre-existing untracked `packages/overlay/dist-artifacts/darwin-arm64/` directory.
 - Any frontend acceptance uses an isolated service/fixture and a task-scoped screenshot.
-- Commit subjects use the `dsw-33987` prefix and delivery is pushed to the `myhexin` remote.
+- Commit subjects use the `dsw-33987` prefix and delivery is pushed to the `legacy-remote` remote.
 
 ### Evidence read
 

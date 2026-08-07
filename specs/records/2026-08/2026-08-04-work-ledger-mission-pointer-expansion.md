@@ -6,7 +6,7 @@
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | User requirement        | Mission 下存在 Task 时，鼠标 hover Mission 行必须自动展开 child Task；该功能此前已实现但当前运行态失效。                                                                                                                                                                                                                                   |
 | Acceptance criteria     | 指针进入带 child Task 的 Mission 行后，disclosure 箭头旋转且 drawer 自动展开；指针移动到 child Task 后保持展开，离开完整 Mission shell 后收起；selected child 与键盘 focus 继续保持 drawer 可见。真实桌面页面必须执行 hover、截图并人工复核。                                                                                              |
-| Hard constraints        | 桌面端单端修复；不新增、修改、更新或运行 User Interface（UI，用户界面）自动化测试；不增加持久化展开状态、fallback、第二 drawer owner 或 gate；保留并行工作区改动；不干预正在运行的 OpenCorvus / overlay；提交主题使用 `dsw-33987` 前缀并推送当前分支到 `myhexin`。                                                                         |
+| Hard constraints        | 桌面端单端修复；不新增、修改、更新或运行 User Interface（UI，用户界面）自动化测试；不增加持久化展开状态、fallback、第二 drawer owner 或 gate；保留并行工作区改动；不干预正在运行的 OpenCorvus / overlay；提交主题使用 `dsw-33987` 前缀并推送当前分支到 `legacy-remote`。                                                                         |
 | Read material           | 根 `AGENTS.md`、`CLAUDE.md`；用户 478×130 截图；`specs/current/architecture/07-panel.md`；2026-08-03 Work Ledger pointer jitter、density/Mission expansion 与 Mission-only Task hierarchy 记录；当前 `WorkLedger.tsx`、`work-ledger.css`、`index.html`、Vite build output。                                                                |
 | Whole-repository search | `WorkLedgerRowView` 是 Mission shell、disclosure 和 child drawer 的唯一 DOM owner；`WorkLedgerTaskChildRow` 只在该 drawer 内复用同一行组件；`work-ledger.css` 是 drawer、child insertion 和 disclosure 展开样式的唯一 owner；当前源码与 `dist-vite` 都含父 `.work-row-shell:hover` 选择器；没有其他 drawer 选择器或覆盖规则。              |
 | Historical evidence     | `4c223c3893` 为修复 pointer geometry 删除 Mission `:hover` 展开；`076de76141` 于 2026-08-03 恢复该 CSS 伪类。当前 HEAD 与构建 CSS 均含恢复后的规则，但用户截图中行操作已经呈现交互态，disclosure 仍朝右且 child drawer 未展开。                                                                                                            |
@@ -35,7 +35,7 @@
 1. 格式化 task-owned TypeScript / Cascading Style Sheets（CSS，层叠样式表）并运行 Overlay TypeScript typecheck、internationalization（i18n，国际化）check、Vite production build 与 `git diff --check`；不运行任何 UI 自动化测试。
 2. 启动隔离的当前源码页面，使用 Node 驱动的 headed Chromium 对真实 Mission 行执行 pointer hover；分别捕获静止 Mission、hover Mission、hover child Task 与离开后的状态并人工查看。
 3. 复核 disclosure 旋转、drawer 高度/可见性、child 行持续可见，以及 Mission/相邻行没有异常覆盖或抖动。
-4. 二次审查 task-owned diff，更新 spec 索引和验证记录，提交并推送当前交付分支到 `myhexin`。
+4. 二次审查 task-owned diff，更新 spec 索引和验证记录，提交并推送当前交付分支到 `legacy-remote`。
 
 ## Progress
 

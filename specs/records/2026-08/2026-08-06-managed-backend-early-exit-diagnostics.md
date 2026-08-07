@@ -18,7 +18,7 @@ The operator reported `[1785947449] managed backend did not become healthy withi
 - Preserve the sidecar-log path through the startup failure surface instead of querying already-cleared child state.
 - Verify the non-User-Interface process/diagnostic contract with focused Rust tests.
 - Reproduce the real ownership conflict with a live source backend and the packaged Windows Overlay, inspect the visible failure dialog, and capture a task-bound screenshot without creating or running User-Interface automation tests.
-- Complete a second source/evidence review, commit with the `dsw-33987` prefix, and push the main delivery branch to git-cc.
+- Complete a second source/evidence review, commit with the `dsw-33987` prefix, and push the main delivery branch to legacy remote.
 
 ### Hard constraints
 
@@ -74,7 +74,7 @@ The existing runtime ownership implementation is unchanged. Development beside a
 - Overlay TypeScript/Rust build checks required by the package scripts.
 - Spec link and document-health tests required for the new record.
 - Real Windows package conflict reproduction: start a source backend against the canonical home, launch the packaged Overlay, confirm failure occurs without the 30-second masking delay, inspect the dialog text and capture a screenshot, then close both processes and confirm the database owner is released.
-- Final clean-worktree diff review, commit, git-cc push, and remote equality check.
+- Final clean-worktree diff review, commit, legacy remote push, and remote equality check.
 
 ## Outcome
 

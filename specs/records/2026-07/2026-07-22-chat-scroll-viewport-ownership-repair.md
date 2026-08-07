@@ -5,12 +5,12 @@
 | Item | Detail |
 | --- | --- |
 | User request | Chat mode frequently loses its scrollbar and cannot scroll far enough to display all messages. |
-| Acceptance criteria | A populated desktop Chat keeps one visible native scrollbar, preserves a bounded `#chatScroll` viewport while virtualized content grows, exposes a positive scroll range for long transcripts, responds to real wheel and keyboard input from top to bottom, keeps the composer fixed, and shows the earliest and latest messages in task-scoped screenshots. Focused source/browser tests, typecheck/build, document health, secondary review, commit, and `myhexin` push must pass. |
+| Acceptance criteria | A populated desktop Chat keeps one visible native scrollbar, preserves a bounded `#chatScroll` viewport while virtualized content grows, exposes a positive scroll range for long transcripts, responds to real wheel and keyboard input from top to bottom, keeps the composer fixed, and shows the earliest and latest messages in task-scoped screenshots. Focused source/browser tests, typecheck/build, document health, secondary review, commit, and `legacy-remote` push must pass. |
 | Hard constraints | Desktop-only scope; `#chatScroll` remains the sole transcript overflow owner and `#solidChatComposer` remains the sole composer; no fallback scroller, synthetic message, state machine, keyword workaround, iframe/query override, worktree, Bun-launched Playwright, or refresh/restart of the user's running OpenCorvus/Overlay. Preserve unrelated `.DS_Store` files. |
 | Sources read | `AGENTS.md`; Browser control skill and complete selected-browser documentation; `specs/README.md`; July index; the 2026-07-17 fixed-composer record, 2026-07-19 message/composer/scrollbar alignment record, and 2026-07-21 Chat scroll investigation; `App.tsx`; `Conversation.tsx`; `conversation.css`; `workspace.css`; `base.css`; `field.css`; `main.tsx`; `dom-utils.ts`; current source/browser regressions and relevant Git history/blame. |
 | Whole-repository search | `rg` enumerated every production/test reference to `chatScroll`, `.chat-scroll`, `.conversation-scroll-shell`, `conversation-body`, scrollbar declarations, overflow/height owners, `solidChatComposer`, virtualized conversation sizing, tree replacement, follow-lock, and browser scroll assertions. Production ownership is singular: `App.tsx` owns DOM order; `workspace.css` and `.chat` own the bounded ancestor chain; `conversation.css` owns the implicit Grid row, positioning shell and transcript overflow; `base.css` owns native scrollbar chrome; `Conversation.tsx` owns virtualized measurement and content-change projection; `dom-utils.ts` owns follow-lock; `main.tsx` owns measured gutter. Test consumers are the architecture, density, visible-scrollbar, autoscroll, Agent Rail, long-transcript and scroll-button suites. |
 | Independent agent feedback | None. The user did not request sub-agents, and active policy forbids unrequested delegation. |
-| Git baseline | `HEAD` `d51c4f26f` matches `myhexin/v0.0.14beta`. The pre-change push passed repository hooks. Two unrelated untracked `.DS_Store` files are preserved. |
+| Git baseline | `HEAD` `d51c4f26f` matches `legacy-remote/v0.0.14beta`. The pre-change push passed repository hooks. Two unrelated untracked `.DS_Store` files are preserved. |
 
 ## Evidence and causal chain
 
@@ -76,7 +76,7 @@ it preserves an already visible row while older records prepend.
    `git diff --check`.
 4. Inspect task-scoped top/bottom screenshots at original resolution, perform
    a second call-site/diff review, record the exact evidence here, then commit
-   with the `dsw-33987` prefix and push the current delivery branch to `myhexin`.
+   with the `dsw-33987` prefix and push the current delivery branch to `legacy-remote`.
 
 ## Result
 
@@ -111,7 +111,7 @@ Verification evidence:
   edits were fully reverted; it is not presented as Chat-scroll evidence.
 - During verification, concurrent delivery advanced the main worktree from the
   recorded start baseline to `v0.0.15beta` at `c935f51f9`, matching
-  `myhexin/v0.0.15beta`. This repair is committed and pushed on that current
+  `legacy-remote/v0.0.15beta`. This repair is committed and pushed on that current
   single delivery branch; no stale `v0.0.14beta` push is used.
 
 No running OpenCorvus or Overlay process was restarted, refreshed, or closed.

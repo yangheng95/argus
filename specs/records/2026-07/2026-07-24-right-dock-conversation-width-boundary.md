@@ -118,7 +118,7 @@ the same absolute Dock maximum and remaining-width contract.
 5. Confirm concurrent working-tree blockers separately without folding them
    into this task's commit, run hooks without bypassing them, commit with the
    required `dsw-33987` prefix, fetch/reconcile the delivery branch, and push
-   to `myhexin`.
+   to `legacy-remote`.
 
 ## Verification ledger
 

@@ -13,7 +13,7 @@ Monitor Mission `bea70267fe9d5843`, repair every evidenced problem immediately, 
 3. A Goal from another Task cannot be projected through the current Task dispatcher.
 4. The repair applies through the shared delegated-worker adapter to all Expert Squads and dynamic Agent identities using `base_role: delegated-worker`; no Prism-specific prompt, fallback, gate, retry, or compatibility path is introduced.
 5. Exact selected `artifact:<id>` payload projection remains unchanged.
-6. Focused regressions, document-health checks, typecheck, commit, normal-hook push to `myhexin`, and a bounded runtime verification succeed.
+6. Focused regressions, document-health checks, typecheck, commit, normal-hook push to `legacy-remote`, and a bounded runtime verification succeed.
 
 ### Hard constraints
 
@@ -21,7 +21,7 @@ Monitor Mission `bea70267fe9d5843`, repair every evidenced problem immediately, 
 - Use one canonical persisted Goal row as the contract source. `goal:*` evidence labels cannot become a second selector.
 - Do not infer Goal facts from the delegated instruction, artifact summaries, filenames, Agent identity, or Squad identity.
 - Do not restart the Mission for ordinary progress. After verification, prefer an explicit continuation using the same Mission only if the blocked worker can consume the repaired contract without polluted output; otherwise settle the old execution and use a never-reused run.
-- Commit subjects start with `dsw-33987`; push only to `myhexin`.
+- Commit subjects start with `dsw-33987`; push only to `legacy-remote`.
 
 ### Sources read
 
@@ -86,7 +86,7 @@ The Task board simultaneously exposed two complete persisted acceptance specs fo
 - `bun test packages/opencorvus/test/script/document-health.test.ts`
 - `bun test packages/opencorvus/test/script/product-docs-single-source.test.ts`
 - `bun run --cwd packages/opencorvus typecheck`
-- Review the exact owned-file diff, commit only those files, and push through normal hooks to `myhexin`.
+- Review the exact owned-file diff, commit only those files, and push through normal hooks to `legacy-remote`.
 
 ## Implementation
 

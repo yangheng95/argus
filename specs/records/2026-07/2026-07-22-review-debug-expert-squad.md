@@ -33,7 +33,7 @@ On 2026-07-23 the user supplied Task `tsk_f8a970abb001eDUEwNJjE7TgVK` and requir
 - The repair implementer may edit product source only after reproducible evidence and a causal explanation exist. Reviewers and investigators remain read-only.
 - A visual repair is incomplete without a task-scoped real preview, screenshots bound to the affected region/state, interaction evidence, and personal visual inspection.
 - MirrorTest may consume repaired-product and regression evidence, repair test-owned artifacts, and issue an audit report; it must not edit product source or diagnose product root cause.
-- New commits use the `dsw-33987` subject prefix and are pushed to `myhexin/v0.0.15beta` through hooks.
+- New commits use the `dsw-33987` subject prefix and are pushed to `legacy-remote/v0.0.15beta` through hooks.
 
 ### Sources Read
 
@@ -112,7 +112,7 @@ The collaboration definition is authoring-time validation only. Runtime handoff 
 5. Update exact payload package lists, stage new package source, regenerate the single generated payload, and verify byte parity.
 6. Run focused package/SDK/payload/registry/resolver tests, documentation health, historical links, TypeScript checks, `git diff --check`, and residue searches.
 7. Perform a primary-agent second review against the user requirement and MirrorTest boundary; record results here.
-8. Commit with `dsw-33987`, fetch/merge `myhexin/v0.0.15beta`, rerun required checks when merge changes relevant files, and push through hooks.
+8. Commit with `dsw-33987`, fetch/merge `legacy-remote/v0.0.15beta`, rerun required checks when merge changes relevant files, and push through hooks.
 
 ## Non-Goals
 
@@ -138,7 +138,7 @@ The collaboration definition is authoring-time validation only. Runtime handoff 
 - Manager payload inventory and selector expert-contract cases: `2 pass`, `398 assertions`.
 - Historical links and document health: `82 pass`, `1,362 assertions`.
 - SDK and OpenCorvus TypeScript checks passed; working-tree and staged diff whitespace checks passed.
-- The concurrent Mission contract task committed the complete expert-squad source closure, regenerated OpenAPI and the single bundled payload, retained all Review & Debug commits, and pushed `a3953f902` to `myhexin/v0.0.15beta`. The generated payload contains `builtin/review-debug` revision `2026.07.22.2`, and fresh-project release now installs and reloads that exact package.
+- The concurrent Mission contract task committed the complete expert-squad source closure, regenerated OpenAPI and the single bundled payload, retained all Review & Debug commits, and pushed `a3953f902` to `legacy-remote/v0.0.15beta`. The generated payload contains `builtin/review-debug` revision `2026.07.22.2`, and fresh-project release now installs and reloads that exact package.
 
 ### Phase 08 Correction Verification
 

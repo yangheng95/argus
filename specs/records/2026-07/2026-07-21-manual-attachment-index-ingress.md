@@ -73,7 +73,7 @@ conversation/task APIs.
    browser fixture to inspect a goal-scoped desktop screenshot without touching
    the running application.
 8. Perform a second diff review, record verification evidence here, commit with
-   the `dsw-33987` prefix, fetch/reconcile git-cc, and push the delivery commit.
+   the `dsw-33987` prefix, fetch/reconcile legacy remote, and push the delivery commit.
 
 ## Verification Record
 
@@ -86,7 +86,7 @@ conversation/task APIs.
 - `bun test packages/opencorvus/test/script/historical-docs-links.test.ts`: 21 passed, 0 failed.
 - `bun run --cwd packages/overlay build:vite`: the fresh production Overlay bundle built successfully before visual inspection.
 - Real desktop rendering was inspected at 1440 x 900 through the in-app Browser against the fresh bundle and an isolated local response fixture; this is visual verification, not claimed as backend end-to-end validation. During upload, `.scratch/manual-attachment-index-ingress/uploading.png` shows the visible `Indexing 1 attachment(s)…` status and a disabled Send action without an error dialog. After completion, `.scratch/manual-attachment-index-ingress/indexed.png` shows a removable canonical file-index chip. Folder selection of `world-economy-design-v3` produced two indexed child entries with their folder provenance preserved, recorded in `.scratch/manual-attachment-index-ingress/folder-indexed.png`; the final Send action was enabled and no `Attachment too large` / skipped-file dialog appeared.
-- After fetching git-cc, the branch merged `myhexin/v0.0.12beta` at `b844a3c41`. The merged tree passed `bun run typecheck` (9/9), the eight attachment-specific backend regressions (8/8), the Overlay-focused suite (49/49), route inventory, generated-doc consistency, locale parity, and `git diff --check`.
+- After fetching legacy remote, the branch merged `legacy-remote/v0.0.12beta` at `b844a3c41`. The merged tree passed `bun run typecheck` (9/9), the eight attachment-specific backend regressions (8/8), the Overlay-focused suite (49/49), route inventory, generated-doc consistency, locale parity, and `git diff --check`.
 
 ## Codex Review Revision
 
@@ -208,7 +208,7 @@ artifacts.
 No visual correction was required after inspecting the generated screenshots.
 Before delivery, the repository was rechecked with `git ls-files -u` and
 `git diff --name-only --diff-filter=U`; both returned no paths. The current
-branch and `myhexin/work-v0.0.17beta-yr-0723` also resolve to the same commit.
+branch and `legacy-remote/work-v0.0.17beta-yr-0723` also resolve to the same commit.
 Only the image-presentation files and the corresponding test hunks may enter
 the delivery commit; the remaining dirty-worktree files belong to other
 in-progress changes and stay untouched.

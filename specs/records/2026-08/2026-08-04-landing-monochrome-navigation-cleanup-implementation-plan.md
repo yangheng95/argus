@@ -18,7 +18,7 @@
 - Remove green/blue accent tokens, colored gradients, ornamental grids, glow elements, glow shadows, and colored chrome dots from the landing renderer.
 - Preserve the native colors inside imported product screenshots and the demo video.
 - Do not add, modify, update, or run UI automation tests. UI acceptance uses the real visible page, screenshots, and personal review only.
-- Use `apply_patch` for source/spec edits, stage exact task files, use the `dsw-33987` commit prefix, and push normally to `myhexin/work-lcx-v0.0.30beta` without bypassing hooks.
+- Use `apply_patch` for source/spec edits, stage exact task files, use the `dsw-33987` commit prefix, and push normally to `legacy-remote/work-lcx-v0.0.30beta` without bypassing hooks.
 
 ---
 
@@ -275,14 +275,14 @@ git add -- specs/records/2026-08/2026-08-04-landing-monochrome-navigation-cleanu
 git commit -m "dsw-33987 record landing monochrome evidence"
 ```
 
-- [x] **Step 9: Reconcile and push git-cc**
+- [x] **Step 9: Reconcile and push legacy remote**
 
 Run:
 
 ```powershell
-git fetch myhexin work-lcx-v0.0.30beta
-git rev-list --left-right --count HEAD...myhexin/work-lcx-v0.0.30beta
-git push myhexin work-lcx-v0.0.30beta
+git fetch legacy-remote work-lcx-v0.0.30beta
+git rev-list --left-right --count HEAD...legacy-remote/work-lcx-v0.0.30beta
+git push legacy-remote work-lcx-v0.0.30beta
 ```
 
 Do not force-push or bypass hooks. Preserve unrelated work and report any evidenced external blocker exactly.
@@ -300,7 +300,7 @@ Do not force-push or bypass hooks. Preserve unrelated work and report any eviden
 - Simplified Chinese visual evidence: `specs/artifacts/landing-monochrome-zh-cn.png` was captured from `http://127.0.0.1:9999/docs/zh-cn/`. The Windows card exposes `/docs/downloads/windows-x64/OpenCorvus_0.0.30-beta_x64-setup.exe`; its black/white card hierarchy, CTA, footer, typography, and language switch were inspected without clipping or residual page-chrome color.
 - Visual review result: the rendered chrome uses solid black, white, and neutral gray surfaces, fine borders, and flat controls. Green/blue accents, gradients, glow shadows, ornamental grids, and lift effects are removed. Product evidence media intentionally retains its native application colors.
 - UI acceptance stayed interactive and manual: no UI automation test, source-string UI assertion, snapshot baseline, or pixel-diff fixture was created or run.
-- Git-cc delivery: after fetching `myhexin/work-lcx-v0.0.30beta`, the local branch was 3 commits ahead and 0 behind. The normal push completed successfully; pre-push hooks passed SDK imports, AI runtime checks, 8 typecheck tasks across the 10-package scope, API route checks, documentation checks, overlay/panel internationalization checks, and secret scanning.
+- legacy remote delivery: after fetching `legacy-remote/work-lcx-v0.0.30beta`, the local branch was 3 commits ahead and 0 behind. The normal push completed successfully; pre-push hooks passed SDK imports, AI runtime checks, 8 typecheck tasks across the 10-package scope, API route checks, documentation checks, overlay/panel internationalization checks, and secret scanning.
 
 ## Follow-up adjustment: native brand color and MOSA label
 
@@ -315,7 +315,7 @@ Do not force-push or bypass hooks. Preserve unrelated work and report any eviden
 - [x] Define one exported `landingProductName = "MOSA"` value in `landing.ts`; use it for all bilingual product copy and import it into `Lander.astro` for the header, demo-stage label, workspace label, and accessibility descriptions.
 - [x] Remove the grouped brand-image grayscale filter without changing image files or product evidence media.
 - [x] Run Astro checks and the static distribution build, then inspect the real English and Simplified Chinese landing pages and capture fresh screenshots.
-- [x] Record verification, commit with the `dsw-33987` prefix, and push normally to `myhexin/work-lcx-v0.0.30beta`.
+- [x] Record verification, commit with the `dsw-33987` prefix, and push normally to `legacy-remote/work-lcx-v0.0.30beta`.
 
 ### Follow-up evidence
 
@@ -326,11 +326,11 @@ Do not force-push or bypass hooks. Preserve unrelated work and report any eviden
 - `bun run build:landing-dist` rebuilt 105 pages and retained all three Windows artifacts, including the current setup executable.
 - Real-page review used `http://127.0.0.1:9996/docs/zh-cn/` and `http://127.0.0.1:9996/docs/`. The header, hero, download section, demo stage, Expert Squads, runtime surfaces, CTA, footer, and accessibility tree identify MOSA; the brand icon renders in its original blue. The installer link remains `/docs/downloads/windows-x64/OpenCorvus_0.0.30-beta_x64-setup.exe`.
 - Fresh visual evidence is stored in `specs/artifacts/landing-mosa-zh-cn.png` and `specs/artifacts/landing-mosa-en.png`. Product screenshots/video intentionally retain their original embedded pixels.
-- Git-cc delivery: commit `e774e28c95` was pushed normally to `myhexin/work-lcx-v0.0.30beta`. Pre-push checks passed SDK imports, AI runtime compatibility, all 8 typecheck tasks, API route validation, documentation checks, overlay/panel internationalization checks, and secret scanning.
+- legacy remote delivery: commit `e774e28c95` was pushed normally to `legacy-remote/work-lcx-v0.0.30beta`. Pre-push checks passed SDK imports, AI runtime compatibility, all 8 typecheck tasks, API route validation, documentation checks, overlay/panel internationalization checks, and secret scanning.
 
 ## Plan self-review
 
-- Spec coverage: navigation deletion, documentation preservation, version-badge deletion, monochrome tokens, gradient/glow retirement, media preservation, distribution build, screenshots, and git-cc delivery all map to concrete tasks.
+- Spec coverage: navigation deletion, documentation preservation, version-badge deletion, monochrome tokens, gradient/glow retirement, media preservation, distribution build, screenshots, and legacy remote delivery all map to concrete tasks.
 - Placeholder scan: all file paths, tokens, commands, route URLs, screenshot paths, expected inventories, and commit subjects are explicit.
 - Type consistency: `LandingLink` remains for language only; `LandingStory` and `LandingSurface` no longer expose link fields; installer `version` remains internal to `landingWindowsDownload`.
 - Test boundary: automated checks cover TypeScript/Astro compilation, documentation health, and filesystem artifact copying only. No UI source-string, DOM, component, snapshot, Playwright-test, or screenshot assertion is added or run.

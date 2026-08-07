@@ -33,7 +33,7 @@
   Overlay processes; verification uses the existing isolated browser fixture.
 - Preserve unrelated dirty-worktree changes and stage only task-owned hunks.
 - Commit subjects use the required `dsw-33987` prefix and the completed change
-  is pushed to the `myhexin` remote.
+  is pushed to the `legacy-remote` remote.
 
 ### Sources read
 

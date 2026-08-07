@@ -64,7 +64,7 @@ Both modes create one `ExpertSquadPackageDefinition` and materialize it only thr
 2. Run portable template and SDK authoring tests.
 3. Run documentation health, historical-link, and product single-source tests.
 4. Run TypeScript, API route, documentation, generated-artifact, and diff checks.
-5. Inspect the final staged patch for unrelated concurrent content before commit and git-cc push.
+5. Inspect the final staged patch for unrelated concurrent content before commit and legacy remote push.
 
 ## Forward test
 

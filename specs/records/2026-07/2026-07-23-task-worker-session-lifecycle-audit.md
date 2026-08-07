@@ -25,7 +25,7 @@ Generalize the Goal-scoped research session repair and inspect the other project
 - Do not restart or otherwise disturb the running OpenCorvus or Overlay process.
 - Preserve and exclude the unrelated user modification in `2026-07-22-mirror-prism-full-workflow-distillation.md`.
 - Dead-code removal requires prior user notice. The audit may identify an unused surface, but it must not silently delete it.
-- Commit subjects use `dsw-33987`; delivery is pushed from the current main worktree to `myhexin/v0.0.16beta`.
+- Commit subjects use `dsw-33987`; delivery is pushed from the current main worktree to `legacy-remote/v0.0.16beta`.
 
 ### Evidence read
 

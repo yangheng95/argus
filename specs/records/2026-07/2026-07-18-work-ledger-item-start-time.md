@@ -1,6 +1,6 @@
 # Work Ledger Item Start Time
 
-Status: completed and delivered to git-cc
+Status: completed and delivered to legacy remote
 
 ## Recall
 
@@ -8,7 +8,7 @@ Status: completed and delivered to git-cc
 | --- | --- |
 | User request | Add the current Task, Chat, and Mission start time to the Work Ledger row hover popup shown in the supplied screenshot. |
 | Acceptance criteria | The existing Kobalte Work Ledger Tooltip remains the only item hover surface. A started Task, Chat, or Mission visibly shows a localized `Started` label, an exact local start timestamp, and the compact relative start time in the headline. The semantic HTML `time` values use the same canonical timestamp. A queued Task with no execution start omits both time presentations instead of showing its creation time. Real desktop browser coverage opens and checks Task, Chat, Mission, and not-started Task popups, and task-scoped screenshots are visually reviewed. |
-| Hard constraints | Preserve the mature Tooltip, Work Ledger response, time-formatting utilities, and current compact desktop geometry. Do not add a hover fetch, native `title`, frontend fallback from `started` to `created`, second popup, state machine, mobile/tablet scope, new worktree, or intervention in the running OpenCorvus/Overlay. Use `EngineTaskTable.time_started` as the Task execution-start authority; Chat and Mission start with their persisted session creation time. Run Playwright through Node. Commit subjects start with `dsw-33987` and push to `myhexin`. |
+| Hard constraints | Preserve the mature Tooltip, Work Ledger response, time-formatting utilities, and current compact desktop geometry. Do not add a hover fetch, native `title`, frontend fallback from `started` to `created`, second popup, state machine, mobile/tablet scope, new worktree, or intervention in the running OpenCorvus/Overlay. Use `EngineTaskTable.time_started` as the Task execution-start authority; Chat and Mission start with their persisted session creation time. Run Playwright through Node. Commit subjects start with `dsw-33987` and push to `legacy-remote`. |
 | Supplied evidence | `C:/Users/10132/AppData/Local/Temp/codex-clipboard-f60e864b-106e-4809-bf29-2786ea3a770c.png`, inspected at original `1076x291` resolution. The current compact popup contains a title, an unlabeled relative value (`2d ago`), and the folder name, but no visible exact/labeled start-time fact. |
 | Sources read | `AGENTS.md`; Browser control skill; `specs/records/2026-07/2026-07-17-work-ledger-compact-context-tooltips.md`; the recent Work Ledger hover/tooltip records; current Work Ledger backend projection/route/schema, Overlay service/component/styles/i18n, time utilities, focused source tests, route tests, and the Node browser fixture. |
 | Whole-repository search evidence | `packages/opencorvus/src/work-ledger/projection.ts` is the single Work Ledger response owner. `MissionTaskProjection.started` already exposes `EngineTaskTable.time_started`, while the Work Ledger task adapter currently discards it and exports only `created`/`updated`. Standalone Task projection also has direct access to `task.time_started`. Mission and Chat adapters have canonical session creation timestamps. `packages/overlay/src/components/WorkLedger.tsx` is the sole item-summary Tooltip producer and currently formats `row.created` as `tooltipStartTime`; `packages/overlay/src/services/work-ledger.ts` is the frontend row contract. `work-ledger-consolidation.test.ts`, `project-ledger-group-browser.test.ts`, `work-ledger-fixture.ts`, and `work-ledger-routes.test.ts` are the direct regression/fixture owners. The Work Ledger OpenAPI response is generated into `packages/sdk/openapi.json` and `packages/sdk/js/src/gen/**`; API reference MDX is generated from the same schema. No database schema or migration is required. |
@@ -42,7 +42,7 @@ Status: completed and delivered to git-cc
 2. Implement the backend projection and existing Tooltip composition, then regenerate API/SDK/docs with the repository toolchain.
 3. Run focused backend/Overlay tests, typecheck, i18n, API route/OpenAPI checks, and the Node-launched desktop browser fixture.
 4. Inspect the Task, Chat, and Mission popup screenshots at original resolution, correct any density/overflow issue, and rerun until visually accepted.
-5. Run documentation health and exact diff checks, update this record with evidence, stage only task-owned files, commit, and push to git-cc.
+5. Run documentation health and exact diff checks, update this record with evidence, stage only task-owned files, commit, and push to legacy remote.
 
 ## Verification commands
 
@@ -63,7 +63,7 @@ git diff --check
 - [x] Regression assertions added and observed failing against the missing backend/frontend `started` contract.
 - [x] Backend contract, generated artifacts, and Tooltip presentation implemented.
 - [x] Focused/type/i18n/API/browser verification and visual review passed.
-- [x] Exact diff review, commit, and git-cc push completed.
+- [x] Exact diff review, commit, and legacy remote push completed.
 
 ## Implementation result
 
@@ -83,4 +83,4 @@ git diff --check
 | Desktop browser | Node-launched browser test passed. It exercised started Task, queued Task, Mission, and Chat hover popups with canonical `dateTime` assertions. |
 | Visual review | Original-resolution Task, Mission, and Chat Tooltip screenshots were inspected. The resulting popup is `300x94`, retains one-line ellipsis and compact spacing, and shows the labeled exact start without overflow. |
 | Documentation health | Historical links, document health, and product-doc single-source suites passed: `84 pass`, `1333 expect()` calls. |
-| Git delivery | Implementation commit `a46b766a8` (`dsw-33987 add Work Ledger item start time`) passed the repository pre-push hook and was pushed to `myhexin/work-v0.0.9beta-yr-0718`. The hook independently passed 10 package typechecks, API route checks, generated-doc consistency, Overlay i18n, and the tracked-source secret scan. |
+| Git delivery | Implementation commit `a46b766a8` (`dsw-33987 add Work Ledger item start time`) passed the repository pre-push hook and was pushed to `legacy-remote/work-v0.0.9beta-yr-0718`. The hook independently passed 10 package typechecks, API route checks, generated-doc consistency, Overlay i18n, and the tracked-source secret scan. |

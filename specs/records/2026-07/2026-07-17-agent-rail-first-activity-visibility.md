@@ -23,7 +23,7 @@
 - Preserve `conversationAgentRecordsForSource(boardStore.selectedSource)` as the single rail data source and `App.tsx` as the single mount owner; move that mount rather than adding another.
 - Reuse the existing Solid `Show`, Kobalte-backed Tooltip, shared Button, and current rail CSS; no new UI dependency or hand-built parallel primitive.
 - Do not restart, refresh, close, or otherwise interfere with the user's running OpenCorvus/Overlay. Visual verification uses the existing isolated Node browser fixture.
-- Commit subjects start with `dsw-33987`; commit and push the current `v0.0.8beta` branch to the `myhexin` git-cc remote.
+- Commit subjects start with `dsw-33987`; commit and push the current `v0.0.8beta` branch to the legacy remote.
 
 ### Sources read before implementation
 
@@ -95,7 +95,7 @@ The follow-up screenshot exposed a second independent mismatch: the sole mount l
 
 1. Restore the four historical width tokens in `conversation.css`; do not add pointer listeners, timers, drag behavior, or a second interaction source.
 2. Update static contracts and extend the existing real browser fixture to assert the full proximity ladder and reset behavior.
-3. Rebuild, run focused tests, capture and inspect the hovered rail, run document health and second diff review, then commit and push the current branch to `myhexin`.
+3. Rebuild, run focused tests, capture and inspect the hovered rail, run document health and second diff review, then commit and push the current branch to `legacy-remote`.
 
 ### Validation result
 
@@ -110,7 +110,7 @@ The follow-up screenshot exposed a second independent mismatch: the sole mount l
 2. Move the sole rail mount from `#conversationBody` into `#workspaceMain`. Retire the conversation `:has(...)`/mirrored-column layout and make the host one fixed-width absolute transparent overlay using the existing rail/tick tokens.
 3. Replace the static fourth-record and message-card-placement assertions with zero-hidden/nonzero-visible and Dock-edge ownership coverage. Extend the existing Node-browser fixture to prove one real record renders, exact Dock/workspace adjacency, message-card independence, and the established large-history interactions.
 4. Run focused unit/browser tests, Overlay typecheck/build/i18n, and document-health checks; inspect fresh isolated desktop screenshots showing the one-record and long-history Dock rail.
-5. Perform a second diff and ownership review, record validation evidence here, commit only the repair files, and push `v0.0.8beta` to `myhexin`.
+5. Perform a second diff and ownership review, record validation evidence here, commit only the repair files, and push `v0.0.8beta` to `legacy-remote`.
 
 ## Verification plan
 

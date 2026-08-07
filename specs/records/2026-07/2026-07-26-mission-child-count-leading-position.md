@@ -33,7 +33,7 @@ Owner: Codex
   hover-reveal behavior. Do not add a second count, local state, fallback,
   compatibility branch, gate, or route.
 - Desktop is the only visual acceptance target.
-- Commit subjects use `dsw-33987`; delivery goes to `myhexin`.
+- Commit subjects use `dsw-33987`; delivery goes to `legacy-remote`.
 
 ### Material read before implementation
 
@@ -89,7 +89,7 @@ conditional grid columns or introducing a second layout source.
 4. Launch the isolated Vite fixture with Node, inspect the scoped screenshot at
    original resolution, and correct any visual regression.
 5. Perform a second diff/test review, commit only task-owned files with the
-   required prefix, reconcile the remote branch, and push to `myhexin`.
+   required prefix, reconcile the remote branch, and push to `legacy-remote`.
 
 ## Progress
 

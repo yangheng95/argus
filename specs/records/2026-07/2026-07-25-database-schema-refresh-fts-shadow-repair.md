@@ -12,7 +12,7 @@ remains under monitoring.
 | --- | --- |
 | User requirement | Immediately repair any evidenced shared infrastructure defect while monitoring the fresh TradingView Spaces Mission; intervene and restart only when necessary. The user explicitly rejected the false claim that the temporary port-7879 server database was healthy. |
 | Acceptance criteria | Schema refresh restores user tables without writing SQLite Full-Text Search (FTS) shadow tables, preserves the immutable stale-image backup, leaves one usable current-schema database, and allows a fresh Mission to proceed. `/global/health` must project the durable `Database.unavailable()` state instead of hard-coding health, while remaining readable without opening SQLite so operators retain the exact reset path. Overlay connection monitoring must treat `healthy=false` as offline after retaining the runtime paths. The failures have regression tests and exact runtime evidence. |
-| Hard constraints | Follow `AGENTS.md`; no fallback database, compatibility reader, host gate, retry loop, hidden data source, broad reset, or destructive cleanup. Preserve the failed active image and immutable schema backup until recovery is verified. Preserve all unrelated worktree changes. Commit subject starts with `dsw-33987`; push to `myhexin`. |
+| Hard constraints | Follow `AGENTS.md`; no fallback database, compatibility reader, host gate, retry loop, hidden data source, broad reset, or destructive cleanup. Preserve the failed active image and immutable schema backup until recovery is verified. Preserve all unrelated worktree changes. Commit subject starts with `dsw-33987`; push to `legacy-remote`. |
 | Runtime evidence | After safely settling polluted Mission `a0326f635c659e7a`, PID 92398 restarted on commit `bbfc5a14a6`. At `2026-07-25T11:58:32.574Z`, the first project-open request entered `refreshSchemaDatabase` and failed in `restoreCurrentSchemaData` with exact SQLite error `table memory_fts_config may not be modified` at `storage/db.ts:349`. The stale image was preserved as `/Users/yangheng/.local/share/opencorvus/opencorvus.schema-backup-2026-07-25T11-58-32.540Z-f0c2213b-5102-4a58-ae7d-c11ce64847f0.db`. The partial current image later became process-wide unavailable with `SQLITE_IOERR_VNODE` errno 6922, causing Mission status and scheduler polling to return `DatabaseUnavailableError`. Fresh Mission `b47c6e85d5995014` had bootstrapped fresh-09 but had not created a Task. A repaired temporary PID 98603 initially completed schema refresh and served `/mission`, but at `2026-07-25T12:21:33.495Z` its cron poll recorded the same durable `SQLITE_IOERR_VNODE` state. At the same time `/mission` returned 503 while `/global/health` incorrectly returned HTTP 200 with `healthy=true`; the process had already closed its failed SQLite handle. |
 | Sources read | `AGENTS.md`; `2026-07-20-database-schema-backup-restore.md`; `storage/db.ts`; `storage/ddl.ts`; `memory/memory.sql.ts`; `storage/db-path.test.ts`; runtime terminal output; active and backup database file metadata. |
 | Whole-repository grep | `rg -n "restoreCurrentSchemaData\|refreshSchemaDatabase\|memory_fts_config\|fts_config\|sqlite_schema\|shadow"` across storage source, storage tests, and July records; `rg -n "schema drift\|memory_fts\|schemaRefresh"` across the focused database test; `git log` and `git diff` for `storage/db.ts`. `restoreCurrentSchemaData` is the sole backup-copy loop and `readOrdinaryTableShape` is its shared current-schema inventory owner. For the reopened health defect, `rg -n "global.health\|/global/health\|databaseSchemaRefresh\|healthy"` covered the route, server route tests, packaged health tests, Overlay connection service, connection lifecycle browser tests, API clients, and reset UI. The server route and Overlay `checkConnection` are the two shared projection owners to replace; healthy packaged startup consumers remain unchanged. |
@@ -70,7 +70,7 @@ parallel untracked
 `2026-07-25-research-deliverable-case-benchmark.md` already linked by another
 working-tree owner, not this repair.
 
-Commit `490aeb3066` was pushed to `myhexin/v0.0.18beta`. After PID 92398 exited,
+Commit `490aeb3066` was pushed to `legacy-remote/v0.0.18beta`. After PID 92398 exited,
 the unusable partial current image was preserved as
 `/Users/yangheng/.local/share/opencorvus/opencorvus.failed-partial-2026-07-25T11-58-32.db`;
 the immutable 43 MB stale-image backup remained untouched and was copied back
@@ -104,7 +104,7 @@ did not bypass the shared browser lock currently owned by the independent
 research-deliverable benchmark PID 2194; no visual pass is claimed while that
 external owner remains active.
 
-Commit `8666610cdd` was pushed to `myhexin/v0.0.18beta` after the generated
+Commit `8666610cdd` was pushed to `legacy-remote/v0.0.18beta` after the generated
 OpenAPI document and TypeScript SDK were rebuilt and route/docs checks passed.
 The failed PID 98603 had no database handle or supervised child process and
 was stopped through its normal SIGINT settlement path. Replacement PID 8734

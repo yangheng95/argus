@@ -15,7 +15,7 @@ Owner: Codex
 - `capability_projection.agents.<agentID>` remains the runtime, dispatch, tool, skill and catalog identity.
   `base_role` remains only the strict runtime-template seed. Missing projected agents and missing runtime templates
   must fail immediately.
-- The current branch is `v0.0.9beta`; every completed slice is committed and pushed to `myhexin` before the next
+- The current branch is `v0.0.9beta`; every completed slice is committed and pushed to `legacy-remote` before the next
   implementation slice grows.
 
 ### Exact Tree And Sources Recalled
@@ -228,7 +228,7 @@ Owner: Codex
   task-scoped context tool; negative source scan for every automatic caller and host-prepared prompt; tests proving
   Deep Research, Frontend Research and Frontend Design no longer execute source acquisition before their model;
   no first-URL provenance claim; payload freshness; focused tests, typecheck and document health; independent
-  exact-tree review; traceable `dsw-33987` commit and push to `myhexin/v0.0.9beta`.
+  exact-tree review; traceable `dsw-33987` commit and push to `legacy-remote/v0.0.9beta`.
 
 #### Slice B implementation and verification refresh
 
@@ -311,7 +311,7 @@ source-skeleton,evidence-integrity}` tests. `web-clone/{archive-html,ir,layout}`
   see the package tool; every `webCloneSource` producer/parser/render/consumer and positive test is removed and
   strict parsing rejects the retired field. Payload freshness, package bundle closure, typecheck, dead-code, docs,
   focused runtime tests and independent exact-tree review must pass; then commit and push to
-  `myhexin/v0.0.9beta` before the Browser Preview and Frontend Design residue slices begin.
+  `legacy-remote/v0.0.9beta` before the Browser Preview and Frontend Design residue slices begin.
 
 ### Repository-Debt Independent Feedback
 
@@ -341,7 +341,7 @@ The continuing platform-runtime Goal requires OpenCorvus to become generic infra
 the common development runtime and extends agent-team behavior through explicit interfaces and protocols. The
 user also requires a large-scale cleanup of remaining technical debt, legacy code, stale tests and intermediate
 files, with final verification kept until the final phase. Every implementation slice requires
-independent-agent review, a traceable commit and a push to `myhexin/v0.0.8beta`.
+independent-agent review, a traceable commit and a push to `legacy-remote/v0.0.8beta`.
 
 ### Acceptance Criteria
 
@@ -571,7 +571,7 @@ excludes tests from `tsconfig.json` and Bun erases types when running tests. The
 without adding tests to the production build. Any of the five keys re-entering through a direct, mapped or
 composed declaration fails package typecheck. The corrected exact tree received independent `ACCEPT` against
 HEAD `3a13c9d892` and cached patch `e4897289b4`; commit `7ae874b10a` is pushed to
-`myhexin/v0.0.7beta`.
+`legacy-remote/v0.0.7beta`.
 
 ## Slice 2: Config Fail-Fast Loading
 
@@ -860,7 +860,7 @@ terminology debt in `RightActivity`,
 `rightToolbarOpen`, `ChatHeaderRightToolbarToggle` and their i18n/data attributes. Those are functioning RightDock
 owners, not dead code; cleanup order item 18 records their later alias-free atomic rename.
 
-During validation, `myhexin/v0.0.7beta` advanced by two commits to `ce20053924`. The remote primitive-convergence
+During validation, `legacy-remote/v0.0.7beta` advanced by two commits to `ce20053924`. The remote primitive-convergence
 change overlaps eight files in this slice, including `BrowserPreviewPanel.tsx`, `inspector.css` and shared browser
 fixtures. The current candidate will receive an exact-tree review and local commit first; then the remote commit
 will be merged, conflicts will preserve both the new text-field primitive and this deletion semantics, and the
@@ -974,7 +974,7 @@ acceptance claim until the corrected tree is revalidated:
   captured directory and view before committing; a delayed append race must be exercised as behavior rather than
   a source-string assertion.
 
-The branch is still at local `adf980ac5e`; fetched `myhexin/v0.0.7beta` is `fcb930ee30` and is four commits ahead.
+The branch is still at local `adf980ac5e`; fetched `legacy-remote/v0.0.7beta` is `fcb930ee30` and is four commits ahead.
 The remote primitive-convergence commits overlap the Overlay slice, so the corrected local tree will receive a
 fresh exact-tree review and local commit first. Only then will the remote be merged, conflicts resolved without
 discarding either ownership change, the merged tree revalidated and independently reviewed, and the result pushed.
@@ -1173,8 +1173,8 @@ During the correction another obsolete source-string assertion was exposed: it s
 now pins that actual owner and passes 2/2.
 
 The shared worktree was then switched by parallel work from local `v0.0.7beta` at `adf980ac5e` to
-`v0.0.8beta` at `50dbbc78f7`. That HEAD equals both `myhexin/v0.0.8beta` and the fetched
-`myhexin/v0.0.7beta`; it already contains the five previously pending primitive-convergence commits. The local
+`v0.0.8beta` at `50dbbc78f7`. That HEAD equals both `legacy-remote/v0.0.8beta` and the fetched
+`legacy-remote/v0.0.7beta`; it already contains the five previously pending primitive-convergence commits. The local
 Slice 4 index and worktree were preserved on top, including `TextField` and semantic icon ownership in Browser
 Preview and the remote Mailbox/CSS primitive changes. Therefore no second merge remains: final validation and
 exact-tree review must bind the combined `v0.0.8beta` tree, and delivery must push that current branch.
@@ -1740,7 +1740,7 @@ provider's key-free config, Save must reject a null seed visibly, and no submiss
 config. Regression coverage must independently pin both entry points and both consumers, reject the nullish
 fallback, and keep `/auth/:providerID` as the global credential owner.
 
-The shared worktree is also 38 commits behind `myhexin/v0.0.8beta`. Those commits overlap the Overlay delivery
+The shared worktree is also 38 commits behind `legacy-remote/v0.0.8beta`. Those commits overlap the Overlay delivery
 surface, so final acceptance cannot bind to the current local tree. The current reviewed slice must first become a
 coherent commit without resetting, stashing or discarding any shared edits; the remote line must then be merged in
 the same primary worktree, conflicts resolved from both designs, and the complete validation plus exact-tree review
@@ -1849,7 +1849,7 @@ Node/tsx parse inventory for every changed browser file, the affected Node brows
 visual artifacts and manual screenshot review, the complete Overlay unit runner, root typecheck/routes/docs/dead-
 code/document-health/transport checks, and three new exact-tree reviews. Only then may the local candidate be
 committed. The 38 remote commits overlap 16 staged paths, so that commit must be merged into the latest
-`myhexin/v0.0.8beta`, conflicts resolved semantically, and the complete validation plus exact-tree review repeated
+`legacy-remote/v0.0.8beta`, conflicts resolved semantically, and the complete validation plus exact-tree review repeated
 on the merged tree before final commit and push.
 
 ### Exact staged-tree rejection correction replay
@@ -1964,7 +1964,7 @@ runtime-only fields; 81 document-health tests pass. Browser fixture teardown cor
 replay are still in progress, so these local results do not yet create a new frozen tree. After that bounded work,
 the complete validation matrix and three fresh exact-tree reviews remain mandatory before commit. The remote line
 is now 59 commits ahead and overlaps this delivery; only a locally accepted commit may be merged into it, followed
-by a complete post-merge replay, exact-tree review and push to `myhexin/v0.0.8beta`.
+by a complete post-merge replay, exact-tree review and push to `legacy-remote/v0.0.8beta`.
 
 The operator subsequently issued an explicit instruction to push regardless of test outcome. The current tree is
 therefore permitted to create a clearly labelled WIP checkpoint before final acceptance. This changes only the
@@ -1975,7 +1975,7 @@ collector. Those known failures remain mandatory follow-up work, and the pushed 
 as a completed or accepted delivery.
 
 The WIP checkpoint `c66c39f72e` was merged with the then-current remote line in `f239052612` and pushed to
-`myhexin/v0.0.8beta` at the operator's explicit request. The pre-push hook passed repository typecheck, the
+`legacy-remote/v0.0.8beta` at the operator's explicit request. The pre-push hook passed repository typecheck, the
 31-file route inventory, 272-operation generated documentation check, Overlay i18n and the tracked-source secret
 scan. Nine merge conflicts were resolved semantically: the retired `SideActivityToolbar` stayed deleted in favor
 of the single Right Dock owner, the remote transparent text-disclosure design was preserved, and browser tests
@@ -1995,7 +1995,7 @@ ACCEPTs `connection-badge-button-focus.png`: the Offline badge has a clear uncli
 `connection-banner-button-primitive.png`: status text and both actions are readable and do not overlap. This
 correction still requires commit/push and does not by itself complete the broader exact-tree review.
 
-The startup correction was committed as `9e950d486c` and pushed to `myhexin/v0.0.8beta`, but an independent review
+The startup correction was committed as `9e950d486c` and pushed to `legacy-remote/v0.0.8beta`, but an independent review
 REJECTed its test evidence. Both connection fixtures express offline state as HTTP 200 with a malformed JSON body,
 which tests protocol corruption rather than a valid health failure. They also never prove offline-to-online,
 disconnect and reconnect behavior, the existing Mailbox source assertion matches the wrong branch, and the nearest
@@ -2046,7 +2046,7 @@ unproven. This WIP slice may be pushed only because the operator explicitly requ
 outcome; the failed Node mailbox replay and complete Overlay unit replay remain mandatory follow-up.
 
 The connection WIP was committed as `fd4ca90542`, merged with nineteen concurrent remote commits in
-`8cf6b00467`, and pushed to `myhexin/v0.0.8beta`. The pre-push hook passed repository typecheck, the 31-file route
+`8cf6b00467`, and pushed to `legacy-remote/v0.0.8beta`. The pre-push hook passed repository typecheck, the 31-file route
 inventory, generated documentation, Overlay i18n and secret scanning. Post-merge focused units pass 27/27 and the
 lifecycle, badge and banner Node browser cases pass 3/3. Independent WIP review still REJECTed final acceptance:
 Mailbox concurrency duplicated same-directory base requests; the exact failure chronology in this Recall was
@@ -2072,7 +2072,7 @@ coverage, the 10-second owner proof and the complete Overlay unit replay remain 
 
 Independent exact-diff review ACCEPTed the directory-preflight correction after both missing regressions were
 added. Commit `b0bea18355` was merged with the concurrent Darwin artifact delivery and pushed as merge head
-`b45fec490f` to `myhexin/v0.0.8beta`. The first two fetch attempts failed after the remote returned HTTP 504; a
+`b45fec490f` to `legacy-remote/v0.0.8beta`. The first two fetch attempts failed after the remote returned HTTP 504; a
 protocol-v0 branch-only fetch completed without changing source semantics. The push hook passed repository
 typecheck, the 31-file route inventory, 274 generated API operations, Overlay i18n and secret scanning.
 
@@ -2122,7 +2122,7 @@ SHA-256 `5f03a6ebbc483f2916fbcfbf828f2a73d5ff0bca9c3d435672decce52dc4f4832` and
 `work-ledger-pin-click-result.png` SHA-256
 `4cdbd6ffaec80d0d2c6ba5ac664fdeaf9da6980ffd8f5818744ae5f53949f8d3`. Independent final diff review ACCEPTed the
 seven-file candidate. Commit `22225bc296` was merged with the concurrent sidecar lease-GC delivery and pushed as
-merge head `6ad7cd65eb` to `myhexin/v0.0.8beta`; the pre-push repository typecheck, route inventory, generated API
+merge head `6ad7cd65eb` to `legacy-remote/v0.0.8beta`; the pre-push repository typecheck, route inventory, generated API
 documentation, Overlay internationalization and secret scan all passed. Another complete Overlay unit replay
 remains open, so this push does not by itself finalize the broader platform delivery.
 
@@ -2148,7 +2148,7 @@ the intended hierarchy. Document health passes 81/81. Independent exact-diff rev
 candidate with no fallback, alias, gate, double source or new specialization; another complete Overlay unit
 replay remains mandatory after this bounded push.
 
-Commit `02c5cb850a` pushed the accepted environment opacity correction to `myhexin/v0.0.8beta`; the pre-push
+Commit `02c5cb850a` pushed the accepted environment opacity correction to `legacy-remote/v0.0.8beta`; the pre-push
 repository typecheck, route inventory, generated API documentation, Overlay internationalization and secret scan
 passed. The next complete Overlay unit replay advanced to `sse-parse-error.test.ts`, where three backend-upload
 assertions fail even in an isolated replay. The visible SSE dispatch diagnostics are present in `AppLog`, but the
@@ -2178,7 +2178,7 @@ log-flush matrix passes 30/30 with 114 assertions; Overlay typecheck passes; doc
 replayed the same 30/30 matrix. This acceptance is limited to test connection ownership: the activity-aware log
 drain correction remains the next mandatory slice, and the complete Overlay unit suite remains open.
 
-Commit `8965222fc8` pushed the accepted SSE upload-precondition correction to `myhexin/v0.0.8beta`; its pre-push
+Commit `8965222fc8` pushed the accepted SSE upload-precondition correction to `legacy-remote/v0.0.8beta`; its pre-push
 repository checks passed. The mandatory adjacent audit enumerated every `waitForLogDrain` caller: the sole
 production caller is `main.tsx` in `initApp` finalization, and the three test families are
 `log-flush-diagnostic.test.ts`, `sse-parse-error.test.ts` and `sse-reconnect.test.ts`. The helper currently
@@ -3953,7 +3953,7 @@ combined repository projection, Frontend Replica tool, Registry, Resolver, bundl
 
 - User requirement: continue the platformization goal under the revised scope, excluding the three abandoned real
   end-to-end exercises, while preserving strict expert-squad projection semantics and removing legacy or specialized
-  Core behavior. Each atomic change must be tested, independently reviewed, committed and pushed to `myhexin`.
+  Core behavior. Each atomic change must be tested, independently reviewed, committed and pushed to `legacy-remote`.
 - Acceptance: `frontend-design-skeleton/**`, `web-clone-source/**` and `webpage-evidence/**` behave exactly like
   ordinary project-owned files in Git staging, acceptance paths, workspace export, worktree publication and dirty
   primary recovery. Only genuine internal runtime storage such as `.opencorvus/.r/**`, the retired runtime root,
@@ -5203,7 +5203,7 @@ freeze:
 The next implementation must first enumerate every call point for these six surfaces, then replace the double sources
 without aliases, fallback readers or prompt-only enforcement. Official generation, focused positive and negative
 tests, typecheck/static checks, and three fresh reviews over one unchanged HEAD/tree/fingerprint are required before
-commit and git-cc push. The three user-abandoned product E2E runs remain outside this goal; no running OpenCorvus or
+commit and legacy remote push. The three user-abandoned product E2E runs remain outside this goal; no running OpenCorvus or
 Overlay process may be touched.
 
 The required pre-edit repository grep produced this complete implementation map:
@@ -5219,10 +5219,10 @@ The required pre-edit repository grep produced this complete implementation map:
 
 During this correction the user changed the delivery branch. The shared worktree was switched in place from
 `v0.0.9beta` to local `v0.0.10beta` without stash, reset or file replacement, and its upstream is now
-`myhexin/v0.0.10beta`. All staged and unstaged changes were retained. At switch time the local line was three commits
+`legacy-remote/v0.0.10beta`. All staged and unstaged changes were retained. At switch time the local line was three commits
 ahead and the remote line nine commits ahead from their common base; the 66 remote-changed paths had no exact overlap
 with the then-current dirty path set. The correction must be committed on `v0.0.10beta`, then the fetched remote line
-must be merged and the combined branch verified and pushed to git-cc.
+must be merged and the combined branch verified and pushed to legacy remote.
 
 ### D2b sixteenth candidate verification before freeze
 
@@ -6118,7 +6118,7 @@ The residue scan also separated two meanings previously conflated as "operator n
 
 ### Post-merge D6 review rejection and correction
 
-The independent review of the git-cc merge accepted the lockfile, SDK, API projection, documentation, and spec indexes but rejected one deterministic prompt residue. The remote internal-wake provenance addition had named a missing task-level `operatorMessage`, even though D6's only task-message wake identity is `rootMessage { messageID, kind }`. Its tests positively preserved that retired alias and were therefore false-green. The same name remains valid only inside the separate targeted child-coordination protocol.
+The independent review of the legacy remote merge accepted the lockfile, SDK, API projection, documentation, and spec indexes but rejected one deterministic prompt residue. The remote internal-wake provenance addition had named a missing task-level `operatorMessage`, even though D6's only task-message wake identity is `rootMessage { messageID, kind }`. Its tests positively preserved that retired alias and were therefore false-green. The same name remains valid only inside the separate targeted child-coordination protocol.
 
 The task-level notice and all four affected assertions now name `rootMessage` plus `operatorIntent`, and negative assertions reject `operatorMessage` in the notice. The targeted child-coordination implementation and tests remain unchanged. Focused internal-wake, identity-only event, and session-reuse verification passes 7/7, and the production Orchestrator residue scan finds no `current operatorMessage`, `OrchestratorEventNote`, or free-text `User requested retry|replan` protocol.
 
@@ -6309,7 +6309,7 @@ the executable authority for Skill/MCP loading.
 
 Acceptance is: zero generated authoring claims that every agent must be represented in a virtual workflow; generated
 artifact freshness; concise bilingual canonical ref tables; focused portable, Registry, SDK-authoring and docs tests;
-typecheck; exact-tree independent review; commit and push to `myhexin/v0.0.10beta`. The unrelated CMS plan remains
+typecheck; exact-tree independent review; commit and push to `legacy-remote/v0.0.10beta`. The unrelated CMS plan remains
 outside this slice. The independent audit separately confirmed that Frontend Replica/reference-parity policy still has
 an oversized host ABI and remains the final platformization phase after this authoring correction.
 
@@ -6327,7 +6327,7 @@ freshness and `git diff --check` pass. The exact old workflow-exhaustiveness sen
 
 - The continuing platformization Goal requires one manifest v1 protocol for every Expert Squad, with no package-ID
   special case, fallback, alias or UI-only exception. The exact resumed tree is `eccf86c2993e5129e1a2b2c5f894c7d4546f5641`,
-  already pushed to `myhexin/v0.0.10beta`; the worktree was clean before this slice.
+  already pushed to `legacy-remote/v0.0.10beta`; the worktree was clean before this slice.
 - Re-read this complete Recall and `specs/current/architecture/04-extensions.md`, then searched Registry, catalog,
   resolver, manager, generated SDK and focused tests for `ManifestSchema`, selector optionality, `selector.md`, `general`
   identity checks and every selector consumer. The sole manifest identity branch is
@@ -6409,7 +6409,7 @@ source and every separated rerun passed.
 - Acceptance: no MIME-to-domain-intent inference; no optional/free-form user attachment intent; no implicit
   frontend-design attachment scan; no manifest intent inference; no Figma-generated task attachment; no Build raw
   attachment fallback; strict positive/negative tests, generated artifacts, typecheck, docs health, independent exact
-  diff review, commit and push to `myhexin/v0.0.11beta`.
+  diff review, commit and push to `legacy-remote/v0.0.11beta`.
 - Codex independent-review correction: the preceding statement that the host gives Figma provider outputs fixed intents
   is rejected. Figma acquisition is specialist policy and must live entirely in the installed expert-squad package as a
   scheduler-owned package tool. Core `dispatch_agent`, Frontend Design, task signals, manifests, SDK and OpenAPI accept
@@ -6504,7 +6504,7 @@ source and every separated rerun passed.
 - Two independent read-only audits confirmed the complete mirror has no production message consumer and that keeping
   throw-only APIs plus tests is positive legacy maintenance. Acceptance: zero production/test reference to retired APIs
   or mirror fields; real card-tree hydration and task-switch tests remain green; Overlay typecheck and focused tests;
-  exact-diff independent review; commit and push to `myhexin/v0.0.11beta`. Frontend Replica remains untouched.
+  exact-diff independent review; commit and push to `legacy-remote/v0.0.11beta`. Frontend Replica remains untouched.
 
 #### Review amendment
 

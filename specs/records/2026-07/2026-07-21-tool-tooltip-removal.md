@@ -10,7 +10,7 @@
 | Sources read | `AGENTS.md`; Browser skill; `specs/README.md`; `specs/current/architecture/99-principles.md`; `2026-07-16-tools-surface-time-pin-visual-refinement.md`; `2026-07-17-tools-reasoning-inline-text-flow.md`; `CardHeader.tsx`; `CardHeaderChrome.tsx`; `card-timing.ts`; `card.css`; timing/header source tests; `message-part-chronology-browser.test.ts`; relevant locale files. |
 | Whole-repository search evidence | `rg` enumerated every `tool-timing-tooltip`, `card-tool-timing-tooltip`, `data-tool-timing-trigger`, `toolTimingRows`, Tool timing locale key, `card__tool-start-time`, `card__duration`, and Tool subtitle `title` call site across production, tests, and specs. Production ownership is singular: `CardHeader` mounts the structured Tool tooltip, `CardDurationChip` owns both Tool-native timing titles and inline timing, `card-timing.ts` formats tooltip-only rows, and `card.css` owns the tooltip-only presentation. The exact disposition follows below. |
 | Independent agent feedback | None. The user did not request sub-agents, and current collaboration policy does not authorize unrequested delegation. |
-| Git baseline | The current branch is `work-v0.0.13beta-yr-0721`. During investigation a concurrent workflow moved both local and git-cc branch refs from `4a853f623` back to `d657bf323`; the working tree also gained unrelated web/landing-page and Settings-plan changes. This task preserves them and will re-fetch/reconcile before delivery. |
+| Git baseline | The current branch is `work-v0.0.13beta-yr-0721`. During investigation a concurrent workflow moved both local and legacy remote branch refs from `4a853f623` back to `d657bf323`; the working tree also gained unrelated web/landing-page and Settings-plan changes. This task preserves them and will re-fetch/reconcile before delivery. |
 
 ## Evidence and root cause
 
@@ -46,7 +46,7 @@ and the existing hover/focus-revealed inline start time.
 2. Delete tooltip-only formatting, locale, and CSS support so no hidden/dead implementation remains.
 3. Update source/unit and Node-launched real-browser assertions for absence of tooltip ownership plus continued inline timing, disclosure, focus, and geometry behavior.
 4. Run focused tests, Overlay typecheck/internationalization/build, and the real message chronology browser scenario; inspect the current-task desktop screenshot and correct any visual regression.
-5. Run required documentation-health tests, re-fetch/reconcile the active git-cc branch, perform a second scoped diff review, commit only task-owned changes with the `dsw-33987` prefix, and push to `myhexin`.
+5. Run required documentation-health tests, re-fetch/reconcile the active legacy remote branch, perform a second scoped diff review, commit only task-owned changes with the `dsw-33987` prefix, and push to `legacy-remote`.
 
 ## Progress
 
@@ -54,7 +54,7 @@ and the existing hover/focus-revealed inline start time.
 - [x] Removed Tool tooltip ownership and tooltip-only dead support.
 - [x] Updated focused and real-browser regression coverage.
 - [x] Completed build, screenshot inspection, and visual correction.
-- [ ] Completed documentation checks, second review, commit, and git-cc push.
+- [ ] Completed documentation checks, second review, commit, and legacy remote push.
 
 ## Verification evidence
 

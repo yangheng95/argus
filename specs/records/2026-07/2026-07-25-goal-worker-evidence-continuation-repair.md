@@ -13,7 +13,7 @@ Repair the infrastructure defects exposed by Mission `7a18cba92c55a6b9`, then re
 3. The Build runtime template does not expose interactive Coding-only `delegate_agent`.
 4. Raw pending Goals remain pending in task and Mission status progress rather than being counted as running.
 5. Agent invocation DAG lifecycle evidence is persisted for cross-directory workers without requiring the test or caller to manually drain the cross-instance bridge.
-6. Focused regressions, typecheck, documentation health checks, commit, normal-hook push to `myhexin`, backend restart, and a bounded real Mission verification pass succeed.
+6. Focused regressions, typecheck, documentation health checks, commit, normal-hook push to `legacy-remote`, backend restart, and a bounded real Mission verification pass succeed.
 
 ### Hard constraints
 
@@ -21,7 +21,7 @@ Repair the infrastructure defects exposed by Mission `7a18cba92c55a6b9`, then re
 - No fallback, compatibility path, state machine, gate, synthetic message, hidden message, retry loop, fabricated Mission, or weakened permission boundary.
 - The terminal wake is an ingress notification for a real participant fact only. The Orchestrator remains the sole decision owner.
 - Do not repeatedly publish the Mission. Restarting the backend is authorized only after the repair is verified locally.
-- Every code change requires a regression test. Commit subjects start with `dsw-33987`; push only to `myhexin`.
+- Every code change requires a regression test. Commit subjects start with `dsw-33987`; push only to `legacy-remote`.
 
 ### Sources read
 
@@ -75,7 +75,7 @@ The same run exposed three adjacent data-plane defects: delegated PRD workers re
 
 ## Parallel-work note
 
-Before this task's first edit, local `HEAD` was `f40471a2072c830f0bccd19cdcd4ee57eade2a0c` while `myhexin/v0.0.18beta` was `c1bea0824f9b2a25c741d971a86fe6d23127bdc3`; the worktree already contained extensive unrelated parallel changes. The repair owns only the files enumerated by its final staged diff.
+Before this task's first edit, local `HEAD` was `f40471a2072c830f0bccd19cdcd4ee57eade2a0c` while `legacy-remote/v0.0.18beta` was `c1bea0824f9b2a25c741d971a86fe6d23127bdc3`; the worktree already contained extensive unrelated parallel changes. The repair owns only the files enumerated by its final staged diff.
 
 ## Verification evidence
 

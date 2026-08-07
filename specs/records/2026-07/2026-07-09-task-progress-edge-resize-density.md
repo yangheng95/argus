@@ -25,7 +25,7 @@
 - Keep frontend validation visual: start an isolated test page, capture screenshots, inspect them, and iterate if visual output is wrong.
 - Do not restart, kill, refresh, or otherwise interfere with the user's running OpenCorvus / overlay process.
 - Code edits require matching tests, including behavior that prevents goal crowding.
-- Commit subject must start with `dsw-33987`; push to the `myhexin` remote after validation.
+- Commit subject must start with `dsw-33987`; push to the `legacy-remote` remote after validation.
 
 ### Hard-Disk Context Read Before Editing
 

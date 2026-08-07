@@ -51,7 +51,7 @@ Hard constraints:
 - The shared worktree contains unrelated changes. Do not reset, restore, or stage
   those changes. No new worktree is authorized.
 - All edits receive tests, a second review, a `dsw-33987` commit, and a push to
-  the `myhexin` git-cc remote.
+  the legacy remote.
 
 Sources read before implementation:
 
@@ -155,7 +155,7 @@ rules.
    current-goal screenshots.
 6. Run focused and documentation checks, typecheck, route/OpenAPI checks, browser
    visual review, diff review, then stage only this task's hunks, commit, and push
-   the current main delivery branch to `myhexin`.
+   the current main delivery branch to `legacy-remote`.
 
 ## Validation Plan
 

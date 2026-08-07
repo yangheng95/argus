@@ -5,7 +5,7 @@
 | Item | Evidence and constraint |
 | --- | --- |
 | User request | Identify the missing commits, explain the cause, and start restoring the code that did not reach `v0.0.33beta`. |
-| Acceptance criteria | Recover every still-current product contract from the unmerged `v0.0.31beta` chain; do not replay commits already reimplemented or superseded; preserve current architecture and unrelated work; verify non-User Interface (UI) contracts with focused tests and UI changes through a real page and manually reviewed screenshots; commit and push isolated recovery changes to git-cc. |
+| Acceptance criteria | Recover every still-current product contract from the unmerged `v0.0.31beta` chain; do not replay commits already reimplemented or superseded; preserve current architecture and unrelated work; verify non-User Interface (UI) contracts with focused tests and UI changes through a real page and manually reviewed screenshots; commit and push isolated recovery changes to legacy remote. |
 | Hard constraints | No whole-branch merge, compatibility fallback, history reset, or blind cherry-pick; generated artifacts must be regenerated from current sources; UI automated tests must not be added, modified, or run and discovered obsolete UI tests must be removed; all commits use the `dsw-33987` prefix. |
 | Sources read | Repository `AGENTS.md`; `git cherry`, `git range-diff`, merge-parent and merge-base evidence for `v0.0.31beta...v0.0.33beta`; commits `0bc4d2cd75`, `0d3c5186d9`, `0bafc424198`, `0e3c335109`, `1cbe4cdba8`, `90d41932ce`, `95d641b93c`; current brand-restoration plan. |
 | Whole-repository search | Fifteen commits are outside the current ancestry: one empty checkpoint, four modified replays, ten without a range-diff match. Current generated Multica SDK already includes the old generated fields and the README slogan has been superseded; the remaining report, occurrence/status, visible-brand, and settings-hierarchy contracts require semantic comparison. |
@@ -13,7 +13,7 @@
 
 ## Cause
 
-Merge commit `a55cd224d2` merged work-branch tip `72934b6ea1`, while the target changes continued on the separate `v0.0.31beta` line after merge base `72044d9232` through tip `c3d6eccf1d`. Git retained every object and the git-cc remote still references the source line; this is an integration omission, not object loss or metadata-rewrite damage.
+Merge commit `a55cd224d2` merged work-branch tip `72934b6ea1`, while the target changes continued on the separate `v0.0.31beta` line after merge base `72044d9232` through tip `c3d6eccf1d`. Git retained every object and the legacy remote still references the source line; this is an integration omission, not object loss or metadata-rewrite damage.
 
 ## Recovery groups
 
@@ -27,7 +27,7 @@ Merge commit `a55cd224d2` merged work-branch tip `72934b6ea1`, while the target 
 
 - Run focused positive non-UI contract tests for each restored runtime group, then typecheck, route checks, documentation checks, and historical-document link checks.
 - Build the real Overlay, open the affected surfaces, capture screenshots tied to the brand and Expert Squad settings regions, and manually review them without creating or running UI automated tests.
-- Review the final diff against each source commit, stage only recovery-owned paths, commit independently, and push `v0.0.33beta` to git-cc.
+- Review the final diff against each source commit, stage only recovery-owned paths, commit independently, and push `v0.0.33beta` to legacy remote.
 
 ## Recovery progress
 

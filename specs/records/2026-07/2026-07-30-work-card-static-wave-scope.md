@@ -11,7 +11,7 @@
 | Sources read | Root `AGENTS.md`; Browser control skill; supplied screenshot; `specs/current/architecture/12-overlay-card-system.md`; `2026-07-29-running-execution-wave-scope-and-text-contrast.md`; `2026-07-29-agent-wave-and-trailing-tool-disclosure.md`; `2026-07-29-conversation-streaming-text-wave.md`; `2026-07-28-subagent-running-surface-wave-and-selection-stability.md`; `Conversation.tsx`; `ConversationCard.tsx`; `ChatBubble.tsx`; `SubagentConversationPanel.tsx`; `SubagentProgressGrid.tsx`; `conversation.css`; `messages.css`; and introducing commit `8ec16b545c`. |
 | Whole-repository grep | Searches covered every wave/shimmer animation, keyframe, mask, `.chat-bubble::before`, `.subagent-progress-card::before`, `chat-bubble-row`, `data-kind`, and `data-status` production owner. `messages.css` owns the only text wave and already scopes it to running Tool name/detail consumers. `conversation.css` owns the only surface wave. `ChatBubble.tsx` projects both main `WORK` and exact-session messages as `.chat-bubble-row[data-kind="agent"]`; `SubagentConversationPanel.tsx` reuses `ConversationCard`, so it is not a distinct Agent-card renderer. `SubagentProgressGrid.tsx` alone emits the dedicated `.subagent-progress-card` identity. |
 | Independent review | Claude Code `2.1.147` was invoked from the repository root with only `Read,Grep,Glob`, no session persistence, streaming output, and explicit prohibitions on edits, UI tests, delegation, and worktrees. It exited before reading the repository because the local command-line interface is not authenticated (`Not logged in`). No Claude finding is claimed; the primary agent owns the evidence-based correction and final second review. |
-| Git baseline | Branch `work-v0.0.24beta-yr-0729` and `myhexin/work-v0.0.24beta-yr-0729` were converged at `ff58137c8c` after fetch. Existing changes in `conversation-history-recovery-routes.test.ts` and both shared spec indexes are unrelated and must be preserved. |
+| Git baseline | Branch `work-v0.0.24beta-yr-0729` and `legacy-remote/work-v0.0.24beta-yr-0729` were converged at `ff58137c8c` after fetch. Existing changes in `conversation-history-recovery-routes.test.ts` and both shared spec indexes are unrelated and must be preserved. |
 
 ## Cause Chain
 
@@ -59,7 +59,7 @@
    remains intact. Do not manufacture a running state.
 5. Re-grep every owner, perform a second exact-diff and screenshot review,
    update this record and both spec indexes, fetch/converge, selectively commit
-   only task-owned paths and hunks, push to `myhexin`, and verify remote
+   only task-owned paths and hunks, push to `legacy-remote`, and verify remote
    convergence.
 
 ## Progress
@@ -69,11 +69,11 @@
 - [x] Authentication-blocked Claude Code review attempt recorded honestly.
 - [x] Recall, causal chain, complete call-site disposition, and verification
       plan recorded.
-- [x] Recall commit `4808f8bb8e` and git-cc push complete.
+- [x] Recall commit `4808f8bb8e` and legacy remote push complete.
 - [x] Product and architecture correction plus static/build verification complete.
 - [x] Real-page visual acceptance and second review complete.
 - [x] Final record/index update and product commit `e3622e9fba` pushed to
-      git-cc; final record convergence follows in its own traceable commit.
+      legacy remote; final record convergence follows in its own traceable commit.
 
 ## Visual Evidence
 

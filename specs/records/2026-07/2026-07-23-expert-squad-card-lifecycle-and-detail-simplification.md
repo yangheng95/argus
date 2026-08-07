@@ -75,7 +75,7 @@ The Details metadata block is a second presentation of directory, scope, and act
 4. Update focused source, sizing, navigation, and Node browser interaction assertions.
 5. Run targeted tests, typecheck, i18n, documentation health, and `git diff --check`.
 6. Launch the isolated real page with Node, capture and personally inspect Install and Details screenshots in the in-app Browser, correct discrepancies, and repeat.
-7. Perform a second ownership/diff review, record results here, then commit and push only task-owned changes to `myhexin/work-v0.0.16beta-yr-0723`.
+7. Perform a second ownership/diff review, record results here, then commit and push only task-owned changes to `legacy-remote/work-v0.0.16beta-yr-0723`.
 
 ## Result
 

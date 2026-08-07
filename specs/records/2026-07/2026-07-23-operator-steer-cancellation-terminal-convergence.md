@@ -58,7 +58,7 @@ Goal run without a coordination action binding.
   OpenCorvus/Overlay process.
 - Do not create a worktree.
 - Commit subjects use the required `dsw-33987` prefix.
-- Push the completed main-worktree result to `myhexin/v0.0.17beta`.
+- Push the completed main-worktree result to `legacy-remote/v0.0.17beta`.
 
 ### Persisted sources read
 

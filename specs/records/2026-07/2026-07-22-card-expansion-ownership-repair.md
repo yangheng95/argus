@@ -87,7 +87,7 @@ Implementation plan:
 4. Add an isolated Node browser test that expands a running tool, streams a
    completed status, verifies it remains expanded, and captures the final UI.
 5. Run targeted tests, overlay typecheck/build, documentation health checks,
-   inspect the screenshot, then commit and push to `myhexin`.
+   inspect the screenshot, then commit and push to `legacy-remote`.
 
 ## Validation
 

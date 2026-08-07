@@ -62,7 +62,7 @@
 5. If the screenshot still shows axis, scale, or hierarchy drift, correct the
    shared style owner and repeat the real-page review. Then re-grep owners,
    perform a second diff review, update this record with evidence, commit only
-   task-owned paths, push `myhexin`, and verify remote convergence.
+   task-owned paths, push `legacy-remote`, and verify remote convergence.
 
 ## Progress
 
@@ -71,7 +71,7 @@
       inspected.
 - [x] Recall, cause chain, complete call-site disposition, and verification
       plan recorded.
-- [x] Recall committed as `cef52ea9aa` and pushed to the git-cc `myhexin`
+- [x] Recall committed as `cef52ea9aa` and pushed to the legacy remote
       remote before the product edit.
 - [x] Product implementation complete in the transcript-local style owner.
       `biome check`, Overlay typecheck, localization validation, Vite production
@@ -80,9 +80,9 @@
       current-source OpenCorvus server at `127.0.0.1:7886`, using a portable
       snapshot of the real local data so the user's running application was not
       restarted, refreshed, closed, or reused.
-- [x] Product delivery committed as `662349a467`, pushed to `myhexin`, and
+- [x] Product delivery committed as `662349a467`, pushed to `legacy-remote`, and
       verified at zero ahead/behind against
-      `myhexin/work-v0.0.24beta-yr-0729`. Shared indexes already contain this
+      `legacy-remote/work-v0.0.24beta-yr-0729`. Shared indexes already contain this
       record from the pre-change Recall commit; unrelated concurrent index and
       Overlay edits remain untouched.
 

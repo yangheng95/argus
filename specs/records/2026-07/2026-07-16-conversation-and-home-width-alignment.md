@@ -11,7 +11,7 @@
 | Sources read | `AGENTS.md`; Browser control skill; `specs/README.md`; `specs/current/architecture/{07-panel,12-overlay-card-system}.md`; prior July records for composer/dialog parity, message/composer scrollbar alignment, and empty-home ownership; `App.tsx`; `Conversation.tsx`; `base.css`; `conversation.css`; `composer.css`; `chat-bubble.css`; focused source and browser tests. |
 | Whole-repository search | `rg` enumerated every `ui-chat-message-content-width`, `ui-chat-message-scroll-width`, `conversation-message-content-width`, `conversation-message-lane-width`, `chat-composer-stack`, `chat-home-composition-width`, `chat-home-compact-width`, and conversation/card browser-geometry reference. Production owners are `base.css` for global size tokens, `conversation.css` for the Chat/message/home layout, and `composer.css` for the composer stack. Regression owners are `workspace-composer-density.test.ts`, `conversation-empty-state-source.test.ts`, `overlay-architecture-guards.test.ts`, `command-palette.test.ts`, `conversation-agent-rail-scroll-browser.test.ts`, and the focused `agent-card-separation-browser.test.ts` fixture. |
 | Independent agent feedback | None. The user did not request sub-agents, and the active collaboration policy forbids unrequested delegation. |
-| Git baseline | After fetching `myhexin`, `HEAD` and `myhexin/work-v0.0.7beta-yr-0716` were both `01944f687`, and the pre-change push reported up to date. Unrelated concurrent CardHeader/message/style/test/spec edits appeared afterward and must remain excluded. |
+| Git baseline | After fetching `legacy-remote`, `HEAD` and `legacy-remote/work-v0.0.7beta-yr-0716` were both `01944f687`, and the pre-change push reported up to date. Unrelated concurrent CardHeader/message/style/test/spec edits appeared afterward and must remain excluded. |
 
 ## Root cause
 
@@ -54,7 +54,7 @@ home-layout value.
    screenshots at original resolution, and iterate if the visual result does
    not match the request.
 5. Review the diff twice, stage only task-owned changes, commit with the
-   `dsw-33987` prefix, and push the current branch to `myhexin`.
+   `dsw-33987` prefix, and push the current branch to `legacy-remote`.
 
 ## Result
 

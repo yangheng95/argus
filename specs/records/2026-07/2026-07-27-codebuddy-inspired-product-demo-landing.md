@@ -47,7 +47,7 @@
 - Start an independent Web Docs preview only, then inspect `/docs/` and `/docs/zh-cn/` with the supported browser at the desktop surface.
 - Capture and inspect hero, demo stage, feature stories, final call to action, focus state, native video metadata/playback state, horizontal overflow, localized title, and console errors.
 - Run `git diff --check`, inspect the exact diff and tracked media inventory, review once for product truth and once for code/design single-source ownership.
-- Commit with a `dsw-33987` subject and push the current branch to `myhexin`. If git-cc remains unreachable, report that external blocker explicitly instead of claiming delivery.
+- Commit with a `dsw-33987` subject and push the current branch to `legacy-remote`. If legacy remote remains unreachable, report that external blocker explicitly instead of claiming delivery.
 
 ## Verification evidence
 

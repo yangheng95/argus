@@ -29,7 +29,7 @@
   - `rg -n "gitignoreEssentials|ensureGitignore|\\.gitignore" packages/opencorvus/src packages/opencorvus/test packages/overlay/src packages/overlay/test script specs/current specs/records/2026-07`
   - `rg -n "OPENCORVUS_GIT_EXCLUDED_PATHS|gitignoreEssentials\\(|ensureGitignore\\(" packages/opencorvus/src packages/opencorvus/test --glob '*.ts'`
 - Independent agent feedback: none; the user did not request sub-agents or parallel audit, so no delegation was authorized.
-- Git baseline: `v0.0.11beta` was equal to `myhexin/v0.0.11beta`; pre-change commit `4e7b3c1b5` was pushed successfully. The unrelated untracked `C:/` tree is preserved and excluded.
+- Git baseline: `v0.0.11beta` was equal to `legacy-remote/v0.0.11beta`; pre-change commit `4e7b3c1b5` was pushed successfully. The unrelated untracked `C:/` tree is preserved and excluded.
 
 ## Evidence and cause
 
@@ -57,7 +57,7 @@ The directly observed behavior is therefore not caused by multiple callers: all 
 3. Make tracked-path cleanup consume the same canonical root and remove the old sibling/artifact cleanup list.
 4. Rewrite focused tests to assert exact new-file and append behavior, absence of every former injection category, idempotency, `.opencorvus/.r/`-only untracking, and continued static package visibility.
 5. Run focused engine tests, typecheck, diff checks, required historical/document-health checks, then perform an independent diff review.
-6. Update this record with verification evidence, commit with the required `dsw-33987` prefix, and push `v0.0.11beta` to `myhexin`.
+6. Update this record with verification evidence, commit with the required `dsw-33987` prefix, and push `v0.0.11beta` to `legacy-remote`.
 
 ## Implemented outcome
 

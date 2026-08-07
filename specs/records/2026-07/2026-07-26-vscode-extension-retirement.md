@@ -112,5 +112,5 @@ Shared contracts that are still consumed by Tauri/browser stay in
    terminology from forbidden live Extension-host references.
 7. Run focused transport, Overlay, CLI, document, typecheck, build, dead-code,
    API, version and hook checks.
-8. Commit only retirement-owned paths and push to `myhexin` through normal
+8. Commit only retirement-owned paths and push to `legacy-remote` through normal
    hooks.

@@ -40,7 +40,7 @@ then explicitly requested that the diagnosed problems be repaired.
 - Do not restart, refresh, stop, or otherwise interfere with the running OpenCorvus or
   Overlay process.
 - Preserve unrelated `.DS_Store` files and any user changes. Commit subjects use the
-  `dsw-33987` prefix and push to `myhexin/v0.0.13beta` without bypassing hooks.
+  `dsw-33987` prefix and push to `legacy-remote/v0.0.13beta` without bypassing hooks.
 
 ### Sources read
 

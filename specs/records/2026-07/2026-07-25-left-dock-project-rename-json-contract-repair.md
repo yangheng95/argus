@@ -5,11 +5,11 @@
 | Field | Evidence |
 | --- | --- |
 | User request | “左侧dock的重命名项目不起作用”. |
-| Acceptance criteria | The existing left-Dock project menu opens the existing rename dialog; confirming a non-empty changed name sends one directory-scoped `PATCH /project/current` with an `application/json` body containing the exact trimmed `name`; the backend persists the label; the canonical Work Ledger refresh shows it without reloading the running Overlay; malformed input and response handling remain strict; the anonymous-project promotion request keeps the same JSON transport contract; focused service, route, Vite/browser, screenshot, type, build, document-health, second-review, commit, and git-cc push checks pass. |
-| Hard constraints | Preserve the existing `ProjectLedgerGroup` → `main.tsx` → `workspace.ts` → `PATCH /project/current` ownership chain and Work Ledger projection; do not add a duplicate project-name store, optimistic fallback, compatibility path, gate, state machine, mobile/tablet scope, new worktree, or process restart/refresh; use Node for browser interaction and an isolated Vite fixture; preserve every unrelated dirty change; commit subjects use `dsw-33987`; push only to `myhexin`. |
+| Acceptance criteria | The existing left-Dock project menu opens the existing rename dialog; confirming a non-empty changed name sends one directory-scoped `PATCH /project/current` with an `application/json` body containing the exact trimmed `name`; the backend persists the label; the canonical Work Ledger refresh shows it without reloading the running Overlay; malformed input and response handling remain strict; the anonymous-project promotion request keeps the same JSON transport contract; focused service, route, Vite/browser, screenshot, type, build, document-health, second-review, commit, and legacy remote push checks pass. |
+| Hard constraints | Preserve the existing `ProjectLedgerGroup` → `main.tsx` → `workspace.ts` → `PATCH /project/current` ownership chain and Work Ledger projection; do not add a duplicate project-name store, optimistic fallback, compatibility path, gate, state machine, mobile/tablet scope, new worktree, or process restart/refresh; use Node for browser interaction and an isolated Vite fixture; preserve every unrelated dirty change; commit subjects use `dsw-33987`; push only to `legacy-remote`. |
 | Runtime evidence | `~/.local/share/opencorvus/log/dev.log` records two real attempts at `2026-07-25T08:05:22Z` and `08:05:41Z`. Both reached `PATCH /project/current` and returned HTTP 400 because the validated JSON body was `{}` and `name` was `undefined`. The diagnostic ID is `runtime:work-ledger.project-rename`. SQLite inspection immediately afterward showed the affected project names still unset. |
 | Sources read | Root `AGENTS.md`; Browser skill; `specs/current/architecture/07-panel.md`; `2026-07-16-project-actions-secondary-menu.md`; `2026-07-18-work-ledger-pin-and-automatic-right-dock-reveal.md`; `2026-07-25-anonymous-project-chats-promotion-and-attachments.md`; current `ProjectLedgerGroup.tsx`, `WorkLedger.tsx`, `main.tsx`, `workspace.ts`, `api.ts`, `tauri-transport.ts`, project/work-ledger routes and projections, and focused service/route/browser tests. |
-| Git baseline | `v0.0.18beta` at `a04d15c851`, equal to `myhexin/v0.0.18beta` before this task. The worktree contains unrelated right-Dock/sub-agent changes; they remain untouched and unstaged by this task. |
+| Git baseline | `v0.0.18beta` at `a04d15c851`, equal to `legacy-remote/v0.0.18beta` before this task. The worktree contains unrelated right-Dock/sub-agent changes; they remain untouched and unstaged by this task. |
 | Independent agent feedback | None. The user did not request sub-agents; current collaboration policy forbids unsolicited delegation. |
 
 ## Causal Chain
@@ -75,7 +75,7 @@
    left-Dock menu, inspect the desktop screenshot at original resolution, and
    correct any interaction or visual regression.
 6. Run document-health checks, re-enumerate body/header call sites, review the
-   exact diff and staged ownership, fetch git-cc, commit with `dsw-33987`, and
+   exact diff and staged ownership, fetch legacy remote, commit with `dsw-33987`, and
    push through normal hooks.
 
 ## Progress
@@ -90,7 +90,7 @@
 - [x] Add regressions and implement the caller-contract repair.
 - [x] Complete real Vite/browser screenshot acceptance and second review.
 - [x] Commit the verified implementation.
-- [x] Push the verified commits through the normal git-cc hook.
+- [x] Push the verified commits through the normal legacy remote hook.
 
 ## Result And Verification
 
@@ -125,8 +125,8 @@
   changes. The canonical SDK and API documentation generators synchronized
   those derived artifacts, after which `api:routes-check` and `docs:check`
   passed without bypassing the hook or modifying the concurrent source edits.
-- The final normal git-cc hook passed all nine package typechecks,
+- The final normal legacy remote hook passed all nine package typechecks,
   `api:routes-check`, `docs:check`, Overlay localization validation, and the
   tracked-source secret scan. Commit `c11ff8ade4` reached
-  `myhexin/v0.0.18beta`; concurrent worktree changes remained unstaged and
+  `legacy-remote/v0.0.18beta`; concurrent worktree changes remained unstaged and
   uncommitted by this repair.

@@ -39,7 +39,7 @@
 - Preserve the unrelated dirty
   `specs/artifacts/opencorvus-workbuddy-qoderwork-multica-codex-benchmark-catalog.md`.
 - Do not create a worktree. Browser interaction uses the Browser skill and Node.js-backed control.
-- Commit subjects begin with `dsw-33987`; push checkpoints and the completed delivery to `myhexin`.
+- Commit subjects begin with `dsw-33987`; push checkpoints and the completed delivery to `legacy-remote`.
 
 ### Hard-disk sources read
 
@@ -112,7 +112,7 @@ the only second line.
    do not run UI tests.
 5. Reload the real page, select and deselect an Expert Squad, inspect Skill, Mission Skill, and Expert
    Squad rows, capture screenshots, and personally review Popover continuity and two-line density.
-6. Re-read the diff and screenshots, fetch and converge with `myhexin`, commit only task-owned paths,
+6. Re-read the diff and screenshots, fetch and converge with `legacy-remote`, commit only task-owned paths,
    push `v0.0.26beta`, and verify local/remote convergence.
 
 ## Progress
@@ -154,7 +154,7 @@ two-row hierarchy, truncation, spacing, and Popover anchoring.
 - No UI automation test was added, modified, updated, or run.
 
 The implementation and its three task-scoped screenshots were committed as `9fbe22c85c` after
-fast-forwarding the two latest git-cc commits. The full pre-push hook then passed workspace typecheck,
+fast-forwarding the two latest legacy remote commits. The full pre-push hook then passed workspace typecheck,
 route inventory, generated documentation consistency, Overlay internationalization, and secret
-scanning. Local and `myhexin/v0.0.26beta` both resolved to the same implementation commit after the
+scanning. Local and `legacy-remote/v0.0.26beta` both resolved to the same implementation commit after the
 push.

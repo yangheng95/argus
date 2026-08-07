@@ -60,7 +60,7 @@ Owner: Codex
   session store, route, iframe, local signal copy, fallback, compatibility
   branch, gate, or state machine.
 - Desktop is the only visual acceptance target.
-- Commit subjects use `dsw-33987`; delivery goes to the `myhexin` remote.
+- Commit subjects use `dsw-33987`; delivery goes to the `legacy-remote` remote.
 
 ### Material read before implementation
 
@@ -164,7 +164,7 @@ global primitive source.
    at original resolution and correct any remaining visual defect.
 7. Perform a second source/diff/screenshot review, commit only task-owned
    changes with the required prefix, reconcile remote changes, and push the
-   delivery branch to `myhexin`.
+   delivery branch to `legacy-remote`.
 
 ## Status
 

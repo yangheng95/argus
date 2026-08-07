@@ -24,7 +24,7 @@ The user also clarified that the import must be Agent-led and backed by a preset
 8. Clicking the left action starts a real Mission with a visible user-role import request under the built-in `general` prompt profile. Its Orchestrator must load the preset `multica-import` skill and use the projected `multica_catalog`, `multica_preview`, and `multica_import` tools; ordinary Coding Assistant Chat receives no parallel skill/tool path.
 9. Cover strict source schemas, authenticated HTTP requests, malicious skill paths, blocker cases, digest drift, zero-write failure, Registry/Manager/Resolver isolation, Skill/Tool projection, Mission launch, left-sidebar ownership/order, project-scoped routes, and real rendered desktop interaction.
 10. Frontend acceptance must use an isolated real Overlay page, Node-launched Playwright/browser sidecar, task-scoped screenshots, and a manual second visual review. The currently running OpenCorvus/Overlay process must not be restarted, refreshed, or stopped.
-11. Commit subjects use the `dsw-33987` prefix and delivery pushes the current main worktree branch to `myhexin` without bypassing hooks.
+11. Commit subjects use the `dsw-33987` prefix and delivery pushes the current main worktree branch to `legacy-remote` without bypassing hooks.
 
 ### Hard constraints
 
@@ -98,7 +98,7 @@ Three independent read-only agents investigated official Multica contracts, back
 ### Baseline/toolchain evidence
 
 - On 2026-07-14, the official `multica` CLI and `~/.multica/config.json` were absent on this host, so a real authenticated user-workspace pull cannot be claimed from this machine.
-- `git fetch myhexin v0.0.3beta` proved the local branch was three existing commits ahead and zero behind.
+- `git fetch legacy-remote v0.0.3beta` proved the local branch was three existing commits ahead and zero behind.
 - The required pre-change push reached the repository hook but was rejected by pre-existing uncommitted `ProjectRuntimePaths.frontendDesignPaths` contract changes: removed `webpageEvidence*`/`sourcePackage*` fields still have many callers. This task did not create those errors and will not roll back or overwrite the existing work.
 
 ## External research decision
@@ -191,7 +191,7 @@ Each external fetch has a bounded request timeout owned by the adapter. The full
 4. Replace the superseded titlebar/dialog path with the `WorkLedger` shortcut and real Mission launcher; delete direct Overlay importer code and tests.
 5. Keep generated REST/OpenAPI/SDK/docs surfaces synchronized with the retained programmatic API.
 6. Run the focused benchmark loop, repair causes, then run rendered browser acceptance and manually inspect screenshots.
-7. Perform a second diff/package/runtime review, commit with `dsw-33987`, and push `HEAD:refs/heads/v0.0.3beta` to `myhexin` without bypassing hooks.
+7. Perform a second diff/package/runtime review, commit with `dsw-33987`, and push `HEAD:refs/heads/v0.0.3beta` to `legacy-remote` without bypassing hooks.
 
 ## Implementation and verification record
 
@@ -229,21 +229,21 @@ The previous titlebar/dialog evidence is obsolete because it proves the wrong pr
 ## Incremental delivery progress
 
 - Batch 1 was committed as `62cb63d5f0` (`dsw-33987 add strict Multica import adapter`) and pushed to
-  `myhexin/v0.0.3beta` on 2026-07-14.
+  `legacy-remote/v0.0.3beta` on 2026-07-14.
 - Batch 1 contains only the strict REST adapter, atomic Registry/Manager import, fine-grained Agent tool module,
   and their 12-test / 38-assertion regression suite. Existing staged files and unrelated parallel work were excluded.
 - Batch 2 is delivered under the commit subject `dsw-33987 project Multica preset through General`. It contains only
   the bundled `multica-import` Skill, the General scheduler's explicit three-tool/one-skill projection, Orchestrator
   tool registration, and focused source/package regressions. The final pre-commit rerun passed 14 tests with 48
   assertions across the strict adapter, General projection/worker isolation, tool registration, and Skill contract.
-  It was committed as `503f895c8d` and pushed to `myhexin/v0.0.3beta`.
+  It was committed as `503f895c8d` and pushed to `legacy-remote/v0.0.3beta`.
 - Batch 3 was committed as `a72cdb02b8` (`dsw-33987 expose project-scoped Multica import API`) and pushed to
-  `myhexin/v0.0.3beta`. It contains
+  `legacy-remote/v0.0.3beta`. It contains
   only the three strict project-scoped routes, their isolated real-App regression, and matching OpenAPI, JavaScript
   SDK, English API reference, and Chinese API reference projections. The route regression passed with 8 assertions;
   generated route, documentation, and SDK checks passed before commit.
 - Batch 4 was committed as `4ceb490f0a` (`dsw-33987 launch Multica import from Work Ledger`) and pushed to
-  `myhexin/v0.0.3beta`. It contains only the Work Ledger shortcut, visible General Mission launcher, English/Chinese
+  `legacy-remote/v0.0.3beta`. It contains only the Work Ledger shortcut, visible General Mission launcher, English/Chinese
   copy, source-level ownership regressions, and the Node-launched rendered-browser regression. The focused UI rerun
   passed 20 tests with 257 assertions; the browser regression passed and both screenshots were manually reviewed.
 - The final whole-chain review reran the adapter/General projection (13 tests, 44 assertions), Skill contract (1 test,

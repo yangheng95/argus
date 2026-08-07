@@ -52,7 +52,7 @@ Date: 2026-07-29
     generated OpenAPI/Software Development Kit (SDK), internationalization,
     document-health, and diff checks pass.
 11. The implementation is committed with a `dsw-33987` subject, merged back to
-    the `v0.0.24beta` delivery branch, and pushed to the git-cc `myhexin`
+    the `v0.0.24beta` delivery branch, and pushed to the legacy remote
     remote without disturbing concurrent changes.
 
 ### Hard constraints
@@ -62,7 +62,7 @@ Date: 2026-07-29
 - The authorized implementation worktree is
   `/Users/yangheng/Desktop/opencorvus-work-harness-refactor` on
   `codex/work-harness-refactor`, based exactly on
-  `myhexin/v0.0.24beta@a2d0654a72545176713af6b1e9ff5cdc6c1f933f`.
+  `legacy-remote/v0.0.24beta@a2d0654a72545176713af6b1e9ff5cdc6c1f933f`.
 - Do not restart, refresh, terminate, or otherwise alter the user's running
   OpenCorvus or Overlay process.
 - Do not add fallback behavior, compatibility aliases, dual writes, a generic

@@ -64,7 +64,7 @@ session owner; do not keep both WebSocket and SSE public output paths.
    right-side Terminal, type a command, verify output and resizing, inspect a
    task-scoped screenshot, correct visual issues, and repeat.
 8. Perform a second code/diff review, commit only this task's files, and push the
-   branch to git-cc.
+   branch to legacy remote.
 
 ## Progress
 
@@ -84,7 +84,7 @@ session owner; do not keep both WebSocket and SSE public output paths.
       could be captured. Alternate browser automation was not used because the
       policy explicitly forbids circumvention.
 - [x] Second review, selective implementation commit `414f37a7d`, full
-      pre-push hook, and git-cc push completed.
+      pre-push hook, and legacy remote push completed.
 
 ## Second Review Findings
 

@@ -12,10 +12,10 @@ Owner: Codex
 | --- | --- |
 | User request | The Settings page renders group headings smaller than setting items. Audit the whole Overlay and make headings slightly larger than content through one primitive-like standard. |
 | Supplied evidence | `codex-clipboard-aff9448b-be38-44ab-8f47-843c4bb2ec62.png`, inspected at original resolution, shows `Personal`, `Expert Squads`, `Integrations`, `Coding`, and `Archived` at the 12px small tier while their navigation items render at the 14px control tier. |
-| Acceptance criteria | Page headings continue to use the heading tier; standalone section/group headings use the shared 15px title tier; ordinary content and controls remain on the 14px body/control tier; metadata remains smaller. Settings, Work Ledger, menus/pickers, task evidence, activity panels, and content subsections no longer locally downsize true section/group headings. Focused source tests, Overlay typecheck/build, isolated Node-launched browser interactions, task-scoped screenshots, original-resolution visual review, documentation health, second review, commit, and git-cc push pass. |
-| Hard constraints | Preserve item-title, filename, status-pill, code, and metadata typography unless the element is proven to own a section/group heading role; class names alone are not evidence. Reuse the existing Section primitive and `--ui-font-title`; do not add another typography token, fallback, compatibility alias, global zoom, new worktree, or restart/refresh the user's running OpenCorvus/Overlay. Desktop-only scope. Playwright is launched by Node. Every code change receives regression coverage. Commit subjects start with `dsw-33987`; push to `myhexin`. |
+| Acceptance criteria | Page headings continue to use the heading tier; standalone section/group headings use the shared 15px title tier; ordinary content and controls remain on the 14px body/control tier; metadata remains smaller. Settings, Work Ledger, menus/pickers, task evidence, activity panels, and content subsections no longer locally downsize true section/group headings. Focused source tests, Overlay typecheck/build, isolated Node-launched browser interactions, task-scoped screenshots, original-resolution visual review, documentation health, second review, commit, and legacy remote push pass. |
+| Hard constraints | Preserve item-title, filename, status-pill, code, and metadata typography unless the element is proven to own a section/group heading role; class names alone are not evidence. Reuse the existing Section primitive and `--ui-font-title`; do not add another typography token, fallback, compatibility alias, global zoom, new worktree, or restart/refresh the user's running OpenCorvus/Overlay. Desktop-only scope. Playwright is launched by Node. Every code change receives regression coverage. Commit subjects start with `dsw-33987`; push to `legacy-remote`. |
 | Sources read | Root `AGENTS.md`; Browser control skill; supplied screenshot; `specs/current/architecture/07-panel.md`; the July 8 font-size alignment record; the July 10 desktop typography normalization record; `design-language.css`; `section.css`; settings, Work Ledger, titlebar, command palette, Composer, activity, changes, conversation, inspector, mailbox, messages, card, and settings styles; corresponding component and focused test owners. |
-| Git baseline | Branch `work-v0.0.16beta-yr-0723` showed no ahead/behind marker against `myhexin/work-v0.0.16beta-yr-0723`. The worktree already contained unrelated in-progress Overlay/mission changes, which remain preserved. The required pre-change push was attempted, but `git-cc.myhexin.com:6443` was unreachable from the environment. |
+| Git baseline | Branch `work-v0.0.16beta-yr-0723` showed no ahead/behind marker against `legacy-remote/work-v0.0.16beta-yr-0723`. The worktree already contained unrelated in-progress Overlay/mission changes, which remain preserved. The required pre-change push was attempted, but `legacy remote.myhexin.com:6443` was unreachable from the environment. |
 | Independent agent feedback | None. The user did not request sub-agents, and the active collaboration boundary forbids unrequested delegation. |
 
 ### Whole-repository search evidence
@@ -45,7 +45,7 @@ Owner: Codex
 4. Document the current typography contract in `specs/current/architecture/07-panel.md`.
 5. Run focused typography/component tests, Overlay typecheck/build, i18n and documentation health checks.
 6. Start only isolated Node-based browser fixtures, capture the Settings sidebar plus representative left-rail/menu/panel screenshots, inspect them at original resolution, and iterate if hierarchy, wrapping, clipping, or density is wrong.
-7. Re-grep every owner, inspect the exact diff a second time, commit with `dsw-33987`, fetch/converge if the remote is reachable, push to `myhexin`, and verify local/remote equality.
+7. Re-grep every owner, inspect the exact diff a second time, commit with `dsw-33987`, fetch/converge if the remote is reachable, push to `legacy-remote`, and verify local/remote equality.
 
 ## Verification evidence
 
@@ -55,7 +55,7 @@ Owner: Codex
 - The Node-launched Settings browser suite passed after its obsolete 11–12px sidebar-heading expectation was replaced with the canonical 15px title token and strict `heading > item` assertion. The same fixture was repaired to serve the two provider-refresh routes that the real Providers panel calls.
 - Isolated in-app browser review at the actual desktop surface measured Settings sidebar headings at 15px versus 14px navigation items, page headings at 20px, section/row titles at 15px, and descriptions at 14px. A second About-panel review measured section headings at 15px versus 14px content. The reviewed screenshots are `.scratch/section-heading-settings-visual.png` and `.scratch/section-heading-about-visual.png`.
 - Historical documentation-link checks passed. The required pre-push hook passed full workspace typecheck, route inventory, generated API documentation, Overlay i18n, and secret scanning. The standalone document-health test still observes another concurrent July record indexed while untracked; this task does not stage or claim that record.
-- Implementation commit `e45121639` was pushed to `myhexin/work-v0.0.16beta-yr-0723`; the local and git-cc remote-tracking commits matched after push.
+- Implementation commit `e45121639` was pushed to `legacy-remote/work-v0.0.16beta-yr-0723`; the local and legacy remote-tracking commits matched after push.
 
 ## Progress
 
@@ -64,4 +64,4 @@ Owner: Codex
 - [x] Focused regressions updated.
 - [x] Production implementation complete.
 - [x] Static, browser, and screenshot verification complete.
-- [x] Second review, commit, and git-cc push complete.
+- [x] Second review, commit, and legacy remote push complete.

@@ -11,7 +11,7 @@
 | Sources read | `AGENTS.md`; Browser skill; `specs/current/architecture/07-panel.md`; the 2026-07-17 Tools/Reasoning density, plain-stream, inline-flow, and message-hover-time records; `CardParts.tsx`; `TextPart.tsx`; `text-part-model.ts`; `card-message-run.ts`; `messages.css`; `markdown.css`; `card.css`; `chat-bubble.css`; focused source/browser tests and fixtures. |
 | Whole-repository search evidence | `rg` enumerated every `msg-work-details`, `chat-bubble__body-inner`, `card-message-run`, `msg-text`, `md-frozen-block`, and `md-active-text` owner and consumer. Production rendering remains singular. `markdown.css` gives parsed paragraphs a bottom margin while active streaming text has no matching margin; `chat-bubble.css` currently removes the generic body gap whenever Tools exists, leaving that renderer-shape difference observable at the narrative-to-disclosure boundary. Direct regression consumers are `chat-bubble.test.ts`, `message-embed.test.ts`, `message-part-chronology-browser.test.ts`, and `chat-bubble-disclosure-button-browser.test.ts`. |
 | Independent agent feedback | None. The user did not request delegation, so no sub-agent was started. |
-| Git baseline | `HEAD` and `myhexin/work-v0.0.13beta-yr-0721` both resolve to `6b4948af4`; the existing dirty worktree belongs to concurrent tasks and will not be staged by this repair. |
+| Git baseline | `HEAD` and `legacy-remote/work-v0.0.13beta-yr-0721` both resolve to `6b4948af4`; the existing dirty worktree belongs to concurrent tasks and will not be staged by this repair. |
 
 ## Evidence and causal chain
 
@@ -49,7 +49,7 @@ grouping, or Tool rendering.
 2. Add the conversation-scoped narrative-to-Tools spacing contract using the existing spacing token and remove only the adjacent final Markdown margin contribution.
 3. Run focused unit/source tests, Overlay typecheck and internationalisation, then start the isolated Vite fixture with Node.
 4. Use the in-app browser to inspect computed geometry and current-task screenshots at a desktop viewport; iterate until both gaps match visually and numerically.
-5. Run documentation health, inspect the scoped diff a second time, fetch/reconcile git-cc, commit only task-owned files/hunks with the required `dsw-33987` prefix, push `myhexin`, and verify local/remote equality.
+5. Run documentation health, inspect the scoped diff a second time, fetch/reconcile legacy remote, commit only task-owned files/hunks with the required `dsw-33987` prefix, push `legacy-remote`, and verify local/remote equality.
 
 ## Progress
 
@@ -57,7 +57,7 @@ grouping, or Tool rendering.
 - [x] Identified the renderer-shape margin difference at the narrative-to-Tools boundary.
 - [x] Added regression coverage and the single spacing contract.
 - [x] Completed real-browser visual verification and second review.
-- [x] Committed and pushed the verified repair to git-cc.
+- [x] Committed and pushed the verified repair to legacy remote.
 
 ## Verification
 

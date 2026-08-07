@@ -7,12 +7,12 @@ Status: implemented and visually accepted
 | Item | Detail |
 | --- | --- |
 | User request | The macOS UI transparency looks poor and its theme colors contradict one another. |
-| Acceptance criteria | The macOS titlebar and left Dock read as one restrained native material; the selected Overlay light/dark palette remains the visible color authority; active/inactive window material follows the real window state; Windows keeps Mica without sharing a contradictory effect list; the desktop layout and interactions remain unchanged. Focused source tests, theme/material browser screenshots, manual original-resolution review, Overlay typecheck/build, document health, commit, and `myhexin` push pass. |
+| Acceptance criteria | The macOS titlebar and left Dock read as one restrained native material; the selected Overlay light/dark palette remains the visible color authority; active/inactive window material follows the real window state; Windows keeps Mica without sharing a contradictory effect list; the desktop layout and interactions remain unchanged. Focused source tests, theme/material browser screenshots, manual original-resolution review, Overlay typecheck/build, document health, commit, and `legacy-remote` push pass. |
 | Hard constraints | Follow `AGENTS.md`; use Tauri platform configuration and existing semantic palette tokens; no runtime platform guessing, fallback, compatibility branch, image/noise asset, duplicated theme palette, new state machine, mobile/tablet scope, worktree, or intervention in the user's running OpenCorvus/Overlay process. Playwright remains Node-launched. Preserve the unrelated untracked `C:/` directory. |
 | Sources read | `AGENTS.md`; Browser control skill; `specs/current/architecture/07-panel.md`; `2026-07-14-overlay-workspace-surface-continuity.md`; `2026-07-17-platform-left-dock-glass-material.md`; current Tauri configs; `cascade/{base,light,dark,vscode-dark}.css`; `surfaces/{activity,sidebar,titlebar,workspace}.css`; theme service/callers; focused source/browser tests; official Tauri configuration and platform-specific configuration documentation. |
 | Whole-repository search evidence | `rg` enumerated every `windowEffects`, `transparent`, `macOSPrivateApi`, `--rail-surface`, `--left-dock-material-*`, `backdrop-filter`, `data-platform`, `applyTheme`, and native `setTheme` occurrence. The material has one CSS owner in `surfaces/sidebar.css` and one clipped renderer in `surfaces/activity.css`. The base Tauri config currently supplies `effects: ["sidebar", "mica"]` to every target even though Tauri documents those as macOS-only and Windows-only conflicting effects. The only platform override is `tauri.macos.conf.json`, which currently owns signing only. The current macOS CSS layer adds a 34% theme tint plus an independent highlight gradient, so a system-derived native material remains more visually authoritative than the user-selected Overlay palette. |
 | Independent agent feedback | None. The user did not request sub-agents, and active collaboration policy forbids unrequested delegation. |
-| Git baseline | `v0.0.9beta` was fast-forwarded to `myhexin/v0.0.9beta` at `368bf860a` before implementation. The only existing worktree residue is untracked `C:/`. |
+| Git baseline | `v0.0.9beta` was fast-forwarded to `legacy-remote/v0.0.9beta` at `368bf860a` before implementation. The only existing worktree residue is untracked `C:/`. |
 
 ## Causal chain
 
@@ -37,7 +37,7 @@ Status: implemented and visually accepted
 2. Implement the config and material-token repair.
 3. Run focused tests, the Node-owned browser visual test, Overlay typecheck/build, and document health.
 4. Inspect macOS light/dark screenshots at original resolution, revise if the rail is washed out or opaque, then perform a second code/diff review.
-5. Commit with the `dsw-33987` prefix, push `v0.0.9beta` to `myhexin`, and verify remote convergence.
+5. Commit with the `dsw-33987` prefix, push `v0.0.9beta` to `legacy-remote`, and verify remote convergence.
 
 ## Codex review feedback
 
@@ -49,7 +49,7 @@ The first draft proposed putting native effects in `tauri.macos.conf.json` and a
 - [x] Baseline macOS light/dark screenshots reproduced and inspected.
 - [x] Regression tests and production implementation complete.
 - [x] Post-fix visual and build acceptance complete.
-- [x] Second review and commits complete; git-cc push verified below.
+- [x] Second review and commits complete; legacy remote push verified below.
 
 ## Outcome
 

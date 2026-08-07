@@ -36,7 +36,7 @@ Remove the database-reset feature shown in the General settings screenshot: the
   `packages/opencorvus/src/skill/builtin-payload.ts`.
 - Keep generated OpenAPI, SDK, and public API documentation synchronized.
 - Commit subjects use the required `dsw-33987` prefix and pushes target
-  `myhexin`.
+  `legacy-remote`.
 
 ### Sources read
 

@@ -42,7 +42,7 @@
   Visual verification must use an isolated HTTP fixture and Playwright launched
   with Node, not Bun.
 - Preserve unrelated dirty-worktree edits; do not create another worktree.
-- New commits use the `dsw-33987` subject prefix and are pushed to `myhexin`.
+- New commits use the `dsw-33987` subject prefix and are pushed to `legacy-remote`.
 
 ### Landed sources read before implementation
 

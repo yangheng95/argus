@@ -127,7 +127,7 @@ cover the Desktop caller's data-root value.
 4. Run focused recovery/serve/managed-ownership tests, OpenCorvus typecheck,
    document health, and diff checks.
 5. Review the exact scoped diff, commit with the required `dsw-33987` prefix,
-   fetch, and push the current delivery branch to `myhexin`.
+   fetch, and push the current delivery branch to `legacy-remote`.
 
 ## Implementation
 

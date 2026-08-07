@@ -4,7 +4,7 @@
 
 - User request: repair the Git commit-message model-context handoff for a temporary repository, and do not show Push actions when that repository has no remote.
 - Acceptance criteria: a selected Task continues to resolve its Task-root model overlay; a selected ordinary Chat Session resolves its Session-root model overlay; a repository with no configured Git remote shows Commit only; a repository with a configured remote shows the existing Commit & Push and Push actions; direct VCS actions keep using the current project directory.
-- Hard constraints: fix the identity and VCS fact boundaries without fallback, compatibility input, a second model source, a host workflow gate, or a hand-written Git heuristic; use Git itself as the remote source; add only positive non-User-Interface contracts; do not add, modify, or run User Interface automated tests; validate the real desktop page through interaction and screenshots; preserve unrelated worktree changes; commit subjects start with `dsw-33987`; push the current main delivery branch to `git-cc`.
+- Hard constraints: fix the identity and VCS fact boundaries without fallback, compatibility input, a second model source, a host workflow gate, or a hand-written Git heuristic; use Git itself as the remote source; add only positive non-User-Interface contracts; do not add, modify, or run User Interface automated tests; validate the real desktop page through interaction and screenshots; preserve unrelated worktree changes; commit subjects start with `dsw-33987`; push the current main delivery branch to legacy remote.
 - Read records and architecture: `specs/current/architecture/03-control.md`, `specs/current/architecture/06-provider.md`, `specs/records/2026-08/2026-08-03-temporary-project-provider-catalog-invalidation.md`, the effective-config resolver, VCS implementation and routes, Overlay selected-source projection, Composer model projection, and the Git action dialog.
 - Repository search: the Overlay commit-message request currently sends only `activeTaskID`; `activeSessionID` is the canonical ordinary-Session identity; the backend model resolver already accepts and validates both `taskID` and `sessionID`; `Vcs.Info` currently projects no remote fact; both Push buttons render without a remote condition; `Vcs.push` uses native `git push` and does not create or alter remotes.
 - Independent Agent feedback: none; the user did not request sub-agents, so no delegation was used.
@@ -37,10 +37,10 @@ Why the previous behavior cannot cure itself: selecting a model on the Chat Sess
 ## Progress
 
 - [x] Root-cause investigation and Recall.
-- [x] Pre-implementation plan committed and published to git-cc as `61a55dc1f6` after the concurrent TypeScript work converged.
+- [x] Pre-implementation plan committed and published to legacy remote as `61a55dc1f6` after the concurrent TypeScript work converged.
 - [x] Product and positive contract implementation.
 - [x] Focused verification and real-page visual acceptance.
-- [x] Second review completed; implementation commit `4f612cae8b` passed the full pre-push hook and was published to git-cc.
+- [x] Second review completed; implementation commit `4f612cae8b` passed the full pre-push hook and was published to legacy remote.
 
 ## Verification results
 
@@ -52,7 +52,7 @@ Why the previous behavior cannot cure itself: selecting a model on the Chat Sess
 - Root `bun run typecheck`: passed across all eight active package checks.
 - Root `bun run docs:check`: passed after regenerating the English and Chinese API references with the new `sessionID` body field.
 - Root `bun run api:routes-check`: passed all six rules and the route inventory across 33 files after the concurrent shutdown route adopted the existing runtime environment boundary and the current SDK/OpenAPI was regenerated.
-- Full git-cc pre-push hook: package typechecks, API route inventory, generated documentation, Overlay internationalization, and secret scan all passed.
+- Full legacy remote pre-push hook: package typechecks, API route inventory, generated documentation, Overlay internationalization, and secret scan all passed.
 - Documentation health: 69 passed and one task-external failure remained because the monthly index concurrently linked two untracked records (`work-research-report-quality-repair` and `managed-backend-early-exit-diagnostics`).
 - Real isolated runtime at port 7879: `GET /vcs` returned the same repository with `hasRemote: false`, then `hasRemote: true` after a local bare remote was configured and pushed.
 - Real ordinary Chat Session: the dirty repository's commit-message request resolved the Session/project QA model and advanced beyond `MissingModelConfigError`; the intentionally non-responsive QA Provider produced an empty-message error, confirming the selected Session identity reached strict model resolution.

@@ -11,7 +11,7 @@
 | Sources read               | Root `AGENTS.md`; Browser control skill; supplied screenshot; `specs/current/architecture/99-principles.md`; `2026-07-28-right-dock-chrome-tabs-and-blank-tab.md`; `2026-07-29-browser-tab-task-preview-separation.md`; `RightDock.tsx`; `BrowserPreviewPanel.tsx`; `main.tsx`; `App.tsx`; shared `Tabs.tsx`, `DropdownMenu.tsx`, and their styles; Right Dock, inspector, and titlebar styles; localized Browser/Right Dock strings.                                                                                                                                                                                                                                                                 |
 | Whole-repository grep      | Searched production, tests, current architecture, and July records for `RightDock`, `RightDockPanel`, `centerWorkbenchPanels`, `selectedCenterWorkbenchPanel`, `open/close/activateCenterWorkbenchPanel`, `rightDockTabPanels`, `BrowserPreviewPanel`, `right-dock-browser`, `tabID`, `onPageTitleChange`, `onDblClick`, tab-strip styles, Browser address/zoom/selection controls, WindowControls, and all direct tests. The call-site disposition below records every production state owner and consumer. Existing UI tests were identified only as historical consumers and will not be modified or run.                                                                                          |
 | Independent agent feedback | None. The user did not request sub-agents, so the primary agent owns implementation and the required second review.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| Git baseline               | `work-v0.0.24beta-yr-0729` and `myhexin/work-v0.0.24beta-yr-0729` both resolved to `85f0ffca84` after the initial push raced with the same remote update. The worktree was clean before this record.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Git baseline               | `work-v0.0.24beta-yr-0729` and `legacy-remote/work-v0.0.24beta-yr-0729` both resolved to `85f0ffca84` after the initial push raced with the same remote update. The worktree was clean before this record.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
 ## Causal chain
 
@@ -57,7 +57,7 @@
    screenshots, and iterate until the requested surface is visually correct.
 6. Review the exact diff and live screenshots a second time, update this record
    with evidence, commit with the `dsw-33987` prefix, fetch/converge, and push to
-   `myhexin`.
+   `legacy-remote`.
 
 ## Progress
 
@@ -65,7 +65,7 @@
 - [x] Tab-instance identity and independent Browser lifecycle implemented.
 - [x] Codex-like Right Dock and Browser chrome implemented.
 - [x] Real interaction and screenshot acceptance completed.
-- [x] Second review, commit, convergence, and git-cc push completed.
+- [x] Second review, commit, convergence, and legacy remote push completed.
 
 ## Verification evidence
 
@@ -77,7 +77,7 @@
 | Non-UI tests         | `bun test packages/transport-protocol/test/contract.test.ts packages/overlay/test/browser-preview-native.test.ts packages/overlay/test/host-transport-capabilities.test.ts` passed: 44 tests, 0 failures, 1369 expectations. `cargo test --manifest-path packages/overlay/src-tauri/Cargo.toml browser_preview_` passed: 23 tests, 0 failures, covering surface labels, scope isolation, callback-store isolation, delayed callback ownership, navigation, zoom, selection, and cleanup.                                                          |
 | Static/build checks  | `bun run --cwd packages/overlay typecheck`, `bun run --cwd packages/overlay check:i18n`, `bun run --cwd packages/overlay build:vite`, `cargo fmt --manifest-path packages/overlay/src-tauri/Cargo.toml`, and `git diff --check` completed successfully. The production Vite build emitted only existing third-party directive and chunk-size warnings.                                                                                                                                                                                            |
 | Documentation health | `bun test --timeout 60000 packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/product-docs-single-source.test.ts packages/opencorvus/test/script/document-health.test.ts` passed: 93 tests, 0 failures, 1448 expectations.                                                                                                                                                                                                                                                                              |
-| Git convergence      | Implementation commit `1b2f48c650` (`dsw-33987 align Right Dock Browser tab instances`) was checked for unrelated staged hunks and pushed to `myhexin/work-v0.0.24beta-yr-0729`. The git-cc hook passed SDK import, AI runtime, full Turbo typecheck, API route inventory, generated docs, Overlay localization, and secret scan checks.                                                                                                                                                                                                          |
+| Git convergence      | Implementation commit `1b2f48c650` (`dsw-33987 align Right Dock Browser tab instances`) was checked for unrelated staged hunks and pushed to `legacy-remote/work-v0.0.24beta-yr-0729`. The legacy remote hook passed SDK import, AI runtime, full Turbo typecheck, API route inventory, generated docs, Overlay localization, and secret scan checks.                                                                                                                                                                                                          |
 
 ## Second review
 

@@ -18,7 +18,7 @@ Status: implementation complete
 5. Session-diff publication remains single-source and atomic; readers never accept partial JSON.
 6. Existing task, Goal, plan, decision-log and progress data remain untouched. No database reset, compatibility branch, retry loop or filesystem permission fallback is introduced.
 7. Focused TypeScript, Rust, CLI lifecycle and document-health tests pass, followed by a second diff review.
-8. Changes are committed with the `dsw-33987` prefix and pushed to `myhexin/v0.0.11beta` without restarting the user's running OpenCorvus processes.
+8. Changes are committed with the `dsw-33987` prefix and pushed to `legacy-remote/v0.0.11beta` without restarting the user's running OpenCorvus processes.
 
 ### Hard constraints
 

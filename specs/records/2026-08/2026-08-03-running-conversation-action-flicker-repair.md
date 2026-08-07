@@ -6,7 +6,7 @@
 | --- | --- |
 | User request | The trailing time, metadata, and overflow-action area of a Conversation Agent card flashes continuously while the Agent is executing. |
 | Acceptance criteria | A running Agent card keeps the existing trailing action group visually stable throughout live streaming and bottom-follow movement. Completed and inactive cards retain the existing hover/focus disclosure. The change is reviewed on a real isolated page with a region-bound screenshot. |
-| Hard constraints | Use the canonical `CardNode.status` projection; keep `CardHeaderChrome` as the only metadata/action renderer; do not add a timer, local status, fallback, second action surface, state machine, or UI automation test; use Node for Playwright/browser work; desktop-only scope; commit with the `dsw-33987` prefix and push to `myhexin`. |
+| Hard constraints | Use the canonical `CardNode.status` projection; keep `CardHeaderChrome` as the only metadata/action renderer; do not add a timer, local status, fallback, second action surface, state machine, or UI automation test; use Node for Playwright/browser work; desktop-only scope; commit with the `dsw-33987` prefix and push to `legacy-remote`. |
 | Sources read | `specs/current/architecture/07-panel-reactivity.md`; `specs/records/2026-07/2026-07-16-work-ledger-pin-and-agent-header-order.md`; `specs/records/2026-07/2026-07-30-overlay-close-and-conversation-chrome-repair.md`; `packages/overlay/src/components/{Conversation,ConversationCard,ChatBubble,CardHeaderChrome}.tsx`; `packages/overlay/src/{services/clock,utils/card-timing,utils/chat-bubble}.ts`; `packages/overlay/src/styles/surfaces/chat-bubble.css`. |
 | Whole-repository search evidence | `ChatBubbleActions` has one production mount. `.chat-bubble__hover-actions` has one presentation owner and is hidden by default, then revealed only by `.chat-bubble:hover` or `:focus-within`. `CardDurationChip` is the only `useNowTick()` consumer and Solid updates only its duration text. `Conversation` owns bottom-follow during every published live tree update. The visible flash therefore comes from pointer hover repeatedly changing as the streaming card moves, not from a second timer or action renderer. |
 | Independent agent feedback | None. The user did not request independent agents, and the active collaboration policy does not authorize delegation for this task. |
@@ -47,7 +47,7 @@ duration text node.
 - [x] Real running Agent card shows a continuously visible trailing action group.
 - [x] Completed/inactive Agent card keeps the actions hidden at rest and the unchanged hover/focus selector remains its disclosure owner.
 - [x] Region screenshot is inspected manually and shows no layout regression.
-- [x] Final diff is reviewed and committed; the amended delivery commit is pushed to `myhexin` below.
+- [x] Final diff is reviewed and committed; the amended delivery commit is pushed to `legacy-remote` below.
 
 ## Verification Evidence
 

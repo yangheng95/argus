@@ -28,7 +28,7 @@ Hard constraints retained from project instructions:
 - Browser verification uses an isolated preview and Playwright is started with
   Node, never Bun.
 - Stage only this repair, use the `dsw-33987` commit prefix, and push to the
-  git-cc `myhexin` remote through normal hooks.
+  legacy remote through normal hooks.
 
 Sources read before implementation:
 
@@ -106,7 +106,7 @@ spacing, clipping, or menu focus restoration.
    real Node/Playwright visual verification, docs health, `git diff --check`,
    and an exact-file second review.
 5. Commit only this repair with the required prefix and push the current main
-   delivery branch to `myhexin`.
+   delivery branch to `legacy-remote`.
 
 ## Verification Commands
 
@@ -155,4 +155,4 @@ spacing, clipping, or menu focus restoration.
 - `git diff --check` passed before the final review.
 - Commit `8f90f24054` passed the normal pre-push SDK-import, AI-runtime,
   repository typecheck, route-inventory, API-doc, Overlay i18n, and secret-scan
-  hooks and reached the git-cc `myhexin` delivery branch.
+  hooks and reached the legacy remote delivery branch.

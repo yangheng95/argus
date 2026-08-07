@@ -46,7 +46,7 @@ application surface. Completion requires:
    API/Software Development Kit (SDK), route/docs/i18n/document-health checks,
    `git diff --check`, and a second code and visual review pass.
 9. Only task-owned files are staged. The final commit uses the `dsw-33987`
-   prefix and is pushed through normal hooks to `myhexin/v0.0.18beta`.
+   prefix and is pushed through normal hooks to `legacy-remote/v0.0.18beta`.
 
 ### Hard constraints
 
@@ -140,7 +140,7 @@ rules prohibit unsolicited delegation.
 ### Git and shared-worktree baseline
 
 - Branch: `v0.0.18beta`.
-- Baseline HEAD: `5d6891137`, equal to `myhexin/v0.0.18beta`.
+- Baseline HEAD: `5d6891137`, equal to `legacy-remote/v0.0.18beta`.
 - The worktree already contains unrelated Expert Squad, Goal versioning and
   spec-index changes. This task will edit and stage only exact task-owned paths
   and hunks.
@@ -309,7 +309,7 @@ The new types close real semantic gaps:
 - [x] Unit, integration and real message-flow coverage.
 - [x] Isolated Vite Node/Playwright light/dark visual acceptance.
 - [x] Full checks and second review.
-- [x] Exact commit and git-cc push.
+- [x] Exact commit and legacy remote push.
 
 ## Verification evidence
 

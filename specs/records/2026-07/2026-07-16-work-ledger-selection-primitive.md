@@ -68,7 +68,7 @@ The UI combines two different concepts as if they were one selection: `settingsS
 3. Derive project active state from directory equality plus absence of a selected task/session identifier.
 4. Make manual same-directory `applyDirectory` clear the selected source and task-scoped projection while leaving project-scope data and its task-list stream intact.
 5. Add focused source/unit tests and extend the real desktop browser fixture to prove mutual exclusion and equal computed radii in both selection directions.
-6. Build, run focused tests, inspect the resulting screenshots, repair any visual mismatch, run spec/document health checks, then perform a second diff review before commit and git-cc push.
+6. Build, run focused tests, inspect the resulting screenshots, repair any visual mismatch, run spec/document health checks, then perform a second diff review before commit and legacy remote push.
 
 ## Validation Plan
 

@@ -98,7 +98,7 @@ before that host call, so the correct AUMID adapter never runs.
 3. Run focused projector/transport/native tests, typecheck, build, and required
    spec health suites.
 4. Re-grep owners, review the exact diff, record verification evidence, commit,
-   fetch, and push the main-worktree branch to `myhexin`.
+   fetch, and push the main-worktree branch to `legacy-remote`.
 
 ## Progress
 
@@ -106,7 +106,7 @@ before that host call, so the correct AUMID adapter never runs.
 - [x] Regression added and observed against the old implementation.
 - [x] Production implementation complete.
 - [x] Focused and repository verification complete.
-- [x] Second review, commit, and git-cc push complete.
+- [x] Second review, commit, and legacy remote push complete.
 
 ## Verification evidence
 
@@ -131,4 +131,4 @@ before that host call, so the correct AUMID adapter never runs.
   stage those owners' changes.
 - Functional delivery is commit `06af2025a`; byte-safe index repair is
   `10417d7a1`. Both are published on
-  `myhexin/work-v0.0.17beta-yr-0723`.
+  `legacy-remote/work-v0.0.17beta-yr-0723`.

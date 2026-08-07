@@ -51,7 +51,7 @@ dialog at every Environment panel visibility state.
 - Preserve the unrelated user modification in
   `specs/artifacts/opencorvus-workbuddy-qoderwork-multica-codex-benchmark-catalog.md`.
 - Commit subjects use `dsw-33987`, and delivery pushes the current primary
-  branch to `myhexin`.
+  branch to `legacy-remote`.
 
 ### Material read before implementation
 
@@ -145,7 +145,7 @@ forbids unsolicited sub-agents.
    manual visual review.
 6. Perform a second source/diff and screenshot review, record exact results,
    commit only task-owned files, reconcile the current branch, and push to
-   `myhexin`.
+   `legacy-remote`.
 
 ## Status
 
@@ -154,7 +154,7 @@ forbids unsolicited sub-agents.
 - [x] Production correction complete and obsolete UI-test paths confirmed
       absent.
 - [x] Non-UI verification and real-page visual acceptance complete.
-- [x] Second source/diff and screenshot review complete; commit and `myhexin`
+- [x] Second source/diff and screenshot review complete; commit and `legacy-remote`
       delivery are recorded by Git.
 
 ## Verification evidence

@@ -5,7 +5,7 @@
 ### User request
 
 - Investigate why OpenCorvus on this machine cannot load providers, then fix the root cause.
-- Preserve the repository rules: no fallback, no double source, no process restart without authorization, tests for every behavior change, second review, and push the finished change to the `myhexin` git-cc remote.
+- Preserve the repository rules: no fallback, no double source, no process restart without authorization, tests for every behavior change, second review, and push the finished change to the legacy remote.
 
 ### Acceptance criteria
 
@@ -23,7 +23,7 @@
 - Keep one runtime catalog file. A bundled bootstrap asset may only provision a missing default canonical file; runtime reads and refreshes continue through that canonical file.
 - Do not restart, close, refresh, or otherwise interfere with an existing OpenCorvus/overlay process. Use an isolated service for runtime verification.
 - Do not modify or commit the pre-existing untracked `packages/overlay/dist-artifacts/darwin-arm64/` tree.
-- Commit subjects must start with `dsw-33987`; pushes go to `myhexin/v0.0.7beta` without bypassing hooks.
+- Commit subjects must start with `dsw-33987`; pushes go to `legacy-remote/v0.0.7beta` without bypassing hooks.
 
 ### Sources read
 
@@ -101,7 +101,7 @@ The post-implementation reviewer found that the first draft captured `Global.Pat
 - Provider refresh/Hexin atomic replacement tests.
 - Typecheck, API route check, docs checks, historical/spec health checks, and affected packaging tests.
 - Build a host-native overlay-server artifact, launch it against an isolated home and port, request real provider endpoints, then use Playwright through Node against the isolated UI and inspect the screenshot.
-- Independent diff review before commit; fetch/merge latest git-cc immediately before the final push.
+- Independent diff review before commit; fetch/merge latest legacy remote immediately before the final push.
 
 ## Status
 

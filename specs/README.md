@@ -1,5 +1,9 @@
 # Specs Storage Index
 
+Latest legacy internal remote sanitation: [`2026-08-07-remove-legacy-remote-records.md`](records/2026-08/2026-08-07-remove-legacy-remote-records.md).
+
+Latest open-source acknowledgement analysis: [`2026-08-07-open-source-acknowledgements.md`](records/2026-08/2026-08-07-open-source-acknowledgements.md).
+
 Latest version changelog initialization from `0.0.35beta`: [`2026-08-07-version-changelog.md`](records/2026-08/2026-08-07-version-changelog.md).
 
 Latest Mission scope-first Expert Squad partitioning and optional-test consent semantics: [`2026-08-07-mission-scope-split-and-test-consent.md`](records/2026-08/2026-08-07-mission-scope-split-and-test-consent.md).
@@ -691,7 +695,7 @@ Latest Browser Preview manual address navigation: [`2026-07-28-browser-preview-m
 
 Latest Settings titlebar menu interaction-layer repair: [`2026-07-28-settings-titlebar-menu-interaction-layer-repair.md`](records/2026-07/2026-07-28-settings-titlebar-menu-interaction-layer-repair.md).
 
-Latest landing CTA contrast and git-cc source repair: [`2026-07-28-landing-cta-contrast-and-gitcc-source.md`](records/2026-07/2026-07-28-landing-cta-contrast-and-gitcc-source.md).
+Latest landing CTA contrast and legacy remote source repair: [`2026-07-28-landing-cta-contrast-and-legacy-remote-source.md`](records/2026-07/2026-07-28-landing-cta-contrast-and-legacy-remote-source.md).
 
 Latest promotional landing image preview: [`2026-07-28-landing-image-preview.md`](records/2026-07/2026-07-28-landing-image-preview.md).
 

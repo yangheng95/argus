@@ -52,7 +52,7 @@
 - Delete directly encountered UI automation tests that assert the changed model Popover or Composer
   reference-selection presentation, without running them.
 - New commit subjects begin with `dsw-33987`; push each task checkpoint and the completed delivery to
-  `myhexin`.
+  `legacy-remote`.
 
 ### Hard-disk sources read
 
@@ -144,7 +144,7 @@ the freed header area and can reuse the existing SearchField and `fuzzysort`.
 9. Start an isolated real page, interact with every requested state, capture task-scoped screenshots,
    inspect them, and correct visual or interaction defects.
 10. Re-read the final diff and screenshots, fetch/converge, commit only task-owned paths, push to
-    `myhexin`, and verify local/remote convergence.
+    `legacy-remote`, and verify local/remote convergence.
 
 ## Progress
 
@@ -203,7 +203,7 @@ fixture. The complete retired-executor absence test was deleted instead of retai
 compatibility path; this follows the repository's prohibition on negative tests. Directly encountered
 UI source assertions and browser fixtures were likewise deleted without running those UI tests.
 
-The implementation commit is `c474c75a58`; it was merged with the latest `myhexin/v0.0.26beta` in
+The implementation commit is `c474c75a58`; it was merged with the latest `legacy-remote/v0.0.26beta` in
 `e3740d5da0`. The pre-push hook passed full workspace typecheck, route inventory, documentation
 generation consistency, Overlay internationalization, and secret scanning before the remote accepted
 the branch.

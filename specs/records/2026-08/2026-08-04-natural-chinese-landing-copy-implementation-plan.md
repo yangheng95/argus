@@ -17,7 +17,7 @@
 - Do not modify `LandingContent`, `Lander.astro`, assets, interactions, or English copy unless real desktop inspection proves a copy-induced layout defect.
 - Do not add, modify, or run User Interface (UI) automated tests. Real-page interaction and manually inspected screenshots own UI acceptance.
 - Keep desktop-only acceptance at approximately 1,440 pixels; no mobile or responsive redesign is authorized.
-- Commit subjects start with `dsw-33987`; push the delivery branch to `myhexin` without bypassing hooks.
+- Commit subjects start with `dsw-33987`; push the delivery branch to `legacy-remote` without bypassing hooks.
 
 ## Recall
 
@@ -156,7 +156,7 @@ Capture the full Chinese page plus focused hero/scenario and Expert Squads/runti
 
 **Interfaces:**
 - Consumes: final source diff, static commands, documentation tests, real browser states, and screenshots.
-- Produces: an indexed verification record and git-cc delivery.
+- Produces: an indexed verification record and legacy remote delivery.
 
 - [ ] **Step 1: Run documentation-contract tests**
 
@@ -175,7 +175,7 @@ Record exact check/build/test results, live URL, browser interactions, screensho
 
 - [ ] **Step 3: Commit and push**
 
-Stage only the Chinese content owner, this task's plan/index changes, and task-scoped screenshots. Commit with a `dsw-33987` subject and push the current branch to `myhexin` without bypassing hooks.
+Stage only the Chinese content owner, this task's plan/index changes, and task-scoped screenshots. Commit with a `dsw-33987` subject and push the current branch to `legacy-remote` without bypassing hooks.
 
 ## Plan self-review
 

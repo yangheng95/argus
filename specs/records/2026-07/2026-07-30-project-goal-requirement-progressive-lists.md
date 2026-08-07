@@ -21,7 +21,7 @@ Owner: Codex
 | Sources read               | Root `AGENTS.md`; Browser control skill; all four user screenshots; `specs/current/architecture/07-panel.md`; the current Right Dock Goal/Requirement disclosure record; current `WorkLedger.tsx`, `LedgerList.tsx`, `ProjectLedgerGroup.tsx`, `Board.tsx`, `GoalGroup.tsx`, `RequirementsPanel.tsx`, Button primitive, locale catalogs, and relevant Work Ledger/sidebar/inspector CSS.                                                                                                                                                                                                                                                                                    |
 | Whole-repository grep      | `GoalList` is mounted only by `GoalsBoardPanel`; `RequirementsPanel` is mounted only by `RequirementsBoardPanel`; `LedgerList` is mounted only by `WorkLedger`. Work Ledger has separate pinned and unpinned group projections, plus a one-list projection containing one synthetic group. The existing `加载更多` action calls backend pagination and cannot own local ten-entry disclosure. No shared progressive-list primitive exists. `ConversationArtifactSummary` has feature-local show-more logic for artifact files and is not a general ordered-list owner.                                                                                                      |
 | Independent agent feedback | No sub-agent was started because the current collaboration instruction permits delegation only when the user explicitly requests it; this request did not. Codex will perform the required second source, interaction, and visual review directly.                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| Git baseline               | Delivery branch is `work-v0.0.24beta-yr-0729`, tracking `myhexin/work-v0.0.24beta-yr-0729`. The worktree already contains the in-progress Goal/Requirement disclosure and Right Dock stability changes from the immediately preceding plans. This task must preserve and verify them rather than overwrite them.                                                                                                                                                                                                                                                                                                                                                            |
+| Git baseline               | Delivery branch is `work-v0.0.24beta-yr-0729`, tracking `legacy-remote/work-v0.0.24beta-yr-0729`. The worktree already contains the in-progress Goal/Requirement disclosure and Right Dock stability changes from the immediately preceding plans. This task must preserve and verify them rather than overwrite them.                                                                                                                                                                                                                                                                                                                                                            |
 
 ## Complete Call-Site Disposition
 
@@ -55,17 +55,17 @@ Owner: Codex
    review task-scoped screenshots.
 7. Perform a second diff and ownership review, update this record with exact
    verification evidence, commit, fetch/reconcile the shared branch, and push to
-   `myhexin`.
+   `legacy-remote`.
 
 ## Status
 
 - [x] User evidence, repository state, historical decisions, and complete production/test call points inspected.
 - [x] Plan and Recall written before implementation.
-- [x] Plan committed and present on `myhexin` before implementation.
+- [x] Plan committed and present on `legacy-remote` before implementation.
 - [x] Shared component and three surface compositions implemented.
 - [x] Static verification and real-page visual review complete.
 - [x] Second source, ownership, and visual review complete.
-- [x] Final implementation commit `bc886939ae` pushed to `myhexin`.
+- [x] Final implementation commit `bc886939ae` pushed to `legacy-remote`.
 
 ## Verification
 

@@ -123,7 +123,7 @@ index from the latest `HEAD` and add only this record's exact index lines.
    probe.
 6. Record independent review feedback, repair any finding, rerun verification,
    then commit only owned paths with the required `dsw-33987` prefix and push
-   through normal hooks to `myhexin/v0.0.19beta`.
+   through normal hooks to `legacy-remote/v0.0.19beta`.
 
 ## Verification
 

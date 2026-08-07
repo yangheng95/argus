@@ -90,7 +90,7 @@ Code / Work 页面是 capability assignment 所有者；Skill Library / MCP Conn
 5. 更新中英文层级、作用域和所有权文案，清理无消费者样式。
 6. 执行 typecheck、build、i18n / 文档健康等非 UI 检查。
 7. 启动隔离 Overlay 页面，人工操作 Settings 搜索、Code、Work、资源库和 Agent Squad 二级页面，并逐张查看截图。
-8. 二次审查 diff、确认并行改动未被纳入后，以 `dsw-33987` 前缀提交并推送 `myhexin/v0.0.25beta`。
+8. 二次审查 diff、确认并行改动未被纳入后，以 `dsw-33987` 前缀提交并推送 `legacy-remote/v0.0.25beta`。
 
 ## 验收记录
 

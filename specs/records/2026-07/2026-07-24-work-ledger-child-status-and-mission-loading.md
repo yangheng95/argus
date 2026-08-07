@@ -25,7 +25,7 @@
 - Reuse `Icon name="loading"`, `StatusIndicator`, the existing action-size axis, and shared motion/color tokens; do not add a second status primitive or animation.
 - Keep the Task lifecycle source in `work-ledger.ts`; do not infer states from titles, labels, or child counts in Cascading Style Sheets.
 - Desktop-only delivery; no mobile or responsive scope is added.
-- Add focused source and real-browser regression coverage, then commit with the required `dsw-33987` prefix and push to `myhexin`.
+- Add focused source and real-browser regression coverage, then commit with the required `dsw-33987` prefix and push to `legacy-remote`.
 
 ### Read material
 
@@ -65,7 +65,7 @@
 2. Correct the shared cancelled lifecycle color to the warning token and restore the existing loading icon animation/geometry styles.
 3. Update source and Node browser regressions for all four child colors, Mission parent structure, hover behavior, accessibility, and screenshots.
 4. Run focused tests, Overlay typecheck/i18n/build, documentation health, and diff checks; inspect screenshots and correct any visual mismatch.
-5. Conduct a second diff review, commit the scoped files, fetch, and push the branch to git-cc.
+5. Conduct a second diff review, commit the scoped files, fetch, and push the branch to legacy remote.
 
 ## Result
 

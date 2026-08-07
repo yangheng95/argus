@@ -14,7 +14,7 @@
 4. Existing receipt rows recover without database mutation, migration, deletion, author rewriting, helper-registry reclassification, fallback, or title/identifier pattern matching.
 5. Historical hydrate and live Session event projection use the same authorization contract, with focused route, projection, negative-integrity, and idempotency tests.
 6. Do not restart, refresh, stop, or otherwise interfere with the running OpenCorvus/Overlay process.
-7. Preserve all unrelated worktree changes. Commit only task-owned files with a `dsw-33987` subject and push to `myhexin/v0.0.15beta`.
+7. Preserve all unrelated worktree changes. Commit only task-owned files with a `dsw-33987` subject and push to `legacy-remote/v0.0.15beta`.
 
 ### Hard constraints
 
@@ -88,7 +88,7 @@
 2. Commit the receipt message, Part, and formal Mission pointer atomically, then project stable owner and truthful participant identities through historical and live message metadata.
 3. Teach the shared Conversation view to accept only that explicit authorization while preserving all negative identity invariants.
 4. Add four-terminal route coverage, live message/part event coverage, idempotency, current-record-shaped projection coverage, and forged/unrelated participant rejection.
-5. Run focused backend/Overlay tests, package typecheck, document-health checks, diff review, independent second review, commit only owned files, and push git-cc.
+5. Run focused backend/Overlay tests, package typecheck, document-health checks, diff review, independent second review, commit only owned files, and push legacy remote.
 
 ## Verification ledger
 

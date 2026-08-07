@@ -27,7 +27,7 @@ The user supplied four screenshots and asked for one repair round:
 - Playwright/browser tests run through Node, never Bun.
 - Do not restart or otherwise disturb the user's running OpenCorvus/overlay process.
 - No mobile/tablet scope is authorized.
-- Commit subjects start with `dsw-33987`; deliver through the `myhexin` git-cc remote.
+- Commit subjects start with `dsw-33987`; deliver through the legacy remote.
 
 ### Disk sources read
 
@@ -118,7 +118,7 @@ The current Windows host can validate Cargo resolution/source ownership and all 
 3. Convert the footer identity trigger to `Button`, open General Settings through `openConfigDialog`, preserve author tooltip copy, and extend the real Settings-dialog browser test plus screenshot.
 4. Pin the upstream Wry key-forwarding repair, update Cargo lock data through Cargo tooling, and add a repository test that proves the resolved source/revision and rejects reintroduction of a Composer private-use filter.
 5. Run focused unit tests, Node browser tests, Overlay typecheck/i18n/build, Cargo checks available on the Windows host, documentation health, and `git diff --check`.
-6. Inspect all new screenshots, correct visual defects, rerun tests, then conduct a second diff review before commit and git-cc push.
+6. Inspect all new screenshots, correct visual defects, rerun tests, then conduct a second diff review before commit and legacy remote push.
 
 ## Validation targets
 

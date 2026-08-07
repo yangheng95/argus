@@ -16,7 +16,7 @@ Status: Implemented and verified.
 4. Catalog/OpenAPI/SDK 明确返回包的安装范围；安装、发现、导出、删除继续共用 Registry/Manager 的严格单一身份协议。
 5. Composer 以 Work Ledger/Board 的后端执行状态为运行来源：Chat active、Mission interruptible、Task queued/active 均显示停止按钮；停止动作分别调用现有 Chat abort、Mission abort、Task cancel 契约。
 6. 覆盖无目录模型读写、全局市场安装/跨项目发现、精确卸载与 active 引用拒绝、三类 Composer 停止态及真实页面视觉截图。
-7. 通过聚焦测试、Overlay 与服务端 typecheck、API/SDK 生成检查、文档健康检查、diff review；使用 `dsw-33987` 提交并 push 到 `myhexin/v0.0.8beta`。
+7. 通过聚焦测试、Overlay 与服务端 typecheck、API/SDK 生成检查、文档健康检查、diff review；使用 `dsw-33987` 提交并 push 到 `legacy-remote/v0.0.8beta`。
 
 ### Hard constraints
 

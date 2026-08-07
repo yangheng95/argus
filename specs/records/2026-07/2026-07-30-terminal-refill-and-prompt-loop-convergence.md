@@ -26,7 +26,7 @@ Status: implemented and verified
 - `event.note` remains diagnostic only; no logic may parse identities from free text.
 - A queued lifecycle occurrence says why the current wake exists. It does not assert that the referenced attempt is still unresolved when the wake is consumed.
 - Preserve the durable Orchestrator Session and visible conversation history.
-- Commit subjects use the `dsw-33987` prefix and the completed change is pushed to `myhexin`.
+- Commit subjects use the `dsw-33987` prefix and the completed change is pushed to `legacy-remote`.
 
 ### Read records and architecture
 

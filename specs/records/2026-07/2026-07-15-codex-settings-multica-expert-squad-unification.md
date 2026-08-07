@@ -25,7 +25,7 @@
 - Preserve `--rail-surface` as the only rail material source and preserve `ExpertSquadPanel` plus `services/expert-squad.ts` as the only catalog/action owners.
 - Do not create a second settings shell, expert-squad catalog, selection state, active-squad source, or compatibility path.
 - Do not restart, refresh, close, or otherwise interfere with the user's running OpenCorvus/Overlay process. Visual validation uses the existing isolated Node/Playwright fixture.
-- Do not create a worktree or bypass hooks. Commit subjects start with `dsw-33987`; delivery pushes to the configured git-cc remote.
+- Do not create a worktree or bypass hooks. Commit subjects start with `dsw-33987`; delivery pushes to the configured legacy remote.
 
 ### Visual evidence
 

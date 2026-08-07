@@ -37,7 +37,7 @@
 2. Replace only the image-preview surface rules in `messages.css`; preserve the shared Dialog primitive and global radius tokens.
 3. Update focused unit and browser assertions for the restored outer radius, detached chrome geometry, no toolbar wrap, viewport containment, focusability, and existing image operations.
 4. Build the Overlay, run the isolated Node browser fixture, inspect fresh screenshots, correct visual defects, and repeat until accepted.
-5. Run focused tests, Overlay typecheck, documentation health/link checks, inspect the scoped diff, commit with the required `dsw-33987` prefix, and push the current branch to `myhexin`.
+5. Run focused tests, Overlay typecheck, documentation health/link checks, inspect the scoped diff, commit with the required `dsw-33987` prefix, and push the current branch to `legacy-remote`.
 
 ## Verification evidence
 

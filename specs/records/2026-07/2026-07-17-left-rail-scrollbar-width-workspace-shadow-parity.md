@@ -1,6 +1,6 @@
 # Left Rail Scrollbar, Width, And Workspace Shadow Parity
 
-Status: implemented and locally accepted; git-cc delivery explicitly authorized on 2026-07-18
+Status: implemented and locally accepted; legacy remote delivery explicitly authorized on 2026-07-18
 
 ## Recall
 
@@ -42,7 +42,7 @@ Status: implemented and locally accepted; git-cc delivery explicitly authorized 
 2. Replace the three canonical production contracts and rename/update the neutral ledger browser owner.
 3. Run focused source tests, Overlay typecheck/internationalization/build, and Node browser fixtures for the overflowing ledger, search/Project action alignment, pane resizing, and workspace continuity.
 4. Inspect every current-task desktop screenshot at original resolution and iterate until the supplied differences are absent without clipping, overlap, or broken scroll/resizer behavior.
-5. Run documentation health, whitespace checks, and exact-diff/call-site review, then commit with the required `dsw-33987` prefix and push to the explicitly authorized git-cc branch.
+5. Run documentation health, whitespace checks, and exact-diff/call-site review, then commit with the required `dsw-33987` prefix and push to the explicitly authorized legacy remote branch.
 
 ## Verification results
 
@@ -60,4 +60,4 @@ Status: implemented and locally accepted; git-cc delivery explicitly authorized 
 - [x] Production implementation complete.
 - [x] Real browser and screenshot acceptance complete.
 - [x] Second review complete.
-- [x] User explicitly authorized the implementation commit and git-cc delivery on `work-v0.0.8beta-yr-0717`.
+- [x] User explicitly authorized the implementation commit and legacy remote delivery on `work-v0.0.8beta-yr-0717`.

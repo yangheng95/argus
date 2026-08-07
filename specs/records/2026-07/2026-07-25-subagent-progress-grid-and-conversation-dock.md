@@ -120,7 +120,7 @@
 
 ### Git and workspace baseline
 
-- Current branch: `v0.0.18beta`, synchronized with `myhexin/v0.0.18beta` at
+- Current branch: `v0.0.18beta`, synchronized with `legacy-remote/v0.0.18beta` at
   the start of the task.
 - The shared worktree already contains staged, unstaged, and untracked changes,
   including unrelated `main.tsx`, localization, Settings, API, and spec-index

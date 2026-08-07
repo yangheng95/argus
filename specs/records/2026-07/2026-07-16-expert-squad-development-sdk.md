@@ -8,7 +8,7 @@ Owner: Codex
 
 ### User Request
 
-The continuing platform-runtime Goal requires OpenCorvus to be generic infrastructure whose agent-team runtime is extended through general interfaces and protocols. After that boundary is stable, the user explicitly requires an expert-squad development SDK with concise human-readable documentation. The user also requires each implementation slice to receive independent-agent review, requires E2E and headed GUI work to remain last, and requires continuous commits and pushes to `myhexin/v0.0.7beta`.
+The continuing platform-runtime Goal requires OpenCorvus to be generic infrastructure whose agent-team runtime is extended through general interfaces and protocols. After that boundary is stable, the user explicitly requires an expert-squad development SDK with concise human-readable documentation. The user also requires each implementation slice to receive independent-agent review, requires E2E and headed GUI work to remain last, and requires continuous commits and pushes to `legacy-remote/v0.0.7beta`.
 
 ### Acceptance Criteria
 
@@ -148,7 +148,7 @@ unstaged `packages/opencorvus/src/expert-squad/payload.ts` was explicitly exclud
 
 - Accepted implementation commit: `76c4b87fdd` (`dsw-33987 add expert squad development sdk`).
 - The implementation was merged with concurrent remote work without SDK conflicts and pushed to
-  `myhexin/v0.0.7beta`; the remote branch resolved to `ff29f5ad968bc13cd07b10a2770ed7a665a0b28f`
+  `legacy-remote/v0.0.7beta`; the remote branch resolved to `ff29f5ad968bc13cd07b10a2770ed7a665a0b28f`
   immediately after delivery.
 - The final pre-push hook passed SDK import and AI runtime checks, TypeScript checks across all 12 scoped
   packages, API route inventory, API documentation freshness, Overlay internationalization, and the tracked

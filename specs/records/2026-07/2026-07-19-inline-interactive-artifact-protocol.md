@@ -107,17 +107,17 @@ Part 不保存 URL、HTML、表格 rows、图表 series、renderer 配置或权�
 4. 覆盖 schema 正反例、foreign-session 404、Chat runtime registry、普通 role/runtime-template 矩阵、strict expert projection、SessionLoop tool execution、Session display-part roundtrip、Conversation projection与 renderer source contracts。
 5. runtime integration 通过 mock model tool-call 驱动真实 SessionLoop publisher 和持久化；另用隔离 browser fixture 从 composer 模拟用户发送消息并注入 UI 消息流。后者只验证文档、表格排序、K 线 canvas、MCP initialize/input/resize/sandbox、刷新与截图，不再称为 runtime E2E。
 6. 截图绑定当前 conversation card region，亲自查看实际页面并修复布局。
-7. 跑 focused suites、Overlay/transport/opencorvus typecheck、Vite build、route/docs/i18n/document health、`git diff --check`，二次 review 后 commit/push `myhexin/v0.0.10beta`。
+7. 跑 focused suites、Overlay/transport/opencorvus typecheck、Vite build、route/docs/i18n/document health、`git diff --check`，二次 review 后 commit/push `legacy-remote/v0.0.10beta`。
 
 ## Progress
 
-- [x] Baseline fetched, verified, hook-tested and confirmed pushed to git-cc.
+- [x] Baseline fetched, verified, hook-tested and confirmed pushed to legacy remote.
 - [x] Existing call sites, package compatibility and standards evidence enumerated.
 - [x] Correct session/message-owned runtime protocol and publisher implemented.
 - [x] Four renderers implemented.
 - [x] Real registry/SessionLoop-to-persisted-message integration passed; browser UI message-flow test remains separately classified.
 - [x] Visual screenshots reviewed; artifact width, candlestick scale margins and full MCP App visibility after transcript scroll corrected and re-tested.
-- [x] Corrected second review completed; the final commits are ready for git-cc push.
+- [x] Corrected second review completed; the final commits are ready for legacy remote push.
 
 ## Verification Evidence
 

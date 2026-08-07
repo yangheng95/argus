@@ -53,7 +53,7 @@ evidence.
   package prose or introducing a second progress authority.
 - Focused positive non-User-Interface (UI) contracts, typecheck, API and docs
   checks, fresh-Task runtime acceptance, manual desktop browser review, second
-  independent review, commit, and `git-cc` push all succeed.
+  independent review, commit, and legacy remote push all succeed.
 
 ### Hard constraints
 
@@ -73,8 +73,8 @@ evidence.
   unrelated modifications and untracked files; this plan owns only its new
   record and index entries.
 - Current branch is `v0.0.29beta`; pre-plan `HEAD` is
-  `4c952b030a`, already equal to `git-cc/v0.0.29beta`. Commit subjects use the
-  `dsw-33987` prefix and pushes target `git-cc`.
+  `4c952b030a`, already equal to `legacy-remote/v0.0.29beta`. Commit subjects use the
+  `dsw-33987` prefix and pushes target legacy remote.
 
 ### Sources read
 
@@ -671,7 +671,7 @@ must not hold an open log listener.
 7. Resolve every confirmed blocking finding and rerun affected validation.
 8. Commit only task-owned paths with `dsw-33987`, fetch and reconcile the
    current delivery branch without overwriting unrelated work, then push to
-   `git-cc/v0.0.29beta` without bypassing hooks.
+   `legacy-remote/v0.0.29beta` without bypassing hooks.
 
 ## Risks and non-solutions
 
@@ -706,4 +706,4 @@ logical occurrences before downstream dispatch, materialized evidence is
 selectable, Debug Info is semantically honest, the final product is implemented
 and manually visually reviewed, all focused positive non-UI contracts and
 repository checks pass, independent review has no unresolved blocker, and the
-task-owned commits are present on `git-cc/v0.0.29beta`.
+task-owned commits are present on `legacy-remote/v0.0.29beta`.

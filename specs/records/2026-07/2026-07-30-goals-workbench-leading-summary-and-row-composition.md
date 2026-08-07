@@ -45,7 +45,7 @@ Owner: Codex
 - Preserve the operator's unrelated uncommitted `RightDock.tsx` and Right Dock record edits.
 - Do not reset, restore, stash, or create another worktree.
 - Use Node for browser verification, not Bun.
-- Delivery commits use the `dsw-33987` prefix and push to `myhexin`.
+- Delivery commits use the `dsw-33987` prefix and push to `legacy-remote`.
 
 ### Material read before implementation
 
@@ -147,7 +147,7 @@ at the end.
    real desktop page, inspect the Goals interaction, and review task-scoped
    screenshots.
 7. Perform a second diff and visual review, commit only task-owned files, fetch
-   and reconcile the shared branch, then push to `myhexin`.
+   and reconcile the shared branch, then push to `legacy-remote`.
 8. Follow-up: remove the badge-placement branch, route every task-scope numeric
    badge through `SurfaceHeader.title`, then visually inspect Requirements,
    Architecture, and Goals on the real desktop page.
@@ -159,7 +159,7 @@ at the end.
 - [x] Component, CSS, localization, and architecture implementation.
 - [x] Static verification and real-page visual review.
 - [x] Second review and task-owned commit.
-- [x] Push to `myhexin`.
+- [x] Push to `legacy-remote`.
 - [x] Follow-up shared leading-summary implementation and three-panel visual review.
 
 ## Verification
@@ -192,7 +192,7 @@ at the end.
   `packages/overlay/.scratch/goals-workbench-leading-summary-final.png`.
 - Delivery commits `52dfcd9420` and `9cc25ef34b` passed the full pre-push
   typecheck, route inventory, documentation, i18n, and secret-scan hook and
-  were pushed to `myhexin/work-v0.0.24beta-yr-0729`.
+  were pushed to `legacy-remote/work-v0.0.24beta-yr-0729`.
 - Follow-up static verification passed: `bun run typecheck`,
   `bun run build:vite`, `bun run docs:check`, Prettier, and
   `git diff --check`. No UI automated test was added, modified, updated, or
@@ -207,4 +207,4 @@ at the end.
   `packages/overlay/.scratch/task-scope-goals-leading-summary.png`.
 - Follow-up delivery commit `bb143738c3` passed the full pre-push typecheck,
   route inventory, documentation, i18n, and secret-scan hook and was pushed to
-  `myhexin/work-v0.0.24beta-yr-0729`.
+  `legacy-remote/work-v0.0.24beta-yr-0729`.

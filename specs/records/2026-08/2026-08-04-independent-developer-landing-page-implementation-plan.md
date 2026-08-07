@@ -207,7 +207,7 @@ If any screenshot differs from the approved hierarchy or has clipping, weak cont
 
 **Interfaces:**
 - Consumes: final source diff, static command output, live browser evidence, and approved design.
-- Produces: current Recall/verification record, indexed specs, one scoped commit, and git-cc push.
+- Produces: current Recall/verification record, indexed specs, one scoped commit, and legacy remote push.
 
 - [x] **Step 1: Perform the independent source review**
 
@@ -238,7 +238,7 @@ dsw-33987 redesign landing page for independent developers
 
 - [x] **Step 5: Push through project hooks**
 
-Push the current delivery branch to the `myhexin` remote without bypassing hooks. Resolve any typecheck, route, or docs check failure at its root and push again.
+Push the current delivery branch to the `legacy-remote` remote without bypassing hooks. Resolve any typecheck, route, or docs check failure at its root and push again.
 
 ## Plan self-review
 
@@ -259,4 +259,4 @@ Push the current delivery branch to the `myhexin` remote without bypassing hooks
 - Accepted remaining media boundary: the Expert Squads section visibly labels its catalog/Agent media frame as a placeholder to be replaced by a future real product capture; it has no fake window, invented data, disabled action, or false live affordance.
 - Final pre-commit verification reran `bun run --cwd packages/web check`, `bun run --cwd packages/web build`, both required documentation-test commands, and `git diff --check` on the delivery tree. Results: Astro reported 0 errors and 0 warnings (plus the same pre-existing hint), the production build generated 105 pages, historical links reported 2 passes, documentation health/single-source reported 68 passes and 1,186 assertions, and the diff whitespace check exited 0.
 - After expanding the English acronym to `Model Context Protocol (MCP)`, a fresh visible Edge session recaptured and personally inspected `specs/artifacts/independent-developer-landing-page-en-expert-squads.png`; the section remained unclipped and preserved its hierarchy at a 1,440-pixel desktop width.
-- Scoped delivery commit `fc5ad6673b` (`dsw-33987 redesign landing page for independent developers`) was pushed successfully to `myhexin/work-lcx-v0.0.30beta` without bypassing hooks.
+- Scoped delivery commit `fc5ad6673b` (`dsw-33987 redesign landing page for independent developers`) was pushed successfully to `legacy-remote/work-lcx-v0.0.30beta` without bypassing hooks.

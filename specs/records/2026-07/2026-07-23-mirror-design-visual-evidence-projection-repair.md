@@ -47,7 +47,7 @@
 3. Run historical link and document-health tests after indexing this record.
 4. Run typecheck, API route check, and docs check.
 5. Review the staged diff for unrelated files and ensure the generated payload matches the staged package source.
-6. Commit with the required `dsw-33987` prefix and push `v0.0.16beta` to `myhexin`.
+6. Commit with the required `dsw-33987` prefix and push `v0.0.16beta` to `legacy-remote`.
 7. Restart the explicitly authorized OpenCorvus process from the repaired application, update the installed `mirror-design` package through the product route, and verify the resumed visual reviewer publishes the primary PNG, calls the formal comparison tools, and produces terminal durable evidence.
 
 ## Implementation

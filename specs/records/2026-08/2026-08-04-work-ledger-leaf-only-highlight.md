@@ -6,7 +6,7 @@
 | --- | --- |
 | User requirement | The Projects task list must highlight only the final selected level, such as a Chat or Task. Its owning Project stays expanded instead of automatically collapsing. |
 | Acceptance criteria | Selecting a Chat or Task paints exactly that leaf row; the Project header has no selected/active wash or `aria-current`; the Project body remains expanded until the operator explicitly toggles it; a selected Mission child Task still keeps its Mission child drawer visible. |
-| Hard constraints | Preserve `boardStore.selectedSource` as the sole selected-row source and the existing Project disclosure owner; remove the reintroduced Project active contract instead of masking its color; do not add, modify, or run UI automation tests; verify the desktop UI through a real native browser tab, screenshots, and manual review; preserve unrelated worktree changes; use Node for browser-backed verification; commit subjects start with `dsw-33987` and push to git-cc. |
+| Hard constraints | Preserve `boardStore.selectedSource` as the sole selected-row source and the existing Project disclosure owner; remove the reintroduced Project active contract instead of masking its color; do not add, modify, or run UI automation tests; verify the desktop UI through a real native browser tab, screenshots, and manual review; preserve unrelated worktree changes; use Node for browser-backed verification; commit subjects start with `dsw-33987` and push to legacy remote. |
 | Records read | `specs/current/architecture/07-panel.md`; `specs/records/2026-07/2026-07-16-work-ledger-selection-primitive.md`; `specs/records/2026-07/2026-07-19-work-ledger-project-selection-retirement.md`; `specs/records/2026-07/2026-07-27-work-ledger-project-selection-order-stability.md`; `specs/records/2026-08/2026-08-02-work-ledger-active-mission-child-path.md`; current `WorkLedger.tsx`, `ProjectLedgerGroup.tsx`, `navigation-row.css`, `sidebar.css`, and `work-ledger.css`. |
 | Whole-repository grep | The production chain is `main.tsx -> WorkLedger -> WorkLedgerProjectGroupView -> ProjectLedgerGroup / WorkLedgerRowView`. `boardStore.selectedSource` reaches leaf rows through `selectedTaskID` / `selectedSessionID`. Commit `c35c09367a` separately added Mission `activeDescendant` disclosure and reintroduced Project `activeProjectDirectory -> active -> data-active / aria-current`; that Project projection conflicts with the earlier leaf-only contract. Project collapse remains isolated in `createProjectLedgerGroupCollapseState` and is not driven by leaf selection. |
 | Independent agent feedback | None. The user did not request sub-agents, and current collaboration policy forbids unrequested delegation. |
@@ -28,17 +28,17 @@
 4. Reconcile `specs/current/architecture/07-panel.md` with the leaf-only rule and retain the Mission child visibility contract.
 5. Run Overlay typecheck, Vite build, localization checks, required documentation checks, and `git diff --check`; do not run UI tests.
 6. Start the real desktop page, select visible Chat and Task leaves, move pointer/focus away, capture the Projects region, inspect it manually, and correct any remaining visual mismatch.
-7. Review the final diff, commit only task-owned files, fetch, and push the current branch to git-cc.
+7. Review the final diff, commit only task-owned files, fetch, and push the current branch to legacy remote.
 
 ## Progress
 
 - [x] Inspect supplied screenshot, current production chain, historical decisions, architecture record, Git history, worktree, and remote state.
 - [x] Record Recall, cause chain, implementation, and verification plan.
-- [x] Commit the pre-implementation plan; push was attempted and timed out while the git-cc endpoint was unreachable.
+- [x] Commit the pre-implementation plan; push was attempted and timed out while the legacy remote endpoint was unreachable.
 - [x] Implement the leaf-only selection contract and architecture correction.
 - [x] Complete non-UI verification and real-page visual acceptance.
 - [x] Perform second review and commit the implementation.
-- [x] Push the current branch to git-cc.
+- [x] Push the current branch to legacy remote.
 
 ## Verification record
 

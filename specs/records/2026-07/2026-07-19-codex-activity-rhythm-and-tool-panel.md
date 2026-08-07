@@ -7,13 +7,13 @@ Status: complete
 | Item | Detail |
 | --- | --- |
 | User requirement | Compare the current transcript with the supplied advanced Codex design, unify Tool and Reasoning line rhythm, and correct the expanded Tool format. |
-| Acceptance criteria | Collapsed Reasoning and Tools disclosures share one font, line-height, row geometry, icon baseline, and surrounding vertical rhythm; narrative text remains the primary prose tier. Expanding an execution run preserves chronology, and expanding an individual Tool reveals one canonical bordered inset panel with a quiet header followed by input and output. A completed Shell command renders as `$ command` before its output. Light/dark desktop screenshots, keyboard disclosure, timing details, focused source/browser tests, typecheck/build/i18n, document health, commit, and `myhexin/v0.0.9beta` push pass. |
+| Acceptance criteria | Collapsed Reasoning and Tools disclosures share one font, line-height, row geometry, icon baseline, and surrounding vertical rhythm; narrative text remains the primary prose tier. Expanding an execution run preserves chronology, and expanding an individual Tool reveals one canonical bordered inset panel with a quiet header followed by input and output. A completed Shell command renders as `$ command` before its output. Light/dark desktop screenshots, keyboard disclosure, timing details, focused source/browser tests, typecheck/build/i18n, document health, commit, and `legacy-remote/v0.0.9beta` push pass. |
 | Hard constraints | Preserve `CardParts` as the only chronological execution owner, `ReasoningPart` as the only reasoning renderer, and `Card`/`CardHeader`/`InlineToolPart` as the only Tool renderer. Use existing Button/Card primitives and theme tokens; no duplicate renderer, hand-built pseudo terminal, fallback, compatibility path, gate, state machine, mobile/tablet scope, worktree, or interference with the running Overlay. Playwright remains Node-launched. Preserve untracked `C:/`. |
 | Supplied evidence | Current screenshot `/var/folders/bj/6vby7ld11796l5bfdmc7s8l40000gn/T/codex-clipboard-fce1d18a-bbb8-4dbe-97ae-bb331e0e0b39.png` shows generic Reasoning/Tools rows with drifting spacing and no Tool detail container. Codex reference `/var/folders/bj/6vby7ld11796l5bfdmc7s8l40000gn/T/codex-clipboard-f6d8a9b1-984f-4731-b52b-8e747f3fcd48.png` shows a consistent compact activity rhythm and an expanded `Shell` panel containing `$ bun run build` followed by output. Both were inspected at original resolution. |
 | Sources read | `AGENTS.md`; Browser skill already active for this task; current architecture/spec indexes; the 2026-07-16/17 Tool disclosure, density, plain-stream, and inline-flow records; `CardParts.tsx`; `ReasoningPart.tsx`; `Card.tsx`; `CardHeader.tsx`; `InlineToolPart.tsx`; `tool-card-node.ts`; `tool.ts`; `messages.css`; `chat-bubble.css`; `card.css`; focused source and browser tests; current blame and the superseding `3e923cf35` diff. |
 | Whole-repository search evidence | `rg` enumerated every `msg-work-details*`, `reasoning-toggle`, nested Tool Card override, Tool output, activity summary, Tool timing, and message-run spacing owner. Production ownership is singular. Direct test consumers are `message-embed.test.ts`, `reasoning-part.test.ts`, `chat-bubble.test.ts`, `message-part-chronology-browser.test.ts`, `chat-bubble-disclosure-button-browser.test.ts`, `reasoning-toggle-button-browser.test.ts`, Tool display/body tests, and architecture guards. |
 | Independent agent feedback | None. The user did not request sub-agents, and unrequested delegation is disabled. |
-| Git baseline | Local and `myhexin/v0.0.9beta` both point to `1b74895f4`; only the unrelated untracked `C:/` directory exists. |
+| Git baseline | Local and `legacy-remote/v0.0.9beta` both point to `1b74895f4`; only the unrelated untracked `C:/` directory exists. |
 
 ## Evidence and causal chain
 
@@ -42,7 +42,7 @@ Status: complete
 2. Implement the presentation and completed Shell-input projection at existing owners.
 3. Run focused source tests and Node browser fixtures; inspect collapsed and expanded screenshots at original resolution and iterate.
 4. Run Overlay typecheck, i18n, Vite build, document-health suites, `git diff --check`, and a second exact diff/call-site review.
-5. Fetch and merge current git-cc state if needed, commit with `dsw-33987`, push through hooks, and verify local/remote convergence.
+5. Fetch and merge current legacy remote state if needed, commit with `dsw-33987`, push through hooks, and verify local/remote convergence.
 
 ## Progress
 
@@ -50,7 +50,7 @@ Status: complete
 - [x] Failing regressions and implementation complete.
 - [x] Real-browser visual acceptance complete.
 - [x] Final verification and second diff/call-site review complete.
-- [x] Commit and git-cc push complete.
+- [x] Commit and legacy remote push complete.
 
 ## Result
 

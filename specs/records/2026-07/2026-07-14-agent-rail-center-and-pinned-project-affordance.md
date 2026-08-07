@@ -6,7 +6,7 @@
 | --- | --- |
 | User requirement | 把 agent rail 放在消息区域左侧中心留白位置并垂直居中；Pinned 项目的图标必须区别于普通 Projects 项目，并且可以直接 unpin。 |
 | Acceptance criteria | The existing single Conversation rail owner remains in the centered five-column message geometry; a short rail is vertically centered, while an overflowing rail remains scrollable; Pinned project rows use a pin glyph rather than the normal folder glyph; every pinned row exposes a visible keyboard-focusable unpin button backed by the existing canonical Project pin writer; real desktop screenshots are reviewed. |
-| Hard constraints | No fallback, second rail owner, duplicate pin state, local shadow state, gate, mobile/tablet scope, handwritten interaction primitive, process restart/refresh, broad Git restore/reset, or new worktree. Preserve unrelated dirty work. Use Node for Playwright. Commit subjects start with `dsw-33987`; push only to `myhexin`. |
+| Hard constraints | No fallback, second rail owner, duplicate pin state, local shadow state, gate, mobile/tablet scope, handwritten interaction primitive, process restart/refresh, broad Git restore/reset, or new worktree. Preserve unrelated dirty work. Use Node for Playwright. Commit subjects start with `dsw-33987`; push only to `legacy-remote`. |
 | Sources read | `AGENTS.md`; `specs/current/architecture/99-principles.md`; `2026-06-23-agent-rail-visibility-regression.md`; `2026-06-25-agent-rail-execution-ledger-source.md`; `2026-07-08-conversation-agent-history-left-rail.md`; `2026-07-13-overlay-shell-icon-and-message-axis-root-repair.md`; `2026-07-13-project-pin-unpin-and-icon-repair.md`; current `App.tsx`, `ConversationAgentRail.tsx`, `conversation.css`, `WorkLedger.tsx`, `ProjectLedgerGroup.tsx`, `work-ledger.css`, services, i18n, and focused tests. |
 | Whole-repository search evidence | `ConversationAgentRail` has one mounted owner in `App.tsx`; rail selectors are owned by `conversation.css`; production records come only from `conversationAgentStore`; Project pin writes flow through `setWorkLedgerProjectPinned` to canonical `project.time_pinned`; Pinned rows are derived only from `groups().filter(group.project?.pinned)`; normal project icons are `folder`/`folder-open`; the Pinned shortcut currently repeats `folder-open` and hides its unpin button until hover. |
 | Independent agent feedback | None. The user did not request sub-agents and the active policy forbids spawning them otherwise. |
@@ -52,7 +52,7 @@ action persistently visible. No second state or writer is introduced.
 - Pass criteria: focused unit tests, Overlay typecheck/build, real browser
   interaction, rail/pinned-row geometry assertions, task-scoped screenshots,
   manual visual review, spec health, diff review, selective commit, and
-  `myhexin` push all pass.
+  `legacy-remote` push all pass.
 
 ## Progress
 
@@ -62,7 +62,7 @@ action persistently visible. No second state or writer is introduced.
 - [x] Run focused and rendered benchmark.
 - [x] Inspect screenshots and complete second review.
 - [x] Selectively commit the verified task-owned hunks.
-- [ ] Push the current branch to `myhexin` (blocked by the unrelated incomplete
+- [ ] Push the current branch to `legacy-remote` (blocked by the unrelated incomplete
   source-snapshot contract migration in the dirty worktree).
 
 ## Verification result
@@ -158,7 +158,7 @@ surface 与 content 没有空间层级。
 - Local commit: `e2d044e1cf` before this record-only amend; the amended commit
   retains the same `dsw-33987 center agent rail and clarify pinned projects`
   subject.
-- Remote comparison before push: `myhexin/v0.0.3beta` was 0 commits ahead of
+- Remote comparison before push: `legacy-remote/v0.0.3beta` was 0 commits ahead of
   local and local was 9 commits ahead of remote.
 - Mandatory pre-push hook failed in the repository-wide `opencorvus:typecheck`
   before route/docs checks. The dirty source-snapshot migration has removed
@@ -171,7 +171,7 @@ surface 与 content 没有空间层级。
 - Restoring the deleted fields would create the forbidden compatibility path.
   Completing that cross-cutting migration would overwrite unrelated user work
   outside this UI task. No hook bypass, GitHub push, reset, restore, stash, or
-  extra worktree was used. The git-cc remote remains unchanged.
+  extra worktree was used. The legacy remote remains unchanged.
 
 ## Agent message grouping follow-up — Recall
 

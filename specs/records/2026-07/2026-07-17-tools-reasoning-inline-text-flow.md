@@ -49,7 +49,7 @@ typography/flow consume the same existing message-text contract.
 1. Flatten Tools/Reasoning and nested Tool presentation to transparent text flow while preserving semantic disclosure ownership and keyboard focus.
 2. Align reasoning prose and disclosure geometry to the existing Agent narrative typography and spacing tokens.
 3. Replace focused source and Node/Playwright browser expectations with the new no-panel, text-only-hover contract.
-4. Run focused tests, Overlay typecheck/i18n, Node-started browser fixtures, inspect current-task desktop screenshots in light/dark themes, iterate, run document health and a second diff review, then commit and push only this task's files to `myhexin`.
+4. Run focused tests, Overlay typecheck/i18n, Node-started browser fixtures, inspect current-task desktop screenshots in light/dark themes, iterate, run document health and a second diff review, then commit and push only this task's files to `legacy-remote`.
 
 ## Verification
 

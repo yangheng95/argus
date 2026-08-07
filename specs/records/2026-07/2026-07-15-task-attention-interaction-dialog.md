@@ -133,7 +133,7 @@
 1. Add one dialog presentation variant to the shared interaction renderer and expose its existing actions to the shared Dialog footer.
 2. Apply the Command Palette shell and list-row design language with responsive viewport bounds and native-control focus states.
 3. Extend focused static and Node Playwright regressions, render long Chinese/English content, inspect the screenshots, and iterate.
-4. Run the relevant Overlay checks, review the diff, commit with the required prefix, fetch, and push to git-cc.
+4. Run the relevant Overlay checks, review the diff, commit with the required prefix, fetch, and push to legacy remote.
 
 ### Follow-up result
 

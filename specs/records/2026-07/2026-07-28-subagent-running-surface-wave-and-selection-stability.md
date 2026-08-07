@@ -11,7 +11,7 @@
 | Sources read | Root `AGENTS.md`; Browser control skill; supplied screenshot; `specs/current/architecture/12-overlay-card-system.md` and `07-panel-reactivity.md`; `2026-07-24-agent-card-palette-and-running-tool-wave.md`; `2026-07-27-active-tool-wave-all-agent-surfaces.md`; `2026-07-27-subagent-card-pulse-and-tool-status-removal.md`; `2026-07-28-subagent-card-pulse-restraint.md`; current `SubagentProgressGrid.tsx`, `SubagentConversationPanel.tsx`, `subagent-conversation.ts`, `main.tsx`, `conversation.css`, `messages.css`, motion tokens, and focused source/browser tests. |
 | Whole-repository grep | `SubagentProgressGrid.tsx` is the sole compact-card renderer and projects canonical `record().status` to its article. `SubagentConversationPanel.tsx` is the sole exact-session panel; `projectSubagentConversationCard()` projects the same status into its one `ConversationCard`. `conversation.css` owns the only whole-card running pulse. `messages.css` owns the existing `tool-active-wave` and deliberately excludes compact Tool rows. `SubagentConversationPanel.tsx` lines 108-116 were the only application path that wrote `candidates[0]`; a real browser regression then proved Kobalte Tabs also selects `collection.getFirstKey()` when its controlled value is temporarily absent. `main.tsx::openSubagentConversation()` and the Tab/Dropdown callbacks remain the explicit selection writers. `running-tool-wave.test.ts`, `subagent-card-wave-browser.test.ts`, and `subagent-progress-dock-browser.test.ts` own motion verification; `subagent-conversation-autoscroll.test.ts` and `right-dock-panel-ownership.test.ts` own exact-session selection contracts. |
 | Independent agent feedback | None. The user did not request sub-agents, so the primary agent owns implementation and second review. |
-| Git baseline | `work-v0.0.23beta-yr-0728` and `myhexin/work-v0.0.23beta-yr-0728` both point to `b0754fdc0c`. A pre-change empty commit was intentionally not created because concurrently owned files were already staged; committing would have captured unrelated work. |
+| Git baseline | `work-v0.0.23beta-yr-0728` and `legacy-remote/work-v0.0.23beta-yr-0728` both point to `b0754fdc0c`. A pre-change empty commit was intentionally not created because concurrently owned files were already staged; committing would have captured unrelated work. |
 | Concurrent-worktree evidence | During read-only investigation, unrelated Mailbox, user-message, scrollbar, environment-clearance, and Projects changes appeared. `conversation.css` has an unrelated top-of-file `overflow-y` edit; the running-card block is untouched. All task patches and staging must remain line-scoped. |
 
 ## Causal chain
@@ -72,7 +72,7 @@
    resolution; correct motion, clipping, readability, and selection behavior.
 5. Re-grep all owners, perform a second exact-diff review, update this record and
    the two Specs indexes without dropping concurrent entries, commit only
-   task-owned hunks with the `dsw-33987` prefix, reconcile with git-cc, and push.
+   task-owned hunks with the `dsw-33987` prefix, reconcile with legacy remote, and push.
 
 ## Progress
 
@@ -82,7 +82,7 @@
       Kobalte's independent first-key reconciliation.
 - [x] Implementation complete.
 - [x] Real browser and screenshot acceptance complete.
-- [x] Second review, commit, convergence, and git-cc push complete.
+- [x] Second review, commit, convergence, and legacy remote push complete.
 
 ## Verification
 
@@ -95,7 +95,7 @@
   `.scratch/subagent-card-running-wave.png` and
   `.scratch/subagent-conversation-running-wave.png`. Both preserve readable
   content and geometry while the directional band crosses the surface.
-- Commit `27c43d5358` passed the git-cc pre-push SDK import, AI runtime,
+- Commit `27c43d5358` passed the legacy remote pre-push SDK import, AI runtime,
   repository typecheck, API route, generated API documentation, Overlay
   localization, and tracked-source secret checks, then pushed to
-  `myhexin/work-v0.0.23beta-yr-0728`.
+  `legacy-remote/work-v0.0.23beta-yr-0728`.

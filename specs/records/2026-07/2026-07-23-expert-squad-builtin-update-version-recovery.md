@@ -62,7 +62,7 @@ No sub-agent was requested or used. The primary agent will perform the required 
 3. Regenerate the SDK and update Manager/server contract tests for absent, current, stale, and malformed installed versions.
 4. Show available and installed versions in Market and expose only exact `update_available` package buttons in the catalog-error recovery card.
 5. Extend the browser test to prove a catalog failure still exposes and executes the built-in update, then restores the catalog.
-6. Run focused Manager/route/Overlay tests, generated-artifact checks, typecheck, docs/routes/i18n checks, second diff review, commit, and push to `myhexin/v0.0.16beta`.
+6. Run focused Manager/route/Overlay tests, generated-artifact checks, typecheck, docs/routes/i18n checks, second diff review, commit, and push to `legacy-remote/v0.0.16beta`.
 
 ## Implementation result
 

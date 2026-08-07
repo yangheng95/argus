@@ -222,7 +222,7 @@ preview webview instead of extending the PNG input protocol as the primary fix.
 
 ## Continuation Notes
 
-- The updated active goal explicitly says not to commit or push to `myhexin`;
+- The updated active goal explicitly says not to commit or push to `legacy-remote`;
   this implementation is intentionally left unstaged and uncommitted.
 - Existing running OpenCorvus or overlay processes were not restarted, killed,
   refreshed, or reused for validation.

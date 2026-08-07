@@ -12,7 +12,7 @@
 | Sources read | Root `AGENTS.md`; Browser control skill; the two supplied screenshots; `2026-07-23-environment-heading-geometry-and-mission-presentation.md`; `2026-07-24-message-hover-timestamp-removal.md`; `2026-07-22-right-dock-terminal-visibility-and-mailbox-hover-actions.md`; `App.tsx`; `ChatBubble.tsx`; `TaskDirBar.tsx`; Button/Section primitives; conversation/chat-bubble/card CSS; focused source and browser tests. |
 | Whole-repository grep | `ChatBubble.tsx` is the only producer of `data-ui="chat-bubble-head-main"`; `chat-bubble.css` owns its local presentation, while `button.css` owns the higher-specificity generic hover wash and the mature `data-chrome="text-disclosure"` exception. `TaskDirBar.tsx` is the only Environment title/disclosure DOM owner and `conversation.css` is its only geometry owner; `task-cwd-row-layout.test.ts` and `task-dirbar-keyboard.test.ts` are the direct regressions. `App.tsx` is the only Mailbox launcher/left-panel projection owner; `main.tsx` remains the sole persistent `leftSidebarPanel` owner. `mailbox-contextbar-launcher.test.ts` and `mailbox-left-sidebar-browser.test.ts` directly cover the launcher. |
 | Independent agent feedback | None. The user did not request sub-agents, and the active collaboration boundary forbids unrequested delegation. The primary agent performs implementation and second review. |
-| Git baseline | `HEAD` and `myhexin/work-v0.0.17beta-yr-0723` both point to `b0d22ba49`. The shared worktree already contains unrelated OpenCorvus, Overlay, test, and spec changes; only task-owned hunks will be staged. |
+| Git baseline | `HEAD` and `legacy-remote/work-v0.0.17beta-yr-0723` both point to `b0d22ba49`. The shared worktree already contains unrelated OpenCorvus, Overlay, test, and spec changes; only task-owned hunks will be staged. |
 
 ## Causal chain
 
@@ -63,7 +63,7 @@
    screenshots at original resolution, and correct any visual drift.
 5. Re-grep owners, review the exact diff a second time, commit only task-owned
    files with the `dsw-33987` prefix, fetch/converge, and push the current
-   branch to `myhexin`.
+   branch to `legacy-remote`.
 
 ## Result
 

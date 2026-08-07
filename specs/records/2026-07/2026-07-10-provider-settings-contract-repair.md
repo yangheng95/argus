@@ -8,7 +8,7 @@ Status: source repair, focused acceptance, and authorized live-process verificat
 
 - Diagnose and fully repair the Provider settings failure that prevents model selection across Provider, project-default, per-agent, session, composer, and executor surfaces.
 - Preserve the strict no-fallback architecture: stale expert-squad manifests, retired Skill metadata, and invalid model catalogs must not be silently accepted.
-- Complete the repair with focused tests, real local API evidence, a real rendered Provider page screenshot, manual second review, commit, and push to `myhexin`.
+- Complete the repair with focused tests, real local API evidence, a real rendered Provider page screenshot, manual second review, commit, and push to `legacy-remote`.
 
 ### Acceptance Criteria
 
@@ -32,7 +32,7 @@ Status: source repair, focused acceptance, and authorized live-process verificat
 - Preserve unrelated dirty worktree changes. Use focused patches and focused diffs; do not use Git reset or create a worktree.
 - Tests and subprocess checks use stdout/stderr inactivity supervision rather than elapsed wall-clock timeout.
 - Frontend acceptance requires an isolated real page, screenshot inspection, and correction if the rendered Provider surface is not usable.
-- Commit subjects use the `dsw-33987` prefix and delivery targets `myhexin/v0.0.2beta` without bypassing hooks.
+- Commit subjects use the `dsw-33987` prefix and delivery targets `legacy-remote/v0.0.2beta` without bypassing hooks.
 
 ### Sources Read
 

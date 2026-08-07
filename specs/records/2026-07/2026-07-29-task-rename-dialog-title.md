@@ -39,7 +39,7 @@
 1. Update the two canonical locale values without changing dialog or interaction code.
 2. Run the Overlay i18n checker, Overlay typecheck, and Overlay production build; do not run UI tests.
 3. Start the real Overlay frontend, open the rename dialog through the real interaction path, inspect the screenshot, and correct any visual discrepancy.
-4. Re-read the diff, stage only this task's files and index hunks, commit with the required `dsw-33987` prefix, fetch the git-cc remote, and push the current delivery branch.
+4. Re-read the diff, stage only this task's files and index hunks, commit with the required `dsw-33987` prefix, fetch the legacy remote, and push the current delivery branch.
 
 ## Verification evidence
 

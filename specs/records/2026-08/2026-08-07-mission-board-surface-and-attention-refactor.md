@@ -27,7 +27,7 @@ Date: 2026-08-07
 - Reuse existing OpenCorvus surface, border, spacing, Badge, Button, and semantic-color primitives.
 - Desktop-only delivery; no responsive or mobile scope.
 - Playwright/browser interaction must run through Node.js, never Bun, and must remain manual visual acceptance rather than a test artifact.
-- Preserve unrelated worktree changes. Commit subjects start with `dsw-33987`; push to git-cc.
+- Preserve unrelated worktree changes. Commit subjects start with `dsw-33987`; push to legacy remote.
 
 ### Sources read
 
@@ -64,7 +64,7 @@ None requested. No sub-agent is used.
 - [x] Let the desktop grid redistribute available width for four or five visible lanes.
 - [x] Run formatting, focused static checks, Overlay typecheck/build, available documentation checks, and diff checks without running User Interface tests.
 - [x] Operate and capture the real current-source board, perform a second visual review, and iterate if necessary.
-- [x] Record the final commit and git-cc push outcome in the delivery response.
+- [x] Record the final commit and legacy remote push outcome in the delivery response.
 
 ## Implementation and verification evidence
 

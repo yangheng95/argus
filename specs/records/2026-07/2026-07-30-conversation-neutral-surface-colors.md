@@ -11,7 +11,7 @@
 | Sources read | Root `AGENTS.md`; Browser control skill; supplied screenshot; `specs/current/architecture/12-overlay-card-system.md`; the July 15 Agent-card surface record; July 19 message/Tool tone record; July 24 color removal/restoration record; July 27 border-removal record; July 29 Conversation/Dock convergence and edge-to-edge records; July 30 static Work-card record; `App.tsx`; `ChatBubble.tsx`; `ConversationCard.tsx`; `SubagentConversationPanel.tsx`; `card-color.ts`; `light.css`; `dark.css`; `vscode-dark.css`; `conversation.css`; `workspace.css`; `inspector.css`; `card.css`; `chat-bubble.css`; and `messages.css`. |
 | Whole-repository grep | Production search enumerated every `--conversation-card-background`, `--card-stage`, `.subagent-conversation-panel`, `--chat-canvas`, and Tool-surface consumer. `chat-bubble.css` is the sole top-level Agent message-fill owner. `SubagentConversationPanel.tsx` reuses `ConversationCard`/`ChatBubble`; `inspector.css` is the sole exact-session canvas owner. `messages.css` consumes the inherited card background for expanded Tool tone. Main Conversation already uses `--chat-canvas`. Stage color remains independently consumed by avatars, status, Agent rail, compact progress cards, and other structured card identities. |
 | Independent review | No sub-agent was created because the user did not request delegation. Claude Code 2.1.147 was invoked once from the repository root with only `Read,Grep,Glob`, streaming output, no session persistence, and explicit prohibitions on edits, delegation, worktrees, and UI tests. It returned `Not logged in` before reading the repository, so no Claude finding is claimed. |
-| Git baseline | Branch `work-v0.0.24beta-yr-0729` and `myhexin/work-v0.0.24beta-yr-0729` are converged at `52ca2ead54`. Existing uncommitted header-icon and Work Ledger pin-color changes are unrelated and must remain unstaged. |
+| Git baseline | Branch `work-v0.0.24beta-yr-0729` and `legacy-remote/work-v0.0.24beta-yr-0729` are converged at `52ca2ead54`. Existing uncommitted header-icon and Work Ledger pin-color changes are unrelated and must remain unstaged. |
 
 ## Cause Chain
 
@@ -61,7 +61,7 @@
    available, then capture and personally inspect the corrected colors.
 5. Re-grep every production owner, perform a second exact-diff and screenshot
    review, update this record with evidence, fetch/converge, commit only
-   task-owned files, push to `myhexin`, and verify remote convergence.
+   task-owned files, push to `legacy-remote`, and verify remote convergence.
 
 ## Progress
 
@@ -124,7 +124,7 @@ exact-session state was synthesized merely to populate that panel.
 
 - Pre-implementation Recall: `8c45825f14`
 - Product, architecture, and visual evidence: `09c4c1fbe3`
-- Git-cc branch: `myhexin/work-v0.0.24beta-yr-0729`
+- legacy remote branch: `legacy-remote/work-v0.0.24beta-yr-0729`
 - The product commit and remote branch converged after the required pre-push
   typecheck, route inventory, API documentation, localization, and secret
   checks passed.

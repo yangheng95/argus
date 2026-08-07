@@ -76,7 +76,7 @@ None. The user did not request delegation, and the current collaboration policy 
 2. Add distinct builtin/server update methods to the Expert Squad and Skill owners while preserving their identity and atomic replacement invariants.
 3. Add project-scoped update routes, generate OpenAPI/SDK, and cover positive and negative route contracts.
 4. Add Overlay service calls and source-specific update actions using existing settings primitives and translations.
-5. Run focused backend/Overlay tests, typecheck, API/docs/i18n checks, document health and Node Playwright desktop visual acceptance; inspect screenshots, review the exact diff, update this record, commit with `dsw-33987`, and push `v0.0.9beta` to `myhexin`.
+5. Run focused backend/Overlay tests, typecheck, API/docs/i18n checks, document health and Node Playwright desktop visual acceptance; inspect screenshots, review the exact diff, update this record, commit with `dsw-33987`, and push `v0.0.9beta` to `legacy-remote`.
 
 ## Result
 

@@ -25,7 +25,7 @@ Owner: Codex
 - Repeated same-source context growth remains eligible for another automatic
   compaction epoch; Provider fallback/cooldown behavior is outside this repair.
 - Focused tests, documentation health, typecheck, second review, commit, and
-  `myhexin` push pass without touching the running OpenCorvus/Overlay process or
+  `legacy-remote` push pass without touching the running OpenCorvus/Overlay process or
   historical Task database.
 
 ### Hard constraints
@@ -40,7 +40,7 @@ Owner: Codex
   not a Host gate, state machine, keyword matcher, fallback, or second source.
 - Every changed behavior needs focused regression coverage.
 - Commit subjects use `dsw-33987`; delivery follows the current branch to the
-  `myhexin` remote without bypassing hooks.
+  `legacy-remote` remote without bypassing hooks.
 
 ### Sources read
 

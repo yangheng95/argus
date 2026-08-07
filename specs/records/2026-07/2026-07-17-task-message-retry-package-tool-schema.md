@@ -18,7 +18,7 @@ Status: complete
 4. Mirror Watch's real projected iFind tool reaches provider-bound preparation and local input validation in regression coverage; package projection alone is not sufficient proof.
 5. Package tools retain one schema owner. Do not add a package-specific fallback, tolerate invalid schemas, bypass provider preparation, or maintain both `args` and `inputSchema` as runtime authorities.
 6. Focused package-tool, resolver, session/provider-schema, task-message, type-check, and documentation-health verification passes.
-7. Preserve unrelated dirty Overlay Agent Rail work, do not restart or interfere with the running OpenCorvus/Overlay process, and push the completed repair to `myhexin` with a `dsw-33987` commit subject.
+7. Preserve unrelated dirty Overlay Agent Rail work, do not restart or interfere with the running OpenCorvus/Overlay process, and push the completed repair to `legacy-remote` with a `dsw-33987` commit subject.
 
 ### Hard constraints
 
@@ -86,7 +86,7 @@ No sub-agent was created because the user did not request delegation and the act
 2. Change `PromptProfileResolver` definition validation/materialization to require and forward that canonical schema without host-side recomposition.
 3. Extend package bundle and Mirror Watch regressions to prove the runtime definition shape, provider-bound JSON Schema conversion, duplicate-channel local validation, and projected execution.
 4. Run focused tests, package and OpenCorvus type checks, route/docs checks, and document-health tests. Review the diff for all package-tool call points and unrelated-worktree isolation.
-5. Mark this record complete, commit only owned files with a `dsw-33987` subject, push `v0.0.8beta` to `myhexin`, and verify the remote hash.
+5. Mark this record complete, commit only owned files with a `dsw-33987` subject, push `v0.0.8beta` to `legacy-remote`, and verify the remote hash.
 
 ## Implementation and verification log
 

@@ -13,7 +13,7 @@ Date: 2026-08-06
 | Sources read               | `AGENTS.md`; `CLAUDE.md`; the two supplied screenshots; `specs/records/2026-07/2026-07-16-overlay-worktree-shortcuts-chat-files-and-button-system.md`; `specs/records/2026-07/2026-07-29-work-harness-chat-mission-infrastructure-convergence.md`; `ChatComposer.tsx`; `ComposerReferenceSelector.tsx`; `ComposerModelSelector.tsx`; `SelectControl.tsx`; `composer.css`; `select-control.css`; and `button.css`.                                                                                           |
 | Whole-repository search    | The localized option descriptions are consumed only by `ChatComposer`. The editable reference-trigger text is rendered only by `ComposerReferenceSelector`. The Composer select variant is owned only by `SelectControl` plus `select-control.css`. Composer-local intent geometry is owned by `composer.css`; model and reference trigger geometry have one owner each in the same stylesheet. No sibling production renderer exists.                                                                      |
 | Independent agent feedback | Two delegated read-only review sessions reached terminal success, but the parent tool result exposed only their Session and final-message identities rather than review text. Their unseen conclusions are not treated as evidence. The parent therefore completed a separate full diff review and found no blocking issue.                                                                                                                                                                                 |
-| Git baseline               | The current branch is `work-v0.0.33beta-yr-0806`. `git push myhexin work-v0.0.33beta-yr-0806` completed its full pre-push checks and reported `Everything up-to-date`. Concurrent unrelated changes remain unstaged and must not enter this task's commits.                                                                                                                                                                                                                                                 |
+| Git baseline               | The current branch is `work-v0.0.33beta-yr-0806`. `git push legacy-remote work-v0.0.33beta-yr-0806` completed its full pre-push checks and reported `Everything up-to-date`. Concurrent unrelated changes remain unstaged and must not enter this task's commits.                                                                                                                                                                                                                                                 |
 
 ## Root cause and call-site disposition
 
@@ -36,7 +36,7 @@ The four controls already use mature primitives, but the Composer-specific styli
 3. Converge Composer Select, reference, and model controls on one borderless pill geometry and hover wash.
 4. Run Overlay TypeScript, internationalization, build, documentation health, and diff checks without running UI tests.
 5. Start an isolated real page, inspect desktop screenshots for resting, hover, and open-menu states, correct visible alignment defects, then request an independent read-only diff review.
-6. Commit only task-owned hunks with the `dsw-33987` prefix and push the delivery branch to `myhexin`.
+6. Commit only task-owned hunks with the `dsw-33987` prefix and push the delivery branch to `legacy-remote`.
 
 ## Scope refinement from visual review
 

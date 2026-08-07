@@ -37,7 +37,7 @@
 1. Apply the native-shadow and visible-brand changes, then inspect the complete scoped diff and rescan production client sources for remaining user-visible `OpenCorvus` copy.
 2. Run only non-UI checks: Overlay typecheck, i18n catalog check, Vite build, Rust compilation/tests where they do not assert rendered UI, document health, and `git diff --check`.
 3. Build and launch an isolated real Windows desktop client with an isolated runtime/database root, capture the complete window and inspect the outer frame plus upper-left/lower-left MOSA surfaces. Do not use the user's existing process or data.
-4. Perform a second code and screenshot review, commit with the `dsw-33987` prefix, push the current branch to `myhexin`, and verify local/remote convergence.
+4. Perform a second code and screenshot review, commit with the `dsw-33987` prefix, push the current branch to `legacy-remote`, and verify local/remote convergence.
 
 ## Progress
 
@@ -45,7 +45,7 @@
 - [x] Root cause and exhaustive call-site disposition recorded before implementation.
 - [x] Implementation and non-UI checks complete.
 - [x] Real isolated desktop screenshot and personal visual review complete.
-- [x] Second review, commit, and git-cc push complete.
+- [x] Second review, commit, and legacy remote push complete.
 
 ## Verification evidence
 
@@ -55,4 +55,4 @@
 - Passed Overlay TypeScript typecheck, panel i18n (`ca3dd2196dd8b3e9`), Vite production build, Rust `cargo check`, a real embedded-payload `cargo build`, historical document links, and `git diff --check`. The first i18n check correctly requested the new panel revision and passed after both locale catalogs were synchronized.
 - Built the real Windows overlay server payload, embedded it into a native debug client, and launched that client with an isolated `OPENCORVUS_HOME`. The manually inspected DPI-aware native screenshot at `.scratch/mosa-native-frame.png` shows the restored rounded gray outer outline/shadow and the upper-left `MOSA` wordmark. A second complete 1280-by-800 real Vite page screenshot at `.scratch/mosa-vite-complete.png` shows both the upper-left `MOSA` wordmark and lower-left circular `M` plus `MOSA v0.0.30beta` footer; the user-owned Project named `opencorvus` remains unchanged.
 - The isolated native client and Vite service were stopped; port 5174 was verified free. The user's running OpenCorvus/Overlay was not restarted, refreshed, closed, or reused as the validation target.
-- Commits `2373ca47dc`, `59f74f817e`, and `d93b345704` contain the plan, implementation, and locale revision synchronization. A concurrent branch-convergence session rebased them without content loss and pushed the branch; `HEAD` and `myhexin/work-v0.0.30beta-yr-0804` were equal before this final evidence update.
+- Commits `2373ca47dc`, `59f74f817e`, and `d93b345704` contain the plan, implementation, and locale revision synchronization. A concurrent branch-convergence session rebased them without content loss and pushed the branch; `HEAD` and `legacy-remote/work-v0.0.30beta-yr-0804` were equal before this final evidence update.

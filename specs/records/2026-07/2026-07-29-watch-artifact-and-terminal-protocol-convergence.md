@@ -28,7 +28,7 @@
 - Task Debug Info distinguishes retained idle coordination Sessions from executing work and
   exposes activity that happened after Task terminal time without falsifying timestamps.
 - Focused tests, package loading, JavaScript SDK authoring round-trip, TypeScript checks,
-  documentation health checks, independent review, commit, and `myhexin` push all pass.
+  documentation health checks, independent review, commit, and `legacy-remote` push all pass.
 
 ### Hard constraints
 

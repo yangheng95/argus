@@ -116,7 +116,7 @@ acknowledgements in one transaction.
    left Mailbox in its normal desktop geometry and after one-click read-all,
    inspect the PNGs, correct visible defects, and rerun the browser scenario.
 6. Review the complete task diff against this Recall, commit only task files,
-   push `myhexin`, then verify local/remote commit equality and preserved
+   push `legacy-remote`, then verify local/remote commit equality and preserved
    unrelated worktree changes.
 
 ## Verification evidence

@@ -9,7 +9,7 @@
 | Hard constraints | Keep notification state, `Question`, `InteractionCard`, `CardParts`, `ExpertSquadPanel`, and `TitlebarMenubar` as their existing single owners; no fallback renderer/value guess, keyword parser, second notification source, hidden message, gate, state machine, mobile/tablet scope, new worktree, or interference with the user's running OpenCorvus process; browser fixtures use Node. |
 | Supplied evidence | Five screenshots at `C:/Users/10132/AppData/Local/Temp/codex-clipboard-*.png`, personally inspected at original resolution. |
 | Sources read | `AGENTS.md`; browser-control skill; notification lifecycle/log-upload record; compact tool-disclosure and consecutive grouping records; expert-squad redesign record; titlebar dropdown/sidebar parity record; `notification-state.ts`, `notify.ts`, `log.ts`, `main.tsx`, `question/index.ts`, `orchestrator/interaction-tools.ts`, `InteractionCard.tsx`, `CardParts.tsx`, `ExpertSquadPanel.tsx`, `TitlebarNavigation.tsx`, `TitlebarMenubar.tsx`, and their CSS/test owners. |
-| Git baseline | Clean `work-v0.0.6beta-yr-0716` at `21c8cadf0`; `myhexin/work-v0.0.6beta-yr-0716` already contains the same commit. A pre-change `git push myhexin HEAD` passed the full hook and reported everything up to date. |
+| Git baseline | Clean `work-v0.0.6beta-yr-0716` at `21c8cadf0`; `legacy-remote/work-v0.0.6beta-yr-0716` already contains the same commit. A pre-change `git push legacy-remote HEAD` passed the full hook and reported everything up to date. |
 | Independent agent feedback | None. The user did not request delegation; the active collaboration policy forbids unrequested sub-agents. The primary agent owns implementation, screenshot review, and the second diff review. |
 
 ## Whole-repository search evidence
@@ -37,7 +37,7 @@
 3. Refine the existing execution disclosure label/marker token usage without changing grouping or expansion.
 4. Converge Expert Squad header/list icon geometry and alignment in the existing component/CSS owners.
 5. Adjust titlebar-only navigation, group, and trigger spacing; extend source/browser geometry assertions.
-6. Run focused tests, full typecheck/build/i18n/API-doc verification, Node browser fixtures, inspect fresh screenshots at original size, correct visual defects, perform a second diff review, commit with `dsw-33987`, and push `myhexin`.
+6. Run focused tests, full typecheck/build/i18n/API-doc verification, Node browser fixtures, inspect fresh screenshots at original size, correct visual defects, perform a second diff review, commit with `dsw-33987`, and push `legacy-remote`.
 
 ## Verification plan
 

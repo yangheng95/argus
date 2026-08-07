@@ -68,7 +68,7 @@ or absent active RequirementSet remains a visible blocker and cannot unlock Arch
 - Run `skill-creator/scripts/quick_validate.py` for every changed/new Skill.
 - Run focused Prism package/source-capability, Mission Skill, SDK collaboration/authoring, payload,
   historical-link, document-health, typecheck, route and docs checks.
-- Review the final diff and stage only task-owned files before commit/push to `myhexin`.
+- Review the final diff and stage only task-owned files before commit/push to `legacy-remote`.
 
 ## Verification evidence
 

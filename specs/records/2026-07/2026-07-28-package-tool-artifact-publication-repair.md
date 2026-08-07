@@ -52,7 +52,7 @@ authoring contract.
     producer provenance, and negative no-publication paths.
 11. Generated built-in payload and portable template artifacts match their
     canonical generators, the installed Watch package is synchronized, and
-    the repository change is committed and pushed to `myhexin`.
+    the repository change is committed and pushed to `legacy-remote`.
 
 ### Hard constraints
 

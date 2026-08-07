@@ -39,7 +39,7 @@
 - Do not turn `todo.updated` into a visible conversation card.
 - Use the existing conversation-agent projection and the installed Kobalte Progress primitive.
 - Do not restart, refresh, close, or otherwise interfere with the user's running OpenCorvus or Overlay process. Browser acceptance uses an isolated Vite process.
-- Stage only task-owned paths; commit subjects begin with `dsw-33987`; push only to `myhexin`.
+- Stage only task-owned paths; commit subjects begin with `dsw-33987`; push only to `legacy-remote`.
 
 ### Records read
 

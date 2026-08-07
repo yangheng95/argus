@@ -53,19 +53,19 @@ UI means User Interface.
    affected Conversation region, and personally verify the stray line is gone
    while card borders remain complete.
 6. Re-read the exact diff and rendered evidence, update this record with the
-   result, commit only task-owned paths, fetch/reconcile git-cc, and push
+   result, commit only task-owned paths, fetch/reconcile legacy remote, and push
    `v0.0.29beta`.
 
 ## Progress
 
 - [x] Screenshot, source, history, affected callers, current architecture, and
   dirty-worktree boundaries inspected.
-- [x] Recall committed; the first git-cc push was correctly rejected because
+- [x] Recall committed; the first legacy remote push was correctly rejected because
   concurrent Orchestrator and Expert Squad edits had not yet restored their
   type contracts.
 - [x] Obsolete divider implementation and UI-only test removed.
 - [x] Non-UI verification and real-page visual acceptance completed.
-- [x] Second review, final implementation commit, reconciliation, and git-cc
+- [x] Second review, final implementation commit, reconciliation, and legacy remote
   push completed.
 
 ## Verification Evidence
@@ -90,6 +90,6 @@ UI means User Interface.
   The inspected screenshot showed the complete rounded card edge with no
   protruding top divider. Browser warnings and errors: zero.
 - Final implementation commit: `5a35e1daa56930f604ac056559625e9ad8fcb8fd`.
-  The git-cc pre-push hook passed SDK imports, AI runtime ownership, all-package
+  The legacy remote pre-push hook passed SDK imports, AI runtime ownership, all-package
   typecheck, route inventory, API documentation, Overlay localization, and
-  secret scan before updating `myhexin/v0.0.29beta`.
+  secret scan before updating `legacy-remote/v0.0.29beta`.

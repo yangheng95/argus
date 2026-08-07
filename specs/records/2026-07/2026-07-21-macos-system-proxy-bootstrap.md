@@ -97,7 +97,7 @@ work. Repository and runtime evidence were inspected directly.
 3. Add focused parser/application tests using captured `scutil --proxy` output;
    do not depend on the developer machine's live proxy state.
 4. Run focused tests, typecheck, documentation health/link tests, inspect the
-   diff, and push the completed commit to `myhexin/v0.0.13beta`.
+   diff, and push the completed commit to `legacy-remote/v0.0.13beta`.
 
 ## Validation
 

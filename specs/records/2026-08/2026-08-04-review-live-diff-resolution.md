@@ -50,7 +50,7 @@
    running client, select a real live changed file, capture a fresh screenshot,
    and manually review the rendered diff twice.
 8. Review the final diff, commit only task-owned files with the `dsw-33987`
-   prefix, fetch/reconcile the tracked git-cc branch, and push normally.
+   prefix, fetch/reconcile the tracked legacy remote branch, and push normally.
 
 ## Progress
 
@@ -58,7 +58,7 @@
 - [x] Product and architecture changes complete.
 - [x] Allowed verification complete.
 - [x] Real-page visual acceptance and second review complete.
-- [x] Commit and git-cc push complete.
+- [x] Commit and legacy remote push complete.
 
 ## Verification evidence
 

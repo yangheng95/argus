@@ -6,11 +6,11 @@
 | --- | --- |
 | User request | “superpowers 内置的skill去掉” — remove the Superpowers Skills that OpenCorvus ships as built-ins. |
 | Acceptance criteria | No `superpowers:*` identity is present in the generated built-in Skill payload or General scheduler projection; the complete bundled Superpowers source collection and its obsolete scratch-directory ignore are deleted; ordinary external Skills remain discoverable through the canonical Skill catalog; focused non-UI contracts assert the removed built-ins do not return. |
-| Hard constraints | Remove the old path outright without fallback, alias, compatibility projection, hidden source, or second catalog. Preserve historical records as history and update only the living architecture claim. Do not create a worktree, reset the repository, bypass hooks, add or run UI automation tests, or modify unrelated files. Commit subjects use `dsw-33987`; delivery pushes to `myhexin`. |
+| Hard constraints | Remove the old path outright without fallback, alias, compatibility projection, hidden source, or second catalog. Preserve historical records as history and update only the living architecture claim. Do not create a worktree, reset the repository, bypass hooks, add or run UI automation tests, or modify unrelated files. Commit subjects use `dsw-33987`; delivery pushes to `legacy-remote`. |
 | Sources read | Root `AGENTS.md`; `specs/README.md`; `specs/current/architecture/04-extensions.md`; `specs/records/2026-07/2026-07-15-superpowers-grill-me-builtin-mission-publish.md`; `packages/opencorvus/script/generate-builtin-skill-payload.ts`; `packages/opencorvus/src/skill/skill.ts`; General's `expert-squad.jsonc`; built-in Skill and General-projection tests. |
 | Whole-repository grep | Exact-case and case-insensitive searches for `superpowers` found the bundled collection, generated payload, General's 14 default references, `.superpowers` ignore, focused Skill/tool/projection tests, the living extension architecture, historical records, and the pre-June deleted-document guard. `builtinSkillSources` consumers are generic except the focused Superpowers tests and one exact built-in tool materialization fixture. The generated payload is owned by `packages/opencorvus/script/generate-builtin-skill-payload.ts` and regenerated through `generate-build-artifacts.ts`. |
 | Independent feedback | The user did not request independent agents, and active collaboration policy forbids unsolicited delegation. The primary agent owns the required second review. |
-| Baseline/version evidence | The worktree was clean on `work-v0.0.24beta-yr-0729`. After `git fetch myhexin`, local `HEAD` and `myhexin/work-v0.0.24beta-yr-0729` both resolved to `9c6d917dc8`. |
+| Baseline/version evidence | The worktree was clean on `work-v0.0.24beta-yr-0729`. After `git fetch legacy-remote`, local `HEAD` and `legacy-remote/work-v0.0.24beta-yr-0729` both resolved to `9c6d917dc8`. |
 
 ## Call-site disposition
 
@@ -37,7 +37,7 @@
    product-doc single-source validation, and repository-required checks.
 5. Inspect the complete diff, scan again for surviving runtime Superpowers
    references, rerun focused verification as the required second review, commit,
-   fetch/merge the current remote branch if necessary, and push to `myhexin`.
+   fetch/merge the current remote branch if necessary, and push to `legacy-remote`.
 
 ## Status
 
@@ -71,4 +71,4 @@ and disposes it in the same callback. No production behavior changed.
 | Documentation | Historical links, document health, and product documentation single-source suites passed `84/84`; living architecture names only the remaining current built-ins, while historical Superpowers records remain unchanged. |
 | Type and API contracts | OpenCorvus `tsc --noEmit`, `api:routes-check`, and `docs:check` passed. |
 | Second review | The runtime scan found no Superpowers source, generated payload entry, manifest grant, or non-historical architecture claim. Remaining live-text matches are explicit negative regressions and this removal record/index. Unrelated Overlay and July-record work stayed outside this task's edits. |
-| Delivery | Plan commit `c32a82368e` and implementation commit `50f84c9205` were pushed to `myhexin/work-v0.0.24beta-yr-0729` through the normal hooks. The implementation push passed full workspace typecheck, route inventory, generated API documentation, Overlay internationalization, and secret scanning. |
+| Delivery | Plan commit `c32a82368e` and implementation commit `50f84c9205` were pushed to `legacy-remote/work-v0.0.24beta-yr-0729` through the normal hooks. The implementation push passed full workspace typecheck, route inventory, generated API documentation, Overlay internationalization, and secret scanning. |

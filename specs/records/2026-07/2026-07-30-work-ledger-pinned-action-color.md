@@ -6,7 +6,7 @@
 | --- | --- |
 | User requirement | “置顶状态的任务按钮换个颜色，区分置顶和非置顶状态。” The supplied screenshot shows a hovered Work Ledger Task row whose Pin and Archive actions use the same neutral gray. |
 | Acceptance criteria | A pinned Work Ledger item renders its Pin action in a clearly different theme color; an unpinned item retains the current neutral action color; hover and keyboard-focus access remain unchanged; the existing persisted `pinned` value remains the only state source; the real desktop page is opened, interacted with, captured, and personally reviewed. |
-| Hard constraints | Desktop-only UI scope; reuse the existing `Button`, `Icon`, `data-pinned`, and theme `--accent` token; no fallback, compatibility path, second state source, hard-coded color, new primitive, state machine, gate, UI automation test, screenshot baseline, or pixel assertion; do not modify or run existing UI tests; use Node-backed Browser control for manual visual acceptance; preserve unrelated dirty `conversation.css` and architecture-document changes; commit subjects start with `dsw-33987` and push to `myhexin`. |
+| Hard constraints | Desktop-only UI scope; reuse the existing `Button`, `Icon`, `data-pinned`, and theme `--accent` token; no fallback, compatibility path, second state source, hard-coded color, new primitive, state machine, gate, UI automation test, screenshot baseline, or pixel assertion; do not modify or run existing UI tests; use Node-backed Browser control for manual visual acceptance; preserve unrelated dirty `conversation.css` and architecture-document changes; commit subjects start with `dsw-33987` and push to `legacy-remote`. |
 | Sources read | Root `AGENTS.md`; Browser control skill; `specs/current/architecture/07-panel.md`; `specs/records/2026-07/2026-07-29-codex-task-header-and-ledger-actions.md`; current `WorkLedger.tsx`; `App.tsx`; `ProjectLedgerGroup.tsx`; shared `Button.tsx`; button/icon/theme CSS; Work Ledger CSS; relevant existing test inventories. |
 | Whole-repository search evidence | `WorkLedger.tsx` is the sole mixed Mission/Task/Chat/Work row renderer and writes the persisted row state to `data-pinned`; `work-ledger.css` is the sole row-action color override and currently gives every action the same neutral color; `services/work-ledger.ts` and `main.tsx` are the only Overlay item-pin mutation call sites and need no change. Other `data-pinned` consumers are the Conversation header menu (`App.tsx`), Project menu (`ProjectLedgerGroup.tsx` plus `sidebar.css`), and task-directory panel controls (`TaskDirBar.tsx`); they are separate surfaces and remain unchanged. |
 | Independent agent feedback | None. The user did not request sub-agents, so no delegation was started. |
@@ -42,7 +42,7 @@ single CSS owner, not a persistence, event, component, or icon problem.
    the contrast in the supplied region.
 5. Re-grep call sites, review the exact diff and screenshot a second time,
    commit only task-owned files, fetch/converge the current branch, and push to
-   `myhexin`.
+   `legacy-remote`.
 
 ## Progress
 
@@ -52,7 +52,7 @@ single CSS owner, not a persistence, event, component, or icon problem.
 - [x] Implement the single-source pinned action color.
 - [x] Complete typecheck/build and real-page visual acceptance.
 - [x] Complete the second screenshot and exact-diff review.
-- [x] Commit the implementation and push it to git-cc.
+- [x] Commit the implementation and push it to legacy remote.
 
 ## Verification Evidence
 
@@ -81,7 +81,7 @@ single CSS owner, not a persistence, event, component, or icon problem.
   `WorkspaceEditorLaunchers.tsx` during this task; all remain preserved and
   excluded from this delivery.
 - Implementation commit `04debf1812` is present on
-  `myhexin/work-v0.0.24beta-yr-0729`. Its direct push completed every pre-push
+  `legacy-remote/work-v0.0.24beta-yr-0729`. Its direct push completed every pre-push
   check but lost a concurrent remote-reference race; the concurrent branch
   update included the commit, and a fresh fetch confirmed it as an ancestor of
-  the exact git-cc branch head.
+  the exact legacy remote branch head.

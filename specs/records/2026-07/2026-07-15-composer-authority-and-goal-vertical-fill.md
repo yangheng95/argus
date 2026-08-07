@@ -25,7 +25,7 @@
 
 - Follow root `AGENTS.md`: no fallback or compatibility branch, no gate, no blind patch, no Git reset, tests for code changes, real visual verification, and post-benchmark review.
 - Windows Playwright is started with Node, never Bun.
-- Commit subjects start with `dsw-33987`; deliver through the current main worktree and push `v0.0.3beta` to `myhexin`.
+- Commit subjects start with `dsw-33987`; deliver through the current main worktree and push `v0.0.3beta` to `legacy-remote`.
 
 ### Hard-disk sources read before editing
 

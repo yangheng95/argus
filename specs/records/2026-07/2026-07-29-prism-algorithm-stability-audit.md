@@ -112,7 +112,7 @@ publication primitive, not in per-Agent search-before-publish code.
 6. Opt canonical package materializers into Task Artifact idempotency and make Prism asset
    materialization verify a durable input-and-byte provenance record on retry.
 7. Update Prism prompts, README, SDK authoring guidance, generated payload, tests, and spec indexes;
-   run focused chains, full typecheck, API/docs checks, and hook-safe git-cc delivery.
+   run focused chains, full typecheck, API/docs checks, and hook-safe legacy remote delivery.
 
 ## Implementation outcome
 

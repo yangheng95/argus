@@ -38,7 +38,7 @@ repair rather than a local patch.
 - Do not restart, stop, refresh, or otherwise interfere with the running OpenCorvus or
   Overlay process.
 - Preserve all unrelated worktree changes. Any commit subject must start with
-  `dsw-33987` and any push must target `myhexin`.
+  `dsw-33987` and any push must target `legacy-remote`.
 
 ### Sources read
 

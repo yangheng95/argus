@@ -33,7 +33,7 @@ icon-content text axis.
 - Preserve all unrelated dirty work and do not restart or refresh a running
   OpenCorvus/overlay process.
 - Browser verification uses Node, not Bun. No mobile or tablet scope.
-- Commit subjects use `dsw-33987`; delivery goes to `myhexin`.
+- Commit subjects use `dsw-33987`; delivery goes to `legacy-remote`.
 
 ### Disk sources read
 
@@ -101,7 +101,7 @@ on the left axis and explicitly left-aligns title text.
 3. Run focused source tests and the Node-launched Vite browser case, inspect the
    resulting Environment screenshot, and correct only remaining axis drift.
 4. Run Overlay typecheck/build, document health, diff review, then commit only
-   task-owned files and push the current branch to `myhexin`.
+   task-owned files and push the current branch to `legacy-remote`.
 
 ## Status
 

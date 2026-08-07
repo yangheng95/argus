@@ -10,7 +10,7 @@
 | Sources read | `AGENTS.md`; `specs/README.md`; `specs/records/2026-07/README.md`; `specs/records/2026-06/notification-center-history-contract-2026-06-09.md`; `packages/overlay/src/utils/log.ts`; `packages/overlay/src/services/notification-state.ts`; `packages/overlay/src/components/NotificationCenter.tsx`; `packages/overlay/src/styles/surfaces/notifications.css`; `packages/overlay/test/log-flush-notification.test.ts`; `packages/overlay/test/notify-error-persistence.test.ts`; `packages/overlay/test/notification-center-primitive.test.ts`. |
 | Whole-repository grep | `system:overlay-log-upload-failed` is produced only by `utils/log.ts` and asserted by the log-flush/SSE tests. `showStoredNotification` is owned by `notification-state.ts`; `notify.ts` is its only other production caller. `.app-notification` and toast/panel surface distinctions are owned only by `notifications.css`. Existing tests explicitly preserve persistent defaults for ordinary errors and readable dismissed panel rows without whole-card opacity. Existing semi-transparent surfaces use `color-mix(..., transparent)` and design tokens. |
 | Independent agent feedback | None: the user did not request independent or parallel agents, and the active collaboration constraint prohibits delegation without that request. Main-agent second review remains required. |
-| Working-tree boundary | The current worktree contains unrelated uncommitted OpenCorvus backend/prompt/test edits. This task owns only the files listed in the implementation plan below and will not stage or modify those unrelated paths. Current `HEAD` already equals `myhexin/v0.0.5beta`. |
+| Working-tree boundary | The current worktree contains unrelated uncommitted OpenCorvus backend/prompt/test edits. This task owns only the files listed in the implementation plan below and will not stage or modify those unrelated paths. Current `HEAD` already equals `legacy-remote/v0.0.5beta`. |
 
 ## Causal boundary
 
@@ -44,7 +44,7 @@ and mark colors remain unchanged.
 2. Run the existing Node-launched notification browser test and inspect its toast screenshot at actual rendered size.
 3. Run Overlay typecheck/build checks relevant to the touched source.
 4. Run historical-doc links and document-health checks for the new record.
-5. Review the exact diff, stage only task-owned files, commit with `dsw-33987`, and push `v0.0.5beta` to `myhexin` without restarting the running Overlay.
+5. Review the exact diff, stage only task-owned files, commit with `dsw-33987`, and push `v0.0.5beta` to `legacy-remote` without restarting the running Overlay.
 
 ## Implementation and verification evidence
 

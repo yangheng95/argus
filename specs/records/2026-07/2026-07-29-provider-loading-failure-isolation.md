@@ -25,7 +25,7 @@
 - Do not turn recovery availability into permissive task execution. Full runtime bootstrap and task model resolution retain strict validation.
 - Do not add a gate, state machine, fallback, or keyword-based error suppression.
 - Provider/catalog/config route contracts and generated OpenAPI or SDK outputs must stay synchronized.
-- Commit subjects use the `dsw-33987` prefix and delivery pushes to `myhexin`.
+- Commit subjects use the `dsw-33987` prefix and delivery pushes to `legacy-remote`.
 
 ### Sources read
 

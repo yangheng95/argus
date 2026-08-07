@@ -10,7 +10,7 @@
 | Sources read | `AGENTS.md`; browser-control skill; both user screenshots; `2026-07-17-right-dock-flat-tabs-and-terminal-single-title.md`; current `RightDock.tsx`; shared Tabs/Button primitives; `workspace.css`; `right-dock-panel-ownership.test.ts`; `terminal-reference-visual-browser.test.ts`; and current git status/diff. |
 | Whole-repository grep | `RightDock.tsx` is the single DOM owner of `.right-dock-tab`, its icon/label/close action, the open/overflow collection, and global toolbar actions. `workspace.css` is the single Right Dock tab visual owner. The previous underline contract is asserted only by `right-dock-panel-ownership.test.ts` and `terminal-reference-visual-browser.test.ts`; other browser tests address tab behavior, titles, overflow, and close navigation and must remain compatible. `TerminalPanel.tsx` and `terminal.css` already contain no secondary title strip and require no production change. |
 | Independent agent feedback | None. The user did not request sub-agents and the current collaboration boundary forbids proactive delegation. |
-| Git baseline | Delivery branch is `work-v0.0.8beta-yr-0717`; task discovery started at `a7c38dccc`, matching `myhexin`. The shared worktree already contains unrelated edits, including a separate `workspace.css` shadow hunk, so commits must stage only task-owned files/hunks. |
+| Git baseline | Delivery branch is `work-v0.0.8beta-yr-0717`; task discovery started at `a7c38dccc`, matching `legacy-remote`. The shared worktree already contains unrelated edits, including a separate `workspace.css` shadow hunk, so commits must stage only task-owned files/hunks. |
 
 ## Root Cause
 
@@ -41,7 +41,7 @@ parallel component.
 3. Run focused source tests, Overlay typecheck/i18n, production Vite build, and documentation health checks.
 4. Start the existing isolated built fixture through the Node Playwright runner, inspect the generated Right Dock screenshot, and correct any visual mismatch before re-running.
 5. Review the complete task-owned diff and repeat the whole-repository grep for stale underline/hidden-close assumptions.
-6. Record evidence, selectively commit only task-owned hunks, and push the delivery branch to `myhexin` through all hooks.
+6. Record evidence, selectively commit only task-owned hunks, and push the delivery branch to `legacy-remote` through all hooks.
 
 ## Progress
 
@@ -95,7 +95,7 @@ underline, duplicate title row, clipped text, or accidental seam.
 | Task-scoped desktop visual/behavior | `node ... browser-runner.mjs ... terminal-reference-visual-browser.test.ts`: passed after visual correction; it verifies Review/Terminal labels, 184x32 geometry, 8px spacing/radius, light fill, visible close placement, absent Terminal secondary chrome, direct canvas geometry, PTY output/input, focus, and screenshot. |
 | Existing Right Dock interaction E2E | The full `titlebar-toolbar-toggle-browser.test.ts` passed 2/2, covering add/close/selection/overflow behavior against the changed tab width. |
 | Documentation | Product single-source, historical-link, and document-health suites passed 81/81 with 1,282 assertions. |
-| Push hooks | Repository SDK/runtime checks, all-package typecheck, route inventory, generated docs, Overlay i18n, and secret scan passed before the git-cc push. |
+| Push hooks | Repository SDK/runtime checks, all-package typecheck, route inventory, generated docs, Overlay i18n, and secret scan passed before the legacy remote push. |
 | Diff hygiene | Task files pass `git diff --check`; grep finds no production underline or hover-only close contract. The separate workspace-shadow hunk and all other concurrent edits remain outside `107798ab7`. |
 
 ## Second Review
@@ -117,7 +117,7 @@ underline, duplicate title row, clipped text, or accidental seam.
 
 - Plan commit `17b81e916` and implementation commit `107798ab7` both use the required
   `dsw-33987` prefix and are pushed to
-  `myhexin/work-v0.0.8beta-yr-0717`.
+  `legacy-remote/work-v0.0.8beta-yr-0717`.
 - The implementation commit contains only the Right Dock tab hunk and its two regression
   tests. Concurrent Work Ledger, left-rail, shadow, scrollbar, token, browser-test, and
   historical-record changes were preserved and not staged or committed by this task.

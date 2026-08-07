@@ -11,7 +11,7 @@
 | Sources read | Root `AGENTS.md`; Browser control skill; supplied screenshot; `specs/current/architecture/07-panel.md`, `07-panel-reactivity.md`, and `99-principles.md`; `2026-07-25-conversation-environment-mailbox-hover-repair.md`; `2026-07-25-mailbox-notification-count-and-hover-lifecycle.md`; `2026-07-27-mailbox-hover-region-lifecycle.md`; current `App.tsx`, titlebar styles, and focused source/browser tests. |
 | Whole-repository grep | `App.tsx` is the only producer of `work-ledger-search-toggle`, `mailbox-toggle`, and `mailboxHoverPreview`. `TitlebarMenubar.tsx` is the only production caller that forwards the menu Search action to the Search launcher. `mailbox-contextbar-launcher.test.ts`, `titlebar-brand.test.ts`, `overlay-startup-chrome-parity.test.ts`, and `overlay-left-rail-density.test.ts` assert static launcher ownership/order/geometry. `command-palette.test.ts` covers ordinary Search activation and focus restoration. `titlebar-toolbar-toggle-browser.test.ts` and `mailbox-left-sidebar-browser.test.ts` explicitly assert that Search remains visible during Mailbox hover and are the interaction contracts to replace. Other Mailbox browser fixtures hover the launcher but do not inspect Search visibility. |
 | Independent agent feedback | None. The user did not request sub-agents, so the primary agent owns implementation and second review. |
-| Git baseline | The clean `work-v0.0.23beta-yr-0728` branch was fast-forwarded from `myhexin/v0.0.23beta` and pushed to `myhexin/work-v0.0.23beta-yr-0728` at `b0754fdc0c` before task changes. |
+| Git baseline | The clean `work-v0.0.23beta-yr-0728` branch was fast-forwarded from `legacy-remote/v0.0.23beta` and pushed to `legacy-remote/work-v0.0.23beta-yr-0728` at `b0754fdc0c` before task changes. |
 
 ## Causal chain
 
@@ -50,7 +50,7 @@
 4. Inspect the task-scoped hover-open and restored screenshots at original
    resolution; correct any geometry or interaction regression.
 5. Re-grep owners, second-review the exact diff, update this record with
-   evidence, commit with the `dsw-33987` prefix, converge with git-cc, and push.
+   evidence, commit with the `dsw-33987` prefix, converge with legacy remote, and push.
 
 ## Progress
 
@@ -58,7 +58,7 @@
 - [x] Failing regressions observed.
 - [x] Implementation complete.
 - [x] Real browser and screenshot acceptance complete.
-- [ ] Second review, commit, convergence, and git-cc push complete.
+- [ ] Second review, commit, convergence, and legacy remote push complete.
 
 ## Result
 

@@ -77,7 +77,7 @@ These are evidence gaps, not established generic product defects. Running-card e
 3. Replace the error action's long native title with a shared Kobalte Tooltip using `top-end`, `fitViewport`, and wrapped content.
 4. Extend source-contract tests and real browser acceptance for the add menu, clipped-error geometry/copy, and delayed commit-message first paint.
 5. Rerun existing task-scoped Browser Preview and running-to-terminal Agent lifecycle acceptance.
-6. Inspect screenshots, run focused and document-health tests, perform a secondary diff review, then commit only task-owned changes and push `v0.0.18beta` to `myhexin`.
+6. Inspect screenshots, run focused and document-health tests, perform a secondary diff review, then commit only task-owned changes and push `v0.0.18beta` to `legacy-remote`.
 
 ## Validation
 

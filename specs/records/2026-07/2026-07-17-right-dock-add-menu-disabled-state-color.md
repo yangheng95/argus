@@ -61,7 +61,7 @@ Repository searches covered every `data-disabled={...}` JSX writer, every CSS `[
 
 1. Remove the manual string-valued `data-disabled` attribute and keep Kobalte's `disabled={isOpen()}` projection as the only disabled-state source.
 2. Add focused source and real-browser regressions for enabled and opened rows, including computed opacity/color and a light-theme menu screenshot.
-3. Run focused tests, TypeScript, production Overlay build, document-health checks, inspect the rendered screenshot, then record the result and deliver the isolated commit to git-cc.
+3. Run focused tests, TypeScript, production Overlay build, document-health checks, inspect the rendered screenshot, then record the result and deliver the isolated commit to legacy remote.
 
 ## Result
 

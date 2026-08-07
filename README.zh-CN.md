@@ -285,6 +285,57 @@ bun ./packages/sdk/js/script/build.ts
 - GitHub Action：[`github/README.md`](./github/README.md)
 - 贡献指南：[`CONTRIBUTING.md`](./CONTRIBUTING.md)
 
+## 开源致谢
+
+OpenCorvus 从 [OpenCode](https://github.com/anomalyco/opencode) 代码库演进而来，
+当前模型 Provider、GitHub Copilot 和 Provider 插件中仍保留了明确标注、持续同步的
+OpenCode 工作。感谢 OpenCode 的维护者和贡献者奠定了这部分基础。
+
+当前产品也建立在许多优秀的开源项目之上。下面只列出承担主要产品边界或作为关键能力
+随产品交付的项目，不机械复制完整依赖图。
+
+- **运行时与 Agent 核心：** [Bun](https://github.com/oven-sh/bun)、
+  [Vercel AI SDK](https://github.com/vercel/ai)、
+  [Hono](https://github.com/honojs/hono) 和
+  [Drizzle ORM](https://github.com/drizzle-team/drizzle-orm) 分别支撑运行时、流式模型集成、
+  超文本传输协议（Hypertext Transfer Protocol，HTTP）应用程序编程接口
+  （Application Programming Interface，API）与 SQLite 持久化层。
+- **开放互操作：** 官方
+  [Model Context Protocol TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)、
+  [MCP Apps](https://github.com/modelcontextprotocol/ext-apps) 和
+  [Agent Client Protocol TypeScript SDK](https://github.com/agentclientprotocol/typescript-sdk)
+  将 OpenCorvus 与工具、交互式应用和外部编码 Agent 连接起来。
+- **桌面应用：** [Tauri](https://github.com/tauri-apps/tauri)、
+  [SolidJS](https://github.com/solidjs/solid) 和
+  [Kobalte](https://github.com/kobaltedev/kobalte) 提供原生桌面壳、响应式渲染器和无障碍
+  用户界面（User Interface，UI）基础组件。
+- **执行与证据：** [Playwright](https://github.com/microsoft/playwright)、
+  [CUA](https://github.com/trycua/cua) 和
+  [OfficeCLI](https://github.com/iOfficeAI/OfficeCLI) 分别支撑浏览器证据、宿主原生
+  Computer Use，以及可编辑 Office Artifact 的检查与渲染。
+- **随包交付的命令行运行时：** [Node.js](https://github.com/nodejs/node) 和
+  [ripgrep](https://github.com/BurntSushi/ripgrep) 进入受支持的 Release 闭包，分别服务于
+  Node sidecar 和高速仓库搜索。
+- **交互式工作台：** [CodeMirror](https://github.com/codemirror/dev)、
+  [xterm.js](https://github.com/xtermjs/xterm.js)、
+  [Mermaid](https://github.com/mermaid-js/mermaid)、
+  [MapLibre GL JS](https://github.com/maplibre/maplibre-gl-js)、
+  [PDF.js](https://github.com/mozilla/pdf.js)、
+  [Reveal.js](https://github.com/hakimel/reveal.js)、
+  [Vega-Lite](https://github.com/vega/vega-lite)、
+  [Cytoscape.js](https://github.com/cytoscape/cytoscape.js) 和
+  [Univer](https://github.com/dream-num/univer) 共同构成编辑器与交互式 Artifact 表面。
+- **内置能力来源：** 随产品提供的设计与访谈 Skill 分别改编自
+  [Taste Skill](https://github.com/Leonxlnx/taste-skill) 和
+  [Matt Pocock Skills](https://github.com/mattpocock/skills)；对应本地 Skill 仍保留独立的
+  来源与许可证文件。
+- **文档：** [Astro](https://github.com/withastro/astro) 和
+  [Starlight](https://github.com/withastro/starlight) 支撑产品文档站。
+
+感谢这些项目以及仓库清单中众多小型依赖背后的每一位维护者和贡献者。各上游项目仍受
+各自许可证和商标规则约束；这份致谢不能替代源码与 Release Artifact 随附的许可证和
+NOTICE 文件，也不表示任何上游项目对 OpenCorvus 的背书或关联关系。
+
 ## 许可证
 
 [MIT](./LICENSE)

@@ -44,7 +44,7 @@
 - `MissionWorkflowHero` was imported and rendered only by the hero; later story media use separate screenshots.
 - The existing image-preview dialog remains live for later story screenshots.
 - `diagramWindowLabel` and `diagramAlt` remain the localized window and accessible-description contract.
-- The pre-change branch and `myhexin/work-lcx-v0.0.30beta` were aligned at `de7d38d664985da037022a47b3d1f5e00bf4ead4`. During implementation, an already-running upstream convergence advanced both to `06a346e55e80ec47356cdb654e74a64f02020af8`; this change is reconciled on that commit.
+- The pre-change branch and `legacy-remote/work-lcx-v0.0.30beta` were aligned at `de7d38d664985da037022a47b3d1f5e00bf4ead4`. During implementation, an already-running upstream convergence advanced both to `06a346e55e80ec47356cdb654e74a64f02020af8`; this change is reconciled on that commit.
 - Separate expert-squad landing work remains unstaged and is outside this task.
 
 ### Independent agent feedback

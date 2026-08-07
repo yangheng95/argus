@@ -8,7 +8,7 @@
   - English and Chinese locale catalogs retain identical keys and the current panel revision.
   - Overlay TypeScript compilation and the UI build pipeline pass.
   - The final diff is reviewed after the automated checks pass.
-- Hard constraints: no fallback or compatibility path; preserve unrelated dirty work; do not restart or stop a running OpenCorvus/Overlay process; use the repository-owned revision generator; do not run Playwright through Bun; commit subjects use the required `dsw-33987` prefix and push only to `myhexin` when a safe task-owned commit is possible.
+- Hard constraints: no fallback or compatibility path; preserve unrelated dirty work; do not restart or stop a running OpenCorvus/Overlay process; use the repository-owned revision generator; do not run Playwright through Bun; commit subjects use the required `dsw-33987` prefix and push only to `legacy-remote` when a safe task-owned commit is possible.
 - Sources read: `AGENTS.md`, `specs/current/architecture/{07-panel.md,12-overlay-card-system.md,99-principles.md}`, `specs/records/2026-07/{2026-07-12-work-ledger-pin-unpin.md,2026-07-13-expert-squad-integration-guide.md}`, `packages/overlay/package.json`, `packages/overlay/script/{check-panel-i18n.ts,bump-panel-revision.ts,build-overlay.ts}`, and `packages/overlay/test/panel-i18n-script.test.ts`.
 - Whole-repository search evidence: `panel_revision`, `check-panel-i18n`, and `bump-panel-revision` identify one checker, one repository-owned generator, two locale metadata values, the build entry point, and the focused checker test. `src/index.html` is the only current panel file contributing to the revision hash.
 - Independent agent feedback: none; the user did not request sub-agents.

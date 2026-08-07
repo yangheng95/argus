@@ -11,7 +11,7 @@
 | Sources read | `AGENTS.md`; Browser control skill; `specs/README.md`; July records for message/composer scrollbar alignment, empty-home layout, and Settings/search/composer visual convergence; `App.tsx`; `ChatComposer.tsx`; `base.css`; `workspace.css`; `conversation.css`; `composer.css`; focused static and browser tests. |
 | Whole-repository search | `rg` enumerated every `chat-composer-stack`, `chat-content-frame`, `chat-message-pane`, `conversation-message-content-width`, `ui-chat-message-content-width`, `chat-home-composition-width`, `chat-composer-max-width`, and `width: min(...76%)` reference. Production width owners are `workspace.css` for the full conversation frame, `composer.css` for the ordinary composer stack, and the more-specific empty-home rule in `conversation.css`. Regression owners are `workspace-composer-density.test.ts`, `overlay-architecture-guards.test.ts`, and `conversation-agent-rail-scroll-browser.test.ts`. No other production caller defines the ordinary composer width. |
 | Independent agent feedback | None. The user did not request sub-agents; repository policy keeps this tightly coupled layout repair single-agent. |
-| Git baseline | After fetching git-cc, `HEAD` `84cc83693` equals `origin/work-v0.0.6beta-yr-0716`. Existing dirty Overlay, Expert Squad, test, and spec changes are preserved and excluded from this task's staged delivery. |
+| Git baseline | After fetching legacy remote, `HEAD` `84cc83693` equals `origin/work-v0.0.6beta-yr-0716`. Existing dirty Overlay, Expert Squad, test, and spec changes are preserved and excluded from this task's staged delivery. |
 
 ## Root cause
 
@@ -39,7 +39,7 @@ message-width rule and is a separate layout contract.
 2. Replace the ordinary stack cap at its single CSS owner.
 3. Run focused Bun tests, Overlay typecheck and production build, and documentation health checks.
 4. Run the existing isolated Playwright fixture through Node, inspect its screenshot at original resolution, and correct any visual mismatch.
-5. Review the exact diff twice, stage only task-owned hunks, commit with the `dsw-33987` prefix, and push the current branch to git-cc.
+5. Review the exact diff twice, stage only task-owned hunks, commit with the `dsw-33987` prefix, and push the current branch to legacy remote.
 
 ## Result
 
@@ -77,7 +77,7 @@ message-width rule and is a separate layout contract.
 | Sources read | `AGENTS.md`; Browser control skill; this record; `2026-07-15-agent-card-time-and-action-chrome.md`; `2026-07-15-agent-message-card-reference-surface.md`; `App.tsx`; `ChatComposer.tsx`; `ChatBubble.tsx`; `base.css`; `workspace.css`; `conversation.css`; `composer.css`; `chat-bubble.css`; focused unit and browser tests; relevant commit history and line blame. |
 | Whole-repository search | `rg` enumerated every `chat-composer-stack`, `chat-content-frame`, `ui-chat-message-content-width`, `conversation-message-content-width`, `conversation-card-inline-size`, `chat-home-composition-width`, and `chat-bubble__hover-actions` reference. The populated Assistant card receives its width through the centered message lane and `--ui-chat-message-content-width`; the ordinary composer width is owned only by `composer.css`, with a more-specific empty-home override in `conversation.css`. The hover-action frame is owned only by `chat-bubble.css`; `ChatBubble.tsx` and `CardHeaderChrome` own behavior and remain unchanged. Regression owners are `workspace-composer-density.test.ts`, `overlay-architecture-guards.test.ts`, `conversation-agent-rail-scroll-browser.test.ts`, `chat-bubble.test.ts`, and `chat-bubble-disclosure-button-browser.test.ts`. |
 | Independent agent feedback | None. The user did not request sub-agents, and the active collaboration policy forbids unrequested delegation. |
-| Git baseline | Current branch `work-v0.0.6beta-yr-0716` is at pushed git-cc commit `9f670edb9`. Existing staged/unstaged Overlay, Expert Squad, test, and spec edits are unrelated and will not be overwritten or included. |
+| Git baseline | Current branch `work-v0.0.6beta-yr-0716` is at pushed legacy remote commit `9f670edb9`. Existing staged/unstaged Overlay, Expert Squad, test, and spec edits are unrelated and will not be overwritten or included. |
 
 ### Corrected causal chain
 
@@ -113,7 +113,7 @@ test contract.
 2. Correct the two canonical CSS owners without adding selectors or alternate paths.
 3. Run focused Bun tests, Overlay typecheck/build, and documentation health checks.
 4. Run the existing browser fixtures through Node, inspect the populated conversation and Agent hover screenshots at original resolution, and correct any mismatch.
-5. Review the scoped diff twice, stage only task-owned files/hunks, commit with the `dsw-33987` prefix, and push the current branch to `myhexin`.
+5. Review the scoped diff twice, stage only task-owned files/hunks, commit with the `dsw-33987` prefix, and push the current branch to `legacy-remote`.
 
 ### Follow-up result
 

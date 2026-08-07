@@ -7,7 +7,7 @@
 - Stop treating Interactive Artifact support as a promise or a renderer-name count.
 - Repair the visibly poor Presentation / PowerPoint display completely.
 - Compare the interactive rendering with mature industry behavior and close the real gaps.
-- Finish implementation, testing, real-page interaction, screenshot review, commit, and git-cc push without drip-feeding partial claims.
+- Finish implementation, testing, real-page interaction, screenshot review, commit, and legacy remote push without drip-feeding partial claims.
 
 ### Acceptance
 
@@ -31,7 +31,7 @@
 - No UI automated tests. Browser use is interactive acceptance only.
 - Attachment retention is a data-integrity contract and receives a positive non-UI regression.
 - Preserve all concurrent work; do not stash, reset, restore, create a worktree, or broadly stage.
-- Commit subject begins with `dsw-33987`; push the current main delivery branch to `myhexin`.
+- Commit subject begins with `dsw-33987`; push the current main delivery branch to `legacy-remote`.
 
 ### Materials read
 

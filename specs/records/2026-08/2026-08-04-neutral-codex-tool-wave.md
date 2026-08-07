@@ -36,7 +36,7 @@
    the Browser, capture the affected region, and personally review the neutral
    wave in both resting and highlight phases.
 5. Re-review the exact diff, selectively commit task-owned files, push to
-   `git-cc`, and record the resulting evidence here.
+   legacy remote, and record the resulting evidence here.
 
 ## Progress
 
@@ -45,14 +45,14 @@
 - [x] Neutral Tool wave implemented and old pulse keyframes removed.
 - [x] Static verification complete.
 - [x] Real-page visual acceptance and second review complete.
-- [x] Selective commit and git-cc push complete.
+- [x] Selective commit and legacy remote push complete.
 
 The neutral Tool-wave CSS and the visual-verification evidence landed in shared
 branch commit `71b8faa84b`. That commit was created concurrently with the Work
 Ledger delivery after this task had selectively staged only its three CSS hunks
 and this record; no unrelated working-tree content was staged by this task.
 The task-specific delivery record landed in `eb88d28318`, and both commits were
-pushed through the normal git-cc hooks to `v0.0.30beta`.
+pushed through the normal legacy remote hooks to `v0.0.30beta`.
 
 ## Visual evidence
 
@@ -91,7 +91,7 @@ closed. Completed Tool rows stayed static in both themes.
 - Production owner grep confirms one Tool animation declaration and no
   remaining `tool-active-pulse` keyframes.
 - No User Interface automated test was run, added, modified, or updated.
-- The pre-implementation git-cc push initially encountered a transient Domain
+- The pre-implementation legacy remote push initially encountered a transient Domain
   Name System (DNS) resolution failure. The delivery retry passed the full
   pre-push typecheck, route, documentation, localization, and secret checks and
-  advanced git-cc `v0.0.30beta` through `eb88d28318`.
+  advanced legacy remote `v0.0.30beta` through `eb88d28318`.

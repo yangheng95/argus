@@ -6,7 +6,7 @@
 | --- | --- |
 | User requirement | 对话框左侧 Agent Rail 短线的 hover 弹框参考所附 Codex 截图：弹框放在短线右侧，尺寸不能太大。 |
 | Acceptance criteria | Hover and keyboard focus open the existing Kobalte Tooltip to the right of the selected tick; its visible card is compact, remains within the desktop viewport, keeps agent/status/input/output information readable, and preserves tick proximity plus click-to-locate behavior. A real Node-launched desktop browser screenshot is inspected after the change. |
-| Hard constraints | Reuse `ConversationAgentRail`, the canonical `Button`, and the shared Kobalte `Tooltip`; do not add a second popover, native `title`, alternate activity source, fallback, gate, mobile/tablet scope, or new worktree. Do not restart or refresh the user's running OpenCorvus/Overlay. Playwright is launched with Node. Commit subjects use `dsw-33987`, and delivery pushes the current branch to `myhexin`. |
+| Hard constraints | Reuse `ConversationAgentRail`, the canonical `Button`, and the shared Kobalte `Tooltip`; do not add a second popover, native `title`, alternate activity source, fallback, gate, mobile/tablet scope, or new worktree. Do not restart or refresh the user's running OpenCorvus/Overlay. Playwright is launched with Node. Commit subjects use `dsw-33987`, and delivery pushes the current branch to `legacy-remote`. |
 | Supplied evidence | The attached Codex crop shows the hover card beginning to the right of the short vertical-rail mark. The card uses a restrained information width and shallow content rhythm rather than a large inspection panel. |
 | Sources read | `AGENTS.md`; Browser skill; the supplied screenshot; `2026-07-14-agent-rail-hover-input-context.md`; `2026-07-16-header-toggle-agent-rail-visual-alignment.md`; current `ConversationAgentRail.tsx`, shared `Tooltip.tsx`, `tooltip.css`, `conversation.css`, focused source test, and real browser hover fixture. |
 | Whole-repository grep | `ConversationAgentRail.tsx` is the only Agent Rail tooltip producer and currently hard-codes `placement="left"`, `gutter={8}`, and `flip={false}`. `conversation.css` is the only feature-local geometry owner and currently sets a token-scaled 280px width and 280px maximum height. `conversation-agent-rail.test.ts` is the direct source-contract owner. `conversation-agent-rail-hover-context-browser.test.ts` is the direct hover/focus content and geometry owner; `conversation-agent-rail-scroll-browser.test.ts` only guards rail continuity and tooltip count during its broader scroll path. Shared `.oc-tooltip` remains the sole chrome recipe. No backend, schema, store, localization, route, or Software Development Kit change is required. |
@@ -36,7 +36,7 @@
 2. Change the existing Kobalte placement and feature-local bounds without changing content projection or shared popup chrome.
 3. Run focused Agent Rail tests, Overlay typecheck/i18n, and the Node Playwright hover fixture.
 4. Inspect the generated screenshot at original resolution, correct any overlap or density drift, then run documentation health, diff checks, and a second review.
-5. Record verified evidence here, commit with `dsw-33987`, and push the current branch to git-cc.
+5. Record verified evidence here, commit with `dsw-33987`, and push the current branch to legacy remote.
 
 ## Verification result
 

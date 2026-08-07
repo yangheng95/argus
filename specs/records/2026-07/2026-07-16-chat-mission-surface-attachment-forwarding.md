@@ -27,7 +27,7 @@ The user reported that a right-sidebar Chat routed into Mission, but the Mission
 - `PanelTool.resolvePanelSurface` remains fail-fast. The fix supplies the missing dispatcher input rather than weakening authorization in the callee.
 - Preserve unrelated dirty worktree changes and stage only this repair.
 - Code changes require regression tests, and spec indexes plus documentation-health checks must stay synchronized.
-- The current branch uses the required `dsw-33987` commit prefix and pushes only to the git-cc `myhexin` remote.
+- The current branch uses the required `dsw-33987` commit prefix and pushes only to the legacy remote.
 
 ### Sources read
 

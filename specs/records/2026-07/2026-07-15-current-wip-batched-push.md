@@ -14,7 +14,7 @@
 - Commits are separated by the existing functional ownership boundaries: checkpoint payload,
   Multica/runtime contract, and Overlay Agent-card presentation.
 - Every new or safely amendable unpushed commit subject begins with `dsw-33987`.
-- Each batch is pushed to `myhexin/v0.0.5beta` without bypassing hooks, and the final remote SHA
+- Each batch is pushed to `legacy-remote/v0.0.5beta` without bypassing hooks, and the final remote SHA
   equals local `HEAD`.
 - The final Git index and worktree are empty for the captured snapshot. If an active parallel Agent
   writes after a batch, its later bytes are included in a subsequent batch rather than overwritten.

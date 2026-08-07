@@ -16,7 +16,7 @@
 - Validate the User Interface through a real Node-launched preview, visible Browser interaction, screenshots bound to this task, and personal visual review.
 - Automated validation is limited to Astro type checking/building, distribution assembly, and documentation-health contracts whose assertions do not target rendered User Interface behavior.
 - Preserve unrelated staged and unstaged work. Stage only exact task paths.
-- Every commit subject starts with `dsw-33987`; push normally to `myhexin/work-lcx-v0.0.30beta` without bypassing hooks.
+- Every commit subject starts with `dsw-33987`; push normally to `legacy-remote/work-lcx-v0.0.30beta` without bypassing hooks.
 
 ## Recall
 
@@ -72,7 +72,7 @@ Three paths were evaluated:
 
 - [x] Run the required historical-document, document-health, and product-document single-source contracts.
 - [x] Review the exact diff and generated Uniform Resource Locator (URL) behavior a second time.
-- [ ] Append exact evidence to this record, commit only task files with a `dsw-33987` subject, fetch `myhexin`, reconcile the branch, and push without bypassing hooks.
+- [ ] Append exact evidence to this record, commit only task files with a `dsw-33987` subject, fetch `legacy-remote`, reconcile the branch, and push without bypassing hooks.
 
 ## Plan Self-Review
 

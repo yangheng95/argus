@@ -41,7 +41,7 @@ Current worktree facts:
 
 - Local branch `coding-assistant` was pushed to `origin/coding-assistant` through `Require run artifact status`.
 - There are unrelated dirty files and unrelated untracked spec / architecture files. This increment must stage only its own hunks.
-- `myhexin` push still requires a real `dsw-*` task id; do not invent one.
+- `legacy-remote` push still requires a real `dsw-*` task id; do not invent one.
 
 Whole-repository grep evidence:
 

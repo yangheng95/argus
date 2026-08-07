@@ -21,7 +21,7 @@ Date: 2026-07-30
 - The selected conversation remains exact and live. Database-backed message recovery remains available, but ordinary exact `message.*` events do not trigger a second full conversation hydration.
 - The existing Browser auto-reveal, native navigation, evidence view, child-Agent conversation, Mailbox, file draft, pulse, streaming, hover, and reduced-motion semantics remain available.
 - Focused non-UI contracts, typecheck, build, document health, an isolated real page, and manually inspected screenshots pass.
-- Only task-owned files are committed and the primary branch is pushed to `myhexin` with the `dsw-33987` subject prefix.
+- Only task-owned files are committed and the primary branch is pushed to `legacy-remote` with the `dsw-33987` subject prefix.
 
 ### Hard constraints
 

@@ -54,7 +54,7 @@ The previous repair targeted hover opacity from `CardNode.status`. That status i
 2. Keep the item projection subscribed to `publishedCardTreeVersion`; mounted card content continues reading the current card/store proxy directly without a second source.
 3. Document the stable virtual-list identity contract in current panel reactivity architecture.
 4. Run TypeScript typecheck, the Vite production build, i18n/document health checks, and the required historical-doc links test without running UI tests.
-5. Reopen the real streaming Chat, repeat DOM-identity sampling, capture the changed Conversation region, and manually review the screenshot. Commit and push the scoped repair to `myhexin`.
+5. Reopen the real streaming Chat, repeat DOM-identity sampling, capture the changed Conversation region, and manually review the screenshot. Commit and push the scoped repair to `legacy-remote`.
 
 ## Verification
 

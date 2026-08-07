@@ -13,7 +13,7 @@
 - Desktop-only acceptance; do not add mobile or responsive scope.
 - Do not add, modify, update, or run User Interface automated tests, source-string assertions, screenshots baselines, or pixel comparisons.
 - Preserve one native dialog, one preview request token, and one landing renderer.
-- Commit subjects begin with `dsw-33987`; push the completed `v0.0.30beta` state to `myhexin` without bypassing hooks.
+- Commit subjects begin with `dsw-33987`; push the completed `v0.0.30beta` state to `legacy-remote` without bypassing hooks.
 
 ## Recall
 
@@ -74,7 +74,7 @@ The complete user request, screenshot evidence, current owners, root-cause chain
 - [x] Capture and inspect the task-scoped screenshots; correct defects and repeat until aligned.
 - [x] Run `bun test packages/opencorvus/test/script/historical-docs-links.test.ts` and `bun test --timeout 60000 packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/product-docs-single-source.test.ts`.
 - [x] Append exact verification results and second-review evidence to this plan.
-- [x] Commit with a `dsw-33987` subject, fetch/merge current git-cc changes, push without bypassing hooks, and verify local/remote commit identity.
+- [x] Commit with a `dsw-33987` subject, fetch/merge current legacy remote changes, push without bypassing hooks, and verify local/remote commit identity.
 
 ## Plan self-review
 
@@ -91,5 +91,5 @@ The complete user request, screenshot evidence, current owners, root-cause chain
 - The Web application anchor exposed `target="_blank"` with `rel="noopener noreferrer"`; a real click produced two browser pages while the landing page remained the original tab.
 - At a 1,440 by 650 desktop viewport, the oversized preview measured 1,103 pixels of scroll content in a 586-pixel dialog. A real mouse click and wheel moved the dialog from `scrollTop = 0` to its 517.33-pixel maximum while the landing page remained at `scrollY = 4,440`.
 - Manual screenshot review found the Chinese Expert Squad heading and proof cards optically top-aligned, the closing title reduced to two left-aligned lines with its description on the same left edge, and no compressed or colliding display-title lines in the Chinese full-page or English Expert Squad evidence.
-- Plan baseline `39313efa7b` was merged with current git-cc state as `c733b25b8e` and pushed before source implementation.
-- Implementation commit `caed01208a` was merged with the intervening git-cc Mirror Watch update as `6f9d1f44b6`; the merged result passed typecheck, documentation health, route, localization, and secret checks before the branch push succeeded.
+- Plan baseline `39313efa7b` was merged with current legacy remote state as `c733b25b8e` and pushed before source implementation.
+- Implementation commit `caed01208a` was merged with the intervening legacy remote Mirror Watch update as `6f9d1f44b6`; the merged result passed typecheck, documentation health, route, localization, and secret checks before the branch push succeeded.

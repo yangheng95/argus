@@ -41,7 +41,7 @@ This is a lifecycle-boundary defect, not a project-row projection defect. A manu
 2. Give application initialization/reconnect/teardown explicit ownership of the global stream. Keep folder switching and project closure limited to the directory task stream.
 3. Add focused lifecycle tests that reproduce the missed-event window and prove the global stream stays live through task-list retargeting.
 4. Add a real browser regression that selects a folder through the existing host picker, emits the backend-shaped `project.updated` event during project reload, and verifies the new empty project appears in the left Projects list without page refresh. Save and personally inspect a task-scoped desktop screenshot.
-5. Run focused tests, Overlay typecheck/build, documentation health, `git diff --check`, and a second diff review. Commit only attributable files with the `dsw-33987` prefix and push the current branch to `myhexin`.
+5. Run focused tests, Overlay typecheck/build, documentation health, `git diff --check`, and a second diff review. Commit only attributable files with the `dsw-33987` prefix and push the current branch to `legacy-remote`.
 
 ## Verification plan
 

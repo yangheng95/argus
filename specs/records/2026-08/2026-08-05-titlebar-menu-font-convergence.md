@@ -10,7 +10,7 @@
 | Sources read          | Root `AGENTS.md`; `CLAUDE.md`; supplied screenshot; titlebar menu component and stylesheet; shared design-language typography tokens; Sidebar and Work Ledger styles; native-menu typography and titlebar-adjacent August records.                                                                                                                                                                                                                      |
 | Whole-repository grep | `TitlebarMenubar.tsx` renders the four menu definitions through the one `data-ui="titlebar-menubar-trigger"` path. `titlebar.css` gives that path a hard-coded 12 scaled-pixel size. Sidebar shortcuts, Project rows, and Work Ledger rows use `--ui-font-navigation`; the token resolves to the 14 scaled-pixel body tier. Dropdown menu item titles already use the same navigation token. No second visible titlebar trigger style exists in source. |
 | Independent review    | A session-local read-only reviewer completed without modifying the worktree. Claude Code 2.1.147 was also invoked with read-only tools, but external review was unavailable because the installed CLI is not authenticated (`Not logged in`).                                                                                                                                                                                                           |
-| Git baseline          | Branch `work-v0.0.30beta-yr-0804` started at `93c97cc41d` with concurrent Environment popover changes in `TaskDirBar.tsx`, panel architecture, and August indexes. Those changes remain outside this task. The tracked git-cc branch was fetched before implementation.                                                                                                                                                                                 |
+| Git baseline          | Branch `work-v0.0.30beta-yr-0804` started at `93c97cc41d` with concurrent Environment popover changes in `TaskDirBar.tsx`, panel architecture, and August indexes. Those changes remain outside this task. The tracked legacy remote branch was fetched before implementation.                                                                                                                                                                                 |
 
 ## Causal chain
 
@@ -34,7 +34,7 @@
    navigation together at desktop size, personally compare the rendered text,
    and repeat after correction if needed.
 4. Inspect the final diff, perform a second review, commit only task-owned
-   changes with the `dsw-33987` prefix, reconcile the tracked git-cc branch, and
+   changes with the `dsw-33987` prefix, reconcile the tracked legacy remote branch, and
    push through normal hooks.
 
 ## Progress
@@ -43,7 +43,7 @@
 - [x] Product change complete.
 - [x] Static verification complete.
 - [x] Real-page visual acceptance and second review complete.
-- [x] Commit and git-cc push complete.
+- [x] Commit and legacy remote push complete.
 
 ## Real-page visual evidence
 

@@ -26,7 +26,7 @@
 - Reuse existing Solid and shared `Button` / token primitives; do not introduce a parallel design system or new UI dependency.
 - Do not restart, refresh, kill, or otherwise interfere with the user's running OpenCorvus or Overlay. Browser validation uses an isolated server and Node-started browser tooling on Windows.
 - Preserve all unrelated dirty worktree changes. In particular, do not overwrite the concurrent one-line tool-header work in `card.css`, its fixture, tests, or task record.
-- Commit subjects must start with `dsw-33987`; delivery is pushed to the `myhexin` git-cc remote on `v0.0.3beta`.
+- Commit subjects must start with `dsw-33987`; delivery is pushed to the legacy remote on `v0.0.3beta`.
 
 ### Hard-disk sources read before implementation
 
@@ -71,7 +71,7 @@ The July message redesign established the correct ownership model but its visual
 3. Restyle the existing execution summary and rail in `messages.css` as one restrained inset work surface. Keep expanded nested reasoning and tools flat, preserve one-line tool headers, and use status color only for live/current evidence.
 4. Add or update focused source and browser regressions for default collapse, absent agent frame, typography hierarchy, readable measure, summary wording, expanded rail, focus, and light/dark rendering.
 5. Run focused tests, Overlay typecheck/build, i18n and spec health, inspect real isolated desktop screenshots, correct visual defects, then perform a second diff review.
-6. Commit only this task's files with a `dsw-33987` subject, merge/fetch the current git-cc branch if required, and push `v0.0.3beta` to `myhexin` without including unrelated dirty worktree changes.
+6. Commit only this task's files with a `dsw-33987` subject, merge/fetch the current legacy remote branch if required, and push `v0.0.3beta` to `legacy-remote` without including unrelated dirty worktree changes.
 
 ## Verification plan
 

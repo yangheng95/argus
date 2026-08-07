@@ -28,7 +28,7 @@ Hard constraints:
 - Do not restart, close, refresh, or kill the user's running OpenCorvus or Overlay process; use isolated tests.
 - Test timeout must be inactivity-based.
 - Code changes require tests; benchmark passing must be followed by second review.
-- Commit subject must start with `dsw-33987`; push to `myhexin`.
+- Commit subject must start with `dsw-33987`; push to `legacy-remote`.
 
 Persisted records read before implementation:
 

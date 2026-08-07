@@ -141,7 +141,7 @@ A selected workflow node has one logical occurrence per Task. Before its first o
 5. Rewrite focused non-UI Prompt contracts around positive current behavior.
 6. Update current architecture and spec indexes after concurrent edits settle.
 7. Run focused Mission, Orchestrator, resolver, route, artifact, typecheck, and documentation-health verification.
-8. Inspect the final diff, commit only task-owned paths, and push `v0.0.28beta` to `myhexin`.
+8. Inspect the final diff, commit only task-owned paths, and push `v0.0.28beta` to `legacy-remote`.
 
 ## Independent agent review
 

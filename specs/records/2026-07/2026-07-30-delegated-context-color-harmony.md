@@ -11,7 +11,7 @@
 | Sources read | 根目录 `AGENTS.md`；Browser control skill；`specs/current/architecture/12-overlay-card-system.md`；`2026-07-20-delegated-context-disclosure-alignment.md`；`2026-07-24-delegated-context-prominence.md`；当前 `DelegatedContextDisclosure.tsx`、`CardParts.tsx`、`SubagentProgressGrid.tsx`、`button.css`、`messages.css`、`conversation.css`、`card.css` 和 light/dark/VS Code dark token 定义。 |
 | Whole-repository grep | `DelegatedContextDisclosure.tsx` 是 `data-chrome="context-disclosure"` 与 `data-ui="delegated-context-toggle"` 的唯一生产 owner；它由 `CardParts.tsx` 和 `SubagentProgressGrid.tsx` 两处调用。`messages.css` 只拥有 disclosure 的布局尺寸，`button.css` 的通用 outline 规则当前提供纯 `surface-strong` 静止背景与 `surface-hover` hover/focus 背景，但没有任何 `context-disclosure` 颜色规则。现有相关测试均断言 UI 源码、渲染或交互表现，本任务按 UI 自动化测试禁令不修改也不运行。 |
 | Independent agent feedback | None。用户没有要求子 Agent、委托或并行审计；当前协作策略禁止主动委托，主 Agent 负责完整调查与二次 review。 |
-| Git baseline | 当前分支 `work-v0.0.24beta-yr-0729` 跟踪 `myhexin/work-v0.0.24beta-yr-0729`。工作区已有 `SubagentConversationPanel.tsx`、`inspector.css` 与 `2026-07-30-subagent-tab-border-and-menu-count.md` 的其他任务修改，本任务不得修改或提交这些文件。 |
+| Git baseline | 当前分支 `work-v0.0.24beta-yr-0729` 跟踪 `legacy-remote/work-v0.0.24beta-yr-0729`。工作区已有 `SubagentConversationPanel.tsx`、`inspector.css` 与 `2026-07-30-subagent-tab-border-and-menu-count.md` 的其他任务修改，本任务不得修改或提交这些文件。 |
 
 ## Causal Chain
 
@@ -37,7 +37,7 @@
 2. 在 Button primitive 的现有 variant/chrome cascade 中增加唯一的 context-disclosure 颜色规则，不改组件或状态。
 3. 运行 Overlay TypeScript、i18n、production build、文档健康与 `git diff --check` 等非 UI 验证。
 4. 打开真实桌面页面，人工检查亮色静止、hover、focus 和展开状态截图；不落成测试文件、fixture 或 baseline。
-5. 二次 review 精确 diff 与截图，只提交本任务文件并以 `dsw-33987` 前缀推送当前分支到 `myhexin`。
+5. 二次 review 精确 diff 与截图，只提交本任务文件并以 `dsw-33987` 前缀推送当前分支到 `legacy-remote`。
 
 ## Progress
 
@@ -45,7 +45,7 @@
 - [x] 提交并推送实施前 Recall。
 - [x] 实现颜色契约并完成非 UI 验证。
 - [x] 完成真实页面与人工视觉验收。
-- [x] 完成二次 review；最终提交与 git-cc 推送由本轮收敛。
+- [x] 完成二次 review；最终提交与 legacy remote 推送由本轮收敛。
 
 ## Implementation And Validation
 
@@ -67,7 +67,7 @@
 - 实施前 Recall commit `e7d299d5c1` 已通过完整 pre-push hook
   （repository typecheck、API route check、docs check、Overlay i18n
   和 secret scan）并推送到
-  `myhexin/work-v0.0.24beta-yr-0729`。
+  `legacy-remote/work-v0.0.24beta-yr-0729`。
 
 ## Visual Review
 

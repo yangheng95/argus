@@ -40,7 +40,7 @@ Status: implemented and verified
 - Add regression coverage for the repaired behavior and the unrelated-session
   negative boundary.
 - Commit with the `dsw-33987` prefix and push the current `v0.0.19beta`
-  delivery branch to the git-cc remote after verification.
+  delivery branch to the legacy remote after verification.
 
 ### Sources read before implementation
 
@@ -140,7 +140,7 @@ allow an unrelated session to refresh the task.
 - Run
   `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts --timeout 20000`.
 - Inspect the final diff and rerun the focused queue regression.
-- Fetch and merge the latest git-cc `v0.0.19beta`, then push without bypassing
+- Fetch and merge the latest legacy remote `v0.0.19beta`, then push without bypassing
   hooks.
 
 ## Implementation and verification log
@@ -178,7 +178,7 @@ allow an unrelated session to refresh the task.
   heartbeat test body while initializing Git. The same test passed when rerun
   alone, and the subsequent complete 38-test run passed without the toolchain
   failure.
-- The latest git-cc `v0.0.19beta` commit
+- The latest legacy remote `v0.0.19beta` commit
   `9874b93741` was fast-forwarded before final verification; its Artifact files
   did not overlap this repair.
 - Codex review correction: the first pre-push interpretation inverted the

@@ -38,7 +38,7 @@ failed execution again.
   authority.
 - Do not restart or disturb the running OpenCorvus or Overlay process.
 - Preserve the unrelated untracked `expert-squads/.DS_Store`.
-- Commit subjects use `dsw-33987` and push through normal hooks to `myhexin/v0.0.18beta`.
+- Commit subjects use `dsw-33987` and push through normal hooks to `legacy-remote/v0.0.18beta`.
 
 ### Evidence read
 

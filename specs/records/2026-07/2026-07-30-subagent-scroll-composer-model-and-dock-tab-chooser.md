@@ -11,7 +11,7 @@
 | Existing records read | `specs/current/architecture/06-provider.md`; `specs/current/architecture/07-panel.md`; `2026-07-25-subagent-progress-grid-and-conversation-dock.md`; `2026-07-28-subagent-conversation-refresh-storm-repair.md`; `2026-07-28-conversation-scrollport-composer-boundary-repair.md`; `2026-07-29-composer-conversation-context-flags.md`; `2026-07-29-composer-model-trigger-neutral-parity.md`; `2026-07-29-right-dock-codex-parity-and-browser-tab-instances.md`; `2026-07-30-right-dock-new-tab-active-selection.md`. |
 | Whole-repository grep | `setupAutoScroll` has exactly two production callers: `Conversation.tsx` and `SubagentConversationPanel.tsx`; the utility is the single follow-lock implementation and both callers own only their local tracking signal. `ComposerModelSelector.tsx` alone groups `connectedModelOptions()` and renders Composer model rows; `services/llm.ts` already supplies the canonical fully-qualified `value`. `ChatComposer.tsx` alone mounts the Code/Work control, conversation context badges, Composer model trigger, and send/stop action; `composer.css` alone overrides their surface geometry. `RightDock.tsx` alone binds blank-strip `onDblClick`, the shared add dropdown, its catalog, and Browser creation; `main.tsx` alone owns the add-menu signal and the ordered tab collection. Existing UI-test files were identified only as historical consumers and will not be changed or run. |
 | Independent review | Claude Code 2.1.147 was invoked in the repository with `Read,Grep,Glob` only and no session persistence, but returned `Not logged in · Please run /login` before reading files. It produced no review or modification. The primary Agent therefore owns the required second review and records this missing external feedback rather than inventing a result. |
-| Baseline and concurrency | `git fetch myhexin` completed. During investigation another owner advanced and pushed `work-v0.0.24beta-yr-0729` from `fd2d368bbd` to `cbbac9efa1`; local and remote then matched. Existing uncommitted ChatBubble, ProgressiveList, primitive-style, inspector-style, and spec edits are unrelated concurrent work and must remain untouched and outside this task's staged paths. |
+| Baseline and concurrency | `git fetch legacy-remote` completed. During investigation another owner advanced and pushed `work-v0.0.24beta-yr-0729` from `fd2d368bbd` to `cbbac9efa1`; local and remote then matched. Existing uncommitted ChatBubble, ProgressiveList, primitive-style, inspector-style, and spec edits are unrelated concurrent work and must remain untouched and outside this task's staged paths. |
 
 ## Causal chains
 
@@ -99,12 +99,12 @@
    iterate until the requested behavior and hierarchy are visible.
 5. Inspect the complete diff and repeat relevant static checks as the primary
    Agent's second review. Commit only task-owned paths and push the final
-   `dsw-33987` commit to `myhexin/work-v0.0.24beta-yr-0729`.
+   `dsw-33987` commit to `legacy-remote/work-v0.0.24beta-yr-0729`.
 
 ## Status
 
 - [x] Recall, evidence, causal chains, and production call-site audit recorded.
-- [x] Plan commit `73d80618a8` and git-cc push completed.
+- [x] Plan commit `73d80618a8` and legacy remote push completed.
 - [x] Product implementation completed.
 - [x] Static and documentation verification completed.
 - [ ] Real-page interaction and screenshot review completed only for the
@@ -112,7 +112,7 @@
   sub-agent-follow and connected-model-row surfaces remain blocked by the
   current local runtime state documented below.
 - [x] Primary-Agent second review completed against the full task-owned diff.
-- [x] Final implementation commit `80e3909818` and git-cc push completed.
+- [x] Final implementation commit `80e3909818` and legacy remote push completed.
 
 ## Verification evidence
 

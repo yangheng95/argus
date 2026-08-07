@@ -26,7 +26,7 @@
 - Do not restart, refresh, resize, close, or otherwise interfere with the user's running OpenCorvus/Overlay. Validation uses an isolated fixture and browser page.
 - Playwright must run through Node, not Bun.
 - Preserve the current branch and current worktree; do not create another worktree.
-- Commit subjects use the required `dsw-33987` prefix and delivery pushes only to the `myhexin` git-cc remote.
+- Commit subjects use the required `dsw-33987` prefix and delivery pushes only to the legacy remote.
 
 ### Supplied visual evidence
 
@@ -75,7 +75,7 @@ The current popover uses `width: 420px * --ui-scale`; at the user's display scal
 2. Remove the redundant Local basename projection, collapse information rows to a three-column grid, and reduce the panel/padding/row geometry to the supplied Codex proportions.
 3. Extend focused source and real browser coverage with large totals and four persisted sources, including exact width, overflow, row-action, Dock-opening, filename, and screenshot assertions.
 4. Run document, type, internationalization, focused unit, and Node-launched browser checks; inspect the rendered screenshot and correct any visual mismatch before acceptance.
-5. Perform a second diff review, update this record with result evidence, commit with `dsw-33987`, and push the current branch to `myhexin`.
+5. Perform a second diff review, update this record with result evidence, commit with `dsw-33987`, and push the current branch to `legacy-remote`.
 
 ## Verification plan
 

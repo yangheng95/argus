@@ -43,7 +43,7 @@ The read-only incident inspection used the packaged Overlay process, its structu
 - Do not convert successful same-scope data into stale cross-scope UI state.
 - Use existing `createInstanceState`, catalog mutation locks, Expert Squad install locks, and supervised `Process.run` rather than hand-written infrastructure.
 - Tests assert positive current behavior. Delete any UI automation or negative test encountered in task-owned test paths instead of running or updating it.
-- Commit subjects start with `dsw-33987`; do not bypass hooks. Commit and push the isolated branch to `myhexin`, but do not merge it into the main worktree.
+- Commit subjects start with `dsw-33987`; do not bypass hooks. Commit and push the isolated branch to `legacy-remote`, but do not merge it into the main worktree.
 
 ### Records and architecture read
 

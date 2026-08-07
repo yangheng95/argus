@@ -33,7 +33,7 @@
   fallback, a duplicate transcript store, a host gate, or a second Dock.
 - Playwright browser acceptance must be launched with Node, not Bun.
 - The branch is `v0.0.22beta`; new commit subjects use the `dsw-33987` prefix
-  and delivery pushes to `myhexin`.
+  and delivery pushes to `legacy-remote`.
 
 ### Evidence captured before implementation
 

@@ -22,7 +22,7 @@
 - Preserve project action behavior, keyboard focus, accessible labels, and current row geometry.
 - Desktop-only scope. Playwright runs through Node, never Bun.
 - Do not restart, refresh, close, or otherwise interfere with the user's running OpenCorvus/Overlay process; visual verification uses isolated test processes.
-- Do not create a worktree, reset or overwrite unrelated changes, bypass hooks, or push outside the configured git-cc remote.
+- Do not create a worktree, reset or overwrite unrelated changes, bypass hooks, or push outside the configured legacy remote.
 
 ### Supplied visual evidence
 

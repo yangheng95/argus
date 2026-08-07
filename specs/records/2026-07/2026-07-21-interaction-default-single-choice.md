@@ -5,12 +5,12 @@
 | Item | Detail |
 | --- | --- |
 | User request | Fix the Multica import authorization-repair dialog so its two radio options do not both look selected; the first option is selected by default; clicking `Answer` immediately submits that first selection. |
-| Acceptance criteria | On first render, exactly the first enabled option of a fixed-choice (`multiple:false`, `custom:false`) Question is checked and visually selected; every other option is visibly unchecked; without any option click, `Answer` submits the first option's stable value; pointer and keyboard replacement selection remain exclusive; multi-select and custom-answer questions keep their existing empty draft; focused tests, a Node-launched real browser fixture, inspected task-scoped screenshot, typecheck/build, document health, second review, commit and git-cc push pass. |
+| Acceptance criteria | On first render, exactly the first enabled option of a fixed-choice (`multiple:false`, `custom:false`) Question is checked and visually selected; every other option is visibly unchecked; without any option click, `Answer` submits the first option's stable value; pointer and keyboard replacement selection remain exclusive; multi-select and custom-answer questions keep their existing empty draft; focused tests, a Node-launched real browser fixture, inspected task-scoped screenshot, typecheck/build, document health, second review, commit and legacy remote push pass. |
 | Hard constraints | Keep `InteractionCard` as the single question renderer for inline and dialog surfaces; keep native grouped radio semantics and the shared `Radio` primitive; do not add a Multica-specific modal, title/label keyword match, fallback, second selection store, state machine, worktree, Bun-launched Playwright, or refresh/restart of a running OpenCorvus/Overlay process. |
 | Sources read | `AGENTS.md`; `browser:control-in-app-browser` Skill; `specs/records/2026-07/2026-07-20-multica-import-repair-dialog.md`; `InteractionCard.tsx`; `InteractionDialogHost.tsx`; `RadioGroup.tsx`; `Checkbox.tsx`; `selection-control.css`; `card.css`; Multica and interaction browser fixtures; selection primitive and Multica surface tests; Question schema/reply route and interaction-reply service. |
 | Whole-repository search | `rg` enumerated `InteractionCard`, `submitAnswers`, `interaction.answer`, `answers`, Question `multiple/custom/options`, every `<InteractionCard>` call, all `data-selected`/`data-checked` radio styling, Multica `repair-and-import`/`cancel-import`, reply routes and focused browser assertions. Production rendering has one component with two consumers: `CardParts` for the inline record and `InteractionDialogHost` for the popup. The existing reply service is already the single submission boundary. |
 | Independent agent feedback | None. The user did not request sub-agents, and active policy prohibits unrequested delegation. The primary Agent owns the second review. |
-| Git baseline | Clean `work-v0.0.12beta-yr-0720` at `624d230e6`, equal to `myhexin/work-v0.0.12beta-yr-0720` after the complete pre-push quality hook passed. |
+| Git baseline | Clean `work-v0.0.12beta-yr-0720` at `624d230e6`, equal to `legacy-remote/work-v0.0.12beta-yr-0720` after the complete pre-push quality hook passed. |
 
 ## Root-cause chain
 
@@ -59,7 +59,7 @@ initial native state, custom-control paint, or the no-interaction reply body.
 5. Inspect the final task-scoped repair dialog screenshot at original resolution,
    exercise the isolated page with the browser-control skill, perform a second
    diff/call-point review, record evidence here, then commit and push to
-   `myhexin`.
+   `legacy-remote`.
 
 ## Result
 

@@ -24,7 +24,7 @@ The header renders model, context, and usage as three separate focusable text ch
 3. Route metadata tooltip text through the application control/body typography tiers, route conversation identity/body emphasis through the next existing shared tier, and size avatar/action glyphs from the canonical icon token.
 4. Replace every focused source/browser expectation that names the retired three-chip topology; assert one trigger, three rows, keyboard focus, tooltip typography, final time order, and icon/text scale relative to the left-menu contract.
 5. Run focused tests, Overlay typecheck/i18n/build and documentation health; then run the production-shaped isolated desktop fixture through the Node browser path, hover/focus the metadata icon, capture screenshots, inspect them at original resolution, and correct any visual mismatch.
-6. Review the exact diff twice, stage only task-owned files/hunks, commit with the `dsw-33987` prefix, and push the current git-cc branch.
+6. Review the exact diff twice, stage only task-owned files/hunks, commit with the `dsw-33987` prefix, and push the current legacy remote branch.
 
 ## Verification
 

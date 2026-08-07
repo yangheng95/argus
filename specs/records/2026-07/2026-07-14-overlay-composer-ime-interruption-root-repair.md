@@ -37,7 +37,7 @@
 - Output: zero programmatic writes during composition, final `你好`, external comment present.
 - Environment: Windows host, production Vite bundle, isolated HTTP fixture, Node Playwright; no desktop Overlay interaction.
 - Timeout: existing activity-reset browser runner.
-- Pass: focused/systemic/browser/typecheck/build/i18n/docs checks, screenshot review, selective git-cc delivery.
+- Pass: focused/systemic/browser/typecheck/build/i18n/docs checks, screenshot review, selective legacy remote delivery.
 
 ## Progress
 
@@ -46,7 +46,7 @@
 - [x] Implement both feedback-edge repairs.
 - [x] Complete product-focused verification against protected commit.
 - [x] Record second review.
-- [x] Push to git-cc after typecheck, route inventory, generated API documentation, localization and secret-scan hooks passed.
+- [x] Push to legacy remote after typecheck, route inventory, generated API documentation, localization and secret-scan hooks passed.
 
 ## Verification Result
 

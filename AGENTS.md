@@ -5,7 +5,7 @@
 > 编号沿用历史版本，便于追溯与对照。
 
 - 严格根据本规则进行自动化工作，不要等待用户的指令来执行每一步。你必须根据你的专业知识和项目现状，主动执行每一步，直到重构结束。
-- 并 git push 上传代码到 git-cc 远端，直到重构结束。你需要关注合并 remote 代码。
+- 完成修改后必须保留可审查的 Git 提交；只有用户明确要求发布时才向当前配置的公开远端推送，并在推送前关注并合并远端代码。
 - 原则上禁止手搓有成熟工具链支持的UI/UX 设计、前端交互、后端架构、数据库设计等方案。对于任何有现成解决方案的设计问题，必须优先考虑使用成熟的工具链或库来实现，而不是从零开始手工编写。禁止在这些领域进行过度工程，必须利用现有的工具和框架来简化开发过程，提高效率和质量。
 - 原则上禁止任何gate/门规则和机制，加这些东西是因为你找不到真正的症结在哪里了，或者你不想修真正的症结。禁止使用 gate 来绕过问题，必须直接面对和解决问题的根本原因。任何试图通过 gate 来掩盖问题的行为都是不可接受的。
 - 设置benchmark后用定时器自我唤醒，不要保持监听日志
@@ -178,15 +178,11 @@ UI 验收只能走真实页面交互和人工视觉复核：Agent 可以使用�
 
 **32.5（spec 索引与验证 — 2026-06-29）**：移动、删除、新增 spec 后，必须同步更新 `specs/README.md`、相关子目录 README 和文档健康测试。验证至少包含 `bun test packages/opencorvus/test/script/historical-docs-links.test.ts`；涉及产品 docs 或架构 docs 时，还必须跑对应的 docs 单源与 document-health 测试。
 
-**33.** 必须主动在任何改动前后 commit + push 到 git-cc 远端（当前仓库 remote 名称为 `myhexin`，URL 为 `https://git-cc.myhexin.com:6443/yangheng/opencorvus.git`；`origin` / GitHub push 不能替代 git-cc push；不绕 hook，hook 是质量检查，pre-push 跑 typecheck / api:routes-check / docs:check，失败时修根因再 push，不要传 `--no-verify`），以便追踪历史和回滚。
-
-**33.0（v0.0.1beta commit 前缀 — 2026-07-06）**：当前 `v0.0.1beta` git-cc 交付线后续新提交、尚未推送的本地提交、以及当前提交前可安全 amend 的最新提交，commit subject 必须统一以 `dsw-33987` 开头；禁止使用 `dsw-0000`、临时占位编号或其他未被用户明确指定的 `dsw-*` 编号绕过远端 hook。已提交 / 已推送的历史提交不得仅为了前缀统一而整段改写，除非用户明确要求历史重写并说明上游合并处理方式。
+**33.** 必须主动在改动后创建可审查的 commit，以便追踪历史和回滚。只有用户明确要求发布时才向当前配置的公开远端 push；不绕 hook，hook 是质量检查，pre-push 跑 typecheck / api:routes-check / docs:check，失败时修根因再 push，不要传 `--no-verify`。
 
 **33.1（非主分支工作收敛 — 2026-06-22）**：如果为了隔离、并行、审计或修复切换到主分支外的分支 / worktree 工作，所有有效修改在该分支提交后，必须在同一轮工作内合并回主分支并切回主分支；主分支是唯一交付和 push 的事实来源。禁止把非主分支上的 commit、未合并 worktree 或远端临时分支当作已交付结果；禁止让同一需求在多个分支上长期并存造成事实分叉。合并前必须先 `fetch` 并确认主分支最新，合并后必须验证、commit/push 主分支；确认为废弃的分支修改不得作为交付物引用。
 
 **33.2（worktree 授权边界 — 2026-06-28）**：未经用户明确授权，禁止创建任何新的 git worktree / 临时 worktree / detached worktree，包括为了隔离 push、规避主工作区脏状态、绕开 hook、审计、验证或制造 clean checkout。所有提交、hook 修复、验证和 push 必须在当前主 worktree 完成；如果主 worktree 的脏状态导致 hook 或 push 失败，必须在主 worktree 追查并修复真实阻塞，或明确报告阻塞，不得创建额外 worktree 规避。
-
-**33.3（git-cc Windows 写入通道 — 2026-08-07）**：本机直连 `https://git-cc.myhexin.com:6443/yangheng/opencorvus.git` 的读取链路正常，但 `POST .../git-receive-pack` 已被实测会在上传完成后错误返回 `HTTP 200 + application/json`，Git 表现为 `protocol error: bad line length character: {"co`。这不是 commit subject 缺少 `dsw-33987` 的证据；判断远端 hook 拒绝必须以可见的 `GL-HOOK-ERR` / `remote rejected` 回执为准。遇到上述精确协议错误时，本机 git-cc push 的已验证写入通道是临时透明 HTTP（Hypertext Transfer Protocol，超文本传输协议）转发器：仅监听 `127.0.0.1`，用 `git credential fill` 在进程内取得 git-cc 凭据，将请求方法、路径、请求体和除 Host / Authorization 外的原始请求头转发到同一 git-cc HTTPS（HTTP Secure，安全超文本传输协议）仓库，并原样返回上游状态、响应头和响应体；禁止解析或改写 Git payload、禁止跳过 pre-push、禁止传 `--no-verify`、禁止修改 commit、禁止把凭据写入文件或日志。push 前必须 `fetch` 并证明目标是 fast-forward；push 必须使用当前 HEAD 到精确目标分支的显式 refspec；push 后必须通过直连 `git ls-remote myhexin refs/heads/<branch>` 回读并证明远端 SHA（Secure Hash Algorithm，安全散列算法）严格等于本地 HEAD。无论成功或失败，都必须关闭转发器、删除临时脚本并确认监听端口已经释放。2026-08-06 `v0.0.32beta` / `v0.0.33beta` 与 2026-08-07 `v0.0.34beta` 均已通过该通道在完整 hooks 后成功写入并由直连回读确认。
 
 **35.** 方案落盘前必须穷举调用点，禁止凭单点采样泛化。任何方案、设计、修复在落盘前，必须对涉及的 API / 函数 / 错误类 / 路由 / 配置项做一次**全仓 grep**，把所有调用点 / 同名兄弟 / 已存在的命名错误 / 已存在的接口路径列入方案。**遗漏一处即视为 rule 8（禁止双源）违规**。具体要求：
 

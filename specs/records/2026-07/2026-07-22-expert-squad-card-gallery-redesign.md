@@ -71,7 +71,7 @@ Both pages share one card component and one visual contract. Install cards summa
 3. Replace Details' vertical catalog list and dashboard-like overview with the same gallery grammar and a compact canonical-context strip; retain the full Agent access and technical details below.
 4. Update bilingual copy, shared Expert Squad CSS, and focused source/browser assertions.
 5. Run focused verification and Node Playwright, inspect fresh desktop screenshots at original resolution, correct visual discrepancies, and repeat.
-6. Perform a second diff/ownership review, update this record with results, then commit and push only task-owned files to `myhexin/v0.0.15beta`.
+6. Perform a second diff/ownership review, update this record with results, then commit and push only task-owned files to `legacy-remote/v0.0.15beta`.
 
 ## Result
 

@@ -56,7 +56,7 @@ the Composer. The required result is:
   and Playwright launched through Node.js.
 - Preserve unrelated staged and unstaged worktree changes; do not reset, restore,
   stash, or create another worktree.
-- Commit subjects use `dsw-33987` and delivery pushes to `myhexin`.
+- Commit subjects use `dsw-33987` and delivery pushes to `legacy-remote`.
 
 ### Material read before implementation
 
@@ -136,7 +136,7 @@ forbids unsolicited sub-agents.
    discrepancies, and rerun.
 5. Update architecture/index records, run document health, perform a second
    diff and visual review, then stage only task-owned changes, commit, fetch,
-   reconcile, and push to `myhexin`.
+   reconcile, and push to `legacy-remote`.
 
 ## Status
 
@@ -145,7 +145,7 @@ forbids unsolicited sub-agents.
 - [x] Focused regressions and implementation complete.
 - [x] Type/build/browser verification and screenshot review complete.
 - [x] Architecture/index updates and second review complete; the accepted
-      implementation is ready for its traceable commit and `myhexin` push.
+      implementation is ready for its traceable commit and `legacy-remote` push.
 
 ## Verification evidence
 

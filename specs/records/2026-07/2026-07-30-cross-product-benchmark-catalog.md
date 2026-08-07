@@ -36,7 +36,7 @@ Owner: Codex
 - Do not run UI automated tests.
 - The mandatory historical-document test path was touched during verification. Remove its existing negative assertions and replace them with positive canonical-index and complete-catalog contracts before running it.
 - Preserve all unrelated dirty-worktree changes and stage only the benchmark document, this record, and their index entries.
-- Commit subjects must start with `dsw-33987`; push only to `myhexin`.
+- Commit subjects must start with `dsw-33987`; push only to `legacy-remote`.
 
 ### Sources read
 

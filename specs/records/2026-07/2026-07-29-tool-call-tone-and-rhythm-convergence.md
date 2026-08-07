@@ -77,8 +77,8 @@ leaving exactly one 12px boundary on each side.
    Sub-agent conversation, exercise Tool disclosure, capture scoped desktop
    screenshots, and correct any remaining tone or rhythm mismatch.
 4. Review the scoped diff and screenshots a second time, update this record
-   with evidence, reconcile the tracked git-cc branch, commit with the required
-   `dsw-33987` prefix, push `myhexin`, and verify local/remote convergence.
+   with evidence, reconcile the tracked legacy remote branch, commit with the required
+   `dsw-33987` prefix, push `legacy-remote`, and verify local/remote convergence.
 
 ## Verification evidence
 

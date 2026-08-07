@@ -11,7 +11,7 @@
 | Sources read          | Root `AGENTS.md`; Browser control skill; supplied screenshot; `specs/current/architecture/12-overlay-card-system.md`; `2026-07-30-work-card-static-wave-scope.md`; `2026-07-29-running-execution-wave-scope-and-text-contrast.md`; `2026-07-29-agent-wave-and-trailing-tool-disclosure.md`; `2026-07-27-subagent-card-pulse-and-tool-status-removal.md`; `App.tsx`; `Conversation.tsx`; `ConversationArtifactSummary.tsx`; `SubagentProgressGrid.tsx`; `SubagentConversationPanel.tsx`; `ChatBubble.tsx`; `CardParts.tsx`; `subagent-presentation.ts`; `board.ts`; `messages.css`; and `conversation.css`.                                                                                                                                                                                                                                                          |
 | Whole-repository grep | Searches covered every `wave`, shimmer, mask animation, keyframe, Tool `data-status`, Agent `data-status`, selected Task/session status reader, terminal classifier, main Conversation mount, compact Agent renderer, and exact-session Right Dock renderer. `messages.css` owns the sole Tool text wave across nested Tool cards, inline Tool rows, and main/Right-Dock execution disclosures. `conversation.css` owns the sole compact Agent surface wave. `App.tsx` is the common ancestor of the center transcript and Right Dock and already reads `boardStore`; task boards expose `board.task.status`, standalone conversation boards expose `board.status`, and `ConversationArtifactSummary.tsx` already treats only standalone `active` as executing. Compact Agent Tool events intentionally remain static under the prior whole-card activity contract. |
 | Independent review    | Claude Code `2.1.147` was checked with `command`, version, and help from the repository root, then invoked with only `Read,Grep,Glob`, no session persistence, streaming output, and explicit prohibitions on edits, delegation, worktrees, and UI tests. It exited before reading the repository because the local command-line interface is not authenticated (`Not logged in`). No Claude finding is claimed; the primary agent owns both evidence reviews.                                                                                                                                                                                                                                                                                                                                                                                                      |
-| Git baseline          | Delivery branch is `work-v0.0.24beta-yr-0729`. Fetch showed local HEAD `341500c8ad` one commit ahead of `myhexin/work-v0.0.24beta-yr-0729`; that commit and dirty `Board.tsx`, `main.tsx`, and `07-panel.md` changes belong to concurrent work and must be preserved. This delivery owns only the parent execution projection, the two existing animation selectors/comments, current card-system architecture, this record, its visual artifact, and the two shared spec indexes.                                                                                                                                                                                                                                                                                                                                                                                  |
+| Git baseline          | Delivery branch is `work-v0.0.24beta-yr-0729`. Fetch showed local HEAD `341500c8ad` one commit ahead of `legacy-remote/work-v0.0.24beta-yr-0729`; that commit and dirty `Board.tsx`, `main.tsx`, and `07-panel.md` changes belong to concurrent work and must be preserved. This delivery owns only the parent execution projection, the two existing animation selectors/comments, current card-system architecture, this record, its visual artifact, and the two shared spec indexes.                                                                                                                                                                                                                                                                                                                                                                                  |
 
 ## Follow-up Recall: Double Wave Cadence
 
@@ -69,7 +69,7 @@
    contract and report the evidence boundary honestly.
 5. Re-grep all owners, perform a second exact-diff and screenshot review,
    update this record and both indexes, fetch/converge, selectively commit only
-   task-owned paths/hunks, push through normal hooks to `myhexin`, and verify
+   task-owned paths/hunks, push through normal hooks to `legacy-remote`, and verify
    remote convergence.
 
 ## Progress
@@ -79,13 +79,13 @@
       authentication-blocked Claude review inspected.
 - [x] Recall, cause chain, complete call-site disposition, and verification
       plan recorded.
-- [x] Recall commit `085a674192` and git-cc push complete.
+- [x] Recall commit `085a674192` and legacy remote push complete.
 - [x] Product and architecture correction plus static/build verification
       complete.
 - [x] Real-page visual acceptance and second review complete.
 - [x] Follow-up doubled-wave cadence implementation and real-page review
       complete.
-- [x] Implementation commit `0cc52f12e3`, final record update, and git-cc
+- [x] Implementation commit `0cc52f12e3`, final record update, and legacy remote
       convergence complete.
 
 ## Visual Evidence

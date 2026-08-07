@@ -48,7 +48,7 @@ exposed, and then asked to fix them.
 - Persist the exact aborted attempt result in the same transaction as the
   process-shutdown infrastructure fact and durable recovery wake.
 - Commit subjects use the required `dsw-33987` prefix and push the current
-  `v0.0.23beta` delivery branch to `myhexin` without bypassing hooks.
+  `v0.0.23beta` delivery branch to `legacy-remote` without bypassing hooks.
 
 ### Sources read
 
@@ -155,7 +155,7 @@ the “fresh” contract.
    health checks, inspect the exact task-owned diff, and perform a second
    review.
 6. Commit only task-owned files with `dsw-33987`, fetch, recheck `HEAD` and
-   staged paths, push `v0.0.23beta` to `myhexin`, and verify remote equality.
+   staged paths, push `v0.0.23beta` to `legacy-remote`, and verify remote equality.
 
 ## Implementation
 

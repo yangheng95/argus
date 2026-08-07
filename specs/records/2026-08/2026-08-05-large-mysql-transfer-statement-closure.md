@@ -15,7 +15,7 @@
 - Make the recovered snapshot pass the current strict transfer preflight, current dispatch-lineage parser, foreign-key validation, and current DDL import.
 - Make a large official MySQL transfer import close every owned SQLite statement before checkpoint and database close.
 - Keep the current empty active database recoverable until an isolated restored database has passed integrity and application-startup checks.
-- Add positive non-User Interface regression coverage, run focused verification, review, commit with the required `dsw-33987` prefix, and push to the `myhexin` git-cc remote.
+- Add positive non-User Interface regression coverage, run focused verification, review, commit with the required `dsw-33987` prefix, and push to the legacy remote.
 
 ### Hard constraints
 
@@ -61,7 +61,7 @@ No sub-agent was commissioned because the user did not request delegation. The p
 2. Add a positive multi-page MySQL transfer round trip that verifies successful import, exact Project row count, and a closed database connection.
 3. Re-run the recovered 35,120-row snapshot through an isolated official import, verify all tables, dispatch-lineage rows, foreign keys, integrity, and current triggers, then start a current isolated server against it.
 4. Stop the current empty client only after isolated acceptance, preserve its database, install the validated restored database through the explicit import path, and restart the `0.0.32-beta` client.
-5. Run focused tests, typecheck, documentation health checks, review the diff, commit, and push to git-cc.
+5. Run focused tests, typecheck, documentation health checks, review the diff, commit, and push to legacy remote.
 
 ## Validation record
 

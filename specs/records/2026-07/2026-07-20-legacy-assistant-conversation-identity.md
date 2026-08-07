@@ -20,7 +20,7 @@
 - 不增加数据库迁移、数据回填猜测、兼容 alias、双源 active identity 或 HTTP 降级路径。
 - 只使用持久化 session kind、正式 Agent role contract 和持久化 message `agentID` 作为证据。
 - 保留工作区中所有并行修改，尤其是 Provider profile/model 和相邻 2026-07-20 records/index edits。
-- commit subject 必须以 `dsw-33987` 开头，并 push 到 `myhexin/v0.0.12beta`。
+- commit subject 必须以 `dsw-33987` 开头，并 push 到 `legacy-remote/v0.0.12beta`。
 
 ### Sources read
 
@@ -70,7 +70,7 @@ Repository-wide `rg` enumerated every `projectConversationView`, `projectConvers
 2. Use that resolver in both display and Agent Rail ledger projection, while retaining hard failure for multiple real non-helper identities.
 3. Add direct projection tests for successful `assistant -> chat` resolution and rejected `chat -> coding` drift.
 4. Add a parent/child session route regression reproducing the historical database shape and asserting HTTP 200 plus coherent owner/message identities.
-5. Run focused tests, OpenCorvus typecheck, historical document links/document health, inspect the diff twice, then commit only owned files and push git-cc.
+5. Run focused tests, OpenCorvus typecheck, historical document links/document health, inspect the diff twice, then commit only owned files and push legacy remote.
 
 ## Verification ledger
 

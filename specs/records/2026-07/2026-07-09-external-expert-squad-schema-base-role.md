@@ -30,7 +30,7 @@
 - 非 `general` 专家团仍只能通过 `.opencorvus/expert-squads/<namespace>/<id>/` package discovery / resolver / catalog 路径进入。
 - 不创建新 worktree，不重启或刷新 OpenCorvus / overlay 运行进程。
 - 当前工作区已有外部修改 `AGENTS.md`，不得回退或改动它。
-- 修改必须配测试；提交 subject 必须以 `dsw-33987` 开头，最终 push 到 `myhexin` remote。
+- 修改必须配测试；提交 subject 必须以 `dsw-33987` 开头，最终 push 到 `legacy-remote` remote。
 
 ### Sources Read
 

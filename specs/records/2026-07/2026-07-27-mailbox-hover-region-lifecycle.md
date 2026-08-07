@@ -11,7 +11,7 @@
 | Sources read | Root `AGENTS.md`; Browser control skill; supplied screenshot; `specs/current/architecture/07-panel.md`; `2026-07-25-conversation-environment-mailbox-hover-repair.md`; `2026-07-25-mailbox-notification-count-and-hover-lifecycle.md`; `App.tsx`; `main.tsx`; `activity.css`; focused source and browser tests. |
 | Whole-repository grep | `App.tsx` is the only launcher and left-activity visibility owner. `main.tsx` is the only producer of `leftSidebarPanel`, `openLeftSidebarMailbox`, `closeLeftSidebarMailbox`, and `toggleLeftSidebarMailbox`; there are no non-launcher consumers. `mailbox-contextbar-launcher.test.ts` is the focused ownership test. `mailbox-left-sidebar-browser.test.ts` is the real interaction/visual fixture. Other Mailbox tests consume the rendered active body but do not own selection. |
 | Independent agent feedback | None. The user did not request sub-agents, so the primary agent owns implementation and second review. |
-| Git baseline | Branch `work-v0.0.19beta-yr-0727` is synchronized with `myhexin/work-v0.0.19beta-yr-0727` at `1384e19c8b`. The worktree already contains unrelated edits in `App.tsx`, `TaskDirBar.tsx`, shared styles, and tests; only task-owned hunks will be staged. |
+| Git baseline | Branch `work-v0.0.19beta-yr-0727` is synchronized with `legacy-remote/work-v0.0.19beta-yr-0727` at `1384e19c8b`. The worktree already contains unrelated edits in `App.tsx`, `TaskDirBar.tsx`, shared styles, and tests; only task-owned hunks will be staged. |
 
 ## Causal chain
 
@@ -49,7 +49,7 @@
    and build, documentation health, and diff hygiene.
 4. Inspect task-scoped screenshots and correct visual or interaction drift.
 5. Re-grep owners, review the exact diff a second time, commit only task-owned
-   files with the `dsw-33987` prefix, fetch/converge, and push to `myhexin`.
+   files with the `dsw-33987` prefix, fetch/converge, and push to `legacy-remote`.
 
 ## Result
 

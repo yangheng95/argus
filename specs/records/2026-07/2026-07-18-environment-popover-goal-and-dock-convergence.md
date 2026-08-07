@@ -75,7 +75,7 @@ The message surface and Environment Information independently project the same g
 2. Replace Environment Information's single open signal with transient hover/focus intent plus explicit pinned intent on the existing Popover.
 3. Project every Dock feature from a canonical catalog and its real availability source; lift Terminal/Mailbox counts without duplicating their data.
 4. Hide entire empty resource sections, update styles and tests, then run isolated browser interaction and screenshot review.
-5. Run focused tests, typecheck, i18n, production build, document health, diff review, commit with the required `dsw-33987` prefix, and push the current main delivery branch to `myhexin` if the shared dirty worktree can be safely committed as one coherent delivery.
+5. Run focused tests, typecheck, i18n, production build, document health, diff review, commit with the required `dsw-33987` prefix, and push the current main delivery branch to `legacy-remote` if the shared dirty worktree can be safely committed as one coherent delivery.
 
 ## Validation status
 

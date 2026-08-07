@@ -58,7 +58,7 @@
 - Keep the global Task message budget for unrelated transcript payloads; do
   not solve the defect by raising `80` or returning every child transcript.
 - Use the `dsw-33987` commit prefix and push the reviewed commit only to
-  `myhexin`.
+  `legacy-remote`.
 
 ### Sources read
 
@@ -181,5 +181,5 @@ the retired scattered-card fallback.
 6. Run the isolated Vite fixture through Node, capture the repaired refresh
    state, inspect the screenshot, and repeat after any visual mismatch.
 7. Review the complete diff against this Recall, verify parallel diffs remain,
-   commit only task-owned hunks, fetch/reconcile `myhexin`, and push with normal
+   commit only task-owned hunks, fetch/reconcile `legacy-remote`, and push with normal
    hooks.

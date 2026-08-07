@@ -4,7 +4,7 @@
 
 - User requirement: the supplied desktop screenshot shows that a pinned Project row renders only the pin and remove icons; restore the missing Project name.
 - Acceptance criteria: a pinned Project with an empty stored title renders the same non-empty directory-derived name as its Projects-section row; a non-empty custom Project title remains authoritative; the label stays ellipsized inside the existing row and the visible remove action remains unchanged; a real desktop browser fixture is inspected by screenshot.
-- Hard constraints: preserve Project pin state as the existing backend projection; do not add local state, a second label source, compatibility behavior, a workflow gate, a handwritten user-interface primitive, mobile or tablet scope, or a new worktree; do not refresh or restart the user's running OpenCorvus or Overlay; Playwright must be launched through Node.js; commit subjects begin with `dsw-33987` and pushes target `myhexin`.
+- Hard constraints: preserve Project pin state as the existing backend projection; do not add local state, a second label source, compatibility behavior, a workflow gate, a handwritten user-interface primitive, mobile or tablet scope, or a new worktree; do not refresh or restart the user's running OpenCorvus or Overlay; Playwright must be launched through Node.js; commit subjects begin with `dsw-33987` and pushes target `legacy-remote`.
 - Sources read: `AGENTS.md`; the supplied `codex-clipboard-143b6f07-34e7-4b57-9754-ceea5a6caecd.png`; `2026-07-13-project-pin-unpin-and-icon-repair.md`; `2026-07-16-project-pin-optical-size-repair.md`; `2026-07-14-agent-rail-center-and-pinned-project-affordance.md`; current `WorkLedger.tsx`, `ProjectLedgerGroup.tsx`, `project-directory.ts`, `work-ledger.css`, `sidebar.css`, Work Ledger browser fixture, and focused consolidation/directory tests.
 - Whole-repository search evidence: `projectDisplayName` has exactly two render consumers in `WorkLedger.tsx`, the Projects group and Pinned row; `ProjectLedgerGroup` has one production caller and already derives a directory name when its optional custom name is empty; `projectDirectoryLabel` is the existing cross-platform directory-label owner used by Work Ledger, Project headings, and Conversation; the pinned row bypasses that owner by directly rendering `group.project?.title`; `.sidebar-codex-action-label` already owns the correct grid column, minimum width, overflow, ellipsis, and no-wrap behavior; the only browser coverage of `work-ledger-pinned-project` verifies icons and unpin visibility but does not assert label text.
 - Independent agent feedback: none. The user did not request sub-agents and the active policy forbids spawning them otherwise.
@@ -42,7 +42,7 @@ Add one shared Project display-name resolver beside `projectDirectoryLabel`. It 
 - [x] Shared display-name implementation and regression tests.
 - [x] Real desktop browser screenshot review.
 - [x] Second implementation and screenshot review.
-- [x] Final commit and `myhexin` push.
+- [x] Final commit and `legacy-remote` push.
 
 ## Verification result
 
@@ -61,5 +61,5 @@ Add one shared Project display-name resolver beside `projectDirectoryLabel`. It 
 
 ## Delivery result
 
-- Implementation commit `ec9feb1dc` (`dsw-33987 restore pinned project labels`) was pushed to `myhexin/work-v0.0.9beta-yr-0718`.
+- Implementation commit `ec9feb1dc` (`dsw-33987 restore pinned project labels`) was pushed to `legacy-remote/work-v0.0.9beta-yr-0718`.
 - The mandatory pre-push hook passed repository-wide type checking, route inventory, generated documentation, Overlay localization, and secret scanning without bypasses.

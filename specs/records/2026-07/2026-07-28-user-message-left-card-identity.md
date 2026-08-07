@@ -85,10 +85,10 @@ implementation and second review.
 ### Git baseline
 
 - Branch: `work-v0.0.23beta-yr-0728`.
-- Remote: `myhexin`.
+- Remote: `legacy-remote`.
 - The worktree was clean.
-- `git fetch myhexin` followed by
-  `git rev-list --left-right --count HEAD...myhexin/work-v0.0.23beta-yr-0728`
+- `git fetch legacy-remote` followed by
+  `git rev-list --left-right --count HEAD...legacy-remote/work-v0.0.23beta-yr-0728`
   returned `0 0`.
 
 ## Design
@@ -116,7 +116,7 @@ always expanded and non-collapsible.
 5. Run targeted tests, Overlay typecheck/build, spec health tests, and a
    task-scoped browser screenshot.
 6. Review the diff and screenshot a second time, then commit and push the final
-   implementation to `myhexin`.
+   implementation to `legacy-remote`.
 
 ## Validation
 

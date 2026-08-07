@@ -41,7 +41,7 @@
 - Do not restart, refresh, terminate, or mutate the user's running Overlay or
   production database. Real-page acceptance uses an isolated runtime.
 - Playwright/browser control must run with Node.js, never Bun.
-- Commit subjects begin with `dsw-33987`; delivery pushes to `myhexin`.
+- Commit subjects begin with `dsw-33987`; delivery pushes to `legacy-remote`.
 
 ### Hard-disk sources read
 
@@ -133,7 +133,7 @@ new draft.
    different models, switch Task/Session/New Chat scopes in the real Overlay,
    capture screenshots, and personally review them.
 9. Re-read all call sites and the final diff, commit only task-owned paths, push
-   to `myhexin`, and verify local/remote convergence.
+   to `legacy-remote`, and verify local/remote convergence.
 
 ## Progress
 

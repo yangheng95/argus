@@ -23,7 +23,7 @@ Owner: Codex
   fallback, compatibility path, route bypass, workflow gate, hidden/synthetic
   message, keyword rule, or database migration; preserve unrelated dirty
   files; add regression tests; commit with `dsw-33987` and push the current
-  release branch to `myhexin`. The plan checkpoint was created on
+  release branch to `legacy-remote`. The plan checkpoint was created on
   `v0.0.13beta`; the repository's release process subsequently advanced the
   same commit ancestry to `v0.0.14beta`.
 - **Persisted/runtime evidence:** Server log

@@ -379,4 +379,4 @@ Node-started Playwright must:
 - [x] Incorporate independent Agent review and close all five blockers.
 - [x] Obtain final independent acceptance after correcting the two factual path/scope findings.
 - [x] Validate documentation links and format-check the final plan.
-- [ ] Commit and push the task-owned plan to `myhexin`.
+- [ ] Commit and push the task-owned plan to `legacy-remote`.

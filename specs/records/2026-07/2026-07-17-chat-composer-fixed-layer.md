@@ -11,7 +11,7 @@
 | Sources read | `AGENTS.md`; Browser control skill and complete selected-browser documentation; `specs/README.md`; `specs/records/2026-07/README.md`; the 2026-07-09 message/composer scrollbar alignment, 2026-07-16 conversation/home width alignment and composer/dialog parity, and 2026-07-17 sticky-scroll-owner records; `App.tsx`; `Conversation.tsx`; `ChatComposer.tsx`; `main.tsx`; `dom-utils.ts`; `base.css`; `workspace.css`; `conversation.css`; `composer.css`; focused source/browser tests; commit `48252c4c9`, its parent layout, blame, and current browser screenshot. |
 | Whole-repository search | `rg` enumerated every `chatHomeComposition`, `solidChatComposer`, `conversation-scroll-shell`, `chatScroll`, `chat-content-frame`, `chat-composer-stack`, sticky-composer assertion, bottom-clearance assertion, message padding, measured scrollbar gutter, auto-scroll call, and selector consumer. Production ownership is: `App.tsx` for DOM order; `Conversation.tsx` for portals, auto-scroll, history and measured layout reactions; `dom-utils.ts` for scroll following; `main.tsx` for symmetric scrollbar measurement; `base.css` for content/padding/gutter/scroll-width tokens; `workspace.css` for the full-height content frame; `conversation.css` for the scroll shell, overlay layer, empty home and scroll button; `composer.css` for the rendered composer stack. Focus/navigation-only `solidChatComposer` consumers in `CommandPalette`, titlebar and browser fixtures keep the stable ID. Regression owners are `conversation-empty-state-source`, `conversation-scroll-bottom-button`, `workspace-composer-density`, `overlay-architecture-guards`, `visible-scrollbar-whitelist`, `conversation-agent-rail`, `dom-utils-autoscroll`, `conversation-agent-rail-scroll-browser`, `chat-composer-resize-browser`, `conversation-scroll-bottom-button-browser`, `command-palette`, chronological-message and expert-squad browser suites. Historical records are evidence only and are not runtime sources. |
 | Independent agent feedback | None. The user did not request sub-agents, and active policy forbids unrequested delegation. |
-| Git baseline | `HEAD` `3f901bf72` matched `myhexin/work-v0.0.8beta-yr-0717`; the worktree was clean. The pre-change push completed with typecheck, route, docs, i18n and secret-scan hooks passing and reported everything up to date. |
+| Git baseline | `HEAD` `3f901bf72` matched `legacy-remote/work-v0.0.8beta-yr-0717`; the worktree was clean. The pre-change push completed with typecheck, route, docs, i18n and secret-scan hooks passing and reported everything up to date. |
 
 ## Causal chain
 
@@ -68,7 +68,7 @@ why the sticky regression passed despite the user-visible failure.
 5. Attempt the in-app browser only against isolated task evidence; do not
    refresh the user's running Overlay. Perform a second source/diff and
    screenshot review, update this record with exact evidence, commit with the
-   `dsw-33987` prefix, and push the current branch to `myhexin`.
+   `dsw-33987` prefix, and push the current branch to `legacy-remote`.
 
 ## Result
 

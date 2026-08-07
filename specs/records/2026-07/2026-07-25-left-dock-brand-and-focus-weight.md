@@ -25,7 +25,7 @@
 - Derive brand alignment from the primary navigation icon geometry instead of a selector-local pixel nudge.
 - Desktop-only scope. Do not restart, refresh, close, or otherwise interfere with the user's running OpenCorvus / Overlay process.
 - Launch Playwright through Node, never Bun.
-- Commit subjects start with `dsw-33987` and push the current main branch to `myhexin`.
+- Commit subjects start with `dsw-33987` and push the current main branch to `legacy-remote`.
 
 ### Sources read
 
@@ -69,7 +69,7 @@ The `Workspace` suffix is real production markup and is therefore present in bot
 2. Reduce `TitlebarBrand` to one accessible wordmark and delete the now-unused locale/style/test label path.
 3. Replace Work Ledger's unconditional `strong` title element with `.work-row-title`; set body weight at rest and strong weight only for active Mission/Chat rows.
 4. Extend source and Node browser tests for brand copy, icon-axis geometry, Project/body weight, inactive record/body weight, and active Mission/Chat strong weight.
-5. Run focused tests, Overlay typecheck/build, Node Playwright Vite acceptance, inspect screenshots, run documentation health, review the scoped diff, commit task-owned hunks, and push to `myhexin/v0.0.18beta`.
+5. Run focused tests, Overlay typecheck/build, Node Playwright Vite acceptance, inspect screenshots, run documentation health, review the scoped diff, commit task-owned hunks, and push to `legacy-remote/v0.0.18beta`.
 
 ## Progress
 

@@ -53,7 +53,7 @@ fields exist; identity and status always render.
 - Pass criteria: focused server/store/component tests, Overlay and server
   typecheck/build, i18n, real hover and keyboard focus assertions, geometric
   non-overlap, task-scoped screenshot review, docs health, diff review,
-  selective task commit, and git-cc push.
+  selective task commit, and legacy remote push.
 
 ## Progress
 
@@ -109,7 +109,7 @@ fields exist; identity and status always render.
 ## Delivery result
 
 - Functional commit: `e55ee18c2f` (`dsw-33987 restore agent rail hover input context`).
-- PASS: git-cc pre-push SDK import, AI runtime, 11-package monorepo typecheck,
+- PASS: legacy remote pre-push SDK import, AI runtime, 11-package monorepo typecheck,
   API route inventory, generated API docs, Overlay i18n, and secret scan.
-- `myhexin/v0.0.3beta` advanced from `d4f2ff57ab` to `e55ee18c2f` without
+- `legacy-remote/v0.0.3beta` advanced from `d4f2ff57ab` to `e55ee18c2f` without
   bypassing hooks.

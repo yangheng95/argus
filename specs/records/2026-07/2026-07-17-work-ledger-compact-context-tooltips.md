@@ -1,6 +1,6 @@
 # Work Ledger Compact Context Tooltips
 
-Status: implemented, visually verified, and delivered to git-cc
+Status: implemented, visually verified, and delivered to legacy remote
 
 ## Recall
 
@@ -8,11 +8,11 @@ Status: implemented, visually verified, and delivered to git-cc
 | --- | --- |
 | User request | Retry the Work Ledger hover repair. A project hover must show the folder name, the aggregate Task/Chat/Mission count, and the folder path. A Task/Chat/Mission hover must show the item name on one ellipsized line, the folder name, optional Git branch only if it is already implemented, and the start time. Every absent value must be omitted rather than replaced by a label or placeholder. The user's follow-up explicitly says not to implement Git branch projection when it does not already exist. |
 | Acceptance criteria | The project header no longer produces the long browser-native tooltip and opens one compact Kobalte Tooltip with folder name, non-zero aggregate Task/Chat/Mission count (including nested Mission Tasks), and path. Item rows open the existing compact Kobalte Tooltip with a one-line ellipsized real title, physical folder name, and relative start time derived from `created`; the old request description, exact/update timestamp, Task ID, project display name, full path, and unavailable branch are absent. Empty title/folder/start-time/count values produce no empty row. A real desktop browser run proves both popup structures, title overflow, missing-value omission, and screenshot quality. |
-| Hard constraints | Reuse the repository Tooltip, Button, Icon, Work Ledger response, project-directory label, and relative-time primitives. Do not add branch API/schema/VCS work, use the active project's branch for unrelated rows, or fetch on hover. Delete the native project-header `title` source and the superseded item-tooltip fields/styles. Do not touch or restart the running OpenCorvus/Overlay, create a worktree, add mobile/tablet scope, or stage unrelated scrollbar/rail/shadow edits. Playwright runs through Node. Commit subjects start with `dsw-33987` and delivery pushes to `myhexin`. |
+| Hard constraints | Reuse the repository Tooltip, Button, Icon, Work Ledger response, project-directory label, and relative-time primitives. Do not add branch API/schema/VCS work, use the active project's branch for unrelated rows, or fetch on hover. Delete the native project-header `title` source and the superseded item-tooltip fields/styles. Do not touch or restart the running OpenCorvus/Overlay, create a worktree, add mobile/tablet scope, or stage unrelated scrollbar/rail/shadow edits. Playwright runs through Node. Commit subjects start with `dsw-33987` and delivery pushes to `legacy-remote`. |
 | Sources read | `AGENTS.md`; browser-control skill; both supplied screenshots; current `ProjectLedgerGroup.tsx`, `WorkLedger.tsx`, `work-ledger.css`, Work Ledger frontend/backend schemas and route, Project/VCS implementation, locale catalogs, focused source tests, backend route tests, and the real-browser Work Ledger fixture; prior identity/path and compact-summary records. |
 | Whole-repository search evidence | `ProjectLedgerGroup.tsx` is the sole project-group owner and its main Button still sets the long concatenated native `title`; `projectLedgerGroupTip` and the optional group `title` prop have no caller. `WorkLedger.tsx` is the sole item-summary Tooltip producer and still renders description, exact/update timestamp, Task ID, project display name, and row path. `work-ledger.css` owns all corresponding obsolete selectors. `work-ledger-consolidation.test.ts` and `project-ledger-group-browser.test.ts` are the two direct Overlay regression owners. Work Ledger rows already carry canonical `title`, `directory`, `created`, and `updated`, but no branch field; per the revised user boundary, backend projection, VCS, route, and service schemas stay unchanged. |
 | Independent agent feedback | None. The user did not request sub-agents, and the active collaboration policy forbids unrequested delegation. |
-| Git baseline | Work started at `733b4f9e4` on `work-v0.0.8beta-yr-0717`, equal to `myhexin/work-v0.0.8beta-yr-0717`. Pre-existing unstaged scrollbar/rail/shadow and related browser-test/spec changes are user-owned and remain outside this delivery. |
+| Git baseline | Work started at `733b4f9e4` on `work-v0.0.8beta-yr-0717`, equal to `legacy-remote/work-v0.0.8beta-yr-0717`. Pre-existing unstaged scrollbar/rail/shadow and related browser-test/spec changes are user-owned and remain outside this delivery. |
 
 ## Causal chain
 
@@ -37,7 +37,7 @@ Status: implemented, visually verified, and delivered to git-cc
 2. Implement the two Tooltip compositions using the existing Work Ledger row contract while removing obsolete code and styles.
 3. Run focused backend/Overlay tests, typecheck, internationalization, route/OpenAPI checks where required, and the Node-launched real browser fixture.
 4. Inspect project and item popup screenshots at original resolution; iterate until geometry and hierarchy match the supplied compact references.
-5. Run documentation health and diff checks, update this record with evidence, stage only task-owned hunks/files, commit, and push to git-cc.
+5. Run documentation health and diff checks, update this record with evidence, stage only task-owned hunks/files, commit, and push to legacy remote.
 
 ## Verification commands
 
@@ -57,7 +57,7 @@ git diff --check
 - [x] Compact project and item Tooltip implementations complete without a branch-contract expansion.
 - [x] Focused, type, i18n, real-browser, and screenshot checks pass.
 - [x] Documentation health checks pass after all linked record files were tracked.
-- [x] Exact task-owned diff review, commit, pre-push quality hooks, and git-cc push complete.
+- [x] Exact task-owned diff review, commit, pre-push quality hooks, and legacy remote push complete.
 
 ## Result
 
@@ -78,4 +78,4 @@ git diff --check
 | Visual review | Passed at original resolution for `.scratch/work-ledger-project-compact-context-tooltip.png` and `.scratch/work-ledger-row-compact-context-tooltip.png`. The project card follows the three-row reference hierarchy; the item card is compact, its long title visibly ellipsizes, and start time stays right-aligned. |
 | Diff health | `git diff --check` passed. |
 | Documentation health | Passed: 81 tests and 1,282 expectations across historical links, document health, and product-document single-source checks. |
-| Delivery | Task-owned hunks were reviewed before commit. Commit `3c0d7540c` was pushed to `myhexin/work-v0.0.8beta-yr-0717`; all pre-push checks passed (SDK imports, AI runtime, repository typecheck, route inventory, docs, Overlay internationalization, and secret scan). A concurrent process added its already-staged titlebar/conversation files during the commit's index-lock window, so the shared commit also contains that separately owned work; no reset, rewrite, or destructive separation was performed. |
+| Delivery | Task-owned hunks were reviewed before commit. Commit `3c0d7540c` was pushed to `legacy-remote/work-v0.0.8beta-yr-0717`; all pre-push checks passed (SDK imports, AI runtime, repository typecheck, route inventory, docs, Overlay internationalization, and secret scan). A concurrent process added its already-staged titlebar/conversation files during the commit's index-lock window, so the shared commit also contains that separately owned work; no reset, rewrite, or destructive separation was performed. |

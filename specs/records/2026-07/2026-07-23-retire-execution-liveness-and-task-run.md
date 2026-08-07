@@ -3,7 +3,7 @@
 Date: 2026-07-23
 
 Status: Implemented, validated, committed, and pushed to
-`myhexin/v0.0.17beta`. Final independent read-only re-review returned `ACCEPT`
+`legacy-remote/v0.0.17beta`. Final independent read-only re-review returned `ACCEPT`
 after removal of the remaining Task-level acceptance double source and its
 residual read/write contracts. Only the restart-gated real Mirror replay
 remains recorded below.
@@ -580,7 +580,7 @@ Implementation completed on 2026-07-24 as a direct replacement:
 | Combined architecture regression | Passed: 137 tests across immutable acceptance publishing, Goal-attempt evidence ordering, orchestrator tools, execution-liveness retirement, immutable Goal attempts, root wake ordering, Visual QA evidence separation, and exact verification metrics. |
 | Documentation health | Passed: 21 historical-link tests and 61 document-health tests in the target split; the current consolidated command reports 82 passing tests across both files. The health inventory follows the renamed visible-final-message browser fixture and contains no stale deleted-file path. |
 | Independent final implementation review | `ACCEPT`: no blocking architectural residual found. The reviewer independently repeated typecheck, API/docs checks, the 137-test architecture suite, and the isolated Node/Playwright acceptance panel. |
-| Version-control delivery | Pushed commits `b9a6ebc52` (`dsw-33987 retire execution liveness and Task Run`) and `d0d15883d` (`dsw-33987 remove retired acceptance locale keys`) to `myhexin/v0.0.17beta` with all pre-push hooks enabled. |
+| Version-control delivery | Pushed commits `b9a6ebc52` (`dsw-33987 retire execution liveness and Task Run`) and `d0d15883d` (`dsw-33987 remove retired acceptance locale keys`) to `legacy-remote/v0.0.17beta` with all pre-push hooks enabled. |
 | Real Mirror replay | Not executed against the running application. The new schema/binary is not active until a separately authorized restart; this implementation did not restart, stop, refresh, or reload OpenCorvus, Overlay, or any sidecar. |
 
 The working tree also contains an independently authored output-tool/stage
@@ -608,6 +608,6 @@ The refactor is complete only when:
 6. Focused tests, full typecheck, API/docs checks, generated-contract checks,
    and the real visual replay pass.
 7. Changes are committed with the `dsw-33987` prefix and pushed to
-   `myhexin/v0.0.17beta`.
+   `legacy-remote/v0.0.17beta`.
 8. No running OpenCorvus, Overlay, or sidecar process is restarted without a
    separate explicit user request.

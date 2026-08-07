@@ -55,7 +55,7 @@ HoverCard. Two behaviors must be restored or corrected:
   OpenCorvus/Overlay process. Visual verification uses an isolated Vite process.
 - Playwright, if used as an interactive browser driver, runs through Node and does
   not create, update, or execute UI test files.
-- Commit subjects use `dsw-33987`; delivery goes to `myhexin`.
+- Commit subjects use `dsw-33987`; delivery goes to `legacy-remote`.
 
 ### Material read before implementation
 

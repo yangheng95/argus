@@ -36,7 +36,7 @@ acceptance-delivery level rather than using one Goal per persona row.
 - Do not restart, refresh, stop, or otherwise interfere with the running OpenCorvus or
   Overlay process.
 - Preserve unrelated `.DS_Store` files and concurrent repository work. Commit subjects
-  use `dsw-33987` and push the current main delivery branch to `myhexin` without bypassing
+  use `dsw-33987` and push the current main delivery branch to `legacy-remote` without bypassing
   hooks.
 
 ### Sources read

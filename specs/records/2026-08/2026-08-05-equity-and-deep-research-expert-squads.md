@@ -14,7 +14,7 @@ Reimplement and integrate two industry reference systems as first-class MOSA Age
 - Deep Research covers perspective discovery, evidence curation, outline construction, cited drafting, citation audit, and a polished long-form report.
 - Registry, Manager, payload, PromptProfileResolver, projected adapters, package skills, and exact workflow graphs receive positive contract coverage.
 - A real model executes each installed package as a directly published production Task. Final Markdown, structured Artifact lineage, and source/citation coverage are inspected against explicit reference-derived rubrics.
-- Validation, second review, commit, and `git-cc` push complete without staging unrelated worktree changes.
+- Validation, second review, commit, and legacy remote push complete without staging unrelated worktree changes.
 
 ### Hard constraints
 

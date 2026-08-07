@@ -10,7 +10,7 @@
 | Sources read               | Root `AGENTS.md`; Browser control skill; `specs/current/architecture/07-panel.md`; `2026-07-02-right-toolbar-task-scope-panels.md`; `2026-07-23-environment-summary-git-actions-and-resource-groups.md`; `main.tsx`; `RightDock.tsx`; `TaskDirBar.tsx`; `App.tsx`; `Board.tsx`; `ArchitectPanel.tsx`; both locale catalogs; and the existing historical UI-test assertion inventory without running those tests.                                                                                                                                                                                                     |
 | Whole-repository grep      | Exact source searches enumerated every `RightDockPanel` / `CenterWorkbenchPanel` `architect` member, the single `RIGHT_DOCK_CATALOG` metadata row consumed by both empty-state and add-menu launchers, the Environment `taskScopeShortcuts` architect counter and generic click handler, the `main.tsx` mounted `TabPanel`, view lookup, order member, and `ArchitectBoardPanel` import. The remaining `architect` occurrences belong to Agent/session identity, persisted board data, card color/message presentation, or the dormant reusable `ArchitectPanel`; they do not open the Right Dock Architecture page. |
 | Independent agent feedback | None. The user did not request sub-agents; the frontend path is small and shares one catalog plus one mount owner.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| Git baseline               | Delivery branch is `work-v0.0.24beta-yr-0729`; commit `4be3b20325` was pushed to `myhexin/work-v0.0.24beta-yr-0729` before this task's edits. Existing workspace-corner and wave-cadence changes are unrelated concurrent work and must remain untouched.                                                                                                                                                                                                                                                                                                                                                            |
+| Git baseline               | Delivery branch is `work-v0.0.24beta-yr-0729`; commit `4be3b20325` was pushed to `legacy-remote/work-v0.0.24beta-yr-0729` before this task's edits. Existing workspace-corner and wave-cadence changes are unrelated concurrent work and must remain untouched.                                                                                                                                                                                                                                                                                                                                                            |
 
 ## Cause Chain
 
@@ -59,17 +59,17 @@
    that no Architecture entry, tab, component, or click trigger remains.
 6. Re-grep every frontend call site, review the exact task-owned diff and visual
    evidence a second time, then commit with the required `dsw-33987` prefix,
-   push to `myhexin`, and verify remote convergence.
+   push to `legacy-remote`, and verify remote convergence.
 
 ## Progress
 
 - [x] Read the current architecture, production owners, historical decisions,
       and every exact frontend call site.
 - [x] Record Recall, cause chain, complete disposition, and verification plan.
-- [x] Commit `7b0df00c33` and push the pre-change plan to git-cc.
+- [x] Commit `7b0df00c33` and push the pre-change plan to legacy remote.
 - [x] Remove the frontend Architecture destination and all launchers.
 - [x] Complete non-UI verification and real-page visual acceptance.
-- [x] Complete second review, commit `b8fa951c84`, and git-cc convergence.
+- [x] Complete second review, commit `b8fa951c84`, and legacy remote convergence.
 
 ## Visual Evidence
 

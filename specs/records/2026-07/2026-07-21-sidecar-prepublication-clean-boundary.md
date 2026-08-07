@@ -18,7 +18,7 @@ Status: superseded by `2026-07-21-sidecar-upgrade-startup-lease-boundary-repair.
 4. 没有 lease ownership 证据的旧 payload 必须拒绝新发布并暴露精确路径；不得把目录年龄、进程名或猜测当成所有权证明。
 5. lifecycle lock 内清理已中断发布遗留的 `.sidecar-*-extract-*` 目录；非 Sidecar 目录保持不变。
 6. Rust 行为测试覆盖无主旧 payload、live lease、无 lease 旧目录、未发布 extraction、当前 payload 与无关目录；Overlay source-contract、typecheck、文档健康和打包检查通过。
-7. 不停止、刷新或重启用户正在运行的 OpenCorvus；提交以 `dsw-33987` 开头并推送 `myhexin/v0.0.12beta`。
+7. 不停止、刷新或重启用户正在运行的 OpenCorvus；提交以 `dsw-33987` 开头并推送 `legacy-remote/v0.0.12beta`。
 
 ### Hard constraints
 

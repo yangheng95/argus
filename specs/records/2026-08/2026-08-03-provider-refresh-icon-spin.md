@@ -21,7 +21,7 @@
 - Reuse the existing global `oc-spin` keyframes and Provider-specific duration token; do not add another animation definition or duration.
 - Preserve the independent `refreshingProviders` and `refreshingModels` signals and their current `data-spinning` projection.
 - Preserve unrelated workspace changes and do not restart or refresh the user's running OpenCorvus / Overlay process.
-- Commit subjects use the `dsw-33987` prefix and delivery is pushed to `myhexin`.
+- Commit subjects use the `dsw-33987` prefix and delivery is pushed to `legacy-remote`.
 
 ### Sources read
 
@@ -56,7 +56,7 @@ The follow-up inspection found that `.provider-refresh-icon` is an `inline-block
 
 1. Give the shared icon wrapper an explicit centered square geometry using `--oc-icon-size-standard`, while retaining the existing `oc-spin` animation and Provider duration token.
 2. Build and typecheck the Overlay, then render an isolated desktop page, trigger both real refresh actions, inspect screenshots, and correct any remaining visual issue.
-3. Run documentation health checks, inspect the final diff, perform a second review, commit only task-owned files, push to `myhexin`, and verify remote alignment.
+3. Run documentation health checks, inspect the final diff, perform a second review, commit only task-owned files, push to `legacy-remote`, and verify remote alignment.
 
 ## Progress
 

@@ -13,7 +13,7 @@
 | Real pre-fix reproduction | The real Vite Overlay at `http://127.0.0.1:5173/` used the current main OpenCorvus backend. Opening `目标` from the empty Dock correctly selected it. Opening `需求` next through the real `+` menu closed the menu but left `目标` with `aria-selected="true"` and `tabindex="0"`; `需求` had `aria-selected="false"` and `tabindex="-1"`, and `centerWorkbenchGoals` remained the active body. No fixture, test hook, local signal, query override, or synthetic record was used. |
 | First correction review | Keying the fixed-tool collection by stable strings repaired both `需求` and `架构` in the real page, but opening a new Browser instance still restored `目标`. The new Browser tab appeared with its unique `browser:<UUID>` identity, yet `目标` remained selected and its body active. This proves the first correction covered replacement of fixed placeholders but not registration of a genuinely new dynamic key. |
 | Independent review | Claude Code `2.1.147` was invoked from the repository root with only `Read,Grep,Glob`, no session persistence, streaming output, and explicit prohibitions on edits, UI tests, delegation, and worktrees. It exited before reading the repository because the local command-line interface is not authenticated (`Not logged in`). No Claude finding is claimed; the primary Agent owns the evidence-based repair and second review. |
-| Git baseline | Initial inspection found branch `work-v0.0.24beta-yr-0729` and `myhexin/work-v0.0.24beta-yr-0729` at `e7d299d5c1`. While this Recall was being prepared, the existing Sub-Agent tab/menu work was independently committed and pushed as `0428cc1123`; the current branch and remote then converged at that commit. Remaining pre-existing shared-button and delegated-context-record edits are unrelated and must stay excluded from this task's selective commits. |
+| Git baseline | Initial inspection found branch `work-v0.0.24beta-yr-0729` and `legacy-remote/work-v0.0.24beta-yr-0729` at `e7d299d5c1`. While this Recall was being prepared, the existing Sub-Agent tab/menu work was independently committed and pushed as `0428cc1123`; the current branch and remote then converged at that commit. Remaining pre-existing shared-button and delegated-context-record edits are unrelated and must stay excluded from this task's selective commits. |
 
 ## Causal Chain
 
@@ -85,7 +85,7 @@ branch instead of treating the first partial result as accepted.
    capture the affected Dock, and personally review it.
 5. Re-grep the complete owner set, review the exact diff and screenshot a
    second time, update this record with delivery evidence, selectively commit
-   only task-owned paths/hunks, fetch, push to `myhexin`, and verify remote
+   only task-owned paths/hunks, fetch, push to `legacy-remote`, and verify remote
    convergence.
 
 ## Progress
@@ -93,24 +93,24 @@ branch instead of treating the first partial result as accepted.
 - [x] Screenshot, source owners, prior architecture records, full call-site
       grep, Git baseline, and real pre-fix interaction inspected.
 - [x] Authentication-blocked Claude Code read-only review attempt recorded.
-- [x] Recall commit and git-cc push complete.
+- [x] Recall commit and legacy remote push complete.
 - [x] Product correction, targeted typecheck/build, and exact-diff verification
       complete; the final whole-worktree i18n check is waiting on an unrelated
       concurrent Image Preview locale cleanup.
 - [x] Real-page interaction, screenshot review, and second review complete.
 - [x] Final record update and task-owned product commit complete.
-- [x] Final git-cc push and remote convergence complete.
+- [x] Final legacy remote push and remote convergence complete.
 
 ## Delivery Evidence
 
 - Recall commit `797f205f71` passed the normal pre-push hook and was pushed to
-  `myhexin/work-v0.0.24beta-yr-0729` before product edits.
+  `legacy-remote/work-v0.0.24beta-yr-0729` before product edits.
 - Product commit `7da4ebe62b` contains only the two product owners, this
   delivery record, and the reviewed real-page screenshot; the concurrent
   `main.tsx` formatting hunk was excluded by selective staging.
 - The normal final pre-push hook passed full-repository typecheck, route
   inventory, generated documentation, localization, and secret scanning. A
-  concurrent push advanced the git-cc branch to `9cc25ef34b` first; explicit
+  concurrent push advanced the legacy remote branch to `9cc25ef34b` first; explicit
   ancestor checks confirmed both task commits were already present there.
 - Fixed-tool regression path: in the real completed Work conversation
   `修复公开开源项目缺陷`, `目标` was active first. Selecting `需求` from the

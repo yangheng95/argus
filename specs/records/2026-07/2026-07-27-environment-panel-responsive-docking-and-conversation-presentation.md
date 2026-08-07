@@ -64,7 +64,7 @@ requested behavior is:
   Node-launched fixture.
 - Preserve the unrelated Composer pointer-focus, Work Ledger, Task-directory
   row, and design-language working-tree edits already present.
-- Commit subjects use `dsw-33987`; delivery goes to `myhexin`.
+- Commit subjects use `dsw-33987`; delivery goes to `legacy-remote`.
 
 ### Material read before implementation
 
@@ -112,11 +112,11 @@ performed the required repository-wide call-point audit.
 ### Working-tree and remote evidence
 
 The branch started at `348db78255` and matched the locally known
-`myhexin/work-v0.0.19beta-yr-0727` ref. The worktree already contained unrelated
+`legacy-remote/work-v0.0.19beta-yr-0727` ref. The worktree already contained unrelated
 uncommitted edits plus an incomplete Environment dock attempt, so a clean
 pre-change commit was not possible without taking ownership of user/concurrent
-work. `git fetch myhexin` was attempted before implementation and failed because
-`git-cc.myhexin.com` could not be resolved; local implementation and validation
+work. `git fetch legacy-remote` was attempted before implementation and failed because
+`legacy remote.myhexin.com` could not be resolved; local implementation and validation
 continue without rewriting or hiding that external blocker.
 
 ## Root cause
@@ -150,7 +150,7 @@ creating a second message store or inferring content from names.
 5. Update verification evidence and architecture, run typecheck/build/i18n and
    documentation health, perform a second diff review, commit only task-owned
    hunks with `dsw-33987`, reconcile the delivery branch, and push to
-   `myhexin`.
+   `legacy-remote`.
 
 ## Verification ledger
 

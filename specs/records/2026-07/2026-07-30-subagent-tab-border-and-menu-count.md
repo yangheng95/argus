@@ -11,7 +11,7 @@
 | Sources read | Root `AGENTS.md`; Browser control skill; supplied screenshot; `specs/current/architecture/12-overlay-card-system.md`; `2026-07-27-subagent-conversation-tab-overflow.md`; `2026-07-28-right-dock-subagent-tab-standard-typography.md`; `SubagentConversationPanel.tsx`; `inspector.css`; shared `Tabs.tsx`; and `tabs.css`. |
 | Whole-repository grep | `SubagentConversationPanel.tsx` is the sole production markup owner for `subagent-conversation-panel__agent-tab`, `subagent-conversation-panel__agent-tabs`, `subagent-conversation-panel__agent-menu-count`, and `data-ui="subagent-agent-menu-trigger"`. `inspector.css` is the sole feature-local style owner. `main.tsx` is the only production mount and retains selection ownership. Existing source/browser UI tests mention the selector but are prohibited from modification or execution in this task. |
 | Independent review | Claude Code `2.1.147` was invoked from the repository root with only `Read,Grep,Glob`, no session persistence, streaming output, and explicit prohibitions on edits, UI tests, delegation, and worktrees. It exited before reading the repository because the local command-line interface is not authenticated (`Not logged in`). No Claude finding is claimed; the primary Agent owns the evidence-based repair and second review. |
-| Git baseline | Branch `work-v0.0.24beta-yr-0729` and `myhexin/work-v0.0.24beta-yr-0729` were converged at `52ca2ead54`. Pre-existing Overlay and specification changes are unrelated and will be preserved and excluded from this task's selective commits. |
+| Git baseline | Branch `work-v0.0.24beta-yr-0729` and `legacy-remote/work-v0.0.24beta-yr-0729` were converged at `52ca2ead54`. Pre-existing Overlay and specification changes are unrelated and will be preserved and excluded from this task's selective commits. |
 
 ## Cause Chain
 
@@ -66,7 +66,7 @@ resting-border source rather than changing overflow behavior.
    result. Do not manufacture records or selection state.
 6. Re-grep every owner, review the exact diff and screenshot a second time,
    update this record, selectively commit only task-owned paths/hunks, fetch,
-   push to `myhexin`, and verify remote convergence.
+   push to `legacy-remote`, and verify remote convergence.
 
 ## Progress
 
@@ -75,7 +75,7 @@ resting-border source rather than changing overflow behavior.
 - [x] Authentication-blocked Claude Code review attempt recorded honestly.
 - [x] Recall, cause chain, call-site disposition, and verification plan
       recorded.
-- [x] Recall committed as `c933b9ed46` and pushed to git-cc before the product
+- [x] Recall committed as `c933b9ed46` and pushed to legacy remote before the product
       correction.
 - [x] Product correction and static verification complete: Overlay typecheck,
       localization validation, the production Vite build, the 22-case
@@ -83,7 +83,7 @@ resting-border source rather than changing overflow behavior.
       8-case product-document single-source suite, `docs:check`, target-path
       `git diff --check`, and the final owner grep pass.
 - [x] Real-page interaction, screenshot review, and second review complete.
-- [x] Final record update, task-owned commit, and git-cc push prepared for the
+- [x] Final record update, task-owned commit, and legacy remote push prepared for the
       delivery commit below; the remote convergence result is reported in the
       user-facing handoff.
 

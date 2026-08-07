@@ -47,7 +47,7 @@ the same `#G3V1` change group.
 - Do not restart, refresh, close, or otherwise interfere with the user's
   running OpenCorvus or Overlay process.
 - Start Playwright with Node, not Bun.
-- Commit subjects use the required `dsw-33987` prefix and push to `myhexin`
+- Commit subjects use the required `dsw-33987` prefix and push to `legacy-remote`
   through the normal hooks.
 
 ### Sources read
@@ -145,7 +145,7 @@ used as sole causal proof.
    or interaction regression, rerun affected checks, then perform a second
    exact-diff/call-site review.
 6. Record final evidence, commit only task-owned changes, fetch/reconcile the
-   current branch, push to `myhexin`, and confirm local/remote equality.
+   current branch, push to `legacy-remote`, and confirm local/remote equality.
 
 ## Status
 
@@ -155,7 +155,7 @@ used as sole causal proof.
 - [x] Real Review browser screenshot and visual correction loop.
 - [x] Full validation and second review.
 
-The final implementation commit and `myhexin` push are the delivery action and
+The final implementation commit and `legacy-remote` push are the delivery action and
 are reported with their resulting Git identifiers.
 
 ## Implementation

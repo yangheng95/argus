@@ -10,7 +10,7 @@
 | Sources read | Root `AGENTS.md`; Browser control skill; `specs/current/architecture/07-panel.md`; `specs/current/architecture/07-panel-reactivity.md`; `2026-07-29-browser-tab-task-preview-separation.md`; `2026-07-29-right-dock-codex-parity-and-browser-tab-instances.md`; `packages/overlay/src/main.tsx`; `BrowserPreviewPanel.tsx`; native Browser service and Tauri host call sites; Git history for message-link preview routing. |
 | Whole-repository grep | Searched production, current architecture, historical records, and directly related Overlay tests for `data-browser-preview-url`, `openBrowserPreviewFromMessage`, `BrowserPreviewPanel`, `browserPreview.sync`, native navigation, address controls, Right Dock Browser identities, and automatic ready-target reveal. The search found the obsolete message-link dispatcher plus existing UI/source-string tests tied to the touched Browser/Right Dock surface; those UI tests and their dedicated fixture must be removed without running them. |
 | Independent agent feedback | None. The user did not request sub-agents, so the primary agent owns implementation and second review. |
-| Git baseline | `work-v0.0.29beta-yr-0803` was clean and synchronized with `myhexin/work-v0.0.29beta-yr-0803` at `cb968457ea` before this record. The pre-existing checkpoint commit was preserved, retitled with the required `dsw-33987` prefix, and pushed through the normal hook. |
+| Git baseline | `work-v0.0.29beta-yr-0803` was clean and synchronized with `legacy-remote/work-v0.0.29beta-yr-0803` at `cb968457ea` before this record. The pre-existing checkpoint commit was preserved, retitled with the required `dsw-33987` prefix, and pushed through the normal hook. |
 
 ## Causal chain
 
@@ -52,14 +52,14 @@
    and rendered Browser page in screenshots, then repeat the interaction and
    exact-diff review as the mandatory second verification.
 6. Update this record with evidence, commit with the `dsw-33987` prefix, fetch
-   and reconcile the tracked git-cc branch, then push through the normal hook.
+   and reconcile the tracked legacy remote branch, then push through the normal hook.
 
 ## Progress
 
 - [x] Recall, causal chain, and call-site inventory recorded.
 - [x] Product routing and directly related obsolete UI-test cleanup complete.
 - [x] Non-UI/static verification and real-page visual acceptance complete.
-- [x] Second review, commit preparation, remote convergence checks, and git-cc delivery complete.
+- [x] Second review, commit preparation, remote convergence checks, and legacy remote delivery complete.
 
 ## Delivered behavior
 

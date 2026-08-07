@@ -25,7 +25,7 @@ from the product's current condition.
 - Preserve the earlier report's 11 OpenCorvus-source items and four
   OpenMirror-source items as the comparison baseline.
 - Reassess every item against the current `v0.0.30-beta` work branch after it
-  has incorporated the latest same-version git-cc product branch.
+  has incorporated the latest same-version legacy remote product branch.
 - Separate code/history evidence from current real-page interaction evidence;
   a commit title or an implementation record alone is not a passing result.
 - Identify requirements whose current product semantics replaced the earlier
@@ -48,7 +48,7 @@ from the product's current condition.
   destructive Git operation.
 - Report and spec files use the repository's canonical `specs` index rules.
 - Commit subjects begin with `dsw-33987`, and repository changes are pushed to
-  the `myhexin` git-cc remote.
+  the legacy remote.
 
 ### Material read before implementation
 
@@ -68,8 +68,8 @@ from the product's current condition.
 ### Repository and history evidence
 
 - Initial branch state was clean and synchronized with
-  `myhexin/work-v0.0.30beta-yr-0804` at `cb395e5a2d`.
-- `myhexin/v0.0.30beta` had advanced through `fc4c4ec1f3`; it was merged into the
+  `legacy-remote/work-v0.0.30beta-yr-0804` at `cb395e5a2d`.
+- `legacy-remote/v0.0.30beta` had advanced through `fc4c4ec1f3`; it was merged into the
   work branch as `e5d5d03675` and pushed after typecheck, route, API document,
   localization, and secret-scan hooks passed.
 - The merge exposed seven unreferenced pre-convergence Goal workflow locale keys.
@@ -114,7 +114,7 @@ agent audit. No conclusion is attributed to an unperformed independent review.
 - [x] New Markdown, HTML, screenshots, and ZIP package.
 - [x] Browser visual review and second review.
 - [x] Document health validation.
-- [x] Final commit and git-cc push.
+- [x] Final commit and legacy remote push.
 
 ## Result
 
@@ -192,5 +192,5 @@ were staged, the original commands were rerun serially without changing tests
 or timeouts and passed completely.
 
 Immediately before the final report commit, the branch was fetched from
-`myhexin`; it was zero commits behind its work-branch upstream and contained
+`legacy-remote`; it was zero commits behind its work-branch upstream and contained
 the latest `v0.0.30beta` product history.

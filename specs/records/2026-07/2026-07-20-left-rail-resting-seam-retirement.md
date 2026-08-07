@@ -5,12 +5,12 @@
 | Item | Detail |
 | --- | --- |
 | User requirement | Hide the extra vertical line highlighted between the left rail and the conversation workspace in `codex-clipboard-7721531d-3ff8-4c8a-bcf0-a980d319f965.png`. |
-| Acceptance criteria | The left rail has no permanent hard vertical seam at rest; the workspace keeps its established soft ambient edge and rounded top-left corner; the existing left-pane resize hit target remains transparent at rest and retains pointer, hover, focus, keyboard, persistence, and accessibility behavior; focused source tests, a Node-launched real browser fixture, screenshot review, Overlay TypeScript, documentation health, second review, commit, and git-cc push succeed. |
+| Acceptance criteria | The left rail has no permanent hard vertical seam at rest; the workspace keeps its established soft ambient edge and rounded top-left corner; the existing left-pane resize hit target remains transparent at rest and retains pointer, hover, focus, keyboard, persistence, and accessibility behavior; focused source tests, a Node-launched real browser fixture, screenshot review, Overlay TypeScript, documentation health, second review, commit, and legacy remote push succeed. |
 | Hard constraints | Visual-only desktop scope. Do not remove or replace `#leftPaneResizer`, change pane geometry/state, add a covering mask, theme override, fallback, compatibility selector, gate, mobile/tablet work, or worktree. Do not restart, refresh, close, or otherwise interfere with the user's running OpenCorvus/Overlay. Playwright starts through Node in an isolated fixture. Preserve unrelated dirty Agent Rail and Memory work. |
 | Supplied evidence | The supplied 252-by-1554 crop was inspected at original resolution. Pixel sampling shows a persistent dark two-pixel band at x=58..59 across y=54, 95, 200, 500, 1000, and 1500, between the pale rail and white workspace. |
 | Sources read | `AGENTS.md`; Browser control skill; `specs/current/architecture/99-principles.md`; the 2026-07-10 two-region shell, 2026-07-14 workspace surface continuity, 2026-07-17 rail/shadow parity, 2026-07-18 Windows titlebar/Dock continuity, 2026-06-17 left-pane accessibility, and 2026-06-23 pane legal-size records; current `App.tsx`, `activity.css`, `workspace.css`, `conversation.css`, pane service, static tests, and real browser fixtures. |
 | Whole-repository grep | `App.tsx` is the only production owner of `#leftActivityShell`, `#leftPaneResizer`, and `#workspaceMain`. `activity.css` is the only production rule that gives `.left-activity-shell` the resting inset edge. `workspace.css` is the only owner of the transparent pane-resizer box/hit area and the established workspace ambient shadow. `left-work-ledger-shell.test.ts`, `left-dock-opaque-shell.test.ts`, and architecture guards cover rail ownership; `pane-config.test.ts`, `pane-resizer-css.test.ts`, and `left-pane-resizer-browser.test.ts` cover interaction and geometry; `workspace-surface-continuity.test.ts` and its Node browser fixture cover material/shadow/seam behavior. No route, schema, API, or runtime state writer is involved. |
-| Git/toolchain baseline | `HEAD` and `myhexin/work-v0.0.11beta-yr-0720` were both `9e63b5fe5` after fetch. The first pre-push exposed a missing installed `property-information`; `bun install --frozen-lockfile` restored it without tracked changes. The second exposed stale Software Development Kit (SDK) `dist` declarations; rebuilding the canonical SDK artifacts made Overlay typecheck pass without tracked SDK changes. Concurrent unrelated Agent Rail and Memory edits appeared afterward and are excluded from this task. |
+| Git/toolchain baseline | `HEAD` and `legacy-remote/work-v0.0.11beta-yr-0720` were both `9e63b5fe5` after fetch. The first pre-push exposed a missing installed `property-information`; `bun install --frozen-lockfile` restored it without tracked changes. The second exposed stale Software Development Kit (SDK) `dist` declarations; rebuilding the canonical SDK artifacts made Overlay typecheck pass without tracked SDK changes. Concurrent unrelated Agent Rail and Memory edits appeared afterward and are excluded from this task. |
 | Independent agent feedback | None. The user did not request sub-agents, and the active collaboration policy forbids unrequested delegation. |
 
 ## Causal chain
@@ -39,14 +39,14 @@
 2. Remove the duplicated rail-local inset edge at its sole production owner.
 3. Run focused source tests, Overlay TypeScript and internationalization checks, and Node browser fixtures for three-theme continuity and left-pane keyboard/pointer resize.
 4. Inspect the regenerated task-scoped screenshots at original resolution; iterate if a hard seam remains or the workspace edge/corner/resizer regresses.
-5. Run historical/document-health checks, re-grep owners, review the exact diff and screenshots a second time, then commit only task-owned files with the `dsw-33987` prefix and push the current branch to `myhexin` after fetch/convergence checks.
+5. Run historical/document-health checks, re-grep owners, review the exact diff and screenshots a second time, then commit only task-owned files with the `dsw-33987` prefix and push the current branch to `legacy-remote` after fetch/convergence checks.
 
 ## Progress
 
 - [x] Supplied screenshot, pixel evidence, history, architecture decisions, production owners, tests, and full call surface inspected.
 - [x] Regression tests and production source updated.
 - [x] Real browser and visual acceptance complete.
-- [ ] Second review, documentation health, commit, and git-cc push complete.
+- [ ] Second review, documentation health, commit, and legacy remote push complete.
 
 ## Verification evidence
 

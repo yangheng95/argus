@@ -46,7 +46,7 @@ Create `expert-squads/mirror/mirror-prism-unified/` as a new source package:
 - [x] Add focused source-package, workflow-topology, Manager/Resolver, inactive-isolation, and authoring regression tests.
 - [x] Stage the new package and regenerate the Git-index-backed payload.
 - [ ] Run focused tests, payload freshness, repository dynamic-package validation, SDK tests, required docs tests, typecheck, and `git diff --check`.
-- [ ] Perform a second diff/evidence review, record validation results, commit with the `dsw-33987` prefix, and push the current main branch to `myhexin`.
+- [ ] Perform a second diff/evidence review, record validation results, commit with the `dsw-33987` prefix, and push the current main branch to `legacy-remote`.
 
 ## Validation plan
 

@@ -50,7 +50,7 @@ Why the previous path did not remain fixed: the earlier repair correctly separat
 3. Update current architecture and documentation indexes without overwriting the existing folder-picker entries.
 4. Run the focused Overlay source test, i18n check, Overlay typecheck/build, and Node-launched Multica browser fixture.
 5. Inspect the fresh task-scoped question screenshot at original resolution. If titles are not names or any option state is visually wrong, correct and rerun.
-6. Run historical-link/document-health tests and `git diff --check`, perform a second complete diff review, commit only this task's files with the `dsw-33987` prefix, and push `myhexin`.
+6. Run historical-link/document-health tests and `git diff --check`, perform a second complete diff review, commit only this task's files with the `dsw-33987` prefix, and push `legacy-remote`.
 
 ## Verification result
 

@@ -27,7 +27,7 @@ Owner: Codex
 - 修复走 Mission prompt 与架构语义，不增加 Host gate、关键词路由、状态机、fallback
   或第二 active Squad 来源。
 - 增加纯非 UI 的正向 prompt 契约回归；不新增、修改或运行 UI 自动化测试。
-- 保留共享工作区全部并行改动，只提交本任务路径并推送到 `myhexin` 当前交付分支。
+- 保留共享工作区全部并行改动，只提交本任务路径并推送到 `legacy-remote` 当前交付分支。
 
 ### Hard constraints
 

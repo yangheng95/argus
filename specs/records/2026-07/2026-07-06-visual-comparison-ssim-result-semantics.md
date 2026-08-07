@@ -111,4 +111,4 @@ This is not a new acceptance gate. It is a correction to the tool-produced `stat
 
 ## Push Note
 
-Before implementation, pushing existing ahead commits to `myhexin` ran local pre-push checks successfully but remote pre-receive rejected the push because the two existing unpushed commit messages do not start with the required `dsw-<taskID>` prefix. This is not caused by the SSIM repair, but it affects final push unless those existing commit messages are rewritten or otherwise resolved.
+Before implementation, pushing existing ahead commits to `legacy-remote` ran local pre-push checks successfully but remote pre-receive rejected the push because the two existing unpushed commit messages do not start with the required `dsw-<taskID>` prefix. This is not caused by the SSIM repair, but it affects final push unless those existing commit messages are rewritten or otherwise resolved.

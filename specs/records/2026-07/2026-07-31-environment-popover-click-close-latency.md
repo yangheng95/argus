@@ -23,7 +23,7 @@ HoverCard as the delivery surface.
 4. TypeScript typecheck, Vite build, localization validation, and documentation
    health checks pass.
 5. The finished change is reviewed, committed with the `dsw-33987` prefix, and
-   pushed to the `myhexin` `v0.0.26beta` delivery branch without including the
+   pushed to the `legacy-remote` `v0.0.26beta` delivery branch without including the
    unrelated user edit in
    `specs/artifacts/opencorvus-workbuddy-qoderwork-multica-codex-benchmark-catalog.md`.
 
@@ -150,7 +150,7 @@ Why timing or CSS changes would not fix the root:
   through the in-app Browser, click the Environment trigger open and closed,
   inspect the immediate state, and manually review screenshots.
 - Perform a second source/diff review, commit with `dsw-33987`, fetch the
-  current `myhexin` branch, and push the main worktree branch.
+  current `legacy-remote` branch, and push the main worktree branch.
 
 ## Validation results
 

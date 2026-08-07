@@ -41,7 +41,7 @@ The fresh Codex manual confirms that Local uses the current project directory an
 2. Add failing overlay service/source assertions, then replace the two inert rows with Kobalte-backed dropdown triggers wired to the current directory and VCS sources.
 3. Extend the existing Node/Playwright task-dirbar fixture to prove visible menus, keyboard semantics, branch mutation, stable parent popover behavior, region geometry, and screenshots.
 4. Run focused server/overlay tests, typecheck, internationalization, route parity, document health, and the Node browser checker. Inspect both Local and branch menu screenshots and correct visual mismatches.
-5. Review the complete task diff independently against this Recall, append result evidence, commit with the `dsw-33987` prefix, and push the current main delivery branch to `myhexin` without including unrelated working-tree changes.
+5. Review the complete task diff independently against this Recall, append result evidence, commit with the `dsw-33987` prefix, and push the current main delivery branch to `legacy-remote` without including unrelated working-tree changes.
 
 ## Verification Plan
 
@@ -83,7 +83,7 @@ Verification evidence:
 - project and route branch tests: 22 passed, 2 pre-existing skips, 0 failed;
 - Overlay menu/service/layout/primitive tests: 16 passed with 311 assertions;
 - Overlay typecheck, panel internationalization check, production Vite build,
-  generated OpenAPI/SDK parity, API docs, and the git-cc pre-push hook passed;
+  generated OpenAPI/SDK parity, API docs, and the legacy remote pre-push hook passed;
 - task-scoped browser scenario passed in 6.0 seconds after the final build;
 - `.scratch/task-dirbar-runtime-local-menu.png` and
   `.scratch/task-dirbar-runtime-branch-menu.png` were inspected at original

@@ -20,7 +20,7 @@
 
 ### Hard constraints
 
-- Root `AGENTS.md` applies: fix the root interaction model, preserve one source, add regression tests, use real screenshot review for frontend work, avoid fallback/gates/state machines, and push task commits to `myhexin` with `dsw-33987` subjects.
+- Root `AGENTS.md` applies: fix the root interaction model, preserve one source, add regression tests, use real screenshot review for frontend work, avoid fallback/gates/state machines, and push task commits to `legacy-remote` with `dsw-33987` subjects.
 - Existing unrelated tracked and untracked worktree changes remain untouched and are excluded from this task's commits.
 - Playwright is started by Node, never Bun.
 
@@ -52,7 +52,7 @@
 
 ### Baseline evidence
 
-- `v0.0.8beta` and `myhexin/v0.0.8beta` are aligned (`0 0`) after fetch.
+- `v0.0.8beta` and `legacy-remote/v0.0.8beta` are aligned (`0 0`) after fetch.
 - The worktree contains unrelated in-progress conversation styling, browser tests, frontend-replica fixture files, and packaged artifacts. They are preserved and will not be staged.
 
 ## Root design
@@ -67,7 +67,7 @@ The placeholder keeps the existing rotating project examples but prefixes them w
 2. Extend `ComposerMentionMenu` and token-based CSS with an automatically visible child Listbox, pointer-driven parent switching, and accessible list labels.
 3. Add bilingual placeholder/cascade copy and focused unit/UI/browser assertions that the intermediate text transition no longer occurs.
 4. Run the focused test/build/browser screenshot loop, inspect and correct the rendered desktop cascade, then run docs health and a second diff review.
-5. Commit only task-owned files with the required subject prefix and push `v0.0.8beta` to `myhexin` without bypassing hooks.
+5. Commit only task-owned files with the required subject prefix and push `v0.0.8beta` to `legacy-remote` without bypassing hooks.
 
 ## Progress
 
@@ -75,7 +75,7 @@ The placeholder keeps the existing rotating project examples but prefixes them w
 - [x] Record root cause, design, acceptance, and worktree boundary.
 - [x] Implement the placeholder and cascading menu.
 - [x] Complete automated and visual verification.
-- [x] Complete second review, commit, and git-cc push.
+- [x] Complete second review, commit, and legacy remote push.
 
 ## Verification evidence
 
@@ -85,4 +85,4 @@ The placeholder keeps the existing rotating project examples but prefixes them w
 - The Node-started headed browser test passed at 1440×900. It proves the placeholder begins with both entry points, `@` exposes both controlled Listboxes, pointer hover and keyboard category movement replace the child rows without changing the textarea, keyboard confirmation writes the final exact Squad directive in one operation, direct filtered completion still works, atomic caret/deletion still works, typing performs no extra catalog/mount requests, and Mission wake receives the exact `frontend-replica` manifest identity.
 - Inspected `.scratch/composer-mentions/placeholder-light.png`, `category-light.png`, and `squad-dark.png`. The placeholder prefix is legible before the rotating example; the category and entity panels are visibly adjacent, aligned, unclipped, and use the existing light-theme popover/listbox material; direct filtered completion remains visually coherent in the dark theme.
 - Second review found and repaired the caret-boundary collision: at caret position zero, `findComposerMentionQuery` previously treated the `@` at the beginning of a completed directive as an active empty query. That allowed the new cascade Arrow Right handler to preempt atomic directive navigation. The parser now rejects a query unless the caret is after `@`, and a pure regression assertion covers the boundary.
-- Commit `70029f288` (`dsw-33987 add cascading composer mentions`) passed the full pre-push typecheck, API route, generated documentation, i18n, and secret-scan hook and was delivered to `myhexin/v0.0.8beta`.
+- Commit `70029f288` (`dsw-33987 add cascading composer mentions`) passed the full pre-push typecheck, API route, generated documentation, i18n, and secret-scan hook and was delivered to `legacy-remote/v0.0.8beta`.

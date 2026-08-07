@@ -41,7 +41,7 @@
   remaining renderer or interaction surface; its obsolete non-rendering unit
   test is deleted with the retired behavior.
 - Commit subjects start with `dsw-33987` and the completed change is pushed to
-  `myhexin/v0.0.28beta`.
+  `legacy-remote/v0.0.28beta`.
 
 ### Sources read
 

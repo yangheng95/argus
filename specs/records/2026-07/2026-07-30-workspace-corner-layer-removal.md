@@ -11,7 +11,7 @@
 | Sources read               | Root `AGENTS.md`; Browser control skill; supplied screenshot; `specs/current/architecture/07-panel.md`; `2026-07-28-workspace-top-left-radius-restoration.md`; `2026-07-29-workspace-corner-shadow-confinement.md`; `2026-07-29-conversation-edge-to-edge-surface.md`; `App.tsx`; `workspace.css`; `activity.css`; `titlebar.css`; `header.css`; `sidebar.css`; and the radius/shadow tokens in `design-language.css`.                                                                                                                                                                                                                      |
 | Whole-repository grep      | Searches enumerated every `.workspace-main`, Workbench radius statement, `--oc-radius-xl` consumer, workspace shadow token, rail paint owner, architecture statement, historical record, and UI-test assertion. `App.tsx` mounts one `#workspaceMain`; `workspace.css` is the sole production radius/shadow/clip compositor; `design-language.css` remains the token owner; `activity.css` and `titlebar.css` remain the two rail-paint consumers. Several historical UI tests and records intentionally assert the now-obsolete rounded corner, but the current UI-test prohibition requires leaving those test files untouched and unrun. |
 | Independent agent feedback | None. The user did not request sub-agents, and this correction has one tightly coupled visual owner.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| Git baseline               | Delivery branch is `work-v0.0.24beta-yr-0729` at `085a674192`, aligned with `myhexin/work-v0.0.24beta-yr-0729` before this record. Existing modifications in Overlay source and architecture records belong to ongoing work and remain outside this task except for the exact architecture hunk required below.                                                                                                                                                                                                                                                                                                                             |
+| Git baseline               | Delivery branch is `work-v0.0.24beta-yr-0729` at `085a674192`, aligned with `legacy-remote/work-v0.0.24beta-yr-0729` before this record. Existing modifications in Overlay source and architecture records belong to ongoing work and remain outside this task except for the exact architecture hunk required below.                                                                                                                                                                                                                                                                                                                             |
 
 ## Cause Chain
 
@@ -56,7 +56,7 @@
    correcting the single owner if any curved cutout or pointed remnant remains.
 5. Re-grep all production owners and historical consumers, review the exact
    task-owned diff and screenshot a second time, commit with the required
-   `dsw-33987` prefix, push to `myhexin`, and verify remote convergence.
+   `dsw-33987` prefix, push to `legacy-remote`, and verify remote convergence.
 
 ## Progress
 
@@ -67,7 +67,7 @@
 - [x] Implement the single-owner visual correction.
 - [x] Complete non-UI verification and real-page visual acceptance.
 - [x] Complete second review and final record update.
-- [x] Complete the final commit and git-cc push.
+- [x] Complete the final commit and legacy remote push.
 
 ## Visual Evidence
 
@@ -103,7 +103,7 @@ wedge.
 | Real-page computed geometry                                           | Passed: rail and Workbench share `y=36`; Workbench and header share `x=281`; top-left radius is `0px`                                 |
 | Real-page screenshot and personal visual review                       | Passed                                                                                                                                |
 | UI automated tests                                                    | None added, modified, updated, deleted, or run                                                                                        |
-| Git and git-cc convergence                                            | Product, architecture, record, and visual evidence landed in `d7d72f7aa1`; `myhexin/work-v0.0.24beta-yr-0729` reached the same commit |
+| Git and legacy remote convergence                                            | Product, architecture, record, and visual evidence landed in `d7d72f7aa1`; `legacy-remote/work-v0.0.24beta-yr-0729` reached the same commit |
 
 ## Second Review
 

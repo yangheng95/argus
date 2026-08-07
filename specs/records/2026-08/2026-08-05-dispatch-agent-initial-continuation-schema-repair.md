@@ -20,7 +20,7 @@ broken. The supplied Task Debug Info showed one Orchestrator Session remaining
 - Positive non-User-Interface contract tests cover the provider-visible JSON
   Schema shape and both successful initial and continuation execution.
 - Focused tests, repository typecheck, Application Programming Interface route
-  checks, documentation checks, and git-cc push pass.
+  checks, documentation checks, and legacy remote push pass.
 
 ### Hard constraints
 
@@ -33,7 +33,7 @@ broken. The supplied Task Debug Info showed one Orchestrator Session remaining
 - No compatibility branch, fallback, Host workflow gate, or state machine is
   introduced.
 - New commits use the `dsw-33987` subject prefix and land on
-  `v0.0.31beta`, then push to `git-cc`.
+  `v0.0.31beta`, then push to legacy remote.
 
 ### Evidence read
 
@@ -148,5 +148,5 @@ packages; it is not edited as a second source.
    visible message flow. If runtime replacement is blocked by shared local
    state, report that limit explicitly rather than calling static tests a live
    Task acceptance.
-7. Review the final diff, commit with `dsw-33987`, merge current git-cc changes
-   if any, and push `v0.0.31beta` to `git-cc`.
+7. Review the final diff, commit with `dsw-33987`, merge current legacy remote changes
+   if any, and push `v0.0.31beta` to legacy remote.

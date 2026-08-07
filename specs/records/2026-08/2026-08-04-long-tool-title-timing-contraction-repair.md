@@ -16,7 +16,7 @@ CSS means Cascading Style Sheets. UI means User Interface.
 | Sources read | Root `AGENTS.md`; Browser control and OpenCorvus debug-evidence skills; current card architecture; August 4 Conversation Tool-disclosure repair; July 15 Tool-call single-line authority record; current `CardHeader.tsx`, `CardHeaderChrome.tsx`, `tool-card-node.ts`, `card.css`, and `messages.css`; introducing commit and line history; MDN flex-shrink documentation. |
 | Whole-repository grep | `toolToCardNode` maps the canonical Tool name to `CardNode.title`. `CardHeader` places title and subtitle inside the shrinkable header button; `CardDurationChip` appends start and duration as non-shrinking siblings. The Tool title alone declares `flex: 0 0 auto` and `max-width: none`, while the subtitle is shrinkable. The execution-summary Tool name already has a bounded maximum and is not the overlapping row. |
 | Independent feedback | None. The user did not request sub-agents, so the primary Agent owns implementation and second review. |
-| Git baseline | After fetching and fast-forwarding, local `v0.0.30beta` and `myhexin/v0.0.30beta` resolve to `83b7ca2e78`. The only pre-existing dirty path is `packages/opencorvus/src/skill/builtin-payload.ts`, which remains outside this task. |
+| Git baseline | After fetching and fast-forwarding, local `v0.0.30beta` and `legacy-remote/v0.0.30beta` resolve to `83b7ca2e78`. The only pre-existing dirty path is `packages/opencorvus/src/skill/builtin-payload.ts`, which remains outside this task. |
 
 ## Causal Chain
 
@@ -43,7 +43,7 @@ CSS means Cascading Style Sheets. UI means User Interface.
    disclosures, capture the affected region, and personally review it.
 5. Re-read the exact diff and visual evidence, update this record, commit only
    task-owned paths with the `dsw-33987` prefix, reconcile the remote, and push
-   `v0.0.30beta` to `myhexin`.
+   `v0.0.30beta` to `legacy-remote`.
 
 ## Progress
 
@@ -115,6 +115,6 @@ unstaged.
 ## Delivery
 
 Implementation commit `782f6a52d4` was merged with the concurrently advanced
-`myhexin/v0.0.30beta` history without conflict and pushed through the repository
+`legacy-remote/v0.0.30beta` history without conflict and pushed through the repository
 pre-push checks. The converged remote head after that delivery was
 `b7732a0cd5`.

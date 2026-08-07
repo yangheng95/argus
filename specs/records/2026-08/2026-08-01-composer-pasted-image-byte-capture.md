@@ -94,7 +94,7 @@ clipboard lifetime.
 5. Start an isolated real Overlay page, perform an actual clipboard image paste,
    inspect the rendered attachment chip and screenshot, then perform a second
    code review.
-6. Commit with the `dsw-33987` prefix and push the final delivery to `myhexin`.
+6. Commit with the `dsw-33987` prefix and push the final delivery to `legacy-remote`.
 
 ## Verification record
 

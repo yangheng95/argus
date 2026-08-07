@@ -56,7 +56,7 @@ Whole-repository search evidence:
 - `rg -n --glob '!packages/overlay/src-tauri/target*/**' --glob '!**/node_modules/**' --glob '!**/.git/**' "layout.*geometry|geometry.*layout|alignment|align|misalign|crooked|skew|歪|对齐|left rail|content rail|main.*rail|browser_preview.*geometry|geometry_diagnostic|layout_diagnostic" packages specs AGENTS.md -S`
 - `rg -n --glob '!packages/overlay/src-tauri/target*/**' --glob '!**/node_modules/**' "browser_preview_layout_geometry|layout-geometry|LayoutGeometry|layoutGeometry|layout_geometry" packages/opencorvus/src packages/opencorvus/test specs/current specs/records/2026-06 specs/records/2026-07 -S`
 - `rg -n --glob '!packages/overlay/src-tauri/target*/**' --glob '!**/node_modules/**' "composeLatestAcceptanceFeedbackForBuild|composeLatestVisualQaFeedbackForBuild|renderVisualQaProblemDomFeedback|visualQaFeedback|Visual QA Repair Overlay|production_blockers|problem_dom_regions|layout-geometry" packages/opencorvus/src packages/opencorvus/test -S`
-- `rg -n --glob '!packages/overlay/src-tauri/target*/**' --glob '!**/node_modules/**' "ths-0658675194|sandbox\\.f2e\\.myhexin|/indices|Market summary|Index collections|layout-geometry" . -S`
+- `rg -n --glob '!packages/overlay/src-tauri/target*/**' --glob '!**/node_modules/**' "ths-0658675194|sandbox\\.f2e\\.legacy-remote|/indices|Market summary|Index collections|layout-geometry" . -S`
 
 Independent agent feedback:
 

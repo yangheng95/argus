@@ -68,7 +68,7 @@ plain Markdown link to a generated workspace file.
 4. Extend focused unit tests and the existing Node/Vite browser fixture,
    including keyboard activation and screenshot inspection.
 5. Run Overlay checks, documentation health, diff review, commit with the
-   required `dsw-33987` prefix, and push the primary branch to git-cc.
+   required `dsw-33987` prefix, and push the primary branch to legacy remote.
 
 ## Progress
 
@@ -76,7 +76,7 @@ plain Markdown link to a generated workspace file.
 - [x] Shared renderer and click-path repair implemented.
 - [x] Focused and real-browser regressions pass.
 - [x] Visual screenshot review and second code review complete.
-- [x] Commit and git-cc synchronization complete.
+- [x] Commit and legacy remote synchronization complete.
 
 ## Verification
 

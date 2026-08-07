@@ -27,7 +27,7 @@
   - the locale keys already exist and do not require a second label source.
 - Independent agent feedback: none; the user did not request delegated or parallel agent work.
 - Git evidence before implementation:
-  - the branch was one commit ahead of `myhexin/v0.0.17beta`;
+  - the branch was one commit ahead of `legacy-remote/v0.0.17beta`;
   - the required pre-push hook entered the real full-repository typecheck and failed on 13 pre-existing Fact Check refactor errors outside this change;
   - no hook bypass or additional worktree was used.
 

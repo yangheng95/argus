@@ -24,7 +24,7 @@ Status: Complete.
 - Skill Market 是全局配置面；Skill mount/matrix、project-local import 和 MCP 继续要求真实项目目录。
 - 不刷新、重启或停止用户正在运行的 OpenCorvus/Overlay。验证只使用本任务启动的独立 Vite 和后端进程。
 - 保留现有未提交的 frontend-replica E2E 文件和 `packages/overlay/dist-artifacts/darwin-arm64/`，不纳入本任务提交。
-- 所有提交以 `dsw-33987` 开头并 push 到 `myhexin/v0.0.8beta`，不绕过 hooks。
+- 所有提交以 `dsw-33987` 开头并 push 到 `legacy-remote/v0.0.8beta`，不绕过 hooks。
 
 ### Sources read before implementation
 
@@ -90,7 +90,7 @@ The observable macOS failure is caused by incomplete global-settings ownership a
 - Real Vite browser regression: Node Playwright runner built 2,489 modules and passed the first-launch flow that saves a Hexin key, opens Agent Models, opens Skill Market, and installs a market entry without a directory.
 - Visual review: Providers, Skill Market, and Agent Models screenshots were inspected at desktop size. All three surfaces opened without the workspace warning, controls were aligned and readable, and the installed Skill changed to its open action. Evidence: `.scratch/mac-first-launch-providers-vite.png`, `.scratch/mac-first-launch-skill-market-vite.png`, `.scratch/mac-first-launch-agent-models-vite.png`, and `packages/overlay/.scratch/mac-first-launch-global-settings.png`.
 - Second review: the staged diff preserves global credential/config owners, rejects global path imports, keeps project mounts/MCP isolated, and the browser fixture proves no project settings route is used on first launch. Whitespace checks are clean.
-- Source delivery: commit `100bbccda` passed the git-cc pre-push TypeScript, API route, generated-doc, i18n, and secret checks and was pushed to `myhexin/v0.0.8beta`.
+- Source delivery: commit `100bbccda` passed the legacy remote pre-push TypeScript, API route, generated-doc, i18n, and secret checks and was pushed to `legacy-remote/v0.0.8beta`.
 - macOS packaging: the first matrix invocation overlapped a separately started production matrix for the same commit; that process removed the shared Tauri bundle while the first invocation was archiving it, so the first invocation was correctly rejected rather than publishing partial output. The existing matrix owner then completed the GUI build from `100bbccda`, producing the ARM64 application archive, DMG, and staged executable.
 - Native artifact verification: both staged and archived executables are Mach-O 64-bit ARM64; `CFBundleShortVersionString` and `CFBundleVersion` report `0.0.8-beta`; strict deep code-sign verification passes; `hdiutil verify` reports a valid DMG checksum.
 - Final GUI SHA-256: staged executable `8dad69d8c233b2dcd2a5917872357037ffaccd8f2dcd3f1092eeefb64fa1cb31`; DMG `baa2f979902738f8731b982b05040913ab88210e1ad894e8f41a7211f4741bc0`; application archive `8d64c7355ef3e704813e50c05144fc02cdc54c17d2e4a8f7e0b637644e0129c9`.

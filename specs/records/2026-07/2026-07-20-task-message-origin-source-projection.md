@@ -20,7 +20,7 @@
 - 不重启、刷新、终止或操作用户正在运行的 OpenCorvus/Overlay。
 - 不增加状态 gate、前端 fallback、第二套消息 DTO 投影或兼容路径；复用 backend message bridge。
 - 保留工作区所有既有未提交修改和未跟踪 `C:/`，只提交本任务文件/hunk。
-- commit subject 以 `dsw-33987` 开头，并 push 到 `myhexin/v0.0.11beta`。
+- commit subject 以 `dsw-33987` 开头，并 push 到 `legacy-remote/v0.0.11beta`。
 
 ### Sources read
 
@@ -68,7 +68,7 @@ Repository-wide `rg` covered `originSource`, `tree-writer`, `ingestPersistedConv
 1. Add one exported persisted task-message projection in the existing backend message bridge, built from the same message/part event enrichment path.
 2. Make the task append response use that projection and remove its partial manual overlay metadata assembly.
 3. Extend route, bridge, and Node browser regressions to assert `originSource`, message/part order keys, and successful cancelled-task submission without a send-failure dialog.
-4. Run focused tests, typecheck, historical-doc links, diff review, then commit only owned hunks and push `myhexin/v0.0.11beta`.
+4. Run focused tests, typecheck, historical-doc links, diff review, then commit only owned hunks and push `legacy-remote/v0.0.11beta`.
 
 ## Verification ledger
 

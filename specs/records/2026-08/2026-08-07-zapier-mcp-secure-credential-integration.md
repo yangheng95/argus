@@ -31,7 +31,7 @@
 - 静态凭证配置与 OAuth 自动发现互斥，避免同一服务器存在双认证来源。
 - 不新增、修改或运行 UI 自动化测试；UI 只通过真实应用操作、截图和人工视觉复核验收。
 - 保留工作区中 `packages/opencorvus/src/mcp/computer/backend.ts` 与 `packages/opencorvus/test/mcp/computer-contract.test.ts` 的既有未提交改动，不纳入本任务提交。
-- 提交 subject 以 `dsw-33987` 开头，并推送到 `git-cc` 的当前交付分支。
+- 提交 subject 以 `dsw-33987` 开头，并推送到 legacy remote 的当前交付分支。
 
 ### 已读取的落盘资料
 

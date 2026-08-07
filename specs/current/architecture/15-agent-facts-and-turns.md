@@ -252,7 +252,7 @@ require the old Runtime.
 - The running OpenCorvus, Overlay, and sidecar processes are not restarted,
   refreshed, stopped, or otherwise manipulated.
 - Targeted tests, typecheck, API/docs checks, second review, commit, and
-  `myhexin` push complete successfully.
+  `legacy-remote` push complete successfully.
 
 ### Hard constraints
 
@@ -262,7 +262,7 @@ require the old Runtime.
   advanced `HEAD` first to `9e7fd126b` and then to `1b483fc12` while this
   refactor was in progress. During the residual-protocol implementation it
   advanced again to `92d765c38` on `v0.0.18beta`, matching
-  `myhexin/v0.0.18beta`. No reset, restore, cleanup, worktree creation, or
+  `legacy-remote/v0.0.18beta`. No reset, restore, cleanup, worktree creation, or
   staging rewrite is allowed, and unrelated changes remain unstaged.
 - Delivery Slice revision identity and execution-ownership → dispatch-lineage
   changes are concurrent user work. This refactor must compose with them
@@ -270,7 +270,7 @@ require the old Runtime.
 - No OpenCorvus/Overlay/sidecar process operation is authorized.
 - All implementation changes require focused regression coverage.
 - Commit subjects use the `dsw-33987` prefix and delivery follows the
-  authoritative current branch to `myhexin/v0.0.18beta` without bypassing hooks.
+  authoritative current branch to `legacy-remote/v0.0.18beta` without bypassing hooks.
 
 ### Sources read
 

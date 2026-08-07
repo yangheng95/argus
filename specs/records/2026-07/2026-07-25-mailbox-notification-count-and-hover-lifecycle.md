@@ -30,7 +30,7 @@
   continuity pass in an isolated real Vite page launched with Node. A desktop
   screenshot is reviewed and corrected if necessary.
 - Focused backend, Overlay, host-transport, type, build, documentation, second
-  review, commit, and git-cc push checks pass without touching unrelated work.
+  review, commit, and legacy remote push checks pass without touching unrelated work.
 
 ### Hard constraints
 
@@ -117,7 +117,7 @@ notification semantics must be corrected before the host command.
 5. Run focused checks, real Node/Vite interaction and screenshot review, then
    second-review the full diff and update this record with exact evidence.
 6. Commit only task-owned files with the `dsw-33987` prefix, fetch the latest
-   git-cc branch, rerun required checks, and push the main branch through hooks.
+   legacy remote branch, rerun required checks, and push the main branch through hooks.
 
 ## Progress
 
@@ -126,7 +126,7 @@ notification semantics must be corrected before the host command.
 - [x] Backend and Overlay implementation complete.
 - [x] Real Vite visual/interaction acceptance complete.
 - [x] Second review complete.
-- [x] Commit and git-cc push complete.
+- [x] Commit and legacy remote push complete.
 
 ## Verification evidence
 
@@ -151,6 +151,6 @@ notification semantics must be corrected before the host command.
 - The task-owned staged snapshot passes all 91 historical-link,
   document-health, and product-doc single-source tests with 1,461 expectations.
 - Implementation commit `977e223b7b` passed the normal pre-push hook and was
-  pushed to `myhexin/v0.0.18beta`; the hook passed the 11-package typecheck,
+  pushed to `legacy-remote/v0.0.18beta`; the hook passed the 11-package typecheck,
   SDK import/runtime checks, 32-file API route inventory, 291-operation API docs
   check, Overlay i18n, and secret scan.

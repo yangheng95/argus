@@ -27,7 +27,7 @@ Integrate Frontend replica through the latest OpenCorvus expert-squad/project-pa
 - Non-`general` bundled squads remain clear-text project packages released from the generated payload. Generated `payload.ts` is never hand-edited.
 - Frontend acceptance is desktop-only and must use a real page, task-scoped preview/evidence, Node-launched Playwright, headed visual evidence, and human screenshot inspection.
 - Existing untracked macOS build artifacts are user-owned and must not be changed or committed. Running OpenCorvus/Overlay processes must not be restarted, refreshed, or killed without explicit permission.
-- Work stays in the current main worktree; commits use the `dsw-33987` prefix and push to `myhexin` without bypassing hooks.
+- Work stays in the current main worktree; commits use the `dsw-33987` prefix and push to `legacy-remote` without bypassing hooks.
 
 ### Sources Read
 
@@ -75,7 +75,7 @@ This is not a reason to copy host algorithms into the package. The protocol deli
 2. Terminal authority: make Overlay card terminal reasons derive from the backend protocol type and render `artifact_missing` as the existing error semantic; add tree-writer and browser-visible regression coverage without compatibility branches.
 3. Algorithm truth: correct source-project provenance to the actual read set, add over-cap parity tests or remove unjustified truncation at the source model boundary, and move duplicated Frontend replica domain policy out of generic host research prompts into package-owned prompts.
 4. Real E2E: repair the local dependency/runtime prerequisite, install the generated package into an isolated real project, activate it, run a stable local HTTP reference through the real streamed scheduler/worker path, capture task-scoped preview evidence with Node/Playwright, and assert visible tool results, yields, session terminal states, artifacts, source-project provenance, keyboard/focus/state diagnostics, and visual/integrity review.
-5. Visual and independent acceptance: inspect reference/target desktop screenshots, correct mismatches, rerun focused and document/API/type checks, and request independent read-only code/evidence review before the final commit and git-cc push.
+5. Visual and independent acceptance: inspect reference/target desktop screenshots, correct mismatches, rerun focused and document/API/type checks, and request independent read-only code/evidence review before the final commit and legacy remote push.
 
 ## Conflict Stop Rule
 

@@ -48,7 +48,7 @@
 - Keep `browser_preview_target` and `browser_preview_evidence` as the canonical
   Task Preview facts and AttachmentStore as byte storage.
 - New commits on the current beta line use the `dsw-33987` prefix and must be
-  pushed to `myhexin` without bypassing hooks.
+  pushed to `legacy-remote` without bypassing hooks.
 
 ### Durable material read
 
@@ -169,7 +169,7 @@ salient completeness facts.
    real page and manually inspect fresh screenshots without saving an
    automation test.
 8. Incorporate the independent Agent review, run a final local review, commit
-   only task-owned files with `dsw-33987`, fetch/merge current `myhexin` state
+   only task-owned files with `dsw-33987`, fetch/merge current `legacy-remote` state
    if required, and push through hooks.
 
 ## Verification matrix

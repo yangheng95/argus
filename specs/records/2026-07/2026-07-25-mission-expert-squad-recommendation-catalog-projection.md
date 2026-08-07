@@ -13,7 +13,7 @@ The user supplied a screenshot of a Mission `panel` card showing `...89955 bytes
 3. Empty launcher selection still returns the complete canonical visible Squad set; a non-empty selection still preserves exact caller order and rejects unknown IDs.
 4. Settings and Expert Squad API consumers retain the existing complete `ExpertSquadCatalogSummary` projection.
 5. Root-Session large-output recovery remains independently supported for genuinely large tool results; this repair does not weaken or remove truncation storage.
-6. Focused tests, typecheck, documentation health, commit, normal-hook push to `myhexin`, and a real post-reload Mission call verify the repaired message flow.
+6. Focused tests, typecheck, documentation health, commit, normal-hook push to `legacy-remote`, and a real post-reload Mission call verify the repaired message flow.
 
 ### Hard constraints
 

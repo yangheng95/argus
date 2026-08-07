@@ -41,7 +41,7 @@ The earlier correction remains binding:
 - No Host scheduling gate, retry state machine, fallback path, compatibility
   alias, or lifecycle mutation is introduced.
 - Focused positive non-User-Interface tests, typecheck, documentation checks,
-  second review, commit, and `myhexin/v0.0.28beta` push succeed.
+  second review, commit, and `legacy-remote/v0.0.28beta` push succeed.
 
 ### Hard constraints
 
@@ -134,7 +134,7 @@ semantics, missing repair routing, and unbounded evidence consumption.
 6. Run focused positive tests, package typecheck, route/docs checks, and a
    second diff review.
 7. Commit only task-owned paths with the `dsw-33987` prefix and push the
-   current main delivery branch to `myhexin`.
+   current main delivery branch to `legacy-remote`.
 
 ## Verification
 

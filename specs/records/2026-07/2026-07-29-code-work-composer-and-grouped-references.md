@@ -28,7 +28,7 @@
 - Reuse `SegmentedControl`, Kobalte-backed `Listbox`, the existing scope-keyed reference snapshot, Chat's existing `panel.wake_mission` tool contract, and the existing Mission attachment pipeline.
 - Playwright is started by Node.js, never Bun.
 - The user explicitly authorized an isolated worktree after the original worktree was found to be on the wrong branch. The authorized worktree is `/tmp/opencorvus-v0023-code-work.xWEE8h`, checked out at `v0.0.23beta`.
-- Commit subjects begin with `dsw-33987`; push only the completed `v0.0.23beta` result to `myhexin`.
+- Commit subjects begin with `dsw-33987`; push only the completed `v0.0.23beta` result to `legacy-remote`.
 
 ### Hard-disk sources read
 
@@ -73,7 +73,7 @@ and attachment handoff calls.
 - Starting baseline: `21cafc7c12576c42658868cf846eb3c1b9b759f2`.
 - Before delivery, the branch advanced through the concurrent Work artifact records to
   `2bd84c07f28af3befb0e07c7c4c04d5ef94f413a`; after fetch, `HEAD` and
-  `myhexin/v0.0.23beta` were aligned (`0 0`).
+  `legacy-remote/v0.0.23beta` were aligned (`0 0`).
 - The original shared worktree's unrelated and wrong-branch local changes remain untouched and are excluded from this branch.
 
 ## Root design
@@ -96,7 +96,7 @@ set while visual headers and dividers communicate type.
 2. Flatten mention candidates into all available real entities, enable Squad in Code, and render one grouped Listbox with true type labels and dividers.
 3. Update focused source/unit/browser tests, preserving direct Mission, semantic handoff, exact directive, attachment, IME, focus, and atomic-edit behavior.
 4. Build and run an isolated Vite page through Node-started Playwright, inspect Code/Work and grouped-mention screenshots, correct visual issues, then rerun.
-5. Run document health and second review, commit only task-owned paths, push `v0.0.23beta` to `myhexin`, and verify remote divergence is `0 0`.
+5. Run document health and second review, commit only task-owned paths, push `v0.0.23beta` to `legacy-remote`, and verify remote divergence is `0 0`.
 
 ## Progress
 

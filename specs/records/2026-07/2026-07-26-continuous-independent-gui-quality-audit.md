@@ -30,7 +30,7 @@ three-agent round with zero new evidence-backed findings.
 - A final independent audit round returns no new evidence-backed issue in the
   selected runtime, UI, and single-source scopes.
 - Task-owned changes are committed with a `dsw-33987` subject and pushed to the
-  `myhexin` git-cc remote without bypassing hooks.
+  legacy remote without bypassing hooks.
 
 ### Hard constraints
 
@@ -144,7 +144,7 @@ evidence, native lease identity, and Right Dock catalog remain unchanged.
 5. Repair Browser Preview and Right Dock through their canonical owners.
 6. Run focused tests, Overlay/OpenCorvus typecheck, Vite build, i18n, document
    health, and a secondary diff review.
-7. Commit only task-owned files and push through normal git-cc hooks.
+7. Commit only task-owned files and push through normal legacy remote hooks.
 8. Start a fresh independent runtime/UI/single-source audit round. Repeat until
    a complete round reports no new evidence-backed defect.
 
@@ -1447,7 +1447,7 @@ The wide configuration selection now passes 82 tests and 189 assertions.
   most Round 14–16 changes plus unrelated parallel work. This audit preserves
   that history and does not rewrite, split, reset, or present the in-progress
   checkpoint as final task delivery.
-- The git-cc remote `myhexin/v0.0.19beta` remains behind the local checkpoint.
+- The legacy remote `legacy-remote/v0.0.19beta` remains behind the local checkpoint.
   The managed execution profile still prevents this Agent from creating
   `.git/index.lock`; remaining post-checkpoint increments cannot be staged or
   committed here, and no alternate index/worktree/hook bypass is used.

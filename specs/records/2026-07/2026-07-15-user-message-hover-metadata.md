@@ -25,7 +25,7 @@
 - Use existing Solid control flow, `Button`, `Icon`, shared time formatting, and design tokens.
 - Do not restart, refresh, close, or otherwise interfere with the user's running OpenCorvus or Overlay. Visual validation must use an isolated server and Node-started browser tooling.
 - Do not add mobile or tablet scope; this is desktop reference parity only.
-- Commit subjects start with `dsw-33987`, and commits are pushed to the current git-cc delivery branch.
+- Commit subjects start with `dsw-33987`, and commits are pushed to the current legacy remote delivery branch.
 
 ### Hard-disk sources read before implementation
 
@@ -68,7 +68,7 @@
 3. Add user-only token-based geometry so the bubble/footer form one right-aligned content-width unit, the footer is transparent and non-interactive at rest, and hover/focus reveals it without layout shift.
 4. Update focused static tests and extend the existing production-shaped browser fixture with resting and hover geometry/visibility assertions plus screenshots.
 5. Run focused unit tests, typecheck/build, spec health, and the Node browser test. Inspect the real screenshots, correct any mismatch, then repeat verification and perform a second diff review.
-6. Commit and push the implementation to the current git-cc delivery branch.
+6. Commit and push the implementation to the current legacy remote delivery branch.
 
 ## Verification plan
 

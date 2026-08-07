@@ -65,7 +65,7 @@ single SDK writer/Registry/Manager installation path.
 5. Capture and manually inspect fresh screenshots for the keyboard-focused
    Research Studio row and the live-authoring result.
 6. Perform a second diff/review, commit task-owned paths, fetch the current
-   git-cc branch, integrate if required, and push to `myhexin`.
+   legacy remote branch, integrate if required, and push to `legacy-remote`.
 
 ## Verification result
 

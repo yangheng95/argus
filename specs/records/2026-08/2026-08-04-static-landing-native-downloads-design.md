@@ -14,7 +14,7 @@
 | Web build evidence | `packages/web` is an Astro static site with base `/docs`; `bun run --cwd packages/web build` owns `packages/web/dist`. The Windows directory must therefore be copied after Astro completes and linked beneath `/docs/downloads/windows-x64/`. |
 | Reviewed records | `2026-08-04-landing-platform-download-dialog-design.md` and `2026-08-04-landing-platform-download-dialog-implementation-plan.md` document the API-backed dialog being replaced. |
 | Full-scope search | A repository search found the landing API URLs and dialog runtime only in the shared download module, landing component, bilingual content, and their positive resolver test. Existing native artifact staging is owned by `script/package-gui-installer-matrix.ts`. |
-| Hard constraints | One static package source, no API or fallback, no Windows or macOS native rebuild, no UI automated tests, real desktop page interaction plus manually inspected screenshots, no unrelated Overlay changes, and scoped commit/push to `myhexin` with the `dsw-33987` prefix. |
+| Hard constraints | One static package source, no API or fallback, no Windows or macOS native rebuild, no UI automated tests, real desktop page interaction plus manually inspected screenshots, no unrelated Overlay changes, and scoped commit/push to `legacy-remote` with the `dsw-33987` prefix. |
 | Independent agent feedback | None. This side conversation prohibits sub-Agent delegation. |
 
 ## Decision

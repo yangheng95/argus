@@ -22,7 +22,7 @@ The collapsed runtime Popover trigger is not expanded semantically (`aria-expand
 2. Keep the existing 46px rail slot and symmetric conversation grid, but center each hit target and marker within that slot; reduce the tick ladder to an 8px rest mark with only subtle near/active growth.
 3. Update source-contract and Node browser geometry assertions to prove transparent collapsed runtime chrome, visible expanded chrome, centered short ticks, and preserved transcript/composer axes.
 4. Generate task-scoped desktop screenshots for the collapsed/expanded runtime dropdown and Agent Rail, inspect them directly, correct any visual drift, then rerun focused tests, typecheck, i18n, docs health, and diff review.
-5. Commit with the `dsw-33987` prefix and push the current branch to the configured git-cc remote after the combined in-scope visual work passes review.
+5. Commit with the `dsw-33987` prefix and push the current branch to the configured legacy remote after the combined in-scope visual work passes review.
 
 ## Verification
 

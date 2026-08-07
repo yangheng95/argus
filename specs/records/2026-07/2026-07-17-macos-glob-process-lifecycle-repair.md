@@ -14,7 +14,7 @@
   - reuse `Process.Child.terminate()` and `ProcessSupervisor.awaitWithTimeout()` as the single process-lifecycle source;
   - do not restart or interfere with a running OpenCorvus/Overlay process;
   - preserve unrelated untracked files and native build artifacts;
-  - commit subjects use the `dsw-33987` prefix and delivery pushes the current main delivery branch to `myhexin`.
+  - commit subjects use the `dsw-33987` prefix and delivery pushes the current main delivery branch to `legacy-remote`.
 - Sources read:
   - `AGENTS.md`;
   - `packages/opencorvus/src/tool/glob.ts`;

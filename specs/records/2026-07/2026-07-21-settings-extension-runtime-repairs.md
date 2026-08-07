@@ -30,7 +30,7 @@
 - Missing Hexin metadata means an absent enrichment row only. HTTP failures, malformed response bodies, non-positive limits, and conflicting duplicates stay visible failures and preserve the previous catalog.
 - Multica repair remains Agent-led. Safe source evidence can produce an explicit mapping; credentials, external authority, and unproven semantic equivalence are not guessed or silently dropped.
 - Do not restart, stop, refresh, or reuse the running OpenCorvus/Overlay as a mutable test target. Browser validation uses an isolated Node runner, never Bun-launched Playwright.
-- Preserve and exclude unrelated user changes. No new worktree. Commit subjects use `dsw-33987` and the current delivery branch is pushed to `myhexin`.
+- Preserve and exclude unrelated user changes. No new worktree. Commit subjects use `dsw-33987` and the current delivery branch is pushed to `legacy-remote`.
 
 ### Sources read
 
@@ -122,7 +122,7 @@ The adapter already has a strict digest-bound `mcp_replacements` mapping and the
 3. Run Overlay/OpenCorvus/SDK typechecks, i18n validation, historical links, product-doc single source, document health, and `git diff --check`.
 4. Launch the existing Provider and Settings/Browser Node browser fixtures. Verify Provider/model auto-refresh request counts, search by provider/model/API/environment, clear/no-results, overlapping Browser surface occlusion, no Multica repair dialog, pointer/keyboard paths, and focus behavior.
 5. Inspect task-scoped screenshots personally, correct visual or stacking defects, rerun, and record exact artifacts here.
-6. Perform a second complete call-point/diff review. Record corrections, commit with `dsw-33987`, and push the current delivery branch to `myhexin` without staging unrelated user work.
+6. Perform a second complete call-point/diff review. Record corrections, commit with `dsw-33987`, and push the current delivery branch to `legacy-remote` without staging unrelated user work.
 
 ## Verification results
 

@@ -33,7 +33,7 @@ The operator then authorized implementation and widened the scheduler's autonomy
 - An uncertain extra commit is inspected against task-owned paths, current behavior, and Host-observed diffs. Unrelated commits are preserved; overlap is reconciled by Build. Commit count, HEAD drift, or provenance uncertainty alone does not fail acceptance.
 - Provider, network, process, compaction, and tool execution interruptions are physical evidence. The scheduler resumes the bound dispatch lineage or routes recoverable work to the phase Build owner; it does not create a new Task.
 - No Host scheduling gate, retry counter, workflow state machine, compatibility path, fallback profile, or generic `universal-build` substitution is added.
-- Focused positive non-User-Interface contracts, typecheck, documentation checks, second review, commit, and `myhexin/v0.0.28beta` push succeed.
+- Focused positive non-User-Interface contracts, typecheck, documentation checks, second review, commit, and `legacy-remote/v0.0.28beta` push succeed.
 
 ### Hard constraints
 
@@ -106,7 +106,7 @@ Three prior independent read-only audits agreed that the frequent failures were 
 5. Regenerate affected built-in Expert Squad payloads and versions.
 6. Update current architecture and documentation indexes.
 7. Run focused tests, package typecheck, generated-contract checks, docs checks, and second diff review.
-8. Commit only task-owned paths with the `dsw-33987` prefix and push the current delivery branch to `myhexin`.
+8. Commit only task-owned paths with the `dsw-33987` prefix and push the current delivery branch to `legacy-remote`.
 
 ## Verification
 

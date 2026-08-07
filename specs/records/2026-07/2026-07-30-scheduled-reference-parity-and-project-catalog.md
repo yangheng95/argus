@@ -41,7 +41,7 @@
 - Do not stop, restart, refresh, or interact with a user's running Overlay.
   Visual review uses only a separately started isolated Vite/backend target.
 - Commit subjects use `dsw-33987`; push the current main delivery branch to
-  `myhexin` without bypassing hooks.
+  `legacy-remote` without bypassing hooks.
 
 ### Read records and sources
 
@@ -118,7 +118,7 @@ drill-in views over the same signals and services.
    iterate until the desktop visual surface matches the reference intent.
 8. Re-read the spec and final diff, stage only task-owned paths through an
    isolated current-HEAD index if needed, commit with `dsw-33987`, fetch, and
-   push the current main branch to `myhexin`.
+   push the current main branch to `legacy-remote`.
 
 ## Implemented result
 

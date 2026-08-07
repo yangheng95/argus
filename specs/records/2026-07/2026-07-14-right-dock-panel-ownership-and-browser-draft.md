@@ -35,7 +35,7 @@ Browser picker 已经返回正确 selection/comment，也已经把格式化文�
 - Output: node comment appears in the mounted composer textarea under the same draft key; Dock chrome contains icon tabs without duplicate visible titles; closing the last tab hides the Dock.
 - Environment: Windows host source, repository Vite build, Node browser runner, task-scoped backend fixture; no running Overlay interaction.
 - Timeout: the existing activity-reset browser runner timeout.
-- Pass criteria: focused source/store tests, Overlay typecheck and i18n, real picker-to-textarea assertion, last-tab close assertion, task-scoped screenshot inspection, diff review, selective commit, git-cc push.
+- Pass criteria: focused source/store tests, Overlay typecheck and i18n, real picker-to-textarea assertion, last-tab close assertion, task-scoped screenshot inspection, diff review, selective commit, legacy remote push.
 
 ## Progress
 
@@ -85,6 +85,6 @@ Browser picker 已经返回正确 selection/comment，也已经把格式化文�
 ## Delivery Result
 
 - Implementation commit: `69e08f5b04` (`dsw-33987 unify right dock panel ownership`).
-- The `myhexin/v0.0.3beta` remote was verified at the same commit after the
+- The `legacy-remote/v0.0.3beta` remote was verified at the same commit after the
   pre-push SDK import, AI runtime, 11-package typecheck, route inventory,
   documentation, Overlay i18n, and secret-scan checks passed.

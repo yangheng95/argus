@@ -11,7 +11,7 @@
 | Sources read | `AGENTS.md`; Browser control skill; `specs/current/architecture/12-overlay-card-system.md`; the 2026-07-16 Codex Tool disclosure repair, 2026-07-28 Tool disclosure size parity, and 2026-07-29 Tool-call tone/rhythm records; `CardParts.tsx`; `messages.css`; the shared `Icon` registry; relevant screenshots in `.scratch`. |
 | Whole-repository grep | Searches covered `ExecutionDisclosureRun`, `work-details-toggle`, `msg-transcript-disclosure__marker`, `msg-work-details`, `CardParts`, `collapseWorkDetails`, `executionDisclosureKey`, `conversationDisclosureExpanded`, `setConversationDisclosureExpanded`, and every chevron call site. `ExecutionDisclosureRun` is the sole production Tool-disclosure control. `ChatBubble` has three production `CardParts` projections and recursive `Card` has one; all four request the same collapsed-work-details path. `conversation-ui.ts` is the sole reactive expansion owner. `messages.css` already owns the shared marker geometry and Tool-row rhythm. |
 | Independent review | Claude Code 2.1.147 was invoked in the repository with only `Read,Grep,Glob`, no session persistence, and no Agent/worktree tools. It returned `Not logged in · Please run /login`, so no independent conclusion was available. The primary review therefore relies on the repository history, current ownership graph, and visual evidence and records this external limitation explicitly. |
-| Workspace preservation | The task began on `work-v0.0.24beta-yr-0729` at `baa2d9a703`, aligned with `myhexin/work-v0.0.24beta-yr-0729`. Existing modified Overlay, test, architecture, locale, and July-record files belong to concurrent work and must not be overwritten, reverted, or staged except for exact task-owned hunks in shared index files. |
+| Workspace preservation | The task began on `work-v0.0.24beta-yr-0729` at `baa2d9a703`, aligned with `legacy-remote/work-v0.0.24beta-yr-0729`. Existing modified Overlay, test, architecture, locale, and July-record files belong to concurrent work and must not be overwritten, reverted, or staged except for exact task-owned hunks in shared index files. |
 
 ## Evidence and root cause
 
@@ -54,7 +54,7 @@ data, grouping, route, persistence, or active-wave change is required.
    a test fixture, assertion script, or screenshot baseline.
 4. Correct any visual alignment or density defect found in the screenshots,
    repeat both-state review, perform a second source/diff review, stage only
-   task-owned paths/hunks, commit with the `dsw-33987` prefix, push `myhexin`,
+   task-owned paths/hunks, commit with the `dsw-33987` prefix, push `legacy-remote`,
    and verify local/remote convergence.
 
 ## Implementation result

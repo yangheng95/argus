@@ -23,7 +23,7 @@
 - Inspect persisted plans and grep evidence before editing.
 - Do not restart, refresh, or kill the user's running OpenCorvus / overlay process; use an isolated browser fixture.
 - Playwright/browser verification on Windows must run through Node, not Bun.
-- Commit subject must start with `dsw-33987`; push to `myhexin`.
+- Commit subject must start with `dsw-33987`; push to `legacy-remote`.
 
 ### Hard-Disk Context Read Before Editing
 

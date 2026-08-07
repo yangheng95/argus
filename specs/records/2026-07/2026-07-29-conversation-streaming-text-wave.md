@@ -12,7 +12,7 @@
 | Sources read | Root `AGENTS.md`; Browser control skill; both supplied screenshots; `2026-07-29-ui-automated-test-prohibition.md`; `2026-07-24-agent-card-palette-and-running-tool-wave.md`; `2026-07-27-active-tool-wave-all-agent-surfaces.md`; `2026-07-28-subagent-running-surface-wave-and-selection-stability.md`; `TextPart.tsx`; `text-part-model.ts`; `CardParts.tsx`; `ConversationCard.tsx`; `ChatBubble.tsx`; `Card.tsx`; `Conversation.tsx`; `ConversationAgentRail.tsx`; `SubagentConversationPanel.tsx`; `subagent-conversation.ts`; `messages.css`; `markdown.css`; `chat-bubble.css`; `conversation.css`; and motion tokens. |
 | Whole-repository grep | `CardParts.tsx` is the sole production caller of `TextPart`; `.md-active-text` exists only for the live streaming tail. `ConversationCard.tsx` remains the sole conversation dispatcher. The right exact-session panel renders that same shared chain. `messages.css` owns the sole text-mask wave. The previous right-side surface wave was separately owned by `conversation.css` pseudo-elements on `.subagent-progress-card` and `.subagent-conversation-panel .chat-bubble`; those owners must be removed rather than hidden by another layer. |
 | Independent-agent feedback | None. The user did not request sub-agents, so the primary agent owns implementation and second review. |
-| Git baseline | `work-v0.0.24beta-yr-0729` and `myhexin/work-v0.0.24beta-yr-0729` both pointed to `974cde4d71` before this record. The worktree was clean. The initial plan commit is `85f0ffca84`. |
+| Git baseline | `work-v0.0.24beta-yr-0729` and `legacy-remote/work-v0.0.24beta-yr-0729` both pointed to `974cde4d71` before this record. The worktree was clean. The initial plan commit is `85f0ffca84`. |
 
 ## Causal chain
 
@@ -52,7 +52,7 @@
    content. The user's native backend remains untouched.
 4. Re-grep all owners, inspect the exact diff, perform a second visual review,
    update this record, commit with the `dsw-33987` prefix, reconcile with
-   git-cc, and push.
+   legacy remote, and push.
 
 ## Visual evidence
 
@@ -84,4 +84,4 @@
 - [x] Final selector, lighter mask, 3.4-second cycle, longer hold, and whole-card removal implemented.
 - [x] Type/build/document verification complete.
 - [x] Real-page main/Squad visual acceptance complete.
-- [x] Second grep/diff review and delivery preparation complete; commit and git-cc push follow this recorded verification.
+- [x] Second grep/diff review and delivery preparation complete; commit and legacy remote push follow this recorded verification.

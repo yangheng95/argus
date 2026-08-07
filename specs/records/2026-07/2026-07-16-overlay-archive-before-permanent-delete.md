@@ -48,7 +48,7 @@ The Settings sidebar already renders an `Archived` group label, but the only row
 3. Replace Work Ledger Chat/Mission/Task delete callbacks and Trash affordances with archive callbacks and mature Lucide archive glyphs. Keep project deletion unchanged.
 4. Add Settings > Archive through the existing config-section registry. Implement exact archived-row loading, Restore, and `ArmedConfirmButton` permanent deletion using the existing delete services.
 5. Add backend and Overlay regression tests, regenerate OpenAPI/SDK/docs, run focused inactivity-aware tests, build/typecheck, then run a Node Playwright interaction and screenshot benchmark.
-6. Review the screenshots and diff manually, correct visual or semantic defects, run document-health checks, commit only this task's files with the required `dsw-33987` prefix, and push the current primary branch to `myhexin`.
+6. Review the screenshots and diff manually, correct visual or semantic defects, run document-health checks, commit only this task's files with the required `dsw-33987` prefix, and push the current primary branch to `legacy-remote`.
 
 ## Validation log
 

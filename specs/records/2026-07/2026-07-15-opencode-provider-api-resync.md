@@ -59,7 +59,7 @@
 - 不移植上游 fallback：例如 Copilot 模型发现失败返回静态模型、GitLab discovery `catch -> {}`、
   SDK 方法链 fallback、Snowflake 把错误响应伪造为成功等均不进入 OpenCorvus。
 - Anthropic Claude Pro/Max 订阅 OAuth 已被上游移除且被厂商禁止，本任务只保留 Anthropic API provider。
-- 所有新增提交以 `dsw-33987` 开头，并推送 `myhexin/v0.0.4beta`。
+- 所有新增提交以 `dsw-33987` 开头，并推送 `legacy-remote/v0.0.4beta`。
 - 缩写首次出现必须说明全称和含义。
 
 ### 已读取的落盘资料
@@ -88,7 +88,7 @@
   refs/heads/upstream-dev:packages/opencode/src/plugin/openai/codex.ts` 已验证对象可独立读取。
 - `git merge-base --all HEAD anomalyco/dev` 返回空；`rev-list --left-right --count` 为
   `14857 / 4349`，因此禁止把常规 merge 当成同步手段。
-- 预改动 `v0.0.4beta` 已推送至 `myhexin`；hook 的 typecheck、API route、docs、Overlay i18n 和
+- 预改动 `v0.0.4beta` 已推送至 `legacy-remote`；hook 的 typecheck、API route、docs、Overlay i18n 和
   secret scan 全部通过。
 - 工作区存在其他并行任务的专家团、Overlay、测试、spec 和 dashboard 未提交修改；本任务只暂存
   本方案及后续 Provider/API 精确文件，不得暂存或覆盖任何不在本方案调用点矩阵中的改动。
@@ -254,4 +254,4 @@ git diff --check
 - Provider/CLI/插件精确组合：31 pass / 0 fail，覆盖 Azure/Cloudflare 上游声明、Snowflake、API Key/metadata 分离与授权结果 metadata 合并。
 - Node 驱动真实浏览器：6 pass / 0 fail；xAI 与 OpenAI 均完成“Connect → 方法选择 → 手工 Key → execute → Connected”，payload 使用真实上游索引 `2`。
 - 已查看 `.scratch/provider-auth-xai-upstream-method-order.png` 与 `.scratch/provider-auth-xai-api-key-password.png`：三项方法完整可见、声明顺序正确、Key 使用 password input；未发现遮挡或不可点击问题。
-- `packages/opencorvus` 与 `packages/overlay` typecheck 均通过；当前交付分支为 `v0.0.5beta`，最终提交使用 `dsw-33987` 前缀并推送 `myhexin`。
+- `packages/opencorvus` 与 `packages/overlay` typecheck 均通过；当前交付分支为 `v0.0.5beta`，最终提交使用 `dsw-33987` 前缀并推送 `legacy-remote`。

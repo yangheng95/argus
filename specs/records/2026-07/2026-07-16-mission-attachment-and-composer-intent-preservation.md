@@ -82,7 +82,7 @@ The backend capability and the visible composer diverged. Mission attachment sup
 3. Forward staged attachments through the existing `wakeMission` contract and delete the obsolete rejection copy.
 4. Update unit/source contracts and add an interactive browser regression that types text, stages a real `File`, changes expert-squad intent, proves both survive, and captures the composer region.
 5. Pin the shared `.chat-textarea` to the canonical regular body-weight token and assert its real computed weight in the same browser flow.
-6. Run focused overlay/backend tests, typechecks, docs health checks, browser validation, screenshot inspection, diff review, then commit and push to `myhexin`.
+6. Run focused overlay/backend tests, typechecks, docs health checks, browser validation, screenshot inspection, diff review, then commit and push to `legacy-remote`.
 
 ## Validation Record
 

@@ -39,7 +39,7 @@ Environment Information Goals section and the conversation surface:
   do not add a second renderer, fallback, hard-coded palette, local status
   shadow, iframe, mobile scope, or process restart.
 - Preserve unrelated dirty work, use the current worktree, prefix the delivery
-  commit with `dsw-33987`, and push to `myhexin`.
+  commit with `dsw-33987`, and push to `legacy-remote`.
 
 ### Sources read before implementation
 
@@ -102,7 +102,7 @@ and stable geometry.
 3. Run focused tests, Overlay typecheck/build, and the isolated Node browser
    fixture; inspect task-scoped screenshots and iterate.
 4. Run documentation health, diff review, second visual review, commit only
-   task-owned files, fetch/converge, and push the current branch to `myhexin`.
+   task-owned files, fetch/converge, and push the current branch to `legacy-remote`.
 
 ## Status
 
@@ -111,7 +111,7 @@ and stable geometry.
 - [x] Focused source tests, Overlay typecheck, localization validation, and
   production build pass.
 - [x] Node-launched browser interaction and task-scoped screenshot review pass.
-- [x] Second review, delivery commit, and `myhexin` push complete.
+- [x] Second review, delivery commit, and `legacy-remote` push complete.
 
 ## Validation evidence
 

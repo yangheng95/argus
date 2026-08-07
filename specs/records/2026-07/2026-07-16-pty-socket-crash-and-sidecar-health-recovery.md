@@ -66,7 +66,7 @@ boundaries.
    touching the user's running Overlay, inspect the resulting logs, and verify
    the server health endpoint remains available.
 6. Perform a second diff/root-cause review, commit only this task's files with
-   the required `dsw-33987` prefix, and push the current branch to `myhexin`.
+   the required `dsw-33987` prefix, and push the current branch to `legacy-remote`.
 
 ## Progress
 
@@ -76,7 +76,7 @@ boundaries.
 - [x] PTY lifecycle repair and regression coverage.
 - [x] Online sidecar-loss detection and replacement reload coverage.
 - [x] Focused and package-level verification.
-- [x] Second review complete; selective git-cc delivery prepared.
+- [x] Second review complete; selective legacy remote delivery prepared.
 
 ## Implementation
 

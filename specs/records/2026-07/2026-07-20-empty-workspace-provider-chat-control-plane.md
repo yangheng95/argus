@@ -21,7 +21,7 @@
 - 复用后端现有 `POST /global/chat` implicit-project allocator；点击 New Chat 本身不得制造未使用的项目。
 - 不停止、刷新、重启或操作用户正在运行的 OpenCorvus/Overlay；浏览器验收使用本任务隔离 fixture。
 - 保留现有未跟踪的 `C:/`；并发完成并推送的 database schema backup/restore 提交不属于本任务改动。
-- 新 commit subject 以 `dsw-33987` 开头并 push 到 `myhexin/v0.0.11beta`。
+- 新 commit subject 以 `dsw-33987` 开头并 push 到 `legacy-remote/v0.0.11beta`。
 
 ### Sources read
 
@@ -67,7 +67,7 @@ Repository-wide `rg` covered `createCodingAssistantSession`, `createGlobalCoding
 2. Extract Provider discovery/test operations behind one implementation that accepts explicit config scope, expose the global control-plane routes, and route the Overlay by its captured directory owner.
 3. Add negative/positive regressions for no project, project isolation, request paths, and the absence of the old workspace-directory errors.
 4. Run focused route/unit/type/API/docs checks, then a real Node browser flow at desktop size; inspect screenshots and correct any visual regression.
-5. Perform a second exact-diff review, update this record with evidence, commit only task-owned hunks, and push `v0.0.11beta` to `myhexin`.
+5. Perform a second exact-diff review, update this record with evidence, commit only task-owned hunks, and push `v0.0.11beta` to `legacy-remote`.
 
 ## Verification ledger
 

@@ -22,7 +22,7 @@
 - Preserve unrelated untracked files in the shared main worktree.
 - Do not restart, refresh, close, or otherwise interfere with a running OpenCorvus/overlay process.
 - Launch Playwright with Node, not Bun.
-- Commit subjects use the `dsw-33987` prefix and push through normal hooks to the git-cc remote.
+- Commit subjects use the `dsw-33987` prefix and push through normal hooks to the legacy remote.
 
 ### Sources read
 

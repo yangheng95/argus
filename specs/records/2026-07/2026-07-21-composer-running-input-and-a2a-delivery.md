@@ -91,7 +91,7 @@ No sub-Agent was started. The current collaboration policy prohibits delegation 
 3. Add unit/source regressions plus production-route queue/delivery evidence.
 4. Run focused tests, Overlay type checking, protocol tests, documentation health checks, and the repository-required validation that is relevant to the touched surfaces.
 5. Start an isolated page, exercise the actual interaction with Node browser automation, inspect screenshots, and correct any visual or keyboard regression before delivery.
-6. Perform a second diff review, commit with the required `dsw-33987` prefix, reconcile the current branch with `myhexin`, and push through hooks.
+6. Perform a second diff review, commit with the required `dsw-33987` prefix, reconcile the current branch with `legacy-remote`, and push through hooks.
 
 ## Verification ledger
 

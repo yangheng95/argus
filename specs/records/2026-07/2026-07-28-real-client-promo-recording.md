@@ -42,7 +42,7 @@
 - Run the focused landing tests, historical-doc links, document health, Astro check, and production build.
 - In an independent docs preview, visually inspect English and Chinese hero/demo regions, play the video, confirm duration and ready state, and check console output and horizontal overflow.
 - Review the exact diff for single-source ownership and verify that no browser fixture or synthetic task payload entered the media pipeline.
-- Commit with a `dsw-33987` subject and push the current branch to `myhexin`; report git-cc network failure explicitly if it remains unreachable.
+- Commit with a `dsw-33987` subject and push the current branch to `legacy-remote`; report legacy remote network failure explicitly if it remains unreachable.
 
 ## Recorded evidence
 
@@ -131,7 +131,7 @@
 - Inspect representative raw frames for every selected capability and every real-Task surface.
 - Verify the capture remains exactly `2304 × 1296`, contains only the native client area, and encodes to a 45-second WebM.
 - Run the focused landing regression, documentation health checks, Astro check/build, and desktop browser playback acceptance.
-- Commit with a `dsw-33987` subject and push the current branch to `myhexin`; report an external git-cc connection failure rather than bypassing hooks or changing remotes.
+- Commit with a `dsw-33987` subject and push the current branch to `legacy-remote`; report an external legacy remote connection failure rather than bypassing hooks or changing remotes.
 
 ### Recorded evidence
 
@@ -169,7 +169,7 @@
 - Prove the project, Mission/task identifier, exact submitted text, runtime status, source-count evidence, generated artifacts, and roadmap evidence through the real client and sidecar.
 - Visually inspect representative raw capture frames, the encoded WebM, and the task-scoped website states; do not accept DOM-only or mocked evidence.
 - Run the focused landing tests, relevant document-health tests, Astro check/build, and desktop playback acceptance with screenshot, console, overflow, duration, and native media dimensions.
-- Review the final diff for a single video/data source, commit with a `dsw-33987` subject, and push the current branch to `myhexin`; report a remaining external git-cc connection failure explicitly.
+- Review the final diff for a single video/data source, commit with a `dsw-33987` subject, and push the current branch to `legacy-remote`; report a remaining external legacy remote connection failure explicitly.
 
 ### Observed real-run blocker
 
@@ -213,7 +213,7 @@
 3. Update bilingual feature narration so the replaced artifact image is described as an interactive evidence surface rather than a generic environment screenshot.
 4. Rebuild the WebM from the accepted submission capture plus all subsequent chronological execution and terminal-result evidence, then update the displayed duration from the encoded media truth.
 5. Continue the same native-client recording after terminal evidence long enough to open representative flow details, interactive artifacts, and selected OpenCorvus feature surfaces. Preserve the real client and task context; do not compose browser footage or static screenshots into the recording.
-6. Repeat focused tests, documentation health, Astro check/build, real desktop playback, screenshot, overflow, and console acceptance before committing and pushing to `myhexin`.
+6. Repeat focused tests, documentation health, Astro check/build, real desktop playback, screenshot, overflow, and console acceptance before committing and pushing to `legacy-remote`.
 
 ## Follow-up: two-minute feature-first edit
 

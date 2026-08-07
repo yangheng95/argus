@@ -2,7 +2,7 @@
 
 Date: 2026-08-07
 
-Status: Implemented and locally validated; git-cc delivery pending network recovery.
+Status: Implemented and locally validated; legacy remote delivery pending network recovery.
 
 ## Recall
 
@@ -10,11 +10,11 @@ Status: Implemented and locally validated; git-cc delivery pending network recov
 | --- | --- |
 | User requirement | Mission 的 Prompt 必须明确自动按照输入任务的 scope，把工作切分给不同专家团，而不是把全部工作塞进一个 Task。调度器在测试前提出的询问如果被拒绝或超时，含义都是不执行该询问覆盖的测试。 |
 | Acceptance criteria | Mission first partitions the complete requested scope by positive held-Squad ownership, creates a separate fixed-`promptProfile` Task for every unavoidable cross-Squad partition, and only then applies delivery-closure granularity inside each single-Squad partition. The scheduler's optional test question names the exact testing increment; an explicit refusal or automatic deadline expiry selects `skip_optional_testing`, and none of the testing described by that question is dispatched or executed. Tests already explicitly required by the operator or a selected binding workflow remain part of the authored Task contract and are never relabeled as optional. |
-| Hard constraints | Keep `prompt_profile.active` and Task `promptProfile` as the single fixed-Squad authority. Keep the behavior prompt-owned; do not add a Host gate, state machine, hidden preference field, fallback, keyword router, synthetic message, or second workflow source. Preserve visible question evidence. Do not add, modify, or run User Interface automation tests. Use only positive non-User-Interface prompt contract tests. Preserve unrelated commits and shared-worktree changes. Commit subjects use `dsw-33987`; delivery targets the `git-cc` remote. |
+| Hard constraints | Keep `prompt_profile.active` and Task `promptProfile` as the single fixed-Squad authority. Keep the behavior prompt-owned; do not add a Host gate, state machine, hidden preference field, fallback, keyword router, synthetic message, or second workflow source. Preserve visible question evidence. Do not add, modify, or run User Interface automation tests. Use only positive non-User-Interface prompt contract tests. Preserve unrelated commits and shared-worktree changes. Commit subjects use `dsw-33987`; delivery targets the legacy remote. |
 | Sources read | Root `AGENTS.md`; `packages/opencorvus/src/prompt/core/mission-core.txt`; `packages/opencorvus/src/prompt/core/orchestrator-core.txt`; `packages/opencorvus/src/orchestrator/interaction-tools.ts`; `specs/current/architecture/01-agents.md` and `99-principles.md`; `2026-08-02-mission-task-delivery-closure-granularity.md`; `2026-08-06-cognition-aligned-verification-budget-scheduling.md`; existing verification-budget prompt contract test. |
 | Whole-repository grep | Current Mission text already states that different Squads cannot share a Task, but its first-wake and stage-design procedures begin from delivery closure grouping and repeatedly emphasize avoiding fragmentation. The older 2026-08-02 record explicitly defaults to one large fixed-Squad Task. The current scheduler maps rejected or expired verification questions to `required_only`, whose wording still authorizes the acceptance-floor test path instead of explicitly skipping the testing named in the question. No dedicated Mission prompt contract test currently covers scope-first Squad partitioning. |
 | Independent Agent feedback | No independent Agent was requested. Current collaboration policy prohibits inferred sub-agent spawning; the primary Agent will perform implementation and a separate semantic diff review. |
-| Git baseline | Branch `v0.0.35beta` was clean and six commits ahead of the last locally known `git-cc/v0.0.35beta`. The required pre-change fetch was attempted, but the git-cc TLS handshake failed before remote state could be refreshed. No existing commit or file was rewritten. |
+| Git baseline | Branch `v0.0.35beta` was clean and six commits ahead of the last locally known `legacy-remote/v0.0.35beta`. The required pre-change fetch was attempted, but the legacy remote TLS handshake failed before remote state could be refreshed. No existing commit or file was rewritten. |
 
 ## Root-cause analysis
 
@@ -49,7 +49,7 @@ An explicitly requested test or a mandatory node in the already selected binding
 3. Update the positive verification-budget test and add a positive Mission prompt contract test.
 4. Run the two focused non-User-Interface prompt tests, package typecheck, documentation checks that exist on this branch, and `git diff --check`.
 5. Perform a separate semantic review for single-source ownership, mandatory-workflow preservation, refusal/expiry meaning, and accidental Host-gate language.
-6. Commit with the required prefix, fetch/reconcile `git-cc`, push through hooks, and report any external delivery blocker exactly.
+6. Commit with the required prefix, fetch/reconcile legacy remote, push through hooks, and report any external delivery blocker exactly.
 
 ## Implementation outcome
 

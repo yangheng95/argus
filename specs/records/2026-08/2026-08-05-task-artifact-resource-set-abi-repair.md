@@ -38,7 +38,7 @@ typed `mirror-watch/persona-survey-cohort` publisher.
 8. Architecture, package prompts, authoring guidance, generated payloads, and
    repository documentation describe one resource-set protocol.
 9. Targeted tests, typecheck, document health, generated-artifact checks,
-   independent diff review, commit, and `git-cc` push succeed.
+   independent diff review, commit, and legacy remote push succeed.
 
 ### Hard constraints
 
@@ -155,7 +155,7 @@ consumer ABI was never exercised at the package's authoritative cohort size.
 - OpenCorvus package typecheck and Application Programming Interface (API)
   route/documentation checks required by hooks.
 - Final `git diff --check`, focused code review, clean task-owned diff, commit
-  subject prefixed `dsw-33987`, and push to `git-cc/v0.0.31beta`.
+  subject prefixed `dsw-33987`, and push to `legacy-remote/v0.0.31beta`.
 
 ## Progress
 

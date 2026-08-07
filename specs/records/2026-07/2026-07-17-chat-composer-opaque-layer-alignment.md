@@ -17,7 +17,7 @@
 | Sources read | `AGENTS.md`; Browser control skill; `specs/README.md`; `specs/records/2026-07/README.md`; the 2026-07-17 scroll-owner, fixed-layer, sparse-Chat, and Tools/Reasoning alignment records; merge commits `3f901bf72` and `10f1814ce` plus both relevant parents; `App.tsx`; `Conversation.tsx`; `ChatComposer.tsx`; `Card.tsx`; `CardParts.tsx`; `conversation.css`; `composer.css`; `card.css`; `chat-bubble.css`; `messages.css`; elevation tokens; focused source/browser tests; current real-page screenshots. |
 | Whole-repository search | `rg` enumerated every `chatHomeComposition`, `solidChatComposer`, `conversation-composer-block-size`, `conversation-message-content-width`, `conversation-message-lane-width`, `conversation-virtual-item`, Assistant-card background, composer-layer `z-index`, and browser geometry assertion. Production ownership is singular: `App.tsx` owns sibling DOM order; `Conversation.tsx` projects the rendered composer height; `conversation.css` owns the scroll lane, exact inline inset, bottom layer, and transcript clearance; `composer.css` owns the input stack; `chat-bubble.css` owns Assistant-card visual bounds. The direct regression owner is `conversation-agent-rail-scroll-browser.test.ts`; source contracts live in `conversation-scroll-bottom-button.test.ts`, `conversation-agent-rail.test.ts`, `conversation-empty-state-source.test.ts`, `overlay-architecture-guards.test.ts`, and `workspace-composer-density.test.ts`. |
 | Independent agent feedback | None. The user did not request sub-agents, and active policy forbids unrequested delegation. |
-| Git baseline | `HEAD` `66cb87d6b` matched `myhexin/v0.0.8beta`. The worktree already contained unrelated frontend-replica E2E files and generated macOS artifacts; they remain outside this task. The pre-change push completed with typecheck, route, docs, i18n, panel-i18n, and secret-scan hooks passing and reported everything up to date. |
+| Git baseline | `HEAD` `66cb87d6b` matched `legacy-remote/v0.0.8beta`. The worktree already contained unrelated frontend-replica E2E files and generated macOS artifacts; they remain outside this task. The pre-change push completed with typecheck, route, docs, i18n, panel-i18n, and secret-scan hooks passing and reported everything up to date. |
 
 ## Causal chain
 
@@ -72,7 +72,7 @@ canonical inset and width sources.
    acceptance criteria.
 5. Perform a second source/diff and screenshot review, record exact evidence,
    commit only task-owned files with the `dsw-33987` prefix, and push the
-   current branch to `myhexin`.
+   current branch to `legacy-remote`.
 
 ## Result
 

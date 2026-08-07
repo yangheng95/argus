@@ -23,7 +23,7 @@ existing minimum native window size and square-aspect contract unchanged.
 | --- | --- |
 | User request 2026-08-03 | In fullscreen, dragging the scrollbar can move the entire page upward and reveal blank space below; adjust the layout. |
 | User screenshot | The titlebar has moved above the viewport, the sidebar and Composer terminate before the screenshot bottom, and the Conversation scrollbar remains visible at the right edge. This proves the whole document moved rather than the Composer merely gaining bottom margin. |
-| `AGENTS.md` | Fix the root cause without a gate or fallback; preserve unrelated worktree changes; do not add, update, or run UI automation tests; verify UI changes in a real page with screenshots and a second visual review; commit and push to git-cc. |
+| `AGENTS.md` | Fix the root cause without a gate or fallback; preserve unrelated worktree changes; do not add, update, or run UI automation tests; verify UI changes in a real page with screenshots and a second visual review; commit and push to legacy remote. |
 | `specs/records/2026-07/2026-07-08-overlay-square-aspect-window.md` | Keep the `1120px` minimum width, `720px` minimum height, square aspect legality, and generated size-contract ownership. |
 | `packages/overlay/src/styles/cascade/base.css` | `body` owns the generated minimum size and hides its own overflow, but the `html` root scroll container has no overflow contract. |
 | Real-page reproduction | At a `2048x650` effective viewport, `body` remains `720px` high, `documentElement.scrollHeight` becomes `720px`, and scrolling outside the transcript moves `documentElement.scrollTop` to about `70px`; the titlebar and whole application move upward exactly like the supplied screenshot. |

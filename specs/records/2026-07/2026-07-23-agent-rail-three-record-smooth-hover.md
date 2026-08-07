@@ -25,7 +25,7 @@
 - Do not restart, refresh, close, or otherwise interfere with the user's running OpenCorvus/Overlay; use the existing isolated Node browser fixture.
 - Playwright must run through Node, never Bun.
 - Preserve all unrelated shared-worktree changes and selectively stage only this task.
-- Commit subjects use the `dsw-33987` prefix and push through the normal git-cc hook to `myhexin`.
+- Commit subjects use the `dsw-33987` prefix and push through the normal legacy remote hook to `legacy-remote`.
 
 ### Sources read before implementation
 
@@ -79,7 +79,7 @@
   `composer.css`, and an in-progress connection-badge selector ownership
   mismatch. They do not touch the rail component, its marker CSS, or its
   browser fixture and must not be hidden or folded into this repair.
-- A pre-change push was attempted through the normal git-cc hook. The hook
+- A pre-change push was attempted through the normal legacy remote hook. The hook
   correctly blocked on an unrelated generated OpenAPI difference from existing
   Mission/panel changes; no hook was bypassed.
 
@@ -132,7 +132,7 @@
 5. Inspect fresh task-scoped rest, hover, and pointer-traversal screenshots at
    original resolution; iterate until the motion and layout pass visual review.
 6. Re-read the scoped diff and browser evidence, selectively stage only this
-   task's hunks/files, commit with `dsw-33987`, push through the normal git-cc
+   task's hunks/files, commit with `dsw-33987`, push through the normal legacy remote
    hook, and report any unrelated hook blocker honestly.
 
 ## Validation targets
@@ -198,7 +198,7 @@ git diff --check
   untracked. This task commit tracks its own record; the concurrent record/link
   remains outside this repair. The remaining document-health and
   historical-link tests pass.
-- The pre-change git-cc push hook is blocked by generated OpenAPI drift from
+- The pre-change legacy remote push hook is blocked by generated OpenAPI drift from
   concurrent Mission/panel changes. No hook or checker was bypassed.
 
 ## Visual review and second review

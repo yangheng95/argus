@@ -16,7 +16,7 @@
 - `build:landing-dist` must replace both `packages/web/dist` and `packages/web/dist.zip`.
 - Automated tests cover filesystem and archive contracts only; no UI automated test may be added, changed, or run.
 - Real-page acceptance uses Node-backed browser tooling and `http://localhost:9999`.
-- Task commits use the `dsw-33987` prefix and push to `myhexin/v0.0.30beta` without bypassing hooks.
+- Task commits use the `dsw-33987` prefix and push to `legacy-remote/v0.0.30beta` without bypassing hooks.
 
 ## Recall
 
@@ -97,13 +97,13 @@ The user's first request requires rebuilding the promotional dist from the lates
 - Modify: `specs/records/2026-08/README.md`
 
 **Interfaces:**
-- Produces: exact verification evidence, a second review verdict, scoped commits, and the pushed git-cc branch.
+- Produces: exact verification evidence, a second review verdict, scoped commits, and the pushed legacy remote branch.
 
 - [ ] Run `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/product-docs-single-source.test.ts`.
 - [ ] Run `git diff --check`, inspect the task diff, generated package inventory, ZIP entries, and Git status, and confirm no unrelated file is staged.
 - [ ] Append exact build, test, size, URL, screenshot, and second-review evidence to this plan.
 - [ ] Commit implementation and evidence with `dsw-33987` subjects.
-- [ ] Fetch/reconcile `myhexin/v0.0.30beta`, push normally, and confirm local/remote equality.
+- [ ] Fetch/reconcile `legacy-remote/v0.0.30beta`, push normally, and confirm local/remote equality.
 
 ## Plan self-review
 

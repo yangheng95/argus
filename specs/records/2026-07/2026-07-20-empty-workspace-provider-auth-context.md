@@ -12,7 +12,7 @@
 2. API key、声明式 prompt、OAuth authorize/callback 均通过显式全局控制面工作，不读取或伪造 Project `Instance`。
 3. 打开项目后的 Provider auth 继续使用项目 Plugin 投影；全局与项目流程共享 `ProviderAuth` 行为及 `Auth` 凭据单一来源。
 4. Overlay 不再把空项目的 `providerAuth` 写成 `null`，也不以缺少目录拒绝鉴权动作。
-5. route、单元和真实 Node 浏览器截图覆盖空项目 OpenAI 订阅入口与全局请求路径；二次审查后提交并推送到 `myhexin/v0.0.11beta`。
+5. route、单元和真实 Node 浏览器截图覆盖空项目 OpenAI 订阅入口与全局请求路径；二次审查后提交并推送到 `legacy-remote/v0.0.11beta`。
 
 ### Hard constraints
 
@@ -21,7 +21,7 @@
 - OAuth pending callback 按显式 global/project scope 隔离；持久化仍只写 `Auth` 的 `auth.json`。
 - 不停止、重启或刷新用户正在运行的 OpenCorvus/Overlay；视觉验收使用隔离 Node Playwright fixture。
 - 保留现有未提交设置、transport、spec 索引与 `C:/` 改动；本任务提交只包含自己拥有的 hunks。
-- commit subject 以 `dsw-33987` 开头并 push 到 `myhexin/v0.0.11beta`。
+- commit subject 以 `dsw-33987` 开头并 push 到 `legacy-remote/v0.0.11beta`。
 
 ### Sources read
 

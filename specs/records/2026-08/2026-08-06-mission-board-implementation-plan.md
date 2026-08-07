@@ -16,7 +16,7 @@
 - Do not add, change, or run User Interface automation tests.
 - Use test-first positive non-User-Interface contracts for projection, Tool, protocol, and route behavior.
 - Use only the current worktree and stage exact files.
-- Commit subjects begin with `dsw-33987` and push to `myhexin`.
+- Commit subjects begin with `dsw-33987` and push to `legacy-remote`.
 
 ---
 
@@ -112,7 +112,7 @@ type MissionCompletionFact = {
 - [x] Personally inspect hierarchy, clipping, horizontal density, light/dark tokens, empty lanes, real pending-interaction facts, and card-to-conversation navigation.
 - [x] Correct every observed visual or interaction defect and capture a fresh screenshot.
 - [x] Run final non-User-Interface contracts, both package typechecks, Overlay build, localization check, Application Programming Interface route check, documentation checks, historical link checks, and repository status review.
-- [x] Commit and push the final verified implementation to `myhexin` (`c1b0538bd1`).
+- [x] Commit and push the final verified implementation to `legacy-remote` (`c1b0538bd1`).
 
 ### Task 5: Conversation-owned Environment Information lifecycle
 
@@ -130,7 +130,7 @@ type MissionCompletionFact = {
 - [x] Run Overlay typecheck, localization check, and production build without running User Interface automation tests.
 - [x] Start the real page, open a concrete Project conversation, open Environment Information, navigate to Mission Board, and manually verify from a fresh screenshot that the card is gone.
 - [x] Open a Mission card and verify the conversation-owned launcher is available again.
-- [x] Complete a second diff/status review, commit, and push the exact repair to `myhexin` (`6f22ffb9ee`).
+- [x] Complete a second diff/status review, commit, and push the exact repair to `legacy-remote` (`6f22ffb9ee`).
 
 ## Final verification record
 

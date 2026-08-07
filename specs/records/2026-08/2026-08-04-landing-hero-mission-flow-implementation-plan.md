@@ -18,7 +18,7 @@
 - Delete the hero's floating local-client walkthrough chip and all selectors that only support it.
 - Do not add, modify, update, or run UI automation tests. UI acceptance uses real visible English and Simplified Chinese pages, manual interaction, screenshots, and personal review.
 - Do not rebuild native Windows artifacts; `build:landing-dist` copies the existing three-file Windows directory.
-- Use `apply_patch` for text/source edits, exact-path staging, `dsw-33987` commit subjects, and normal pushes to `myhexin/work-lcx-v0.0.30beta`.
+- Use `apply_patch` for text/source edits, exact-path staging, `dsw-33987` commit subjects, and normal pushes to `legacy-remote/work-lcx-v0.0.30beta`.
 - Do not create a worktree or use a sub-agent in this side conversation.
 
 ---
@@ -155,7 +155,7 @@ git commit -m "dsw-33987 replace hero with mission workflow"
 
 **Interfaces:**
 - Consumes: final page renderer and existing Windows artifact directory.
-- Produces: deployment-ready `packages/web/dist`, visual evidence, completed plan, and git-cc delivery.
+- Produces: deployment-ready `packages/web/dist`, visual evidence, completed plan, and legacy remote delivery.
 
 - [x] **Step 1: Run non-UI checks and build**
 
@@ -196,7 +196,7 @@ git commit -m "dsw-33987 record mission flow hero evidence"
 
 - [x] **Step 6: Fetch, reconcile, and push**
 
-Fetch `myhexin/work-lcx-v0.0.30beta`, require a zero-behind comparison, and push normally without bypassing hooks. Record the final commit and remote alignment in this plan.
+Fetch `legacy-remote/work-lcx-v0.0.30beta`, require a zero-behind comparison, and push normally without bypassing hooks. Record the final commit and remote alignment in this plan.
 
 ## Implementation evidence
 
@@ -211,12 +211,12 @@ Fetch `myhexin/work-lcx-v0.0.30beta`, require a zero-behind comparison, and push
 - Simplified Chinese real-page evidence: `http://127.0.0.1:9996/docs/zh-cn/` renders the same approved workflow with localized window/alternative text, balanced against the Chinese hero copy and without clipping. Screenshot: `specs/artifacts/landing-mission-flow-zh-cn.png`.
 - Visual review: the pure black/warm-white diagram matches the landing's restrained surfaces, its window frame aligns with the existing hero geometry, every supplied node remains present, and the removed chip leaves no empty overlay or alignment gap.
 - UI acceptance remained manual and interactive; no UI automation test, DOM/source-string assertion, screenshot baseline, or pixel-difference fixture was created or run.
-- Git delivery: `git fetch myhexin work-lcx-v0.0.30beta` showed the local branch two commits ahead and zero behind before push. Commits `e1899d43e2` and `bfc2c30a87` were pushed normally to `myhexin/work-lcx-v0.0.30beta` without bypassing hooks.
+- Git delivery: `git fetch legacy-remote work-lcx-v0.0.30beta` showed the local branch two commits ahead and zero behind before push. Commits `e1899d43e2` and `bfc2c30a87` were pushed normally to `legacy-remote/work-lcx-v0.0.30beta` without bypassing hooks.
 - Pre-push verification: SDK import and AI runtime checks passed; all 8 scheduled package typechecks passed; API route inventory, documentation generation, overlay internationalization, and secret scanning all completed successfully.
 
 ## Plan self-review
 
-- Spec coverage: approved PNG, complete nodes, pure monochrome design, hero replacement, chip deletion, retained demo/story/download behavior, static build, screenshots, and git-cc delivery all map to explicit steps.
+- Spec coverage: approved PNG, complete nodes, pure monochrome design, hero replacement, chip deletion, retained demo/story/download behavior, static build, screenshots, and legacy remote delivery all map to explicit steps.
 - Placeholder scan: all files, fields, locale values, commands, URLs, expected counts, and commit subjects are explicit.
 - Type consistency: both new `hero` fields are declared once and consumed by the hero renderer; no second content source is introduced.
 - UI-test boundary: automated checks cover Astro compilation, filesystem distribution, and documentation health only. UI acceptance is real-page interaction and manual screenshot review.

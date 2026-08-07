@@ -59,9 +59,9 @@
     the absence explicitly.
 - Git / remote state:
   - Branch: `v0.0.1beta`.
-  - `git fetch myhexin v0.0.1beta` completed.
-  - Local `HEAD` is one commit ahead of git-cc. A pre-change push attempt ran
-    quality hooks successfully but git-cc rejected the existing unpushed commit
+  - `git fetch legacy-remote v0.0.1beta` completed.
+  - Local `HEAD` is one commit ahead of legacy remote. A pre-change push attempt ran
+    quality hooks successfully but legacy remote rejected the existing unpushed commit
     message because it lacks a `dsw-<taskID>` prefix.
 
 ## Plan

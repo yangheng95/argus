@@ -63,7 +63,7 @@ The observable flash is not a missing-data interval. A Work Ledger change event 
 2. Reconcile project groups by canonical directory and rows, including Mission children, by `kind:id` with Solid's established `reconcile(..., { key: "renderKey", merge: true })`.
 3. Feed both pinned and unpinned project-group surfaces from those reconciled stores while retaining the server-projected row order.
 4. Add focused source contracts and a Node-launched browser regression that emits unchanged Work Ledger events and asserts project/row DOM identity plus hover and focus continuity.
-5. Build, run focused tests, inspect the goal-scoped screenshot, run documentation health checks, review the diff twice, commit with the required prefix, fetch, and push to `myhexin`.
+5. Build, run focused tests, inspect the goal-scoped screenshot, run documentation health checks, review the diff twice, commit with the required prefix, fetch, and push to `legacy-remote`.
 
 ## Validation plan
 
