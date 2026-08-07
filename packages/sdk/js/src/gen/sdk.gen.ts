@@ -4235,91 +4235,34 @@ export class Control extends HeyApiClient {
           }
         | {
             action: "query_task_artifacts"
-            /**
-             * Optional exact namespaced Artifact-type filter.
-             */
             artifact_types?: Array<string>
-            /**
-             * Optional inclusive lower creation-time bound in Unix milliseconds.
-             */
             created_at_or_after_ms?: number
-            /**
-             * Optional exclusive upper creation-time bound in Unix milliseconds.
-             */
             created_before_ms?: number
-            /**
-             * Opaque cursor returned by the preceding page; omit it for the first page.
-             */
             cursor?: string
-            /**
-             * Optional exact logical Goal-subject filter.
-             */
             goal_ids?: Array<string>
-            /**
-             * Optional exact source-Task lineage filter for imported Engine Artifacts. Non-imported entries never match.
-             */
             import_source_task_ids?: Array<string>
-            /**
-             * Optional exact persisted Artifact-kind filter.
-             */
             kinds?: Array<string>
-            /**
-             * Optional exact stable Artifact-label filter.
-             */
             labels?: Array<string>
-            /**
-             * Optional exact resource media-type filter.
-             */
             media_types?: Array<string>
-            /**
-             * Optional exact projected producer Agent-identity filter. Core-owned typed projections never match this filter; select those by label, kind, artifact type, or Goal.
-             */
             producer_agent_ids?: Array<string>
-            /**
-             * Optional exact projected or Mission producer Session identity filter. Core-owned typed projections never match this filter.
-             */
             producer_session_ids?: Array<string>
-            /**
-             * Optional exact projected producer Expert Squad identity filter. Core-owned typed projections never match this filter.
-             */
             producer_squad_ids?: Array<string>
-            /**
-             * Optional hierarchical candidate query over bounded catalog identity, label, type, producer, Goal, and resource metadata. Fuzzy mode is explicit and never selects evidence. Omit query to enumerate.
-             */
             query?: {
               mode?: "substring" | "fuzzy"
               text: string
             }
-            /**
-             * Explicit candidate order. Defaults to relevance when query is present and newest otherwise.
-             */
             sort?: "relevance" | "newest" | "oldest" | "name"
-            /**
-             * Optional authoritative-store filter. Omit it to include every catalog provider.
-             */
             sources?: Array<"engine_artifact" | "task_artifact">
             /**
              * Source Task whose Artifact catalog should be enumerated.
              */
             taskID: string
-            /**
-             * Engine version scope at the frozen catalog revision. Task Artifact snapshots are immutable.
-             */
             version_scope?: "current" | "historical" | "all"
           }
         | {
             action: "read_task_artifact"
-            /**
-             * Zero-based byte offset within the exact canonical payload or resource.
-             */
             byte_offset?: number
-            /**
-             * inline returns one bounded content chunk. materialized_file verifies one complete text resource and returns an immutable local cache path for bounded command-line inspection.
-             */
             delivery?: "inline" | "materialized_file"
-            /**
-             * Exact typed locator returned by Artifact search, including its immutable digest.
-             */
             locator:
               | {
                   artifact_id: string
@@ -4354,9 +4297,6 @@ export class Control extends HeyApiClient {
                   }
                   source: "task_artifact_resource"
                 }
-            /**
-             * Maximum UTF-8 text bytes to return in this exact-read chunk. Binary resources use one complete attachment and ignore text pagination.
-             */
             max_bytes?: number
             /**
              * Terminal source Task in the current Mission lineage.
@@ -4584,9 +4524,6 @@ export class Control extends HeyApiClient {
              * Model reference in provider/model format for the new task.
              */
             model?: string
-            /**
-             * Channel platform for an external task binding.
-             */
             platform?:
               | "slack"
               | "telegram"
@@ -4615,9 +4552,6 @@ export class Control extends HeyApiClient {
               | "twitch"
               | "zalo"
               | "zalouser"
-            /**
-             * Product pillar for direct panel-UI creation. Mission and conversation callers inherit their persisted pillar.
-             */
             productPillar?: "code" | "work"
             /**
              * Exact expert-squad manifest ID that owns the new Task for its full lifetime. Mission must choose this from expert_squad_catalog for every created Task. Non-Mission callers may omit it to inherit their effective prompt_profile.active.
@@ -4802,9 +4736,6 @@ export class Control extends HeyApiClient {
           }
         | {
             action: "cancel_task"
-            /**
-             * Why the task is being cancelled.
-             */
             reason: string
             /**
              * Task ID to cancel.

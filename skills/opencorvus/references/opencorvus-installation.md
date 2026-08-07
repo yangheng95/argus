@@ -7,7 +7,7 @@ The current project documentation identifies a source build as the verifiable in
 Prerequisites:
 
 - Git
-- Bun `1.3.13`, matching the root `packageManager` declaration
+- Bun `1.3.14`, matching the root `packageManager` declaration
 - network access to clone the repository and install dependencies
 - a model-provider credential or supported sign-in method
 

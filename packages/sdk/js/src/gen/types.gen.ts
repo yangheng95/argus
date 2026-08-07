@@ -4,22 +4,6 @@ export type ClientOptions = {
   baseUrl: `${string}://${string}` | (string & {})
 }
 
-export type ApiError = {
-  data: {
-    isRetryable: boolean
-    message: string
-    metadata?: {
-      [key: string]: string
-    }
-    responseBody?: string
-    responseHeaders?: {
-      [key: string]: string
-    }
-    statusCode?: number
-  }
-  name: "APIError"
-}
-
 export type Agent = {
   color?: string
   description?: string
@@ -79,33 +63,204 @@ export type BadRequestError = {
  * Channel integration configuration
  */
 export type ChannelConfig = {
-  clickclack?: ClickClackChannelConfig
-  dingtalk?: DingTalkChannelConfig
-  discord?: DiscordChannelConfig
-  feishu?: FeishuChannelConfig
-  googlechat?: GoogleChatChannelConfig
-  imessage?: IMessageChannelConfig
-  irc?: IrcChannelConfig
-  line?: LineChannelConfig
-  matrix?: MatrixChannelConfig
-  mattermost?: MattermostChannelConfig
-  msteams?: MsTeamsChannelConfig
-  "nextcloud-talk"?: NextcloudTalkChannelConfig
-  nostr?: NostrChannelConfig
-  qqbot?: QqBotChannelConfig
-  raft?: RaftChannelConfig
-  reef?: ReefChannelConfig
-  signal?: SignalChannelConfig
-  slack?: SlackChannelConfig
-  sms?: SmsChannelConfig
-  "synology-chat"?: SynologyChatChannelConfig
-  telegram?: TelegramChannelConfig
-  tlon?: TlonChannelConfig
-  twitch?: TwitchChannelConfig
-  wecom?: WeComChannelConfig
-  whatsapp?: WhatsappChannelConfig
-  zalo?: ZaloChannelConfig
-  zalouser?: ZaloPersonalChannelConfig
+  clickclack?: {
+    baseUrl?: string
+    enabled?: boolean
+    token?: string
+    workspace?: string
+  }
+  dingtalk?: {
+    appKey?: string
+    appSecret?: string
+    callbackToken?: string
+    defaultWebhook?: string
+    enabled?: boolean
+    encodingAesKey?: string
+    webhookHost?: string
+    webhookPath?: string
+    webhookPort?: string
+  }
+  discord?: {
+    enabled?: boolean
+    token?: string
+  }
+  feishu?: {
+    appId?: string
+    appSecret?: string
+    enabled?: boolean
+    verificationToken?: string
+    webhookHost?: string
+    webhookPath?: string
+    webhookPort?: string
+  }
+  googlechat?: {
+    authAudience?: string
+    enabled?: boolean
+    serviceAccount?: string
+    webhookHost?: string
+    webhookPath?: string
+    webhookPort?: string
+  }
+  imessage?: {
+    cliPath?: string
+    dbPath?: string
+    enabled?: boolean
+    service?: string
+  }
+  irc?: {
+    channels?: string
+    enabled?: boolean
+    host?: string
+    nick?: string
+    password?: string
+    port?: string
+    tls?: boolean
+  }
+  line?: {
+    enabled?: boolean
+    secret?: string
+    token?: string
+    webhookHost?: string
+    webhookPath?: string
+    webhookPort?: string
+  }
+  matrix?: {
+    enabled?: boolean
+    homeserver?: string
+    since?: string
+    token?: string
+  }
+  mattermost?: {
+    enabled?: boolean
+    token?: string
+    url?: string
+    webhookHost?: string
+    webhookPath?: string
+    webhookPort?: string
+    webhookToken?: string
+  }
+  msteams?: {
+    appId?: string
+    appSecret?: string
+    enabled?: boolean
+    webhookHost?: string
+    webhookPath?: string
+    webhookPort?: string
+  }
+  "nextcloud-talk"?: {
+    baseUrl?: string
+    botSecret?: string
+    enabled?: boolean
+    webhookHost?: string
+    webhookPath?: string
+    webhookPort?: string
+    webhookPublicUrl?: string
+  }
+  nostr?: {
+    enabled?: boolean
+    privateKey?: string
+    relays?: string
+  }
+  qqbot?: {
+    appId?: string
+    clientSecret?: string
+    enabled?: boolean
+  }
+  raft?: {
+    enabled?: boolean
+    profile?: string
+  }
+  reef?: {
+    email?: string
+    enabled?: boolean
+    guardApiKeyEnv?: string
+    guardPinnedModel?: string
+    guardPolicyVersion?: string
+    guardProvider?: string
+    guardTimeoutMs?: string
+    handle?: string
+    relayUrl?: string
+    requestPolicy?: string
+  }
+  signal?: {
+    account?: string
+    enabled?: boolean
+    service?: string
+  }
+  slack?: {
+    appToken?: string
+    botToken?: string
+    enabled?: boolean
+    signingSecret?: string
+  }
+  sms?: {
+    accountSid?: string
+    authToken?: string
+    defaultTo?: string
+    enabled?: boolean
+    fromNumber?: string
+    publicWebhookUrl?: string
+    webhookPath?: string
+  }
+  "synology-chat"?: {
+    enabled?: boolean
+    incomingUrl?: string
+    nasHost?: string
+    token?: string
+  }
+  telegram?: {
+    enabled?: boolean
+    token?: string
+  }
+  tlon?: {
+    code?: string
+    defaultAuthorizedShips?: string
+    dmAllowlist?: string
+    enabled?: boolean
+    groupChannels?: string
+    ship?: string
+    url?: string
+  }
+  twitch?: {
+    accessToken?: string
+    allowFrom?: string
+    channel?: string
+    clientId?: string
+    enabled?: boolean
+    requireMention?: boolean
+    username?: string
+  }
+  wecom?: {
+    agentId?: string
+    corpId?: string
+    enabled?: boolean
+    encodingAesKey?: string
+    secret?: string
+    token?: string
+    webhookHost?: string
+    webhookPath?: string
+    webhookPort?: string
+  }
+  whatsapp?: {
+    appSecret?: string
+    enabled?: boolean
+    numberId?: string
+    token?: string
+    verifyToken?: string
+    webhookHost?: string
+    webhookPath?: string
+    webhookPort?: string
+  }
+  zalo?: {
+    botToken?: string
+    enabled?: boolean
+    webhookSecret?: string
+    webhookUrl?: string
+  }
+  zalouser?: {
+    enabled?: boolean
+    profile?: string
+  }
 }
 
 export type ChatCapabilitySettings = {
@@ -190,25 +345,6 @@ export type ChatCapabilitySettings = {
   tools: {
     declared: Array<string>
   }
-}
-
-export type ClickClackChannelConfig = {
-  /**
-   * ClickClack server base URL
-   */
-  baseUrl?: string
-  /**
-   * Enable ClickClack channel integration
-   */
-  enabled?: boolean
-  /**
-   * ClickClack bot token
-   */
-  token?: string
-  /**
-   * ClickClack workspace ID, slug, or name
-   */
-  workspace?: string
 }
 
 export type CodingCliOpenResponse = {
@@ -592,14 +728,6 @@ export type Config = {
   }
 }
 
-export type ContextOverflowError = {
-  data: {
-    message: string
-    responseBody?: string
-  }
-  name: "ContextOverflowError"
-}
-
 export type ConversationCapabilityUpdate =
   | {
       assigned: boolean
@@ -622,56 +750,6 @@ export type CreateQuickNoteResponse = {
     note_id: string
     summary: string
   }
-}
-
-export type DingTalkChannelConfig = {
-  /**
-   * DingTalk app key
-   */
-  appKey?: string
-  /**
-   * DingTalk app secret
-   */
-  appSecret?: string
-  /**
-   * DingTalk callback token
-   */
-  callbackToken?: string
-  /**
-   * Optional DingTalk default session webhook
-   */
-  defaultWebhook?: string
-  /**
-   * Enable DingTalk integration
-   */
-  enabled?: boolean
-  /**
-   * DingTalk callback EncodingAESKey
-   */
-  encodingAesKey?: string
-  /**
-   * Optional DingTalk webhook host
-   */
-  webhookHost?: string
-  /**
-   * Optional DingTalk webhook path
-   */
-  webhookPath?: string
-  /**
-   * Optional DingTalk webhook port
-   */
-  webhookPort?: string
-}
-
-export type DiscordChannelConfig = {
-  /**
-   * Enable Discord channel integration
-   */
-  enabled?: boolean
-  /**
-   * Discord bot token
-   */
-  token?: string
 }
 
 export type DiscoveredProject = {
@@ -1050,13 +1128,7 @@ export type EventMailboxMessage = {
           source: "session"
         }
       | {
-          /**
-           * Exact Message ID stored in the paired session_id.
-           */
           message_id: string
-          /**
-           * Exact producing Session ID for message_id; do not substitute the current caller Session unless it produced that Message.
-           */
           session_id: string
           source: "session_message"
         }
@@ -1394,18 +1466,180 @@ export type EventSessionError = {
       }>
     }
     error:
-      | ProviderAuthError
-      | UnknownError
-      | MessageOutputLengthError
-      | MessageAbortedError
-      | StructuredOutputPayloadError
-      | SnapshotIntegrityError
-      | SnapshotEmptyTreeError
-      | ContextOverflowError
-      | PromptBudgetOverflowError
-      | ToolSchemaBudgetError
-      | ModelImageInputTooLargeError
-      | ApiError
+      | {
+          data: {
+            message: string
+            providerID: string
+          }
+          name: "ProviderAuthError"
+        }
+      | {
+          data: {
+            message: string
+          }
+          name: "UnknownError"
+        }
+      | {
+          data: {
+            effectiveOutputLimit?: number
+            message?: string
+          }
+          name: "MessageOutputLengthError"
+        }
+      | {
+          data: {
+            cancellation?: {
+              actor:
+                | "user"
+                | "mission"
+                | "control_agent"
+                | "right_sidebar_conversation"
+                | "orchestrator"
+                | "scheduler"
+                | "runtime"
+              causationEventID?: string
+              messageID?: string
+              missionID?: string
+              queueOccurrenceID?: string
+              reason: string
+              requestID: string
+              source:
+                | "control.message_stream_disconnect"
+                | "mission.abort"
+                | "mission.archive"
+                | "mission.delete"
+                | "session.abort"
+                | "session.delete"
+                | "right_sidebar.abort"
+                | "right_sidebar.archive"
+                | "project.delete"
+                | "task.cancel"
+                | "task.delete"
+                | "task.archive"
+                | "panel.cancel_task"
+                | "orchestrator.cancel_task"
+                | "task.lifecycle"
+                | "task.queue_timeout"
+                | "process.shutdown"
+                | "agent.parent_signal"
+                | "agent.coordination_signal"
+                | "orchestrator.abort_cascade"
+                | "orchestrator.inactivity"
+                | "delegate_agent.parent_signal"
+                | "engine.child_execution_abort"
+                | "dispatch.preparation"
+                | "runtime.prompt_owner"
+              surface: string
+              targetSessionID?: string
+              taskID?: string
+              toolCallID?: string
+              toolPartID?: string
+              wakeID?: string
+            }
+            message: string
+          }
+          name: "MessageAbortedError"
+        }
+      | {
+          data: {
+            message: string
+            reason: string
+          }
+          name: "StructuredOutputPayloadError"
+        }
+      | {
+          data: {
+            cwd: string
+            exitCode?: number
+            gitDir: string
+            message: string
+            operation: string
+            stderr?: string
+            stdout?: string
+            worktree: string
+          }
+          name: "SnapshotIntegrityError"
+        }
+      | {
+          data: {
+            cwd: string
+            fileCount?: number
+            gitDir: string
+            message: string
+            operation: string
+            worktree: string
+          }
+          name: "SnapshotEmptyTreeError"
+        }
+      | {
+          data: {
+            message: string
+            responseBody?: string
+          }
+          name: "ContextOverflowError"
+        }
+      | {
+          data: {
+            compressibleMessageChars: number
+            limit: number
+            message: string
+            messagePayloadChars: number
+            nonCompressiblePromptChars: number
+            systemTokensEst: number
+            toolNames: string
+            toolSchemaChars: number
+            usableBudget: number
+          }
+          name: "PromptBudgetOverflowError"
+        }
+      | {
+          data: {
+            message: string
+            ratio: number
+            toolNames: string
+            toolSchemaChars: number
+            usableBudget: number
+          }
+          name: "ToolSchemaBudgetError"
+        }
+      | {
+          data: {
+            blankMarginCrop?: {
+              height: number
+              originalHeight: number
+              originalWidth: number
+              trimOffsetLeft?: number
+              trimOffsetTop?: number
+              width: number
+            }
+            height: number
+            maxDimension: number
+            maxPixels?: number
+            message: string
+            mime: string
+            originalHeight?: number
+            originalWidth?: number
+            pixels?: number
+            source: string
+            width: number
+          }
+          name: "ModelImageInputTooLargeError"
+        }
+      | {
+          data: {
+            isRetryable: boolean
+            message: string
+            metadata?: {
+              [key: string]: string
+            }
+            responseBody?: string
+            responseHeaders?: {
+              [key: string]: string
+            }
+            statusCode?: number
+          }
+          name: "APIError"
+        }
     failureOccurrence?: {
       assistant_message_id: string
       error_name: string
@@ -1578,13 +1812,7 @@ export type EventTaskInfrastructureFailed = {
           source: "session"
         }
       | {
-          /**
-           * Exact Message ID stored in the paired session_id.
-           */
           message_id: string
-          /**
-           * Exact producing Session ID for message_id; do not substitute the current caller Session unless it produced that Message.
-           */
           session_id: string
           source: "session_message"
         }
@@ -2094,37 +2322,6 @@ export type ExpertSquadSettingsSurface = {
   }>
 }
 
-export type FeishuChannelConfig = {
-  /**
-   * Feishu or Lark app ID
-   */
-  appId?: string
-  /**
-   * Feishu or Lark app secret
-   */
-  appSecret?: string
-  /**
-   * Enable Feishu or Lark channel integration
-   */
-  enabled?: boolean
-  /**
-   * Optional Feishu or Lark webhook verification token
-   */
-  verificationToken?: string
-  /**
-   * Optional Feishu or Lark webhook host
-   */
-  webhookHost?: string
-  /**
-   * Optional Feishu or Lark webhook path
-   */
-  webhookPath?: string
-  /**
-   * Optional Feishu or Lark webhook port
-   */
-  webhookPort?: string
-}
-
 export type File = {
   added: number
   path: string
@@ -2267,83 +2464,6 @@ export type GlobalSession = {
   }
   title: string
   version: string
-}
-
-export type GoogleChatChannelConfig = {
-  /**
-   * Google Chat request token audience, usually the HTTPS endpoint URL
-   */
-  authAudience?: string
-  /**
-   * Enable Google Chat integration
-   */
-  enabled?: boolean
-  /**
-   * Google Chat service account JSON or path
-   */
-  serviceAccount?: string
-  /**
-   * Optional Google Chat webhook host
-   */
-  webhookHost?: string
-  /**
-   * Optional Google Chat webhook path
-   */
-  webhookPath?: string
-  /**
-   * Optional Google Chat webhook port
-   */
-  webhookPort?: string
-}
-
-export type IMessageChannelConfig = {
-  /**
-   * Path to the imsg command-line bridge on macOS
-   */
-  cliPath?: string
-  /**
-   * Optional path to the Messages chat database
-   */
-  dbPath?: string
-  /**
-   * Enable iMessage integration
-   */
-  enabled?: boolean
-  /**
-   * Optional service selection: imessage, sms, or auto
-   */
-  service?: string
-}
-
-export type IrcChannelConfig = {
-  /**
-   * Comma-separated IRC channels to join
-   */
-  channels?: string
-  /**
-   * Enable Internet Relay Chat integration
-   */
-  enabled?: boolean
-  /**
-   * IRC server hostname
-   */
-  host?: string
-  /**
-   * IRC bot nickname
-   */
-  nick?: string
-  /**
-   * Optional IRC server password
-   */
-  password?: string
-  /**
-   * Optional IRC server port
-   */
-  port?: string
-  /**
-   * Use Transport Layer Security for IRC
-   */
-  tls?: boolean
 }
 
 export type InteractiveArtifactPart = {
@@ -2918,33 +3038,6 @@ export type LspStatus = {
   status: "connected" | "error"
 }
 
-export type LineChannelConfig = {
-  /**
-   * Enable LINE integration
-   */
-  enabled?: boolean
-  /**
-   * LINE channel secret for webhook verification
-   */
-  secret?: string
-  /**
-   * LINE channel access token
-   */
-  token?: string
-  /**
-   * Optional LINE webhook host
-   */
-  webhookHost?: string
-  /**
-   * Optional LINE webhook path
-   */
-  webhookPath?: string
-  /**
-   * Optional LINE webhook port
-   */
-  webhookPort?: string
-}
-
 /**
  * Project-owned environment variables and shell setup source applied to OpenCorvus Bash and session shell commands.
  */
@@ -3011,83 +3104,6 @@ export type McpStatusNeedsAuth = {
 export type McpStatusNeedsClientRegistration = {
   error: string
   status: "needs_client_registration"
-}
-
-export type MsTeamsChannelConfig = {
-  /**
-   * Microsoft Teams bot app ID
-   */
-  appId?: string
-  /**
-   * Microsoft Teams bot app secret
-   */
-  appSecret?: string
-  /**
-   * Enable Microsoft Teams integration
-   */
-  enabled?: boolean
-  /**
-   * Optional Microsoft Teams webhook host
-   */
-  webhookHost?: string
-  /**
-   * Optional Microsoft Teams webhook path
-   */
-  webhookPath?: string
-  /**
-   * Optional Microsoft Teams webhook port
-   */
-  webhookPort?: string
-}
-
-export type MatrixChannelConfig = {
-  /**
-   * Enable Matrix integration
-   */
-  enabled?: boolean
-  /**
-   * Matrix homeserver URL
-   */
-  homeserver?: string
-  /**
-   * Optional Matrix sync token
-   */
-  since?: string
-  /**
-   * Matrix access token
-   */
-  token?: string
-}
-
-export type MattermostChannelConfig = {
-  /**
-   * Enable Mattermost integration
-   */
-  enabled?: boolean
-  /**
-   * Mattermost bot token
-   */
-  token?: string
-  /**
-   * Mattermost server URL
-   */
-  url?: string
-  /**
-   * Optional Mattermost webhook host
-   */
-  webhookHost?: string
-  /**
-   * Optional Mattermost webhook path
-   */
-  webhookPath?: string
-  /**
-   * Optional Mattermost webhook port
-   */
-  webhookPort?: string
-  /**
-   * Mattermost outgoing webhook token used to verify inbound requests
-   */
-  webhookToken?: string
 }
 
 export type McpAppHostEvent = {
@@ -3445,69 +3461,6 @@ export type McpResource = {
   uri: string
 }
 
-export type MessageAbortedError = {
-  data: {
-    cancellation?: {
-      actor:
-        | "user"
-        | "mission"
-        | "control_agent"
-        | "right_sidebar_conversation"
-        | "orchestrator"
-        | "scheduler"
-        | "runtime"
-      causationEventID?: string
-      messageID?: string
-      missionID?: string
-      queueOccurrenceID?: string
-      reason: string
-      requestID: string
-      source:
-        | "control.message_stream_disconnect"
-        | "mission.abort"
-        | "mission.archive"
-        | "mission.delete"
-        | "session.abort"
-        | "session.delete"
-        | "right_sidebar.abort"
-        | "right_sidebar.archive"
-        | "project.delete"
-        | "task.cancel"
-        | "task.delete"
-        | "task.archive"
-        | "panel.cancel_task"
-        | "orchestrator.cancel_task"
-        | "task.lifecycle"
-        | "task.queue_timeout"
-        | "process.shutdown"
-        | "agent.parent_signal"
-        | "agent.coordination_signal"
-        | "orchestrator.abort_cascade"
-        | "orchestrator.inactivity"
-        | "delegate_agent.parent_signal"
-        | "engine.child_execution_abort"
-        | "dispatch.preparation"
-        | "runtime.prompt_owner"
-      surface: string
-      targetSessionID?: string
-      taskID?: string
-      toolCallID?: string
-      toolPartID?: string
-      wakeID?: string
-    }
-    message: string
-  }
-  name: "MessageAbortedError"
-}
-
-export type MessageOutputLengthError = {
-  data: {
-    effectiveOutputLimit?: number
-    message?: string
-  }
-  name: "MessageOutputLengthError"
-}
-
 export type Model = {
   api: {
     id: string
@@ -3589,30 +3542,6 @@ export type Model = {
   }
 }
 
-export type ModelImageInputTooLargeError = {
-  data: {
-    blankMarginCrop?: {
-      height: number
-      originalHeight: number
-      originalWidth: number
-      trimOffsetLeft?: number
-      trimOffsetTop?: number
-      width: number
-    }
-    height: number
-    maxDimension: number
-    maxPixels?: number
-    message: string
-    mime: string
-    originalHeight?: number
-    originalWidth?: number
-    pixels?: number
-    source: string
-    width: number
-  }
-  name: "ModelImageInputTooLargeError"
-}
-
 export type NativeAgentOverride = {
   /**
    * Hex color code (e.g., #FF5733) or theme color (e.g., primary)
@@ -3688,52 +3617,6 @@ export type NetworkProxyTestResponse = {
   status: "connected" | "error"
   statusCode?: number
   targetUrl: string
-}
-
-export type NextcloudTalkChannelConfig = {
-  /**
-   * Nextcloud server base URL
-   */
-  baseUrl?: string
-  /**
-   * Nextcloud Talk webhook bot secret
-   */
-  botSecret?: string
-  /**
-   * Enable Nextcloud Talk integration
-   */
-  enabled?: boolean
-  /**
-   * Optional webhook bind host
-   */
-  webhookHost?: string
-  /**
-   * Optional webhook path
-   */
-  webhookPath?: string
-  /**
-   * Optional webhook bind port
-   */
-  webhookPort?: string
-  /**
-   * Optional externally reachable webhook URL
-   */
-  webhookPublicUrl?: string
-}
-
-export type NostrChannelConfig = {
-  /**
-   * Enable Nostr direct messages
-   */
-  enabled?: boolean
-  /**
-   * Nostr private key
-   */
-  privateKey?: string
-  /**
-   * Comma-separated Nostr relay URLs
-   */
-  relays?: string
 }
 
 export type OAuth = {
@@ -3911,29 +3794,6 @@ export type ProjectSummary = {
   worktree: string
 }
 
-export type ProjectWorktree = {
-  branch?: string
-  directory: string
-  name: string
-  removable: boolean
-  status: "primary" | "managed"
-}
-
-export type PromptBudgetOverflowError = {
-  data: {
-    compressibleMessageChars: number
-    limit: number
-    message: string
-    messagePayloadChars: number
-    nonCompressiblePromptChars: number
-    systemTokensEst: number
-    toolNames: string
-    toolSchemaChars: number
-    usableBudget: number
-  }
-  name: "PromptBudgetOverflowError"
-}
-
 export type Provider = {
   env: Array<string>
   id: string
@@ -3977,14 +3837,6 @@ export type ProviderAuthAuthorization = {
   instructions: string
   method: "auto" | "code"
   url: string
-}
-
-export type ProviderAuthError = {
-  data: {
-    message: string
-    providerID: string
-  }
-  name: "ProviderAuthError"
 }
 
 export type ProviderAuthMethod = {
@@ -4237,21 +4089,6 @@ export type Pty = {
   title: string
 }
 
-export type QqBotChannelConfig = {
-  /**
-   * QQ Bot application ID
-   */
-  appId?: string
-  /**
-   * QQ Bot client secret
-   */
-  clientSecret?: string
-  /**
-   * Enable the official QQ Bot API integration
-   */
-  enabled?: boolean
-}
-
 export type QuestionAnswer = Array<string>
 
 /**
@@ -4343,17 +4180,6 @@ export type QuestionRequest = {
   }
 }
 
-export type RaftChannelConfig = {
-  /**
-   * Enable the Raft command-line wake bridge
-   */
-  enabled?: boolean
-  /**
-   * Raft CLI profile
-   */
-  profile?: string
-}
-
 export type Range = {
   end: {
     character: number
@@ -4381,49 +4207,6 @@ export type ReasoningPart = {
   type: "reasoning"
 }
 
-export type ReefChannelConfig = {
-  /**
-   * Reef registration email
-   */
-  email?: string
-  /**
-   * Enable guarded end-to-end encrypted Reef messaging
-   */
-  enabled?: boolean
-  /**
-   * Environment variable containing the guard provider API key
-   */
-  guardApiKeyEnv?: string
-  /**
-   * Pinned guard model identifier
-   */
-  guardPinnedModel?: string
-  /**
-   * Pinned Reef guard policy version
-   */
-  guardPolicyVersion?: string
-  /**
-   * Guard model provider: anthropic or openai
-   */
-  guardProvider?: string
-  /**
-   * Guard request timeout in milliseconds
-   */
-  guardTimeoutMs?: string
-  /**
-   * Reef handle
-   */
-  handle?: string
-  /**
-   * Reef relay origin
-   */
-  relayUrl?: string
-  /**
-   * Reef friend request policy: code-only, friends-of-friends, or open
-   */
-  requestPolicy?: string
-}
-
 export type ResourceSource = {
   clientName: string
   text: FilePartSourceText
@@ -4433,7 +4216,21 @@ export type ResourceSource = {
 
 export type RetryPart = {
   attempt: number
-  error: ApiError
+  error: {
+    data: {
+      isRetryable: boolean
+      message: string
+      metadata?: {
+        [key: string]: string
+      }
+      responseBody?: string
+      responseHeaders?: {
+        [key: string]: string
+      }
+      statusCode?: number
+    }
+    name: "APIError"
+  }
   id: string
   messageID: string
   orderKey?: string
@@ -4442,37 +4239,6 @@ export type RetryPart = {
     created: number
   }
   type: "retry"
-}
-
-export type SmsChannelConfig = {
-  /**
-   * Twilio account identifier
-   */
-  accountSid?: string
-  /**
-   * Twilio authentication token
-   */
-  authToken?: string
-  /**
-   * Optional default recipient number
-   */
-  defaultTo?: string
-  /**
-   * Enable Twilio Short Message Service integration
-   */
-  enabled?: boolean
-  /**
-   * Twilio sender number in E.164 format
-   */
-  fromNumber?: string
-  /**
-   * Externally reachable Twilio webhook URL
-   */
-  publicWebhookUrl?: string
-  /**
-   * Optional local webhook path
-   */
-  webhookPath?: string
 }
 
 /**
@@ -4582,66 +4348,6 @@ export type SessionStatus =
       type: "terminal"
     }
 
-export type SignalChannelConfig = {
-  /**
-   * Signal sender account or number
-   */
-  account?: string
-  /**
-   * Enable Signal integration
-   */
-  enabled?: boolean
-  /**
-   * Signal service URL
-   */
-  service?: string
-}
-
-export type SlackChannelConfig = {
-  /**
-   * Slack app token for Socket Mode
-   */
-  appToken?: string
-  /**
-   * Slack bot token
-   */
-  botToken?: string
-  /**
-   * Enable Slack channel integration
-   */
-  enabled?: boolean
-  /**
-   * Slack signing secret
-   */
-  signingSecret?: string
-}
-
-export type SnapshotEmptyTreeError = {
-  data: {
-    cwd: string
-    fileCount?: number
-    gitDir: string
-    message: string
-    operation: string
-    worktree: string
-  }
-  name: "SnapshotEmptyTreeError"
-}
-
-export type SnapshotIntegrityError = {
-  data: {
-    cwd: string
-    exitCode?: number
-    gitDir: string
-    message: string
-    operation: string
-    stderr?: string
-    stdout?: string
-    worktree: string
-  }
-  name: "SnapshotIntegrityError"
-}
-
 export type SnapshotPart = {
   id: string
   messageID: string
@@ -4672,14 +4378,6 @@ export type StepStartPart = {
   type: "step-start"
 }
 
-export type StructuredOutputPayloadError = {
-  data: {
-    message: string
-    reason: string
-  }
-  name: "StructuredOutputPayloadError"
-}
-
 export type Symbol = {
   kind: number
   location: {
@@ -4696,25 +4394,6 @@ export type SymbolSource = {
   range: Range
   text: FilePartSourceText
   type: "symbol"
-}
-
-export type SynologyChatChannelConfig = {
-  /**
-   * Enable Synology Chat webhooks
-   */
-  enabled?: boolean
-  /**
-   * Synology Chat incoming webhook URL
-   */
-  incomingUrl?: string
-  /**
-   * Optional Synology Network Attached Storage host
-   */
-  nasHost?: string
-  /**
-   * Synology Chat outgoing webhook token
-   */
-  token?: string
 }
 
 export type SystemTerminalOpenResponse = {
@@ -4757,17 +4436,6 @@ export type TaskMessageUserInfo = {
 
 export type TaskMessageUserPart = Part & {
   orderKey: string
-}
-
-export type TelegramChannelConfig = {
-  /**
-   * Enable Telegram channel integration
-   */
-  enabled?: boolean
-  /**
-   * Telegram bot token
-   */
-  token?: string
 }
 
 /**
@@ -4856,37 +4524,6 @@ export type TextPartInput = {
   type: "text"
 }
 
-export type TlonChannelConfig = {
-  /**
-   * Urbit ship login code
-   */
-  code?: string
-  /**
-   * Comma-separated Urbit ships authorized in joined group channels
-   */
-  defaultAuthorizedShips?: string
-  /**
-   * Comma-separated Urbit ships allowed to send direct messages
-   */
-  dmAllowlist?: string
-  /**
-   * Enable Tlon on Urbit
-   */
-  enabled?: boolean
-  /**
-   * Comma-separated channel nests
-   */
-  groupChannels?: string
-  /**
-   * Urbit ship name
-   */
-  ship?: string
-  /**
-   * Urbit ship URL
-   */
-  url?: string
-}
-
 export type Todo = {
   /**
    * Brief description of the task
@@ -4948,17 +4585,6 @@ export type ToolPart = {
   type: "tool"
 }
 
-export type ToolSchemaBudgetError = {
-  data: {
-    message: string
-    ratio: number
-    toolNames: string
-    toolSchemaChars: number
-    usableBudget: number
-  }
-  name: "ToolSchemaBudgetError"
-}
-
 export type ToolState = ToolStatePending | ToolStateRunning | ToolStateCompleted | ToolStateError
 
 export type ToolStateCompleted = {
@@ -5011,40 +4637,9 @@ export type ToolStateRunning = {
   title?: string
 }
 
-export type TwitchChannelConfig = {
-  /**
-   * Twitch OAuth token with chat read and write scopes
-   */
-  accessToken?: string
-  /**
-   * Comma-separated Twitch user IDs
-   */
-  allowFrom?: string
-  /**
-   * Twitch channel name to join
-   */
-  channel?: string
-  /**
-   * Twitch application client ID
-   */
-  clientId?: string
-  /**
-   * Enable Twitch chat integration
-   */
-  enabled?: boolean
-  /**
-   * Require messages to mention the Twitch bot
-   */
-  requireMention?: boolean
-  /**
-   * Twitch bot username
-   */
-  username?: string
-}
-
 export type UnknownError = {
   data: {
-    message: string
+    [key: string]: unknown
   }
   name: "UnknownError"
 }
@@ -5134,18 +4729,180 @@ export type VisibleMessage =
       }
       cost: number
       error?:
-        | ProviderAuthError
-        | UnknownError
-        | MessageOutputLengthError
-        | MessageAbortedError
-        | StructuredOutputPayloadError
-        | SnapshotIntegrityError
-        | SnapshotEmptyTreeError
-        | ContextOverflowError
-        | PromptBudgetOverflowError
-        | ToolSchemaBudgetError
-        | ModelImageInputTooLargeError
-        | ApiError
+        | {
+            data: {
+              message: string
+              providerID: string
+            }
+            name: "ProviderAuthError"
+          }
+        | {
+            data: {
+              message: string
+            }
+            name: "UnknownError"
+          }
+        | {
+            data: {
+              effectiveOutputLimit?: number
+              message?: string
+            }
+            name: "MessageOutputLengthError"
+          }
+        | {
+            data: {
+              cancellation?: {
+                actor:
+                  | "user"
+                  | "mission"
+                  | "control_agent"
+                  | "right_sidebar_conversation"
+                  | "orchestrator"
+                  | "scheduler"
+                  | "runtime"
+                causationEventID?: string
+                messageID?: string
+                missionID?: string
+                queueOccurrenceID?: string
+                reason: string
+                requestID: string
+                source:
+                  | "control.message_stream_disconnect"
+                  | "mission.abort"
+                  | "mission.archive"
+                  | "mission.delete"
+                  | "session.abort"
+                  | "session.delete"
+                  | "right_sidebar.abort"
+                  | "right_sidebar.archive"
+                  | "project.delete"
+                  | "task.cancel"
+                  | "task.delete"
+                  | "task.archive"
+                  | "panel.cancel_task"
+                  | "orchestrator.cancel_task"
+                  | "task.lifecycle"
+                  | "task.queue_timeout"
+                  | "process.shutdown"
+                  | "agent.parent_signal"
+                  | "agent.coordination_signal"
+                  | "orchestrator.abort_cascade"
+                  | "orchestrator.inactivity"
+                  | "delegate_agent.parent_signal"
+                  | "engine.child_execution_abort"
+                  | "dispatch.preparation"
+                  | "runtime.prompt_owner"
+                surface: string
+                targetSessionID?: string
+                taskID?: string
+                toolCallID?: string
+                toolPartID?: string
+                wakeID?: string
+              }
+              message: string
+            }
+            name: "MessageAbortedError"
+          }
+        | {
+            data: {
+              message: string
+              reason: string
+            }
+            name: "StructuredOutputPayloadError"
+          }
+        | {
+            data: {
+              cwd: string
+              exitCode?: number
+              gitDir: string
+              message: string
+              operation: string
+              stderr?: string
+              stdout?: string
+              worktree: string
+            }
+            name: "SnapshotIntegrityError"
+          }
+        | {
+            data: {
+              cwd: string
+              fileCount?: number
+              gitDir: string
+              message: string
+              operation: string
+              worktree: string
+            }
+            name: "SnapshotEmptyTreeError"
+          }
+        | {
+            data: {
+              message: string
+              responseBody?: string
+            }
+            name: "ContextOverflowError"
+          }
+        | {
+            data: {
+              compressibleMessageChars: number
+              limit: number
+              message: string
+              messagePayloadChars: number
+              nonCompressiblePromptChars: number
+              systemTokensEst: number
+              toolNames: string
+              toolSchemaChars: number
+              usableBudget: number
+            }
+            name: "PromptBudgetOverflowError"
+          }
+        | {
+            data: {
+              message: string
+              ratio: number
+              toolNames: string
+              toolSchemaChars: number
+              usableBudget: number
+            }
+            name: "ToolSchemaBudgetError"
+          }
+        | {
+            data: {
+              blankMarginCrop?: {
+                height: number
+                originalHeight: number
+                originalWidth: number
+                trimOffsetLeft?: number
+                trimOffsetTop?: number
+                width: number
+              }
+              height: number
+              maxDimension: number
+              maxPixels?: number
+              message: string
+              mime: string
+              originalHeight?: number
+              originalWidth?: number
+              pixels?: number
+              source: string
+              width: number
+            }
+            name: "ModelImageInputTooLargeError"
+          }
+        | {
+            data: {
+              isRetryable: boolean
+              message: string
+              metadata?: {
+                [key: string]: string
+              }
+              responseBody?: string
+              responseHeaders?: {
+                [key: string]: string
+              }
+              statusCode?: number
+            }
+            name: "APIError"
+          }
       failureOccurrence?: {
         assistant_message_id: string
         error_name: string
@@ -5297,7 +5054,21 @@ export type VisibleMessagePart =
     }
   | {
       attempt: number
-      error: ApiError
+      error: {
+        data: {
+          isRetryable: boolean
+          message: string
+          metadata?: {
+            [key: string]: string
+          }
+          responseBody?: string
+          responseHeaders?: {
+            [key: string]: string
+          }
+          statusCode?: number
+        }
+        name: "APIError"
+      }
       id: string
       messageID: string
       orderKey: string
@@ -5325,84 +5096,10 @@ export type VisibleMessageWithParts = {
   parts: Array<VisibleMessagePart>
 }
 
-export type WeComChannelConfig = {
-  /**
-   * WeCom agent ID
-   */
-  agentId?: string
-  /**
-   * WeCom corp ID
-   */
-  corpId?: string
-  /**
-   * Enable WeCom integration
-   */
-  enabled?: boolean
-  /**
-   * WeCom receive-message callback EncodingAESKey
-   */
-  encodingAesKey?: string
-  /**
-   * WeCom app secret
-   */
-  secret?: string
-  /**
-   * WeCom receive-message callback token
-   */
-  token?: string
-  /**
-   * Optional WeCom webhook host
-   */
-  webhookHost?: string
-  /**
-   * Optional WeCom webhook path
-   */
-  webhookPath?: string
-  /**
-   * Optional WeCom webhook port
-   */
-  webhookPort?: string
-}
-
 export type WellKnownAuth = {
   key: string
   token: string
   type: "wellknown"
-}
-
-export type WhatsappChannelConfig = {
-  /**
-   * WhatsApp Meta app secret used to verify webhook signatures
-   */
-  appSecret?: string
-  /**
-   * Enable WhatsApp channel integration
-   */
-  enabled?: boolean
-  /**
-   * WhatsApp Cloud API phone number ID
-   */
-  numberId?: string
-  /**
-   * WhatsApp Cloud API access token
-   */
-  token?: string
-  /**
-   * WhatsApp webhook verification token
-   */
-  verifyToken?: string
-  /**
-   * Optional WhatsApp webhook host
-   */
-  webhookHost?: string
-  /**
-   * Optional WhatsApp webhook path
-   */
-  webhookPath?: string
-  /**
-   * Optional WhatsApp webhook port
-   */
-  webhookPort?: string
 }
 
 export type WorkCapabilitySettings = {
@@ -5526,36 +5223,6 @@ export type WorktreeRemoveInput = {
 export type WorktreeResetInput = {
   baseRef?: string
   directory: string
-}
-
-export type ZaloChannelConfig = {
-  /**
-   * Zalo bot token
-   */
-  botToken?: string
-  /**
-   * Enable the Zalo Bot API integration
-   */
-  enabled?: boolean
-  /**
-   * Optional Zalo webhook signature secret
-   */
-  webhookSecret?: string
-  /**
-   * Optional public webhook URL
-   */
-  webhookUrl?: string
-}
-
-export type ZaloPersonalChannelConfig = {
-  /**
-   * Enable a Zalo personal account through the official OpenClaw plugin
-   */
-  enabled?: boolean
-  /**
-   * Zalo Personal profile name
-   */
-  profile?: string
 }
 
 export type AppAgentsData = {
@@ -14838,91 +14505,34 @@ export type GatewayControlActionData = {
       }
     | {
         action: "query_task_artifacts"
-        /**
-         * Optional exact namespaced Artifact-type filter.
-         */
         artifact_types?: Array<string>
-        /**
-         * Optional inclusive lower creation-time bound in Unix milliseconds.
-         */
         created_at_or_after_ms?: number
-        /**
-         * Optional exclusive upper creation-time bound in Unix milliseconds.
-         */
         created_before_ms?: number
-        /**
-         * Opaque cursor returned by the preceding page; omit it for the first page.
-         */
         cursor?: string
-        /**
-         * Optional exact logical Goal-subject filter.
-         */
         goal_ids?: Array<string>
-        /**
-         * Optional exact source-Task lineage filter for imported Engine Artifacts. Non-imported entries never match.
-         */
         import_source_task_ids?: Array<string>
-        /**
-         * Optional exact persisted Artifact-kind filter.
-         */
         kinds?: Array<string>
-        /**
-         * Optional exact stable Artifact-label filter.
-         */
         labels?: Array<string>
-        /**
-         * Optional exact resource media-type filter.
-         */
         media_types?: Array<string>
-        /**
-         * Optional exact projected producer Agent-identity filter. Core-owned typed projections never match this filter; select those by label, kind, artifact type, or Goal.
-         */
         producer_agent_ids?: Array<string>
-        /**
-         * Optional exact projected or Mission producer Session identity filter. Core-owned typed projections never match this filter.
-         */
         producer_session_ids?: Array<string>
-        /**
-         * Optional exact projected producer Expert Squad identity filter. Core-owned typed projections never match this filter.
-         */
         producer_squad_ids?: Array<string>
-        /**
-         * Optional hierarchical candidate query over bounded catalog identity, label, type, producer, Goal, and resource metadata. Fuzzy mode is explicit and never selects evidence. Omit query to enumerate.
-         */
         query?: {
           mode?: "substring" | "fuzzy"
           text: string
         }
-        /**
-         * Explicit candidate order. Defaults to relevance when query is present and newest otherwise.
-         */
         sort?: "relevance" | "newest" | "oldest" | "name"
-        /**
-         * Optional authoritative-store filter. Omit it to include every catalog provider.
-         */
         sources?: Array<"engine_artifact" | "task_artifact">
         /**
          * Source Task whose Artifact catalog should be enumerated.
          */
         taskID: string
-        /**
-         * Engine version scope at the frozen catalog revision. Task Artifact snapshots are immutable.
-         */
         version_scope?: "current" | "historical" | "all"
       }
     | {
         action: "read_task_artifact"
-        /**
-         * Zero-based byte offset within the exact canonical payload or resource.
-         */
         byte_offset?: number
-        /**
-         * inline returns one bounded content chunk. materialized_file verifies one complete text resource and returns an immutable local cache path for bounded command-line inspection.
-         */
         delivery?: "inline" | "materialized_file"
-        /**
-         * Exact typed locator returned by Artifact search, including its immutable digest.
-         */
         locator:
           | {
               artifact_id: string
@@ -14957,9 +14567,6 @@ export type GatewayControlActionData = {
               }
               source: "task_artifact_resource"
             }
-        /**
-         * Maximum UTF-8 text bytes to return in this exact-read chunk. Binary resources use one complete attachment and ignore text pagination.
-         */
         max_bytes?: number
         /**
          * Terminal source Task in the current Mission lineage.
@@ -15187,9 +14794,6 @@ export type GatewayControlActionData = {
          * Model reference in provider/model format for the new task.
          */
         model?: string
-        /**
-         * Channel platform for an external task binding.
-         */
         platform?:
           | "slack"
           | "telegram"
@@ -15218,9 +14822,6 @@ export type GatewayControlActionData = {
           | "twitch"
           | "zalo"
           | "zalouser"
-        /**
-         * Product pillar for direct panel-UI creation. Mission and conversation callers inherit their persisted pillar.
-         */
         productPillar?: "code" | "work"
         /**
          * Exact expert-squad manifest ID that owns the new Task for its full lifetime. Mission must choose this from expert_squad_catalog for every created Task. Non-Mission callers may omit it to inherit their effective prompt_profile.active.
@@ -15405,9 +15006,6 @@ export type GatewayControlActionData = {
       }
     | {
         action: "cancel_task"
-        /**
-         * Why the task is being cancelled.
-         */
         reason: string
         /**
          * Task ID to cancel.
@@ -18324,13 +17922,7 @@ export type MailboxListResponses = {
             source: "session"
           }
         | {
-            /**
-             * Exact Message ID stored in the paired session_id.
-             */
             message_id: string
-            /**
-             * Exact producing Session ID for message_id; do not substitute the current caller Session unless it produced that Message.
-             */
             session_id: string
             source: "session_message"
           }
@@ -21154,7 +20746,13 @@ export type ProjectCurrentWorktreesResponses = {
   /**
    * Project worktrees
    */
-  200: Array<ProjectWorktree>
+  200: Array<{
+    branch?: string
+    directory: string
+    name: string
+    removable: boolean
+    status: "primary" | "managed"
+  }>
 }
 
 export type ProjectCurrentWorktreesResponse = ProjectCurrentWorktreesResponses[keyof ProjectCurrentWorktreesResponses]
@@ -22695,18 +22293,180 @@ export type SessionCommandResponses = {
       }
       cost: number
       error?:
-        | ProviderAuthError
-        | UnknownError
-        | MessageOutputLengthError
-        | MessageAbortedError
-        | StructuredOutputPayloadError
-        | SnapshotIntegrityError
-        | SnapshotEmptyTreeError
-        | ContextOverflowError
-        | PromptBudgetOverflowError
-        | ToolSchemaBudgetError
-        | ModelImageInputTooLargeError
-        | ApiError
+        | {
+            data: {
+              message: string
+              providerID: string
+            }
+            name: "ProviderAuthError"
+          }
+        | {
+            data: {
+              message: string
+            }
+            name: "UnknownError"
+          }
+        | {
+            data: {
+              effectiveOutputLimit?: number
+              message?: string
+            }
+            name: "MessageOutputLengthError"
+          }
+        | {
+            data: {
+              cancellation?: {
+                actor:
+                  | "user"
+                  | "mission"
+                  | "control_agent"
+                  | "right_sidebar_conversation"
+                  | "orchestrator"
+                  | "scheduler"
+                  | "runtime"
+                causationEventID?: string
+                messageID?: string
+                missionID?: string
+                queueOccurrenceID?: string
+                reason: string
+                requestID: string
+                source:
+                  | "control.message_stream_disconnect"
+                  | "mission.abort"
+                  | "mission.archive"
+                  | "mission.delete"
+                  | "session.abort"
+                  | "session.delete"
+                  | "right_sidebar.abort"
+                  | "right_sidebar.archive"
+                  | "project.delete"
+                  | "task.cancel"
+                  | "task.delete"
+                  | "task.archive"
+                  | "panel.cancel_task"
+                  | "orchestrator.cancel_task"
+                  | "task.lifecycle"
+                  | "task.queue_timeout"
+                  | "process.shutdown"
+                  | "agent.parent_signal"
+                  | "agent.coordination_signal"
+                  | "orchestrator.abort_cascade"
+                  | "orchestrator.inactivity"
+                  | "delegate_agent.parent_signal"
+                  | "engine.child_execution_abort"
+                  | "dispatch.preparation"
+                  | "runtime.prompt_owner"
+                surface: string
+                targetSessionID?: string
+                taskID?: string
+                toolCallID?: string
+                toolPartID?: string
+                wakeID?: string
+              }
+              message: string
+            }
+            name: "MessageAbortedError"
+          }
+        | {
+            data: {
+              message: string
+              reason: string
+            }
+            name: "StructuredOutputPayloadError"
+          }
+        | {
+            data: {
+              cwd: string
+              exitCode?: number
+              gitDir: string
+              message: string
+              operation: string
+              stderr?: string
+              stdout?: string
+              worktree: string
+            }
+            name: "SnapshotIntegrityError"
+          }
+        | {
+            data: {
+              cwd: string
+              fileCount?: number
+              gitDir: string
+              message: string
+              operation: string
+              worktree: string
+            }
+            name: "SnapshotEmptyTreeError"
+          }
+        | {
+            data: {
+              message: string
+              responseBody?: string
+            }
+            name: "ContextOverflowError"
+          }
+        | {
+            data: {
+              compressibleMessageChars: number
+              limit: number
+              message: string
+              messagePayloadChars: number
+              nonCompressiblePromptChars: number
+              systemTokensEst: number
+              toolNames: string
+              toolSchemaChars: number
+              usableBudget: number
+            }
+            name: "PromptBudgetOverflowError"
+          }
+        | {
+            data: {
+              message: string
+              ratio: number
+              toolNames: string
+              toolSchemaChars: number
+              usableBudget: number
+            }
+            name: "ToolSchemaBudgetError"
+          }
+        | {
+            data: {
+              blankMarginCrop?: {
+                height: number
+                originalHeight: number
+                originalWidth: number
+                trimOffsetLeft?: number
+                trimOffsetTop?: number
+                width: number
+              }
+              height: number
+              maxDimension: number
+              maxPixels?: number
+              message: string
+              mime: string
+              originalHeight?: number
+              originalWidth?: number
+              pixels?: number
+              source: string
+              width: number
+            }
+            name: "ModelImageInputTooLargeError"
+          }
+        | {
+            data: {
+              isRetryable: boolean
+              message: string
+              metadata?: {
+                [key: string]: string
+              }
+              responseBody?: string
+              responseHeaders?: {
+                [key: string]: string
+              }
+              statusCode?: number
+            }
+            name: "APIError"
+          }
       failureOccurrence?: {
         assistant_message_id: string
         error_name: string
@@ -23938,18 +23698,180 @@ export type SessionPromptResponses = {
       }
       cost: number
       error?:
-        | ProviderAuthError
-        | UnknownError
-        | MessageOutputLengthError
-        | MessageAbortedError
-        | StructuredOutputPayloadError
-        | SnapshotIntegrityError
-        | SnapshotEmptyTreeError
-        | ContextOverflowError
-        | PromptBudgetOverflowError
-        | ToolSchemaBudgetError
-        | ModelImageInputTooLargeError
-        | ApiError
+        | {
+            data: {
+              message: string
+              providerID: string
+            }
+            name: "ProviderAuthError"
+          }
+        | {
+            data: {
+              message: string
+            }
+            name: "UnknownError"
+          }
+        | {
+            data: {
+              effectiveOutputLimit?: number
+              message?: string
+            }
+            name: "MessageOutputLengthError"
+          }
+        | {
+            data: {
+              cancellation?: {
+                actor:
+                  | "user"
+                  | "mission"
+                  | "control_agent"
+                  | "right_sidebar_conversation"
+                  | "orchestrator"
+                  | "scheduler"
+                  | "runtime"
+                causationEventID?: string
+                messageID?: string
+                missionID?: string
+                queueOccurrenceID?: string
+                reason: string
+                requestID: string
+                source:
+                  | "control.message_stream_disconnect"
+                  | "mission.abort"
+                  | "mission.archive"
+                  | "mission.delete"
+                  | "session.abort"
+                  | "session.delete"
+                  | "right_sidebar.abort"
+                  | "right_sidebar.archive"
+                  | "project.delete"
+                  | "task.cancel"
+                  | "task.delete"
+                  | "task.archive"
+                  | "panel.cancel_task"
+                  | "orchestrator.cancel_task"
+                  | "task.lifecycle"
+                  | "task.queue_timeout"
+                  | "process.shutdown"
+                  | "agent.parent_signal"
+                  | "agent.coordination_signal"
+                  | "orchestrator.abort_cascade"
+                  | "orchestrator.inactivity"
+                  | "delegate_agent.parent_signal"
+                  | "engine.child_execution_abort"
+                  | "dispatch.preparation"
+                  | "runtime.prompt_owner"
+                surface: string
+                targetSessionID?: string
+                taskID?: string
+                toolCallID?: string
+                toolPartID?: string
+                wakeID?: string
+              }
+              message: string
+            }
+            name: "MessageAbortedError"
+          }
+        | {
+            data: {
+              message: string
+              reason: string
+            }
+            name: "StructuredOutputPayloadError"
+          }
+        | {
+            data: {
+              cwd: string
+              exitCode?: number
+              gitDir: string
+              message: string
+              operation: string
+              stderr?: string
+              stdout?: string
+              worktree: string
+            }
+            name: "SnapshotIntegrityError"
+          }
+        | {
+            data: {
+              cwd: string
+              fileCount?: number
+              gitDir: string
+              message: string
+              operation: string
+              worktree: string
+            }
+            name: "SnapshotEmptyTreeError"
+          }
+        | {
+            data: {
+              message: string
+              responseBody?: string
+            }
+            name: "ContextOverflowError"
+          }
+        | {
+            data: {
+              compressibleMessageChars: number
+              limit: number
+              message: string
+              messagePayloadChars: number
+              nonCompressiblePromptChars: number
+              systemTokensEst: number
+              toolNames: string
+              toolSchemaChars: number
+              usableBudget: number
+            }
+            name: "PromptBudgetOverflowError"
+          }
+        | {
+            data: {
+              message: string
+              ratio: number
+              toolNames: string
+              toolSchemaChars: number
+              usableBudget: number
+            }
+            name: "ToolSchemaBudgetError"
+          }
+        | {
+            data: {
+              blankMarginCrop?: {
+                height: number
+                originalHeight: number
+                originalWidth: number
+                trimOffsetLeft?: number
+                trimOffsetTop?: number
+                width: number
+              }
+              height: number
+              maxDimension: number
+              maxPixels?: number
+              message: string
+              mime: string
+              originalHeight?: number
+              originalWidth?: number
+              pixels?: number
+              source: string
+              width: number
+            }
+            name: "ModelImageInputTooLargeError"
+          }
+        | {
+            data: {
+              isRetryable: boolean
+              message: string
+              metadata?: {
+                [key: string]: string
+              }
+              responseBody?: string
+              responseHeaders?: {
+                [key: string]: string
+              }
+              statusCode?: number
+            }
+            name: "APIError"
+          }
       failureOccurrence?: {
         assistant_message_id: string
         error_name: string
@@ -24419,18 +24341,180 @@ export type SessionShellResponses = {
     }
     cost: number
     error?:
-      | ProviderAuthError
-      | UnknownError
-      | MessageOutputLengthError
-      | MessageAbortedError
-      | StructuredOutputPayloadError
-      | SnapshotIntegrityError
-      | SnapshotEmptyTreeError
-      | ContextOverflowError
-      | PromptBudgetOverflowError
-      | ToolSchemaBudgetError
-      | ModelImageInputTooLargeError
-      | ApiError
+      | {
+          data: {
+            message: string
+            providerID: string
+          }
+          name: "ProviderAuthError"
+        }
+      | {
+          data: {
+            message: string
+          }
+          name: "UnknownError"
+        }
+      | {
+          data: {
+            effectiveOutputLimit?: number
+            message?: string
+          }
+          name: "MessageOutputLengthError"
+        }
+      | {
+          data: {
+            cancellation?: {
+              actor:
+                | "user"
+                | "mission"
+                | "control_agent"
+                | "right_sidebar_conversation"
+                | "orchestrator"
+                | "scheduler"
+                | "runtime"
+              causationEventID?: string
+              messageID?: string
+              missionID?: string
+              queueOccurrenceID?: string
+              reason: string
+              requestID: string
+              source:
+                | "control.message_stream_disconnect"
+                | "mission.abort"
+                | "mission.archive"
+                | "mission.delete"
+                | "session.abort"
+                | "session.delete"
+                | "right_sidebar.abort"
+                | "right_sidebar.archive"
+                | "project.delete"
+                | "task.cancel"
+                | "task.delete"
+                | "task.archive"
+                | "panel.cancel_task"
+                | "orchestrator.cancel_task"
+                | "task.lifecycle"
+                | "task.queue_timeout"
+                | "process.shutdown"
+                | "agent.parent_signal"
+                | "agent.coordination_signal"
+                | "orchestrator.abort_cascade"
+                | "orchestrator.inactivity"
+                | "delegate_agent.parent_signal"
+                | "engine.child_execution_abort"
+                | "dispatch.preparation"
+                | "runtime.prompt_owner"
+              surface: string
+              targetSessionID?: string
+              taskID?: string
+              toolCallID?: string
+              toolPartID?: string
+              wakeID?: string
+            }
+            message: string
+          }
+          name: "MessageAbortedError"
+        }
+      | {
+          data: {
+            message: string
+            reason: string
+          }
+          name: "StructuredOutputPayloadError"
+        }
+      | {
+          data: {
+            cwd: string
+            exitCode?: number
+            gitDir: string
+            message: string
+            operation: string
+            stderr?: string
+            stdout?: string
+            worktree: string
+          }
+          name: "SnapshotIntegrityError"
+        }
+      | {
+          data: {
+            cwd: string
+            fileCount?: number
+            gitDir: string
+            message: string
+            operation: string
+            worktree: string
+          }
+          name: "SnapshotEmptyTreeError"
+        }
+      | {
+          data: {
+            message: string
+            responseBody?: string
+          }
+          name: "ContextOverflowError"
+        }
+      | {
+          data: {
+            compressibleMessageChars: number
+            limit: number
+            message: string
+            messagePayloadChars: number
+            nonCompressiblePromptChars: number
+            systemTokensEst: number
+            toolNames: string
+            toolSchemaChars: number
+            usableBudget: number
+          }
+          name: "PromptBudgetOverflowError"
+        }
+      | {
+          data: {
+            message: string
+            ratio: number
+            toolNames: string
+            toolSchemaChars: number
+            usableBudget: number
+          }
+          name: "ToolSchemaBudgetError"
+        }
+      | {
+          data: {
+            blankMarginCrop?: {
+              height: number
+              originalHeight: number
+              originalWidth: number
+              trimOffsetLeft?: number
+              trimOffsetTop?: number
+              width: number
+            }
+            height: number
+            maxDimension: number
+            maxPixels?: number
+            message: string
+            mime: string
+            originalHeight?: number
+            originalWidth?: number
+            pixels?: number
+            source: string
+            width: number
+          }
+          name: "ModelImageInputTooLargeError"
+        }
+      | {
+          data: {
+            isRetryable: boolean
+            message: string
+            metadata?: {
+              [key: string]: string
+            }
+            responseBody?: string
+            responseHeaders?: {
+              [key: string]: string
+            }
+            statusCode?: number
+          }
+          name: "APIError"
+        }
     failureOccurrence?: {
       assistant_message_id: string
       error_name: string
@@ -26122,13 +26206,7 @@ export type TaskGetResponses = {
             source: "session"
           }
         | {
-            /**
-             * Exact Message ID stored in the paired session_id.
-             */
             message_id: string
-            /**
-             * Exact producing Session ID for message_id; do not substitute the current caller Session unless it produced that Message.
-             */
             session_id: string
             source: "session_message"
           }
@@ -26289,13 +26367,7 @@ export type TaskSetArchivedResponses = {
 
 export type TaskReadConversationArtifactData = {
   body: {
-    /**
-     * Zero-based byte offset within the exact canonical payload or resource.
-     */
     byte_offset?: number
-    /**
-     * Exact typed locator returned by Artifact search, including its immutable digest.
-     */
     locator:
       | {
           artifact_id: string
@@ -26330,9 +26402,6 @@ export type TaskReadConversationArtifactData = {
           }
           source: "task_artifact_resource"
         }
-    /**
-     * Maximum UTF-8 text bytes to return in this exact-read chunk. Binary resources use one complete attachment and ignore text pagination.
-     */
     max_bytes?: number
   }
   path: {
@@ -27034,13 +27103,7 @@ export type TaskBoardResponses = {
               source: "session"
             }
           | {
-              /**
-               * Exact Message ID stored in the paired session_id.
-               */
               message_id: string
-              /**
-               * Exact producing Session ID for message_id; do not substitute the current caller Session unless it produced that Message.
-               */
               session_id: string
               source: "session_message"
             }
@@ -28870,13 +28933,7 @@ export type TaskConversationResponses = {
                 source: "session"
               }
             | {
-                /**
-                 * Exact Message ID stored in the paired session_id.
-                 */
                 message_id: string
-                /**
-                 * Exact producing Session ID for message_id; do not substitute the current caller Session unless it produced that Message.
-                 */
                 session_id: string
                 source: "session_message"
               }
@@ -30491,13 +30548,7 @@ export type TaskProgressResponses = {
               source: "session"
             }
           | {
-              /**
-               * Exact Message ID stored in the paired session_id.
-               */
               message_id: string
-              /**
-               * Exact producing Session ID for message_id; do not substitute the current caller Session unless it produced that Message.
-               */
               session_id: string
               source: "session_message"
             }
@@ -30845,13 +30896,7 @@ export type TaskReplanResponses = {
             source: "session"
           }
         | {
-            /**
-             * Exact Message ID stored in the paired session_id.
-             */
             message_id: string
-            /**
-             * Exact producing Session ID for message_id; do not substitute the current caller Session unless it produced that Message.
-             */
             session_id: string
             source: "session_message"
           }
@@ -31148,13 +31193,7 @@ export type TaskRetryResponses = {
             source: "session"
           }
         | {
-            /**
-             * Exact Message ID stored in the paired session_id.
-             */
             message_id: string
-            /**
-             * Exact producing Session ID for message_id; do not substitute the current caller Session unless it produced that Message.
-             */
             session_id: string
             source: "session_message"
           }
@@ -31697,13 +31736,7 @@ export type TaskQueueStartNowResponses = {
               source: "session"
             }
           | {
-              /**
-               * Exact Message ID stored in the paired session_id.
-               */
               message_id: string
-              /**
-               * Exact producing Session ID for message_id; do not substitute the current caller Session unless it produced that Message.
-               */
               session_id: string
               source: "session_message"
             }

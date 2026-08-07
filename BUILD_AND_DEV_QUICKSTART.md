@@ -6,7 +6,7 @@
 
 Windows 本地建议准备：
 
-- Bun：`1.3.13`
+- Bun：`1.3.14`
 - Rust/Cargo：`stable-x86_64-pc-windows-msvc`
 - PowerShell
 - 可访问 npm registry 和公司 LiteLLM/模型服务网络

@@ -13,7 +13,7 @@ Do not substitute a different package-manager installation path.
 
 ## Build or doctor failure
 
-1. Record `bun --version`; the repository currently declares Bun `1.3.13`.
+1. Record `bun --version`; the repository currently declares Bun `1.3.14`.
 2. Run the exact failing build command again from the repository root.
 3. Run `doctor --json --refresh` for structured capability evidence.
 4. Fix the reported dependency or platform capability, then rerun `doctor` and the original acceptance command.

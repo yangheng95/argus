@@ -6,7 +6,7 @@
 
 - 操作系统：Windows x64
 - Shell：PowerShell
-- Bun：`1.3.13`
+- Bun：`1.3.14`
 - Rust toolchain：`stable-x86_64-pc-windows-msvc`
 - Cargo 路径：`C:\Users\lichenxing\.cargo\bin`
 - Bun 路径：`C:\Users\lichenxing\.bun\bin`
@@ -16,7 +16,7 @@
 项目根目录 `package.json` 指定的包管理器是：
 
 ```text
-bun@1.3.13
+bun@1.3.14
 ```
 
 ## 一次性环境准备
@@ -31,7 +31,7 @@ irm bun.sh/install.ps1 | iex
 
 ```powershell
 Invoke-WebRequest https://bun.sh/install.ps1 -OutFile $env:TEMP\bun-install.ps1
-& $env:TEMP\bun-install.ps1 -Version 1.3.13
+& $env:TEMP\bun-install.ps1 -Version 1.3.14
 ```
 
 安装 Rust/Cargo：
@@ -206,7 +206,7 @@ cargo: command not found
 
 ### Bun baseline runtime 下载失败
 
-现象包括下载 `bun-windows-x64-baseline-v1.3.13` 失败或连接被拒绝。
+现象包括下载 `bun-windows-x64-baseline-v1.3.14` 失败或连接被拒绝。
 
 处理：手动下载 Bun release 中的 `bun-windows-x64-baseline.zip`，解压到 `OPENCORVUS_BUN_RUNTIME_DIR\bun-windows-x64-baseline`。
 

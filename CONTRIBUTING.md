@@ -31,7 +31,7 @@ https://github.com/yangheng95/models.dev
 
 ## Developing OpenCorvus
 
-- Requirements: Bun 1.3.13 or newer
+- Requirements: Bun 1.3.14 or newer
 - Install dependencies from the repo root:
 
   ```bash

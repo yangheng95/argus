@@ -66,16 +66,20 @@
 3. GitHub's public Actions history showed build 34 succeeded on July 9, 2026 at old commit `85599f9`; it does not validate current source.
 4. The locally installed GitHub Command Line Interface had no authentication, while a Git dry-run proved the existing Git credential path can publish a new `v0.0.35beta` branch and the repository pre-push checks pass.
 5. The first full push was rejected by GitHub `GH001`: historical and current generated package outputs contained executable and installer blobs above GitHub's 100 MB per-file limit. The current tree still tracked ten files under root `opencorvus-dist/`, including 121-128 MB Linux executables, while only Overlay's generated `dist-artifacts/` directory was ignored.
+6. GitHub Actions build 35 checked out the exact delivery commit and acquired all five hosted runners, but every row stalled in the shared Bun 1.3.13 cold install. Linux x64 reached `Resolved, downloaded and extracted [346]` in nine seconds, then produced no output for 22 minutes and left an orphan Bun process when cancelled; no package command started.
+7. An isolated Windows cold-cache reproduction reached the same `[346]` boundary. Bun 1.3.13 then emitted an `EPERM` cache-move error and remained alive, while official stable Bun 1.3.14 returned explicit `InstallFailed` errors instead of silently retaining the process. The lockfile also contained approximately 1,900 tarball URLs pinned to `registry.npmmirror.com`, whereas Bun's documented default registry is `registry.npmjs.org`.
+8. The first Bun 1.3.14 pre-push review exposed two stale local/generated boundaries before publication: Overlay's package-local SDK junction pointed at an older isolated worktree, and the tracked OpenAPI/SDK artifacts differed from the current server route generator. Correcting the local junction made Overlay typecheck pass; running the canonical transactional SDK build regenerated the tracked artifacts instead of weakening the checks.
 
 ## Implementation Plan
 
 1. Remove the tracked root `opencorvus-dist/` generated package tree and add its root path to `.gitignore`; the canonical matrix remains the regeneration source.
 2. Set repository-local `remote.pushDefault=origin`. Because published `git-cc` history contains rejected large package objects and cannot be rewritten, create a GitHub delivery commit whose parent is GitHub `candidate` and whose tree is the exact cleaned current source tree; publish it as `v0.0.35beta` without changing the local or `git-cc` history.
 3. Dispatch `.github/workflows/build.yml` explicitly at that branch with an empty release version so the run creates retained development artifacts without creating a release or mutating the release branch.
-4. Inspect every matrix job and artifact from the exact dispatched commit. Distinguish runner-service failures from repository workflow or packager failures.
-5. Repair only evidenced canonical owners. Add or restore focused positive non-User Interface contract coverage when implementation changes are required.
-6. Commit with the required `dsw-33987` prefix, push the ordinary history to `git-cc`, update the GitHub delivery commit, rerun the exact workflow, and record terminal job/artifact evidence here.
-7. Run documentation health, version, workflow syntax/contract, typecheck, diff, and cached-diff checks; then manually review the final source and live Actions result.
+4. Replace the stale Bun 1.3.13 cold-install workaround with the current official stable Bun release, official npm registry authority, and Bun's native platform backend/concurrency defaults. Synchronize all active runtime requirement documentation and the Overlay Docker builder.
+5. Inspect every matrix job and artifact from the exact dispatched commit. Distinguish runner-service failures from repository workflow or packager failures.
+6. Repair only evidenced canonical owners. Add or restore focused positive non-User Interface contract coverage when implementation changes are required.
+7. Commit with the required `dsw-33987` prefix, push the ordinary history to `git-cc`, update the GitHub delivery commit, rerun the exact workflow, and record terminal job/artifact evidence here.
+8. Run documentation health, version, workflow syntax/contract, typecheck, diff, and cached-diff checks; then manually review the final source and live Actions result.
 
 ## Verification Evidence
 

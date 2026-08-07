@@ -4,7 +4,7 @@
   "description": "OpenCorvus AI-powered development tool",
   "private": true,
   "type": "module",
-  "packageManager": "bun@1.3.13",
+  "packageManager": "bun@1.3.14",
   "scripts": {
     "dev": "bun run --cwd packages/opencorvus dev",
     "dev:overlay": "cd packages/overlay/src-tauri && cargo run --release",
