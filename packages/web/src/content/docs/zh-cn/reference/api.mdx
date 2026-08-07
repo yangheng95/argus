@@ -359,10 +359,9 @@ OpenAPI 只会给项目作用域操作标注 `directory` query 参数。单个 T
 
 | Method | 路径 | 说明 | operationId |
 |---|---|---|---|
-| POST | `/computer/return` | Return Computer guest to Agent automation 请求体: `computerID`, `displayID`, `sessionID`; 错误: `BadRequestError`, `UnknownError`. | `computer.return` |
-| POST | `/computer/status` | Get Computer guest ownership 请求体: `computerID`, `displayID`, `sessionID`; 错误: `BadRequestError`, `UnknownError`. | `computer.status` |
-| POST | `/computer/takeover` | Take over Computer guest 请求体: `computerID`, `displayID`, `sessionID`; 错误: `BadRequestError`, `UnknownError`. | `computer.takeover` |
-| POST | `/computer/viewer/open` | Open Computer viewer 请求体: `computerID`, `displayID`, `sessionID`; 错误: `BadRequestError`, `UnknownError`. | `computer.viewer.open` |
+| POST | `/computer/return` | Return the current desktop to Agent automation 请求体: `computerID`, `displayID`, `sessionID`; 错误: `BadRequestError`, `UnknownError`. | `computer.return` |
+| POST | `/computer/status` | Get Computer desktop ownership 请求体: `computerID`, `displayID`, `sessionID`; 错误: `BadRequestError`, `UnknownError`. | `computer.status` |
+| POST | `/computer/takeover` | Take over the current desktop 请求体: `computerID`, `displayID`, `sessionID`; 错误: `BadRequestError`, `UnknownError`. | `computer.takeover` |
 
 ### MCP
 

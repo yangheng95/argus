@@ -15,6 +15,7 @@ import { Script } from "@opencorvus-ai/script"
 import pkg from "../package.json"
 import {
   artifactBrowserMcpNodeExternalModules,
+  artifactBrowserMcpNodeRuntimeModules,
   artifactBrowserMcpNodeExecutableName,
   artifactEntrypoints,
   artifactExecutableName,
@@ -388,7 +389,7 @@ for (const item of targets) {
     await copyRuntimeNodeModules(item, path.join(dir, "dist", name), dir, DEFAULT_PACKAGED_PLUGIN_MODULES)
     await stageDefaultPluginManifests(path.join(dir, "dist", name), item.os as PackagedPluginTargetOS)
   }
-  await copyRuntimeNodeModules(item, browserMcpRuntimeDir, dir)
+  await copyRuntimeNodeModules(item, browserMcpRuntimeDir, dir, artifactBrowserMcpNodeRuntimeModules())
   await copyBrowserMcpNodeRuntime(item, browserMcpRuntimeDir)
   await writePackagedRuntimePackageJson({
     name: `${name}-browser-mcp-node`,

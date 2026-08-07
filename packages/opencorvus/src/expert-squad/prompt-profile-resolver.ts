@@ -81,7 +81,6 @@ type ConfigLike = {
   prompt_profile?: PromptProfileConfig
   skill_mounts?: Config.Info["skill_mounts"]
   mcp?: Config.Info["mcp"]
-  computer?: Config.Info["computer"]
   assistant?: Config.Info["assistant"]
   experimental?: Config.Info["experimental"]
   runtime_templates?: Config.Info["runtime_templates"]
@@ -1027,7 +1026,7 @@ export namespace PromptProfileResolver {
       if (!server) throw new Error(`Active expert squad projects missing default MCP server default/mcp/${serverName}.`)
       result[serverName] =
         serverName === ComputerMCPBuiltin.ServerName
-          ? ComputerMCPBuiltin.localConfig({ runtimeBundleManifest: config.computer?.runtime_bundle_manifest })
+          ? ComputerMCPBuiltin.localConfig()
           : Config.Mcp.parse(server)
     }
     return result
@@ -2167,7 +2166,6 @@ export namespace PromptProfileResolver {
             input.connectionOwner.id,
             ComputerHostRuntime.adapter({
               runtimeScope: input.connectionOwner.id,
-              manifestPath: configuredMcp.environment?.OPENCORVUS_COMPUTER_RUNTIME_MANIFEST,
             }),
           )
         : configuredMcp

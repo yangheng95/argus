@@ -18,7 +18,7 @@ const HostResponse = z.discriminatedUnion("ok", [
     .strict(),
 ])
 
-const Created = z.object({ computerId: z.string(), displayId: z.string(), bundleId: z.string() }).strict()
+const Created = z.object({ computerId: z.string(), displayId: z.string(), driverVersion: z.string() }).strict()
 const Observed = z.object({ computerId: z.string(), displayId: z.string(), pngBase64: z.string() }).strict()
 const Acted = z.object({ accepted: z.literal(true), backendActionId: z.string() }).strict()
 const Destroyed = z.object({ destroyed: z.literal(true) }).strict()
@@ -105,15 +105,15 @@ export class HostComputerBackend implements ComputerBackend {
   }
 
   act(action: ComputerBackendAction) {
-    const { computerId, displayId, ...params } = action
-    return this.request(action.kind, { ...params, computer_id: computerId, display_id: displayId }, Acted, "effect")
+    const { computerId, displayId, kind, ...params } = action
+    return this.request(kind, { ...params, computer_id: computerId, display_id: displayId }, Acted, "effect")
   }
 
   destroy(input: { computerId: string }) {
     return this.request("session_destroy", { computer_id: input.computerId }, Destroyed, "effect")
   }
 
-  // The host owns the guest process and workspace. Closing one MCP adapter only
+  // The host owns the native desktop session. Closing one MCP adapter only
   // releases that adapter's local controller state.
   async close() {}
 }

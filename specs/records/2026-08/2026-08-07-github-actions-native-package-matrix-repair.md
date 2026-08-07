@@ -6,6 +6,7 @@
 
 - Change the repository's default Git remote address to `https://github.com/yangheng95/opencorvus`.
 - Repair and test the package matrix through GitHub Actions.
+- Upgrade Bun to 1.3.14 and explain or repair the observed 500-plus MB package artifact size at its demonstrated owner.
 
 ### Acceptance Criteria
 
@@ -15,6 +16,7 @@
 - Each row runs the repository-owned matrix packager, validates the final staged artifacts, and uploads only that row's verified output.
 - A real GitHub Actions run on the delivered commit reaches terminal success for every required matrix row. Local workflow checks alone do not count as matrix acceptance.
 - The final workflow, scripts, logs, and produced artifact inventory receive a second review before delivery.
+- Artifact reporting distinguishes one installer's size from a matrix row's aggregate upload, and the Browser Node sidecar contains its own exact runtime closure rather than a duplicate of the Host server closure.
 
 ### Hard Constraints
 
@@ -39,6 +41,12 @@
 - `script/stage-release-upload-assets.ts`
 - `script/release`
 - `LOCAL_PACKAGING.md`
+- `packages/opencorvus/script/build-artifact.ts`
+- `packages/opencorvus/script/build-runtime-node-modules.ts`
+- `packages/opencorvus/script/build.ts`
+- `packages/opencorvus/script/build.local.ts`
+- `packages/opencorvus/src/browser/runtime/node-sidecar.ts`
+- `packages/overlay/src-tauri/build.rs`
 - `specs/records/2026-07/2026-07-09-github-overlay-package-ci.md`
 - `specs/records/2026-07/2026-07-16-gui-installer-matrix-and-db-schema-backup.md`
 - `specs/records/2026-08/2026-08-05-v0.0.32beta-windows-native-matrix-package.md`
@@ -70,6 +78,8 @@
 7. An isolated Windows cold-cache reproduction reached the same `[346]` boundary. Bun 1.3.13 then emitted an `EPERM` cache-move error and remained alive, while official stable Bun 1.3.14 returned explicit `InstallFailed` errors instead of silently retaining the process. The lockfile also contained approximately 1,900 tarball URLs pinned to `registry.npmmirror.com`, whereas Bun's documented default registry is `registry.npmjs.org`.
 8. The first Bun 1.3.14 pre-push review exposed two stale local/generated boundaries before publication: Overlay's package-local SDK junction pointed at an older isolated worktree, and the tracked OpenAPI/SDK artifacts differed from the current server route generator. Correcting the local junction made Overlay typecheck pass; running the canonical transactional SDK build regenerated the tracked artifacts instead of weakening the checks.
 9. GitHub Actions build 36 proved Bun 1.3.14 plus the official registry completed dependency installation on all five native runners. Both macOS rows then reached the canonical packager and failed independently during the Vite transform: Node exhausted its default approximately 2 GB heap. Homebrew's untrusted `aws/tap` message was only a runner warning and not the failed command's cause.
+10. Build 37's completed row uploads measured 545-612 MB because each row artifact aggregates three distributable forms. The Windows directory contains a roughly 211 MiB bare executable, 202 MiB Microsoft Installer package, and 202 MiB Nullsoft Scriptable Install System setup executable; an existing local 0.0.34-beta staging tree has the same sizes, so this aggregate is neither a single installer nor a Bun 1.3.14 regression.
+11. The underlying Windows server payload is roughly 493 MiB before gzip embedding: the Bun-compiled server is 168 MiB, the Browser Node sidecar is 187 MiB, the Host `node_modules` closure is 102 MiB, and tool binaries are 36 MiB. The sidecar's 187 MiB included an 83 MiB Node executable plus another 102 MiB copy of the full Host dependency closure, although its runtime contract resolves only Playwright. This is a real duplicate owner independent of the aggregate-upload presentation.
 
 ## Implementation Plan
 
@@ -82,6 +92,7 @@
 7. Commit with the required `dsw-33987` prefix, push the ordinary history to `git-cc`, update the GitHub delivery commit, rerun the exact workflow, and record terminal job/artifact evidence here.
 8. Run documentation health, version, workflow syntax/contract, typecheck, diff, and cached-diff checks; then manually review the final source and live Actions result.
 9. Run Vite through the package-owned Node entrypoint with an explicit 8 GB heap so every local, Tauri, and matrix caller shares the same memory contract; rerun the full native matrix rather than retrying only macOS.
+10. Give the Browser Node sidecar an explicit Playwright runtime-module closure, use that closure in both production builders and packaged-runtime validation, and rebuild the Windows package to measure the resulting installer rather than estimating from source.
 
 ## Verification Evidence
 

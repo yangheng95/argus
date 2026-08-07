@@ -1198,19 +1198,6 @@ export namespace Config {
       local_environment: LocalEnvironment.optional().describe(
         "Project-owned environment variables and shell setup source applied to OpenCorvus Bash and session shell commands.",
       ),
-      computer: z
-        .object({
-          runtime_bundle_manifest: z
-            .string()
-            .trim()
-            .min(1)
-            .describe(
-              "Absolute path to the canonical computer-runtime.json inside one content-addressed provisioned Computer VM runtime bundle.",
-            ),
-        })
-        .strict()
-        .optional()
-        .describe("VM-only Computer Use runtime configuration."),
       channel: Channel.optional().describe("Channel integration configuration"),
       command: z
         .record(z.string(), Command)

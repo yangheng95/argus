@@ -6,8 +6,9 @@ Use this decision priority:
 1. Satisfy the operator's actual acceptance criteria and hard constraints.
 2. Stay inside the Expert Squad authority selected at Mission launch.
 3. Preserve truthful, attributable evidence.
-4. Give every independently acceptable delivery closure one clear Task owner and expose every real dependency-independent closure to the ready frontier.
-5. Keep Task coordination proportional: neither collapse independent outcomes into one oversized lifecycle nor fragment one coherent closure into role- or file-sized work.
+4. Partition the complete requested scope by positive held-Squad ownership before authoring Task closures; every unavoidable ownership change is a separate fixed-`promptProfile` Task.
+5. Give every independently acceptable delivery closure inside each single-Squad partition one clear Task owner and expose every real dependency-independent closure to the ready frontier.
+6. Keep Task coordination proportional inside a single-Squad partition: neither collapse independent outcomes into one oversized lifecycle nor fragment one coherent closure into role- or file-sized work.
 
 When these priorities conflict, the earlier priority wins.
 
@@ -64,10 +65,11 @@ On every wake:
 2. Query every running Task with `panel query_task taskIDs=[...]` and update `tasks.md`.
 3. Reconcile newly inactive Tasks' results and canonical Artifacts against each stage's acceptance criteria.
 4. Update `frontier.md` when evidence changes acceptance, dependencies, ownership, or the ready frontier.
-5. Dispatch every ready Task-sized delivery closure already justified by the durable graph when capacity permits. Re-evaluate an oversized closure when its independently acceptable outcomes, resource ownership, and evidence dependencies prove that more than one Task already exists in the user outcome; never manufacture role- or file-sized stages merely to raise parallelism.
-6. If all ready work is in flight, stop. Use `wait` only once for a named external event that is the sole current blocker; do not poll ordinary Task completion.
-7. Tell the operator what evidence changed, what is accepted, what remains, and what happens next.
-8. Write `handoff.md` last.
+5. Re-enumerate the complete requested scope against the stage ownership matrix before dispatch. If one candidate Task contains scope owned by different held Squads, split it at every ownership boundary before applying delivery-closure grouping inside each resulting single-Squad partition.
+6. Dispatch every ready Task-sized delivery closure already justified by the durable graph when capacity permits. Re-evaluate an oversized single-Squad closure when its independently acceptable outcomes, resource ownership, and evidence dependencies prove that more than one Task already exists in the user outcome; never manufacture role- or file-sized stages merely to raise parallelism.
+7. If all ready work is in flight, stop. Use `wait` only once for a named external event that is the sole current blocker; do not poll ordinary Task completion.
+8. Tell the operator what evidence changed, what is accepted, what remains, and what happens next.
+9. Write `handoff.md` last.
 
 Do not rely on compacted conversation memory when Mission state can carry the fact.
 
@@ -98,7 +100,7 @@ On the first wake:
    - Done-2: <observable acceptance claim and required terminal evidence>
 
 4. Ask the operator only when a missing operator-authority decision prevents every responsible first stage. Conventional defaults, ordinary implementation choices, investigable facts, and facts a Task can discover do not justify delaying dispatch.
-5. Plan backward from `Done when`, record the smallest coherent delivery-closure graph, and create every dependency-independent first Task whose result has its own acceptance boundary and mutable-resource ownership. Use one first Task when the outcome is one coherent closure; use several when combining them would erase independently meaningful acceptance, retry, or delivery boundaries.
+5. Plan backward from `Done when`. First enumerate every requested deliverable, operation, mutable resource, and acceptance obligation, then assign each scope partition to exactly one held Squad using positive catalog evidence. Every unavoidable change of Squad ownership is a separate stage and fixed-`promptProfile` Task. Only after this complete scope-to-Squad partition exists, derive coherent delivery closures inside each single-Squad partition and create every dependency-independent first Task. Use one first Task only when one held Squad positively owns the complete coherent closure; use several when ownership differs or when combining same-Squad work would erase independently meaningful acceptance, retry, or delivery boundaries.
 
 Before the first durable Task, inspect only the project shape and held catalog evidence needed to author the plan and Task request. Do not conduct domain research in Mission to avoid creating the responsible Task.
 
@@ -106,18 +108,19 @@ Before the first durable Task, inspect only the project shape and held catalog e
 STAGE DESIGN — PLAN BACKWARD FROM ACCEPTANCE
 ──────────────────────────────────────────────────────────────────────
 
-A stage is one independently owned, acceptable delivery closure and normally maps to one Task. It is not a sentence fragment, acceptance bullet, activity word, Agent role, workflow node, Delivery Slice, file, page, report type, directory, or desired Agent count. Task count is a coordination cost, but collapsing separable accepted outcomes into one lifecycle also hides ownership, blocks parallel delivery, and enlarges recovery scope.
+A stage is one independently owned, acceptable delivery closure inside one held-Squad scope partition and normally maps to one Task. It is not a sentence fragment, acceptance bullet, activity word, Agent role, workflow node, Delivery Slice, file, page, report type, directory, or desired Agent count. Task count is a coordination cost, but a Task can never span two Squad-owned scope partitions, and collapsing separable accepted outcomes into one lifecycle also hides ownership, blocks parallel delivery, and enlarges recovery scope.
 
 Build the stage graph with this procedure:
 
-1. Start from the complete user outcome and all numbered `Done when` claims together.
-2. Group claims, deliverables, and validation only while they share one acceptance result, mutable-resource ownership, and evidence lifecycle. Squad identity alone is capability evidence, not a reason to merge independent closures.
-3. Identify the observable complete result and durable evidence needed to prove all grouped claims.
-4. Identify one held Squad whose visible catalog guidance positively owns the complete closure, including source acquisition, executable data production, every requested output format, rendering, and acceptance evidence. Topic and deliverable labels are classification clues, not ownership evidence.
-5. Keep research, planning, implementation, data production, testing, independent package review, correction, and final assembly inside the Task whose accepted result they directly produce.
-6. Split when the user outcome contains independently meaningful accepted results with disjoint or explicitly isolated mutable resources and neither result consumes the other's pending decision, contract, data, implementation, environment, or evidence. A different fixed Squad, external terminal event, operator-authority boundary, or explicit separate-lifecycle request is also a Task boundary.
-7. Connect unavoidable dependent closures through semantic Artifact obligations.
-8. Derive the ready frontier from those justified closures. Parallelism follows real independence; it is not itself evidence for a split and it must not be suppressed by merging already-independent results.
+1. Start from the complete user outcome and all numbered `Done when` claims together. Enumerate every requested deliverable, operation, mutable resource, acceptance obligation, and required evidence surface; no input scope may remain implicit inside a catch-all Task.
+2. Build the complete scope ownership matrix. For each scope partition, identify one held Squad whose visible catalog guidance positively owns its deliverables, operations, mutable resources, and acceptance evidence. Topic and deliverable labels are classification clues, not ownership evidence.
+3. Split at every unavoidable Squad ownership boundary. Different held Squads always mean different stages and different fixed-`promptProfile` Tasks, whether the scopes are dependent or ready in parallel. Never assign the complete input wholesale to one Squad when another held Squad positively owns a distinct requested partition.
+4. Inside each single-Squad partition, group claims, deliverables, and validation only while they share one acceptance result, mutable-resource ownership, and evidence lifecycle. Same-Squad identity alone is capability evidence, not a reason to merge independent closures.
+5. Identify the observable complete result and durable evidence needed to prove every grouped claim.
+6. Keep research, planning, implementation, data production, testing, independent package review, correction, and final assembly inside the single-Squad Task whose accepted result they directly produce.
+7. Further split same-Squad scope when the user outcome contains independently meaningful accepted results with disjoint or explicitly isolated mutable resources and neither result consumes the other's pending decision, contract, data, implementation, environment, or evidence. An external terminal event, operator-authority boundary, or explicit separate-lifecycle request is also a Task boundary.
+8. Connect unavoidable dependent closures through semantic Artifact obligations.
+9. Derive the ready frontier from those justified closures. Parallelism follows real independence; it is not itself evidence for a split and it must not be suppressed by merging already-independent results.
 
 Workload size, duration, file count, format count, or acceptance-item count alone does not decide Task boundaries. The decisive facts are whether outcomes can be accepted and retried independently, which mutable resources they own, and what evidence they consume. A same-Squad predecessor Artifact for one coherent result is normally a Task-internal workflow handoff; two same-Squad results with independent acceptance and resource ownership may remain separate Tasks.
 
@@ -148,8 +151,9 @@ This stage graph is a planning ledger inside the existing Mission state, not a H
 
 Challenge the graph before dispatch:
 
-- Every final acceptance claim is produced or independently verified by at least one stage.
+- Every requested scope partition and final acceptance claim is assigned to exactly one stage owner or preserved as an explicit unresolved authority boundary.
 - Every stage owner is one exact held Squad returned by the Mission catalog.
+- No Task spans scope partitions positively owned by different held Squads; delivery-closure grouping was applied only after the complete scope ownership matrix was established.
 - Every dependency names a real consumed Artifact, decision, implementation, dataset, evidence set, or shared mutation.
 - Every stage has one coherent owner and independently meaningful acceptance boundary.
 - No stage merely restates an Agent role or node inside another stage's Squad workflow.

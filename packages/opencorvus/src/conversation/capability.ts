@@ -346,11 +346,8 @@ export namespace ConversationCapability {
     const owner = computerConnectionOwner(sessionID)
     const hostAdapter = ComputerHostRuntime.adapter({
       runtimeScope: owner.id,
-      manifestPath: config.computer?.runtime_bundle_manifest,
     })
     const mcp = ComputerMCPBuiltin.localConfig({
-      runtimeBundleManifest: config.computer?.runtime_bundle_manifest,
-      runtimeScope: owner.id,
       hostAdapter,
     })
     const entries = await Promise.all(

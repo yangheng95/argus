@@ -1,9 +1,15 @@
 import { randomUUID } from "node:crypto"
 import { z } from "zod"
+import type { CuaDriverLike } from "@trycua/cua-driver"
 import { createInstanceState } from "@/project/instance-state"
-import { JsonLineComputerBackend, type ComputerBackend, type ComputerBackendAction } from "./backend"
+import {
+  closeCuaDriver,
+  createCuaDriver,
+  CuaComputerBackend,
+  type ComputerBackend,
+  type ComputerBackendAction,
+} from "./backend"
 import { ComputerError, computerError } from "./errors"
-import { computerRuntimeWorkspace } from "./runtime-scope"
 
 const HostRequest = z
   .object({
@@ -36,7 +42,12 @@ const HostOperationParams = {
   click: Target.extend({ x: z.number().int(), y: z.number().int(), button: z.enum(["left", "right"]) }).strict(),
   type_text: Target.extend({ text: z.string() }).strict(),
   keypress: Target.extend({ keys: z.array(z.string().min(1)).min(1) }).strict(),
-  scroll: Target.extend({ deltaX: z.number().int(), deltaY: z.number().int() }).strict(),
+  scroll: Target.extend({
+    x: z.number().int().nonnegative(),
+    y: z.number().int().nonnegative(),
+    direction: z.enum(["up", "down", "left", "right"]),
+    amount: z.number().int().positive(),
+  }).strict(),
   drag: Target.extend({ from: Point, to: Point, durationMs: z.number().int().positive() }).strict(),
   session_destroy: z.object({ computer_id: z.string().min(1) }).strict(),
 } satisfies Record<z.infer<typeof HostRequest>["operation"], z.ZodType>
@@ -44,20 +55,21 @@ const HostOperationParams = {
 type RuntimeIdentity = {
   computerId: string
   displayId: string
-  bundleId: string
+  driverVersion: string
 }
 
 type RuntimeEntry = {
   runtimeScope: string
-  manifestPath?: string
-  backend: ComputerBackend
+  backend?: ComputerBackend
   identity?: RuntimeIdentity
   automationAuthorization?: string
+  activeRequests: Set<Promise<unknown>>
 }
 
 type RuntimeState = {
   entries: Map<string, RuntimeEntry>
   authorizations: Map<string, RuntimeEntry>
+  driver?: Promise<CuaDriverLike>
   server?: ReturnType<typeof Bun.serve>
 }
 
@@ -67,7 +79,7 @@ export type ComputerHostAdapterConfig = {
   runtimeScope: string
 }
 
-type BackendFactory = (input: { manifestPath?: string; runtimeScope: string }) => ComputerBackend
+type BackendFactory = (input: { runtimeScope: string }) => ComputerBackend
 
 function bearer(request: Request): string | undefined {
   const value = request.headers.get("authorization")
@@ -85,9 +97,10 @@ function errorResponse(error: unknown, status = 400) {
   )
 }
 
-async function disposeEntry(entry: RuntimeEntry, destroyGuest: boolean): Promise<void> {
+async function disposeEntry(entry: RuntimeEntry, destroyDesktopSession: boolean): Promise<void> {
+  if (!entry.backend) return
   const operations: Promise<unknown>[] = []
-  if (destroyGuest && entry.identity) operations.push(entry.backend.destroy({ computerId: entry.identity.computerId }))
+  if (destroyDesktopSession && entry.identity) operations.push(entry.backend.destroy({ computerId: entry.identity.computerId }))
   const destroyResults = await Promise.allSettled(operations)
   const closeResult = await Promise.allSettled([entry.backend.close()])
   const failures = [...destroyResults, ...closeResult].flatMap((result) =>
@@ -95,33 +108,28 @@ async function disposeEntry(entry: RuntimeEntry, destroyGuest: boolean): Promise
   )
   if (failures.length === 1) throw computerError(failures[0])
   if (failures.length > 1) {
-    throw computerError(new AggregateError(failures, "Computer guest destruction and runtime cleanup failed"))
+    throw computerError(new AggregateError(failures, "Computer desktop session destruction and cleanup failed"))
   }
 }
 
 export class ComputerHostRuntimeAuthority {
   constructor(
     private readonly state: RuntimeState,
-    private readonly createBackend: BackendFactory = ({ manifestPath, runtimeScope }) =>
-      new JsonLineComputerBackend({ manifestPath, workspace: computerRuntimeWorkspace(runtimeScope) }),
+    private readonly injectedBackendFactory?: BackendFactory,
   ) {}
 
-  private entry(input: { runtimeScope: string; manifestPath?: string }): RuntimeEntry {
+  private createBackend(input: { runtimeScope: string }): ComputerBackend {
+    if (this.injectedBackendFactory) return this.injectedBackendFactory(input)
+    const driver = (this.state.driver ??= createCuaDriver())
+    return new CuaComputerBackend(driver)
+  }
+
+  private entry(input: { runtimeScope: string }): RuntimeEntry {
     const current = this.state.entries.get(input.runtimeScope)
-    if (current) {
-      if (current.manifestPath !== input.manifestPath) {
-        throw new ComputerError(
-          "COMPUTER_RUNTIME_INVALID",
-          "Computer runtime bundle cannot change during one Session-owned guest lifetime",
-          { runtimeScope: input.runtimeScope },
-        )
-      }
-      return current
-    }
+    if (current) return current
     const created: RuntimeEntry = {
       runtimeScope: input.runtimeScope,
-      manifestPath: input.manifestPath,
-      backend: this.createBackend(input),
+      activeRequests: new Set(),
     }
     this.state.entries.set(input.runtimeScope, created)
     return created
@@ -150,7 +158,7 @@ export class ComputerHostRuntimeAuthority {
     return this.state.server
   }
 
-  adapter(input: { runtimeScope: string; manifestPath?: string }): ComputerHostAdapterConfig {
+  adapter(input: { runtimeScope: string }): ComputerHostAdapterConfig {
     const entry = this.entry(input)
     if (entry.identity && !entry.automationAuthorization) {
       throw new ComputerError("COMPUTER_RUN_REVOKED", "Computer automation is disconnected during human takeover", {
@@ -175,17 +183,20 @@ export class ComputerHostRuntimeAuthority {
     return identity
   }
 
-  takeover(input: { runtimeScope: string; computerId: string; displayId: string }) {
+  async takeover(input: { runtimeScope: string; computerId: string; displayId: string }) {
     const entry = this.state.entries.get(input.runtimeScope)
     const identity = this.identity(input.runtimeScope)
     this.assertIdentity(identity, input)
     this.revoke(entry!)
+    await Promise.allSettled([...entry!.activeRequests])
+    const preservedIdentity = this.identity(input.runtimeScope)
+    this.assertIdentity(preservedIdentity, input)
     return {
       ownership: "human" as const,
-      computerId: identity.computerId,
-      displayId: identity.displayId,
-      runtimeBundleId: identity.bundleId,
-      guestPreserved: true as const,
+      computerId: preservedIdentity.computerId,
+      displayId: preservedIdentity.displayId,
+      driverVersion: preservedIdentity.driverVersion,
+      desktopPreserved: true as const,
     }
   }
 
@@ -197,7 +208,7 @@ export class ComputerHostRuntimeAuthority {
       ownership: entry.automationAuthorization ? ("agent" as const) : ("human" as const),
       computerId: identity.computerId,
       displayId: identity.displayId,
-      runtimeBundleId: identity.bundleId,
+      driverVersion: identity.driverVersion,
     }
   }
 
@@ -206,7 +217,7 @@ export class ComputerHostRuntimeAuthority {
     const identity = this.identity(input.runtimeScope)
     this.assertIdentity(identity, input)
     if (entry.automationAuthorization) {
-      throw new ComputerError("COMPUTER_BACKEND_ERROR", "Computer automation already owns the guest", {
+      throw new ComputerError("COMPUTER_BACKEND_ERROR", "Computer automation already owns the desktop session", {
         runtimeScope: input.runtimeScope,
       })
     }
@@ -215,7 +226,7 @@ export class ComputerHostRuntimeAuthority {
       ownership: "agent" as const,
       computerId: identity.computerId,
       displayId: identity.displayId,
-      runtimeBundleId: identity.bundleId,
+      driverVersion: identity.driverVersion,
       freshObservationRequired: true as const,
     }
   }
@@ -234,25 +245,26 @@ export class ComputerHostRuntimeAuthority {
     const operations: Record<z.infer<typeof HostRequest>["operation"], () => Promise<unknown>> = {
       session_create: async () => {
         if (entry.identity) return entry.identity
-        const identity = await entry.backend.create()
+        const backend = (entry.backend ??= this.createBackend({ runtimeScope: entry.runtimeScope }))
+        const identity = await backend.create()
         entry.identity = identity
         return identity
       },
       observe: async () => {
         const target = params as z.infer<typeof Target>
-        return entry.backend.observe({ computerId: target.computer_id, displayId: target.display_id })
+        return entry.backend!.observe({ computerId: target.computer_id, displayId: target.display_id })
       },
-      click: () => entry.backend.act(this.action("click", params)),
-      type_text: () => entry.backend.act(this.action("type_text", params)),
-      keypress: () => entry.backend.act(this.action("keypress", params)),
-      scroll: () => entry.backend.act(this.action("scroll", params)),
-      drag: () => entry.backend.act(this.action("drag", params)),
+      click: () => entry.backend!.act(this.action("click", params)),
+      type_text: () => entry.backend!.act(this.action("type_text", params)),
+      keypress: () => entry.backend!.act(this.action("keypress", params)),
+      scroll: () => entry.backend!.act(this.action("scroll", params)),
+      drag: () => entry.backend!.act(this.action("drag", params)),
       session_destroy: async () => {
         const computerId = params.computer_id as string
-        const result = await entry.backend.destroy({ computerId })
-        await entry.backend.close()
-        this.revoke(entry)
-        this.state.entries.delete(entry.runtimeScope)
+        const result = await entry.backend!.destroy({ computerId })
+        await entry.backend!.close()
+        delete entry.backend
+        delete entry.identity
         return result
       },
     }
@@ -281,9 +293,17 @@ export class ComputerHostRuntimeAuthority {
         403,
       )
     }
-    try {
+    const operation = (async () => {
       const input = HostRequest.parse(await request.json())
-      return Response.json({ ok: true, result: await this.perform(entry, input) })
+      return this.perform(entry, input)
+    })()
+    entry.activeRequests.add(operation)
+    try {
+      try {
+        return Response.json({ ok: true, result: await operation })
+      } finally {
+        entry.activeRequests.delete(operation)
+      }
     } catch (error) {
       return errorResponse(error)
     }
@@ -292,24 +312,29 @@ export class ComputerHostRuntimeAuthority {
   async destroy(runtimeScope: string): Promise<void> {
     const entry = this.state.entries.get(runtimeScope)
     if (!entry) return
-    await disposeEntry(entry, true)
     this.revoke(entry)
+    await Promise.allSettled([...entry.activeRequests])
+    await disposeEntry(entry, true)
     this.state.entries.delete(runtimeScope)
   }
 
   async close(): Promise<void> {
     const entries = [...this.state.entries.values()]
+    for (const entry of entries) this.revoke(entry)
+    await Promise.allSettled(entries.flatMap((entry) => [...entry.activeRequests]))
     const results = await Promise.allSettled(entries.map((entry) => disposeEntry(entry, true)))
+    if (this.state.driver) results.push(...(await Promise.allSettled([closeCuaDriver(this.state.driver)])))
     const failures = results.flatMap((result) => (result.status === "rejected" ? [result.reason] : []))
     if (failures.length === 0) {
       this.state.entries.clear()
       this.state.authorizations.clear()
+      delete this.state.driver
       await this.state.server?.stop(true)
       delete this.state.server
       return
     }
     if (failures.length === 1) throw computerError(failures[0])
-    throw computerError(new AggregateError(failures, "Computer host runtime cleanup failed"))
+    throw computerError(new AggregateError(failures, "Computer host driver cleanup failed"))
   }
 }
 
@@ -324,7 +349,7 @@ function authority() {
 }
 
 export namespace ComputerHostRuntime {
-  export function adapter(input: { runtimeScope: string; manifestPath?: string }) {
+  export function adapter(input: { runtimeScope: string }) {
     return authority().adapter(input)
   }
 

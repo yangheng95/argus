@@ -1,24 +1,15 @@
-import { afterEach, describe, expect, test } from "bun:test"
-import { createHash } from "node:crypto"
-import fs from "node:fs/promises"
-import os from "node:os"
-import path from "node:path"
+import { describe, expect, test } from "bun:test"
+import type { CuaDriverLike, ToolResult } from "@trycua/cua-driver"
 import { PNG } from "pngjs"
-import { PassThrough } from "node:stream"
 import { ComputerMCPBuiltin } from "../../src/mcp/computer/builtin"
 import {
-  JsonLineComputerBackend,
+  CuaComputerBackend,
   type ComputerBackend,
   type ComputerBackendAction,
   type ComputerBackendObservation,
 } from "../../src/mcp/computer/backend"
 import { ComputerController } from "../../src/mcp/computer/controller"
 import { COMPUTER_MCP_PERMISSION_BASELINE, computerMcpPermissionPlan } from "../../src/mcp/computer/permission-plan"
-import {
-  provisionComputerRuntimeBundle,
-  verifyComputerRuntimeBundle,
-  verifyProvisionedComputerRuntimeBundle,
-} from "../../src/mcp/computer/runtime-bundle"
 import { ConversationCapability } from "../../src/conversation/capability"
 import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
@@ -29,20 +20,14 @@ import { PromptProfileResolver } from "../../src/expert-squad/prompt-profile-res
 import { buildExpertSquadAuthorDefinition } from "../../src/tool/expert-squad-author"
 import { MCP } from "../../src/mcp"
 import { computerMcpPermissionKeyOf } from "../../src/mcp/computer/permission-plan"
-import { resolveComputerViewer } from "../../src/mcp/computer/viewer"
-import { computerRuntimeScopeIdentity, computerRuntimeWorkspace } from "../../src/mcp/computer/runtime-scope"
+import { computerRuntimeScopeIdentity } from "../../src/mcp/computer/runtime-scope"
 import { CapabilityCatalog, searchCapabilityCatalog } from "../../src/capability/catalog"
 import { PermissionNext } from "../../src/permission/next"
 import { ComputerHostRuntimeAuthority } from "../../src/mcp/computer/host-runtime"
 import { HostComputerBackend } from "../../src/mcp/computer/host-client"
 import { EngineService } from "../../src/task-api"
 import { configureTaskLoopRunner } from "../../src/engine/queue"
-
-const temporaryDirectories: string[] = []
-
-afterEach(async () => {
-  await Promise.all(temporaryDirectories.splice(0).map((directory) => fs.rm(directory, { recursive: true })))
-})
+import { artifactRuntimeNodeModuleNames } from "../../script/build-artifact"
 
 function pngBase64(width: number, height: number) {
   const image = new PNG({ width, height })
@@ -62,7 +47,7 @@ class RecordingBackend implements ComputerBackend {
     return {
       computerId: "computer-1",
       displayId: "display-1",
-      bundleId: "bundle-1",
+      driverVersion: "0.12.2",
     }
   }
 
@@ -87,28 +72,33 @@ class LifecycleBackend implements ComputerBackend {
   readonly events: string[] = []
   private readonly screens = [pngBase64(8, 6), pngBase64(10, 7)]
 
+  constructor(
+    private readonly computerId = "computer-lifecycle",
+    private readonly displayId = "display-lifecycle",
+  ) {}
+
   async create() {
-    this.events.push("guest:create")
-    return { computerId: "computer-lifecycle", displayId: "display-lifecycle", bundleId: "bundle-lifecycle" }
+    this.events.push("desktop:create")
+    return { computerId: this.computerId, displayId: this.displayId, driverVersion: "0.12.2" }
   }
 
   async observe(input: { computerId: string; displayId: string }) {
-    this.events.push(`guest:observe:${input.computerId}:${input.displayId}`)
+    this.events.push(`desktop:observe:${input.computerId}:${input.displayId}`)
     return { computerId: input.computerId, displayId: input.displayId, pngBase64: this.screens.shift()! }
   }
 
   async act() {
-    this.events.push("guest:act")
+    this.events.push("desktop:act")
     return { accepted: true as const, backendActionId: "lifecycle-action" }
   }
 
   async destroy(input: { computerId: string }) {
-    this.events.push(`guest:destroy:${input.computerId}`)
+    this.events.push(`desktop:destroy:${input.computerId}`)
     return { destroyed: true as const }
   }
 
   async close() {
-    this.events.push("runtime:close")
+    this.events.push("desktop:close")
   }
 }
 
@@ -138,12 +128,11 @@ describe("Computer Use exact control contract", () => {
     )
   })
 
-  test("preserves one host-owned guest across takeover and returns with a fresh adapter run", async () => {
+  test("preserves one host-owned desktop session across takeover and returns with a fresh adapter run", async () => {
     const runtime = new LifecycleBackend()
     const authority = new ComputerHostRuntimeAuthority({ entries: new Map(), authorizations: new Map() }, () => runtime)
     const firstAdapter = authority.adapter({
       runtimeScope: "conversation:session-lifecycle:computer",
-      manifestPath: "provisioned/computer-runtime.json",
     })
     const firstController = new ComputerController(
       new HostComputerBackend(
@@ -160,7 +149,7 @@ describe("Computer Use exact control contract", () => {
     })
     expect(firstObservation).toMatchObject({ width: 8, height: 6 })
     expect(
-      authority.takeover({
+      await authority.takeover({
         runtimeScope: firstAdapter.runtimeScope,
         computerId: created.computerId,
         displayId: created.displayId,
@@ -169,8 +158,8 @@ describe("Computer Use exact control contract", () => {
       ownership: "human",
       computerId: "computer-lifecycle",
       displayId: "display-lifecycle",
-      runtimeBundleId: "bundle-lifecycle",
-      guestPreserved: true,
+      driverVersion: "0.12.2",
+      desktopPreserved: true,
     })
     await firstController.close()
 
@@ -184,12 +173,11 @@ describe("Computer Use exact control contract", () => {
       ownership: "agent",
       computerId: "computer-lifecycle",
       displayId: "display-lifecycle",
-      runtimeBundleId: "bundle-lifecycle",
+      driverVersion: "0.12.2",
       freshObservationRequired: true,
     })
     const secondAdapter = authority.adapter({
       runtimeScope: firstAdapter.runtimeScope,
-      manifestPath: "provisioned/computer-runtime.json",
     })
     expect(new Set([firstAdapter.authorization, secondAdapter.authorization]).size).toBe(2)
     const secondController = new ComputerController(
@@ -211,12 +199,136 @@ describe("Computer Use exact control contract", () => {
     await secondController.close()
     await authority.close()
     expect(runtime.events).toEqual([
-      "guest:create",
-      "guest:observe:computer-lifecycle:display-lifecycle",
-      "guest:observe:computer-lifecycle:display-lifecycle",
-      "guest:destroy:computer-lifecycle",
-      "runtime:close",
+      "desktop:create",
+      "desktop:observe:computer-lifecycle:display-lifecycle",
+      "desktop:observe:computer-lifecycle:display-lifecycle",
+      "desktop:destroy:computer-lifecycle",
+      "desktop:close",
     ])
+  })
+
+  test("keeps one adapter authority usable for a new desktop session after exact session destruction", async () => {
+    const backends = [
+      new LifecycleBackend("computer-generation-1", "display-generation-1"),
+      new LifecycleBackend("computer-generation-2", "display-generation-2"),
+    ]
+    const authority = new ComputerHostRuntimeAuthority(
+      { entries: new Map(), authorizations: new Map() },
+      () => backends.shift()!,
+    )
+    const adapter = authority.adapter({ runtimeScope: "conversation:reusable-adapter:computer" })
+    const controller = new ComputerController(
+      new HostComputerBackend(
+        adapter.endpoint,
+        adapter.authorization,
+        adapter.runtimeScope,
+        (input, init) => authority.fetch(new Request(input, init)),
+      ),
+    )
+
+    const first = await controller.create()
+    expect(await controller.destroy({ computerId: first.computerId })).toEqual({
+      computerId: "computer-generation-1",
+      destroyed: true,
+    })
+    const second = await controller.create()
+    expect([first.computerId, second.computerId]).toEqual(["computer-generation-1", "computer-generation-2"])
+    expect(
+      await controller.observe({ computerId: second.computerId, displayId: second.displayId }),
+    ).toMatchObject({ computerId: "computer-generation-2", displayId: "display-generation-2", width: 8, height: 6 })
+
+    await authority.close()
+    expect(backends).toEqual([])
+  })
+
+  test("classifies a lost post-dispatch native session response as an unknown effect outcome", async () => {
+    const runtime = new LifecycleBackend()
+    const authority = new ComputerHostRuntimeAuthority({ entries: new Map(), authorizations: new Map() }, () => runtime)
+    const adapter = authority.adapter({ runtimeScope: "conversation:lost-create-response:computer" })
+    const backend = new HostComputerBackend(
+      adapter.endpoint,
+      adapter.authorization,
+      adapter.runtimeScope,
+      async (input, init) => {
+        await authority.fetch(new Request(input, init))
+        throw new Error("injected response loss")
+      },
+    )
+    await expect(backend.create()).rejects.toMatchObject({
+      code: "COMPUTER_OUTCOME_UNKNOWN",
+      details: { operation: "session_create", runtimeScope: adapter.runtimeScope },
+    })
+    expect(authority.identity(adapter.runtimeScope)).toEqual({
+      computerId: "computer-lifecycle",
+      displayId: "display-lifecycle",
+      driverVersion: "0.12.2",
+    })
+    await authority.destroy(adapter.runtimeScope)
+    await authority.close()
+  })
+
+  test("settles an entered Agent input before publishing human desktop ownership", async () => {
+    const timeline: string[] = []
+    let markStarted!: () => void
+    let releaseAction!: () => void
+    const actionStarted = new Promise<void>((resolve) => {
+      markStarted = resolve
+    })
+    const actionReleased = new Promise<void>((resolve) => {
+      releaseAction = resolve
+    })
+    const runtime: ComputerBackend = {
+      async create() {
+        return { computerId: "computer-quiescence", displayId: "primary", driverVersion: "0.12.2" }
+      },
+      async observe() {
+        return { computerId: "computer-quiescence", displayId: "primary", pngBase64: pngBase64(4, 4) }
+      },
+      async act() {
+        markStarted()
+        await actionReleased
+        timeline.push("agent-input-settled")
+        return { accepted: true, backendActionId: "action-quiescence" }
+      },
+      async destroy() {
+        return { destroyed: true }
+      },
+      async close() {},
+    }
+    const authority = new ComputerHostRuntimeAuthority({ entries: new Map(), authorizations: new Map() }, () => runtime)
+    const adapter = authority.adapter({ runtimeScope: "conversation:takeover-quiescence:computer" })
+    const controller = new HostComputerBackend(
+      adapter.endpoint,
+      adapter.authorization,
+      adapter.runtimeScope,
+      (input, init) => authority.fetch(new Request(input, init)),
+    )
+    const created = await controller.create()
+    const action = controller.act({
+      kind: "click",
+      computerId: created.computerId,
+      displayId: created.displayId,
+      x: 1,
+      y: 1,
+      button: "left",
+    })
+    await actionStarted
+    const takeover = authority
+      .takeover({
+        runtimeScope: adapter.runtimeScope,
+        computerId: created.computerId,
+        displayId: created.displayId,
+      })
+      .then((result) => {
+        timeline.push("human-ownership-published")
+        return result
+      })
+    releaseAction()
+    expect(await action).toMatchObject({ accepted: true, backendActionId: "action-quiescence" })
+    expect(await takeover).toMatchObject({ ownership: "human", desktopPreserved: true })
+    expect(timeline).toEqual(["agent-input-settled", "human-ownership-published"])
+    await authority.destroy(adapter.runtimeScope)
+    await authority.close()
   })
 
   test("maps an observation-bound click to one exact backend action", async () => {
@@ -451,7 +563,7 @@ describe("Computer Use exact control contract", () => {
                     ok: true,
                     computer_id: "computer-1",
                     display_id: "display-1",
-                    runtime_bundle_id: "bundle-1",
+                    driver_version: "0.12.2",
                   }),
                 },
               ],
@@ -459,7 +571,7 @@ describe("Computer Use exact control contract", () => {
                 ok: true,
                 computer_id: "computer-1",
                 display_id: "display-1",
-                runtime_bundle_id: "bundle-1",
+                driver_version: "0.12.2",
               },
             },
           }),
@@ -469,7 +581,7 @@ describe("Computer Use exact control contract", () => {
             computer: {
               computerId: "computer-1",
               displayId: "display-1",
-              runtimeBundleId: "bundle-1",
+              driverVersion: "0.12.2",
             },
             mcp_tool_result: { is_error: false },
           },
@@ -589,226 +701,113 @@ describe("Computer Use exact control contract", () => {
   )
 })
 
-describe("Computer runtime bundle integrity contract", () => {
-  test("classifies a lost post-dispatch create response as an unknown effect outcome", async () => {
-    const workspace = computerRuntimeWorkspace("fault-injection:create-response-loss")
-    const stdin = new PassThrough()
-    const stdout = new PassThrough()
-    const stderr = new PassThrough()
-    let resolveExit!: (code: number) => void
-    const exited = new Promise<number>((resolve) => {
-      resolveExit = resolve
-    })
-    stdin.once("data", () => resolveExit(71))
-    const closeStreams = async () => {
-      stdin.destroy()
-      stdout.destroy()
-      stderr.destroy()
-      resolveExit(0)
+describe("embedded CUA Driver contract", () => {
+  test("packages the pinned CUA SDK and exact native libraries for Windows and macOS", () => {
+    expect(artifactRuntimeNodeModuleNames({ os: "win32", arch: "x64" })).toEqual(
+      expect.arrayContaining([
+        "@trycua/cua-driver",
+        "@trycua/cua-driver-win32-x64-msvc",
+        "@ubjs/node-win32-x64-msvc",
+      ]),
+    )
+    expect(artifactRuntimeNodeModuleNames({ os: "darwin", arch: "arm64" })).toEqual(
+      expect.arrayContaining([
+        "@trycua/cua-driver",
+        "@trycua/cua-driver-darwin-arm64",
+        "@ubjs/node-darwin-arm64",
+      ]),
+    )
+  })
+
+  test("maps one native desktop session and every Computer action through the typed SDK", async () => {
+    const calls: Array<{ operation: string; input: unknown }> = []
+    const ok = (operation: string, input: unknown): ToolResult => {
+      calls.push({ operation, input })
+      return { text: "ok", images: [], isError: false, degraded: false, rawJson: "{}" }
     }
-    const backend = new JsonLineComputerBackend({
-      manifestPath: "provisioned/computer-runtime.json",
-      workspace,
-      verifyRuntime: async () =>
-        ({
-          manifestPath: "provisioned/computer-runtime.json",
-          directory: "provisioned",
-          launcherPath: "provisioned/runtime.exe",
-          viewerPath: "provisioned/viewer.exe",
-          contentID: "f".repeat(64),
-          manifest: {
-            request_timeout_ms: 20_000,
-            protocol_version: 1,
-            bundle_id: "fault-injection-bundle",
-            launcher: { args: [] },
+    const driver = {
+      isAvailable: () => true,
+      metadata: async () => ({
+        driverVersion: "0.12.2",
+        contractVersion: "0.2.0",
+        toolsListSchemaVersion: "1",
+        capabilityVersion: "1",
+        mcpProtocolVersion: "2025-06-18",
+        pid: 42,
+        embedded: true,
+      }),
+      startSession: async (input: unknown) => {
+        calls.push({ operation: "startSession", input })
+        return {
+          active: true,
+          revived: false,
+          state: {
+            session: (input as { session: string }).session,
+            captureScope: 2,
+            effectiveScope: 1,
+            desktopUnlocked: true,
           },
-        }) as never,
-      spawnRuntime: async () => ({
-        pid: 71,
-        stdin,
-        stdout,
-        stderr,
-        exited,
-        terminate: closeStreams,
-        dispose: closeStreams,
-        unref() {},
-      }),
-    })
-    try {
-      await expect(backend.create()).rejects.toMatchObject({
-        code: "COMPUTER_OUTCOME_UNKNOWN",
-        details: { operation: "session_create" },
-      })
-    } finally {
-      await backend.close()
-    }
-  })
-
-  test("verifies the exhaustive self-contained bundle and resolves its absolute launcher", async () => {
-    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-computer-bundle-"))
-    temporaryDirectories.push(directory)
-    const files = [
-      "runtime.exe",
-      "adapter.js",
-      "python.exe",
-      "wheels.lock",
-      "qemu.exe",
-      "firmware.fd",
-      "guest.img",
-      "viewer.exe",
-      "sbom.spdx.json",
-      "licenses.json",
-      "provenance.json",
-      "attestation.json",
-    ]
-    const inventory = []
-    for (const [index, relativePath] of files.entries()) {
-      const content = Buffer.from(`computer-runtime-${index}`)
-      await fs.writeFile(path.join(directory, relativePath), content)
-      inventory.push({
-        path: relativePath,
-        sha256: createHash("sha256").update(content).digest("hex"),
-        bytes: content.byteLength,
-      })
-    }
-    const byPath = new Map(inventory.map((item) => [item.path, item]))
-    const manifestPath = path.join(directory, "computer-runtime.json")
-    await fs.writeFile(
-      manifestPath,
-      JSON.stringify({
-        schema_version: 1,
-        protocol_version: 1,
-        request_timeout_ms: 20_000,
-        bundle_id: "cua-windows-1",
-        bundle_version: "2026.08.06",
-        platform: { os: "win32", arch: "x64" },
-        upstream: {
-          repository: "https://github.com/trycua/cua",
-          commit: "bb8efbfe6caadbccba54221096d959607ed9f574",
-          computer_server_version: "0.3.42",
-        },
-        launcher: { path: "runtime.exe", sha256: byPath.get("runtime.exe")!.sha256, args: [] },
-        adapter: { path: "adapter.js", sha256: byPath.get("adapter.js")!.sha256, protocol: "jsonl-v1" },
-        python: { path: "python.exe", sha256: byPath.get("python.exe")!.sha256, version: "3.13.5" },
-        wheel_lock: { path: "wheels.lock", sha256: byPath.get("wheels.lock")!.sha256 },
-        hypervisor: {
-          path: "qemu.exe",
-          sha256: byPath.get("qemu.exe")!.sha256,
-          kind: "qemu",
-          version: "10.0.2",
-        },
-        firmware: { path: "firmware.fd", sha256: byPath.get("firmware.fd")!.sha256 },
-        guest_image: {
-          path: "guest.img",
-          sha256: byPath.get("guest.img")!.sha256,
-          identity: "windows-evaluation-image",
-        },
-        viewer: {
-          path: "viewer.exe",
-          sha256: byPath.get("viewer.exe")!.sha256,
-          protocol: "workspace-descriptor-v1",
-          descriptor: "viewer.json",
-        },
-        network: { control: "host-only", business: "guest-managed" },
-        sbom: { path: "sbom.spdx.json", sha256: byPath.get("sbom.spdx.json")!.sha256 },
-        licenses: { path: "licenses.json", sha256: byPath.get("licenses.json")!.sha256 },
-        provenance: { path: "provenance.json", sha256: byPath.get("provenance.json")!.sha256 },
-        attestation: { path: "attestation.json", sha256: byPath.get("attestation.json")!.sha256 },
-        files: inventory,
-      }),
-    )
-
-    const verified = await verifyComputerRuntimeBundle({ manifestPath, platform: "win32", arch: "x64" })
-    expect(verified.contentID).toMatch(/^[a-f0-9]{64}$/)
-    expect(verified).toMatchObject({
-      manifestPath,
-      directory,
-      launcherPath: path.join(directory, "runtime.exe"),
-      manifest: { schema_version: 1, bundle_id: "cua-windows-1", protocol_version: 1 },
-    })
-
-    const provisionRoot = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-computer-provisioned-"))
-    temporaryDirectories.push(provisionRoot)
-    const installed = await provisionComputerRuntimeBundle({
-      manifestPath,
-      destinationRoot: provisionRoot,
-      platform: "win32",
-      arch: "x64",
-    })
-    expect(installed).toMatchObject({
-      contentID: verified.contentID,
-      manifestPath: path.join(provisionRoot, verified.contentID, "computer-runtime.json"),
-      manifest: { bundle_id: "cua-windows-1", schema_version: 1 },
-    })
-    expect(
-      await verifyProvisionedComputerRuntimeBundle({
-        manifestPath: installed.manifestPath,
-        platform: "win32",
-        arch: "x64",
-      }),
-    ).toMatchObject({ contentID: verified.contentID, manifestPath: installed.manifestPath })
-
-    const firstConfig = ComputerMCPBuiltin.localConfig({
-      runtimeBundleManifest: installed.manifestPath,
-      runtimeScope: "conversation:session-one:computer",
-    })
-    const secondConfig = ComputerMCPBuiltin.localConfig({
-      runtimeBundleManifest: installed.manifestPath,
-      runtimeScope: "conversation:session-two:computer",
-    })
-    expect(firstConfig.environment).toMatchObject({
-      OPENCORVUS_COMPUTER_RUNTIME_MANIFEST: installed.manifestPath,
-    })
-    expect(firstConfig.environment!.OPENCORVUS_COMPUTER_WORKSPACE).toBe(
-      computerRuntimeWorkspace("conversation:session-one:computer"),
-    )
-    expect(secondConfig.environment!.OPENCORVUS_COMPUTER_WORKSPACE).toBe(
-      computerRuntimeWorkspace("conversation:session-two:computer"),
-    )
-    const adapterConfig = ComputerMCPBuiltin.withRuntimeScope(firstConfig, "conversation:session-one:computer", {
-      endpoint: "http://127.0.0.1:43123/computer/runtime",
-      authorization: "host-capability",
-      runtimeScope: "conversation:session-one:computer",
-    })
-    expect(adapterConfig.environment).toEqual({
-      OPENCORVUS_COMPUTER_HOST_ENDPOINT: "http://127.0.0.1:43123/computer/runtime",
-      OPENCORVUS_COMPUTER_HOST_AUTHORIZATION: "host-capability",
-      OPENCORVUS_COMPUTER_RUNTIME_SCOPE: "conversation:session-one:computer",
-    })
-
-    const workspaceDirectory = firstConfig.environment!.OPENCORVUS_COMPUTER_WORKSPACE
-    temporaryDirectories.push(workspaceDirectory)
-    await fs.mkdir(workspaceDirectory, { recursive: true })
-    await fs.writeFile(
-      path.join(workspaceDirectory, "viewer.json"),
-      JSON.stringify({
-        schema_version: 1,
-        computer_id: "computer-1",
-        display_id: "display-1",
-        args: ["--connect", "host-only-endpoint"],
-      }),
-    )
-    const viewer = await resolveComputerViewer({
-      manifestPath: installed.manifestPath,
-      runtimeScope: "conversation:session-one:computer",
-      computerId: "computer-1",
-      displayId: "display-1",
-    })
-    expect(viewer).toMatchObject({
-      workspaceDirectory,
-      descriptor: {
-        schema_version: 1,
-        computer_id: "computer-1",
-        display_id: "display-1",
-        args: ["--connect", "host-only-endpoint"],
+        }
       },
-      runtime: { viewerPath: path.join(installed.directory, "viewer.exe") },
+      getDesktopState: async (input: unknown) => {
+        calls.push({ operation: "getDesktopState", input })
+        return {
+          text: "desktop screenshot",
+          images: [{ mimeType: "image/png", dataBase64: pngBase64(12, 9) }],
+          structuredJson: JSON.stringify({
+            display: "primary",
+            platform: "windows",
+            screen_width: 12,
+            screen_height: 9,
+            screenshot_width: 12,
+            screenshot_height: 9,
+            screenshot_mime_type: "image/png",
+          }),
+          isError: false,
+          degraded: false,
+          rawJson: "{}",
+        }
+      },
+      click: async (input: unknown) => ok("click", input),
+      typeText: async (input: unknown) => ok("typeText", input),
+      pressKey: async (input: unknown) => ok("pressKey", input),
+      hotkey: async (input: unknown) => ok("hotkey", input),
+      scroll: async (input: unknown) => ok("scroll", input),
+      drag: async (input: unknown) => ok("drag", input),
+      endSession: async (input: unknown) => {
+        calls.push({ operation: "endSession", input })
+        return { session: (input as { session: string }).session, active: false }
+      },
+    } as unknown as CuaDriverLike
+    const backend = new CuaComputerBackend(driver)
+    const created = await backend.create()
+    expect(created).toMatchObject({ displayId: "primary", driverVersion: "0.12.2" })
+    expect(await backend.observe(created)).toMatchObject({
+      computerId: created.computerId,
+      displayId: "primary",
     })
-  })
-
-  test("returns the typed required-runtime contract for an unconfigured deployment", async () => {
-    await expect(verifyComputerRuntimeBundle({})).rejects.toMatchObject({
-      code: "COMPUTER_RUNTIME_REQUIRED",
-    })
+    expect(await backend.act({ kind: "click", ...created, x: 2, y: 3, button: "left" })).toMatchObject({ accepted: true })
+    expect(await backend.act({ kind: "type_text", ...created, text: "OpenCorvus" })).toMatchObject({ accepted: true })
+    expect(await backend.act({ kind: "keypress", ...created, keys: ["ENTER"] })).toMatchObject({ accepted: true })
+    expect(await backend.act({ kind: "keypress", ...created, keys: ["CTRL", "L"] })).toMatchObject({ accepted: true })
+    expect(
+      await backend.act({ kind: "scroll", ...created, x: 5, y: 6, direction: "down", amount: 3 }),
+    ).toMatchObject({ accepted: true })
+    expect(
+      await backend.act({ kind: "drag", ...created, from: { x: 1, y: 2 }, to: { x: 8, y: 7 }, durationMs: 500 }),
+    ).toMatchObject({ accepted: true })
+    expect(await backend.destroy({ computerId: created.computerId })).toEqual({ destroyed: true })
+    expect(calls.map((call) => call.operation)).toEqual([
+      "startSession",
+      "getDesktopState",
+      "getDesktopState",
+      "click",
+      "typeText",
+      "pressKey",
+      "hotkey",
+      "scroll",
+      "drag",
+      "endSession",
+    ])
   })
 })

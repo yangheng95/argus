@@ -1,7 +1,6 @@
 import { createResource, createSignal, Show } from "solid-js"
 import {
   getComputerOwnership,
-  openComputerViewer,
   returnComputerControl,
   takeOverComputer,
   type ComputerIdentity,
@@ -17,15 +16,15 @@ function message(error: unknown): string {
 export function ComputerControlSurface(props: ComputerIdentity) {
   const identity = () => ({ sessionID: props.sessionID, computerID: props.computerID, displayID: props.displayID })
   const [ownership, { mutate }] = createResource(identity, getComputerOwnership)
-  const [operation, setOperation] = createSignal<"viewer" | "takeover" | "return">()
+  const [operation, setOperation] = createSignal<"takeover" | "return">()
   const [operationError, setOperationError] = createSignal("")
 
-  async function run(kind: "viewer" | "takeover" | "return", action: () => Promise<ComputerOwnership | unknown>) {
+  async function run(kind: "takeover" | "return", action: () => Promise<ComputerOwnership>) {
     setOperation(kind)
     setOperationError("")
     try {
       const result = await action()
-      if (kind !== "viewer") mutate(result as ComputerOwnership)
+      mutate(result)
     } catch (error) {
       setOperationError(message(error))
     } finally {
@@ -56,16 +55,6 @@ export function ComputerControlSurface(props: ComputerIdentity) {
         </span>
       </div>
       <div class="computer-control-surface__actions">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          tone="neutral"
-          disabled={Boolean(operation()) || ownership.loading}
-          onClick={() => run("viewer", () => openComputerViewer(identity()))}
-        >
-          {operation() === "viewer" ? t("computer.control.opening") : t("computer.control.open_viewer")}
-        </Button>
         <Show
           when={ownership()?.ownership === "human"}
           fallback={

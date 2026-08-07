@@ -11,9 +11,9 @@
 - Coding / Chat 可用 `delegate_agent` 决定是否为当前交互请求创建一个 bounded local child session；它不具备 engine Task、Delivery Slice、expert-squad、worktree 或 lifecycle authority
 - Infrastructure 只执行，不决策，不自动 dispatch
 - 没有固定 pipeline，没有机械 retry，没有自动流转
-- Orchestrator 在新执行请求首次 domain dispatch 前建立一次可见的 verification-budget shared mental model：不可降低的 acceptance floor 始终执行；只有超出该底线、且 active package 确实可执行的 additional assurance 才询问 operator 是否投入额外时间与 Token。当前请求已明确偏好时不重复问，拒绝或 deadline expiry 采用 compact `required_only` 并继续。该询问属于 prompt-owned 元认知决策，不是 Host gate、状态字段或第二 workflow source
+- Orchestrator 在新执行请求首次 domain dispatch 前建立一次可见的 verification-budget shared mental model：已由 operator、repository contract 或 selected binding workflow 明确要求的 acceptance floor 不进入可选询问；只有超出该底线、且 active package 确实可执行的 optional testing / assurance 才询问 operator 是否投入额外时间与 Token。当前请求已明确偏好时不重复问；拒绝或 deadline expiry 与 `skip_optional_testing` 完全同义，该询问点名的测试、回归、fact checking 或 independent review 一律不 dispatch、不执行，只继续询问之外本已强制的 Task contract。该询问属于 prompt-owned 元认知决策，不是 Host gate、状态字段或第二 workflow source
 - Manifest v1 `capability_projection.virtual_workflows` 显式 `{}` 表示没有 binding workflow 的简单 direct-dispatch Squad。每个 graph 是 package-owned immutable scheduler contract；每个 node 在一个 Task 中只实例化一次。Orchestrator 在首次 domain dispatch 前追加一次可见 workflow-selection decision，绑定精确 package revision/digest 与真实 message/tool identity；它不是 active pointer 或 step state。Graph 不自动 dispatch、不取代 Orchestrator 的可见判断
-- 跨 squad 交付由 Mission 建立依赖阶段 Task：每个阶段 Task 显式设置且终身固定一个 `promptProfile`，只创建本 squad 的本地 Delivery Slices 并执行其 Task-level binding workflow；Mission 只在前置 Task terminal acceptance 后创建下一 Task
+- 跨 squad 交付由 Mission 先枚举完整输入 scope，再按 held Squad 的正向 catalog ownership 分区，任何 ownership 变化都自动形成独立阶段 Task；只有完成 scope-to-Squad 分区后，才允许在单一分区内部按 coherent delivery closure 合并。每个阶段 Task 显式设置且终身固定一个 `promptProfile`，只创建本 squad 的本地 Delivery Slices 并执行其 Task-level binding workflow；依赖阶段只在前置 Task terminal acceptance 后创建，互不依赖的不同 Squad 分区进入同一 ready frontier
 
 ### 2. Sub-agents 是真实 agent session，不是 tool function
 

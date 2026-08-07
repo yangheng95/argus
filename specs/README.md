@@ -1,5 +1,9 @@
 # Specs Storage Index
 
+Latest version changelog initialization from `0.0.35beta`: [`2026-08-07-version-changelog.md`](records/2026-08/2026-08-07-version-changelog.md).
+
+Latest Mission scope-first Expert Squad partitioning and optional-test consent semantics: [`2026-08-07-mission-scope-split-and-test-consent.md`](records/2026-08/2026-08-07-mission-scope-split-and-test-consent.md).
+
 Latest GitHub Actions native package matrix repair: [`2026-08-07-github-actions-native-package-matrix-repair.md`](records/2026-08/2026-08-07-github-actions-native-package-matrix-repair.md).
 
 Latest `v0.0.35beta` branch convergence and release-family bump: [`2026-08-07-v0.0.35beta-branch-bump.md`](records/2026-08/2026-08-07-v0.0.35beta-branch-bump.md).
@@ -48,11 +52,9 @@ Latest Expert Squad name-field contract: [`2026-08-06-expert-squad-name-field.md
 
 Latest Squad SDK Expert Squad design: [`2026-08-06-squad-sdk-expert-squad.md`](records/2026-08/2026-08-06-squad-sdk-expert-squad.md).
 
-Latest Computer Use VM runtime implementation plan: [`2026-08-06-computer-use-runtime-implementation-plan.md`](records/2026-08/2026-08-06-computer-use-runtime-implementation-plan.md).
 
 Latest cognition-aligned verification-budget scheduling research and implementation plan: [`2026-08-06-cognition-aligned-verification-budget-scheduling.md`](records/2026-08/2026-08-06-cognition-aligned-verification-budget-scheduling.md).
 
-Latest Computer Use VM runtime integration design: [`2026-08-06-computer-use-vm-runtime-integration-design.md`](records/2026-08/2026-08-06-computer-use-vm-runtime-integration-design.md).
 
 Latest Mission Board User Interface repair and permanent-delete plan: [`2026-08-06-mission-board-ui-repair-and-delete.md`](records/2026-08/2026-08-06-mission-board-ui-repair-and-delete.md).
 

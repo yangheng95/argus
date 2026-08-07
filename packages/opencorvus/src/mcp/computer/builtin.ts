@@ -1,5 +1,4 @@
 import path from "node:path"
-import { computerRuntimeWorkspace } from "./runtime-scope"
 
 export namespace ComputerMCPBuiltin {
   export const ServerName = "computer"
@@ -36,18 +35,10 @@ export namespace ComputerMCPBuiltin {
     runtime: {
       execPath?: string
       moduleDir?: string
-      runtimeBundleManifest?: string
-      runtimeScope?: string
       hostAdapter?: { endpoint: string; authorization: string; runtimeScope: string }
     } = {},
   ) {
     const environment = {
-      ...(!runtime.hostAdapter && runtime.runtimeBundleManifest
-        ? { OPENCORVUS_COMPUTER_RUNTIME_MANIFEST: runtime.runtimeBundleManifest }
-        : {}),
-      ...(!runtime.hostAdapter && runtime.runtimeScope
-        ? { OPENCORVUS_COMPUTER_WORKSPACE: computerRuntimeWorkspace(runtime.runtimeScope) }
-        : {}),
       ...(runtime.hostAdapter
         ? {
             OPENCORVUS_COMPUTER_HOST_ENDPOINT: runtime.hostAdapter.endpoint,
@@ -70,8 +61,6 @@ export namespace ComputerMCPBuiltin {
     hostAdapter: { endpoint: string; authorization: string; runtimeScope: string },
   ): T {
     const adapterEnvironment = { ...mcp.environment }
-    delete adapterEnvironment.OPENCORVUS_COMPUTER_RUNTIME_MANIFEST
-    delete adapterEnvironment.OPENCORVUS_COMPUTER_WORKSPACE
     return {
       ...mcp,
       environment: {

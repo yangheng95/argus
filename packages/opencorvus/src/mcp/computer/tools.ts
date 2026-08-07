@@ -35,7 +35,7 @@ const bindingSchema = {
 }
 
 const userAuthority =
-  "Stop before any irreversible external effect and leave the final confirmation or control to the user through the guest viewer."
+  "Stop before any irreversible external effect and leave the final confirmation or control to the user on the current desktop."
 
 function binding(input: {
   computer_id: string
@@ -63,7 +63,7 @@ export function createComputerMcpServer(options: { backend?: ComputerBackend } =
     "session_create",
     {
       description:
-        "Create one isolated Virtual Machine computer session from the configured self-contained runtime bundle. This never controls the host desktop. Human viewing and takeover remain in the authenticated native Computer surface and are not exposed to the model.",
+        "Establish this Agent run's OpenCorvus-owned CUA Driver session on the user's current desktop. On first use this creates the host-owned desktop session; after human takeover returns control, call this same visible tool to attach the new Agent run to the preserved session before observe. This creates logical Agent authority, not a Virtual Machine or a second desktop.",
       inputSchema: {},
     },
     async () =>
@@ -73,7 +73,7 @@ export function createComputerMcpServer(options: { backend?: ComputerBackend } =
           ok: true,
           computer_id: created.computerId,
           display_id: created.displayId,
-          runtime_bundle_id: created.bundleId,
+          driver_version: created.driverVersion,
         }
       }),
   )
@@ -82,7 +82,7 @@ export function createComputerMcpServer(options: { backend?: ComputerBackend } =
     "observe",
     {
       description:
-        "Capture the current guest display. Later input must repeat the exact returned computer, display, observation, and digest identities.",
+        "Capture the current desktop. A new Agent run after human takeover must first attach with session_create, then observe before any input. Later input must repeat the exact returned computer, display, observation, and digest identities.",
       inputSchema: {
         computer_id: z.string().min(1),
         display_id: z.string().min(1),
@@ -117,7 +117,7 @@ export function createComputerMcpServer(options: { backend?: ComputerBackend } =
   server.registerTool(
     "click",
     {
-      description: `Send exactly one click to the exact observed guest display. This does not observe or retry. ${userAuthority}`,
+      description: `Send exactly one click to the exact observed desktop. This does not observe or retry. ${userAuthority}`,
       inputSchema: {
         ...bindingSchema,
         x: z.number().int().nonnegative(),
@@ -140,7 +140,7 @@ export function createComputerMcpServer(options: { backend?: ComputerBackend } =
   server.registerTool(
     "type_text",
     {
-      description: `Type exact text into the guest display bound to the exact latest observation. This does not observe or retry. ${userAuthority}`,
+      description: `Type exact text into the desktop bound to the exact latest observation. This does not observe or retry. ${userAuthority}`,
       inputSchema: { ...bindingSchema, text: z.string().max(100_000) },
     },
     async (input) =>
@@ -153,7 +153,7 @@ export function createComputerMcpServer(options: { backend?: ComputerBackend } =
   server.registerTool(
     "keypress",
     {
-      description: `Send one explicit key chord to the exact observed guest display. This does not observe or retry. ${userAuthority}`,
+      description: `Send one explicit key chord to the exact observed desktop. This does not observe or retry. ${userAuthority}`,
       inputSchema: { ...bindingSchema, keys: z.array(z.string().min(1)).min(1).max(8) },
     },
     async (input) =>
@@ -166,11 +166,13 @@ export function createComputerMcpServer(options: { backend?: ComputerBackend } =
   server.registerTool(
     "scroll",
     {
-      description: `Send one scroll delta to the exact observed guest display. This does not observe or retry. ${userAuthority}`,
+      description: `Scroll once at an exact point on the observed desktop. This does not observe or retry. ${userAuthority}`,
       inputSchema: {
         ...bindingSchema,
-        delta_x: z.number().int(),
-        delta_y: z.number().int(),
+        x: z.number().int().nonnegative(),
+        y: z.number().int().nonnegative(),
+        direction: z.enum(["up", "down", "left", "right"]),
+        amount: z.number().int().min(1).max(100),
       },
     },
     async (input) =>
@@ -178,8 +180,10 @@ export function createComputerMcpServer(options: { backend?: ComputerBackend } =
         ok: true,
         ...(await controller.act(binding(input), {
           kind: "scroll",
-          deltaX: input.delta_x,
-          deltaY: input.delta_y,
+          x: input.x,
+          y: input.y,
+          direction: input.direction,
+          amount: input.amount,
         })),
       })),
   )
@@ -187,7 +191,7 @@ export function createComputerMcpServer(options: { backend?: ComputerBackend } =
   server.registerTool(
     "drag",
     {
-      description: `Send one bounded drag to the exact observed guest display. This does not observe or retry. ${userAuthority}`,
+      description: `Send one bounded drag to the exact observed desktop. This does not observe or retry. ${userAuthority}`,
       inputSchema: {
         ...bindingSchema,
         from_x: z.number().int().nonnegative(),
@@ -212,7 +216,8 @@ export function createComputerMcpServer(options: { backend?: ComputerBackend } =
   server.registerTool(
     "session_destroy",
     {
-      description: "Destroy the exact isolated Computer session and release its guest resources.",
+      description:
+        "End the exact CUA Driver desktop session. This does not disconnect the visible MCP adapter; the same Agent run may establish a new session later with session_create.",
       inputSchema: { computer_id: z.string().min(1) },
     },
     async ({ computer_id }) =>

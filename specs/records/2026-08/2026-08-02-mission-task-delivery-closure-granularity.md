@@ -1,5 +1,7 @@
 # Mission Task Delivery-Closure Granularity
 
+> Scope-partition ordering is superseded by [2026-08-07-mission-scope-split-and-test-consent.md](2026-08-07-mission-scope-split-and-test-consent.md): Mission first partitions the complete input by positive held-Squad ownership, then applies this delivery-closure granularity only inside each single-Squad partition.
+
 ## Recall
 
 | Field | Evidence |

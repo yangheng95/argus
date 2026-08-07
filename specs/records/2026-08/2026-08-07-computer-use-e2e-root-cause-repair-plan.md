@@ -1,222 +1,163 @@
 # Computer Use End-to-End Root-Cause Repair Plan
 
 Date: 2026-08-07
-Status: Phases 1–4 and host-owned viewer launch authority implemented; takeover/return, licensed Site Bundle, and real Windows Luna acceptance pending
+Status: Host-native correction and real Windows/Luna acceptance complete; commit and git-cc push pending
 Owner: Codex
 
 ## Recall
 
 ### User requirements
 
-- Thoroughly investigate why the requested `openai/gpt-5.6-luna` Computer Use test generated an Expert Squad instead of testing Computer Use, and provide the root-cause repair plan.
-- Keep Computer Use available in direct non-Mission Chat/Work interaction. Expert Squads may use it only when their active Harness explicitly projects the platform Computer tools; Computer Use itself is not an Expert Squad.
-- Make the integration self-contained, preserve correct permissions, and publish a backend end-to-end acceptance task only after the real runtime path is executable.
-- Have three independent Agents cross-review the design until they reach consensus.
+- Computer Use is an application capability for direct non-Mission Chat and Work, not an Expert Squad and not a deployment project.
+- A normal OpenCorvus user must not install, license, build, or maintain a Virtual Machine (VM), Windows image, hypervisor, viewer, daemon, or standalone driver to use Computer Use.
+- OpenCorvus must ship the mature desktop-control implementation it needs and control the user's current operating-system desktop through the native application.
+- The model-visible surface remains the exact eight Computer Model Context Protocol (MCP) tools: `session_create`, `observe`, `click`, `type_text`, `keypress`, `scroll`, `drag`, and `session_destroy`.
+- Human takeover stops Agent guest input without inventing a hidden tool, Browser WebView, file-polling control plane, synthetic message, second lifecycle source, fallback, gate, or state machine.
+- User Interface (UI) work is accepted only through the real Overlay, real interaction, screenshots, and human visual review. No UI automated test may be added, changed, or run.
+- Final acceptance uses `openai/gpt-5.6-luna` on the managed backend and retains durable Tool, Attachment, backend, and screenshot evidence.
 
-### Acceptance criteria
+### Product correction from the user
 
-1. A direct Work Session using `openai/gpt-5.6-luna` can discover the exact Computer MCP tools, create one isolated Windows Computer, observe it, perform observation-bound input, observe the result, and destroy it through visible Tool Parts.
-2. `capability_search` has one complete catalog owner for configured and projected MCP capabilities. Duplicate publishers fail closed instead of being merged.
-3. `tool` and `mcp_tool` remain distinct canonical kinds. A caller can search all executable capabilities through an exact owner-kind filter or by omitting kind, without a hidden alias or fallback.
-4. Each Conversation Session owns its own Computer connection and controller. No Computer process, observation authority, credential, or cleanup lifetime is shared merely because two Sessions both use Work.
-5. Every observation authorizes at most one action. The authority is consumed atomically before backend dispatch, and every subsequent action requires a new observation.
-6. Any dispatched side-effect operation whose response is lost returns `COMPUTER_OUTCOME_UNKNOWN`; it is never retried, replayed, or silently reconnected.
-7. Permission evaluation uses the exact eight Computer tool identifiers and the four canonical permissions. User/session `ask` and `deny` rules remain authoritative over the baseline allow policy.
-8. The application launches only one immutable, hash-verified, locally provisioned Virtual Machine (VM) bundle through a narrow no-retry adapter. It never selects cloud execution, a host-desktop driver, a system Python, a `PATH` executable, or a second runtime.
-9. Human takeover uses a host-owned authenticated native viewer surface. No viewer command, executable path, locator credential, or secret is emitted to the model or persisted in ordinary Tool output.
-10. Production acceptance requires a real licensed Windows guest, real Luna execution on the managed backend, visible screenshots, manual viewer/takeover review, and preserved backend evidence. Synthetic contracts are not end-to-end acceptance.
+- The previous plan incorrectly equated isolation with a user-provisioned Windows VM. That design made a basic product capability depend on an International Organization for Standardization (ISO) image, Virtual Hard Disk v2 (VHDX), QEMU, virt-viewer, a content-addressed Site Bundle, and deployment licensing work.
+- The user rejected that premise on 2026-08-07: users will not install a VM for Computer Use.
+- This is a root architecture correction, not a wording change. The VM runtime bundle, provisioning command, runtime manifest configuration, launcher protocol, native viewer process, and licensed-image acceptance boundary must be removed from the current product path.
+- Commit `1a4ac332a5` preserved useful adapter/run separation but embedded the wrong VM lifetime and viewer assumptions. It is not reverted wholesale; the valid catalog, permission, observation, error, and run-authority work is retained while the runtime implementation is replaced directly.
 
-### Hard constraints
+### Current repository and remote state
 
-- No fallback, compatibility alias, generic duplicate-source merger, process retry, action replay, host-side workflow gate, state machine, hidden message, or second capability authority.
-- No Browser WebView, query override, temporary inline frame, or host desktop as the Computer runtime or viewer.
-- No User Interface (UI) automated tests or automated visual assertions. UI acceptance is real-page interaction, screenshots, and personal visual review.
-- No negative tests. Tests assert complete current outputs, exact typed errors, and positive data/permission/lifecycle contracts.
-- No redistribution of a derived Windows image unless the deployment has explicit licensing rights.
+- Work continues only in the user-authorized isolated worktree `D:\myhexin-local\opencorvus\.scratch\computer-lifecycle-e2e`.
+- The original checkout contains unrelated work and remains outside this task.
+- The continuation worktree was clean before correction and moved from `1a4ac332a5` to current git-cc `v0.0.33beta` commit `4e603b7a705a8c0add768f57ad242fba073f5f5e`; the latter contains the former plus unrelated already-pushed commits.
+- The first refresh attempt hit a transient git-cc TLS handshake failure; the already-current remote-tracking ref was used only after the clean-tree evidence was recorded. Remote freshness must be rechecked before the next push.
 
-### Material read and evidence inspected
+### Material read
 
-- `specs/records/2026-08/2026-08-06-computer-use-vm-runtime-integration-design.md`
-- `specs/records/2026-08/2026-08-06-computer-use-runtime-implementation-plan.md`
-- `specs/current/architecture/04-extensions.md`, `05-config.md`, and `99-principles.md`
-- capability catalog, fuzzy search, Conversation capability, Computer controller/backend/bundle verifier, permission binding, MCP materialization, and Session loop implementation and tests
-- durable Session and Tool-Part evidence from the incorrect Squad generation and the first direct Luna Work run
-- an isolated source-backend diagnostic run with an ephemeral database
-- pinned upstream CUA source at commit `bb8efbfe6caadbccba54221096d959607ed9f574`, its Sandbox and Computer server metadata, transport behavior, and current official local-image guidance
-- Microsoft Windows 11 licensing and evaluation distribution guidance
+- This plan's previous Recall and implementation record.
+- `specs/records/2026-08/2026-08-06-computer-use-vm-runtime-integration-design.md` and `2026-08-06-computer-use-runtime-implementation-plan.md` as the superseded VM premise.
+- `specs/current/architecture/04-extensions.md`, `05-config.md`, and `99-principles.md`.
+- Current Computer catalog/search, permission, controller, backend, host authority, viewer route, Overlay control surface, OpenAPI, Software Development Kit (SDK), configuration, command, and contract-test paths.
+- CUA Driver official process model, SDK integration, interface contracts, Windows platform support, MCP tool reference, release assets, and MIT license.
 
 ### Whole-repository search result
 
-Repository-wide searches covered `capability_search`, `CapabilityKind`, `mcp-config`, `runtimeSnapshot`, MCP connection owners, `latestObservation`, action dispatch, `COMPUTER_OUTCOME_UNKNOWN`, permission lookup, viewer output, bundle manifest verification, CUA launch, Computer assignments, and Expert Squad projection. They established that the failure spans four ownership boundaries rather than one fuzzy-scoring defect: catalog publication, prompt/schema search semantics, Session-scoped execution authority, and deployable runtime closure.
+Repository-wide searches covered CUA, `runtime_bundle_manifest`, `JsonLineComputerBackend`, `ComputerHostRuntime`, runtime bundle verification/provisioning, viewer routes, generated SDK/docs, and the Computer contract suite. They establish that the VM premise currently spans configuration, documentation, command-line interface, backend process ownership, host routes, Overlay actions, generated APIs, and tests. A correct repair must replace that complete slice and delete the old path rather than add a host-native fallback.
 
-### Independent Agent feedback and consensus
+### Independent Agent feedback
 
-Architecture, adversarial, and ecosystem reviewers independently reviewed the same evidence and then cross-reviewed the combined proposal. All three conditionally accepted one repair direction. Their common conditions are: remove generic source consolidation; publish MCP catalog data once; keep `tool` and `mcp_tool` exact; add cross-kind callable search metadata; derive coherent availability from effective assignment; scope Computer ownership to the Conversation Session; consume observations atomically; classify lost create/input/destroy responses as unknown outcomes; remove model-visible viewer commands; use a pinned local no-retry VM bundle; and require a real Luna/Windows/manual-visual acceptance run. No reviewer retained a competing architecture.
+The earlier three-Agent review accepted a VM design because every reviewer inherited the same false product premise. Their conclusions remain useful for catalog single-source publication, canonical `tool`/`mcp_tool` kinds, exact permissions, Session-scoped adapter authority, atomic observation consumption, and unknown side-effect outcomes. Their VM bundle and separate viewer conclusions are superseded by the explicit user correction and current CUA Driver SDK evidence. No new sub-Agent was requested for this continuation.
 
-### Continuation Recall — takeover/return and final acceptance
+## Evidence and causal chain
 
-- The 2026-08-07 continuation starts from exact commit `9bd2c03408a650e34acff61aba082a7a38ae3d1c`; a fresh `git fetch git-cc v0.0.33beta` confirmed the remote still points to that commit before new edits.
-- The original `D:\myhexin-local\opencorvus` checkout contains unrelated Zapier MCP, config, Overlay, test, and spec changes. They are outside this task and remain untouched. Implementation continues only in the user-authorized detached worktree `D:\myhexin-local\opencorvus\.scratch\computer-lifecycle-e2e`.
-- The remaining lifecycle failure is now proven by the complete close chain: `ConversationCapability.disposeRuntimeMcp()` closes the Session `ScopedConnectionOwner`; `MCP.createScopedConnectionOwner().close()` closes the stdio MCP connection and process; `ComputerMCP.serveStdio()` calls `ComputerController.close()`; `ComputerController.close()` calls `JsonLineComputerBackend.close()`; and backend cleanup terminates the provisioned launcher and removes the host-owned workspace. Closing only one call in that chain would leave an orphan process and is not an acceptable repair.
-- Repository-wide continuation searches covered every `runtimeMcpTools`, `runtimeMcpOwnerIdentity`, `disposeRuntimeMcp`, `ComputerMCPBuiltin.withRuntimeScope`, Computer controller/backend close, Computer viewer route, Session deletion cleanup, Orchestrator/Worker scoped owner, generated OpenAPI/SDK surface, Overlay native surface bridge, and Tauri command registration call point.
-- The selected continuation architecture keeps one host runtime authority per exact Computer runtime scope. The host authority owns the verified launcher, VM identity, workspace, viewer descriptor, and terminal destruction. A scoped MCP adapter receives only one revocable run capability over authenticated loopback IPC (Inter-Process Communication); adapter disconnect or takeover revokes that run without destroying the VM. Return issues a new run capability, creates a new MCP owner/adapter, and has no reusable observation record. This adds no model-visible tool, message, Browser surface, file polling, runtime fallback, or second lifecycle owner.
-- Native takeover/return remains a dedicated Computer UI surface backed by host routes. Its UI is accepted only through a real Overlay launch, manual interaction, screenshots, and personal visual review; no UI test, fixture, screenshot baseline, or automated visual assertion may be created, modified, or run.
-- No new independent Agent was requested for this continuation. The prior three-Agent consensus remains the applicable architecture review input; the final implementation still requires an independent second code review before commit.
-- Final acceptance remains unchanged: a licensed, content-addressed, provisioned Windows Site Bundle must exist before the real `openai/gpt-5.6-luna` boot → observe → input → observe → viewer → takeover → return → destroy run and concurrent second-Session isolation run can be called complete. Absence of that licensed artifact is a truthful external blocker, not authorization for a synthetic substitute.
+1. The first direct Luna run proved the eight Computer tools can be projected but failed with `COMPUTER_RUNTIME_REQUIRED` because the repository required an external runtime bundle.
+2. The subsequent implementation made that external deployment artifact stricter and safer, but did not question whether a normal user should possess one.
+3. The missing ISO/QEMU/viewer audit was therefore not an incidental environment blocker. It exposed the product-design error: OpenCorvus had made its default Computer capability depend on a separately assembled guest operating system.
+4. CUA Driver's official application SDK provides the missing mature abstraction directly. TypeScript applications import `@trycua/cua-driver`; `CuaDriver.create()` loads the Rust implementation in the application process with no daemon, executable, or inter-process communication. Windows support uses Win32, UI Automation (UIA), native input, targeted window messages, and real desktop capture.
+5. Therefore the correct single source is one application-lifetime in-process CUA Driver owned by the OpenCorvus host. The existing OpenCorvus eight-tool surface remains the narrow Agent contract; it delegates to the typed SDK instead of implementing desktop automation or launching a VM.
 
-## Observed evidence
+## Correct architecture
 
-| Observation                                                                                                             | Direct evidence                                                                                                                                          | Meaning                                                                                                                                                                                                   |
-| ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The first task authored `Author Computer Harness E2E Squad` and ran `squad-sdk`.                                        | Durable Task `tsk_fd9c2707c0017XOZ57GMv9UD5a`; the task was cancelled.                                                                                   | The dispatch input changed the requested direct Computer test into package authoring before Luna could exercise Computer Use. This is a caller/dispatch error, not a reason to model Computer as a Squad. |
-| The first correct direct Work run mounted all eight Computer provider tools.                                            | Durable Session `ses_02634624affeg6EJ3gUpP5yqcm`, model `openai/gpt-5.6-luna`.                                                                           | Direct non-Mission projection exists and is the right execution surface.                                                                                                                                  |
-| Luna's first discovery call failed before returning a catalog.                                                          | `capability_search` used `query: "computer use virtual desktop"`, `kinds: ["tool"]`; result: `Capability catalog contains duplicate owner "mcp-config".` | Two `mcp-config` fragments violate the catalog's unique-owner contract.                                                                                                                                   |
-| After temporary generic source consolidation, catalog creation succeeded but filtered discovery still omitted Computer. | Isolated Session `ses_0262a3a55ffeuq1jTiHFp7bLsV`; the harness had all eight Computer MCP refs, while results under `kinds:["tool"]` omitted them.       | Computer entries are canonically `mcp_tool`; exact kind filtering happens before fuzzy scoring. Generic merging masks one defect but does not fix search semantics.                                       |
-| Luna could still call the already-mounted tool, then received `COMPUTER_RUNTIME_REQUIRED`.                              | The same isolated run called `computer_session_create`; config had no runtime bundle manifest.                                                           | Tool mounting is not a real runtime acceptance. The deployable VM closure is absent.                                                                                                                      |
-| Targeted control-plane tests passed.                                                                                    | 11 tests passed across catalog, fuzzy search, and Computer MCP contract.                                                                                 | Existing tests do not traverse the real Conversation catalog publisher, real Luna call, real VM, viewer, or visual path; they are necessary but insufficient.                                             |
+### 1. One application-owned native driver
 
-The isolated Session used an ephemeral database and runtime directory that were removed. It is diagnostic evidence only and must not be represented as durable production acceptance.
+- Add one exact, pinned `@trycua/cua-driver` dependency with its target-native package and declared MIT / Mozilla Public License 2.0 (MPL-2.0) provenance included in normal OpenCorvus packaging.
+- Create one host-owned `CuaDriver` instance for the OpenCorvus application lifetime using `CuaDriver.create()`.
+- Do not require or discover a `PATH` executable, system Python, daemon, socket, VM, cloud sandbox, installer, or user-provisioned artifact.
+- Use only the same-process typed Software Development Kit (SDK) constructor; do not invoke the daemon compatibility, installer, or updater surfaces. OpenCorvus remains the lifecycle and dependency-update authority.
+- Shutdown the driver through its typed `shutdown()` and binding-destruction contract during application disposal.
 
-## Causal chain
+### 2. Session-scoped Agent authority over the current desktop
 
-1. The initial backend task was authored as an Expert Squad generation request, so the scheduler correctly selected `squad-sdk` and never reached the intended Computer execution path.
-2. The corrected direct Work request reached Luna with the Computer tools mounted, but catalog construction aborted because `runtimeSnapshot()` published two sources with the same `mcp-config` owner.
-3. Generic fragment consolidation removed the immediate exception while weakening the catalog invariant. Luna's explicit `kinds:["tool"]` then filtered out canonical `mcp_tool` entries before fuzzy scoring.
-4. The mounted Computer tool bypassed the failed discovery only because it was already in the provider pool; actual creation then failed because no complete runtime bundle was configured.
-5. Even with a bundle, current ownership, observation consumption, outcome classification, and viewer output would not yet satisfy isolation, exactly-once intent, or credential-boundary acceptance.
+- `computer_session_create` starts one CUA Driver desktop-capture session using the exact OpenCorvus runtime scope and returns a public host-computer identity plus the real display identity.
+- Each OpenCorvus Conversation/Orchestrator/Worker runtime scope gets a distinct CUA session and observation cache while all sessions correctly refer to the same physical host desktop.
+- The product no longer promises process, credential, or visual isolation between two Computer sessions. Concurrent Sessions are distinct authorities over one real desktop, not distinct machines.
+- The host issues one revocable OpenCorvus adapter capability per Agent run. Adapter disconnect does not end the CUA session. Explicit `session_destroy` or owner disposal ends the exact CUA session.
 
-Therefore the surface symptom “fuzzy search cannot find the harness” is not the root cause. The correct repair must close all four layers in order: dispatch meaning, catalog/search authority, Session execution semantics, and self-contained runtime/viewer delivery.
+### 3. Observation and action mapping
 
-## Root-cause repairs
+- `observe` calls the typed desktop-state SDK operation and materializes its real Portable Network Graphics (PNG) image as the canonical Attachment.
+- Preserve the existing immutable observation identifier, digest, dimensions, exact display binding, and synchronous single-use consumption before input dispatch.
+- Map click, text, keypress, scroll, and drag to the closest typed CUA SDK inputs. Use desktop scope for the current eight-tool coordinate contract; do not reimplement Win32 input or screenshot code.
+- Each effect is dispatched once. A lost response remains `COMPUTER_OUTCOME_UNKNOWN`; there is no retry, replay, reconnect, or alternative backend.
 
-### 1. Restore a single MCP catalog publisher
+### 4. Human takeover on the actual desktop
 
-Delete `consolidateCapabilityCatalogSources()`. `createCapabilityCatalogSnapshot()` continues to reject duplicate owners. In the native Conversation path, one `mcp-config` publisher constructs one complete entry array containing configured MCP server entries plus the exact MCP tool entries visible through the active runtime projection, then calls `source()` once.
+- The current desktop is already the native human view; delete the separate viewer process, viewer descriptor, viewer credentials, and Open viewer action.
+- The Overlay surface shows exact desktop/display identity and whether Agent input is enabled.
+- Takeover revokes the current Agent run and disconnects its MCP adapter. The physical desktop remains untouched and immediately belongs to the user.
+- Return issues a distinct Agent run capability. The new adapter/controller explicitly calls the same visible `session_create` tool to attach to the preserved host session, then calls `observe` before any effect.
+- OpenCorvus does not synthesize a message or secretly resume an LLM turn. Return makes the capability available to the next real model continuation.
 
-The publisher derives both server and tool availability from the same effective fact: global configuration plus explicit Chat/Work assignment or active Harness projection. An explicitly assigned disabled-by-default Computer server and its tools must not appear simultaneously as `denied` and `visible`.
+### 5. Remove the superseded VM path
 
-### 2. Make cross-kind executable discovery explicit
+- Delete `computer.runtime_bundle_manifest` from configuration, schemas, OpenAPI, SDK, and docs.
+- Delete the runtime bundle verifier/provisioner, `computer-runtime` command, launcher protocol, JSON-line VM backend, runtime workspace/descriptor, viewer resolver/launcher, and their obsolete non-UI tests.
+- Delete the VM-specific native viewer route and generated client surface.
+- Replace the previous host runtime implementation in place; do not retain a runtime selector, compatibility alias, manifest v1/v2 identity, or fallback.
+- Update current architecture and historical task records so there is one current runtime truth. The older dated VM documents must be deleted or rewritten according to their current authority; no parallel active design may remain.
 
-Preserve the canonical kinds `tool` and `mcp_tool`. Improve the `CapabilitySearchInput` schema and tool description so the model is told that `tool` means a platform tool, `mcp_tool` means an MCP executable, and omitting `kinds` searches across kinds.
+## Acceptance criteria
 
-Add the orthogonal exact filter `next_owner_kinds`, including `call_tool`, so a model can request every executable capability without guessing storage kind. The expected Luna discovery call is a fuzzy query plus `next_owner_kinds:["call_tool"]`, or the same query with no `kinds`. This is catalog metadata, not a hidden expansion or workflow gate.
-
-### 3. Scope execution ownership to Conversation Session
-
-Replace the Computer MCP owner keyed only by Chat/Work Agent identity with an exact Conversation Session owner such as `conversation:<sessionID>:computer`. Pass that identity through `runtimeMcpTools` and connection acquisition.
-
-Turns in the same Session reuse the same owner. Different Sessions receive distinct controller, backend process, Computer map, observation authority, and viewer registration. Session termination, explicit destroy, or takeover closes the exact owner and exposes cleanup failure as a typed visible result. A Session never silently changes runtime bundle after creation.
-
-### 4. Make an observation an atomic single-use capability
-
-Replace mutable `latestObservation` reuse with an immutable observation record keyed by Computer, display, observation identifier, digest, and dimensions. Validate the full identity and bounds, then synchronously remove the record before the first asynchronous backend call.
-
-Success, backend-declared failure, transport loss, cancellation, and unknown outcome all consume the observation. Concurrent actions cannot both authorize against the same record. A new `observe` is required before every subsequent action.
-
-### 5. Classify every side-effectful transport loss correctly
-
-Replace the boolean `inputAction` distinction with operation-effect metadata: `read` for observe and `effect` for create, input, and destroy. If an effect request was dispatched and its response is lost through timeout, pipe failure, or process exit, return `COMPUTER_OUTCOME_UNKNOWN`. Pre-dispatch bundle validation remains a precise `REQUIRED`, `INVALID`, or launcher error.
-
-The private adapter sends each effect once. It disables upstream runtime auto-selection, cloud/fleet routing, updater, telemetry, HTTP retry, reconnect replay, and generic transport fallback. Cleanup helpers may not swallow errors.
-
-### 6. Tighten permission identity without adding a gate
-
-Replace `startsWith("computer_")` with the exact set of eight runtime tool identifiers. Map them to `computer.session.create`, `computer.observe`, `computer.input`, and `computer.session.destroy`. Preserve the existing ordered permission evaluation in which later explicit user/session `ask` or `deny` rules override baseline allow.
-
-Projected Expert Squad calls retain the same canonical Computer permission identity as direct Work calls. Harness projection grants visibility only; it does not grant permission or create a second execution path.
-
-### 7. Separate model output from human viewer authority
-
-Remove `viewer_command` and local executable paths from `session_create`. Return only canonical Computer/display identity and, if required by the native UI, a non-secret opaque `viewer_ref`.
-
-A host-owned authenticated viewer registry resolves the actual locator and credentials by Conversation Session and Computer identity. The native Computer surface owns display and takeover; the Browser remains unrelated. During takeover the Agent connection is closed and no screenshot, attachment, or Large Language Model (LLM) input is produced. Returning control starts a new owner/run and begins with a new observation.
-
-### 8. Deliver a real self-contained runtime in two licensed layers
-
-OpenCorvus publishes a pinned Runtime Bundle Builder and verifier, not a redistributable Windows guest. The builder locks the upstream commit, adapter source, Python interpreter, wheel hashes, hypervisor, firmware, viewer, guest preparation recipe, network topology, Software Bill of Materials (SBOM), license inventory, build provenance, and signature/attestation inputs.
-
-Each deployment builds a local Site Bundle from an authorized Windows International Organization for Standardization (ISO) image or Virtual Hard Disk v2 (VHDX). The final manifest exhaustively inventories every regular file by relative path, length, and SHA-256 (Secure Hash Algorithm 256-bit) digest; rejects symlinks, hard-link ambiguity, path escape, undeclared files, and mutable external dependencies; and identifies one fixed launcher and guest image. Provisioning verifies the bundle into an immutable content-addressed location before assignment. Bundle/session temporary files live under the bundle-managed runtime area rather than ambient host `TEMP`/`TMP`.
-
-The VM has one host-only control channel distinct from its business network. Direct host CUA Driver execution is prohibited. Missing or invalid bundle configuration leaves Computer unavailable with a typed error; that is fail-closed deployment state, not a fallback.
-
-## Implementation sequence
-
-### Phase 0: preserve truthful evidence
-
-- Keep the incorrect Squad task cancelled and label it as dispatch evidence, not Computer acceptance.
-- Preserve the durable direct Luna failure Tool Part and record that the ephemeral isolated run was diagnostic only.
-- Do not publish another backend acceptance task until Phases 1–4 provide an executable real runtime path.
-
-### Phase 1: catalog and search contract
-
-- Remove generic consolidation and create the single `mcp-config` publisher.
-- Make availability coherent for disabled-by-default explicit assignment and Harness projection.
-- Add `next_owner_kinds` and update search schema guidance.
-- Replace synthetic `kind:"tool"` Computer fixtures with canonical `mcp_tool` entries and exercise the real Conversation snapshot/search path.
-
-### Phase 2: Session ownership and lifecycle
-
-- Introduce exact Session-scoped Computer owners and deterministic lifecycle cleanup.
-- Bind controller, backend, observations, and viewer registry to that owner.
-- Preserve one owner across turns in the same Session and require a new owner after takeover or terminal cleanup.
-
-### Phase 3: action, outcome, and permission integrity
-
-- Implement atomic single-use observations.
-- Introduce read/effect transport metadata and unknown-outcome classification.
-- Use the exact tool identifier set and prove permission precedence with complete positive outputs.
-
-### Phase 4: builder, Site Bundle, and launcher
-
-- Implement the pinned builder recipe, dependency locks, exhaustive manifest, content-addressed provisioning, SBOM/license/provenance output, and narrow private launcher.
-- Build one licensed local Windows Site Bundle and qualify boot, screen capture, input, teardown, network separation, no-retry behavior, and cleanup reporting.
-
-### Phase 5: native viewer and takeover
-
-- Implement the host-owned authenticated viewer registry and dedicated native Computer surface.
-- Remove model-visible commands and secrets.
-- Manually exercise viewer open/close, takeover, return, focus/keyboard path, resize/display identity, and failure presentation; inspect and retain screenshots without creating UI test files or baselines.
-
-### Phase 6: managed-backend Luna acceptance
-
-- Assign Computer explicitly to a direct Work Session using `openai/gpt-5.6-luna`.
-- Verify one coherent catalog snapshot and fuzzy discovery through `next_owner_kinds:["call_tool"]`.
-- Run create → observe → one action → observe → destroy against the real Windows VM and preserve every visible Tool Part and Attachment.
-- Inject post-dispatch transport loss separately for create, input, and destroy and verify typed unknown outcomes with no retry.
-- Run a second independent Session concurrently and prove distinct runtime/controller/viewer ownership through positive owner and lifecycle facts.
-- Publish the backend end-to-end acceptance task only after the complete sequence succeeds, then perform a separate human visual review of the native viewer evidence.
+1. A clean packaged OpenCorvus install needs no Computer-specific user installation or VM asset.
+2. The exact eight model-visible Computer tools remain discoverable in direct Work and explicit Expert Squad projections with canonical permissions.
+3. `session_create` starts a CUA desktop session against the current Windows interactive desktop and returns exact host/display identity.
+4. `observe` produces a real current-desktop screenshot Attachment; one observation authorizes at most one action.
+5. A real action changes the intended desktop target once, and the next real observation proves the effect.
+6. Takeover stops further Agent input while leaving the desktop and application alive; return creates a distinct run capability and requires a fresh observation.
+7. Explicit destroy and Session disposal end the exact CUA session without shutting down the application-wide driver while other sessions remain.
+8. A second Session has a distinct CUA/OpenCorvus session identity and controller on the same host desktop; the evidence must describe shared physical-desktop semantics honestly rather than claiming VM isolation.
+9. The real Overlay surface is launched, interacted with, screenshotted, and visually reviewed. No UI automated test or baseline exists.
+10. `openai/gpt-5.6-luna` completes create -> observe -> input -> observe -> takeover -> return -> observe -> destroy through visible Tool Parts, with durable Tool, Attachment, backend, and screenshot evidence.
 
 ## Positive non-UI verification
 
-- Real Conversation catalog output equals the complete configured/projected MCP entry set under one `mcp-config` source.
-- Cross-kind `call_tool` search returns all eight exact Computer MCP entries with stable identities and availability.
-- Explicit direct assignment and exact Harness projection each produce the same canonical Computer tool and permission identities.
-- Two Conversation Sessions produce two distinct owners; multiple turns in one Session report the same owner.
-- One observation plus one action produces one backend effect result and a consumed observation record; a second action returns the canonical typed stale/consumed result.
-- Concurrent submissions against one observation produce one effect result and one typed consumed result.
-- Lost dispatched create, input, and destroy operations each produce `COMPUTER_OUTCOME_UNKNOWN` carrying the canonical request and Computer identity.
-- Permission scenarios assert the complete selected rule and resulting `allow`, `ask`, or `deny` decision for each of the four permission classes.
-- Bundle verification returns the exact exhaustive file inventory, verified content identity, launcher identity, guest identity, SBOM, license, and provenance facts.
+- Dependency/package validation proves the pinned root and native CUA Driver packages are present in the packaged dependency closure.
+- Host runtime tests use the typed SDK boundary and assert complete session/action/lifecycle outputs; they do not mock or claim real desktop acceptance.
+- The complete environment projected to the MCP child contains only the authenticated host endpoint, run capability, and exact runtime scope.
+- The focused Computer contract proves exact eight-tool publication, permission identity, distinct run capabilities, fresh observation after return, and exact CUA session termination.
+- Repository typecheck, API route checker, docs checker, and relevant package builds pass.
+- No UI automated test path is created, changed, or executed.
 
-The focused Computer contract suite currently reports 12 passing tests and 49 assertions. It includes a post-dispatch launcher-loss fault injection proving that `session_create` returns `COMPUTER_OUTCOME_UNKNOWN`; it remains a control-plane baseline and does not satisfy the real Luna/Windows/viewer acceptance boundary.
+## Real acceptance sequence
 
-## Release and acceptance boundary
+1. Build/package the native CUA SDK with OpenCorvus on Windows.
+2. Start an isolated real OpenCorvus backend/Overlay without touching another running owner.
+3. Use direct Work with `openai/gpt-5.6-luna`; discover and call the eight Computer tools naturally.
+4. Observe the current desktop, perform one reversible action in a dedicated real application, and observe the proven result.
+5. Open the persisted Computer Tool Part in the real Overlay, take over, interact physically, return control, and require Luna to observe again.
+6. Destroy the Computer session, then run a second exact Session to prove separate logical ownership on the shared desktop.
+7. Retain screenshots and durable Tool/Attachment/backend evidence, perform a separate manual code/visual review, commit with the `dsw-33987` prefix, and push to git-cc without bypassing hooks.
 
-The current implementation is **not accepted end to end**. It has demonstrated direct tool projection and typed missing-runtime failure, but it has not demonstrated a real Windows boot, screen observation, action effect, native viewer, takeover, Session isolation, or no-retry unknown-outcome behavior on the managed backend.
+## Release boundary
 
-Release requires all six phases, a locally licensed Site Bundle, durable Tool/Attachment evidence from the real Luna Session, fault-injection evidence, and manual visual approval. Until then, Computer remains disabled by default and must fail closed when its single configured bundle is absent or invalid.
+The current `1a4ac332a5` VM-based runtime implementation is not accepted as the final Computer Use product. Catalog/search, permission, observation, and adapter-run repairs may remain, but runtime bundle, VM launcher, viewer, and licensed-image requirements must be removed and replaced by the in-process native CUA Driver before real E2E acceptance.
 
-## Implementation progress — 2026-08-07
+## Implementation progress
 
-- Phase 1 replaced generic catalog source consolidation with one Conversation `mcp-config` publisher, coherent explicit-assignment availability, exact `tool`/`mcp_tool` semantics, and `next_owner_kinds:["call_tool"]` discovery.
-- Phase 2 replaced Chat/Work-global Computer owners with exact Conversation Session owners and connected physical Session deletion to exact owner cleanup.
-- Phase 3 made observations atomically single-use, classified create/input/destroy as effect operations, removed model-visible viewer commands, and restricted permission identity to the exact eight Computer tools while preserving explicit `ask`/`deny` precedence.
-- Phase 4 strengthened the still-unreleased manifest v1 in place with exhaustive streamed hashing, symbolic/hard-link rejection, OpenCorvus-managed runtime workspaces, content-addressed provisioning, and the `computer-runtime verify|provision` command. No v2 identity exists before real Windows/Luna acceptance. Runtime execution now accepts only a provisioned bundle.
-- The focused Computer positive non-UI contract suite passes 13 tests with 59 assertions. It includes typed unknown-outcome evidence after a dispatched create loses its response and an exact lifecycle contract proving one guest creation, takeover without destruction, a distinct returned run capability, a fresh second observation, and one terminal guest destruction. OpenCorvus and Overlay TypeScript validation pass.
-- Phase 5 now separates the host-owned guest lifetime from each scoped Model Context Protocol (MCP) adapter lifetime. The host authority exclusively owns the launcher, Virtual Machine (VM), workspace, verified viewer identity, and terminal destruction. Takeover revokes the active adapter capability and disconnects its connection owner while preserving the VM; return issues a distinct run capability, and the replacement adapter starts without reusable observation authority. The MCP child receives only the authenticated host endpoint, run capability, and runtime scope; manifest and workspace paths remain host-only.
-- The native Overlay Computer control surface is bound to canonical persisted `computer_session_create` metadata and exact Session/computer/display identity. It exposes host-backed status, verified native viewer launch, takeover, and return actions without adding a ninth model tool, Browser WebView, file polling, UI-only lifecycle state, or a second authority. Generated OpenAPI, Software Development Kit (SDK), and API documentation include the three ownership routes.
-- Manual Phase 5 visual acceptance remains unachieved because a successful real Computer Tool Part cannot exist without a running licensed VM. No UI automated test was added, modified, or run, and no fixture or synthetic page was used to imitate the missing runtime.
-- The 2026-08-07 asset audit found no `computer-runtime.json`, International Organization for Standardization (ISO) image, Virtual Hard Disk v2 (VHDX), or QEMU Copy-On-Write version 2 (QCOW2) image under `D:\myhexin-local`, Downloads, or Documents. `qemu-system-x86_64`, `qemu-img`, `virt-viewer`, and `remote-viewer` are absent from `PATH`, and no runtime manifest is configured in the continuation environment. Microsoft offers a registered 90-day Windows Enterprise evaluation, but registration/license acceptance and authorized image acquisition are deployment-owner actions; they were not silently performed.
-- Phase 6 therefore remains truthfully blocked by the absent licensed, provisioned Windows Site Bundle and local runtime/viewer toolchain. The real `openai/gpt-5.6-luna` direct Work sequence, concurrent second-Session isolation, durable Tool/Attachment/backend evidence, native screenshots, and human visual approval are not accepted. No synthetic run is accepted as a substitute.
-- The post-implementation second review traced the final disconnect, revoke, return, viewer, and destroy call paths and rechecked the eight-tool model surface. It found and removed one remaining authority leak: projected MCP children had inherited host-only bundle manifest and workspace paths. Their complete runtime environment now contains only the authenticated host endpoint, distinct run capability, and exact runtime scope. The review also found and fixed the native Button primitive's required tone contract.
-- Final verified non-UI commands on the reviewed tree: focused Computer contract `13 pass / 59 assertions`; repository TypeScript `8 successful / 8 total`; Overlay production Vite build `7085 modules / exit 0`; API routes checker `6 rules / 34 files`; API docs checker `318 operations / 25 groups`; and `git diff --check`. No UI automated test path changed and no UI automated test ran.
+### Implemented
+
+- Replaced the VM/launcher/viewer backend with the same-process typed `@trycua/cua-driver@0.12.2` SDK and one host-owned driver shared by logical Computer sessions.
+- Removed runtime bundle configuration, provisioning CLI, JSON-line launcher backend, workspace descriptor, viewer process/server route, generated viewer API, and Overlay viewer action. There is no VM compatibility path or runtime selector.
+- Packaged the pinned root SDK and official target-native packages for Windows, macOS, and supported Linux targets; Windows and macOS are first-class application targets and require no user-installed driver or virtual machine.
+- Kept the model-visible surface at exactly eight Computer MCP tools and preserved canonical permission, observation digest, one-effect consumption, Attachment, and unknown-outcome contracts.
+- Separated adapter/run revocation from native desktop destruction. Takeover revokes the current adapter while preserving the host-owned CUA session; return issues a new authorization; the new run uses visible `session_create` to attach and then performs a fresh `observe`.
+- Kept adapter authority usable after exact `session_destroy`: destruction ends and closes only that native desktop session, clears its host identity, and allows the same connected adapter to establish a new native session. Application/session disposal remains the separate owner cleanup path.
+- Updated the real native control surface to show current desktop identity and Agent/human ownership with Take over and Return to Agent actions.
+
+### Real Windows and Luna evidence
+
+- A direct product-driver probe captured the real 1792x1120 Windows desktop, typed `OPENCORVUS-CUA-E2E-PASS` into a dedicated Windows Terminal, and captured the visible result in `specs/artifacts/computer-use-e2e/windows-native-driver-terminal-input.png`.
+- Direct Work with `openai/gpt-5.6-luna` received exactly 34 tools: 26 platform tools plus the exact eight Computer tools. It created `host-desktop:opencorvus-ebd4a184-a170-4dcb-b611-a9256d7c784f`, observed, dispatched one accepted text action `914f52ea-1826-4a2d-907f-0e2d3bb547cf`, observed the changed desktop, and destroyed the session.
+- The real Overlay was opened and manually operated. Screenshots retain Agent-owned, human-owned takeover, and returned ownership states. No UI automated test, fixture, baseline, or visual assertion was created, changed, or run.
+- The first return attempt exposed an adapter-local `COMPUTER_SESSION_NOT_FOUND`: host identity remained live, but the fresh adapter had not attached its local controller. The contract was corrected so the existing visible `session_create` means create-or-attach for the current run; no hidden ninth tool or host control path was added.
+- A delayed diagnostic attach later reached the preserved host identity but the native SDK session had exceeded its live window and returned typed `session_ended`; this failure was retained rather than called a pass.
+- The immediate corrected sequence then succeeded on exact identity `host-desktop:opencorvus-5437a106-4e7d-4ee1-90be-faad2db48a9a`: create/observe, takeover with desktop preserved, return with fresh observation required, new-run visible attach, fresh observation `bcbaaa4b-59ce-4d99-a3d2-8b4f6c8f403c`, and exact destroy.
+- Two different direct Work Sessions were concurrently live on the shared physical desktop with distinct authorities: `host-desktop:opencorvus-906161ef-93ac-49f3-af56-517e6521602d` and `host-desktop:opencorvus-477f745e-17b7-4392-a1b0-cb7b635d4f64`. Exact host status returned `agent`, `primary`, and Driver `0.12.2` for both before both were explicitly destroyed.
+- Durable public identifiers for Tool Parts, observation digests, backend action, concurrency, cleanup, and screenshot files are recorded in `specs/artifacts/computer-use-e2e/windows-luna-e2e-evidence.json`; the isolated database retains the original Tool and Attachment rows without exposing credentials.
+
+### Verification status
+
+- Focused non-UI Computer contract: 15 tests, 69 assertions passing, including takeover/return fresh adapter attachment, post-dispatch response loss, same-adapter post-destroy reuse, exact eight tools, permissions, persistence, package closure, and typed native SDK mapping.
+- `packages/opencorvus` TypeScript validation passes after the lifecycle repair.
+- Final Overlay production build and local package build pass. The final build was reopened in the real page; Agent ownership, human takeover, return ownership, and the attach-then-observe notice were manually reviewed and recaptured.
+- Full repository typecheck, focused package typecheck, API route checker, docs checker, evidence JSON parsing, and diff whitespace checks pass. The AGENTS.md historical-docs-links command has no corresponding test file in this checkout, so no historical UI or document test was invented to replace it.
+- Second code review removed the final unused VM runtime error codes and corrected destroy semantics so adapter authority and native session destruction remain separate.
+- Remaining before delivery: successful remote refresh, exact commit, pre-push hooks, and git-cc push.

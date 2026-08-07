@@ -20,7 +20,7 @@
 ```
 顶层：      $schema · logLevel · server · share · autoupdate · snapshot · watcher
            disabled_providers · enabled_providers · tool_permissions
-           provider · model · small_model · default_agent · agent · mcp · computer · lsp ·
+           provider · model · small_model · default_agent · agent · mcp · lsp ·
            formatter · permission · compaction · preview · terminal
            channel · command · skills · plugin · prompt · instructions ·
            username · locale · prompt_profile · runtime_templates · expert_squads
@@ -38,11 +38,10 @@ experimental: auto_question · batch_tool · disable_paste_summary · continue_l
 >
 > **Locale contract**：顶级 `locale: "en-US" | "zh-CN"` 是 operator-selected system language，用于 assistant replies 和 Overlay localization。**这是行为类设置**（影响 LLM 回复语言 + SDK 透传），属 Layer 1，**不**属 Overlay UI 偏好的 `locale`（后者由当前 host 的 Overlay Settings 文档持久化，仅控制前端 UI 文案）。
 >
-> **Computer runtime contract**：可选顶级 `computer.runtime_bundle_manifest` 只接受 `computer-runtime provision`
-> 产生的内容寻址目录内 canonical `computer-runtime.json` 绝对路径。普通 `mcp.computer.enabled=false` 保持
-> 默认禁用；直接 Conversation assignment 或 active Harness exact projection 决定可见执行面，但不改变这一
-> 唯一 bundle identity。缺失或无效 manifest 产生 typed fail-closed 结果，不触发 download、`PATH`、system
-> Python、cloud、host desktop 或其他 runtime fallback。
+> **Computer runtime contract**：Computer Use 没有顶级 runtime 配置。OpenCorvus 随应用分发固定版本的
+> `@trycua/cua-driver` 并在 Host 进程内控制当前桌面；用户不配置 VM、image、viewer、daemon、Python、`PATH`
+> executable 或 cloud runtime。`default/mcp/computer` 仍默认不分配，只有直接 Conversation assignment 或
+> active Harness exact projection 决定可见执行面；二者使用同一个 host authority 与八工具契约。
 >
 > **已删除 schema 字段**：以下旧 schema 字段已删除，不再存在：
 >

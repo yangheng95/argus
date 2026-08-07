@@ -9,7 +9,10 @@ import { ExpertSquadRegistry } from "../../src/expert-squad/registry"
 import { DurableActivityCursorSchema } from "@opencorvus-ai/plugin"
 import { executionCapsuleTreeDigest } from "../../src/execution-capsule/tree-digest"
 import { ExecutionCapsuleRuntimeDescriptorSchema } from "../../src/execution-capsule/runtime"
-import { artifactEmbeddedExecutableRelativePaths } from "../build-artifact"
+import {
+  artifactBrowserMcpNodeRuntimeModules,
+  artifactEmbeddedExecutableRelativePaths,
+} from "../build-artifact"
 import { validatePackagedRuntimeNodeModules } from "../build-runtime-node-modules"
 import { normalizeArtifactExecutablePermissions } from "../runtime-executable-contract"
 
@@ -416,6 +419,7 @@ async function validateServerRuntimeClosure(directory: string, expectedDigest: s
     validatePackagedRuntimeNodeModules({
       runtimeRoot: path.join(directory, "browser-mcp-node"),
       target: { os: "linux", arch: "x64" },
+      modules: artifactBrowserMcpNodeRuntimeModules(),
     }),
   ])
 }

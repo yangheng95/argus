@@ -359,10 +359,9 @@ OpenAPI marks project-scoped operations with a `directory` query parameter. Thes
 
 | Method | Path | Summary | operationId |
 |---|---|---|---|
-| POST | `/computer/return` | Return Computer guest to Agent automation Body: `computerID`, `displayID`, `sessionID`; Errors: `BadRequestError`, `UnknownError`. | `computer.return` |
-| POST | `/computer/status` | Get Computer guest ownership Body: `computerID`, `displayID`, `sessionID`; Errors: `BadRequestError`, `UnknownError`. | `computer.status` |
-| POST | `/computer/takeover` | Take over Computer guest Body: `computerID`, `displayID`, `sessionID`; Errors: `BadRequestError`, `UnknownError`. | `computer.takeover` |
-| POST | `/computer/viewer/open` | Open Computer viewer Body: `computerID`, `displayID`, `sessionID`; Errors: `BadRequestError`, `UnknownError`. | `computer.viewer.open` |
+| POST | `/computer/return` | Return the current desktop to Agent automation Body: `computerID`, `displayID`, `sessionID`; Errors: `BadRequestError`, `UnknownError`. | `computer.return` |
+| POST | `/computer/status` | Get Computer desktop ownership Body: `computerID`, `displayID`, `sessionID`; Errors: `BadRequestError`, `UnknownError`. | `computer.status` |
+| POST | `/computer/takeover` | Take over the current desktop Body: `computerID`, `displayID`, `sessionID`; Errors: `BadRequestError`, `UnknownError`. | `computer.takeover` |
 
 ### MCP
 

@@ -43,11 +43,18 @@ export function artifactExternalModules(): string[] {
     "@lydell/node-pty",
     "node-screenshots",
     "sharp",
+    // CUA means Computer Use Agent. Its generated TypeScript binding resolves
+    // a target-specific Node-API library from packaged node_modules at runtime.
+    "@trycua/cua-driver",
   ]
 }
 
 export function artifactBrowserMcpNodeExternalModules(): string[] {
   return artifactExternalModules()
+}
+
+export function artifactBrowserMcpNodeRuntimeModules(): ArtifactRuntimeNodeModule[] {
+  return [{ name: "playwright" }]
 }
 
 export function artifactSourcemap(): "none" {
@@ -111,7 +118,7 @@ export function artifactHostCanProvideNodeRuntime(
 }
 
 export function artifactRuntimeNodeModules(target: ArtifactNodeRuntimeTarget): ArtifactRuntimeNodeModule[] {
-  return [
+  const modules: ArtifactRuntimeNodeModule[] = [
     { name: "playwright" },
     { name: "playwright-core" },
     { name: "chromium-bidi" },
@@ -127,6 +134,11 @@ export function artifactRuntimeNodeModules(target: ArtifactNodeRuntimeTarget): A
     { name: "@parcel/watcher", runtimeDependencies: [parcelWatcherNativePackageName(target)] },
     { name: "node-screenshots", runtimeDependencies: nodeScreenshotsNativePackageNames(target) },
   ]
+  const cuaRuntimeDependencies = cuaDriverRuntimePackageNames(target)
+  if (cuaRuntimeDependencies.length > 0) {
+    modules.push({ name: "@trycua/cua-driver", runtimeDependencies: cuaRuntimeDependencies })
+  }
+  return modules
 }
 
 export function artifactRuntimeNodeModuleNames(target: ArtifactNodeRuntimeTarget): string[] {
@@ -172,4 +184,12 @@ function nodeScreenshotsNativePackageNames(target: ArtifactNodeRuntimeTarget): s
     return [`node-screenshots-linux-${target.arch}-${target.abi === "musl" ? "musl" : "gnu"}`]
   }
   return []
+}
+
+function cuaDriverRuntimePackageNames(target: ArtifactNodeRuntimeTarget): string[] {
+  if (target.os === "linux" && target.abi === "musl") return []
+  const platform = target.os === "linux" ? "linux" : target.os
+  const family = target.os === "win32" ? "msvc" : target.os === "linux" ? "gnu" : undefined
+  const suffix = `${platform}-${target.arch}${family ? `-${family}` : ""}`
+  return [`@trycua/cua-driver-${suffix}`, `@ubjs/node-${suffix}`]
 }

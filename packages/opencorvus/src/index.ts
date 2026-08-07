@@ -30,7 +30,6 @@ import { EOL } from "os"
 import { PrCommand } from "./cli/cmd/pr"
 import { SessionCommand } from "./cli/cmd/session"
 import { DbCommand } from "./cli/cmd/db"
-import { ComputerRuntimeCommand } from "./cli/cmd/computer-runtime"
 import { Capability } from "./platform/capability"
 import { installProcessErrorLogging } from "./util/process-error-logging"
 
@@ -109,7 +108,6 @@ let cli = yargs(hideBin(process.argv))
   .command(PrCommand)
   .command(SessionCommand)
   .command(DbCommand)
-  .command(ComputerRuntimeCommand)
 
 cli = cli
   .fail((msg, err) => {

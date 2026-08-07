@@ -10,8 +10,8 @@ export type ComputerOwnership = {
   ownership: "human" | "agent"
   computerId: string
   displayId: string
-  runtimeBundleId: string
-  guestPreserved?: true
+  driverVersion: string
+  desktopPreserved?: true
   freshObservationRequired?: true
 }
 
@@ -33,18 +33,4 @@ export function takeOverComputer(identity: ComputerIdentity) {
 
 export function returnComputerControl(identity: ComputerIdentity) {
   return request("return", identity)
-}
-
-export function openComputerViewer(identity: ComputerIdentity) {
-  return apiJson<{
-    opened: true
-    pid: number
-    computerId: string
-    displayId: string
-    runtimeBundleId: string
-  }>("computer/viewer/open", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(identity),
-  })
 }

@@ -1,5 +1,7 @@
 # Cognition-Aligned Verification-Budget Scheduling
 
+> The rejected/expired choice names and semantics are superseded by [2026-08-07-mission-scope-split-and-test-consent.md](2026-08-07-mission-scope-split-and-test-consent.md): rejection or deadline expiry now means `skip_optional_testing`, and none of the testing or assurance work named by the question is dispatched or executed.
+
 Date: 2026-08-06
 
 Status: Implemented and accepted.

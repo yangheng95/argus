@@ -1,0 +1,97 @@
+{
+  "captured_at": "2026-08-07T13:15:00Z",
+  "model": "openai/gpt-5.6-luna",
+  "runtime": {
+    "platform": "windows",
+    "driver": "@trycua/cua-driver@0.12.2",
+    "desktop": "current-host",
+    "display_id": "primary",
+    "width": 1792,
+    "height": 1120
+  },
+  "input_effect_sequence": {
+    "session_id": "ses_023bd0f9cffe0tPOHZ6vBBrChQ",
+    "computer_id": "host-desktop:opencorvus-ebd4a184-a170-4dcb-b611-a9256d7c784f",
+    "initial_observation_id": "912bd08e-1bfa-4f1e-8662-ddf15a92d5d2",
+    "initial_observation_digest": "67d1f254754f1b37017cf908a458de9bb773d1e4826377fa7ab6549e2cbab64e",
+    "initial_attachment_sha256": "a58e59f8637d895a6a0f1717cc1c1386aaf8d6798b505227ef203bc7b170439e",
+    "type_text_backend_action_id": "914f52ea-1826-4a2d-907f-0e2d3bb547cf",
+    "fresh_observation_id": "cf9d11eb-4e57-4e16-a676-ff312b8fe308",
+    "fresh_observation_digest": "18b0b695b9cadfa4e08524d0806cab619eadb03e0c95682e2f9b0dcdc26a8090",
+    "fresh_attachment_sha256": "39926288ecec187c50742140272c6f5a2a61e42e37b7c79c6fdcf3eff293ff6e",
+    "destroyed": true,
+    "tool_call_ids": [
+      "call_nfw8S52eyOtb0SWMrQ8cnpAE",
+      "call_bBVIoS8BqrKNjkBGgrSrR6rw",
+      "call_xhLRinSmg642lOjn0lBdMFVn",
+      "call_LFDNScrPCENYPofe7ow98ImO",
+      "call_8DwkKwJooBguJ8cumZdEaCh7"
+    ]
+  },
+  "takeover_return_sequence": {
+    "session_id": "ses_023b903c8ffeKsuMlrk0bNL0Eo",
+    "computer_id": "host-desktop:opencorvus-5437a106-4e7d-4ee1-90be-faad2db48a9a",
+    "before_takeover_observation_id": "5f3eadf4-1cd8-4474-8944-0103da8f94ed",
+    "takeover": {
+      "ownership": "human",
+      "desktop_preserved": true
+    },
+    "return": {
+      "ownership": "agent",
+      "fresh_observation_required": true
+    },
+    "new_run_attach_tool_call_id": "call_E0UYUkCbOPY04UbXbDtnueWh",
+    "fresh_observation_tool_call_id": "call_P8j4o0Cd1N00vrMVp9qi2Vtk",
+    "fresh_observation_id": "bcbaaa4b-59ce-4d99-a3d2-8b4f6c8f403c",
+    "fresh_observation_digest": "6468b38deb46929ced9f3a7e22eb185632fa9f2ae7f3a5b58fc4414cfc7fbcf8",
+    "fresh_attachment_sha256": "4c84eacb1f0236771fef14a250641091d794e06fe1216df997263923ea00b844",
+    "destroy_tool_call_id": "call_PxecLtansYKwovfKpxUIOAbK",
+    "destroyed": true
+  },
+  "concurrent_sessions": [
+    {
+      "session_id": "ses_023bd0f9cffe0tPOHZ6vBBrChQ",
+      "computer_id": "host-desktop:opencorvus-906161ef-93ac-49f3-af56-517e6521602d",
+      "observation_id": "15c36b7d-5a7e-4094-bad0-a923642fcdea",
+      "observation_digest": "b13c35d42246e5065ff61842b6232f806d55d59d5947785367e107eb68efee59",
+      "attachment_sha256": "91247752cf2d3113a22482deee7eaeefd8827656199c9e419cf29d9e028ae2b7",
+      "ownership_during_concurrency_check": "agent",
+      "destroyed_after_evidence": true
+    },
+    {
+      "session_id": "ses_023b903c8ffeKsuMlrk0bNL0Eo",
+      "computer_id": "host-desktop:opencorvus-477f745e-17b7-4392-a1b0-cb7b635d4f64",
+      "observation_id": "2290abe7-e412-4d4f-af7f-0efed3ea19e2",
+      "observation_digest": "84f9be5d040d8201d81e57f912294fc28745fe0df536f30b63225280600ca2bd",
+      "attachment_sha256": "7c02be6c758ab6ef9c825801ebb9c6c2b83bee9831732de5a659c232f5b3d19e",
+      "ownership_during_concurrency_check": "agent",
+      "destroyed_after_evidence": true
+    }
+  ],
+  "visual_evidence": [
+    "windows-native-driver-terminal-input.png",
+    "windows-native-control-agent-owned.png",
+    "windows-native-control-human-owned.png",
+    "windows-native-control-returned.png"
+  ],
+  "backend_evidence": {
+    "projected_tool_count": 34,
+    "projected_computer_tools": [
+      "computer_session_create",
+      "computer_observe",
+      "computer_click",
+      "computer_type_text",
+      "computer_keypress",
+      "computer_scroll",
+      "computer_drag",
+      "computer_session_destroy"
+    ],
+    "takeover_http_status": 200,
+    "return_http_status": 200,
+    "native_package_integrities": {
+      "@trycua/cua-driver@0.12.2": "sha512-Jbhb6KwyRWng6BFyoudxkUPGkJrdvw1TfSIpMNvQbQpcCPgQgc54r2aIoR+Kcl4P54JScY85dZFc5285qcHcKw==",
+      "@trycua/cua-driver-win32-x64-msvc@0.12.2": "sha512-ZZC8EPvuDPxg+/aOy8LX53AirEdqlO6xd4Vqsm3uWmNjfis+D8Fg9Fko2mOO5LWbuGzBYePyQlHji4n4Kqe2Lw=="
+    }
+  },
+  "evidence_authority": "The isolated OpenCorvus SQLite database retains the exact Tool Parts and observation Attachments. This file records their stable public identifiers without copying credentials or the private database."
+}

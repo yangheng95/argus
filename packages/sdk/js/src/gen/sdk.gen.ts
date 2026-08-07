@@ -86,8 +86,6 @@ import type {
   ComputerStatusResponses,
   ComputerTakeoverErrors,
   ComputerTakeoverResponses,
-  ComputerViewerOpenErrors,
-  ComputerViewerOpenResponses,
   ConfigGetErrors,
   ConfigGetResponses,
   ConfigPromptResponses,
@@ -1936,52 +1934,11 @@ export class Command extends HeyApiClient {
   }
 }
 
-export class Viewer extends HeyApiClient {
-  /**
-   * Open Computer viewer
-   *
-   * Open the verified native viewer for the exact Session-owned Computer and display. Viewer credentials remain inside the host-owned runtime workspace and are never returned.
-   */
-  public open<ThrowOnError extends boolean = false>(
-    parameters: {
-      directory?: string
-      computerID: string
-      displayID: string
-      sessionID: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "body", key: "computerID" },
-            { in: "body", key: "displayID" },
-            { in: "body", key: "sessionID" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<ComputerViewerOpenResponses, ComputerViewerOpenErrors, ThrowOnError>({
-      url: "/computer/viewer/open",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-}
-
 export class Computer extends HeyApiClient {
   /**
-   * Return Computer guest to Agent automation
+   * Return the current desktop to Agent automation
    *
-   * Issue a new Agent run capability for the preserved guest. The next adapter starts without observation authority.
+   * Issue a new Agent run capability for the preserved desktop session. The next adapter starts without observation authority.
    */
   public return<ThrowOnError extends boolean = false>(
     parameters: {
@@ -2018,9 +1975,9 @@ export class Computer extends HeyApiClient {
   }
 
   /**
-   * Get Computer guest ownership
+   * Get Computer desktop ownership
    *
-   * Read the exact host-owned Computer identity and current input owner.
+   * Read the exact host-owned desktop session identity and current input owner.
    */
   public status<ThrowOnError extends boolean = false>(
     parameters: {
@@ -2057,9 +2014,9 @@ export class Computer extends HeyApiClient {
   }
 
   /**
-   * Take over Computer guest
+   * Take over the current desktop
    *
-   * Revoke the exact Agent run and disconnect its adapter while preserving the Session-owned guest for the native viewer.
+   * Revoke the exact Agent run and disconnect its adapter while preserving the native desktop session for the user.
    */
   public takeover<ThrowOnError extends boolean = false>(
     parameters: {
@@ -2093,11 +2050,6 @@ export class Computer extends HeyApiClient {
         ...params.headers,
       },
     })
-  }
-
-  private _viewer?: Viewer
-  get viewer(): Viewer {
-    return (this._viewer ??= new Viewer({ client: this.client }))
   }
 }
 
@@ -4235,34 +4187,91 @@ export class Control extends HeyApiClient {
           }
         | {
             action: "query_task_artifacts"
+            /**
+             * Optional exact namespaced Artifact-type filter.
+             */
             artifact_types?: Array<string>
+            /**
+             * Optional inclusive lower creation-time bound in Unix milliseconds.
+             */
             created_at_or_after_ms?: number
+            /**
+             * Optional exclusive upper creation-time bound in Unix milliseconds.
+             */
             created_before_ms?: number
+            /**
+             * Opaque cursor returned by the preceding page; omit it for the first page.
+             */
             cursor?: string
+            /**
+             * Optional exact logical Goal-subject filter.
+             */
             goal_ids?: Array<string>
+            /**
+             * Optional exact source-Task lineage filter for imported Engine Artifacts. Non-imported entries never match.
+             */
             import_source_task_ids?: Array<string>
+            /**
+             * Optional exact persisted Artifact-kind filter.
+             */
             kinds?: Array<string>
+            /**
+             * Optional exact stable Artifact-label filter.
+             */
             labels?: Array<string>
+            /**
+             * Optional exact resource media-type filter.
+             */
             media_types?: Array<string>
+            /**
+             * Optional exact projected producer Agent-identity filter. Core-owned typed projections never match this filter; select those by label, kind, artifact type, or Goal.
+             */
             producer_agent_ids?: Array<string>
+            /**
+             * Optional exact projected or Mission producer Session identity filter. Core-owned typed projections never match this filter.
+             */
             producer_session_ids?: Array<string>
+            /**
+             * Optional exact projected producer Expert Squad identity filter. Core-owned typed projections never match this filter.
+             */
             producer_squad_ids?: Array<string>
+            /**
+             * Optional hierarchical candidate query over bounded catalog identity, label, type, producer, Goal, and resource metadata. Fuzzy mode is explicit and never selects evidence. Omit query to enumerate.
+             */
             query?: {
               mode?: "substring" | "fuzzy"
               text: string
             }
+            /**
+             * Explicit candidate order. Defaults to relevance when query is present and newest otherwise.
+             */
             sort?: "relevance" | "newest" | "oldest" | "name"
+            /**
+             * Optional authoritative-store filter. Omit it to include every catalog provider.
+             */
             sources?: Array<"engine_artifact" | "task_artifact">
             /**
              * Source Task whose Artifact catalog should be enumerated.
              */
             taskID: string
+            /**
+             * Engine version scope at the frozen catalog revision. Task Artifact snapshots are immutable.
+             */
             version_scope?: "current" | "historical" | "all"
           }
         | {
             action: "read_task_artifact"
+            /**
+             * Zero-based byte offset within the exact canonical payload or resource.
+             */
             byte_offset?: number
+            /**
+             * inline returns one bounded content chunk. materialized_file verifies one complete text resource and returns an immutable local cache path for bounded command-line inspection.
+             */
             delivery?: "inline" | "materialized_file"
+            /**
+             * Exact typed locator returned by Artifact search, including its immutable digest.
+             */
             locator:
               | {
                   artifact_id: string
@@ -4297,6 +4306,9 @@ export class Control extends HeyApiClient {
                   }
                   source: "task_artifact_resource"
                 }
+            /**
+             * Maximum UTF-8 text bytes to return in this exact-read chunk. Binary resources use one complete attachment and ignore text pagination.
+             */
             max_bytes?: number
             /**
              * Terminal source Task in the current Mission lineage.
@@ -4524,6 +4536,9 @@ export class Control extends HeyApiClient {
              * Model reference in provider/model format for the new task.
              */
             model?: string
+            /**
+             * Channel platform for an external task binding.
+             */
             platform?:
               | "slack"
               | "telegram"
@@ -4552,6 +4567,9 @@ export class Control extends HeyApiClient {
               | "twitch"
               | "zalo"
               | "zalouser"
+            /**
+             * Product pillar for direct panel-UI creation. Mission and conversation callers inherit their persisted pillar.
+             */
             productPillar?: "code" | "work"
             /**
              * Exact expert-squad manifest ID that owns the new Task for its full lifetime. Mission must choose this from expert_squad_catalog for every created Task. Non-Mission callers may omit it to inherit their effective prompt_profile.active.
@@ -4736,6 +4754,9 @@ export class Control extends HeyApiClient {
           }
         | {
             action: "cancel_task"
+            /**
+             * Why the task is being cancelled.
+             */
             reason: string
             /**
              * Task ID to cancel.

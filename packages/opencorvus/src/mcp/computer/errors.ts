@@ -1,8 +1,6 @@
 import { z } from "zod"
 
 export const ComputerErrorCode = z.enum([
-  "COMPUTER_RUNTIME_REQUIRED",
-  "COMPUTER_RUNTIME_INVALID",
   "COMPUTER_SESSION_NOT_FOUND",
   "COMPUTER_SESSION_IDENTITY_MISMATCH",
   "COMPUTER_RUN_REVOKED",

@@ -181,14 +181,19 @@ dispatch engine, or synthetic progress event. Real scheduling and refusal
 remain observable Orchestrator tool calls.
 
 Cross-squad composition preserves the same boundary through Mission. Mission
-owns the final outcome and dependent Task-sized delivery-closure ledger. The
+owns the final outcome and dependent Task-sized delivery-closure ledger. Before
+grouping delivery closures, Mission enumerates the complete requested scope and
+partitions every deliverable, operation, mutable resource, acceptance obligation,
+and evidence surface by positive held-Squad catalog ownership. Every unavoidable
+ownership change is a separate stage and separate fixed-`promptProfile` Task;
+only scope inside one such partition may be grouped into a coherent closure. The
 graph contains one Task for every independently acceptable outcome with a
 coherent mutable-resource and evidence lifecycle. One Task may satisfy several
 Mission acceptance claims and produce several product, data, report, audit, and
 validation deliverables when they form one accepted result. The same selected
 Squad may own several Tasks when their results can be accepted, retried, and
 delivered independently; Squad identity is capability authority, not Task
-identity. Every unavoidable cross-squad stage is a separate Task
+identity. Every unavoidable cross-squad scope partition is a separate Task
 with one explicit `promptProfile` fixed for its complete lifetime; that Task
 owns only its local Delivery Slices; and Agents are mandatory local
 workflow roles rather than implicit cross-squad stages. Mission creates only

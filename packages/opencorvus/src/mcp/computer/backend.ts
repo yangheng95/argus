@@ -1,12 +1,7 @@
-import { createInterface } from "node:readline"
 import { randomUUID } from "node:crypto"
-import fs from "node:fs/promises"
-import path from "node:path"
-import { ProcessSupervisor } from "@/shell/process-supervisor"
-import { Global } from "@/global"
+import type { CuaDriverLike, ToolResult } from "@trycua/cua-driver"
 import { z } from "zod"
 import { ComputerError, computerError } from "./errors"
-import { verifyProvisionedComputerRuntimeBundle, type VerifiedComputerRuntimeBundle } from "./runtime-bundle"
 
 export type ComputerPoint = { x: number; y: number }
 export type ComputerBackendObservation = {
@@ -19,7 +14,15 @@ export type ComputerBackendAction =
   | { kind: "click"; computerId: string; displayId: string; x: number; y: number; button: "left" | "right" }
   | { kind: "type_text"; computerId: string; displayId: string; text: string }
   | { kind: "keypress"; computerId: string; displayId: string; keys: string[] }
-  | { kind: "scroll"; computerId: string; displayId: string; deltaX: number; deltaY: number }
+  | {
+      kind: "scroll"
+      computerId: string
+      displayId: string
+      x: number
+      y: number
+      direction: "up" | "down" | "left" | "right"
+      amount: number
+    }
   | { kind: "drag"; computerId: string; displayId: string; from: ComputerPoint; to: ComputerPoint; durationMs: number }
 
 export type ComputerBackendActionInput = ComputerBackendAction extends infer Action
@@ -29,290 +32,255 @@ export type ComputerBackendActionInput = ComputerBackendAction extends infer Act
   : never
 
 export interface ComputerBackend {
-  create(): Promise<{ computerId: string; displayId: string; bundleId: string }>
+  create(): Promise<{ computerId: string; displayId: string; driverVersion: string }>
   observe(input: { computerId: string; displayId: string }): Promise<ComputerBackendObservation>
   act(action: ComputerBackendAction): Promise<{ accepted: true; backendActionId: string }>
   destroy(input: { computerId: string }): Promise<{ destroyed: true }>
   close(): Promise<void>
 }
 
-type JsonLineComputerBackendOptions = {
-  manifestPath?: string
-  workspace?: string
-  verifyRuntime?: typeof verifyProvisionedComputerRuntimeBundle
-  spawnRuntime?: typeof ProcessSupervisor.spawnHostCommand
+const DesktopState = z
+  .object({
+    display: z.string().min(1),
+    platform: z.string().min(1),
+    screen_width: z.number().int().positive(),
+    screen_height: z.number().int().positive(),
+    screenshot_width: z.number().int().positive(),
+    screenshot_height: z.number().int().positive(),
+    screenshot_mime_type: z.literal("image/png"),
+  })
+  .passthrough()
+
+function toolFailure(operation: string, result: ToolResult): ComputerError {
+  return new ComputerError("COMPUTER_BACKEND_ERROR", result.text || `CUA Driver ${operation} failed`, {
+    operation,
+    driverErrorCode: result.errorCode,
+    degraded: result.degraded,
+  })
 }
 
-const ProtocolResponse = z
-  .object({
-    request_id: z.string().min(1),
-    result: z.unknown().optional(),
-    error: z
-      .object({
-        code: z.string().min(1),
-        message: z.string().min(1),
-        details: z.record(z.string(), z.unknown()).optional(),
-      })
-      .strict()
-      .optional(),
-  })
-  .strict()
-  .refine((response) => (response.result === undefined) !== (response.error === undefined), {
-    message: "Computer runtime response must contain exactly one result or error",
-  })
-
-const CreateResult = z
-  .object({
-    computer_id: z.string().min(1),
-    display_id: z.string().min(1),
-  })
-  .strict()
-const ObserveResult = z
-  .object({
-    computer_id: z.string().min(1),
-    display_id: z.string().min(1),
-    png_base64: z.string().min(1),
-  })
-  .strict()
-const ActionResult = z.object({ backend_action_id: z.string().min(1) }).strict()
-const DestroyResult = z.object({ destroyed: z.literal(true) }).strict()
-
-type Pending = {
-  operation: string
-  effect: ComputerOperationEffect
-  resolve(value: unknown): void
-  reject(error: unknown): void
+function assertToolResult(operation: string, result: ToolResult): ToolResult {
+  if (result.isError) throw toolFailure(operation, result)
+  return result
 }
 
-type ComputerOperationEffect = "read" | "effect"
+type CuaSdk = typeof import("@trycua/cua-driver")
+type OwnedCuaDriver = CuaDriverLike & { uniffiDestroy(): void }
 
-function failureCode(effect: ComputerOperationEffect) {
-  return effect === "effect" ? "COMPUTER_OUTCOME_UNKNOWN" : "COMPUTER_BACKEND_ERROR"
+function loadCuaSdk(): Promise<CuaSdk> {
+  return import("@trycua/cua-driver")
 }
 
-export class JsonLineComputerBackend implements ComputerBackend {
-  private runtime?: VerifiedComputerRuntimeBundle
-  private child?: ProcessSupervisor.Handle
-  private pending = new Map<string, Pending>()
-  private startup?: Promise<void>
-  private workspaceDirectory?: string
-  private closePromise?: Promise<void>
-
-  private readonly manifestPath?: string
-  private readonly configuredWorkspace?: string
-  private readonly verifyRuntime: typeof verifyProvisionedComputerRuntimeBundle
-  private readonly spawnRuntime: typeof ProcessSupervisor.spawnHostCommand
-
-  constructor(options: JsonLineComputerBackendOptions = {}) {
-    this.manifestPath = options.manifestPath ?? process.env.OPENCORVUS_COMPUTER_RUNTIME_MANIFEST
-    this.configuredWorkspace = options.workspace ?? process.env.OPENCORVUS_COMPUTER_WORKSPACE
-    this.verifyRuntime = options.verifyRuntime ?? verifyProvisionedComputerRuntimeBundle
-    this.spawnRuntime = options.spawnRuntime ?? ProcessSupervisor.spawnHostCommand
+export async function createCuaDriver(): Promise<CuaDriverLike> {
+  const sdk = await loadCuaSdk()
+  const driver = sdk.CuaDriver.create(sdk.DriverOptions.new({ claudeCodeCompatibility: false }))
+  if (!driver.isAvailable()) {
+    ;(driver as OwnedCuaDriver).uniffiDestroy()
+    throw new ComputerError("COMPUTER_BACKEND_ERROR", "The bundled CUA Driver is unavailable on this host")
   }
+  return driver
+}
 
-  private async ensureStarted() {
-    if (this.closePromise) throw new ComputerError("COMPUTER_BACKEND_ERROR", "Computer runtime backend is closed")
-    this.startup ??= this.start()
-    return this.startup
+export async function closeCuaDriver(driverInput: CuaDriverLike | Promise<CuaDriverLike>): Promise<void> {
+  const driver = await driverInput
+  try {
+    await driver.shutdown()
+  } finally {
+    ;(driver as OwnedCuaDriver).uniffiDestroy()
   }
+}
 
-  private async start() {
-    const runtime = await this.verifyRuntime({ manifestPath: this.manifestPath })
-    const workspaceRoot = path.join(Global.Path.temporary, "computer-runtime")
-    const configuredWorkspace = this.configuredWorkspace?.trim()
-    if (!configuredWorkspace) {
-      throw new ComputerError(
-        "COMPUTER_BACKEND_ERROR",
-        "Computer runtime requires one host-owned Session workspace",
-      )
-    }
-    const workspaceDirectory = path.resolve(configuredWorkspace)
-    const relativeWorkspace = path.relative(workspaceRoot, workspaceDirectory)
-    if (!relativeWorkspace || relativeWorkspace.startsWith("..") || path.isAbsolute(relativeWorkspace)) {
-      throw new ComputerError("COMPUTER_BACKEND_ERROR", "Computer runtime workspace is outside the managed root")
-    }
-    await fs.mkdir(workspaceRoot, { recursive: true, mode: 0o700 })
-    await fs.mkdir(workspaceDirectory, { mode: 0o700 })
-    const allowedEnvironment = Object.fromEntries(
-      ["SYSTEMROOT", "WINDIR"].flatMap((key) => (process.env[key] ? [[key, process.env[key] as string]] : [])),
-    )
-    let child: ProcessSupervisor.Handle
-    try {
-      child = await this.spawnRuntime({
-        executable: runtime.launcherPath,
-        args: runtime.manifest.launcher.args,
-        cwd: runtime.directory,
-        env: {
-          ...allowedEnvironment,
-          TEMP: workspaceDirectory,
-          TMP: workspaceDirectory,
-          OPENCORVUS_COMPUTER_PROTOCOL_VERSION: String(runtime.manifest.protocol_version),
-          OPENCORVUS_COMPUTER_BUNDLE_ROOT: runtime.directory,
-          OPENCORVUS_COMPUTER_WORKSPACE: workspaceDirectory,
-        },
-        stdin: "pipe",
-        gracefulTerminationMs: 5_000,
-        owner: "computer-runtime-bundle",
-      })
-    } catch (error) {
-      await fs.rm(workspaceDirectory, { recursive: true, force: true })
-      throw error
-    }
-    if (!child.stdin || !child.stdout || !child.stderr) {
-      await ProcessSupervisor.disposeAndWaitForExit(child, "computer runtime bundle")
-      await fs.rm(workspaceDirectory, { recursive: true, force: true })
-      throw new ComputerError("COMPUTER_BACKEND_ERROR", "Computer runtime launcher did not expose standard streams")
-    }
-    this.runtime = runtime
-    this.child = child
-    this.workspaceDirectory = workspaceDirectory
-    const lines = createInterface({ input: child.stdout })
-    lines.on("line", (line) => this.receive(line))
-    child.stderr.on("data", (chunk) => process.stderr.write(`[computer-runtime] ${String(chunk)}`))
-    void child.exited.then((code) => this.failPending(`Computer runtime launcher exited with code ${code}`))
-  }
+export class CuaComputerBackend implements ComputerBackend {
+  private readonly driverSession = `opencorvus-${randomUUID()}`
+  private identity?: { computerId: string; displayId: string; driverVersion: string }
+  private ended = false
 
-  private receive(line: string) {
-    let response: z.output<typeof ProtocolResponse>
-    try {
-      response = ProtocolResponse.parse(JSON.parse(line))
-    } catch (error) {
-      this.failPending("Computer runtime launcher returned invalid JSON", error)
-      void this.close().catch((closeError) => {
-        process.stderr.write(`[computer-runtime] cleanup failed: ${computerError(closeError).message}\n`)
-      })
-      return
-    }
-    const pending = this.pending.get(response.request_id)
-    if (!pending) return
-    this.pending.delete(response.request_id)
-    if (response.error) {
-      pending.reject(
-        new ComputerError("COMPUTER_BACKEND_ERROR", response.error.message ?? "Computer runtime action failed", {
-          backendCode: response.error.code,
-          ...response.error.details,
-        }),
-      )
-      return
-    }
-    pending.resolve(response.result)
-  }
+  constructor(private readonly driverInput: CuaDriverLike | Promise<CuaDriverLike>) {}
 
-  private failPending(message: string, cause?: unknown) {
-    for (const pending of this.pending.values()) {
-      pending.reject(
-        new ComputerError(
-          failureCode(pending.effect),
-          message,
-          { operation: pending.operation },
-          cause instanceof Error ? { cause } : undefined,
-        ),
-      )
-    }
-    this.pending.clear()
-  }
-
-  private async request<T>(
-    operation: string,
-    params: unknown,
-    resultSchema: z.ZodType<T>,
-    effect: ComputerOperationEffect,
-  ): Promise<T> {
-    await this.ensureStarted()
-    const requestId = randomUUID()
-    const child = this.child
-    if (!child?.stdin) throw new ComputerError("COMPUTER_BACKEND_ERROR", "Computer runtime launcher is unavailable")
-    let timeout: ReturnType<typeof setTimeout> | undefined
-    const result = new Promise<unknown>((resolve, reject) => {
-      this.pending.set(requestId, { operation, effect, resolve, reject })
-      timeout = setTimeout(() => {
-        this.pending.delete(requestId)
-        reject(
-          new ComputerError(failureCode(effect), "Computer runtime request exceeded its bundle-declared timeout", {
-            operation,
-            requestTimeoutMs: this.runtime!.manifest.request_timeout_ms,
-          }),
-        )
-      }, this.runtime!.manifest.request_timeout_ms)
-    })
-    try {
-      child.stdin.write(`${JSON.stringify({ protocol_version: 1, request_id: requestId, operation, params })}\n`)
-    } catch (error) {
-      this.pending.delete(requestId)
-      if (timeout) clearTimeout(timeout)
-      throw new ComputerError(
-        failureCode(effect),
-        "Computer runtime request could not be written",
-        { operation },
-        error instanceof Error ? { cause: error } : undefined,
-      )
-    }
-    try {
-      return resultSchema.parse(await result)
-    } catch (error) {
-      if (error instanceof ComputerError) throw error
-      throw new ComputerError(
-        failureCode(effect),
-        "Computer runtime returned a result outside the narrow protocol contract",
-        { operation },
-        error instanceof Error ? { cause: error } : undefined,
-      )
-    } finally {
-      if (timeout) clearTimeout(timeout)
-    }
+  private driver() {
+    return Promise.resolve(this.driverInput)
   }
 
   async create() {
-    const result = await this.request("session_create", {}, CreateResult, "effect")
-    return {
-      computerId: result.computer_id,
-      displayId: result.display_id,
-      bundleId: this.runtime!.manifest.bundle_id,
+    if (this.identity) return this.identity
+    const [driver, sdk] = await Promise.all([this.driver(), loadCuaSdk()])
+    let started
+    try {
+      started = await driver.startSession(
+        sdk.StartSessionInput.new({ session: this.driverSession, captureScope: sdk.CaptureScope.Desktop }),
+      )
+    } catch (error) {
+      throw new ComputerError(
+        "COMPUTER_OUTCOME_UNKNOWN",
+        "CUA Driver session creation did not return a result",
+        { operation: "session_create" },
+        error instanceof Error ? { cause: error } : undefined,
+      )
+    }
+    if (!started.active || !started.state.desktopUnlocked || started.state.session !== this.driverSession) {
+      await this.endDriverSession()
+      throw new ComputerError("COMPUTER_BACKEND_ERROR", "The host desktop is unavailable for Computer Use", {
+        active: started.active,
+        desktopUnlocked: started.state.desktopUnlocked,
+        expectedSession: this.driverSession,
+        actualSession: started.state.session,
+      })
+    }
+    try {
+      const metadata = await driver.metadata()
+      const desktop = assertToolResult(
+        "get_desktop_state",
+        await driver.getDesktopState(sdk.GetDesktopStateInput.new({ session: this.driverSession })),
+      )
+      const state = DesktopState.parse(JSON.parse(desktop.structuredJson ?? "{}"))
+      this.identity = {
+        computerId: `host-desktop:${this.driverSession}`,
+        displayId: state.display,
+        driverVersion: metadata.driverVersion,
+      }
+      return this.identity
+    } catch (error) {
+      try {
+        await this.endDriverSession()
+      } catch (cleanupError) {
+        throw computerError(new AggregateError([error, cleanupError], "CUA Driver session startup cleanup failed"))
+      }
+      throw error
+    }
+  }
+
+  private assertIdentity(input: { computerId: string; displayId?: string }) {
+    if (!this.identity || this.identity.computerId !== input.computerId) {
+      throw new ComputerError("COMPUTER_SESSION_NOT_FOUND", "Computer session does not exist", {
+        computerId: input.computerId,
+      })
+    }
+    if (input.displayId !== undefined && this.identity.displayId !== input.displayId) {
+      throw new ComputerError("COMPUTER_SESSION_IDENTITY_MISMATCH", "Computer display identity does not match", {
+        computerId: input.computerId,
+        expectedDisplayId: this.identity.displayId,
+        actualDisplayId: input.displayId,
+      })
     }
   }
 
   async observe(input: { computerId: string; displayId: string }) {
-    const result = await this.request(
-      "observe",
-      { computer_id: input.computerId, display_id: input.displayId },
-      ObserveResult,
-      "read",
+    this.assertIdentity(input)
+    const [driver, sdk] = await Promise.all([this.driver(), loadCuaSdk()])
+    const result = assertToolResult(
+      "get_desktop_state",
+      await driver.getDesktopState(sdk.GetDesktopStateInput.new({ session: this.driverSession })),
     )
-    return {
-      computerId: result.computer_id,
-      displayId: result.display_id,
-      pngBase64: result.png_base64,
+    const image = result.images.find((candidate) => candidate.mimeType === "image/png")
+    if (!image) {
+      throw new ComputerError("COMPUTER_BACKEND_ERROR", "CUA Driver returned no PNG desktop observation")
     }
+    return { computerId: input.computerId, displayId: input.displayId, pngBase64: image.dataBase64 }
   }
 
   async act(action: ComputerBackendAction) {
-    const result = await this.request(action.kind, action, ActionResult, "effect")
-    return { accepted: true as const, backendActionId: result.backend_action_id }
+    this.assertIdentity(action)
+    let result: ToolResult
+    try {
+      result = await this.performAction(action)
+    } catch (error) {
+      if (error instanceof ComputerError) throw error
+      throw new ComputerError(
+        "COMPUTER_OUTCOME_UNKNOWN",
+        "CUA Driver action did not return a result",
+        { operation: action.kind },
+        error instanceof Error ? { cause: error } : undefined,
+      )
+    }
+    assertToolResult(action.kind, result)
+    return { accepted: true as const, backendActionId: randomUUID() }
+  }
+
+  private performAction(action: ComputerBackendAction): Promise<ToolResult> {
+    return Promise.all([this.driver(), loadCuaSdk()]).then(([driver, sdk]) => this.dispatchAction(driver, sdk, action))
+  }
+
+  private dispatchAction(driver: CuaDriverLike, sdk: CuaSdk, action: ComputerBackendAction): Promise<ToolResult> {
+    const scope = sdk.DesktopScope.Desktop
+    if (action.kind === "click") {
+      return driver.click(
+        sdk.ClickInput.new({
+          x: action.x,
+          y: action.y,
+          scope,
+          session: this.driverSession,
+          button: action.button === "left" ? sdk.ClickButton.Left : sdk.ClickButton.Right,
+          count: 1,
+        }),
+      )
+    }
+    if (action.kind === "type_text") {
+      return driver.typeText(sdk.TypeTextInput.new({ text: action.text, scope, session: this.driverSession }))
+    }
+    if (action.kind === "keypress") {
+      if (action.keys.length === 1) {
+        return driver.pressKey(sdk.PressKeyInput.new({ key: action.keys[0]!, scope, session: this.driverSession }))
+      }
+      return driver.hotkey(sdk.HotkeyInput.new({ keys: action.keys, scope, session: this.driverSession }))
+    }
+    if (action.kind === "scroll") {
+      const direction = {
+        up: sdk.ScrollDirection.Up,
+        down: sdk.ScrollDirection.Down,
+        left: sdk.ScrollDirection.Left,
+        right: sdk.ScrollDirection.Right,
+      }[action.direction]
+      return driver.scroll(
+        sdk.ScrollInput.new({
+          x: action.x,
+          y: action.y,
+          direction,
+          scope,
+          session: this.driverSession,
+          by: sdk.ScrollBy.Line,
+          amount: BigInt(action.amount),
+        }),
+      )
+    }
+    return driver.drag(
+      sdk.DragInput.new({
+        fromX: action.from.x,
+        fromY: action.from.y,
+        toX: action.to.x,
+        toY: action.to.y,
+        scope,
+        session: this.driverSession,
+        durationMs: BigInt(action.durationMs),
+        button: sdk.ClickButton.Left,
+      }),
+    )
+  }
+
+  private async endDriverSession() {
+    if (this.ended) return
+    this.ended = true
+    const [driver, sdk] = await Promise.all([this.driver(), loadCuaSdk()])
+    await driver.endSession(sdk.EndSessionInput.new({ session: this.driverSession }))
   }
 
   async destroy(input: { computerId: string }) {
-    await this.request("session_destroy", { computer_id: input.computerId }, DestroyResult, "effect")
+    this.assertIdentity(input)
+    try {
+      await this.endDriverSession()
+    } catch (error) {
+      throw new ComputerError(
+        "COMPUTER_OUTCOME_UNKNOWN",
+        "CUA Driver session destruction did not return a result",
+        { operation: "session_destroy", computerId: input.computerId },
+        error instanceof Error ? { cause: error } : undefined,
+      )
+    }
+    delete this.identity
     return { destroyed: true as const }
   }
 
-  private async disposeOwnedRuntime() {
-    const child = this.child
-    const workspaceDirectory = this.workspaceDirectory
-    this.child = undefined
-    this.workspaceDirectory = undefined
-    const cleanup = await Promise.allSettled([
-      ...(child ? [ProcessSupervisor.disposeAndWaitForExit(child, "computer runtime bundle")] : []),
-      ...(workspaceDirectory ? [fs.rm(workspaceDirectory, { recursive: true, force: true })] : []),
-    ])
-    const failures = cleanup.flatMap((result) => (result.status === "rejected" ? [result.reason] : []))
-    if (failures.length === 1) throw computerError(failures[0])
-    if (failures.length > 1) {
-      throw computerError(new AggregateError(failures, "Computer runtime process and workspace cleanup failed"))
-    }
-  }
-
   async close() {
-    this.closePromise ??= this.disposeOwnedRuntime()
-    return this.closePromise
+    if (this.identity) await this.endDriverSession()
+    delete this.identity
   }
 }

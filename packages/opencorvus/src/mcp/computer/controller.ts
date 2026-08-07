@@ -160,6 +160,7 @@ export class ComputerController {
     const observation = this.observation(binding)
     const session = this.session(binding.computerId)
     if (action.kind === "click") this.point(observation, { x: action.x, y: action.y }, "click point")
+    if (action.kind === "scroll") this.point(observation, { x: action.x, y: action.y }, "scroll point")
     if (action.kind === "drag") {
       this.point(observation, action.from, "drag start")
       this.point(observation, action.to, "drag end")

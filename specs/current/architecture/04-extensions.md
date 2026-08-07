@@ -415,7 +415,7 @@ OpenCorvus 作为 client / host 接入外部或 package-scoped MCP server，并�
 
 ### Computer Use
 
-`default/mcp/computer` 是平台内置、默认禁用的 Virtual Machine（VM，虚拟机）Computer Use MCP，
+`default/mcp/computer` 是平台内置、默认禁用的 host-native Computer Use MCP，
 不是 Expert Squad、Mission workflow 或 Browser 的别名。直接 Chat/Work 通过显式
 `primary_assistant_capabilities.<agent>.mcp_server_refs` assignment 使用它；active Expert Squad 只能通过
 Harness 中精确的 `default/mcp/computer/tool/*` refs 投影同一组平台工具。两种入口都保留相同的八个
@@ -428,26 +428,24 @@ disabled-by-default Computer 的有效运行授权事实，因此 server 与其 
 `visible`。
 
 每个 Conversation Session 拥有独立的 Computer scoped MCP connection owner；不同 Session 不共享
-controller、backend process 或 observation authority，删除 Session 会关闭精确 owner。每次 `observe`
+controller、CUA Driver logical session 或 observation authority，删除 Session 会关闭精确 owner。每次 `observe`
 形成一个绑定 computer、display、observation、digest 与像素边界的单次 capability；动作在第一次异步
 backend 调用前原子消费它。create、input 与 destroy 都是 effect operation，派发后响应丢失统一返回
 `COMPUTER_OUTCOME_UNKNOWN`，不得 retry、reconnect replay 或切换 transport。
 
-Computer runtime 只执行 `computer-runtime provision` 写入的内容寻址 bundle。唯一 manifest v1 完整锁定 launcher、
-narrow adapter、Python、wheel lock、QEMU（Quick Emulator，快速模拟器）、firmware、licensed guest image、
-viewer、network topology、SBOM（Software Bill of Materials，软件物料清单）、licenses、provenance、
-attestation 与 exhaustive file inventory；verifier 拒绝 path escape、symbolic link、hard link、undeclared file、
-长度或 SHA-256（Secure Hash Algorithm 256-bit，256 位安全散列算法）漂移。launcher 不读取 `PATH`、system
-Python 或 ambient `TEMP`/`TMP`，只获得 bundle identity 与 OpenCorvus 管理的单 Session workspace。Conversation、
-Orchestrator 与 Worker 的 scoped MCP owner identity 是 workspace authority 的单一来源；MCP 子进程不得自行选择
-随机 workspace。manifest v1 的 viewer 固定使用 `workspace-descriptor-v1`：runtime 只把 exact computer/display
-binding 与 native viewer 参数写入 host-owned `viewer.json`，宿主 API 校验相同 identity 后从已验证 bundle 启动
-viewer，credential 不经过普通 Tool result。
+OpenCorvus 固定依赖并随应用分发 `@trycua/cua-driver`。Host 通过同进程 `CuaDriver.create()` 创建唯一 native
+driver，不发现或启动 daemon、`PATH` executable、Python、Virtual Machine（VM，虚拟机）、guest image、viewer
+或 cloud runtime。Windows 使用 Win32 与 UI Automation（UIA，用户界面自动化）；macOS 使用 Accessibility
+与 Screen Recording 权限，权限归属签名后的 OpenCorvus application identity。产品不提供第二 runtime 或 fallback。
 
-模型可见 `session_create` 不返回 viewer command、可执行路径、locator credential 或 secret。当前 release 已有
-宿主认证的 native viewer 解析与启动通道，但尚未实现关闭 Agent adapter 且保持 VM 存活的 takeover/return
-lifecycle，也没有真实 licensed Windows bundle。因此 viewer 人工视觉、takeover 与 Luna 视觉闭环保持未验收；
-禁止以隐藏 MCP tool、UI-only metadata、Browser WebView 或 mock screenshot 替代该缺口。
+每个 scoped owner 在同一物理桌面上启动独立 CUA logical session。`session_create` 返回 host desktop、真实 display
+与 driver version，不承诺虚拟机级进程、凭据或屏幕隔离。`observe` 直接返回当前桌面 PNG（Portable Network
+Graphics，便携式网络图形）Attachment；click、text、key chord、point scroll 与 drag 通过 typed SDK 输入执行。
+takeover 撤销当前 Agent run capability 并断开其 MCP adapter，桌面与 CUA session 继续存活且由用户直接操作；
+return 生成不同的 run capability，新的 controller 必须先用可见 `session_create` 附着，再 `observe`。显式
+destroy 只结束精确 logical session 并保留当前 adapter 建立下一会话的能力；Session disposal 结束精确 owner，
+只有 host authority disposal 才关闭 application-owned driver。模型面仍只有八个工具，不存在
+viewer tool、Browser WebView、文件轮询或 UI-only lifecycle source。
 
 Multica Squad 导入复用同一 MCP client 与 package projection，不创建第二套运行时。mapping 为每个 source
 Agent 显式声明 `base_role`；普通 routing Squad 使用 `{}` workflow 和 Task direct

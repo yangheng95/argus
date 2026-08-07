@@ -165,7 +165,7 @@ function computerResultMetadata(
     return {
       computerId: snake.data.computer_id,
       displayId: snake.data.display_id,
-      ...(typeof snake.data.runtime_bundle_id === "string" ? { runtimeBundleId: snake.data.runtime_bundle_id } : {}),
+      ...(typeof snake.data.driver_version === "string" ? { driverVersion: snake.data.driver_version } : {}),
     }
   }
   const camel = ComputerCamelIdentityContent.safeParse(structuredContent)
