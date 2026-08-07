@@ -1,10 +1,6 @@
-export interface AudioAttachment {
-  data: Buffer
-  mime: string
-  filename?: string
-  size: number
-  duration?: number
-}
+import type { AudioSource } from "./stt/types"
+
+export type AudioAttachment = AudioSource
 
 export interface ChannelAdapter {
   readonly platform: string
@@ -18,6 +14,8 @@ export interface ChannelAdapter {
 }
 
 export interface IncomingMessage {
+  /** Stable provider event/message identity used for durable ingress ownership. */
+  id?: string
   platform: string
   channel: string
   thread: string

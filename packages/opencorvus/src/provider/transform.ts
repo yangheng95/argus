@@ -2,11 +2,16 @@ import type { ModelMessage } from "ai"
 import { mergeDeep, unique } from "remeda"
 import type { JSONSchema7 } from "@ai-sdk/provider"
 import type { JSONSchema } from "zod/v4/core"
-import type { Provider } from "./provider"
+import type { ProviderModel } from "./model-schema"
 import type { ModelsDev } from "./models"
 import { iife } from "@/util/iife"
 import { Flag } from "@/flag/flag"
-import { Filesystem } from "@/util/filesystem"
+import { AttachmentStore } from "@/storage/attachment-store"
+import { prepareModelImageInput } from "@/session/model-image-input"
+import { decodeDataUrlBase64Bytes, decodeRawBase64Payload } from "@/session/text-mime"
+import { normalizeVendorMessages } from "./vendor-messages"
+import { GLM_EVALUATION_TEMPERATURE, THINKING_MODEL_TOP_P } from "./sampling"
+import { requiresOpenAIStrictToolSchema } from "./strict-tool-schema"
 
 type Modality = NonNullable<ModelsDev.Model["modalities"]>["input"][number]
 
@@ -19,13 +24,93 @@ function mimeToModality(mime: string): Modality | undefined {
 }
 
 export namespace ProviderTransform {
-  export const OUTPUT_TOKEN_MAX = Flag.OPENCORVUS_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 32_000
+  export const OUTPUT_TOKEN_MAX = Flag.OPENCORVUS_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 64_000
+  export type ToolChoice = "auto" | "required" | "none" | { type: "tool"; toolName: string }
+  export type ToolResultAttachmentTransport =
+    | {
+        contentType: "image-data"
+        adapter: "native" | "hexin-openai-compatible"
+      }
+    | {
+        contentType: "file-data"
+        adapter: "openai-responses"
+      }
+    | {
+        contentType: "unsupported"
+        reason: string
+      }
+
+  const NATIVE_TOOL_RESULT_MEDIA_ADAPTERS = new Set([
+    "@ai-sdk/amazon-bedrock",
+    "@ai-sdk/anthropic",
+    "@ai-sdk/gateway",
+    "@ai-sdk/google",
+    "@ai-sdk/google-vertex",
+    "@ai-sdk/google-vertex/anthropic",
+    "@ai-sdk/openai",
+    "@openrouter/ai-sdk-provider",
+  ])
+
+  /**
+   * Identifies the one typed AI SDK (Artificial Intelligence Software
+   * Development Kit) content part that the configured provider adapter can
+   * preserve for a tool-result attachment.
+   *
+   * Images keep their dedicated `image-data` semantics and model capability
+   * check. Arbitrary files use `file-data` only on the exact OpenAI Responses
+   * route configured by `provider/vendor.ts`; the installed OpenAI adapter
+   * maps that part to `input_file` without restricting the MIME (Multipurpose
+   * Internet Mail Extensions) type. Generic OpenAI-compatible, Anthropic,
+   * Bedrock, Gateway, and OpenRouter adapters are deliberately not inferred
+   * from package or model names. Hexin remains the one separately proven
+   * OpenAI-compatible image codec.
+   */
+  export function toolResultAttachmentTransport(model: ProviderModel, mime: string): ToolResultAttachmentTransport {
+    const modality = mimeToModality(mime)
+    if (modality === "image") {
+      if (!model.capabilities.input.image) {
+        return {
+          contentType: "unsupported",
+          reason: `model ${model.id} does not declare image input capability`,
+        }
+      }
+
+      if (model.providerID === "hexin" && model.api.npm === "@ai-sdk/openai-compatible") {
+        return {
+          contentType: "image-data",
+          adapter: "hexin-openai-compatible",
+        }
+      }
+
+      if (NATIVE_TOOL_RESULT_MEDIA_ADAPTERS.has(model.api.npm)) {
+        return {
+          contentType: "image-data",
+          adapter: "native",
+        }
+      }
+
+      return {
+        contentType: "unsupported",
+        reason: `provider adapter ${model.api.npm} has no verified typed image tool-result transport`,
+      }
+    }
+
+    if (model.providerID === "openai" && model.api.npm === "@ai-sdk/openai") {
+      return {
+        contentType: "file-data",
+        adapter: "openai-responses",
+      }
+    }
+
+    return {
+      contentType: "unsupported",
+      reason: `provider ${model.providerID} adapter ${model.api.npm} has no verified arbitrary file-data tool-result transport`,
+    }
+  }
 
   // Maps npm package to the key the AI SDK expects for providerOptions
   function sdkKey(npm: string): string | undefined {
     switch (npm) {
-      case "@ai-sdk/github-copilot":
-        return "copilot"
       case "@ai-sdk/openai":
       case "@ai-sdk/azure":
         return "openai"
@@ -45,134 +130,55 @@ export namespace ProviderTransform {
     return undefined
   }
 
-  function normalizeMessages(msgs: ModelMessage[], model: Provider.Model): ModelMessage[] {
-    // Anthropic rejects messages with empty content - filter out empty string messages
-    // and remove empty text/reasoning parts from array content
-    if (model.api.npm === "@ai-sdk/anthropic") {
-      msgs = msgs
-        .map((msg) => {
-          if (typeof msg.content === "string") {
-            if (msg.content === "") return undefined
-            return msg
-          }
-          if (!Array.isArray(msg.content)) return msg
-          const filtered = msg.content.filter((part) => {
-            if (part.type === "text" || part.type === "reasoning") {
-              return part.text !== ""
-            }
-            return true
-          })
-          if (filtered.length === 0) return undefined
-          return { ...msg, content: filtered }
-        })
-        .filter((msg): msg is ModelMessage => msg !== undefined && msg.content !== "")
-    }
-
-    if (model.api.id.includes("claude")) {
-      return msgs.map((msg) => {
-        if ((msg.role === "assistant" || msg.role === "tool") && Array.isArray(msg.content)) {
-          msg.content = msg.content.map((part) => {
-            if ((part.type === "tool-call" || part.type === "tool-result") && "toolCallId" in part) {
-              return {
-                ...part,
-                toolCallId: part.toolCallId.replace(/[^a-zA-Z0-9_-]/g, "_"),
-              }
-            }
-            return part
-          })
-        }
-        return msg
-      })
-    }
-    if (
-      model.providerID === "mistral" ||
-      model.api.id.toLowerCase().includes("mistral") ||
-      model.api.id.toLocaleLowerCase().includes("devstral")
-    ) {
-      const result: ModelMessage[] = []
-      for (let i = 0; i < msgs.length; i++) {
-        const msg = msgs[i]
-        const nextMsg = msgs[i + 1]
-
-        if ((msg.role === "assistant" || msg.role === "tool") && Array.isArray(msg.content)) {
-          msg.content = msg.content.map((part) => {
-            if ((part.type === "tool-call" || part.type === "tool-result") && "toolCallId" in part) {
-              // Mistral requires alphanumeric tool call IDs with exactly 9 characters
-              const normalizedId = part.toolCallId
-                .replace(/[^a-zA-Z0-9]/g, "") // Remove non-alphanumeric characters
-                .substring(0, 9) // Take first 9 characters
-                .padEnd(9, "0") // Pad with zeros if less than 9 characters
-
-              return {
-                ...part,
-                toolCallId: normalizedId,
-              }
-            }
-            return part
-          })
-        }
-
-        result.push(msg)
-
-        // Fix message sequence: tool messages cannot be followed by user messages
-        if (msg.role === "tool" && nextMsg?.role === "user") {
-          result.push({
-            role: "assistant",
-            content: [
-              {
-                type: "text",
-                text: "Done.",
-              },
-            ],
-          })
-        }
-      }
-      return result
-    }
-
-    if (typeof model.capabilities.interleaved === "object" && model.capabilities.interleaved.field) {
-      const field = model.capabilities.interleaved.field
-      return msgs.map((msg) => {
-        if (msg.role === "assistant" && Array.isArray(msg.content)) {
-          const reasoningParts = msg.content.filter((part: any) => part.type === "reasoning")
-          const reasoningText = reasoningParts.map((part: any) => part.text).join("")
-
-          // Filter out reasoning parts from content
-          const filteredContent = msg.content.filter((part: any) => part.type !== "reasoning")
-
-          // Include reasoning_content | reasoning_details directly on the message for all assistant messages
-          if (reasoningText) {
-            return {
-              ...msg,
-              content: filteredContent,
-              providerOptions: {
-                ...msg.providerOptions,
-                openaiCompatible: {
-                  ...(msg.providerOptions as any)?.openaiCompatible,
-                  [field]: reasoningText,
-                },
-              },
-            }
-          }
-
-          return {
-            ...msg,
-            content: filteredContent,
-          }
-        }
-
-        return msg
-      })
-    }
-
-    return msgs
+  /**
+   * Apply vendor-specific message normalization. Implementation lives in
+   * provider/vendor-messages.ts — see that file for the per-vendor rules
+   * and the pre-vs-terminal staging model.
+   */
+  function normalizeMessages(msgs: ModelMessage[], model: ProviderModel): ModelMessage[] {
+    return normalizeVendorMessages(msgs, model)
   }
 
-  function applyCaching(msgs: ModelMessage[], model: Provider.Model): ModelMessage[] {
-    const system = msgs.filter((msg) => msg.role === "system").slice(0, 2)
+  function applyCaching(msgs: ModelMessage[], model: ProviderModel): ModelMessage[] {
+    // Anthropic allows up to 4 cache_control breakpoints per request. Layout:
+    //   1. system[0]        — env/model header (stable per session)
+    //   2. system[last]     — last system message; covers the WHOLE system
+    //                          tail (skills, instructions, structured-output
+    //                          rules) at 1h TTL. Without this breakpoint the
+    //                          stable middle of system would only get the
+    //                          5m TTL coverage from breakpoint #3.
+    //   3. messages[-2]     — second-to-last user/assistant message at 5m
+    //   4. messages[-1]     — last user/assistant message at 5m
+    // When system has only 1-2 entries, the system slice naturally collapses
+    // (deduped via a Set below) so we don't waste budget.
+    const allSystem = msgs.filter((msg) => msg.role === "system")
+    const systemEdges =
+      allSystem.length === 0
+        ? []
+        : allSystem.length === 1
+          ? [allSystem[0]]
+          : [allSystem[0], allSystem[allSystem.length - 1]]
     const final = msgs.filter((msg) => msg.role !== "system").slice(-2)
 
-    const providerOptions = {
+    // System messages use 1h TTL — they are stable across tool-loop steps and
+    // often across multiple invocations within the same task.  Non-system
+    // (conversation tail) messages use the default 5m TTL.
+    const systemOptions = {
+      anthropic: {
+        cacheControl: { type: "ephemeral", ttl: "1h" },
+      },
+      openrouter: {
+        cacheControl: { type: "ephemeral" },
+      },
+      bedrock: {
+        cachePoint: { type: "default" },
+      },
+      openaiCompatible: {
+        cache_control: { type: "ephemeral" },
+      },
+    }
+
+    const tailOptions = {
       anthropic: {
         cacheControl: { type: "ephemeral" },
       },
@@ -185,91 +191,58 @@ export namespace ProviderTransform {
       openaiCompatible: {
         cache_control: { type: "ephemeral" },
       },
-      copilot: {
-        copilot_cache_control: { type: "ephemeral" },
-      },
     }
 
-    for (const msg of unique([...system, ...final])) {
+    const systemSet = new Set<ModelMessage>(systemEdges)
+    const optionsByMessage = new Map<ModelMessage, Record<string, any>>()
+    for (const msg of unique([...systemEdges, ...final])) {
+      optionsByMessage.set(msg, systemSet.has(msg) ? systemOptions : tailOptions)
+    }
+
+    return msgs.map((msg) => {
+      const opts = optionsByMessage.get(msg)
+      if (!opts) return msg
       const useMessageLevelOptions = model.providerID === "anthropic" || model.providerID.includes("bedrock")
       const shouldUseContentOptions = !useMessageLevelOptions && Array.isArray(msg.content) && msg.content.length > 0
 
       if (shouldUseContentOptions) {
         const lastContent = msg.content[msg.content.length - 1]
-        if (lastContent && typeof lastContent === "object") {
-          lastContent.providerOptions = mergeDeep(lastContent.providerOptions ?? {}, providerOptions)
-          continue
+        if (lastContent && typeof lastContent === "object" && "providerOptions" in lastContent) {
+          const nextContent = [...msg.content]
+          nextContent[nextContent.length - 1] = {
+            ...lastContent,
+            providerOptions: mergeDeep(lastContent.providerOptions ?? {}, opts),
+          }
+          return { ...msg, content: nextContent } as ModelMessage
         }
       }
 
-      msg.providerOptions = mergeDeep(msg.providerOptions ?? {}, providerOptions)
-    }
-
-    return msgs
+      return { ...msg, providerOptions: mergeDeep(msg.providerOptions ?? {}, opts) } as ModelMessage
+    })
   }
 
-  function unsupportedParts(msgs: ModelMessage[], model: Provider.Model): ModelMessage[] {
+  function unsupportedParts(msgs: ModelMessage[], model: ProviderModel): ModelMessage[] {
     return msgs.map((msg) => {
       if (msg.role !== "user" || !Array.isArray(msg.content)) return msg
 
       const filtered = msg.content.map((part) => {
         if (part.type !== "file" && part.type !== "image") return part
 
-        // Check for empty base64 image data
         if (part.type === "image") {
           const imageStr = part.image.toString()
           if (imageStr.startsWith("data:")) {
-            const match = imageStr.match(/^data:([^;]+);base64,(.*)$/)
-            if (match && (!match[2] || match[2].length === 0)) {
-              return {
-                type: "text" as const,
-                text: "ERROR: Image file is empty or corrupted. Please provide a valid image.",
-              }
-            }
+            decodeDataUrlBase64Bytes(imageStr, "ProviderTransform image input")
           }
         }
 
-        const mime = part.type === "image" ? part.image.toString().split(";")[0].replace("data:", "") : part.mediaType
+        const mime =
+          part.type === "image"
+            ? ((part as { mediaType?: string }).mediaType ?? part.image.toString().split(";")[0].replace("data:", ""))
+            : (part.mediaType ?? (part as { mime?: string }).mime)
+        if (!mime) return part
         const filename = part.type === "file" ? part.filename : undefined
         const modality = mimeToModality(mime)
-        if (!modality) {
-          // Safety net: text-like MIME file parts (e.g. text/typescript, application/json)
-          // should have been converted to text parts in prompt.ts, but older persisted
-          // messages or tool result attachments may still carry these MIMEs.
-          if (Filesystem.isTextLikeMime(mime) && part.type === "file") {
-            try {
-              // part.data can be string (data URL or base64), Uint8Array, ArrayBuffer, or URL
-              const data = part.data
-              let text: string | undefined
-              if (data instanceof ArrayBuffer) {
-                text = Buffer.from(data).toString("utf-8")
-              } else if (data instanceof Uint8Array) {
-                text = Buffer.from(data.buffer, data.byteOffset, data.byteLength).toString("utf-8")
-              } else {
-                const str = data instanceof URL ? data.toString() : typeof data === "string" ? data : ""
-                if (str.startsWith("data:") && str.includes(",")) {
-                  const base64Data = str.slice(str.indexOf(",") + 1)
-                  text = Buffer.from(base64Data, "base64").toString("utf-8")
-                } else if (str.length > 0) {
-                  // Might be raw base64 or already text
-                  text = str
-                }
-              }
-              if (text) {
-                const label = filename ? `File: ${filename}\n` : ""
-                return { type: "text" as const, text: label + text }
-              }
-            } catch {
-              // fall through to error
-            }
-            const name = filename ? `"${filename}"` : "file"
-            return {
-              type: "text" as const,
-              text: `ERROR: Cannot inline ${name} (unsupported file type: ${mime}). Inform the user.`,
-            }
-          }
-          return part
-        }
+        if (!modality) return part
         if (model.capabilities.input[modality]) return part
 
         const name = filename ? `"${filename}"` : modality
@@ -283,8 +256,144 @@ export namespace ProviderTransform {
     })
   }
 
-  export function message(msgs: ModelMessage[], model: Provider.Model, _options: Record<string, unknown>) {
+  function filePartMime(part: { mediaType?: unknown; mime?: unknown }): string | undefined {
+    if (typeof part.mediaType === "string" && part.mediaType.length > 0) return part.mediaType
+    if (typeof part.mime === "string" && part.mime.length > 0) return part.mime
+    return undefined
+  }
+
+  async function inlineLocalFilePart(part: unknown): Promise<{ part: unknown; note?: string }> {
+    if (!part || typeof part !== "object" || Array.isArray(part)) return { part }
+    const record = part as Record<string, unknown>
+    if (record.type !== "file") return { part }
+    const mime = filePartMime(record)
+    if (!mime) return { part }
+    const mediaType = mime
+
+    // AI SDK v6 `file` part shape contract diverges by field:
+    //   - `data`: openai-compatible adapter ALWAYS prepends `data:<mediaType>;base64,`
+    //     itself when serializing to image_url. Feeding it a full data URL
+    //     here double-wraps; some OpenAI-compatible gateways reject it as "Non-base64 digit
+    //     found". Inline must be RAW base64 payload only.
+    //   - `url`: adapter forwards verbatim. Full data URL is correct.
+    const ref = (value: unknown): string | undefined =>
+      typeof value === "string" && value.length > 0 && !value.startsWith("data:") ? value : undefined
+
+    async function modelDataUrlFromReference(
+      localRef: string,
+    ): Promise<{ dataUrl: string; note?: string } | undefined> {
+      const located = AttachmentStore.nameFromUrl(localRef)
+      if (!located) return undefined
+      const bytes = await AttachmentStore.read(located.projectID, located.name)
+      const prepared = await prepareModelImageInput({
+        mime: mediaType,
+        bytes,
+        source: typeof record.filename === "string" ? record.filename : localRef,
+      })
+      return {
+        dataUrl: `data:${prepared.mime};base64,${prepared.bytes.toString("base64")}`,
+        ...(prepared.note ? { note: prepared.note } : {}),
+      }
+    }
+
+    const source = typeof record.filename === "string" ? record.filename : "inline file data URL"
+    const dataUrlFromBytes = async (bytes: Buffer): Promise<{ dataUrl: string; note?: string }> => {
+      if (!mediaType.startsWith("image/")) return { dataUrl: `data:${mediaType};base64,${bytes.toString("base64")}` }
+      const prepared = await prepareModelImageInput({
+        mime: mediaType,
+        bytes,
+        source,
+      })
+      return {
+        dataUrl: `data:${prepared.mime};base64,${prepared.bytes.toString("base64")}`,
+        ...(prepared.note ? { note: prepared.note } : {}),
+      }
+    }
+
+    if (typeof record.data === "string" && record.data.startsWith("data:")) {
+      const prepared = await dataUrlFromBytes(
+        decodeDataUrlBase64Bytes(record.data, `ProviderTransform file.data ${source}`),
+      )
+      return {
+        part: {
+          ...record,
+          data: prepared.dataUrl.replace(/^data:[^;]+;base64,/, ""),
+          mediaType: prepared.dataUrl.slice("data:".length, prepared.dataUrl.indexOf(";base64,")),
+        },
+        ...(prepared.note ? { note: prepared.note } : {}),
+      }
+    }
+    if (typeof record.url === "string" && record.url.startsWith("data:")) {
+      const prepared = await dataUrlFromBytes(
+        decodeDataUrlBase64Bytes(record.url, `ProviderTransform file.url ${source}`),
+      )
+      return {
+        part: {
+          ...record,
+          url: prepared.dataUrl,
+          mediaType: prepared.dataUrl.slice("data:".length, prepared.dataUrl.indexOf(";base64,")),
+        },
+        ...(prepared.note ? { note: prepared.note } : {}),
+      }
+    }
+
+    const dataRef = ref(record.data)
+    if (dataRef) {
+      const prepared = await modelDataUrlFromReference(dataRef)
+      if (prepared) {
+        return {
+          part: { ...record, data: prepared.dataUrl.replace(/^data:[^;]+;base64,/, "") },
+          ...(prepared.note ? { note: prepared.note } : {}),
+        }
+      }
+      if (!/^https?:\/\//i.test(dataRef)) {
+        const raw = await dataUrlFromBytes(decodeRawBase64Payload(dataRef, `ProviderTransform file.data ${source}`))
+        return {
+          part: {
+            ...record,
+            data: raw.dataUrl.replace(/^data:[^;]+;base64,/, ""),
+            mediaType: raw.dataUrl.slice("data:".length, raw.dataUrl.indexOf(";base64,")),
+          },
+          ...(raw.note ? { note: raw.note } : {}),
+        }
+      }
+    }
+    const urlRef = ref(record.url)
+    if (urlRef) {
+      const prepared = await modelDataUrlFromReference(urlRef)
+      if (prepared) {
+        return {
+          part: { ...record, url: prepared.dataUrl },
+          ...(prepared.note ? { note: prepared.note } : {}),
+        }
+      }
+    }
+    return { part }
+  }
+
+  async function inlineLocalAttachments(msgs: ModelMessage[]): Promise<ModelMessage[]> {
+    const out: ModelMessage[] = []
+    for (const msg of msgs) {
+      if (!Array.isArray(msg.content)) {
+        out.push(msg)
+        continue
+      }
+      const content: unknown[] = []
+      let changed = false
+      for (const part of msg.content) {
+        const next = await inlineLocalFilePart(part)
+        changed ||= next.part !== part || typeof next.note === "string"
+        content.push(next.part)
+        if (next.note) content.push({ type: "text", text: next.note })
+      }
+      out.push(changed ? ({ ...msg, content } as ModelMessage) : msg)
+    }
+    return out
+  }
+
+  export async function message(msgs: ModelMessage[], model: ProviderModel, _options: Record<string, unknown>) {
     msgs = unsupportedParts(msgs, model)
+    msgs = await inlineLocalAttachments(msgs)
     msgs = normalizeMessages(msgs, model)
     if (
       (model.providerID === "anthropic" ||
@@ -315,7 +424,9 @@ export namespace ProviderTransform {
         return {
           ...msg,
           providerOptions: remap(msg.providerOptions),
-          content: msg.content.map((part) => ({ ...part, providerOptions: remap(part.providerOptions) })),
+          content: msg.content.map((part) =>
+            "providerOptions" in part ? { ...part, providerOptions: remap(part.providerOptions) } : part,
+          ),
         } as typeof msg
       })
     }
@@ -323,14 +434,18 @@ export namespace ProviderTransform {
     return msgs
   }
 
-  export function temperature(model: Provider.Model) {
+  export function temperature(model: ProviderModel) {
+    if (model.transform?.sampling && "temperature" in model.transform.sampling) {
+      return model.transform.sampling.temperature
+    }
     const id = model.id.toLowerCase()
     if (id.includes("qwen")) return 0.55
     if (id.includes("claude")) return undefined
     if (id.includes("gemini")) return 1.0
-    if (id.includes("glm-4.6")) return 1.0
-    if (id.includes("glm-4.7")) return 1.0
+    if (id.includes("glm-4.6")) return GLM_EVALUATION_TEMPERATURE
+    if (id.includes("glm-4.7")) return GLM_EVALUATION_TEMPERATURE
     if (id.includes("minimax-m2")) return 1.0
+    if (isHexinMoonshotFixedTemperatureModel(id)) return undefined
     if (id.includes("kimi-k2")) {
       // kimi-k2-thinking & kimi-k2.5 && kimi-k2p5 && kimi-k2-5
       if (["thinking", "k2.", "k2p", "k2-5"].some((s) => id.includes(s))) {
@@ -341,16 +456,121 @@ export namespace ProviderTransform {
     return undefined
   }
 
-  export function topP(model: Provider.Model) {
+  function hexinToolContent(content: unknown): unknown {
+    let parsed = content
+    if (typeof content === "string") {
+      try {
+        parsed = JSON.parse(content)
+      } catch {
+        return content
+      }
+    }
+    if (!Array.isArray(parsed)) return content
+
+    const hasImage = parsed.some(
+      (part) =>
+        part &&
+        typeof part === "object" &&
+        ["image-data", "image-url", "image_url"].includes(String((part as Record<string, unknown>).type)),
+    )
+    if (!hasImage) return content
+
+    return parsed.map((part, index) => {
+      if (!part || typeof part !== "object" || Array.isArray(part)) {
+        throw new Error(`Hexin tool-result media part ${index} must be an object`)
+      }
+      const record = part as Record<string, unknown>
+      if (record.type === "text" && typeof record.text === "string") {
+        return { type: "text", text: record.text }
+      }
+      if (
+        record.type === "image-data" &&
+        typeof record.mediaType === "string" &&
+        record.mediaType.startsWith("image/") &&
+        typeof record.data === "string" &&
+        record.data.length > 0
+      ) {
+        return {
+          type: "image_url",
+          image_url: {
+            url: `data:${record.mediaType};base64,${record.data}`,
+          },
+        }
+      }
+      if (record.type === "image-url" && typeof record.url === "string" && record.url.length > 0) {
+        return {
+          type: "image_url",
+          image_url: { url: record.url },
+        }
+      }
+      if (
+        record.type === "image_url" &&
+        record.image_url &&
+        typeof record.image_url === "object" &&
+        !Array.isArray(record.image_url) &&
+        typeof (record.image_url as Record<string, unknown>).url === "string"
+      ) {
+        return {
+          type: "image_url",
+          image_url: { url: (record.image_url as Record<string, string>).url },
+        }
+      }
+      throw new Error(`Hexin tool-result media part ${index} has unsupported type ${String(record.type)}`)
+    })
+  }
+
+  function hexinToolResultMediaBody(request: Record<string, unknown>): Record<string, unknown> {
+    if (!Array.isArray(request.messages)) return request
+    let changed = false
+    const messages = request.messages.map((message) => {
+      if (!message || typeof message !== "object" || Array.isArray(message)) return message
+      const record = message as Record<string, unknown>
+      if (record.role !== "tool") return message
+      const content = hexinToolContent(record.content)
+      if (content === record.content) return message
+      changed = true
+      return { ...record, content }
+    })
+    return changed ? { ...request, messages } : request
+  }
+
+  export function requestBody(providerID: string, body: unknown): unknown {
+    if (providerID !== "hexin") return body
+    if (!body || typeof body !== "object" || Array.isArray(body)) return body
+    const request = hexinToolResultMediaBody(body as Record<string, unknown>)
+    const modelID = typeof request.model === "string" ? request.model.toLowerCase() : ""
+    if (!isHexinMoonshotFixedTemperatureModel(modelID)) return request
+    return {
+      ...request,
+      temperature: 1,
+    }
+  }
+
+  function isHexinMoonshotFixedTemperatureModel(modelID: string) {
+    return /(^|\/)(kimi-k2\.6|kimi-k2\.7-code)$/.test(modelID)
+  }
+
+  export function shouldNormalizeRequestBody(providerID: string, apiNpm: string): boolean {
+    void apiNpm
+    return providerID === "hexin"
+  }
+
+  export function topP(model: ProviderModel) {
+    if (model.transform?.sampling && "topP" in model.transform.sampling) {
+      return model.transform.sampling.topP
+    }
     const id = model.id.toLowerCase()
     if (id.includes("qwen")) return 1
     if (["minimax-m2", "gemini", "kimi-k2.5", "kimi-k2p5", "kimi-k2-5"].some((s) => id.includes(s))) {
-      return 0.95
+      return THINKING_MODEL_TOP_P
     }
     return undefined
   }
 
-  export function topK(model: Provider.Model) {
+  export function topK(model: ProviderModel) {
+    if (model.transform?.sampling && "topK" in model.transform.sampling) {
+      return model.transform.sampling.topK
+    }
     const id = model.id.toLowerCase()
     if (id.includes("minimax-m2")) {
       if (["m2.", "m25", "m21"].some((s) => id.includes(s))) return 40
@@ -363,7 +583,7 @@ export namespace ProviderTransform {
   const WIDELY_SUPPORTED_EFFORTS = ["low", "medium", "high"]
   const OPENAI_EFFORTS = ["none", "minimal", ...WIDELY_SUPPORTED_EFFORTS, "xhigh"]
 
-  export function variants(model: Provider.Model): Record<string, Record<string, any>> {
+  export function variants(model: ProviderModel): Record<string, Record<string, any>> {
     if (!model.capabilities.reasoning) return {}
 
     const id = model.id.toLowerCase()
@@ -377,7 +597,10 @@ export namespace ProviderTransform {
       id.includes("glm") ||
       id.includes("mistral") ||
       id.includes("kimi") ||
-      // TODO: Remove this after models.dev data is fixed to use "kimi-k2.5" instead of "k2p5"
+      // models.dev currently ships the Kimi K2.5 release as "k2p5" (the
+      // dot is escaped because the registry uses dots as path separators).
+      // Match both forms so the family detection works regardless of which
+      // ID the upstream catalog returns this week.
       id.includes("k2p5")
     )
       return {}
@@ -460,32 +683,6 @@ export namespace ProviderTransform {
           )
         }
         return Object.fromEntries(OPENAI_EFFORTS.map((effort) => [effort, { reasoningEffort: effort }]))
-
-      case "@ai-sdk/github-copilot":
-        if (model.id.includes("gemini")) {
-          // currently github copilot only returns thinking
-          return {}
-        }
-        if (model.id.includes("claude")) {
-          return {
-            thinking: { thinking_budget: 4000 },
-          }
-        }
-        const copilotEfforts = iife(() => {
-          if (id.includes("5.1-codex-max") || id.includes("5.2") || id.includes("5.3"))
-            return [...WIDELY_SUPPORTED_EFFORTS, "xhigh"]
-          return WIDELY_SUPPORTED_EFFORTS
-        })
-        return Object.fromEntries(
-          copilotEfforts.map((effort) => [
-            effort,
-            {
-              reasoningEffort: effort,
-              reasoningSummary: "auto",
-              include: ["reasoning.encrypted_content"],
-            },
-          ]),
-        )
 
       case "@ai-sdk/cerebras":
       // https://v5.ai-sdk.dev/providers/ai-sdk-providers/cerebras
@@ -713,18 +910,14 @@ export namespace ProviderTransform {
   }
 
   export function options(input: {
-    model: Provider.Model
+    model: ProviderModel
     sessionID: string
     providerOptions?: Record<string, any>
   }): Record<string, any> {
-    const result: Record<string, any> = {}
+    const result: Record<string, any> = { ...(input.model.transform?.options ?? {}) }
 
     // openai and providers using openai package should set store to false by default.
-    if (
-      input.model.providerID === "openai" ||
-      input.model.api.npm === "@ai-sdk/openai" ||
-      input.model.api.npm === "@ai-sdk/github-copilot"
-    ) {
+    if (input.model.providerID === "openai" || input.model.api.npm === "@ai-sdk/openai") {
       result["store"] = false
     }
 
@@ -813,8 +1006,11 @@ export namespace ProviderTransform {
         result["textVerbosity"] = "low"
       }
 
-      if (input.model.providerID.startsWith("opencorvus")) {
+      if (input.model.providerID.startsWith("opencorvus") || input.model.api.npm === "@ai-sdk/azure") {
         result["promptCacheKey"] = input.sessionID
+      }
+
+      if (input.model.providerID.startsWith("opencorvus")) {
         result["include"] = ["reasoning.encrypted_content"]
         result["reasoningSummary"] = "auto"
       }
@@ -836,12 +1032,8 @@ export namespace ProviderTransform {
     return result
   }
 
-  export function smallOptions(model: Provider.Model) {
-    if (
-      model.providerID === "openai" ||
-      model.api.npm === "@ai-sdk/openai" ||
-      model.api.npm === "@ai-sdk/github-copilot"
-    ) {
+  export function smallOptions(model: ProviderModel) {
+    if (model.providerID === "openai" || model.api.npm === "@ai-sdk/openai") {
       if (model.api.id.includes("gpt-5")) {
         if (model.api.id.includes("5.")) {
           return { store: false, reasoningEffort: "low" }
@@ -877,7 +1069,7 @@ export namespace ProviderTransform {
     amazon: "bedrock",
   }
 
-  export function providerOptions(model: Provider.Model, options: { [x: string]: any }) {
+  export function providerOptions(model: ProviderModel, options: { [x: string]: any }) {
     if (model.api.npm === "@ai-sdk/gateway") {
       // Gateway providerOptions are split across two namespaces:
       // - `gateway`: gateway-native routing/caching controls (order, only, byok, etc.)
@@ -908,15 +1100,185 @@ export namespace ProviderTransform {
       return result
     }
 
-    const key = sdkKey(model.api.npm) ?? model.providerID
+    // Some Artificial Intelligence Software Development Kit providers derive
+    // providerOptionsName by splitting the configured provider name on ".".
+    // Mirror that only for packages known to use this convention; other
+    // providers use fixed names or their exact provider id.
+    const usesDotSplitOptions =
+      model.api.npm === "@ai-sdk/openai-compatible" ||
+      model.api.npm === "@ai-sdk/openai" ||
+      model.api.npm === "@ai-sdk/anthropic"
+    const key = sdkKey(model.api.npm) ?? (usesDotSplitOptions ? model.providerID.split(".")[0] : model.providerID)
+    if (model.api.npm === "@ai-sdk/azure") {
+      return { [key]: options, azure: options }
+    }
     return { [key]: options }
   }
 
-  export function maxOutputTokens(model: Provider.Model): number {
+  export function optionsForToolChoice(
+    model: ProviderModel,
+    options: { [x: string]: any },
+    toolChoice: ToolChoice | undefined,
+  ) {
+    if (!toolChoiceForcesToolCall(toolChoice)) return options
+    if (!hasKimiDashScopeThinkingToolChoiceConflict(model)) return options
+    if (options.enable_thinking !== true) return options
+    return { ...options, enable_thinking: false }
+  }
+
+  function toolChoiceForcesToolCall(toolChoice: ToolChoice | undefined) {
+    return toolChoice === "required" || (typeof toolChoice === "object" && toolChoice.type === "tool")
+  }
+
+  function hasKimiDashScopeThinkingToolChoiceConflict(model: ProviderModel) {
+    const modelID = `${model.id} ${model.api.id}`.toLowerCase()
+    return (
+      model.api.npm === "@ai-sdk/openai-compatible" &&
+      model.api.url?.includes("dashscope") === true &&
+      (modelID.includes("kimi-k2.5") || modelID.includes("kimi-k2p5") || modelID.includes("k2p5"))
+    )
+  }
+
+  export function maxOutputTokens(model: ProviderModel): number {
     return Math.min(model.limit.output, OUTPUT_TOKEN_MAX) || OUTPUT_TOKEN_MAX
   }
 
-  export function schema(model: Provider.Model, schema: JSONSchema.BaseSchema | JSONSchema7): JSONSchema7 {
+  const JSON_SCHEMA_ANNOTATION_KEYS = new Set([
+    "$schema",
+    "$comment",
+    "title",
+    "description",
+    "default",
+    "examples",
+    "deprecated",
+    "readOnly",
+    "writeOnly",
+  ])
+
+  function schemaValidationIdentity(value: unknown): string {
+    const normalize = (item: unknown): unknown => {
+      if (Array.isArray(item)) return item.map(normalize)
+      if (!item || typeof item !== "object") return item
+      return Object.fromEntries(
+        Object.entries(item as Record<string, unknown>)
+          .filter(([key]) => !JSON_SCHEMA_ANNOTATION_KEYS.has(key))
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([key, child]) => [key, normalize(child)]),
+      )
+    }
+    return JSON.stringify(normalize(value))
+  }
+
+  function mergeEnumPropertySchemas(schemas: readonly Record<string, unknown>[]): Record<string, unknown> | undefined {
+    const values: unknown[] = []
+    for (const schema of schemas) {
+      if (schema.type !== "string") return undefined
+      if ("const" in schema) {
+        values.push(schema.const)
+        continue
+      }
+      if (Array.isArray(schema.enum)) {
+        values.push(...schema.enum)
+        continue
+      }
+      return undefined
+    }
+    const first = schemas[0]
+    if (!first) return undefined
+    const { const: _const, enum: _enum, ...base } = first
+    return {
+      ...base,
+      type: "string",
+      enum: [...new Map(values.map((value) => [JSON.stringify(value), value])).values()],
+    }
+  }
+
+  function mergeVariantPropertySchemas(schemas: readonly unknown[]): unknown {
+    const representatives = new Map<string, unknown>()
+    for (const schema of schemas) {
+      const identity = schemaValidationIdentity(schema)
+      const current = representatives.get(identity)
+      const descriptionLength = (value: unknown): number =>
+        value &&
+        typeof value === "object" &&
+        !Array.isArray(value) &&
+        typeof (value as Record<string, unknown>).description === "string"
+          ? ((value as Record<string, unknown>).description as string).trim().length
+          : 0
+      if (current === undefined || descriptionLength(schema) > descriptionLength(current)) {
+        representatives.set(identity, schema)
+      }
+    }
+    const unique = [...representatives.values()]
+    if (unique.length === 1) return unique[0]
+
+    const records = unique.filter(
+      (schema): schema is Record<string, unknown> =>
+        Boolean(schema && typeof schema === "object" && !Array.isArray(schema)),
+    )
+    if (records.length === unique.length) {
+      const mergedEnum = mergeEnumPropertySchemas(records)
+      if (mergedEnum) return mergedEnum
+    }
+    return { anyOf: unique }
+  }
+
+  function flattenRootObjectUnionSchema(input: unknown): unknown {
+    if (!input || typeof input !== "object" || Array.isArray(input)) return input
+    const schema = input as Record<string, unknown>
+    if (schema.type) return schema
+    const unionKey = Array.isArray(schema.anyOf) ? "anyOf" : Array.isArray(schema.oneOf) ? "oneOf" : undefined
+    if (!unionKey) return schema
+    const variants = (schema[unionKey] as unknown[]).filter(
+      (variant): variant is Record<string, unknown> =>
+        Boolean(
+          variant &&
+            typeof variant === "object" &&
+            !Array.isArray(variant) &&
+            (variant as Record<string, unknown>).type === "object" &&
+            (variant as Record<string, unknown>).properties &&
+            typeof (variant as Record<string, unknown>).properties === "object" &&
+            !Array.isArray((variant as Record<string, unknown>).properties),
+        ),
+    )
+    if (variants.length === 0) return schema
+
+    const propertySchemas = new Map<string, unknown[]>()
+    let requiredByEveryVariant: Set<string> | undefined
+    for (const variant of variants) {
+      for (const [field, propertySchema] of Object.entries(
+        variant.properties as Record<string, unknown>,
+      )) {
+        const definitions = propertySchemas.get(field) ?? []
+        definitions.push(propertySchema)
+        propertySchemas.set(field, definitions)
+      }
+      const required = new Set(
+        Array.isArray(variant.required)
+          ? variant.required.filter((field): field is string => typeof field === "string")
+          : [],
+      )
+      requiredByEveryVariant =
+        requiredByEveryVariant === undefined
+          ? required
+          : new Set([...requiredByEveryVariant].filter((field) => required.has(field)))
+    }
+
+    const { anyOf: _anyOf, oneOf: _oneOf, ...root } = schema
+    return {
+      ...root,
+      type: "object",
+      properties: Object.fromEntries(
+        [...propertySchemas.entries()].map(([field, definitions]) => [
+          field,
+          mergeVariantPropertySchemas(definitions),
+        ]),
+      ),
+      required: [...(requiredByEveryVariant ?? [])],
+    }
+  }
+
+  export function schema(model: ProviderModel, schema: JSONSchema.BaseSchema | JSONSchema7): JSONSchema7 {
     /*
     if (["openai", "azure"].includes(providerID)) {
       if (schema.type === "object" && schema.properties) {
@@ -984,71 +1346,74 @@ export namespace ProviderTransform {
           delete result.required
         }
 
-        // Flatten top-level anyOf (from z.discriminatedUnion) into a single object schema.
-        // Gemini requires tool parameters to be { type: "object" } — it rejects anyOf at root.
-        if (!result.type && Array.isArray(result.anyOf) && result.anyOf.length > 0) {
-          const variants = result.anyOf.filter((v: any) => v?.type === "object" && v.properties)
-          if (variants.length > 0) {
-            const merged: Record<string, any> = {}
-            const allRequired = new Set<string>()
-            let first = true
-            for (const variant of variants) {
-              for (const [k, v] of Object.entries(variant.properties as Record<string, any>)) {
-                if (!merged[k]) {
-                  merged[k] = v
-                } else if (v?.const !== undefined && (merged[k]?.const !== undefined || merged[k]?.enum)) {
-                  // Discriminator field: merge const values into enum
-                  const existing: any[] = merged[k].enum ?? (merged[k].const !== undefined ? [merged[k].const] : [])
-                  merged[k] = { type: "string", enum: [...new Set([...existing, v.const].map(String))] }
-                } else if (v?.enum && (merged[k]?.enum || merged[k]?.const !== undefined)) {
-                  const existing: any[] = merged[k].enum ?? (merged[k].const !== undefined ? [merged[k].const] : [])
-                  merged[k] = { type: merged[k].type ?? v.type ?? "string", enum: [...new Set([...existing, ...v.enum].map(String))] }
-                }
-                // else: keep first definition (properties with same name across variants)
-              }
-              const req = new Set<string>(variant.required ?? [])
-              if (first) { for (const r of req) allRequired.add(r); first = false }
-              else { for (const r of allRequired) { if (!req.has(r)) allRequired.delete(r) } }
-            }
-            return { type: "object", properties: merged, required: [...allRequired] }
-          }
-        }
-
         return result
       }
 
       schema = sanitizeGemini(schema)
     }
 
-    // OpenAI Responses API requires tool parameters to be { type: "object" }.
-    // Flatten top-level anyOf (from z.discriminatedUnion) into a single object schema.
-    const s = schema as any
-    if (!s.type && Array.isArray(s.anyOf) && s.anyOf.length > 0) {
-      const variants = s.anyOf.filter((v: any) => v?.type === "object" && v.properties)
-      if (variants.length > 0) {
-        const merged: Record<string, any> = {}
-        const allRequired = new Set<string>()
-        let first = true
-        for (const variant of variants) {
-          for (const [k, v] of Object.entries(variant.properties as Record<string, any>)) {
-            if (!merged[k]) {
-              merged[k] = v
-            } else if (v?.const !== undefined && (merged[k]?.const !== undefined || merged[k]?.enum)) {
-              const existing: any[] = merged[k].enum ?? (merged[k].const !== undefined ? [merged[k].const] : [])
-              merged[k] = { type: "string", enum: [...new Set([...existing, v.const].map(String))] }
-            } else if (v?.enum && (merged[k]?.enum || merged[k]?.const !== undefined)) {
-              const existing: any[] = merged[k].enum ?? (merged[k].const !== undefined ? [merged[k].const] : [])
-              merged[k] = { type: merged[k].type ?? v.type ?? "string", enum: [...new Set([...existing, ...v.enum].map(String))] }
-            }
-          }
-          const req = new Set<string>(variant.required ?? [])
-          if (first) { for (const r of req) allRequired.add(r); first = false }
-          else { for (const r of allRequired) { if (!req.has(r)) allRequired.delete(r) } }
-        }
-        return { type: "object", properties: merged, required: [...allRequired] } as JSONSchema7
-      }
+    // OpenAI Responses and Gemini require tool parameters to be a root object.
+    // A discriminated union therefore becomes one provider-facing superset
+    // while the original Zod union remains the execution validator. Repeated
+    // properties are joined by their actual value domains rather than using
+    // whichever branch happened to be listed first.
+    schema = flattenRootObjectUnionSchema(schema) as JSONSchema7
+
+    if (requiresOpenAIStrictToolSchema(model)) {
+      return normalizeOpenAIStrictToolSchema(schema as JSONSchema7) as JSONSchema7
     }
 
     return schema as JSONSchema7
+  }
+
+  function normalizeOpenAIStrictToolSchema(schema: JSONSchema7): JSONSchema7 {
+    return strictifyOpenAISchemaNode(schema, false) as JSONSchema7
+  }
+
+  function strictifyOpenAISchemaNode(node: unknown, optionalFromParent: boolean): unknown {
+    if (Array.isArray(node)) return node.map((item) => strictifyOpenAISchemaNode(item, false))
+    if (!node || typeof node !== "object") return node
+
+    const input = node as Record<string, unknown>
+    const output: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(input)) {
+      if (key === "properties" && value && typeof value === "object" && !Array.isArray(value)) {
+        continue
+      }
+      output[key] = strictifyOpenAISchemaNode(value, false)
+    }
+
+    const properties = input.properties
+    if (properties && typeof properties === "object" && !Array.isArray(properties)) {
+      const required = new Set(
+        Array.isArray(input.required) ? input.required.filter((item) => typeof item === "string") : [],
+      )
+      const strictProperties: Record<string, unknown> = {}
+      for (const [key, value] of Object.entries(properties as Record<string, unknown>)) {
+        const strictValue = strictifyOpenAISchemaNode(value, !required.has(key))
+        strictProperties[key] =
+          !required.has(key) && !schemaAllowsNull(strictValue) ? nullableOpenAISchema(strictValue) : strictValue
+      }
+      output.properties = strictProperties
+      output.required = Object.keys(strictProperties)
+      if (output.additionalProperties === undefined) output.additionalProperties = false
+    }
+
+    return optionalFromParent && !schemaAllowsNull(output) ? nullableOpenAISchema(output) : output
+  }
+
+  function schemaAllowsNull(schema: unknown): boolean {
+    if (!schema || typeof schema !== "object" || Array.isArray(schema)) return false
+    const record = schema as Record<string, unknown>
+    if (record.type === "null") return true
+    if (Array.isArray(record.type) && record.type.includes("null")) return true
+    return (
+      (Array.isArray(record.anyOf) && record.anyOf.some(schemaAllowsNull)) ||
+      (Array.isArray(record.oneOf) && record.oneOf.some(schemaAllowsNull))
+    )
+  }
+
+  function nullableOpenAISchema(schema: unknown): unknown {
+    return { anyOf: [schema, { type: "null" }] }
   }
 }

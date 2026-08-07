@@ -21,9 +21,13 @@ jobs:
       release: ${{ steps.meta.outputs.release }}
       version: ${{ steps.meta.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: ./.github/actions/setup-bun
+        with:
+          install_dependencies: "false"
 
       - name: Resolve version and release flag
         id: meta
@@ -58,104 +62,14 @@ jobs:
         shell: bash
         run: |
           VERSION="${{ steps.meta.outputs.version }}"
-          gh release create "v${VERSION}" \
-            --title "v${VERSION}" \
-            --generate-notes \
-            --repo "$GITHUB_REPOSITORY" || true
-
-  package-cli:
-    name: cli (${{ matrix.platform }})
-    needs: prepare
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: ubuntu-latest
-            platform: linux-x64
-          - runner: ubuntu-24.04-arm
-            platform: linux-arm64
-          - runner: macos-latest
-            platform: darwin-arm64
-          - runner: macos-15-intel
-            platform: darwin-x64
-          - runner: windows-latest
-            platform: windows-x64
-    runs-on: ${{ matrix.runner }}
-    permissions:
-      contents: write
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: ./.github/actions/setup-bun
-
-      - name: Sync repo versions
-        run: bun ./script/sync-version.ts "${{ needs.prepare.outputs.version }}"
-
-      - name: Fetch models.dev snapshot
-        run: curl -fsSL https://models.dev/api.json | tr -d '\n\r' > /tmp/models-api-clean.json
-
-      - name: Cache Bun install cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: bun-cli-${{ matrix.platform }}-${{ hashFiles('**/bun.lock') }}
-          restore-keys: |
-            bun-cli-${{ matrix.platform }}-
-
-      - name: Build CLI (native + baseline)
-        working-directory: packages/opencorvus
-        env:
-          MODELS_DEV_API_JSON: /tmp/models-api-clean.json
-          OPENCORVUS_RELEASE: ${{ needs.prepare.outputs.release == '1' && '1' || '' }}
-          OPENCORVUS_VERSION: ${{ needs.prepare.outputs.version }}
-          OPENCORVUS_CHANNEL: ${{ needs.prepare.outputs.release == '1' && 'latest' || '' }}
-          GH_REPO: ${{ github.repository }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: bun run script/build.ts --single --baseline
-
-      - name: Build CLI (musl, Linux only)
-        if: runner.os == 'Linux'
-        env:
-          MODELS_DEV_API_JSON: /tmp/models-api-clean.json
-          OPENCORVUS_RELEASE: ${{ needs.prepare.outputs.release == '1' && '1' || '' }}
-          OPENCORVUS_VERSION: ${{ needs.prepare.outputs.version }}
-          OPENCORVUS_CHANNEL: ${{ needs.prepare.outputs.release == '1' && 'latest' || '' }}
-          GH_REPO: ${{ github.repository }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          docker run --rm \
-            -v "$GITHUB_WORKSPACE:/workspace" \
-            -w /workspace/packages/opencorvus \
-            -e MODELS_DEV_API_JSON=/tmp/models-api-clean.json \
-            -e OPENCORVUS_RELEASE="${OPENCORVUS_RELEASE}" \
-            -e OPENCORVUS_VERSION="${OPENCORVUS_VERSION}" \
-            -e OPENCORVUS_CHANNEL="${OPENCORVUS_CHANNEL}" \
-            -e GH_REPO="${GH_REPO}" \
-            -e GH_TOKEN="${GH_TOKEN}" \
-            oven/bun:alpine \
-            sh -c "bun install && bun run script/build.ts --single --baseline --musl-only --no-clean"
-
-      - name: Validate CLI assets
-        run: |
-          EXTRA=""
-          if [[ "${{ needs.prepare.outputs.release }}" == "1" ]]; then
-            EXTRA="--require-archives"
+          if gh release view "v${VERSION}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release v${VERSION} already exists"
+          else
+            gh release create "v${VERSION}" \
+              --title "v${VERSION}" \
+              --generate-notes \
+              --repo "$GITHUB_REPOSITORY"
           fi
-          bun ./script/check-release-assets.ts cli \
-            --dir packages/opencorvus/dist \
-            --platforms "${{ matrix.platform }}" \
-            --version "${{ needs.prepare.outputs.version }}" \
-            $EXTRA
-
-      - name: Upload CLI dist artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: opencorvus-dist-${{ matrix.platform }}
-          path: packages/opencorvus/dist/
-          retention-days: 7
 
   package-overlay:
     name: overlay (${{ matrix.platform }})
@@ -179,7 +93,9 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: ./.github/actions/setup-bun
 
@@ -195,7 +111,28 @@ jobs:
             libssl-dev \
             libgtk-3-dev \
             libayatana-appindicator3-dev \
-            librsvg2-dev
+            librsvg2-dev \
+            ripgrep \
+            xdg-utils
+          rg --version
+          # `xdg-utils` provides /usr/bin/xdg-open which Tauri's AppImage
+          # bundler shells out to during `--bundles appimage`. Without it
+          # the bundle step fails with "xdg-open binary not found
+          # /usr/bin/xdg-open" after .deb and .rpm have already been
+          # produced. ubuntu-latest happens to ship it preinstalled but
+          # ubuntu-24.04-arm doesn't, so the linux-arm64 runner failed.
+
+      - name: Install macOS overlay runtime dependencies
+        if: runner.os == 'macOS'
+        run: |
+          brew install ripgrep
+          rg --version
+
+      - name: Install Windows overlay runtime dependencies
+        if: runner.os == 'Windows'
+        run: |
+          choco install ripgrep --yes --no-progress
+          rg --version
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -204,30 +141,14 @@ jobs:
         with:
           workspaces: packages/overlay/src-tauri -> target
 
-      - name: Build bound overlay bundle
-        working-directory: packages/overlay
+      - name: Package GUI installers
         env:
           OPENCORVUS_VERSION: ${{ needs.prepare.outputs.version }}
           OPENCORVUS_CHANNEL: ${{ needs.prepare.outputs.release == '1' && 'latest' || '' }}
-        run: bun run build
-
-      - name: Stage overlay artifacts
-        shell: bash
-        run: |
-          OUT="packages/overlay/dist-artifacts/${{ matrix.platform }}"
-          mkdir -p "$OUT"
-          cp -f packages/overlay/src-tauri/target/release/opencorvus-overlay* "$OUT/" 2>/dev/null || true
-          find packages/overlay/src-tauri/target/release/bundle -type f -exec cp {} "$OUT/" \; 2>/dev/null || true
-
-      - name: Validate overlay assets
-        run: >
-          bun ./script/check-release-assets.ts overlay
-          --dir packages/overlay/dist-artifacts/${{ matrix.platform }}
-          --platform "${{ matrix.platform }}"
-          --version "${{ needs.prepare.outputs.version }}"
+        run: bun run package:gui-installer-matrix
 
       - name: Upload overlay artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: overlay-${{ matrix.platform }}
           path: packages/overlay/dist-artifacts/${{ matrix.platform }}
@@ -238,7 +159,6 @@ jobs:
     name: publish release assets
     needs:
       - prepare
-      - package-cli
       - package-overlay
     if: needs.prepare.outputs.release == '1'
     runs-on: ubuntu-latest
@@ -248,17 +168,27 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-bun
+        with:
+          install_dependencies: "false"
+
+      - uses: actions/download-artifact@v8
         with:
           pattern: overlay-*
           path: /tmp/release-assets
 
-      - name: Upload overlay assets to GitHub Release
+      - name: Upload release assets to GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ needs.prepare.outputs.version }}"
-          mapfile -t FILES < <(find /tmp/release-assets -type f | sort)
+          UPLOAD_DIR="$(mktemp -d)"
+          bun ./script/stage-release-upload-assets.ts --source /tmp/release-assets --out "$UPLOAD_DIR" --version "$VERSION"
+          mapfile -t FILES < <(find "$UPLOAD_DIR" -type f | sort)
           printf '%s\n' "${FILES[@]}"
           gh release upload "v${VERSION}" "${FILES[@]}" --clobber --repo "$GITHUB_REPOSITORY"
 
@@ -266,7 +196,6 @@ jobs:
     name: publish release branch
     needs:
       - prepare
-      - package-cli
       - package-overlay
     if: needs.prepare.outputs.release == '1'
     runs-on: ubuntu-latest
@@ -276,19 +205,13 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
+          persist-credentials: false
           fetch-depth: 0
 
-      - name: Download CLI dist artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: opencorvus-dist-*
-          path: /tmp/dist
-          merge-multiple: true
-
       - name: Download overlay artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: overlay-*
           path: /tmp/overlay
@@ -306,29 +229,41 @@ jobs:
           git init
           git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
-          if git fetch origin release --depth=1 2>/dev/null; then
+          if git fetch --depth=1 origin refs/heads/release:refs/remotes/origin/release 2>/dev/null; then
+            RELEASE_LEASE="$(git rev-parse refs/remotes/origin/release)"
             git checkout release
           else
+            RELEASE_LEASE=""
             git checkout --orphan release
           fi
 
-          git rm -rf . 2>/dev/null || true
+          mapfile -d '' TRACKED_FILES < <(git ls-files -z)
+          if (( ${#TRACKED_FILES[@]} > 0 )); then
+            git rm -f -- "${TRACKED_FILES[@]}"
+          fi
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} +
 
-          cp "$GITHUB_WORKSPACE/README.md" . 2>/dev/null || echo "# OpenCorvus v${VERSION}" > README.md
-          cp "$GITHUB_WORKSPACE/RELEASE.md" . 2>/dev/null || true
-
-          for platform in linux-x64 linux-arm64 darwin-x64 darwin-arm64 windows-x64; do
-            src="/tmp/dist/opencorvus-${platform}"
-            [[ -d "$src" ]] || continue
-            mkdir -p "$platform"
-            find "$src" -maxdepth 1 -type f ! -name '*.map' -exec cp {} "$platform/" \;
-            chmod +x "$platform"/opencorvus* 2>/dev/null || true
+          for required_doc in README.md RELEASE.md; do
+            if [[ ! -f "$GITHUB_WORKSPACE/$required_doc" ]]; then
+              echo "Missing release branch document: $required_doc" >&2
+              exit 1
+            fi
+            cp "$GITHUB_WORKSPACE/$required_doc" .
           done
 
+          shopt -s nullglob
           mkdir -p overlay
-          cp -r /tmp/overlay/overlay-* overlay/ 2>/dev/null || true
+          overlay_dirs=(/tmp/overlay/overlay-*)
+          if (( ${#overlay_dirs[@]} == 0 )); then
+            echo "No overlay artifacts found under /tmp/overlay" >&2
+            exit 1
+          fi
+          cp -R "${overlay_dirs[@]}" overlay/
 
           git add -A
-          git commit -m "release: v${VERSION}"
-          git push origin release --force
-
+          if git diff --cached --quiet; then
+            echo "release branch already up to date for v${VERSION}"
+          else
+            git commit -m "release: v${VERSION}"
+          fi
+          git push origin release:release --force-with-lease=refs/heads/release:"${RELEASE_LEASE}"

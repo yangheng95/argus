@@ -3,18 +3,42 @@ import z from "zod"
 import { Identifier } from "../id/id"
 import { Message } from "./message"
 import { Session } from "."
-import { Agent } from "../agent/agent"
 import { Instance } from "../project/instance"
 import { Plugin } from "../plugin"
 import { defer } from "../util/defer"
 import { ulid } from "ulid"
-import { SessionRevert } from "./revert"
-import { spawn } from "child_process"
 import { Shell } from "@/shell/shell"
-import { SessionPromptState } from "./prompt-state"
+import { PidGuard } from "@/shell/pid-guard"
+import { ProcessSupervisor } from "@/shell/process-supervisor"
+import { SessionPromptState } from "./prompt/state"
+import { gitCeilingEnvForWorktree } from "@/worktree/git-ceiling"
+import { SessionContext } from "./context"
+import { EffectiveConfig } from "@/config/effective"
+import { resolveAgentModelRef, resolveProjectedWorkerModelRef } from "@/agent/model"
+import { SessionRuntimeContractStore, isProjectedWorkerRuntimeContract } from "./runtime-contract"
+import { LocalEnvironment } from "@/config/local-environment"
+import { sanitizeShellEnvironment } from "@/shell/environment"
+import { createExecutionCancellationOrigin } from "./prompt/cancellation"
+import { resolveSessionProcessAuthority } from "@/engine/task-session-lineage"
+
+type SessionShellResume = (input: { sessionID: string; resume_existing: true }) => Promise<unknown>
+
+let resumeSessionLoop: SessionShellResume | undefined
+
+export function configureSessionShellResume(resume: SessionShellResume): void {
+  if (resumeSessionLoop && resumeSessionLoop !== resume) {
+    throw new Error("Session shell resume runner is already configured")
+  }
+  resumeSessionLoop = resume
+}
+
+function requireSessionShellResume(): SessionShellResume {
+  if (!resumeSessionLoop) throw new Error("Session shell resume runner is not configured")
+  return resumeSessionLoop
+}
 
 export namespace SessionShell {
-  const { log, state, start, cancel, lastModel } = SessionPromptState
+  const { log, state, start, cancel } = SessionPromptState
 
   export const ShellInput = z.object({
     sessionID: Identifier.schema("session"),
@@ -29,6 +53,18 @@ export namespace SessionShell {
   })
   export type ShellInput = z.infer<typeof ShellInput>
   export async function shell(input: ShellInput) {
+    const { resolveSessionMessageIdentity } = await import("./message-identity")
+    const session = await Session.get(input.sessionID)
+    const identity = await resolveSessionMessageIdentity({
+      session,
+      requestedAgentID: input.agent,
+      config: await EffectiveConfig.effective({ sessionID: input.sessionID }),
+    })
+    using _runtimeOperation = SessionRuntimeContractStore.claimOperation(
+      input.sessionID,
+      identity.runtimeContract,
+      "session shell",
+    )
     const abort = start(input.sessionID)
     if (!abort) {
       throw new Session.BusyError(input.sessionID)
@@ -37,138 +73,142 @@ export namespace SessionShell {
     await using _ = defer(async () => {
       const callbacks = state()[input.sessionID]?.callbacks ?? []
       if (callbacks.length === 0) {
-        cancel(input.sessionID)
-      } else {
-        const { SessionLoop } = await import("./loop")
-        SessionLoop.loop({ sessionID: input.sessionID, resume_existing: true }).catch((error: any) => {
-          log.error("session loop failed to resume after shell command", { sessionID: input.sessionID, error })
+        cancel(input.sessionID, session.directory, {
+          origin: createExecutionCancellationOrigin({
+            actor: "runtime",
+            source: "runtime.prompt_owner",
+            surface: "session",
+            reason: "Session shell completed without an attached prompt callback",
+            targetSessionID: input.sessionID,
+          }),
         })
+      } else {
+        const resume = requireSessionShellResume()
+        SessionContext.provide(session, () => resume({ sessionID: input.sessionID, resume_existing: true })).catch(
+          (error: any) => {
+            log.error("session loop failed to resume after shell command", { sessionID: input.sessionID, error })
+          },
+        )
       }
     })
 
-    const session = await Session.get(input.sessionID)
-    if (session.revert) {
-      await SessionRevert.cleanup(session)
-    }
-    const agent = await Agent.get(input.agent)
-    const model = input.model ?? agent.model ?? (await lastModel(input.sessionID))
-    const userMsg: Message.User = {
-      id: Identifier.ascending("message"),
-      sessionID: input.sessionID,
-      time: {
-        created: Date.now(),
-      },
-      role: "user",
-      agent: input.agent,
-      model: {
-        providerID: model.providerID,
-        modelID: model.modelID,
-      },
-    }
-    await Session.updateMessage(userMsg)
-    const userPart: Message.Part = {
-      type: "text",
-      id: Identifier.ascending("part"),
-      messageID: userMsg.id,
-      sessionID: input.sessionID,
-      text: "The following tool was executed by the user",
-      synthetic: true,
-    }
-    await Session.updatePart(userPart)
-
-    const msg: Message.Assistant = {
-      id: Identifier.ascending("message"),
-      sessionID: input.sessionID,
-      parentID: userMsg.id,
-      mode: input.agent,
-      agent: input.agent,
-      cost: 0,
-      path: {
-        cwd: Instance.directory,
-        root: Instance.worktree,
-      },
-      time: {
-        created: Date.now(),
-      },
-      role: "assistant",
-      tokens: {
-        input: 0,
-        output: 0,
-        reasoning: 0,
-        cache: { read: 0, write: 0 },
-      },
-      modelID: model.modelID,
-      providerID: model.providerID,
-    }
-    await Session.updateMessage(msg)
-    const part: Message.Part = {
-      type: "tool",
-      id: Identifier.ascending("part"),
-      messageID: msg.id,
-      sessionID: input.sessionID,
-      tool: "bash",
-      callID: ulid(),
-      state: {
-        status: "running",
+    const { msg, part } = await (async () => {
+      using _runtimeIdentity = SessionRuntimeContractStore.claimMessageWrite(input.sessionID, identity.runtimeContract)
+      const projectedIdentity =
+        identity.runtimeContract && isProjectedWorkerRuntimeContract(identity.runtimeContract)
+          ? identity.runtimeContract.identity
+          : undefined
+      const model = await SessionContext.provide(session, () =>
+        projectedIdentity
+          ? resolveProjectedWorkerModelRef(
+              {
+                expertSquadID: projectedIdentity.expertSquadID,
+                agentID: projectedIdentity.agentID,
+                baseRole: projectedIdentity.baseRole,
+              },
+              { explicitModel: input.model, sessionID: input.sessionID },
+            )
+          : resolveAgentModelRef(identity.baseRole, {
+              explicitModel: input.model,
+              sessionID: input.sessionID,
+            }),
+      )
+      const userMsg: Message.User = {
+        id: Identifier.ascending("message"),
+        sessionID: input.sessionID,
+        author: "user",
         time: {
-          start: Date.now(),
+          created: Date.now(),
         },
-        input: {
-          command: input.command,
+        role: "user",
+        agent: identity.agentID,
+        model: {
+          providerID: model.providerID,
+          modelID: model.modelID,
         },
-      },
-    }
-    await Session.updatePart(part)
+      }
+      await Session.updateMessage(userMsg)
+      const userPart: Message.Part = {
+        type: "text",
+        id: Identifier.ascending("part"),
+        messageID: userMsg.id,
+        sessionID: input.sessionID,
+        text: "The following tool was executed by the user",
+      }
+      await Session.updatePart(userPart)
+
+      const msg: Message.Assistant = {
+        id: Identifier.ascending("message"),
+        sessionID: input.sessionID,
+        author: identity.agentID,
+        parentID: userMsg.id,
+        agent: identity.agentID,
+        cost: 0,
+        path: {
+          cwd: Instance.directory,
+          root: Instance.worktree,
+        },
+        time: {
+          created: Date.now(),
+        },
+        role: "assistant",
+        tokens: {
+          total: 0,
+          input: 0,
+          output: 0,
+          reasoning: 0,
+          cache: { read: 0, write: 0 },
+        },
+        modelID: model.modelID,
+        providerID: model.providerID,
+      }
+      await Session.updateMessage(msg)
+      const part: Message.Part = {
+        type: "tool",
+        id: Identifier.ascending("part"),
+        messageID: msg.id,
+        sessionID: input.sessionID,
+        tool: "bash",
+        callID: ulid(),
+        state: {
+          status: "running",
+          time: {
+            start: Date.now(),
+          },
+          input: {
+            command: input.command,
+          },
+        },
+      }
+      await Session.updatePart(part)
+      return { msg, part }
+    })()
     const shellBin = Shell.preferred()
     const shellName = (
       process.platform === "win32" ? path.win32.basename(shellBin, ".exe") : path.basename(shellBin)
     ).toLowerCase()
 
-    const invocations: Record<string, { args: string[] }> = {
-      nu: {
-        args: ["-c", input.command],
-      },
-      fish: {
-        args: ["-c", input.command],
-      },
-      zsh: {
-        args: [
-          "-c",
-          "-l",
-          `
+    const localEnvironment = await LocalEnvironment.projectShellCommand(input.command)
+    const invocationCommand: Record<string, string> = {
+      nu: localEnvironment.command,
+      fish: localEnvironment.command,
+      zsh: `
             [[ -f ~/.zshenv ]] && source ~/.zshenv >/dev/null 2>&1 || true
             [[ -f "\${ZDOTDIR:-$HOME}/.zshrc" ]] && source "\${ZDOTDIR:-$HOME}/.zshrc" >/dev/null 2>&1 || true
-            eval ${JSON.stringify(input.command)}
+            eval ${JSON.stringify(localEnvironment.command)}
           `,
-        ],
-      },
-      bash: {
-        args: [
-          "-c",
-          "-l",
-          `
+      bash: `
             shopt -s expand_aliases
             [[ -f ~/.bashrc ]] && source ~/.bashrc >/dev/null 2>&1 || true
-            eval ${JSON.stringify(input.command)}
+            eval ${JSON.stringify(localEnvironment.command)}
           `,
-        ],
-      },
-      cmd: {
-        args: ["/c", input.command],
-      },
-      powershell: {
-        args: ["-NoProfile", "-Command", input.command],
-      },
-      pwsh: {
-        args: ["-NoProfile", "-Command", input.command],
-      },
-      "": {
-        args: ["-c", `${input.command}`],
-      },
+      cmd: localEnvironment.command,
+      powershell: localEnvironment.command,
+      pwsh: localEnvironment.command,
+      "": localEnvironment.command,
     }
 
-    const matchingInvocation = invocations[shellName] ?? invocations[""]
-    const args = matchingInvocation?.args
+    const supervisedCommand = invocationCommand[shellName] ?? invocationCommand[""]
 
     const cwd = Instance.directory
     const shellEnv = await Plugin.trigger(
@@ -176,21 +216,37 @@ export namespace SessionShell {
       { cwd, sessionID: input.sessionID, callID: part.callID },
       { env: {} },
     )
-    const proc = spawn(shellBin, args, {
-      cwd,
-      detached: process.platform !== "win32",
-      stdio: ["ignore", "pipe", "pipe"],
-      env: {
-        ...process.env,
+    const guardEnv = await PidGuard.env(shellBin)
+    const commandEnvironment = { ...process.env, ...shellEnv.env, ...localEnvironment.variables }
+    const processOptions = {
+      command: supervisedCommand,
+      shell: shellBin,
+      env: sanitizeShellEnvironment(process.env, {
         ...shellEnv.env,
+        ...localEnvironment.variables,
         TERM: "dumb",
-      },
+        ...gitCeilingEnvForWorktree(cwd, commandEnvironment),
+        ...guardEnv,
+      }),
+    }
+    const processAuthority = await resolveSessionProcessAuthority({
+      sessionID: input.sessionID,
+      projectID: Instance.project.id,
+      rootDirectory: Instance.directory,
+      cwd,
+      runtimeTaskID: identity.runtimeContract?.identity.taskID,
     })
+    const supervisor = processAuthority.kind === "task"
+      ? await ProcessSupervisor.spawnTaskShell(
+          { taskID: processAuthority.taskID, cwd: processAuthority.cwd },
+          processOptions,
+        )
+      : await ProcessSupervisor.spawnHostShell({ ...processOptions, cwd: processAuthority.cwd })
 
     let output = ""
-
-    proc.stdout?.on("data", (chunk) => {
-      output += chunk.toString()
+    supervisor.stdout?.on("data", (chunk) => {
+      const text = chunk.toString()
+      output += text
       if (part.state.status === "running") {
         part.state.metadata = {
           output: output,
@@ -200,8 +256,9 @@ export namespace SessionShell {
       }
     })
 
-    proc.stderr?.on("data", (chunk) => {
-      output += chunk.toString()
+    supervisor.stderr?.on("data", (chunk) => {
+      const text = chunk.toString()
+      output += text
       if (part.state.status === "running") {
         part.state.metadata = {
           output: output,
@@ -212,29 +269,52 @@ export namespace SessionShell {
     })
 
     let aborted = false
-    let exited = false
 
-    const kill = () => Shell.killTree(proc, { exited: () => exited })
-
-    if (abort.aborted) {
-      aborted = true
-      await kill()
+    let terminationPromise: Promise<number> | undefined
+    let resolveTerminationRequested: ((promise: Promise<number>) => void) | undefined
+    const terminationRequested = new Promise<Promise<number>>((resolve) => {
+      resolveTerminationRequested = resolve
+    })
+    const requestTermination = (reason: string) => {
+      if (!terminationPromise) {
+        terminationPromise = ProcessSupervisor.terminateAndWaitForExit(supervisor, `session shell ${reason}`)
+        terminationPromise.catch(() => undefined)
+        resolveTerminationRequested?.(terminationPromise)
+      }
+      return terminationPromise
     }
 
     const abortHandler = () => {
       aborted = true
-      void kill()
+      requestTermination("abort")
     }
 
     abort.addEventListener("abort", abortHandler, { once: true })
 
-    await new Promise<void>((resolve) => {
-      proc.on("close", () => {
-        exited = true
-        abort.removeEventListener("abort", abortHandler)
-        resolve()
-      })
-    })
+    let primaryError: unknown
+    try {
+      if (abort.aborted) {
+        aborted = true
+        requestTermination("abort")
+      }
+      await Promise.race([supervisor.exited, terminationRequested.then((cleanup) => cleanup)])
+      if (terminationPromise) {
+        await terminationPromise
+      }
+    } catch (error) {
+      primaryError = error
+      throw error
+    } finally {
+      abort.removeEventListener("abort", abortHandler)
+      try {
+        await ProcessSupervisor.disposeAndWaitForExit(supervisor, "session shell")
+      } catch (error) {
+        if (primaryError) {
+          throw ProcessSupervisor.combineFailures("Session shell execution and disposal failed", [primaryError, error])
+        }
+        throw error
+      }
+    }
 
     if (aborted) {
       output += "\n\n" + ["<metadata>", "User aborted the command", "</metadata>"].join("\n")

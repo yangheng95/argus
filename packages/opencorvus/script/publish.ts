@@ -3,32 +3,43 @@ import { $ } from "bun"
 import pkg from "../package.json"
 import { Script } from "@opencorvus-ai/script"
 import { fileURLToPath } from "url"
+import { isPublishedCliBinaryPackageName } from "./published-package-bin.mjs"
 
 const dir = fileURLToPath(new URL("..", import.meta.url))
 process.chdir(dir)
 
 const binaries: Record<string, string> = {}
 for (const filepath of new Bun.Glob("*/package.json").scanSync({ cwd: "./dist" })) {
-  const pkg = await Bun.file(`./dist/${filepath}`).json()
-  binaries[pkg.name] = pkg.version
+  const binaryPkg = await Bun.file(`./dist/${filepath}`).json()
+  if (!isPublishedCliBinaryPackageName(binaryPkg.name)) continue
+  binaries[binaryPkg.name] = binaryPkg.version
 }
 console.log("binaries", binaries)
+if (Object.keys(binaries).length === 0) {
+  throw new Error("No CLI binary packages found in ./dist")
+}
+if (new Set(Object.values(binaries)).size !== 1) {
+  throw new Error("CLI binary package versions must match before publishing")
+}
 const version = Object.values(binaries)[0]
 
 await $`mkdir -p ./dist/${pkg.name}`
 await $`cp -r ./bin ./dist/${pkg.name}/bin`
-await $`cp ./script/postinstall.mjs ./dist/${pkg.name}/postinstall.mjs`
+await $`mkdir -p ./dist/${pkg.name}/script`
+await $`cp ./script/postinstall.mjs ./dist/${pkg.name}/script/postinstall.mjs`
+await $`cp ./script/published-package-bin.mjs ./dist/${pkg.name}/script/published-package-bin.mjs`
 await Bun.file(`./dist/${pkg.name}/LICENSE`).write(await Bun.file("../../LICENSE").text())
 
 await Bun.file(`./dist/${pkg.name}/package.json`).write(
   JSON.stringify(
     {
       name: pkg.name + "-ai",
+      type: "module",
       bin: {
         [pkg.name]: `./bin/${pkg.name}`,
       },
       scripts: {
-        postinstall: "bun ./postinstall.mjs || node ./postinstall.mjs",
+        postinstall: "node ./script/postinstall.mjs",
       },
       version: version,
       license: pkg.license,
@@ -81,8 +92,6 @@ if (!Script.preview) {
     "license=('MIT')",
     "provides=('opencorvus')",
     "conflicts=('opencorvus')",
-    "depends=('ripgrep')",
-    "",
     `source_aarch64=("\${pkgname}_\${pkgver}_aarch64.tar.gz::https://github.com/yangheng95/opencorvus/releases/download/v\${pkgver}\${_subver}/opencorvus-linux-arm64.tar.gz")`,
     `sha256sums_aarch64=('${arm64Sha}')`,
 
@@ -95,8 +104,9 @@ if (!Script.preview) {
     "",
   ].join("\n")
 
+  const maxAurUpdateAttempts = 30
   for (const [pkg, pkgbuild] of [["opencorvus-bin", binaryPkgbuild]]) {
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < maxAurUpdateAttempts; i++) {
       try {
         await $`rm -rf ./dist/aur-${pkg}`
         await $`git clone ssh://aur@aur.archlinux.org/${pkg}.git ./dist/aur-${pkg}`
@@ -108,6 +118,9 @@ if (!Script.preview) {
         await $`cd ./dist/aur-${pkg} && git push`
         break
       } catch (e) {
+        if (i === maxAurUpdateAttempts - 1) {
+          throw new Error(`AUR update failed after ${maxAurUpdateAttempts} attempts for ${pkg}`, { cause: e })
+        }
         continue
       }
     }
@@ -123,8 +136,6 @@ if (!Script.preview) {
     `  desc "The AI coding agent built for the terminal."`,
     `  homepage "https://github.com/yangheng95/opencorvus"`,
     `  version "${Script.version.split("-")[0]}"`,
-    "",
-    `  depends_on "ripgrep"`,
     "",
     "  on_macos do",
     "    if Hardware::CPU.intel?",

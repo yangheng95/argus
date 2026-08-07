@@ -1,308 +1,601 @@
-// ── SkillMarketPanel ──
-// Solid.js component for managing skills, MCP servers, and marketplace.
+// ── Shared resource management ──
+// Solid.js component for managing project Skills and MCP server definitions.
 // Displays:
 // • Installed custom skills with add/remove/open actions
 // • Installed MCP servers with add/remove actions
-// • Skill market catalog with install / open-site actions
 // All CRUD operations are self-contained — no dependency on static HTML dialogs.
 
+import { createEffect, createSignal, createMemo, For, onCleanup, Show } from "solid-js"
+import { createStore } from "solid-js/store"
+import type { SkillMountsResponse } from "@opencorvus-ai/sdk"
+import { t } from "../../utils/i18n"
+import { configure as configureApi } from "../../services/api"
+import { pickDirectory, syncActiveDirectoryApiContext } from "../../services/workspace"
+import { appStore } from "../../store/app"
+import { getHostTransport } from "../../services/host-transport-runtime"
+import { nativeConfirm, nativeOpen } from "../../utils/native"
+import { formatErrorDetails, reportError } from "../../services/diagnostics"
+import { createVisibilityInterval } from "../../utils/visibility-interval"
 import {
-  createSignal,
-  createMemo,
-  createEffect,
-  For,
-  Show,
-} from "solid-js";
-import { createStore } from "solid-js/store";
-import { t } from "../../utils/i18n";
-import { apiJson } from "../../services/api";
-import { appStore } from "../../store/app";
-import { updateConfig } from "../../services/config";
-import { nativeOpen } from "../../utils/native";
+  loadInstalledSkills,
+  loadSkillIssues,
+  loadProjectMcpStatus,
+  deleteSkill,
+  installSkill,
+  updateSkill,
+  importSkillArchive,
+  importSkillFile,
+  importSkillPackage,
+  type SkillImportPackageFile,
+  type SkillLoadIssue,
+  type SkillUpdateSource,
+} from "../../services/extensions"
+import { addMcpServer, deleteAllMcp, type RemoteMcpCredentialType, type RemoteMcpTransport } from "../../services/mcp"
 import {
-  loadExtensions,
-  loadSkillMarket,
-} from "../../services/extensions";
+  mcpConnectionStatusOrDisabledLabel,
+  mcpConnectionStatusOrDisabledTone,
+} from "../../utils/settings-status-labels"
+import { Badge } from "../ui/Badge"
+import { Button } from "../ui/Button"
+import { TextField } from "../ui/TextField"
+import { Icon } from "../ui/Icon"
+import { SelectField, type SelectFieldOption } from "../ui/SelectField"
+import { SettingsDetailSection, SettingsGroup, SettingsRow, SettingsState } from "./layout"
 
 // ── Types ──
 
-interface SkillItem {
-  name: string;
-  description?: string;
-  location?: string;
-  source?: string;
-  source_type?: string;
-  builtin?: boolean;
-}
+type SkillItem = SkillMountsResponse["skills"][number]
 
 interface McpItem {
-  status?: string;
-  error?: string;
+  status?: string
+  error?: string
 }
 
-interface MarketItem {
-  id: string;
-  name: string;
-  provider: string;
-  trust: string;
-  install_kind: string;
-  description?: string;
-  notes?: string;
-  homepage?: string;
-  source?: string;
-  recommended_policy?: string;
+interface WebkitFileSystemEntry {
+  isFile: boolean
+  isDirectory: boolean
+  name: string
+}
+
+interface WebkitFileSystemFileEntry extends WebkitFileSystemEntry {
+  isFile: true
+  file(success: (file: File) => void, error?: (error: DOMException) => void): void
+}
+
+interface WebkitFileSystemDirectoryReader {
+  readEntries(success: (entries: WebkitFileSystemEntry[]) => void, error?: (error: DOMException) => void): void
+}
+
+interface WebkitFileSystemDirectoryEntry extends WebkitFileSystemEntry {
+  isDirectory: true
+  createReader(): WebkitFileSystemDirectoryReader
+}
+
+interface SkillDropPayload {
+  sourceName: string
+  file?: File
+  archive?: File
+  files?: SkillImportPackageFile[]
 }
 
 // ── Helpers ──
 
 function skillRemoveKind(item: SkillItem): string {
-  if (item.source_type === "managed_git") return "git";
-  if (item.source_type === "config_url") return "url";
-  if (item.source_type === "config_path") return "path";
-  return "";
+  if (item.source_type === "managed_git") return "git"
+  if (item.source_type === "config_url") return "url"
+  if (item.source_type === "config_path") return "path"
+  return ""
 }
 
 function skillRemovable(item: SkillItem): boolean {
-  return !item.builtin && !!item.source && !!skillRemoveKind(item);
+  return !item.builtin && !!item.source && !!skillRemoveKind(item)
 }
 
-function mcpStatusLabel(status: string): string {
-  const map: Record<string, string> = {
-    connected: t("mcp.status.connected"),
-    disabled: t("mcp.status.disabled"),
-    error: t("mcp.status.error"),
-    connecting: t("mcp.status.connecting"),
-  };
-  return map[status] || status;
+function dataTransferEntries(dataTransfer: DataTransfer | null): WebkitFileSystemEntry[] {
+  if (!dataTransfer?.items?.length) return []
+  const entries: WebkitFileSystemEntry[] = []
+  for (const item of Array.from(dataTransfer.items)) {
+    const entry = (
+      item as DataTransferItem & {
+        webkitGetAsEntry?: () => unknown
+      }
+    ).webkitGetAsEntry?.() as WebkitFileSystemEntry | null | undefined
+    if (entry) entries.push(entry)
+  }
+  return entries
 }
 
-function policyLabel(policy: string): string {
-  if (policy === "ask") return t("skill.policy.ask");
-  if (policy === "allow") return t("skill.policy.allow");
-  if (policy === "deny") return t("skill.policy.deny");
-  return policy;
+function readFileEntry(entry: WebkitFileSystemFileEntry): Promise<File> {
+  return new Promise((resolve, reject) => {
+    entry.file(resolve, reject)
+  })
 }
 
-// ── SkillMarketPanel ──
+async function readDirectoryEntries(entry: WebkitFileSystemDirectoryEntry): Promise<WebkitFileSystemEntry[]> {
+  const reader = entry.createReader()
+  const entries: WebkitFileSystemEntry[] = []
+  while (true) {
+    const batch = await new Promise<WebkitFileSystemEntry[]>((resolve, reject) => {
+      reader.readEntries(resolve, reject)
+    })
+    if (batch.length === 0) return entries
+    entries.push(...batch)
+  }
+}
 
-export default function SkillMarketPanel() {
-  const [notice, setNotice] = createSignal("");
-  const [loading, setLoading] = createSignal(false);
+async function fileToBase64(file: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const value = typeof reader.result === "string" ? reader.result : ""
+      const comma = value.indexOf(",")
+      resolve(comma >= 0 ? value.slice(comma + 1) : value)
+    }
+    reader.onerror = () => reject(reader.error || new Error("Failed to read dropped skill file"))
+    reader.readAsDataURL(file)
+  })
+}
 
-  // Reactive data from appStore (populated by loadExtensions/loadSkillMarket after connect)
-  const skills = createMemo((): SkillItem[] => {
-    const raw = appStore.skills;
-    return Array.isArray(raw) ? raw as SkillItem[] : [];
-  });
-  const mcp = createMemo((): Record<string, McpItem> => {
-    const raw = appStore.mcp;
-    return raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, McpItem> : {};
-  });
-  const market = createMemo((): MarketItem[] => {
-    const raw = appStore.skillMarket;
-    return Array.isArray(raw) ? raw as MarketItem[] : [];
-  });
+async function readEntryFiles(entry: WebkitFileSystemEntry, prefix = ""): Promise<SkillImportPackageFile[]> {
+  const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name
+  if (entry.isFile) {
+    const file = await readFileEntry(entry as WebkitFileSystemFileEntry)
+    return [{ path: relativePath, contentBase64: await fileToBase64(file) }]
+  }
+  if (!entry.isDirectory) return []
+  const children = await readDirectoryEntries(entry as WebkitFileSystemDirectoryEntry)
+  const nested = await Promise.all(children.map((child) => readEntryFiles(child, relativePath)))
+  return nested.flat()
+}
 
-  const customSkills = createMemo(() => skills().filter((item) => !item.builtin));
-  const removableSkills = createMemo(() => customSkills().filter(skillRemovable));
-  const builtinCount = createMemo(() => skills().length - customSkills().length);
-  const mcpEntries = createMemo(() => Object.entries(mcp()));
+function fileListPayload(dataTransfer: DataTransfer | null): SkillDropPayload | undefined {
+  const files = Array.from(dataTransfer?.files ?? [])
+  if (files.length === 0) return undefined
+  const first = files[0]!
+  if (files.length === 1 && first.name.toLowerCase().endsWith(".zip")) {
+    return { sourceName: first.name, archive: first }
+  }
+  if (files.length === 1 && !first.webkitRelativePath) {
+    return { sourceName: first.name, file: first }
+  }
+  return {
+    sourceName: first.webkitRelativePath.split("/")[0] || first.name,
+    files: files.map((file) => ({
+      path: file.webkitRelativePath || file.name,
+      contentBase64: "",
+    })),
+  }
+}
 
-  async function reloadAll() {
-    setLoading(true);
+async function droppedSkillPayload(event: DragEvent): Promise<SkillDropPayload | undefined> {
+  const entries = dataTransferEntries(event.dataTransfer)
+  if (entries.length > 0) {
+    if (entries.length === 1 && entries[0]!.isFile) {
+      const file = await readFileEntry(entries[0] as WebkitFileSystemFileEntry)
+      return file.name.toLowerCase().endsWith(".zip")
+        ? { sourceName: file.name, archive: file }
+        : { sourceName: file.name, file }
+    }
+    const files = (await Promise.all(entries.map((entry) => readEntryFiles(entry)))).flat()
+    const sourceName = entries.length === 1 ? entries[0]!.name : "dropped-skills"
+    return { sourceName, files }
+  }
+
+  const payload = fileListPayload(event.dataTransfer)
+  if (!payload?.files) return payload
+  const files = Array.from(event.dataTransfer?.files ?? [])
+  return {
+    ...payload,
+    files: await Promise.all(
+      files.map(async (file) => ({
+        path: file.webkitRelativePath || file.name,
+        contentBase64: await fileToBase64(file),
+      })),
+    ),
+  }
+}
+
+function isRemoteUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value)
+}
+
+function errorDetail(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+// ── Extension Settings Panels ──
+
+type ExtensionPanelMode = "skill" | "mcp"
+const MCP_STATUS_REFRESH_INTERVAL_MS = 1_000
+
+interface FormSelectOption extends SelectFieldOption {}
+
+function runPanelAction(label: string, action: () => void | Promise<void>): void {
+  try {
+    void Promise.resolve(action()).catch((error) => {
+      reportError({
+        id: `skill-panel-action:${label}`,
+        title: t("common.error"),
+        message: error instanceof Error ? error.message : String(error),
+        details: formatErrorDetails(error),
+      })
+    })
+  } catch (error) {
+    reportError({
+      id: `skill-panel-action:${label}`,
+      title: t("common.error"),
+      message: error instanceof Error ? error.message : String(error),
+      details: formatErrorDetails(error),
+    })
+  }
+}
+
+type DirectoryProp = string | (() => string | undefined)
+
+function SharedResourceManagementPanel(props: {
+  mode: ExtensionPanelMode
+  active?: boolean
+  directory?: DirectoryProp
+  onResourcesChanged?: () => void
+}) {
+  const nativeCommands = getHostTransport().capabilities.nativeCommands
+  const canOpenLocalPath = createMemo(() => nativeCommands["open-path"])
+  const canOpenRemoteUrl = createMemo(() => nativeCommands["open-url"])
+  const canPickSkillDirectory = createMemo(() => nativeCommands["workspace.pickDir"])
+  const skillSourceOptions = (): FormSelectOption[] => [
+    { value: "path", label: t("skill.source.path") },
+    { value: "url", label: t("skill.source.url") },
+    { value: "git", label: t("skill.source.git") },
+  ]
+  const skillPolicyOptions = (): FormSelectOption[] => [
+    { value: "ask", label: t("skill.policy.ask") },
+    { value: "allow", label: t("skill.policy.allow") },
+    { value: "deny", label: t("skill.policy.deny") },
+  ]
+  const mcpTypeOptions = (): FormSelectOption[] => [
+    { value: "remote", label: t("mcp.type.remote") },
+    { value: "local", label: t("mcp.type.local") },
+  ]
+
+  const mcpTransportOptions = (): FormSelectOption[] => [
+    { value: "streamable-http", label: t("mcp.transport.streamable_http") },
+    { value: "sse", label: t("mcp.transport.sse") },
+  ]
+  const mcpCredentialOptions = (): FormSelectOption[] => [
+    { value: "none", label: t("mcp.credential.none") },
+    { value: "query", label: t("mcp.credential.query") },
+    { value: "bearer", label: t("mcp.credential.bearer") },
+    { value: "header", label: t("mcp.credential.header") },
+  ]
+  const [notice, setNotice] = createSignal("")
+  const [noticeStatus, setNoticeStatus] = createSignal<"active" | "error" | "warn">("error")
+  const [loading, setLoading] = createSignal(false)
+  const [skillDragActive, setSkillDragActive] = createSignal(false)
+  const [skillLoadIssues, setSkillLoadIssues] = createSignal<SkillLoadIssue[]>([])
+
+  function setPanelNotice(message: string, status: "active" | "error" | "warn" = "error") {
+    setNotice(message)
+    setNoticeStatus(status)
+  }
+
+  function currentDirectory(): string {
+    if (props.directory !== undefined) {
+      const value = typeof props.directory === "function" ? props.directory() : props.directory
+      const directory = String(value || "").trim()
+      configureApi({ directory })
+      return directory
+    }
+    return syncActiveDirectoryApiContext().trim()
+  }
+
+  function sourceMatchesDirectory(directory: string): boolean {
+    return currentDirectory() === directory
+  }
+
+  const panelActive = createMemo(() => props.active === true)
+  const skillPanelActive = createMemo(() => props.mode === "skill" && panelActive())
+  const mcpPanelActive = createMemo(() => props.mode === "mcp" && panelActive())
+  const poolSkills = createMemo(() => (skillPanelActive() ? (appStore.skills as SkillItem[]) : []))
+  const mcp = createMemo(
+    (): Record<string, McpItem> => (mcpPanelActive() ? { ...(appStore.mcp as Record<string, McpItem>) } : {}),
+  )
+
+  const mcpEntries = createMemo(() => Object.entries(mcp()))
+
+  async function refreshMcpStatus(options: { directory?: string } = {}) {
+    const directory = options.directory ?? currentDirectory()
+    if (!directory) return undefined
+    return (await loadProjectMcpStatus({
+      directory,
+      isCurrentDirectory: sourceMatchesDirectory,
+    })) as Record<string, McpItem>
+  }
+
+  function notifyResourceChange() {
+    props.onResourcesChanged?.()
+  }
+
+  async function reloadCurrentPanel(options: { directory?: string } = {}) {
+    const directory = options.directory ?? currentDirectory()
+    if (!directory) {
+      setPanelNotice(t("workspace.no_directory"), "warn")
+      return
+    }
+    setLoading(true)
+    setNotice("")
     try {
-      await Promise.all([loadExtensions(), loadSkillMarket()]);
+      if (props.mode === "mcp") {
+        await refreshMcpStatus({ directory })
+      } else {
+        await loadInstalledSkills({ directory, isCurrentDirectory: sourceMatchesDirectory })
+        setSkillLoadIssues(await loadSkillIssues({ directory, isCurrentDirectory: sourceMatchesDirectory }))
+      }
+      if (!sourceMatchesDirectory(directory)) return
+    } catch (e) {
+      if (sourceMatchesDirectory(directory)) setPanelNotice(e instanceof Error ? e.message : String(e))
     } finally {
-      setLoading(false);
+      if (sourceMatchesDirectory(directory)) setLoading(false)
     }
   }
 
   async function handleRemoveSkill(source: string, kind: string, name: string) {
-    if (!confirm(t("skill.delete_confirm", { name }))) return;
+    const directory = currentDirectory()
+    if (!directory) {
+      setPanelNotice(t("workspace.no_directory"), "warn")
+      return
+    }
+    if (!(await nativeConfirm(t("skill.delete_confirm", { name })))) return
     try {
-      await apiJson("skill/remove", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source, kind }),
-      });
-      await reloadAll();
+      await deleteSkill(source, kind, { directory, isCurrentDirectory: sourceMatchesDirectory })
+      await reloadCurrentPanel({ directory })
+      notifyResourceChange()
     } catch (e) {
-      setNotice(e instanceof Error ? e.message : String(e));
+      if (sourceMatchesDirectory(directory)) setPanelNotice(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  async function handleUpdateSkill(item: SkillItem, source: SkillUpdateSource) {
+    const directory = currentDirectory()
+    if (!directory) {
+      setPanelNotice(t("workspace.no_directory"), "warn")
+      return
+    }
+    setLoading(true)
+    setNotice("")
+    try {
+      const result = await updateSkill(item.name, source, {
+        directory,
+        isCurrentDirectory: sourceMatchesDirectory,
+      })
+      await reloadCurrentPanel({ directory })
+      notifyResourceChange()
+      if (sourceMatchesDirectory(directory)) {
+        setPanelNotice(
+          t("skill.update_success", { name: result.name, version: result.version || t("skill.builtin") }),
+          "active",
+        )
+      }
+    } catch (e) {
+      if (sourceMatchesDirectory(directory)) setPanelNotice(e instanceof Error ? e.message : String(e))
+    } finally {
+      if (sourceMatchesDirectory(directory)) setLoading(false)
     }
   }
 
   async function handleOpenSkill(location: string) {
+    if (isRemoteUrl(location) ? !canOpenRemoteUrl() : !canOpenLocalPath()) return
     try {
-      await nativeOpen(location);
-    } catch {
- // ignore
-    }
-  }
-
-  async function handleDeleteAllSkills() {
-    const list = removableSkills();
-    if (list.length === 0) return;
-    const message = list.length === customSkills().length
-      ? t("skill.delete_all_confirm_all", { count: list.length })
-      : t("skill.delete_all_confirm_partial", { removable: list.length, blocked: customSkills().length - list.length });
-    if (!confirm(message)) return;
-    try {
-      for (const item of list) {
-        await apiJson("skill/remove", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ source: item.source, kind: skillRemoveKind(item) }),
-        });
-      }
-      await reloadAll();
+      const opened = await nativeOpen(location)
+      if (!opened) throw new Error("native open returned false")
     } catch (e) {
-      setNotice(e instanceof Error ? e.message : String(e));
+      setPanelNotice(t("skill.open_failed", { error: errorDetail(e) }))
     }
   }
 
   async function handleDeleteAllMcp() {
-    const names = mcpEntries().map(([name]) => name);
-    if (names.length === 0) return;
-    if (!confirm(t("mcp.delete_all_confirm", { count: names.length }))) return;
+    const directory = currentDirectory()
+    if (!directory) {
+      setPanelNotice(t("workspace.no_directory"), "warn")
+      return
+    }
+    const names = mcpEntries().map(([name]) => name)
+    if (names.length === 0) return
+    if (!(await nativeConfirm(t("mcp.delete_all_confirm", { count: names.length })))) return
     try {
-      await Promise.all(names.map((name) =>
-        apiJson(`mcp/${encodeURIComponent(name)}/disconnect`, { method: "POST" }).catch(() => void 0),
-      ));
-      await Promise.all(names.map((name) =>
-        apiJson(`mcp/${encodeURIComponent(name)}/auth`, { method: "DELETE" }).catch(() => void 0),
-      ));
-      await updateConfig((current: any) => {
-        delete current.mcp;
-      });
-      await reloadAll();
+      await deleteAllMcp({ directory, isCurrentDirectory: sourceMatchesDirectory, names })
+      await reloadCurrentPanel({ directory })
+      notifyResourceChange()
     } catch (e) {
-      setNotice(e instanceof Error ? e.message : String(e));
+      if (sourceMatchesDirectory(directory)) setPanelNotice(e instanceof Error ? e.message : String(e))
     }
   }
 
-  async function handleInstall(item: MarketItem) {
-    if (!item.source || item.install_kind === "manual") return;
-    try {
-      await apiJson("skill/install", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          kind: item.install_kind,
-          value: item.source,
-          policy: item.recommended_policy || undefined,
-        }),
-      });
-      await reloadAll();
-    } catch (e) {
-      setNotice(e instanceof Error ? e.message : String(e));
-    }
-  }
+  // ── Add Skill inline form ──
 
-  async function handleOpenHomepage(url: string | undefined) {
-    if (!url) return;
-    await nativeOpen(url);
-  }
-
- // ── Add Skill inline form ──
-
-  const [showAddSkill, setShowAddSkill] = createSignal(false);
+  const [showAddSkill, setShowAddSkill] = createSignal(false)
   const [skillForm, setSkillForm] = createStore({
     type: "path" as "path" | "url" | "git",
     value: "",
     policy: "ask" as "ask" | "allow" | "deny",
-  });
+  })
 
   async function handleAddSkill() {
-    const value = skillForm.value.trim();
-    if (!value) return;
+    const value = skillForm.value.trim()
+    if (!value) return
+    const directory = currentDirectory()
+    if (!directory) {
+      setPanelNotice(t("workspace.no_directory"), "warn")
+      return
+    }
     try {
-      await apiJson("skill/install", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          kind: skillForm.type,
-          value,
-          policy: skillForm.policy,
-        }),
-      });
-      setSkillForm({ type: "path", value: "", policy: "ask" });
-      setShowAddSkill(false);
-      await reloadAll();
+      await installSkill(skillForm.type, value, skillForm.policy, {
+        directory,
+        isCurrentDirectory: sourceMatchesDirectory,
+      })
+      if (!sourceMatchesDirectory(directory)) return
+      setSkillForm({ type: "path", value: "", policy: "ask" })
+      setShowAddSkill(false)
+      await reloadCurrentPanel({ directory })
+      notifyResourceChange()
     } catch (e) {
-      setNotice(e instanceof Error ? e.message : String(e));
+      if (sourceMatchesDirectory(directory)) setPanelNotice(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  async function handleDroppedSkillDrop(event: DragEvent) {
+    const directory = currentDirectory()
+    if (!directory) {
+      setPanelNotice(t("workspace.no_directory"), "warn")
+      return
+    }
+    try {
+      const payload = await droppedSkillPayload(event)
+      if (!payload) return
+      if (!(await nativeConfirm(t("skill.drop_confirm", { name: payload.sourceName })))) return
+      setLoading(true)
+      setNotice("")
+      const imported = payload.archive
+        ? await importSkillArchive(payload.archive.name, await fileToBase64(payload.archive), skillForm.policy, {
+            directory,
+            isCurrentDirectory: sourceMatchesDirectory,
+          })
+        : payload.files
+          ? await importSkillPackage(payload.sourceName, payload.files, skillForm.policy, {
+              directory,
+              isCurrentDirectory: sourceMatchesDirectory,
+            })
+          : payload.file
+            ? await importSkillFile(payload.file.name, await payload.file.text(), skillForm.policy, {
+                directory,
+                isCurrentDirectory: sourceMatchesDirectory,
+              })
+            : undefined
+      if (!imported) return
+      const installedNames = imported.names?.length ? imported.names.join(", ") : imported.name
+      if (!sourceMatchesDirectory(directory)) return
+      setPanelNotice(t("skill.drop_success", { name: installedNames }), "active")
+      await reloadCurrentPanel({ directory })
+      notifyResourceChange()
+    } catch (e) {
+      if (sourceMatchesDirectory(directory)) setPanelNotice(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSkillDragActive(false)
+      if (sourceMatchesDirectory(directory)) setLoading(false)
     }
   }
 
   async function handleBrowseFolder() {
+    if (!canPickSkillDirectory()) return
     try {
-      const tauri = (window as any).__TAURI__;
-      if (!tauri) return;
-      const { open } = await import("@tauri-apps/plugin-dialog");
-      const selected = await open({ directory: true, multiple: false });
-      if (typeof selected === "string") {
-        setSkillForm("value", selected);
+      const selected = await pickDirectory()
+      if (selected) {
+        setSkillForm("value", selected)
       }
-    } catch {
- // Tauri dialog not available in browser mode
+    } catch (e) {
+      setPanelNotice(t("skill.pick_folder_failed", { error: errorDetail(e) }))
     }
   }
 
   async function handleReloadSkills() {
-    await reloadAll();
+    await reloadCurrentPanel()
   }
 
-  // Ensure market data is loaded once skills are available
   createEffect(() => {
-    if (market().length === 0 && skills().length > 0) {
-      loadSkillMarket().catch(() => {});
+    if (props.mode !== "skill" || props.active !== true) return
+    const directory = currentDirectory()
+    if (!directory) {
+      setPanelNotice(t("workspace.no_directory"), "warn")
+      return
     }
-  });
 
-  async function handleOpenSkillDir() {
-    try {
-      const dirs = await apiJson("skill/directories");
-      const target = (dirs as any)?.global_config || (dirs as any)?.managed_skills;
-      if (!target) return;
-      await nativeOpen(target);
-    } catch {
- // ignore
+    setNotice("")
+    loadInstalledSkills({ directory, isCurrentDirectory: sourceMatchesDirectory }).catch((e) => {
+      if (sourceMatchesDirectory(directory)) setPanelNotice(e instanceof Error ? e.message : String(e))
+    })
+  })
+
+  createEffect(() => {
+    if (props.mode !== "mcp" || props.active !== true) return
+    const directory = currentDirectory()
+    if (!directory) {
+      setPanelNotice(t("workspace.no_directory"), "warn")
+      return
     }
-  }
 
- // ── Add MCP inline form ──
+    const refresh = () => {
+      refreshMcpStatus({ directory }).catch((e) => {
+        if (sourceMatchesDirectory(directory)) setPanelNotice(e instanceof Error ? e.message : String(e))
+      })
+    }
+    setNotice("")
+    const interval = createVisibilityInterval(refresh, MCP_STATUS_REFRESH_INTERVAL_MS, {
+      onVisible: refresh,
+    })
+    refresh()
+    interval.start()
 
-  const [showAddMcp, setShowAddMcp] = createSignal(false);
+    onCleanup(() => {
+      interval.dispose()
+    })
+  })
+
+  // ── Add MCP inline form ──
+
+  const [showAddMcp, setShowAddMcp] = createSignal(false)
   const [mcpForm, setMcpForm] = createStore({
     name: "",
     type: "remote" as "remote" | "local",
+    transport: "streamable-http" as RemoteMcpTransport,
     url: "",
+    credentialType: "none" as RemoteMcpCredentialType,
+    credentialName: "",
+    credentialSecret: "",
     command: "",
     args: "",
-  });
+  })
 
   async function handleAddMcp() {
-    const name = mcpForm.name.trim();
-    if (!name) return;
-    const payload: Record<string, any> = { name, type: mcpForm.type };
-    if (mcpForm.type === "remote") {
-      payload.url = mcpForm.url.trim();
-      if (!payload.url) return;
-    } else {
-      payload.command = mcpForm.command.trim();
-      if (!payload.command) return;
-      if (mcpForm.args.trim()) payload.args = mcpForm.args.trim();
+    const directory = currentDirectory()
+    if (!directory) {
+      setPanelNotice(t("workspace.no_directory"), "warn")
+      return
     }
     try {
-      await apiJson("mcp/add", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      setMcpForm({ name: "", type: "remote", url: "", command: "", args: "" });
-      setShowAddMcp(false);
-      await reloadAll();
+      const request =
+        mcpForm.type === "remote"
+          ? {
+              name: mcpForm.name,
+              type: "remote" as const,
+              transport: mcpForm.transport,
+              url: mcpForm.url,
+              credentialType: mcpForm.credentialType,
+              credentialName: mcpForm.credentialName,
+              credentialSecret: mcpForm.credentialSecret,
+            }
+          : {
+              name: mcpForm.name,
+              type: "local" as const,
+              command: mcpForm.command,
+              args: mcpForm.args,
+            }
+      await addMcpServer(request, { directory, isCurrentDirectory: sourceMatchesDirectory })
+      if (!sourceMatchesDirectory(directory)) return
+      setMcpForm({
+        name: "",
+        type: "remote",
+        transport: "streamable-http",
+        url: "",
+        credentialType: "none",
+        credentialName: "",
+        credentialSecret: "",
+        command: "",
+        args: "",
+      })
+      setShowAddMcp(false)
+      await reloadCurrentPanel({ directory })
+      notifyResourceChange()
     } catch (e) {
-      setNotice(e instanceof Error ? e.message : String(e));
+      if (sourceMatchesDirectory(directory)) setPanelNotice(e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -313,341 +606,487 @@ export default function SkillMarketPanel() {
       </Show>
 
       <Show when={notice()}>
-        <div class="config-status-box" data-status="error">
+        <SettingsState
+          tone={noticeStatus() === "error" ? "error" : noticeStatus() === "warn" ? "warning" : "success"}
+          data-ui={`${props.mode}-capability-notice`}
+          actions={
+            <Button
+              type="button"
+              variant="ghost"
+              size="md"
+              tone="neutral"
+              title={t("common.dismiss")}
+              aria-label={t("common.dismiss")}
+              onClick={() => setNotice("")}
+            >
+              {t("common.dismiss")}
+            </Button>
+          }
+        >
           {notice()}
-          <button
-            type="button"
-            class="btn btn-ghost mini"
-            onClick={() => setNotice("")}
-          >
-            {t("common.dismiss")}
-          </button>
-        </div>
+        </SettingsState>
       </Show>
 
-      {/* ── Installed Skills ── */}
-      <details class="config-subsection" open>
-        <summary class="config-subsection-head">{t("skill.title")}</summary>
-        <div class="config-subsection-body">
-          <div class="extension-head">
-            <div class="dialog-actions compact">
-              <button type="button" class="btn btn-ghost mini" onClick={handleReloadSkills}>
-                {t("common.reload")}
-              </button>
-              <button type="button" class="btn btn-ghost mini" onClick={handleOpenSkillDir}>
-                {t("skill.open_dir")}
-              </button>
-              <button type="button" class="btn btn-ghost mini" onClick={() => setShowAddSkill(!showAddSkill())}>
-                {t("skill.add")}
-              </button>
-              <button
-                type="button"
-                class="btn btn-ghost mini danger"
-                disabled={removableSkills().length === 0}
-                onClick={handleDeleteAllSkills}
-              >
-                {t("skill.delete_all")}
-              </button>
-            </div>
-          </div>
+      <For each={skillLoadIssues()}>
+        {(issue) => (
+          <SettingsState tone="error" data-ui="skill-load-issue">
+            {t("skill.load_issue", {
+              owner: `${issue.kind} · ${issue.path}`,
+              error: issue.message,
+            })}
+          </SettingsState>
+        )}
+      </For>
 
-        {/* Add Skill inline form */}
-        <Show when={showAddSkill()}>
-          <div class="config-inline-form">
-            <label class="field">
-              <span class="field-label">{t("skill.source_type")}</span>
-              <select
-                class="field-input"
-                value={skillForm.type}
-                onChange={(e) => setSkillForm("type", e.currentTarget.value as any)}
-              >
-                <option value="path">{t("skill.source.path")}</option>
-                <option value="url">{t("skill.source.url")}</option>
-                <option value="git">{t("skill.source.git")}</option>
-              </select>
-            </label>
-            <label class="field">
-              <span class="field-label">{t("skill.value")}</span>
-              <div class="field-input-group">
-                <input
-                  class="field-input"
-                  type="text"
-                  value={skillForm.value}
-                  placeholder={t("skill.value_placeholder")}
-                  onInput={(e) => setSkillForm("value", e.currentTarget.value)}
-                />
-                <Show when={skillForm.type === "path"}>
-                  <button type="button" class="btn btn-ghost mini" onClick={handleBrowseFolder}>
-                    {t("skill.browse_folder")}
-                  </button>
-                </Show>
-              </div>
-            </label>
-            <label class="field">
-              <span class="field-label">{t("skill.policy")}</span>
-              <select
-                class="field-input"
-                value={skillForm.policy}
-                onChange={(e) => setSkillForm("policy", e.currentTarget.value as any)}
-              >
-                <option value="ask">{t("skill.policy.ask")}</option>
-                <option value="allow">{t("skill.policy.allow")}</option>
-                <option value="deny">{t("skill.policy.deny")}</option>
-              </select>
-            </label>
-            <div class="dialog-actions compact">
-              <button type="button" class="btn btn-ghost" onClick={() => setShowAddSkill(false)}>
-                {t("common.cancel")}
-              </button>
-              <button
+      {/* ── Installed Skills ── */}
+      <Show when={skillPanelActive()}>
+        <SettingsGroup
+          class="extension-settings-group"
+          contentInset
+          data-skill-drop-active={skillDragActive() ? "true" : "false"}
+          title={t("skill.installed_title")}
+          actions={
+            <div class="extension-settings-actions">
+              <Button
                 type="button"
-                class="btn btn-primary"
-                disabled={!skillForm.value.trim()}
-                onClick={handleAddSkill}
+                variant="ghost"
+                size="md"
+                tone="neutral"
+                data-ui="tool-panel-action"
+                title={t("skill.install")}
+                aria-label={t("skill.install")}
+                onClick={() => setShowAddSkill((visible) => !visible)}
               >
-                {t("skill.install")}
-              </button>
+                <Icon name="plus" />
+                <span class="tool-panel-action-label">{t("skill.install")}</span>
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="md"
+                tone="neutral"
+                data-ui="tool-panel-action"
+                title={t("common.reload")}
+                aria-label={t("common.reload")}
+                onClick={() => runPanelAction(t("common.reload"), handleReloadSkills)}
+              >
+                <Icon name="refresh" />
+                <span class="tool-panel-action-label">{t("common.reload")}</span>
+              </Button>
+            </div>
+          }
+          onDragEnter={(event) => {
+            event.preventDefault()
+            setSkillDragActive(true)
+          }}
+          onDragOver={(event) => {
+            event.preventDefault()
+            if (event.dataTransfer) event.dataTransfer.dropEffect = "copy"
+            setSkillDragActive(true)
+          }}
+          onDragLeave={(event) => {
+            if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
+            setSkillDragActive(false)
+          }}
+          onDrop={(event) => {
+            event.preventDefault()
+            setSkillDragActive(false)
+            void handleDroppedSkillDrop(event)
+          }}
+        >
+          <div class="extension-settings-body">
+            <div class="skill-drop-zone" data-active={skillDragActive() ? "true" : "false"}>
+              <span class="skill-drop-zone__icon" aria-hidden="true">
+                <Icon name="upload" />
+              </span>
+              <span class="skill-drop-zone__copy">
+                <strong>{t("skill.drop_title")}</strong>
+                <span>{t("skill.drop_hint")}</span>
+              </span>
+            </div>
+
+            {/* Add Skill inline form */}
+            <Show when={showAddSkill()}>
+              <div class="config-inline-form">
+                <TextField.Root>
+                  <TextField.Label>{t("skill.source_type")}</TextField.Label>
+                  <SelectField<FormSelectOption>
+                    value={skillForm.type}
+                    options={skillSourceOptions()}
+                    ariaLabel={t("skill.source_type")}
+                    onChange={(value) => setSkillForm("type", value as any)}
+                    optionData={(option) => ({ "data-value": option.value })}
+                  />
+                </TextField.Root>
+                <TextField.Root as="label">
+                  <TextField.Label>{t("skill.value")}</TextField.Label>
+                  <TextField.Root variant="group">
+                    <TextField.Input
+                      type="text"
+                      value={skillForm.value}
+                      placeholder={t("skill.value_placeholder")}
+                      onInput={(e) => setSkillForm("value", e.currentTarget.value)}
+                    />
+                    <Show when={skillForm.type === "path" && canPickSkillDirectory()}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="md"
+                        tone="neutral"
+                        title={t("skill.browse_folder")}
+                        aria-label={t("skill.browse_folder")}
+                        onClick={handleBrowseFolder}
+                      >
+                        {t("skill.browse_folder")}
+                      </Button>
+                    </Show>
+                  </TextField.Root>
+                </TextField.Root>
+                <TextField.Root>
+                  <TextField.Label>{t("skill.policy")}</TextField.Label>
+                  <SelectField<FormSelectOption>
+                    value={skillForm.policy}
+                    options={skillPolicyOptions()}
+                    ariaLabel={t("skill.policy")}
+                    onChange={(value) => setSkillForm("policy", value as any)}
+                    optionData={(option) => ({ "data-value": option.value })}
+                  />
+                </TextField.Root>
+                <div class="dialog-actions compact">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="md"
+                    tone="neutral"
+                    title={t("common.cancel")}
+                    aria-label={t("common.cancel")}
+                    onClick={() => setShowAddSkill(false)}
+                  >
+                    {t("common.cancel")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="solid"
+                    size="md"
+                    tone="accent"
+                    disabled={!skillForm.value.trim()}
+                    title={t("skill.install")}
+                    aria-label={t("skill.install")}
+                    onClick={handleAddSkill}
+                  >
+                    {t("skill.install")}
+                  </Button>
+                </div>
+              </div>
+            </Show>
+            <div class="extension-list" id="skillList">
+              <Show when={poolSkills().length > 0} fallback={<div class="empty-hint">{t("skill.none_custom")}</div>}>
+                <For each={poolSkills()}>
+                  {(item) => (
+                    <SettingsRow
+                      class="extension-settings-row"
+                      title={<span>{item.name}</span>}
+                      desc={item.description || ""}
+                      meta={<small>{item.location || ""}</small>}
+                      interactive
+                      actions={
+                        <div class="extension-settings-actions">
+                          <Show when={item.builtin}>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              tone="neutral"
+                              data-ui="skill-update-builtin"
+                              disabled={loading()}
+                              onClick={() => void handleUpdateSkill(item, "builtin")}
+                            >
+                              {t("skill.update_builtin")}
+                            </Button>
+                          </Show>
+                          <Show when={!item.builtin && item.writable}>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              tone="neutral"
+                              data-ui="skill-update-server"
+                              disabled={loading()}
+                              onClick={() => void handleUpdateSkill(item, "server")}
+                            >
+                              {t("skill.update_server")}
+                            </Button>
+                          </Show>
+                          <Show when={skillRemovable(item)}>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="md"
+                              tone="danger"
+                              title={t("skill.delete_button_title")}
+                              aria-label={t("skill.delete_button_title")}
+                              onClick={() => handleRemoveSkill(item.source || "", skillRemoveKind(item), item.name)}
+                            >
+                              {t("common.delete")}
+                            </Button>
+                          </Show>
+                          <Show
+                            when={
+                              item.location &&
+                              item.location !== "builtin" &&
+                              (isRemoteUrl(item.location) ? canOpenRemoteUrl() : canOpenLocalPath())
+                            }
+                          >
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="md"
+                              tone="neutral"
+                              title={t("skill.open_button_title")}
+                              aria-label={t("skill.open_button_title")}
+                              onClick={() => handleOpenSkill(item.location!)}
+                            >
+                              {t("common.open")}
+                            </Button>
+                          </Show>
+                          <Badge tone="ok">{item.builtin ? t("skill.builtin") : t("common.loaded")}</Badge>
+                        </div>
+                      }
+                    />
+                  )}
+                </For>
+              </Show>
             </div>
           </div>
-        </Show>
-          <div class="extension-list" id="skillList">
-            <Show
-              when={skills().length > 0}
-              fallback={<div class="empty-hint">{t("skill.none_custom")}</div>}
-            >
-              <For each={skills()}>
-                {(item) => (
-                  <div class="extension-row">
-                    <div class="extension-row-main">
-                      <strong>{item.name}</strong>
-                      <span>{item.description || ""}</span>
-                      <small>{item.location || ""}</small>
-                    </div>
-                    <div class="extension-row-actions">
-                      <Show when={skillRemovable(item)}>
-                        <button
-                          type="button"
-                          class="btn btn-ghost mini danger"
-                          title={t("skill.delete_button_title")}
-                          aria-label={t("skill.delete_button_title")}
-                          onClick={() =>
-                            handleRemoveSkill(
-                              item.source || "",
-                              skillRemoveKind(item),
-                              item.name,
-                            )
-                          }
-                        >
-                          {t("common.delete")}
-                        </button>
-                      </Show>
-                      <Show when={item.location && item.location !== "builtin"}>
-                        <button
-                          type="button"
-                          class="btn btn-ghost mini"
-                          title={t("skill.open_button_title")}
-                          aria-label={t("skill.open_button_title")}
-                          onClick={() => handleOpenSkill(item.location!)}
-                        >
-                          {t("common.open")}
-                        </button>
-                      </Show>
-                      <span class="extension-status" data-state="connected">
-                        {item.builtin ? t("skill.builtin") : t("common.loaded")}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </For>
-            </Show>
-          </div>
-        </div>
-      </details>
+        </SettingsGroup>
+      </Show>
 
       {/* ── MCP Servers ── */}
-      <details class="config-subsection" open>
-        <summary class="config-subsection-head">{t("mcp.title")}</summary>
-        <div class="config-subsection-body">
-          <div class="extension-head">
-            <div class="dialog-actions compact">
-              <button type="button" class="btn btn-ghost mini" onClick={() => setShowAddMcp(!showAddMcp())}>
-                {t("mcp.add_action")}
-              </button>
-              <button
+      <Show when={mcpPanelActive()}>
+        <SettingsGroup
+          class="extension-settings-group"
+          title={t("mcp.resource_management_title")}
+          description={t("mcp.resource_management_intro")}
+          contentInset
+          actions={
+            <>
+              <Button
                 type="button"
-                class="btn btn-ghost mini danger"
+                variant="ghost"
+                size="md"
+                tone="neutral"
+                data-ui="tool-panel-action"
+                title={t("mcp.add_action")}
+                aria-label={t("mcp.add_action")}
+                onClick={() =>
+                  runPanelAction(t("mcp.add_action"), () => {
+                    setShowAddMcp(!showAddMcp())
+                  })
+                }
+              >
+                <Icon name="plus" />
+                <span class="tool-panel-action-label">{t("mcp.add_action")}</span>
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="md"
+                tone="danger"
+                data-ui="tool-panel-action"
+                title={t("mcp.delete_all")}
+                aria-label={t("mcp.delete_all")}
                 disabled={mcpEntries().length === 0}
-                onClick={handleDeleteAllMcp}
-            >
-              {t("mcp.delete_all")}
-            </button>
-          </div>
-        </div>
-
-        {/* Add MCP inline form */}
-        <Show when={showAddMcp()}>
-          <div class="config-inline-form">
-            <label class="field">
-              <span class="field-label">{t("mcp.name")}</span>
-              <input
-                class="field-input"
-                type="text"
-                value={mcpForm.name}
-                placeholder="exa"
-                onInput={(e) => setMcpForm("name", e.currentTarget.value)}
-              />
-            </label>
-            <label class="field">
-              <span class="field-label">{t("mcp.type")}</span>
-              <select
-                class="field-input"
-                value={mcpForm.type}
-                onChange={(e) => setMcpForm("type", e.currentTarget.value as any)}
+                onClick={() => runPanelAction(t("mcp.delete_all"), handleDeleteAllMcp)}
               >
-                <option value="remote">{t("mcp.type.remote")}</option>
-                <option value="local">{t("mcp.type.local")}</option>
-              </select>
-            </label>
-            <Show when={mcpForm.type === "remote"}>
-              <label class="field">
-                <span class="field-label">{t("mcp.remote_url")}</span>
-                <input
-                  class="field-input"
-                  type="url"
-                  value={mcpForm.url}
-                  placeholder="https://example.com/mcp"
-                  onInput={(e) => setMcpForm("url", e.currentTarget.value)}
-                />
-              </label>
+                <Icon name="cancel" />
+                <span class="tool-panel-action-label">{t("mcp.delete_all")}</span>
+              </Button>
+            </>
+          }
+        >
+          <div class="extension-settings-body">
+            {/* Add MCP inline form */}
+            <Show when={showAddMcp()}>
+              <div class="config-inline-form">
+                <TextField.Root as="label">
+                  <TextField.Label>{t("mcp.name")}</TextField.Label>
+                  {/* Fixed MCP server-name example. */}
+                  <TextField.Input
+                    type="text"
+                    value={mcpForm.name}
+                    placeholder="exa"
+                    onInput={(e) => setMcpForm("name", e.currentTarget.value)}
+                  />
+                </TextField.Root>
+                <TextField.Root>
+                  <TextField.Label>{t("mcp.type")}</TextField.Label>
+                  <SelectField<FormSelectOption>
+                    value={mcpForm.type}
+                    options={mcpTypeOptions()}
+                    ariaLabel={t("mcp.type")}
+                    onChange={(value) => setMcpForm("type", value as any)}
+                    optionData={(option) => ({ "data-value": option.value })}
+                  />
+                </TextField.Root>
+                <Show when={mcpForm.type === "remote"}>
+                  <TextField.Root>
+                    <TextField.Label>{t("mcp.transport")}</TextField.Label>
+                    <SelectField<FormSelectOption>
+                      value={mcpForm.transport}
+                      options={mcpTransportOptions()}
+                      ariaLabel={t("mcp.transport")}
+                      onChange={(value) => setMcpForm("transport", value as RemoteMcpTransport)}
+                      optionData={(option) => ({ "data-value": option.value })}
+                    />
+                  </TextField.Root>
+                  <TextField.Root as="label">
+                    <TextField.Label>{t("mcp.remote_url")}</TextField.Label>
+                    {/* Fixed remote MCP URL example. */}
+                    <TextField.Input
+                      type="url"
+                      value={mcpForm.url}
+                      placeholder="https://example.com/mcp"
+                      onInput={(e) => setMcpForm("url", e.currentTarget.value)}
+                    />
+                  </TextField.Root>
+                  <TextField.Root>
+                    <TextField.Label>{t("mcp.credential.type")}</TextField.Label>
+                    <SelectField<FormSelectOption>
+                      value={mcpForm.credentialType}
+                      options={mcpCredentialOptions()}
+                      ariaLabel={t("mcp.credential.type")}
+                      onChange={(value) => setMcpForm("credentialType", value as RemoteMcpCredentialType)}
+                      optionData={(option) => ({ "data-value": option.value })}
+                    />
+                  </TextField.Root>
+                  <Show when={mcpForm.credentialType === "query" || mcpForm.credentialType === "header"}>
+                    <TextField.Root as="label">
+                      <TextField.Label>{t("mcp.credential.name")}</TextField.Label>
+                      <TextField.Input
+                        type="text"
+                        value={mcpForm.credentialName}
+                        placeholder={mcpForm.credentialType === "query" ? "token" : "X-API-Key"}
+                        onInput={(event) => setMcpForm("credentialName", event.currentTarget.value)}
+                      />
+                    </TextField.Root>
+                  </Show>
+                  <Show when={mcpForm.credentialType !== "none"}>
+                    <TextField.Root as="label">
+                      <TextField.Label>{t("mcp.credential.secret")}</TextField.Label>
+                      <TextField.Input
+                        type="password"
+                        value={mcpForm.credentialSecret}
+                        autocomplete="off"
+                        placeholder={t("mcp.credential.secret_placeholder")}
+                        onInput={(event) => setMcpForm("credentialSecret", event.currentTarget.value)}
+                      />
+                    </TextField.Root>
+                  </Show>
+                </Show>
+                <Show when={mcpForm.type === "local"}>
+                  <TextField.Root as="label">
+                    <TextField.Label>{t("mcp.command")}</TextField.Label>
+                    {/* Fixed command example. */}
+                    <TextField.Input
+                      type="text"
+                      value={mcpForm.command}
+                      placeholder="npx"
+                      onInput={(e) => setMcpForm("command", e.currentTarget.value)}
+                    />
+                  </TextField.Root>
+                  <TextField.Root as="label">
+                    <TextField.Label>{t("mcp.arguments")}</TextField.Label>
+                    {/* Fixed command-line argument example. */}
+                    <TextField.Input
+                      type="text"
+                      value={mcpForm.args}
+                      placeholder="-y @modelcontextprotocol/server-filesystem C:\repo"
+                      onInput={(e) => setMcpForm("args", e.currentTarget.value)}
+                    />
+                  </TextField.Root>
+                </Show>
+                <div class="dialog-actions compact">
+                  <Button type="button" variant="ghost" size="md" tone="neutral" onClick={() => setShowAddMcp(false)}>
+                    {t("common.cancel")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="solid"
+                    size="md"
+                    tone="accent"
+                    disabled={
+                      !mcpForm.name.trim() ||
+                      (mcpForm.type === "remote"
+                        ? !mcpForm.url.trim() ||
+                          (mcpForm.credentialType !== "none" &&
+                            (!mcpForm.credentialSecret.trim() ||
+                              ((mcpForm.credentialType === "query" || mcpForm.credentialType === "header") &&
+                                !mcpForm.credentialName.trim())))
+                        : !mcpForm.command.trim())
+                    }
+                    onClick={handleAddMcp}
+                  >
+                    {t("mcp.add_action")}
+                  </Button>
+                </div>
+              </div>
             </Show>
-            <Show when={mcpForm.type === "local"}>
-              <label class="field">
-                <span class="field-label">{t("mcp.command")}</span>
-                <input
-                  class="field-input"
-                  type="text"
-                  value={mcpForm.command}
-                  placeholder="npx"
-                  onInput={(e) => setMcpForm("command", e.currentTarget.value)}
-                />
-              </label>
-              <label class="field">
-                <span class="field-label">{t("mcp.arguments")}</span>
-                <input
-                  class="field-input"
-                  type="text"
-                  value={mcpForm.args}
-                  placeholder="-y @modelcontextprotocol/server-filesystem C:\repo"
-                  onInput={(e) => setMcpForm("args", e.currentTarget.value)}
-                />
-              </label>
-            </Show>
-            <div class="dialog-actions compact">
-              <button type="button" class="btn btn-ghost" onClick={() => setShowAddMcp(false)}>
-                {t("common.cancel")}
-              </button>
-              <button
-                type="button"
-                class="btn btn-primary"
-                disabled={!mcpForm.name.trim() || (mcpForm.type === "remote" ? !mcpForm.url.trim() : !mcpForm.command.trim())}
-                onClick={handleAddMcp}
-              >
-                {t("mcp.add_action")}
-              </button>
-            </div>
-          </div>
-        </Show>
-          <div class="extension-list" id="mcpList">
-            <Show
-              when={mcpEntries().length > 0}
-              fallback={<div class="empty-hint">{t("mcp.none")}</div>}
+            <SettingsDetailSection
+              class="extension-list"
+              title={t("mcp.configured_status")}
+              description={t("mcp.configured_status_help")}
+              actions={<Badge tone="neutral">{mcpEntries().length}</Badge>}
             >
-              <For each={mcpEntries()}>
-                {([name, item]) => {
-                  const status = item?.status || "disabled";
-                  const detail = item?.error || "";
-                  return (
-                    <div class="extension-row">
-                      <div class="extension-row-main">
-                        <strong>{name}</strong>
-                        <span>{detail ? detail : mcpStatusLabel(status)}</span>
-                      </div>
-                      <span class="extension-status" data-state={status}>
-                        {mcpStatusLabel(status)}
-                      </span>
-                    </div>
-                  );
-                }}
-              </For>
-            </Show>
+              <div id="mcpList">
+                <Show when={mcpEntries().length > 0} fallback={<div class="empty-hint">{t("mcp.none")}</div>}>
+                  <For each={mcpEntries()}>
+                    {([name, item]) => {
+                      const status = item?.status
+                      const label = mcpConnectionStatusOrDisabledLabel(status)
+                      const detail = item?.error || ""
+                      return (
+                        <SettingsRow
+                          class="extension-settings-row"
+                          title={name}
+                          desc={detail ? detail : label}
+                          interactive
+                          actions={<Badge tone={mcpConnectionStatusOrDisabledTone(status)}>{label}</Badge>}
+                        />
+                      )
+                    }}
+                  </For>
+                </Show>
+              </div>
+            </SettingsDetailSection>
           </div>
-        </div>
-      </details>
-
-      {/* ── Skill Market ── */}
-      <details class="config-subsection">
-        <summary class="config-subsection-head">{t("skill.market.title")}</summary>
-        <div class="config-subsection-body">
-          <div class="extension-list" id="skillMarketList">
-            <Show
-              when={market().length > 0}
-              fallback={<div class="empty-hint">{t("skill.market.none")}</div>}
-            >
-              <For each={market()}>
-                {(item) => {
-                  const installable = !!item.source && item.install_kind !== "manual";
-                  return (
-                    <div class="market-card">
-                      <div class="market-card-main">
-                        <strong>{item.name}</strong>
-                        <span>
-                          {item.provider} · {item.trust} · {item.install_kind}
-                        </span>
-                        <small>{item.description || ""}</small>
-                        <Show when={item.notes}>
-                          <small>{item.notes}</small>
-                        </Show>
-                      </div>
-                      <div class="market-card-actions">
-                        <span
-                          class="extension-status"
-                          data-state={item.recommended_policy || ""}
-                        >
-                          {policyLabel(item.recommended_policy || "")}
-                        </span>
-                        <Show
-                          when={installable}
-                          fallback={
-                            <button
-                              type="button"
-                              class="btn btn-ghost mini"
-                              title={t("skill.market.open_site_title")}
-                              aria-label={t("skill.market.open_site_title")}
-                              onClick={() => handleOpenHomepage(item.homepage)}
-                            >
-                              {t("skill.market.open_site")}
-                            </button>
-                          }
-                        >
-                          <button
-                            type="button"
-                            class="btn btn-primary mini"
-                            title={t("skill.market.install_button_title")}
-                            aria-label={t("skill.market.install_button_title")}
-                            onClick={() => handleInstall(item)}
-                          >
-                            {t("skill.install")}
-                          </button>
-                        </Show>
-                      </div>
-                    </div>
-                  );
-                }}
-              </For>
-            </Show>
-          </div>
-        </div>
-      </details>
+        </SettingsGroup>
+      </Show>
     </>
-  );
+  )
+}
+
+export function SkillResourceManagementPanel(
+  props: { active?: boolean; directory?: DirectoryProp; onResourcesChanged?: () => void } = {},
+) {
+  return (
+    <SharedResourceManagementPanel
+      mode="skill"
+      active={props.active ?? true}
+      directory={props.directory}
+      onResourcesChanged={props.onResourcesChanged}
+    />
+  )
+}
+
+export function McpResourceManagementPanel(
+  props: { active?: boolean; directory?: DirectoryProp; onResourcesChanged?: () => void } = {},
+) {
+  return (
+    <SharedResourceManagementPanel
+      mode="mcp"
+      active={props.active ?? true}
+      directory={props.directory}
+      onResourcesChanged={props.onResourcesChanged}
+    />
+  )
 }

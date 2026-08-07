@@ -1,4 +1,4 @@
-import { ExecutorDiscovery } from "@/executor/discovery"
+import { requireRuntimePackage } from "@/runtime/package-require"
 
 declare const OPENCORVUS_LIBC: string | undefined
 
@@ -50,7 +50,7 @@ export namespace Capability {
   function watcher() {
     const pkg = watcherPkg()
     try {
-      require(pkg)
+      requireRuntimePackage("@parcel/watcher")
       return line("watcher", "File watcher binding", "ok", pkg)
     } catch (err) {
       return line(
@@ -62,7 +62,6 @@ export namespace Capability {
       )
     }
   }
-
 
   async function winFfi() {
     if (process.platform !== "win32") return line("win32_ffi", "Windows console FFI", "ok", "n/a")
@@ -83,13 +82,44 @@ export namespace Capability {
       )
     }
   }
+  async function screenCapture() {
+    try {
+      requireRuntimePackage("node-screenshots")
+      return line("screen_capture", "Screen capture module", "ok", "node-screenshots")
+    } catch (err) {
+      return line(
+        "screen_capture",
+        "Screen capture module",
+        "warn",
+        `node-screenshots unavailable: ${text(err)}`,
+        "Screen tool will fail. Reinstall dependencies or platform may not be supported.",
+      )
+    }
+  }
+
+  async function gitBash() {
+    if (process.platform !== "win32") return line("git_bash", "Git Bash (Windows only)", "ok", "n/a")
+    try {
+      const { Shell } = await import("@/shell/shell")
+      const shellPath = Shell.acceptable()
+      const base = shellPath.toLowerCase()
+      if (base.endsWith("bash.exe")) {
+        return line("git_bash", "Git Bash (Windows)", "ok", shellPath)
+      }
+      return line(
+        "git_bash",
+        "Git Bash (Windows)",
+        "warn",
+        `Falling back to ${shellPath}`,
+        "Install Git for Windows to enable full bash/PID-guard support. Without it, cmd.exe is used.",
+      )
+    } catch (err) {
+      return line("git_bash", "Git Bash (Windows)", "warn", text(err))
+    }
+  }
 
   async function collectFresh() {
-    const checks = [
-      winFfi(),
-      Promise.resolve(watcher()),
-      executors(),
-    ]
+    const checks = [winFfi(), screenCapture(), gitBash(), Promise.resolve(watcher())]
     const nested = await Promise.all(checks)
     const items = nested.flatMap((item) => (Array.isArray(item) ? item : [item]))
     const total = items.reduce(
@@ -106,40 +136,6 @@ export namespace Capability {
       items,
       total,
     } satisfies Report
-  }
-
-  async function executors() {
-    const found = await ExecutorDiscovery.scan()
-    return [
-      found.opencode.available
-        ? line("executor_opencode", "Executor opencode", "ok", found.opencode.detail)
-        : line("executor_opencode", "Executor opencode", "fail", found.opencode.detail),
-      found.codex.available
-        ? line("executor_codex", "Executor codex", "ok", found.codex.version ? `${found.codex.detail} (${found.codex.version})` : found.codex.detail)
-        : line(
-            "executor_codex",
-            "Executor codex",
-            "warn",
-            found.codex.detail,
-            "Install Codex or place the binary in tools/ when using the self-contained package.",
-          ),
-      found["claude-code"].available
-        ? line(
-            "executor_claude_code",
-            "Executor claude-code",
-            "ok",
-            found["claude-code"].version
-              ? `${found["claude-code"].detail} (${found["claude-code"].version})`
-              : found["claude-code"].detail,
-          )
-        : line(
-            "executor_claude_code",
-            "Executor claude-code",
-            "warn",
-            found["claude-code"].detail,
-            "Install Claude Code or place the binary in tools/ when using the self-contained package.",
-          ),
-    ]
   }
 
   export function cached() {

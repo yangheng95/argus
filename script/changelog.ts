@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { $ } from "bun"
-import { createOpenCorvus } from "@opencorvus-ai/sdk/v2"
+import { createOpenCorvus } from "@opencorvus-ai/sdk"
 import { parseArgs } from "util"
 import { Script } from "@opencorvus-ai/script"
 
@@ -52,7 +52,8 @@ export async function getCommits(from: string, to: string): Promise<Commit[]> {
   }
 
   // Get commits that touch the relevant packages
-  const log = await $`git log ${fromRef}..${toRef} --oneline --format="%H" -- packages/opencorvus packages/sdk packages/plugin github`.text()
+  const log =
+    await $`git log ${fromRef}..${toRef} --oneline --format="%H" -- packages/opencorvus packages/sdk packages/plugin github`.text()
   const hashes = log.split("\n").filter(Boolean)
 
   const commits: Commit[] = []

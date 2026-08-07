@@ -3,11 +3,30 @@ import { SessionTable } from "@/session/session.sql"
 import { Timestamps } from "@/storage/schema.sql"
 
 export type TaskQueuePriority = "high" | "normal" | "low"
-export type TaskQueueStatus = "queued" | "retrying" | "running" | "completed" | "failed"
-export type TaskQueueMetadata = {
-  kind: "session_prompt"
-  input: Record<string, unknown>
-}
+export type TaskQueueStatus = "queued" | "running" | "completed" | "failed"
+export type TaskQueueMetadata =
+  | {
+      kind: "session_prompt"
+      input: Record<string, unknown>
+    }
+  | {
+      kind: "session_wake"
+      messageID: string
+      input: Record<string, unknown>
+    }
+  | {
+      kind: "session_compaction"
+      input: {
+        sourceUserMessageID: string
+        model?: {
+          providerID: string
+          modelID: string
+        }
+        auto: boolean
+        overflow: boolean
+        focus?: string
+      }
+    }
 
 export const TaskQueueTable = sqliteTable(
   "a2a_task_queue",
@@ -20,8 +39,6 @@ export const TaskQueueTable = sqliteTable(
     priority: text().notNull().$type<TaskQueuePriority>().default("normal"),
     status: text().notNull().$type<TaskQueueStatus>().default("queued"),
     source: text().notNull().default("api"),
-    retry_count: integer().notNull().default(0),
-    max_retries: integer().notNull().default(3),
     previous_summary: text(),
     error_message: text(),
     metadata: text({ mode: "json" }).notNull().$type<TaskQueueMetadata>(),

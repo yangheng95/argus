@@ -3,9 +3,17 @@ import type { Provider } from "./provider"
 
 function googleVertexVars(options: Record<string, any>) {
   const project =
-    options["project"] ?? Env.get("GOOGLE_CLOUD_PROJECT") ?? Env.get("GCP_PROJECT") ?? Env.get("GCLOUD_PROJECT")
+    options["project"] ??
+    Env.get("GOOGLE_VERTEX_PROJECT") ??
+    Env.get("GOOGLE_CLOUD_PROJECT") ??
+    Env.get("GCP_PROJECT") ??
+    Env.get("GCLOUD_PROJECT")
   const location =
-    options["location"] ?? Env.get("GOOGLE_CLOUD_LOCATION") ?? Env.get("VERTEX_LOCATION") ?? "us-central1"
+    options["location"] ??
+    Env.get("GOOGLE_VERTEX_LOCATION") ??
+    Env.get("GOOGLE_CLOUD_LOCATION") ??
+    Env.get("VERTEX_LOCATION") ??
+    "us-central1"
   const endpoint = location === "global" ? "aiplatform.googleapis.com" : `${location}-aiplatform.googleapis.com`
 
   return {

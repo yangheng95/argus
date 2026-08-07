@@ -1,6 +1,9 @@
+import { randomUUID } from "node:crypto"
 import path from "node:path"
-import { createOpencode, createOpencodeClient, type Event, type OpencodeClient } from "@opencorvus-ai/sdk/v2"
-import { mkdir } from "node:fs/promises"
+import { ChannelId, type ChannelName } from "@opencorvus-ai/channel-config"
+import { createOpenCorvus, createOpenCorvusClient, type Event, type OpenCorvusClient } from "@opencorvus-ai/sdk"
+import { mkdir, open, readFile, rename, rm } from "node:fs/promises"
+import lockfile from "proper-lockfile"
 import type { ChannelAdapter, IncomingMessage } from "./adapter"
 import type { STTPipeline } from "./stt/pipeline"
 import type { VisionPipeline } from "./vision"
@@ -10,36 +13,8 @@ import {
   polishText,
   splitText,
 } from "./message-formatter"
-import {
-  permissionReply as permissionReplyRule,
-  queueLimit as queueLimitRule,
-  type PermissionReply,
-} from "./channel-policy"
+import { queueLimit as queueLimitRule } from "./channel-policy"
 import { SessionCoordinator } from "./session-coordinator"
-
-interface TaskReportProperties {
-  sessionID: string
-  status: "progress" | "need_input" | "done" | "failed"
-  summary: string
-  question?: string
-  next_plan?: string
-  artifacts?: string[]
-  error?: string
-}
-
-interface Job {
-  jobID: string
-  sessionID: string
-  turn: number
-  status: "running" | "waiting_user"
-  lastReport?: TaskReportProperties
-  startedAt: number
-  lastActivityAt: number
-  channel: string
-  thread: string
-  adapter: ChannelAdapter
-  platform: string
-}
 
 interface SessionEntry {
   sessionId: string
@@ -56,23 +31,8 @@ type PermissionAsked = {
   permission: string
   patterns: string[]
 }
-const controlPlatforms = [
-  "slack",
-  "telegram",
-  "discord",
-  "feishu",
-  "whatsapp",
-  "googlechat",
-  "msteams",
-  "line",
-  "matrix",
-  "mattermost",
-  "signal",
-  "wecom",
-  "dingtalk",
-  "qq",
-] as const
-type ControlPlatform = (typeof controlPlatforms)[number]
+const controlPlatforms: readonly ChannelName[] = ChannelId.options
+type ControlPlatform = ChannelName
 type ChannelAttachment = {
   mime: string
   url: string
@@ -80,17 +40,18 @@ type ChannelAttachment = {
 }
 type ChannelResult = {
   kind: "panel_response" | "created" | "message" | "interaction" | "progress" | "task_list" | "cancelled"
-  message: string
+  message?: string
+  message_id?: string
+  control_session_id?: string
   task_id?: string
   attachments?: ChannelAttachment[]
 }
 type EventPermissionAsked = Extract<Event, { type: "permission.asked" }>
-type EventSessionIdle = Extract<Event, { type: "session.idle" }>
 type EventSessionError = Extract<Event, { type: "session.error" }>
-type EventSessionStatus = Extract<Event, { type: "session.status" }>
+type EventExecutionLifecycle = Extract<Event, { type: "agent.execution.lifecycle" }>
 type EventMessageUpdated = Extract<Event, { type: "message.updated" }>
 type EventMessagePartUpdated = Extract<Event, { type: "message.part.updated" }>
-type EventOrchestratorEvaluationCompleted = Extract<Event, { type: "orchestrator.evaluation.completed" }>
+type EventTaskCompleted = Extract<Event, { type: "task.completed" }>
 const MIRROR_PREFIX = "[opencorvus-mirror]"
 type PendingTask = {
   taskId: string
@@ -100,6 +61,8 @@ type PendingTask = {
 export interface ChannelRuntimeOptions {
   port?: number
   baseUrl?: string
+  directory?: string
+  channelProtocol?: boolean
   sharedMode?: boolean
   sharedFile?: string
 }
@@ -107,7 +70,7 @@ export interface ChannelRuntimeOptions {
 export class ChannelRuntime {
   private session = new SessionCoordinator<SessionEntry, IncomingMessage>()
   private adapters: ChannelAdapter[] = []
-  private client!: OpencodeClient
+  private client!: OpenCorvusClient
   private server?: { url: string; close(): void }
   /** Buffer assistant text per messageID until message.updated signals completion */
   private textBuffers = new Map<string, string>()
@@ -126,12 +89,10 @@ export class ChannelRuntime {
   private vision?: VisionPipeline
   /** Base URL of the OpenCorvus server */
   private serverUrl!: string
+  private directory!: string
   private sharedSessionId?: string
-  private runtimeSession?: string
   /** Prevent creating duplicate overlay mirror threads */
   private overlayMirrorBound = false
-  /** Active channel-runtime jobs keyed by sessionID */
-  private jobs = new Map<string, Job>()
   private pending = new Map<string, PendingTask>()
   /** Guard against concurrent releaseSession() calls for the same session */
   private releasing = new Set<string>()
@@ -165,18 +126,64 @@ export class ChannelRuntime {
     })
   }
 
+  /**
+   * audit-2026-04-29 W2-V14 — concurrent-start race. Pre-fix
+   * `start()` had no idempotency guard. Two near-simultaneous
+   * callers both saw `this.running === false` (only set on entry,
+   * not before the await on `createOpenCorvus`), and BOTH proceeded
+   * to spawn an OpenCorvus server, register adapter handlers
+   * twice, and call `subscribeEvents` twice — leaving a duplicate
+   * SSE reconnect loop, double event dispatch, and (in the
+   * non-baseUrl branch) port collision on the second
+   * `createOpenCorvus`.
+   *
+   * Hold an in-flight Promise so concurrent callers share the
+   * single startup; subsequent calls after a successful start are
+   * a no-op. This mirrors the start-once contract in Server.listen.
+   */
+  private startPromise: Promise<void> | undefined
+
   async start(): Promise<void> {
+    if (this.running) return
+    if (this.startPromise) return this.startPromise
+    this.startPromise = this._doStart()
+      .catch((err) => {
+        // Roll back the running flag so a failure (createOpenCorvus
+        // throwing, adapter rejection, etc.) doesn't block a
+        // legitimate retry. The throw still propagates to the
+        // caller so the failure is loud (CLAUDE.md §一-7).
+        this.running = false
+        throw err
+      })
+      .finally(() => {
+        this.startPromise = undefined
+      })
+    return this.startPromise
+  }
+
+  private async _doStart(): Promise<void> {
     this.running = true
+    this.directory = this.requireDirectory()
+
+    // Validate existing shared-session state before starting server, event subscriptions, or adapters.
+    if (this.sharedMode() && !this.sharedSessionId) {
+      const fromFile = await this.readSharedSessionFile()
+      if (fromFile) {
+        this.sharedSessionId = fromFile
+        console.log(`[ChannelRuntime] Pre-loaded shared session: ${fromFile}`)
+      }
+    }
+
     const baseUrl = this.options?.baseUrl?.trim()
     if (baseUrl) {
-      this.client = createOpencodeClient({ baseUrl })
+      this.client = createOpenCorvusClient({ baseUrl, directory: this.directory })
       this.server = undefined
       this.serverUrl = baseUrl
     } else {
-      const opencorvus = await createOpencode({ port: this.options?.port ?? 0 })
-      this.client = opencorvus.client
+      const opencorvus = await createOpenCorvus({ port: this.options?.port ?? 0 })
       this.server = opencorvus.server
       this.serverUrl = opencorvus.server.url
+      this.client = createOpenCorvusClient({ baseUrl: this.serverUrl, directory: this.directory })
     }
     console.log(`[ChannelRuntime] OpenCorvus server running at ${this.serverUrl}`)
 
@@ -200,22 +207,11 @@ export class ChannelRuntime {
       console.warn("[ChannelRuntime] No chat adapter started successfully.")
     }
 
-    // Pre-load shared session ID so overlay-originated events can be mirrored to Slack
-    // even before the first Slack message arrives (which would otherwise populate sharedSessionId).
-    if (this.sharedMode() && !this.sharedSessionId) {
-      const fromFile = await this.readSharedSessionFile()
-      if (fromFile) {
-        this.sharedSessionId = fromFile
-        console.log(`[ChannelRuntime] Pre-loaded shared session: ${fromFile}`)
-      }
-    }
-
     // Overlay is managed by OpenCorvus's overlay-client.ts (spawned on first tool use)
   }
 
   async stop(): Promise<void> {
     this.running = false
-    this.runtimeSession = undefined
     this.stopPendingWatch()
     this.pending.clear()
     this.taskBindings.clear()
@@ -223,13 +219,27 @@ export class ChannelRuntime {
     this.textBuffers.clear()
     this.userMessageIds.clear()
     this.pendingPartTexts.clear()
-    this.jobs.clear()
     this.releasing.clear()
     this.session.clear()
-    for (const adapter of this.adapters) {
-      await adapter.stop()
+    const adapters = [...this.adapters]
+    const server = this.server
+    const results = await Promise.allSettled([
+      ...adapters.map((adapter) => adapter.stop()),
+      Promise.resolve().then(() => server?.close()),
+    ])
+    for (const [index, result] of results.entries()) {
+      if (result.status !== "fulfilled") continue
+      const adapter = adapters[index]
+      if (adapter) {
+        this.adapters = this.adapters.filter((candidate) => candidate !== adapter)
+        continue
+      }
+      if (this.server === server) this.server = undefined
     }
-    this.server?.close()
+    const failures = results.flatMap((result) => (result.status === "rejected" ? [result.reason] : []))
+    if (failures.length > 0) {
+      throw new AggregateError(failures, `Channel runtime failed to release ${failures.length} resource owner(s)`)
+    }
   }
 
   async handleMessage(msg: IncomingMessage): Promise<void> {
@@ -250,20 +260,20 @@ export class ChannelRuntime {
         await adapter.sendMessage(msg.channel, msg.thread, notice)
         if (!text) return
       } else {
-        const result = await this.stt.transcribe(msg.audio)
-        if (result) {
+        try {
+          const result = await this.stt.transcribe(msg.audio)
           const prefix = `[Voice message transcript]: ${result.text}`
           text = text ? `${prefix}\n\n${text}` : prefix
           console.log(`[ChannelRuntime] Transcribed voice (${result.provider}, ${result.durationMs}ms)`)
-        } else {
-          const notice = "Failed to transcribe voice message."
+        } catch (error) {
+          const notice = `Failed to transcribe voice message: ${String(error)}`
           this.mirror("system", notice, {
             platform: msg.platform,
             channel: msg.channel,
             thread: msg.thread,
           })
           await adapter.sendMessage(msg.channel, msg.thread, notice)
-          if (!text) return
+          return
         }
       }
     }
@@ -302,10 +312,11 @@ export class ChannelRuntime {
       }
       if (!shared) {
         const createResult = await this.client.session.create({
+          kind: "assistant",
           title: `${msg.platform} thread ${msg.thread}`,
         })
 
-        if (createResult.error) {
+        if (createResult.error || !createResult.data) {
           console.error("[ChannelRuntime] session.create error:", JSON.stringify(createResult.error).slice(0, 500))
           const notice = "Failed to create session."
           this.mirror("system", notice, {
@@ -345,22 +356,6 @@ export class ChannelRuntime {
       sessionId: session.sessionId,
     })
 
-    // If there is an active job waiting for user input, treat this message as the answer
-    const activeJob = this.jobs.get(session.sessionId)
-    if (activeJob?.status === "waiting_user") {
-      activeJob.status = "running"
-      activeJob.turn++
-      activeJob.lastActivityAt = Date.now()
-      activeJob.lastReport = undefined
-      this.session.start(session.sessionId)
-      await this.client.session.promptAsync({
-        sessionID: session.sessionId,
-        parts: [{ type: "text", text }],
-        system: this.buildSystemPrompt(msg.platform),
-      })
-      return
-    }
-
     // If session is currently processing a task, queue this message and notify user
     if (this.session.processing(session.sessionId)) {
       const queue = this.session.enqueue(session.sessionId, { msg, text }, this.queueLimit())
@@ -391,26 +386,10 @@ export class ChannelRuntime {
     // Mark session as processing before sending prompt
     this.session.start(session.sessionId)
 
-    // Create a new job to track this task through the channel-runtime loop
-    this.jobs.set(session.sessionId, {
-      jobID: Math.random().toString(36).slice(2),
-      sessionID: session.sessionId,
-      turn: 0,
-      status: "running",
-      lastReport: undefined,
-      startedAt: Date.now(),
-      lastActivityAt: Date.now(),
-      channel: session.channel,
-      thread: session.thread,
-      adapter: session.adapter,
-      platform: msg.platform,
-    })
-
     const result = await this.submitTask(session.sessionId, text, msg.platform)
     if (result !== "ok") {
       this.clearPending(session.sessionId)
       this.session.stop(session.sessionId)
-      this.jobs.delete(session.sessionId)
       const notice = "Failed to send prompt."
       this.mirror("system", notice, {
         platform: msg.platform,
@@ -423,175 +402,36 @@ export class ChannelRuntime {
     }
   }
 
-  private async submitTask(sessionID: string, text: string, platform: string) {
-    if (this.taskMode() === "tui-runtime") {
-      const runtimeReady = await this.startRuntime(sessionID)
-      if (!runtimeReady) {
-        return "failed" as const
-      }
-      const result = await this.client.tui.runtime.submitTask({
-        sessionID,
-        text,
-        wait: false,
-      })
-      if (!result.error) {
-        const data = result.data as
-          | {
-              accepted?: boolean
-              taskID?: string | null
-              completed?: boolean
-              waited?: boolean
-            }
-          | undefined
-        if (data?.accepted) {
-          const taskId =
-            typeof data.taskID === "string" && data.taskID.trim() ? data.taskID.trim() : this.taskId(sessionID)
-          this.markPending(sessionID, taskId)
-          console.log(
-            `[ChannelRuntime] Task accepted via tui.runtime.submitTask for session ${sessionID} (task=${taskId}, waited=${data?.waited ? "true" : "false"})`,
-          )
-          return "ok" as const
-        }
-        console.warn(
-          `[ChannelRuntime] tui.runtime.submitTask did not accept task for session ${sessionID} (waited=${data?.waited ? "true" : "false"})`,
-        )
-      }
-      console.error("[ChannelRuntime] tui.runtime.submitTask error:", JSON.stringify(result.error).slice(0, 500))
-      return "failed" as const
-    }
-
+  private async submitTask(sessionID: string, text: string, _platform: string) {
     const result = await this.client.session.promptAsync({
       sessionID,
       parts: [{ type: "text", text }],
-      system: this.buildSystemPrompt(platform),
     })
     if (result.error) {
       console.error("[ChannelRuntime] session.promptAsync error:", JSON.stringify(result.error).slice(0, 500))
       return "failed" as const
     }
-    this.markPending(sessionID, this.taskId(sessionID))
+    this.markPending(sessionID, result.data.taskID)
     console.log(`[ChannelRuntime] Prompt sent via session.promptAsync for session ${sessionID}`)
     return "ok" as const
   }
 
-  private async startRuntime(sessionID: string) {
-    if (this.runtimeSession === sessionID) return true
-
-    const directory = process.env.OPENCORVUS_PROJECT_DIR?.trim() || process.cwd()
-    const bin = process.env.OPENCORVUS_BIN_PATH?.trim()
-    const result = await this.client.tui.runtime.start({
-      mode: "spawn",
-      query_directory: directory,
-      body_directory: directory,
-      sessionID,
-      ...(bin ? { bin } : {}),
-    })
-    if (result.error) {
-      console.error("[ChannelRuntime] tui.runtime.start error:", JSON.stringify(result.error).slice(0, 500))
-      return false
-    }
-
-    this.runtimeSession = sessionID
-    console.log(`[ChannelRuntime] TUI runtime started for session ${sessionID}`)
-    return true
-  }
-
-  private taskMode() {
-    const raw = process.env.OPENCORVUS_CHANNEL_TASK_MODE?.trim().toLowerCase()
-    if (raw === "session-async") return "session-async"
-    return "tui-runtime"
-  }
-
-  /**
-   * Build channel-runtime system prompt injected via the API's `system` field.
-   * Provides operational context: remote interaction mode, TUI launch instructions,
-   * and window binding strategy for on-demand TUI.
-   */
-  private buildSystemPrompt(platform: string): string {
-    const channel = platform === "slack" ? "Slack" : platform === "discord" ? "Discord" : platform
-    return [
-      `You are OpenCorvus - a coding and desktop automation assistant. The user talks to you via ${channel}, and they also watch your screen. They need to SEE what you are doing.`,
-      "",
-      "## The visibility principle",
-      "Everything you do must be visible to the user. Using background tools (write, bash) to produce code silently is unacceptable - the user has no idea what you changed or whether it is correct.",
-      "For coding tasks, open a visible coding tool first:",
-      '- **Claude Code**: `bash(\'start "Claude Code" cmd /k "set CLAUDECODE= && set CLAUDE_CODE_SSE_PORT= && claude"\')` — opens in a new terminal',
-      '- **OpenCorvus TUI (preferred)**: use the `tui` tool, e.g. `tui({ action: "start", mode: "spawn", directory: "<project_dir>" })`',
-      '- Then submit coding work with `tui({ action: "submit_task", text: "<task>", wait: true })`',
-      "- Do NOT use `bun --preload ... src/index.ts` style launch commands in packaged/runtime environments.",
-      "Exception: if the user explicitly asks for a specific tool ('use codex', 'use VS Code', 'run bash'), follow that instruction.",
-      "",
-      "## Window discovery and binding (CRITICAL)",
-      "Single-monitor flow: start with `screen.screenshot`; you often do NOT need `screen.list_windows`.",
-      "Use `screen.bind_window` when app-level precision is needed (window-relative coordinates).",
-      "- Prefer `screen.list_windows` + `window_id` for deterministic window selection.",
-      "- Strategy: window first. Only when target window is not found should you use `screen.list_monitors` + `screen.bind_monitor`.",
-      "- `screen.bind_window` also supports title/app substring fallback (case-insensitive).",
-      "- Use `screen.list_windows` when multiple windows are possible, or bind_window fails.",
-      "- After binding, take a `screenshot` to confirm you see the correct window.",
-      "",
-      "### After focus-changing shortcuts (Win+I, Win+E, Alt+Tab, etc.)",
-      "The system auto-detects focus changes. Your next screenshot will capture the newly focused window.",
-      "If the screenshot doesn't show the expected window, use `screen.list_windows` to find it, then `screen.bind_window`.",
-      "Do NOT repeat the same shortcut if the first attempt opened the window — instead, rebind to see it.",
-      "",
-      "### Claude Code window binding workflow:",
-      '1. `bash(\'start "Claude Code" cmd /k "set CLAUDECODE= && set CLAUDE_CODE_SSE_PORT= && claude"\')` to launch',
-      "2. Skip wait when possible; if needed use `input.wait` with ms=10",
-      "3. Run `screen.list_windows`, pick the Claude window `window_id`, then call `screen.bind_window` with that id",
-      "4. If needed, fallback to title matching with 'claude' or 'Claude Code'",
-      "5. `screenshot` to verify",
-      "6. `input.type` to enter commands, then `input.key` with key='Return' to submit",
-      "",
-      "## Tool parameter constraints (MUST follow strictly)",
-      "- `input.wait`: ms must be 10-10000 (integer). Prefer short waits (10ms first) to keep events responsive.",
-      "- `screen.screenshot`: wait_for_change must be boolean `true` or `false`, NOT a string.",
-      "- `input.click`: x and y must be integers. button is 'left', 'right', or 'middle'.",
-      "- `input.type`: text is a string. For special keys, use `input.key` instead.",
-      "- `input.key`: key must be a valid key name (e.g., 'Return', 'Tab', 'Escape', 'Backspace').",
-      "- All coordinates are logical (DPI-aware) pixel values.",
-      "",
-      "## Response style",
-      "Write in short, scannable blocks suitable for chat apps.",
-      "- Start with a one-line direct answer.",
-      "- Use short labeled sections when useful: Plan, Actions, Result, Next.",
-      "- Prefer numbered steps for procedures and '-' bullets for facts.",
-      "- Keep each paragraph to one or two short sentences.",
-      "- Use fenced code blocks for commands or code snippets.",
-      "- Avoid long walls of text, repeated filler, or unnecessary prefaces.",
-      "",
-      "## Desktop tasks",
-      "Use screen/input tools to interact visually. After screenshots: note key state + coordinates briefly (1 line). No verbose descriptions.",
-      "",
-      "## When something fails",
-      "Read the error message carefully. Fix the exact issue before retrying. Don't loop on the same broken action.",
-      "If a tool says 'invalid arguments', check the parameter constraints above.",
-      "",
-      "## Memory",
-      "Search memory at the start of each task to recall relevant past context.",
-      "",
-      "## Task Loop Protocol (MANDATORY in managed channel mode)",
-      "You are running inside a managed channel coding loop. At the end of EVERY turn you MUST call the `task_report` tool:",
-      "- `task_report(status='progress', summary='...', next_plan='...')` — made progress, need more turns",
-      "- `task_report(status='need_input', summary='...', question='...')` — cannot proceed without user answer",
-      "- `task_report(status='done', summary='...', artifacts=[...])` — task fully complete",
-      "- `task_report(status='failed', summary='...', error='...')` — unrecoverable error",
-      "Never end a turn without calling task_report. It is the channel runtime's signal to continue or wait.",
-      ].join("\n")
-  }
-
   private channelProtocol(platform: string): platform is ControlPlatform {
-    return process.env.OPENCORVUS_CHANNEL_PROTOCOL === "1" &&
-      controlPlatforms.includes(platform as ControlPlatform)
+    return this.options?.channelProtocol === true && controlPlatforms.includes(platform as ControlPlatform)
   }
 
-  private async handleChannelMessage(msg: IncomingMessage & { platform: ControlPlatform }, adapter: ChannelAdapter, text: string) {
+  private async handleChannelMessage(
+    msg: IncomingMessage & { platform: ControlPlatform },
+    adapter: ChannelAdapter,
+    text: string,
+  ) {
     const result = await this.client.channel.message({
       platform: msg.platform as ControlPlatform,
       channel: msg.channel,
       thread: msg.thread,
       text,
       user_id: msg.user,
+      request_id: msg.id,
       source: msg.platform,
       allow_create: true,
     })
@@ -603,7 +443,7 @@ export class ChannelRuntime {
         thread: msg.thread,
       })
       await adapter.sendMessage(msg.channel, msg.thread, notice)
-      return
+      throw new Error(`Channel message failed: ${JSON.stringify(result.error)}`)
     }
     const data = result.data as ChannelResult
     if (data.task_id) {
@@ -643,28 +483,72 @@ export class ChannelRuntime {
     return this.taskBindings.get(taskID) ?? []
   }
 
+  private async findTaskBindingsForEvent(taskID: string) {
+    const cached = this.findTaskBindings(taskID)
+    if (cached.length > 0) return cached
+    const result = await this.client.task.bindings({ taskID })
+    if (result.error || !result.data) {
+      console.warn(`[ChannelRuntime] task.bindings failed for ${taskID}:`, JSON.stringify(result.error).slice(0, 500))
+      return []
+    }
+    const sessions = result.data.flatMap((binding) => {
+      const adapter = this.adapters.find((item) => item.platform === binding.platform)
+      if (!adapter) return []
+      return [
+        {
+          sessionId: taskID,
+          adapter,
+          channel: binding.channel,
+          thread: binding.thread,
+        },
+      ]
+    })
+    for (const session of sessions) {
+      this.bindTask(taskID, session)
+    }
+    return sessions
+  }
+
   private async sendChannelResult(adapter: ChannelAdapter, channel: string, thread: string, result: ChannelResult) {
-    if (result.message.trim()) {
-      await adapter.sendMessage(channel, thread, result.message)
+    const message = await this.channelResultText(result)
+    if (message.trim()) {
+      await adapter.sendMessage(channel, thread, message)
     }
     for (const item of result.attachments ?? []) {
       const image = imageAttachment(item)
       if (!image) continue
       if (adapter.uploadImageUrl) {
-        try {
-          const url = await this.publishChannelAttachment(item.mime, image.buffer, image.filename)
-          await adapter.uploadImageUrl(channel, thread, url, image.filename, result.message || image.filename)
-          continue
-        } catch (error) {
-          console.warn("[ChannelRuntime] uploadImageUrl fallback:", error)
-        }
+        const url = await this.publishChannelAttachment(item.mime, image.buffer, image.filename)
+        await adapter.uploadImageUrl(channel, thread, url, image.filename, message || image.filename)
+        continue
       }
-      await adapter.uploadImage(channel, thread, image.buffer, image.filename, result.message || image.filename)
+      await adapter.uploadImage(channel, thread, image.buffer, image.filename, message || image.filename)
     }
   }
 
+  private async channelResultText(result: ChannelResult): Promise<string> {
+    if (result.message !== undefined) return result.message
+    if (!result.control_session_id || !result.message_id) return ""
+    const response = await this.client.session.message({
+      sessionID: result.control_session_id,
+      messageID: result.message_id,
+    })
+    if (response.error) {
+      throw new Error(
+        `Failed to read Control final message ${result.control_session_id}/${result.message_id}: ${JSON.stringify(response.error)}`,
+      )
+    }
+    const message = response.data as { parts?: Array<{ type?: string; text?: string }> }
+    return (message.parts ?? [])
+      .flatMap((part) => (part.type === "text" && typeof part.text === "string" ? [part.text] : []))
+      .join("\n")
+      .trim()
+  }
+
   private async publishChannelAttachment(mime: string, buffer: Buffer, filename: string) {
-    const res = await fetch(`${this.serverUrl.replace(/\/+$/, "")}/channel/attachment`, {
+    const endpoint = new URL(`${this.serverUrl.replace(/\/+$/, "")}/channel/attachment`)
+    endpoint.searchParams.set("directory", this.directory)
+    const res = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -682,6 +566,14 @@ export class ChannelRuntime {
     const data = (await res.json()) as { url?: string }
     if (!data.url) throw new Error("channel attachment publish failed: missing url")
     return data.url
+  }
+
+  private requireDirectory(): string {
+    const directory = this.options?.directory?.trim()
+    if (!directory) {
+      throw new Error("ChannelRuntime requires options.directory for project-scoped channel routes")
+    }
+    return directory
   }
 
   private mirror(
@@ -744,52 +636,115 @@ export class ChannelRuntime {
 
   private async readSharedSessionFile() {
     const file = this.sharedFile()
-    // File may not exist or contain invalid JSON on first startup
-    const raw = (await Bun.file(file)
-      .json()
-      .catch(() => undefined)) as { session_id?: unknown } | undefined
-    if (!raw) return undefined
-    if (typeof raw.session_id !== "string") return undefined
-    const id = raw.session_id.trim()
-    if (!id) return undefined
+    const text = await readFile(file, "utf8").catch((error: unknown) => {
+      if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return undefined
+      throw new Error(`Failed to read shared session file ${file}: ${String(error)}`)
+    })
+    if (text === undefined) return undefined
+
+    let raw: unknown
+    try {
+      raw = JSON.parse(text)
+    } catch (error) {
+      throw new Error(`Invalid shared session file JSON ${file}: ${String(error)}`)
+    }
+    const sessionId =
+      raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as { session_id?: unknown }).session_id : undefined
+    if (typeof sessionId !== "string") {
+      throw new Error(`Invalid shared session file shape ${file}: expected non-empty session_id`)
+    }
+    const id = sessionId.trim()
+    if (!id) {
+      throw new Error(`Invalid shared session file shape ${file}: expected non-empty session_id`)
+    }
     return id
   }
 
-  private async writeSharedSessionFile(sessionId: string) {
+  private async prepareSharedSessionFile() {
     const file = this.sharedFile()
-    const dir = path.dirname(file)
-    await mkdir(dir, { recursive: true })
+    await mkdir(path.dirname(file), { recursive: true })
+    return file
+  }
+
+  private async writeSharedSessionFile(file: string, sessionId: string) {
     const payload = {
       session_id: sessionId,
       updated_at: Date.now(),
     }
-    await Bun.write(file, JSON.stringify(payload, null, 2) + "\n")
+    const temporary = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.${randomUUID()}.tmp`)
+    let handle: Awaited<ReturnType<typeof open>> | undefined
+    try {
+      handle = await open(temporary, "wx", 0o600)
+      await handle.writeFile(JSON.stringify(payload, null, 2) + "\n")
+      await handle.sync()
+      await handle.close()
+      handle = undefined
+      await rename(temporary, file)
+      const directory = await open(path.dirname(file), "r")
+      try {
+        await directory.sync()
+      } finally {
+        await directory.close()
+      }
+    } finally {
+      await handle?.close().catch(() => undefined)
+      await rm(temporary, { force: true }).catch(() => undefined)
+    }
   }
 
   private async ensureSharedSession(msg: IncomingMessage) {
     if (!this.sharedMode()) return undefined
     if (this.sharedSessionId) return this.sharedSessionId
 
-    const fromFile = await this.readSharedSessionFile()
-    if (fromFile) {
-      this.sharedSessionId = fromFile
-      return fromFile
-    }
+    try {
+      const fromFile = await this.readSharedSessionFile()
+      if (fromFile) {
+        this.sharedSessionId = fromFile
+        return fromFile
+      }
 
-    const createResult = await this.client.session.create({
-      title: `${msg.platform} shared session`,
-    })
-    if (createResult.error) {
-      console.error("[ChannelRuntime] shared session.create error:", JSON.stringify(createResult.error).slice(0, 500))
+      const sharedFile = await this.prepareSharedSessionFile()
+      const release = await lockfile.lock(sharedFile, {
+        realpath: false,
+        stale: 30_000,
+        update: 5_000,
+        retries: {
+          retries: 200,
+          factor: 1,
+          minTimeout: 10,
+          maxTimeout: 25,
+        },
+      })
+      try {
+        const claimed = await this.readSharedSessionFile()
+        if (claimed) {
+          this.sharedSessionId = claimed
+          return claimed
+        }
+
+        const createResult = await this.client.session.create({
+          kind: "assistant",
+          title: `${msg.platform} shared session`,
+        })
+        if (createResult.error || !createResult.data) {
+          console.error(
+            "[ChannelRuntime] shared session.create error:",
+            JSON.stringify(createResult.error).slice(0, 500),
+          )
+          return undefined
+        }
+
+        await this.writeSharedSessionFile(sharedFile, createResult.data.id)
+        this.sharedSessionId = createResult.data.id
+        console.log(`[ChannelRuntime] Created shared session ${createResult.data.id}`)
+        return createResult.data.id
+      } finally {
+        await release()
+      }
+    } catch (error) {
+      console.error("[ChannelRuntime] shared session claim failed:", error)
       return undefined
     }
-
-    this.sharedSessionId = createResult.data.id
-    await this.writeSharedSessionFile(createResult.data.id).catch((err) => {
-      console.warn("[ChannelRuntime] shared session file write failed:", err)
-    })
-    console.log(`[ChannelRuntime] Created shared session ${createResult.data.id}`)
-    return createResult.data.id
   }
 
   /**
@@ -812,10 +767,6 @@ export class ChannelRuntime {
       user: "system",
       text,
     })
-  }
-
-  private taskId(sessionId: string) {
-    return `task_${sessionId.slice(-6)}_${Date.now().toString(36)}`
   }
 
   private pendingTimeout() {
@@ -864,96 +815,18 @@ export class ChannelRuntime {
   }
 
   private releaseSession(sessionId: string) {
-    // Guard: prevent concurrent release for the same session (e.g. session.idle + expirePending)
+    // Prevent concurrent release when lifecycle settlement and expiry arrive together.
     if (this.releasing.has(sessionId)) return
     this.releasing.add(sessionId)
 
     this.clearPending(sessionId)
-    const job = this.jobs.get(sessionId)
-
-    // If there is a pending task_report driving the loop, handle it before releasing
-    if (job?.lastReport) {
-      const report = job.lastReport
-      job.lastReport = undefined
-
-      if (report.status === "progress") {
-        // Continue loop: keep processing flag set, send continuation prompt
-        job.turn++
-        job.lastActivityAt = Date.now()
-        const continuationText = report.next_plan
-          ? `Continue. Next step: ${report.next_plan}`
-          : "Continue with the task."
-        this.client.session
-          .promptAsync({
-            sessionID: sessionId,
-            parts: [{ type: "text", text: continuationText }],
-            system: this.buildSystemPrompt(job.platform),
-          })
-          .then((result) => {
-            this.releasing.delete(sessionId)
-            if (result.error) {
-              console.error("[ChannelRuntime] loop continuation API error:", JSON.stringify(result.error).slice(0, 500))
-              this.jobs.delete(sessionId)
-              this.session.stop(sessionId)
-              const next = this.session.dequeue(sessionId)
-              if (next.item) this.handleMessage(next.item.msg).catch((err) => console.error("[ChannelRuntime] dequeue handleMessage error:", err))
-            } else {
-              this.markPending(sessionId, this.taskId(sessionId))
-            }
-          })
-          .catch((err) => {
-            this.releasing.delete(sessionId)
-            console.error("[ChannelRuntime] loop continuation error:", err)
-            this.jobs.delete(sessionId)
-            this.session.stop(sessionId)
-            const next = this.session.dequeue(sessionId)
-            if (next.item) this.handleMessage(next.item.msg).catch((err) => console.error("[ChannelRuntime] dequeue handleMessage error:", err))
-          })
-        return
-      }
-
-      if (report.status === "need_input") {
-        // Stop processing so the next user message is treated as an answer
-        job.status = "waiting_user"
-        this.session.stop(sessionId)
-        this.releasing.delete(sessionId)
-        return
-      }
-
-      // done or failed: fall through to normal release
-      this.jobs.delete(sessionId)
-    } else if (job) {
-      // Agent ended without calling task_report — clean up job
-      this.jobs.delete(sessionId)
-    }
-
     this.session.stop(sessionId)
     this.releasing.delete(sessionId)
     const next = this.session.dequeue(sessionId)
     if (!next.item) return
-    this.handleMessage(next.item.msg).catch((err) => console.error("[ChannelRuntime] dequeue handleMessage error:", err))
-  }
-
-  private async pendingStatus(taskId: string) {
-    const res = await fetch(`${this.serverUrl}/tui/runtime/task-status`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ taskID: taskId }),
-      signal: AbortSignal.timeout(4_000),
-    }).catch(() => null)
-    if (!res?.ok) return null
-    const body = (await res.json().catch(() => null)) as {
-      found?: boolean
-      status?: string
-      terminal?: boolean
-      error?: string | null
-    } | null
-    if (!body || body.found !== true) return null
-    return {
-      status: typeof body.status === "string" ? body.status : "",
-      terminal: body.terminal === true,
-      error: typeof body.error === "string" && body.error.trim() ? body.error.trim() : null,
-    }
+    this.handleMessage(next.item.msg).catch((err) =>
+      console.error("[ChannelRuntime] dequeue handleMessage error:", err),
+    )
   }
 
   private async expirePending() {
@@ -961,23 +834,6 @@ export class ChannelRuntime {
     const now = Date.now()
     const timeout = this.pendingTimeout()
     for (const [sessionId, item] of Array.from(this.pending.entries())) {
-      const status = await this.pendingStatus(item.taskId)
-      if (status && !status.terminal) {
-        this.touchPending(sessionId)
-        continue
-      }
-      if (status?.terminal) {
-        this.releaseSession(sessionId)
-        if (status.status !== "failed") continue
-        const sessions = this.findSessions(sessionId)
-        if (sessions.length === 0) continue
-        const msg = status.error ? `Task failed (${item.taskId}): ${status.error}` : `Task failed (${item.taskId}).`
-        this.mirrorSessions("system", msg, sessionId, sessions)
-        for (const session of sessions) {
-          await this.safeSend(session.adapter, session.channel, session.thread, msg)
-        }
-        continue
-      }
       if (now - item.touch < timeout) continue
       this.releaseSession(sessionId)
       const sessions = this.findSessions(sessionId)
@@ -993,10 +849,6 @@ export class ChannelRuntime {
 
   private queueLimit() {
     return queueLimitRule(process.env)
-  }
-
-  private permissionReply(): PermissionReply {
-    return permissionReplyRule(process.env)
   }
 
   /** Format a brief status message for important tool completions */
@@ -1041,7 +893,7 @@ export class ChannelRuntime {
 
   /**
    * Upload screenshot attachment and optionally run vision analysis in parallel.
-   * Prefer event payload attachments and fall back to fetching message parts if needed.
+   * Use event payload attachments when present; fetch message parts only when the event omitted attachments.
    */
   private async processScreenshot(
     sessions: SessionEntry[],
@@ -1130,119 +982,59 @@ export class ChannelRuntime {
   }
 
   private async handleEvent(event: Event): Promise<void> {
-    if (event.type === "orchestrator.evaluation.completed") {
-      const info = (event as EventOrchestratorEvaluationCompleted).properties
-      const sessions = this.findTaskBindings(info.taskID)
+    // Task completion is the single terminal delivery fact. Push it back to
+    // every channel thread bound to the Task without recreating an evaluation
+    // lifecycle in the channel runtime.
+    if (event.type === "task.completed") {
+      const info = (event as EventTaskCompleted).properties
+      const sessions = await this.findTaskBindingsForEvent(info.taskID)
       if (sessions.length === 0) return
-      const msg = `Evaluation ${info.verdict}: ${info.summary}`
+      const msg = `Task completed: ${info.summary}`
       for (const session of sessions) {
         await this.safeSend(session.adapter, session.channel, session.thread, msg)
       }
       return
     }
 
-    if (event.type === "session.status") {
-      const info = (event as EventSessionStatus).properties
+    if (event.type === "agent.execution.lifecycle") {
+      const info = (event as EventExecutionLifecycle).properties
       if (!info.sessionID) return
-      if (info.status.type !== "idle") {
+      if (info.status.type !== "terminal") {
         this.touchPending(info.sessionID)
         return
       }
       const pending = this.pending.get(info.sessionID)
       if (!pending) return
-      const status = await this.pendingStatus(pending.taskId)
-      if (status?.terminal) {
-        this.releaseSession(info.sessionID)
-      }
-      return
-    }
-
-    // task.report: agent signals loop status via the task_report tool
-    const eventObj = event as { type?: string; properties?: unknown }
-    if (eventObj.type === "task.report") {
-      const report = eventObj.properties as TaskReportProperties
-      const job = this.jobs.get(report.sessionID)
-      if (!job) return
-
-      job.lastReport = report
-      job.lastActivityAt = Date.now()
-      // Touch pending watchdog so it doesn't time out during a long loop
-      this.touchPending(report.sessionID)
-
-      if (report.status === "progress") {
-        const msg = `[Turn ${job.turn}] ${report.summary}`
-        await this.safeSend(job.adapter, job.channel, job.thread, msg)
-        this.mirrorSessions("assistant", msg, report.sessionID, this.findSessions(report.sessionID))
-      } else if (report.status === "need_input") {
-        const msg = `? ${report.question ?? report.summary}`
-        await this.safeSend(job.adapter, job.channel, job.thread, msg)
-        this.mirrorSessions("assistant", msg, report.sessionID, this.findSessions(report.sessionID))
-      } else if (report.status === "done") {
-        const artifactsLine = report.artifacts?.length ? `\nFiles: ${report.artifacts.join(", ")}` : ""
-        const msg = `Done (${job.turn + 1} turns): ${report.summary}${artifactsLine}`
-        await this.safeSend(job.adapter, job.channel, job.thread, msg)
-        this.mirrorSessions("assistant", msg, report.sessionID, this.findSessions(report.sessionID))
-      } else if (report.status === "failed") {
-        const msg = `Failed: ${report.error ?? report.summary}`
-        await this.safeSend(job.adapter, job.channel, job.thread, msg)
-        this.mirrorSessions("system", msg, report.sessionID, this.findSessions(report.sessionID))
-      }
+      this.releaseSession(info.sessionID)
       return
     }
 
     if (event.type === "permission.asked") {
       const asked = (event as EventPermissionAsked).properties as PermissionAsked
       this.touchPending(asked.sessionID)
-      const reply = this.permissionReply()
-      const result = await this.client.permission.reply({
-        requestID: asked.id,
-        reply,
-      })
       const sessions = this.findSessions(asked.sessionID)
-      if (result.error) {
-        console.error("[ChannelRuntime] permission.reply error:", JSON.stringify(result.error).slice(0, 500))
-        this.mirrorSessions(
-          "system",
-          `Failed to reply permission request: ${asked.permission}`,
-          asked.sessionID,
-          sessions,
-        )
-        for (const session of sessions) {
-          await this.safeSend(session.adapter, session.channel, session.thread, `Failed to reply permission request: ${asked.permission}`)
-        }
-        return
-      }
+      const patterns = asked.patterns.length > 0 ? asked.patterns.join(", ") : "*"
       this.mirrorSessions(
         "system",
-        `Auto-replied permission (${reply}): ${asked.permission}`,
+        `Permission requested: ${asked.permission} [${patterns}]`,
         asked.sessionID,
         sessions,
       )
       for (const session of sessions) {
-        const patterns = asked.patterns.length > 0 ? asked.patterns.join(", ") : "*"
         await this.safeSend(
           session.adapter,
           session.channel,
           session.thread,
-          `Auto-replied permission (${reply}): ${asked.permission} [${patterns}]`,
+          `Permission requested: ${asked.permission} [${patterns}]. Waiting for operator reply.`,
         )
       }
-      console.log(`[ChannelRuntime] Auto-replied permission ${asked.id} with ${reply}`)
-      return
-    }
-
-    // Session entered standby - clear processing flag and dequeue next pending message
-    if (event.type === "session.idle") {
-      const sessionId = (event as EventSessionIdle).properties.sessionID
-      if (sessionId) {
-        this.releaseSession(sessionId)
-      }
+      console.log(`[ChannelRuntime] Permission request ${asked.id} is waiting for operator reply`)
       return
     }
 
     if (event.type === "session.error") {
       const props = (event as EventSessionError).properties
-      const sessionId = props.sessionID
+      const sessionId = "sessionID" in props ? props.sessionID : undefined
       if (!sessionId) return
       this.releaseSession(sessionId)
       const sessions = this.findSessions(sessionId)
@@ -1422,7 +1214,15 @@ export class ChannelRuntime {
 
         if (part.state?.status === "error") {
           const statusMsg = this.formatToolStatus(toolName, toolInput) ?? `\`${toolName}\``
-          const err = String(part.state.error ?? "Unknown tool error")
+          // Mirrors packages/opencorvus/src/session/tool-failure-cause.ts:renderToolFailureCause.
+          // channel-runtime only depends on @opencorvus-ai/sdk (generated types,
+          // no runtime exports), so we cannot import the renderer directly.
+          const failure = (
+            part.state as { failure?: { kind?: string; name?: string; originSite?: string; message?: string } }
+          ).failure
+          const err = failure?.message
+            ? `${failure.kind ?? ""}/${failure.name ?? ""} at ${failure.originSite ?? "unknown"}: ${failure.message}`
+            : "Unknown tool error"
           this.mirrorSessions("system", `${statusMsg} failed: ${err}`, part.sessionID, sessions)
           for (const session of sessions) {
             await this.safeSend(session.adapter, session.channel, session.thread, `${statusMsg} failed: ${err}`)
@@ -1432,16 +1232,25 @@ export class ChannelRuntime {
     }
   }
 
+  // ChannelRuntime relays events from every active OpenCorvus instance into
+  // IM channels, so it must subscribe to the cross-instance bus (/global/event).
+  // The project-scoped /event endpoint requires a directory and emits one
+  // instance's events only — using it here rejects with DirectoryRequiredError
+  // and breaks cross-project relaying. Mirror the ACP agent contract
+  // (packages/opencorvus/src/acp/agent.ts) which already uses global.event +
+  // payload unwrap.
   private subscribeEvents(): void {
     const reconnect = async () => {
       let delay = 1000
       while (this.running) {
         try {
-          const events = await this.client.event.subscribe()
+          const events = await this.client.global.event()
           delay = 1000 // reset backoff on successful connection
-          for await (const event of events.stream) {
+          for await (const wrapped of events.stream) {
+            const payload = (wrapped as { payload?: unknown })?.payload
+            if (!payload) continue
             try {
-              await this.handleEvent(event as Event)
+              await this.handleEvent(payload as Event)
             } catch (err) {
               console.error("[ChannelRuntime] event handler error:", err)
             }
@@ -1465,15 +1274,15 @@ function imageAttachment(input: ChannelAttachment) {
   const match = input.url.match(/^data:[^;]+;base64,(.+)$/)
   if (!match) return
   const buffer = Buffer.from(match[1], "base64")
-  const fallback = input.mime === "image/png" ? "opencorvus-gui.png" : "opencorvus-gui.jpg"
+  const defaultFilename = input.mime === "image/png" ? "opencorvus-gui.png" : "opencorvus-gui.jpg"
   return {
     buffer,
-    filename: input.filename ?? fallback,
+    filename: input.filename ?? defaultFilename,
   }
 }
 
 function sameEntry(left: SessionEntry, right: SessionEntry) {
-  return left.adapter.platform === right.adapter.platform &&
-    left.channel === right.channel &&
-    left.thread === right.thread
+  return (
+    left.adapter.platform === right.adapter.platform && left.channel === right.channel && left.thread === right.thread
+  )
 }

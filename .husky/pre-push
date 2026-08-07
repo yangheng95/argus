@@ -1,5 +1,6 @@
 #!/bin/sh
 set -e
+pre_push_refs=$(cat)
 # Check if bun version matches package.json
 # keep in sync with packages/script/src/index.ts semver qualifier
 bun -e '
@@ -18,3 +19,12 @@ if (process.versions.bun !== expectedBunVersion) {
 }
 '
 bun typecheck
+bun run api:routes-check
+bun run docs:check
+bun run overlay:i18n-check
+# audit-2026-04-29 W2-Task32 — block in-tree secrets at pre-push so a
+# recurrence of the historical Hexin key leak (commit 9d56d9aec) never
+# reaches the remote branch. The script exits 1 on any hit and prints
+# the file:line + pattern id; deliberate test fixtures should mark the
+# offending line with `// secret-scan: ignore`.
+printf '%s\n' "$pre_push_refs" | bun run script/secret-scan.ts --pre-push-stdin

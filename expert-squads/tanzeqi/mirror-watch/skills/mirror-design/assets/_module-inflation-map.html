@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Global Inflation Map</title>
+<style>
+  body { margin: 0; padding: 24px; background: #FFFFFF; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #1A1A1A; }
+  .inflation-map { max-width: 960px; margin: 0 auto; }
+  .inflation-map__header { margin-bottom: 12px; }
+  .inflation-map__title { font-size: 16px; font-weight: 600; margin: 0 0 4px 0; color: #1A1A1A; }
+  .inflation-map__subtitle { font-size: 12px; color: #6B7280; margin: 0; }
+  .inflation-map__svg-wrap { width: 100%; aspect-ratio: 960 / 500; background: #FFFFFF; }
+  .inflation-map__svg { width: 100%; height: 100%; display: block; }
+  .inflation-map__country { fill: var(--color-gray-95, #F2F2F2); stroke: #FFFFFF; stroke-width: 0.5; }
+  .inflation-map__country--t1 { fill: #FFF1E5; }
+  .inflation-map__country--t2 { fill: #FFD9B8; }
+  .inflation-map__country--t3 { fill: #FFAA66; }
+  .inflation-map__country--t4 { fill: #FF6600; }
+  .inflation-map__country--t5 { fill: #CC4400; }
+  .inflation-map__legend { display: flex; align-items: center; justify-content: center; gap: 0; margin-top: 12px; font-size: 11px; color: #6B7280; }
+  .inflation-map__legend-label { padding: 0 8px; min-width: 32px; text-align: center; }
+  .inflation-map__legend-swatches { display: flex; }
+  .inflation-map__legend-swatch { width: 48px; height: 12px; }
+  .inflation-map__legend-title { font-size: 11px; color: #6B7280; margin-right: 12px; font-weight: 500; }
+</style>
+</head>
+<body>
+  <div class="inflation-map">
+    <div class="inflation-map__header">
+      <h3 class="inflation-map__title">Global Inflation</h3>
+      <p class="inflation-map__subtitle">Year-over-year consumer price inflation by country</p>
+    </div>
+    <div class="inflation-map__svg-wrap">
+      <svg class="inflation-map__svg" viewBox="0 0 960 500" preserveAspectRatio="xMidYMid meet" id="inflationMapSvg"></svg>
+    </div>
+    <div class="inflation-map__legend">
+      <span class="inflation-map__legend-title">Inflation YoY</span>
+      <span class="inflation-map__legend-label">0%</span>
+      <div class="inflation-map__legend-swatches">
+        <div class="inflation-map__legend-swatch" style="background:#FFF1E5"></div>
+        <div class="inflation-map__legend-swatch" style="background:#FFD9B8"></div>
+        <div class="inflation-map__legend-swatch" style="background:#FFAA66"></div>
+        <div class="inflation-map__legend-swatch" style="background:#FF6600"></div>
+        <div class="inflation-map__legend-swatch" style="background:#CC4400"></div>
+      </div>
+      <span class="inflation-map__legend-label">50%+</span>
+      <span class="inflation-map__legend-label" style="margin-left:16px;">2% · 5% · 10% · 20%</span>
+    </div>
+  </div>
+
+<!-- D3 + TopoJSON via BootCDN (国内首选) -->
+<script src="https://cdn.bootcdn.net/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdn.bootcdn.net/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<script>
+(function(){
+  // Inflation YoY (%) keyed by ISO 3166-1 numeric code
+  var inflationData = {
+    840: 3.8,   // USA
+    156: 1.2,   // China
+    356: 3.5,   // India
+    392: 1.4,   // Japan
+    276: 2.9,   // Germany
+    826: 2.8,   // UK
+    250: 2.2,   // France
+    124: 2.8,   // Canada
+    643: 5.6,   // Russia
+    76: 4.5,    // Brazil
+    32: 47.0,   // Argentina
+    792: 38.5,  // Turkey
+    484: 3.2,   // Mexico
+    710: 4.8,   // South Africa
+    36: 3.4,    // Australia
+    410: 2.4,   // South Korea
+    360: 1.8,   // Indonesia
+    682: 2.0,   // Saudi Arabia
+    566: 28.0,  // Nigeria
+    604: 3.0,   // Peru
+    152: 4.1,   // Chile
+    170: 6.5,   // Colombia
+    504: 0.8,   // Morocco
+    818: 28.0,  // Egypt
+    364: 35.0,  // Iran
+    616: 4.5,   // Poland
+    704: 3.2,   // Vietnam
+    764: 1.0,   // Thailand
+    608: 3.0,   // Philippines
+    578: 3.0,   // Norway
+    752: 1.5,   // Sweden
+    246: 1.8,   // Finland
+    208: 2.0,   // Denmark
+    528: 2.4,   // Netherlands
+    56: 2.6,    // Belgium
+    40: 2.5,    // Austria
+    300: 3.0,   // Greece
+    724: 2.7,   // Spain
+    380: 2.0    // Italy
+  };
+
+  function tierClass(v){
+    if (v === undefined || v === null) return '';
+    if (v < 2) return 'inflation-map__country--t1';
+    if (v < 5) return 'inflation-map__country--t2';
+    if (v < 10) return 'inflation-map__country--t3';
+    if (v < 20) return 'inflation-map__country--t4';
+    return 'inflation-map__country--t5';
+  }
+
+  var TOPO_URLS = [
+    'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json',
+    'https://cdn.bootcdn.net/ajax/libs/world-atlas/2.0.2/countries-110m.json',
+    'https://unpkg.com/world-atlas@2/countries-110m.json'
+  ];
+
+  function loadTopo(i){
+    if (i >= TOPO_URLS.length) return Promise.reject(new Error('all topo CDNs failed'));
+    return fetch(TOPO_URLS[i]).then(function(r){
+      if (!r.ok) throw new Error('http ' + r.status);
+      return r.json();
+    }).catch(function(){ return loadTopo(i+1); });
+  }
+
+  loadTopo(0).then(function(world){
+    var svg = d3.select('#inflationMapSvg');
+    var countries = topojson.feature(world, world.objects.countries);
+
+    var projection = d3.geoNaturalEarth1()
+      .fitSize([960, 500], countries);
+    var path = d3.geoPath(projection);
+
+    svg.append('g')
+      .selectAll('path')
+      .data(countries.features)
+      .enter()
+      .append('path')
+      .attr('d', path)
+      .attr('class', function(d){
+        var v = inflationData[+d.id];
+        var t = tierClass(v);
+        return 'inflation-map__country' + (t ? ' ' + t : '');
+      });
+  }).catch(function(err){
+    var svg = document.getElementById('inflationMapSvg');
+    svg.innerHTML = '<text x="480" y="250" text-anchor="middle" fill="#999" font-size="14">Map data unavailable</text>';
+    console.error(err);
+  });
+})();
+</script>
+</body>
+</html>

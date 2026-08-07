@@ -3,137 +3,102 @@
 // - Manage the active workspace directory (custom vs. temp vs. task-scoped)
 // - Compute the current workspace mode ("offline" | "task" | "empty")
 // - Enter / clear workspace contexts (empty workspace, task workspace)
-// - Clear board/executor runtime state when switching workspaces
+// - Clear board/agent runtime state when switching workspaces
 // - Clear project-scope data (tasks, path, vcs, memory files)
-// - Directory pick / browse / create (Tauri-backed)
+// - Directory pick / browse (Tauri-backed)
 // - Recent directories persistence (localStorage)
-// - Workspace memory (rememberWorkspace / workspaceRestoreDirectory)
 // This module operates on Solid stores (settingsStore, boardStore) and
 // delegates timers / loading to callers via callbacks.
 
-import { settingsStore, setSettingsStore } from "../store/settings";
-import { boardStore, setBoardStore } from "../store/board";
-import { clearMessages } from "../store/messages";
-import { AppLog } from "../utils/log";
-import { t } from "../utils/i18n";
-import { apiJson, configure as configureApi } from "./api";
+import { batch } from "solid-js"
+import { bumpWorkspaceEpoch, saveSettings, settingsStore, setSettingsStore } from "../store/settings"
+import { boardStore, setBoardStore, activeTaskID, clearTasksForMissingDirectory } from "../store/board"
+import { abortChatRequest } from "../store/messages"
+import { clearConversationUiState } from "../store/conversation-ui"
+import { appStore, setAppStore } from "../store/app"
+import { AppLog } from "../utils/log"
+import { t } from "../utils/i18n"
+import { apiJson, ApiError, configure as configureApi, serverSettledRequest } from "./api"
+import { getHostTransport } from "./host-transport-runtime"
+import type { ProjectEditorID } from "./host-transport"
+import { nativeMessage } from "./app-dialog"
+import { nativeOpen } from "../utils/native"
+import { checkConnection } from "./connection"
+import { reloadProjectScope } from "./config"
+import { startTaskListSSE, stopSSE, stopTaskListSSE } from "./sse"
+import { activeProjectDirectory, restoreWorkspaceDirectory, setProjectDirectoryContext } from "./project-directory"
+import { directoryScopedPath } from "./task-path"
+import { cancelConversationReplay, resetConversationProjection } from "./conversation"
+import { clearBrowserPreviewRevisionCursors } from "./browser-preview"
+import { clearComposerModelProjection } from "./composer-model"
+import { initializeProjectDirectoryGit } from "./project-git"
+import {
+  TaskCancellationRequestBody,
+  type TaskCancellationRequestBody as TaskCancellationRequestBodyValue,
+} from "@opencorvus-ai/transport-protocol"
 
 // ── Types ──
 
-export type WorkspaceMode = "offline" | "task" | "empty";
+export type WorkspaceMode = "offline" | "task" | "empty"
 
-export interface ClearWorkspaceRuntimeOptions {
-  /** When true, the in-flight chat request is NOT cancelled. */
-  preserveChatRequest?: boolean;
+export interface ProjectEditor {
+  id: ProjectEditorID
+  label: string
 }
 
-export interface EnterEmptyWorkspaceOptions extends ClearWorkspaceRuntimeOptions {
-  /** Override the globalView flag. */
-  globalView?: boolean;
+export interface DiscoveredProject {
+  id?: string
+  directory: string
+  name: string
+  marker: string
+}
+
+export interface ProjectDiscovery {
+  root: string
+  defaultDirectory: string
+  projects: DiscoveredProject[]
+}
+
+// IDE means Integrated Development Environment; these IDs are the public
+// choices surfaced by the workspace UI and handled by the native host.
+export const PROJECT_EDITORS: ProjectEditor[] = [
+  { id: "vscode", label: "VS Code" },
+  { id: "pycharm", label: "PyCharm" },
+  { id: "webstorm", label: "WebStorm" },
+  { id: "intellij", label: "IntelliJ IDEA" },
+  { id: "cursor", label: "Cursor" },
+]
+
+export interface EnterEmptyWorkspaceOptions {
   /** When false, the saved/temp directory is NOT restored. Defaults to true. */
-  restoreDirectory?: boolean;
+  restoreDirectory?: boolean
 }
 
-export interface EnterTaskWorkspaceOptions extends ClearWorkspaceRuntimeOptions {
-  /** If provided, sets the workspace directory with source "task". */
-  directory?: string;
-}
+// ── Module-level task sequence ──
 
-// ── Module-level counters (mirror state.workspaceEpoch / state.tasksSeq) ──
-
-let workspaceEpoch = 0;
-let tasksSeq = 0;
+let tasksSeq = 0
+let globalComposerProjectAllocation: Promise<string> | null = null
 
 // ── Internal: schedule-board timer (
 // These timers are held here so clearWorkspaceRuntime can cancel them.
 
-let boardKickTimer: ReturnType<typeof setTimeout> | null = null;
-let tasksKickTimer: ReturnType<typeof setTimeout> | null = null;
+let boardKickTimer: ReturnType<typeof setTimeout> | null = null
+let tasksKickTimer: ReturnType<typeof setTimeout> | null = null
 
 export function setBoardKickTimer(timer: ReturnType<typeof setTimeout> | null): void {
-  boardKickTimer = timer;
+  boardKickTimer = timer
 }
 
 export function setTasksKickTimer(timer: ReturnType<typeof setTimeout> | null): void {
-  tasksKickTimer = timer;
+  tasksKickTimer = timer
 }
 
 export function getBoardKickTimer(): ReturnType<typeof setTimeout> | null {
-  return boardKickTimer;
+  return boardKickTimer
 }
 
 export function getTasksKickTimer(): ReturnType<typeof setTimeout> | null {
-  return tasksKickTimer;
-}
-
-// ── setWorkspaceDirectory ──
-
-/**
- * Set the active workspace directory.
- * @param value The new directory path (trimmed).
- * @param source How the directory was set: "manual" (user-driven) or
- * "task" (task-scoped) or "auto" (restored). Defaults to
- * "manual".
- * When source is "manual":
- * - Persists the directory as the saved directory.
- * - Clears the temp directory when a non-empty value is provided.
- * - Updates directoryMode to "custom" or "temp".
- * Mirrors workspace.js setWorkspaceDirectory.
- */
-export function setWorkspaceDirectory(
-  value: string,
-  source: "manual" | "task" | "auto" = "manual",
-): string {
-  const next = typeof value === "string" ? value.trim() : "";
-
-  if (source === "manual") {
-    setSettingsStore({
-      directory: next,
-      savedDirectory: next,
-      tempDirectory: next ? "" : settingsStore.tempDirectory,
-      directoryMode: next ? "custom" : "temp",
-    });
-  } else {
-    setSettingsStore("directory", next);
-  }
-
-  return next;
-}
-
-// ── restoreWorkspaceDirectory ──
-
-/**
- * Restore the workspace directory from the persisted "saved" or "temp"
- * directory. Returns the restored path (or the current directory if neither
- * is available).
- * Mirrors workspace.js restoreWorkspaceDirectory.
- */
-export function restoreWorkspaceDirectory(): string {
-  const saved =
-    typeof settingsStore.savedDirectory === "string" &&
-    settingsStore.savedDirectory.trim()
-      ? settingsStore.savedDirectory.trim()
-      : "";
-  const temp =
-    typeof settingsStore.tempDirectory === "string" &&
-    settingsStore.tempDirectory.trim()
-      ? settingsStore.tempDirectory.trim()
-      : "";
-
- // Resolve: prefer the persisted baseline directory, then the temp directory,
- // then fall back to the current active directory.
-  const next =
-    saved ||
-    temp ||
-    (settingsStore.directory ? settingsStore.directory.trim() : "");
-  if (!next) return settingsStore.directory;
-
-  setSettingsStore({
-    directory: next,
-    directoryMode: saved ? "custom" : "temp",
-  });
-
-  return next;
+  return tasksKickTimer
 }
 
 // ── workspaceMode ──
@@ -146,16 +111,16 @@ export function restoreWorkspaceDirectory(): string {
  * Mirrors workspace.js workspaceMode.
  */
 export function workspaceMode(): WorkspaceMode {
-  if (!boardStore.selectedTaskID && !boardStore.board) {
- // Check app connection state — treat no-board as offline proxy
- // Real connected flag lives in appStore, but workspace.js keyed off
- // state.connected. We approximate using boardStore + presence of data.
- // Callers that need a precise offline check should read appStore.connected
- // directly.
+  if (!activeTaskID() && !boardStore.board) {
+    // Check app connection state — treat no-board as offline proxy
+    // Real connected flag lives in appStore, but workspace.js keyed off
+    // state.connected. We approximate using boardStore + presence of data.
+    // Callers that need a precise offline check should read appStore.connected
+    // directly.
   }
- // Use the boardStore selectedTaskID as the primary signal
-  if (boardStore.selectedTaskID) return "task";
-  return "empty";
+  // Use the selected task source as the primary signal
+  if (activeTaskID()) return "task"
+  return "empty"
 }
 
 /**
@@ -164,9 +129,9 @@ export function workspaceMode(): WorkspaceMode {
  * supply the connection status.
  */
 export function workspaceModeWithConnection(connected: boolean): WorkspaceMode {
-  if (!connected) return "offline";
-  if (boardStore.selectedTaskID) return "task";
-  return "empty";
+  if (!connected) return "offline"
+  if (activeTaskID()) return "task"
+  return "empty"
 }
 
 // ── hasWorkspaceSelection ──
@@ -176,7 +141,7 @@ export function workspaceModeWithConnection(connected: boolean): WorkspaceMode {
  * Mirrors workspace.js hasWorkspaceSelection.
  */
 export function hasWorkspaceSelection(): boolean {
-  return !!boardStore.selectedTaskID;
+  return !!activeTaskID()
 }
 
 // ── enterSessionWorkspace ──
@@ -186,45 +151,48 @@ export function hasWorkspaceSelection(): boolean {
  * Throws unconditionally, mirroring workspace.js.
  */
 export function enterSessionWorkspace(): never {
-  throw new Error("Overlay no longer supports session workspaces");
+  throw new Error("Overlay no longer supports session workspaces")
 }
 
 // ── clearWorkspaceRuntime ──
 
 /**
  * Clear all volatile runtime state associated with the current workspace
- * (board, messages, executor events, pending timers).
+ * (board, messages, runtime events, pending timers).
  * Increments workspaceEpoch so any in-flight requests can detect staleness.
- * @param options.preserveChatRequest When true, skips cancelling any
- * in-flight chat/stream request.
- * Mirrors workspace.js clearWorkspaceRuntime.
  */
-export function clearWorkspaceRuntime(
-  options: ClearWorkspaceRuntimeOptions = {},
-): void {
-  workspaceEpoch += 1;
+function clearConversationRuntime(cause: string): void {
+  abortChatRequest()
+  cancelConversationReplay()
+  clearConversationUiState()
+  resetConversationProjection({ scrollIntent: "bottom", cause })
+}
 
- // Cancel pending board/task schedule timers
-  if (boardKickTimer !== null) {
-    clearTimeout(boardKickTimer);
-    boardKickTimer = null;
-  }
-  if (tasksKickTimer !== null) {
-    clearTimeout(tasksKickTimer);
-    tasksKickTimer = null;
-  }
+export function clearWorkspaceRuntime(): void {
+  bumpWorkspaceEpoch()
+  clearBrowserPreviewRevisionCursors()
 
-  tasksSeq += 1;
+  batch(() => {
+    clearConversationRuntime("empty-workspace")
 
- // Clear Solid board store
-  setBoardStore({
-    board: null,
-    loading: false,
-  });
+    // Cancel pending board/task schedule timers
+    if (boardKickTimer !== null) {
+      clearTimeout(boardKickTimer)
+      boardKickTimer = null
+    }
+    if (tasksKickTimer !== null) {
+      clearTimeout(tasksKickTimer)
+      tasksKickTimer = null
+    }
 
- // Clear messages store
-  clearMessages();
+    tasksSeq += 1
 
+    // Clear Solid board store
+    setBoardStore({
+      board: null,
+      loading: false,
+    })
+  })
 }
 
 // ── clearProjectScopeData ──
@@ -238,361 +206,369 @@ export function clearWorkspaceRuntime(
  * fields are owned by for now.
  */
 export function clearProjectScopeData(): void {
-  setBoardStore("tasks", []);
- // path, vcs, memoryFiles, memorySearchMode remain
- // state and are not yet migrated to a Solid store.
+  clearTasksForMissingDirectory()
+  setBoardStore({
+    path: null,
+    vcs: null,
+    changes: [],
+    planPreview: "",
+    specPreview: "",
+    taskSequence: 0,
+    boardEtag: "",
+    boardSyncPending: false,
+    boardQueued: false,
+    snapshotVersion: "",
+    tasksError: "",
+    tasksLoaded: true,
+  })
+  setAppStore({
+    config: null,
+    configLoadIssues: [],
+    projectLoadIssues: [],
+    providerCatalog: null,
+    providerAuth: null,
+    providerLoadIssues: [],
+    providerTest: null,
+    channels: [],
+    skills: [],
+    skillMounts: null,
+    skillMarket: [],
+    mcp: {},
+    memoryFiles: [],
+    memorySearchMode: false,
+    criteriaSpecs: [],
+  })
+}
+
+// ── closeProject ──
+
+function enterDirectoryFreeWorkspace(savedDirectory: string): number {
+  const selectionEpoch = beginWorkspaceSelection()
+  clearComposerModelProjection()
+  stopSSE()
+  stopTaskListSSE()
+  setSettingsStore("directoryEpoch", (n: number) => n + 1)
+  setSettingsStore({
+    directory: "",
+    savedDirectory,
+    workspaceTaskID: "",
+    workspaceDirectory: "",
+  })
+  configureApi({ directory: "" })
+  enterEmptyWorkspace({ restoreDirectory: false })
+  clearProjectScopeData()
+  return selectionEpoch
+}
+
+/**
+ * Close the current project selection without deleting project data.
+ * This is the single lifecycle path for Project -> Close Project.
+ */
+export async function closeProject(): Promise<void> {
+  enterDirectoryFreeWorkspace("")
+  await saveSettings()
+}
+
+/**
+ * Enter the directory-free global launcher. Durable Project ownership begins
+ * only when the operator submits actual content.
+ */
+export async function openGlobalChatLauncher(): Promise<void> {
+  enterDirectoryFreeWorkspace(settingsStore.savedDirectory)
+  setTimeout(() => document.querySelector<HTMLTextAreaElement>("#solidChatComposer textarea")?.focus(), 0)
+}
+
+/**
+ * Leave a Project whose backend deletion already committed. Unlike the
+ * explicit Close Project command, this does not allocate a replacement.
+ */
+export async function leaveDeletedProject(directory: string): Promise<void> {
+  const deletedDirectory = directory.trim()
+  if (!deletedDirectory || activeDirectory().trim() !== deletedDirectory) return
+  const savedDirectory = settingsStore.savedDirectory.trim() === deletedDirectory ? "" : settingsStore.savedDirectory
+  enterDirectoryFreeWorkspace(savedDirectory)
+  await saveSettings()
+}
+
+/**
+ * Resolve the canonical Project for durable global Composer input. Empty New
+ * Chat remains write-free; a real attachment or Mission submission is the
+ * first durable boundary. Concurrent attachment ingresses share one Project.
+ */
+export async function resolveGlobalComposerProject(): Promise<string> {
+  const current = activeDirectory().trim()
+  if (current) return current
+  if (globalComposerProjectAllocation) return globalComposerProjectAllocation
+
+  const selectionEpoch = beginWorkspaceSelection()
+  const allocation = (async () => {
+    const directory = await createAnonymousProject()
+    if (!ownsWorkspaceSelection(selectionEpoch)) {
+      throw new DOMException("Global Composer Project creation superseded", "AbortError")
+    }
+    const activated = await applyDirectory(directory, {
+      save: false,
+      persist: false,
+      restoreWorkspace: false,
+      selectionEpoch,
+    })
+    if (!activated || !ownsWorkspaceSelection(selectionEpoch)) {
+      throw new DOMException("Global Composer Project activation superseded", "AbortError")
+    }
+    return directory
+  })()
+  globalComposerProjectAllocation = allocation
+  try {
+    return await allocation
+  } finally {
+    if (globalComposerProjectAllocation === allocation) globalComposerProjectAllocation = null
+  }
+}
+
+export interface GlobalComposerSubmissionContext {
+  directory: string
+  model: string | undefined
+}
+
+/**
+ * Snapshot the directory-free Composer model before Project activation can
+ * replace the active frontend projection, then resolve its durable owner.
+ */
+export async function resolveGlobalComposerSubmissionContext(): Promise<GlobalComposerSubmissionContext> {
+  const model = appStore.composerModel.trim() || undefined
+  const directory = await resolveGlobalComposerProject()
+  return { directory, model }
+}
+
+export interface ProjectDeleteResult {
+  ok: true
+  projectID: string
+  directory: string
+  deletedTaskCount: number
+}
+
+export type ProjectDeleteOutcome =
+  | { status: "deleted"; result: ProjectDeleteResult }
+  | { status: "already_absent"; directory: string }
+
+export interface ProjectRenameResult {
+  id: string
+  worktree: string
+  name: string
+}
+
+export interface AnonymousProjectPromotionResult {
+  project: ProjectRenameResult
+  sourceDirectory: string
+  directory: string
+  cleanupPending: boolean
+}
+
+export async function promoteAnonymousProject(
+  directory: string,
+  destinationParent: string,
+  name: string,
+): Promise<AnonymousProjectPromotionResult> {
+  const source = directory.trim()
+  const parent = destinationParent.trim()
+  const projectName = name.trim()
+  if (!source || !parent || !projectName)
+    throw new Error("Anonymous project conversion requires source, parent, and name")
+  const query = new URLSearchParams({ directory: source })
+  const result: unknown = await apiJson(`project/current/promote-anonymous?${query.toString()}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ destinationParent: parent, name: projectName }),
+  })
+  if (
+    !result ||
+    typeof result !== "object" ||
+    typeof (result as Record<string, unknown>).directory !== "string" ||
+    typeof (result as Record<string, unknown>).sourceDirectory !== "string" ||
+    typeof (result as Record<string, unknown>).cleanupPending !== "boolean"
+  ) {
+    throw new Error("POST project/current/promote-anonymous returned an invalid result")
+  }
+  return result as AnonymousProjectPromotionResult
+}
+
+/** Rename one project record without renaming its workspace directory. */
+export async function renameProjectRecord(directory: string, name: string): Promise<ProjectRenameResult> {
+  const projectDirectory = directory.trim()
+  const projectName = name.trim()
+  if (!projectDirectory) throw new Error("renameProjectRecord requires a project directory")
+  if (!projectName) throw new Error("renameProjectRecord requires a project name")
+  const query = new URLSearchParams({ directory: projectDirectory })
+  const result: unknown = await apiJson(`project/current?${query.toString()}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: projectName }),
+  })
+  if (
+    !result ||
+    typeof result !== "object" ||
+    typeof (result as Record<string, unknown>).id !== "string" ||
+    typeof (result as Record<string, unknown>).worktree !== "string" ||
+    typeof (result as Record<string, unknown>).name !== "string" ||
+    !(result as Record<string, unknown>).name
+  ) {
+    throw new Error("PATCH project/current returned an invalid ProjectRenameResult")
+  }
+  return result as ProjectRenameResult
+}
+
+/**
+ * Delete one project's OpenCorvus-owned state through the canonical backend
+ * lifecycle. The workspace source directory is intentionally outside that
+ * endpoint's deletion boundary.
+ */
+export async function deleteProjectState(
+  directory: string,
+  provenance: TaskCancellationRequestBodyValue,
+): Promise<ProjectDeleteOutcome> {
+  const projectDirectory = directory.trim()
+  if (!projectDirectory) throw new Error("deleteProjectState requires a project directory")
+  const body = TaskCancellationRequestBody.parse(provenance)
+  const query = new URLSearchParams({ directory: projectDirectory })
+  let result: unknown
+  try {
+    result = await apiJson(
+      `project/current?${query.toString()}`,
+      serverSettledRequest({
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+    )
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      return { status: "already_absent", directory: projectDirectory }
+    }
+    throw error
+  }
+  if (
+    !result ||
+    typeof result !== "object" ||
+    (result as Record<string, unknown>).ok !== true ||
+    typeof (result as Record<string, unknown>).projectID !== "string" ||
+    typeof (result as Record<string, unknown>).directory !== "string" ||
+    !Number.isInteger((result as Record<string, unknown>).deletedTaskCount) ||
+    Number((result as Record<string, unknown>).deletedTaskCount) < 0
+  ) {
+    throw new Error("DELETE project/current returned an invalid ProjectDeleteResult")
+  }
+  return { status: "deleted", result: result as ProjectDeleteResult }
 }
 
 // ── enterEmptyWorkspace ──
 
 /**
  * Switch to the "empty" workspace (no task selected).
- * - Clears the selectedTaskID.
+ * - Clears the selected source.
  * - Optionally restores the saved/temp directory.
  * - Clears all runtime state.
  * Mirrors workspace.js enterEmptyWorkspace.
  */
-export function enterEmptyWorkspace(
-  options: EnterEmptyWorkspaceOptions = {},
-): void {
-  setBoardStore("selectedTaskID", "");
-
-  if (options.restoreDirectory !== false) {
-    restoreWorkspaceDirectory();
-  }
-
-  clearWorkspaceRuntime(options);
-}
-
-// ── enterTaskWorkspace ──
-
-/**
- * Switch to a specific task workspace.
- * - Optionally sets the workspace directory with source "task".
- * - Sets the selectedTaskID.
- * - Clears all runtime state.
- * Mirrors workspace.js enterTaskWorkspace.
- */
-export function enterTaskWorkspace(
-  taskID: string,
-  options: EnterTaskWorkspaceOptions = {},
-): void {
-  if (
-    typeof options.directory === "string" &&
-    options.directory.trim()
-  ) {
-    setWorkspaceDirectory(options.directory, "task");
-  }
-
-  setBoardStore("selectedTaskID", taskID || "");
-  clearWorkspaceRuntime(options);
+export function enterEmptyWorkspace(options: EnterEmptyWorkspaceOptions = {}): void {
+  batch(() => {
+    setBoardStore("selectedSource", null)
+    if (options.restoreDirectory !== false) {
+      restoreWorkspaceDirectory()
+    }
+    clearWorkspaceRuntime()
+  })
 }
 
 // ── Epoch / sequence accessors ──
 
 /** Returns the current workspace epoch (incremented on every runtime clear). */
 export function getWorkspaceEpoch(): number {
-  return workspaceEpoch;
+  return settingsStore.workspaceEpoch
 }
 
 /** Returns the current tasks sequence number (incremented on every runtime clear). */
 export function getTasksSeq(): number {
-  return tasksSeq;
-}
-
-// ── Tauri helpers (internal) ──
-
-async function tauriInvoke(command: string, args?: Record<string, unknown>): Promise<unknown> {
-  const globalInvoke = (window as any).__TAURI__?.core?.invoke;
-  if (typeof globalInvoke === "function") {
-    return globalInvoke(command, args);
-  }
-  throw new Error(`Tauri runtime unavailable for ${command}`);
-}
-
-function hasTauriRuntime(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    typeof (window as any).__TAURI__?.core?.invoke === "function"
-  );
-}
-
-async function currentTauriWindow(): Promise<any | null> {
-  const getCurrent = (window as any).__TAURI__?.window?.getCurrentWindow;
-  if (typeof getCurrent === "function") {
-    try {
-      return getCurrent() as any;
-    } catch {
- // Not running inside Tauri
-    }
-  }
-  return null;
-}
-
-/**
- * Temporarily un-pin the always-on-top window, run `run()`, then restore the
- * pin state.
- */
-async function withUnpinned<T>(run: () => Promise<T>): Promise<T> {
-  const win = await currentTauriWindow();
-  if (
-    !win ||
-    typeof win.isAlwaysOnTop !== "function" ||
-    typeof win.setAlwaysOnTop !== "function"
-  ) {
-    return run();
-  }
-  const pinned = await win.isAlwaysOnTop().catch(() => false);
-  if (!pinned) return run();
-  await win.setAlwaysOnTop(false).catch(() => undefined);
-  try {
-    return await run();
-  } finally {
-    await win.setAlwaysOnTop(true).catch(() => undefined);
-    await win.setFocus?.().catch(() => undefined);
-  }
+  return tasksSeq
 }
 
 /** Produce a user-facing error message: translated key + error detail. */
 function errorText(key: string, error: unknown): string {
-  const detail = error instanceof Error ? error.message : String(error ?? "");
-  return `${t(key)}: ${detail}`;
+  const detail = error instanceof Error ? error.message : String(error ?? "")
+  return `${t(key)}: ${detail}`
 }
 
 // ── Path utilities (internal) ──
 
 function absolutePath(value: string): boolean {
-  return /^([a-zA-Z]:[\\/]|\\\\|\/)/.test(value);
+  return /^([a-zA-Z]:[\\/]|\\\\|\/)/.test(value)
 }
 
 function joinPath(base: string, value: string): string {
-  if (!base) return value;
-  if (absolutePath(value)) return value;
-  if (/[\\/]$/.test(base)) return `${base}${value}`;
-  const sep = base.includes("\\") ? "\\" : "/";
-  return `${base}${sep}${value}`;
+  if (!base) return value
+  if (absolutePath(value)) return value
+  if (/[\\/]$/.test(base)) return `${base}${value}`
+  const sep = base.includes("\\") ? "\\" : "/"
+  return `${base}${sep}${value}`
 }
 
-// ── Native dialog helpers (internal) ──
-
-interface NativeMessageOptions {
-  title?: string;
-  kind?: "info" | "warning" | "error";
-  okLabel?: string;
-}
-
-interface NativePromptOptions {
-  title?: string;
-  kind?: "info" | "warning" | "error";
-  okLabel?: string;
-  cancelLabel?: string;
-  inputLabel?: string;
-  inputPlaceholder?: string;
-  inputValue?: string;
-}
-
-/**
- * Show an application-level notification dialog.
- * Delegates to `showAppDialog` via the `window` global to
- * avoid a circular import during the.
- */
-async function nativeMessage(message: string, options?: NativeMessageOptions): Promise<void> {
-  const showAppDialog = (window as any).showAppDialog;
-  if (typeof showAppDialog === "function") {
-    await showAppDialog({
-      title: options?.title || t("dialog.notice"),
-      message,
-      kind: options?.kind || "info",
-      okLabel: options?.okLabel || t("common.ok"),
-    });
-  }
-}
-
-/**
- * Show an input prompt dialog.
- * Returns the trimmed string entered by the user, or null if cancelled.
- * Uses showAppDialog window global.
- */
-async function nativePrompt(
-  message: string,
-  options?: NativePromptOptions,
-): Promise<string | null> {
-  const showAppDialog = (window as any).showAppDialog;
-  if (typeof showAppDialog !== "function") return null;
-  const result = await showAppDialog({
-    title: options?.title || t("dialog.input"),
-    message,
-    kind: options?.kind || "info",
-    okLabel: options?.okLabel || t("common.submit"),
-    cancelLabel: options?.cancelLabel || t("common.cancel"),
-    cancel: true,
-    input: true,
-    inputLabel: options?.inputLabel || t("dialog.value"),
-    inputPlaceholder: options?.inputPlaceholder || "",
-    inputValue: options?.inputValue || "",
-  });
-  return result?.confirmed ? result.value : null;
-}
-
-/**
- * Open a local path or URL using native OS facilities.
- */
-async function nativeOpen(target: string): Promise<boolean> {
-  if (!target) return false;
-  const url = /^https?:\/\//i.test(target);
-  try {
-    const opened = url
-      ? await tauriInvoke("overlay_open_url", { url: target })
-      : await tauriInvoke("overlay_open_path", { path: target });
-    if (opened) return true;
-  } catch { /* Tauri not available */ }
-  if (url) {
-    window.open(target, "_blank", "noopener");
-    return true;
-  }
-  try {
-    const result = await apiJson("path/open", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: target }),
-    });
-    return (result as any)?.opened === true;
-  } catch (openErr) {
-    AppLog.debug("ui", "path/open fallback failed", { target, error: String(openErr) });
-    return false;
-  }
-}
-
-// ── Temp directory ──
-
-/**
- * Ask the Tauri backend to create a new temporary directory.
- * Returns the path, or an empty string on failure.
- */
-export async function createTempDirectory(): Promise<string> {
-  const created = await tauriInvoke("overlay_create_temp_dir").catch(() => undefined);
-  return typeof created === "string" ? created.trim() : "";
+function clearSelectedWorkItem(): void {
+  clearConversationRuntime("project-selection")
+  setBoardStore({
+    selectedSource: null,
+    board: null,
+    loading: false,
+    taskSwitching: false,
+    taskSequence: 0,
+    boardEtag: "",
+    boardSyncPending: false,
+    boardQueued: false,
+    snapshotVersion: "",
+  })
 }
 
 // ── Tauri file / directory pickers ──
 
-/**
- * Open a native directory picker, temporarily un-pinning the window.
- * Returns the selected path, or an empty string when cancelled.
- */
+/** Open a native directory picker. Returns the selected path, or an empty string when cancelled. */
 export async function pickDirectory(start?: string): Promise<string> {
-  const selected = await withUnpinned(() =>
-    tauriInvoke("overlay_pick_dir", { start: start || undefined }) as Promise<unknown>,
-  );
-  return typeof selected === "string" ? selected : "";
+  const selected = await getHostTransport().native({ kind: "workspace.pickDir", start })
+  if (selected === null || selected === undefined) return ""
+  if (typeof selected !== "string") throw new Error("workspace.pickDir returned a non-string payload")
+  return selected
 }
 
-/**
- * Open a native multi-file picker, temporarily un-pinning the window.
- * Returns the array of selected paths.
- */
+/** Open a native multi-file picker. Returns the array of selected paths. */
 export async function pickFiles(start?: string): Promise<string[]> {
-  const result = await withUnpinned(() =>
-    tauriInvoke("overlay_pick_files", { start: start || undefined }) as Promise<unknown>,
-  );
-  return Array.isArray(result) ? result : [];
+  const result = await getHostTransport().native({
+    kind: "workspace.pickFiles",
+    start,
+    multiple: true,
+  })
+  if (result === null || result === undefined) return []
+  if (!Array.isArray(result) || result.some((item) => typeof item !== "string")) {
+    throw new Error("workspace.pickFiles returned a non-string-array payload")
+  }
+  return result
 }
 
 // ── Directory helper functions ──
 
 /**
- * Returns the currently active working directory from the settings store.
+ * Returns the currently active working directory for project-scoped UI.
  */
 export function activeDirectory(): string {
-  return settingsStore.directory;
+  return activeProjectDirectory()
 }
 
-/**
- * Returns "custom" when `directory` is non-empty, otherwise returns the
- * default directoryMode ("temp").
- */
-export function sanitizeDirectoryMode(
-  value: unknown,
-  directory: string,
-): "custom" | "temp" {
-  if (value === "custom") return "custom";
-  if (typeof value === "string" && value.trim() === "temp") return "temp";
-  return typeof directory === "string" && directory.trim() ? "custom" : "temp";
-}
-
-/**
- * Returns the "saved directory" value: non-empty only when the mode resolves
- * to "custom".
- */
-export function savedDirectoryValue(directory: string, mode: unknown): string {
-  const next = typeof directory === "string" ? directory.trim() : "";
-  if (!next) return "";
-  return sanitizeDirectoryMode(mode, next) === "custom" ? next : "";
-}
-
-/**
- * Extract and trim the `directory` field from a settings object.
- */
-export function settingsDirectory(settings: Record<string, unknown> | null | undefined): string {
-  return typeof settings?.directory === "string" ? settings.directory.trim() : "";
-}
-
-// ── Workspace memory (rememberWorkspace / workspaceRestoreDirectory) ──
-
-/**
- * Returns true when the path looks like a goal-workspace execution directory
- * (contains a "goal-workspace" path segment).
- */
-export function looksLikeExecutionWorkspace(value: unknown): boolean {
-  const text = String(value || "").trim();
-  if (!text) return false;
-  return /(^|[\\/])goal-workspace([\\/]|$)/i.test(text);
-}
-
-/**
- * Returns `value` unless it looks like a goal-workspace execution directory,
- * in which case returns an empty string.
- */
-export function workspaceRestoreDirectory(value: unknown): string {
-  const text = typeof value === "string" ? value.trim() : "";
-  if (!text) return "";
-  if (looksLikeExecutionWorkspace(text)) return "";
-  return text;
-}
-
-export interface RememberWorkspaceInput {
-  taskID?: string;
-  directory?: string;
-}
-
-/**
- * Persist the current task + directory as the "workspace memory" so it can be
- * restored after an overlay restart.
- */
-export function rememberWorkspace(input: RememberWorkspaceInput = {}): void {
-  const taskID =
-    typeof input.taskID === "string"
-      ? input.taskID.trim()
-      : boardStore.selectedTaskID || settingsStore.workspaceTaskID || "";
-
-  const rawDir =
-    typeof input.directory === "string"
-      ? input.directory.trim()
-      : settingsStore.savedDirectory || activeDirectory() || settingsStore.directory || "";
-
-  const directory =
-    workspaceRestoreDirectory(rawDir) ||
-    workspaceRestoreDirectory(settingsStore.savedDirectory || "") ||
-    "";
-
-  setSettingsStore("workspaceTaskID", taskID);
-  setSettingsStore("workspaceDirectory", taskID ? directory : "");
+export function syncActiveDirectoryApiContext(): string {
+  const directory = activeDirectory()
+  configureApi({ directory })
+  return directory
 }
 
 // ── Recent directories ──
 
-const RECENT_DIRS_KEY = "oc_recent_directories";
-const MAX_RECENT_DIRS = 10;
+const RECENT_DIRS_KEY = "oc_recent_directories"
+const MAX_RECENT_DIRS = 10
 
 /**
  * Load the recent-directories list from localStorage.
@@ -600,14 +576,12 @@ const MAX_RECENT_DIRS = 10;
  */
 export function loadRecentDirectories(): string[] {
   try {
-    const raw = localStorage.getItem(RECENT_DIRS_KEY);
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed)
-      ? parsed.filter((d) => typeof d === "string" && (d as string).trim())
-      : [];
+    const raw = localStorage.getItem(RECENT_DIRS_KEY)
+    if (!raw) return []
+    const parsed: unknown = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.filter((d) => typeof d === "string" && (d as string).trim()) : []
   } catch {
-    return [];
+    return []
   }
 }
 
@@ -616,8 +590,10 @@ export function loadRecentDirectories(): string[] {
  */
 export function saveRecentDirectories(dirs: string[]): void {
   try {
-    localStorage.setItem(RECENT_DIRS_KEY, JSON.stringify(dirs));
-  } catch { /* ignore quota errors */ }
+    localStorage.setItem(RECENT_DIRS_KEY, JSON.stringify(dirs))
+  } catch {
+    /* ignore quota errors */
+  }
 }
 
 /**
@@ -625,149 +601,169 @@ export function saveRecentDirectories(dirs: string[]): void {
  * insensitive comparison) and persist.
  */
 export function addRecentDirectory(dir: string): void {
-  if (!dir || typeof dir !== "string") return;
-  const normalized = dir.trim();
-  if (!normalized) return;
-  const dirs = loadRecentDirectories().filter(
-    (d) => d.toLowerCase() !== normalized.toLowerCase(),
-  );
-  dirs.unshift(normalized);
-  saveRecentDirectories(dirs.slice(0, MAX_RECENT_DIRS));
+  if (!dir || typeof dir !== "string") return
+  const normalized = dir.trim()
+  if (!normalized) return
+  const dirs = loadRecentDirectories().filter((d) => d.toLowerCase() !== normalized.toLowerCase())
+  dirs.unshift(normalized)
+  saveRecentDirectories(dirs.slice(0, MAX_RECENT_DIRS))
 }
 
-/**
- * Remove all entries matching `dir` (case-insensitive) from the recent-
- * directories list and persist.
- */
-export function removeRecentDirectory(dir: string): void {
-  if (!dir) return;
-  const normalized = dir.trim().toLowerCase();
-  saveRecentDirectories(
-    loadRecentDirectories().filter((d) => d.toLowerCase() !== normalized),
-  );
+export async function loadDiscoveredProjects(): Promise<ProjectDiscovery> {
+  const result = await apiJson("global/projects/discover")
+  const root = typeof result?.root === "string" ? result.root : ""
+  const defaultDirectory = typeof result?.defaultDirectory === "string" ? result.defaultDirectory.trim() : ""
+  const projects = Array.isArray(result?.projects)
+    ? result.projects
+        .filter((item: any) => item && typeof item.directory === "string" && typeof item.name === "string")
+        .map((item: any) => ({
+          id: typeof item.id === "string" ? item.id : undefined,
+          directory: String(item.directory),
+          name: String(item.name),
+          marker: typeof item.marker === "string" ? item.marker : "",
+        }))
+    : []
+  return { root, defaultDirectory, projects }
 }
 
 // ── applyDirectory ──
 
 export interface ApplyDirectoryOptions {
+  /** Shared selection intent that must still own boardStore.selectEpoch. */
+  selectionEpoch?: number
   /**
- * When true, `next` is written as the saved directory.
- * When false, the saved directory is cleared.
- * When omitted (null/undefined), the saved directory is unchanged.
- */
-  save?: boolean;
+   * When true, `next` is written as the saved directory.
+   * When false, the saved directory is cleared.
+   * When omitted (null/undefined), the saved directory is unchanged.
+   */
+  save?: boolean
   /**
- * When true, `next` is written as the temp directory.
- * When false, the temp directory is cleared.
- * When omitted (null/undefined), the temp directory is unchanged.
- */
-  temp?: boolean;
+   * When false, skip persisting overlay settings after the switch.
+   * Defaults to true.
+   */
+  persist?: boolean
   /**
- * When false, skip persisting overlay settings after the switch.
- * Defaults to true.
- */
-  persist?: boolean;
+   * When false, skip restoring the initial workspace after the reload.
+   * Defaults to true.
+   */
+  restoreWorkspace?: boolean
   /**
- * When false, skip restoring the initial workspace after the reload.
- * Defaults to true.
- */
-  restoreWorkspace?: boolean;
+   * Internal task-selection handoff: selectTask owns the target task hydrate
+   * after a cross-directory switch, so it keeps selection lifecycle control.
+   * Manual directory switches must leave this unset so stale task ids cannot
+   * survive after project projections are cleared.
+   */
+  preserveSelection?: boolean
 }
 
 /**
  * Switch the active working directory, update related store fields, and
  * trigger a project-scope reload via the .
  */
-export async function applyDirectory(
-  next: string,
-  options: ApplyDirectoryOptions = {},
-): Promise<void> {
-  const save =
-    options.save === true ? next : options.save === false ? "" : null;
-  const temp =
-    options.temp === true ? next : options.temp === false ? "" : null;
+export function beginWorkspaceSelection(): number {
+  const epoch = boardStore.selectEpoch + 1
+  setBoardStore("selectEpoch", epoch)
+  return epoch
+}
 
-  const curDir = settingsStore.directory;
-  const curSaved = settingsStore.savedDirectory;
-  const curTemp = settingsStore.tempDirectory;
+export function ownsWorkspaceSelection(epoch: number): boolean {
+  return boardStore.selectEpoch === epoch
+}
 
-  if (
-    next === curDir &&
-    (save === null || save === curSaved) &&
-    (temp === null || temp === curTemp)
-  ) {
-    console.log("[applyDir] skipped (same)", {
-      next,
-      save,
-      temp,
-      dir: curDir,
-      saved: curSaved,
-      tempDir: curTemp,
-    });
-    return;
+export async function applyDirectory(next: string, options: ApplyDirectoryOptions = {}): Promise<boolean> {
+  const selectionEpoch = options.selectionEpoch ?? beginWorkspaceSelection()
+  if (!ownsWorkspaceSelection(selectionEpoch)) return false
+  const save = options.save === true ? next : options.save === false ? "" : null
+
+  const curDir = settingsStore.directory
+  const curSaved = settingsStore.savedDirectory
+
+  if (next === curDir && (save === null || save === curSaved)) {
+    if (options.preserveSelection !== true) {
+      stopSSE()
+      clearSelectedWorkItem()
+    }
+    console.log("[applyDir] skipped (same)", { next, save, dir: curDir, saved: curSaved })
+    return true
   }
 
-  console.log("[applyDir] switching", { from: curDir, to: next, save, temp });
+  console.log("[applyDir] checking connection")
+  const ok = await checkConnection({ background: true })
+  if (!ownsWorkspaceSelection(selectionEpoch)) return false
+  if (!ok) {
+    console.warn("[applyDir] connection failed, rejecting switch")
+    throw new Error("Failed to set directory")
+  }
 
-  setSettingsStore("directoryEpoch", (n: number) => n + 1);
-  setSettingsStore("directory", next);
-  if (save !== null) setSettingsStore("savedDirectory", save);
-  if (temp !== null) setSettingsStore("tempDirectory", temp);
-  setSettingsStore(
-    "directoryMode",
-    settingsStore.savedDirectory ? "custom" : "temp",
-  );
+  console.log("[applyDir] switching", { from: curDir, to: next, save })
 
- // Sync the API client's directory context immediately so all subsequent
- // API calls (checkConnection, reloadProjectScope, etc.) target the new
- // directory on the backend.
-  configureApi({ directory: next });
-  setBoardStore("pendingTasks", []);
+  stopSSE()
+  stopTaskListSSE()
+  if (options.preserveSelection !== true) {
+    clearSelectedWorkItem()
+  }
+  setSettingsStore("directoryEpoch", (n: number) => n + 1)
+  setSettingsStore("directory", next)
+  if (save !== null) setSettingsStore("savedDirectory", save)
 
- // Clear stale workspace memory so restoreInitialWorkspace() won't revert the switch.
-  setSettingsStore("workspaceTaskID", "");
-  setSettingsStore("workspaceDirectory", "");
+  // Sync the API client's directory context immediately so all subsequent
+  // API calls (checkConnection, reloadProjectScope, etc.) target the new
+  // directory on the backend.
+  configureApi({ directory: next })
+  setBoardStore("pendingTasks", [])
 
- // Clear project-scope data (tasks list, messages, executor events).
-  clearProjectScopeData();
+  // Directory switching is the other project-identity ingress beside startup.
+  // Initialize before any project-scoped load can cache a non-Git Instance;
+  // changing Git identity after Mission/Chat execution begins would require an
+  // exclusive refresh behind their long-lived project lease.
+  if (settingsStore.initGit) {
+    await initializeProjectDirectoryGit(next)
+    if (!ownsWorkspaceSelection(selectionEpoch)) return false
+  }
+
+  // Clear transient provider-test state so a result from the previous project
+  // does not linger in the Settings › Providers panel after the switch. The
+  // Provider owners load providerCatalog / providerAuth when their UI opens;
+  // providerTest is user-triggered-only and otherwise never refreshed.
+  setAppStore("providerTest", null)
+
+  // Clear stale workspace memory so restoreInitialWorkspace() won't revert the switch.
+  setSettingsStore("workspaceTaskID", "")
+  setSettingsStore("workspaceDirectory", "")
+
+  // Clear project-scope data (tasks list, messages, runtime events).
+  clearProjectScopeData()
 
   if (options.persist !== false) {
- // Persist via to keep localStorage + Tauri store in sync.
-    const persistFn = (window as any).persistOverlaySettings;
-    if (typeof persistFn === "function") await persistFn();
+    // Persist through the active host settings source.
+    const persistFn =
+      typeof globalThis.window === "object" ? (globalThis.window as any).persistOverlaySettings : undefined
+    if (typeof persistFn === "function") await persistFn()
   }
 
-  if (options.save === true && next) addRecentDirectory(next);
+  if (!ownsWorkspaceSelection(selectionEpoch)) return false
 
- // Capture epoch before entering async phase — if another applyDirectory
- // call supersedes us while we await, our epoch will be stale.
-  const epoch = settingsStore.directoryEpoch;
+  if (options.save === true && next) addRecentDirectory(next)
 
- // Connection check + reload via .
-  const { checkConnection } = await import("./connection");
-  if (typeof checkConnection === "function") {
-    console.log("[applyDir] checking connection");
-    const ok = await checkConnection();
-    if (!ok) {
-      console.warn("[applyDir] connection failed, aborting");
-      return;
-    }
-  }
+  // Capture epoch before entering async phase — if another applyDirectory
+  // call supersedes us while we await, our epoch will be stale.
+  const epoch = settingsStore.directoryEpoch
 
   if (epoch !== settingsStore.directoryEpoch) {
-    console.log("[applyDir] superseded after connection check, aborting");
-    return;
+    console.log("[applyDir] superseded after connection check, aborting")
+    return false
   }
 
-  const { reloadProjectScope } = await import("./config");
-  console.log("[applyDir] reloading project scope");
-  await reloadProjectScope(options);
+  console.log("[applyDir] reloading project scope")
+  await reloadProjectScope(options)
 
-  if (epoch !== settingsStore.directoryEpoch) {
-    console.log("[applyDir] superseded after reload, discarding");
-    return;
+  if (epoch !== settingsStore.directoryEpoch || !ownsWorkspaceSelection(selectionEpoch)) {
+    console.log("[applyDir] superseded after reload, discarding")
+    return false
   }
-  console.log("[applyDir] done, tasks=", boardStore.tasks.length);
+  startTaskListSSE()
+  console.log("[applyDir] done, tasks=", boardStore.tasks.length)
+  return true
 }
 
 // ── setActiveDirectory ──
@@ -776,230 +772,183 @@ export async function applyDirectory(
  * Set the active directory without persisting.
  * No-ops when `value` is empty or already equals the current directory.
  */
-export async function setActiveDirectory(
-  value: string,
-  options: ApplyDirectoryOptions = {},
-): Promise<void> {
-  const next = typeof value === "string" ? value.trim() : "";
-  if (!next || next === settingsStore.directory) return;
-  await applyDirectory(next, { ...options, persist: false });
+export async function setActiveDirectory(value: string, options: ApplyDirectoryOptions = {}): Promise<void> {
+  const next = typeof value === "string" ? value.trim() : ""
+  if (!next || next === settingsStore.directory) return
+  await applyDirectory(next, { ...options, persist: false })
 }
 
-// ── browseDirectory / createDirectory ──
+// ── browseDirectory ──
 
 /**
  * Open a native directory picker and apply the selected directory.
  */
 export async function browseDirectory(): Promise<void> {
   try {
-    const selected = await pickDirectory(activeDirectory());
-    if (!selected) return;
-    await setDirectory(selected);
+    const selected = await pickDirectory(activeDirectory())
+    if (!selected) return
+    await setDirectory(selected)
   } catch (e) {
-    AppLog.error("ui", "Failed to set working directory", { error: String(e) });
+    AppLog.error("ui", "Failed to set working directory", { error: String(e) })
     await nativeMessage(errorText("cwd.set_failed", e), {
       title: t("cwd.title"),
       kind: "error",
-    });
+    })
   }
 }
 
-/**
- * Pick a parent directory and prompt for a new folder name, then create it
- * and switch to it (optionally initialising Git).
- */
-export async function createDirectory(): Promise<void> {
-  try {
-    const parent = await pickDirectory(activeDirectory());
-    if (!parent) return;
-    const name = await nativePrompt(t("cwd.create_prompt"), {
-      title: t("cwd.create_title"),
-      okLabel: t("common.create"),
-      inputLabel: t("cwd.folder"),
-      inputPlaceholder: t("cwd.folder_placeholder"),
-    });
-    const value = name?.trim();
-    if (!value) return;
-    const target = joinPath(parent, value);
-    const created = await tauriInvoke("overlay_create_dir", { path: target }).catch(
-      () => undefined,
-    );
-    if (!created) throw new Error(t("cwd.create_unavailable"));
-    await setDirectory(target);
-    if (settingsStore.initGit) {
-      const { initGitCurrent } = await import("../utils/git");
-      await initGitCurrent({ notify: false });
-    }
-  } catch (e) {
-    AppLog.error("ui", "Failed to create working directory", { error: String(e) });
-    await nativeMessage(errorText("cwd.create_failed", e), {
-      title: t("cwd.title"),
-      kind: "error",
-    });
-  }
-}
-
-// ── openDirectory / resetDirectory ──
+// ── openDirectory ──
 
 /**
  * Open the given directory (or the current active directory) with the
  * native OS file explorer.
  */
 export async function openDirectory(target?: string): Promise<void> {
-  const dir = target ?? activeDirectory();
+  const dir = target ?? activeDirectory()
+  if (!dir) return
   try {
-    if (!dir) return;
-    const opened = await nativeOpen(dir);
-    if (opened) return;
-    await nativeMessage(dir, {
-      title: t("cwd.title"),
-      kind: "info",
-    });
+    await nativeOpen(dir)
   } catch (e) {
-    AppLog.error("ui", "Failed to open working directory", { error: String(e) });
+    AppLog.error("ui", "Failed to open working directory", { error: String(e) })
     await nativeMessage(errorText("cwd.open_failed", e), {
       title: t("cwd.title"),
       kind: "error",
-    });
+    })
   }
 }
 
+// ── openDirectoryInEditor ──
+
 /**
- * Reset the working directory to a fresh temp directory.
+ * Open the given directory or file path (or the current active directory) with
+ * the requested project editor.
  */
-export async function resetDirectory(): Promise<void> {
+export async function openDirectoryInEditor(editor: ProjectEditorID, target?: string): Promise<void> {
+  await openProjectPathInEditor(editor, target ?? activeDirectory())
+}
+
+/**
+ * Open a project path (directory or file) in the selected IDE.
+ * Relative paths are resolved against the active project directory.
+ */
+export async function openProjectPathInEditor(editor: ProjectEditorID, target?: string): Promise<void> {
+  const rawTarget = typeof target === "string" ? target.trim() : ""
+  if (!rawTarget) return
+  const baseDirectory = activeDirectory()
+  const resolvedTarget = absolutePath(rawTarget) ? rawTarget : baseDirectory ? joinPath(baseDirectory, rawTarget) : ""
+  if (!resolvedTarget) return
   try {
-    await setTempDirectory();
+    await getHostTransport().native({
+      kind: "workspace.openProjectEditor",
+      editor,
+      path: resolvedTarget,
+    })
   } catch (e) {
-    AppLog.error("ui", "Failed to reset working directory", { error: String(e) });
-    await nativeMessage(errorText("cwd.reset_failed", e), {
-      title: t("cwd.title"),
+    const label = PROJECT_EDITORS.find((item) => item.id === editor)?.label ?? editor
+    AppLog.error("ui", "Failed to open workspace path in editor", {
+      editor,
+      path: resolvedTarget,
+      error: String(e),
+    })
+    await nativeMessage(errorText("cwd.open_editor_failed", e), {
+      title: t("cwd.open_in_editor", { name: label }),
       kind: "error",
-    });
+    })
   }
 }
 
-// ── setDirectory / setTempDirectory ──
-
-/**
- * Set the working directory to `value`. When `value` is empty, falls back to
- * the existing temp directory or creates a new one.
- */
-export async function setDirectory(
-  value: string,
-  options: ApplyDirectoryOptions = {},
-): Promise<void> {
-  const next = typeof value === "string" ? value.trim() : "";
-  if (!next) {
-    if (settingsStore.tempDirectory) {
-      await applyDirectory(settingsStore.tempDirectory, { ...options, save: false });
-      return;
+export async function openPathInSelectedEditor(target: string): Promise<void> {
+  const path = editorTargetPath(target)
+  if (!path) {
+    if (typeof target === "string" && target.trim()) {
+      await nativeMessage(t("cwd.path_required"), {
+        title: t("cwd.title"),
+        kind: "error",
+      })
     }
-    await setTempDirectory(options);
-    return;
+    return
   }
-  await applyDirectory(next, { ...options, save: true, temp: false });
+  await openDirectoryInEditor(settingsStore.projectEditor, path)
 }
 
+export async function openProjectFile(target: string): Promise<void> {
+  const path = editorTargetPath(target)
+  if (!path) {
+    if (typeof target === "string" && target.trim()) {
+      await nativeMessage(t("cwd.path_required"), {
+        title: t("cwd.title"),
+        kind: "error",
+      })
+    }
+    return
+  }
+  await nativeOpen(path)
+}
+
+function isAbsoluteEditorPath(path: string): boolean {
+  return /^(?:[A-Za-z]:[\\/]|[\\/]{2}|\/)/.test(path)
+}
+
+export function editorTargetPath(target: string): string {
+  const path = typeof target === "string" ? target.trim() : ""
+  if (!path || isAbsoluteEditorPath(path)) return path
+  const base = activeDirectory().trim()
+  if (!base) return ""
+  const separator = base.includes("\\") ? "\\" : "/"
+  return `${base.replace(/[\\/]+$/, "")}${separator}${path.replace(/^[\\/]+/, "")}`
+}
+
+// ── setDirectory ──
+
 /**
- * Create a new temporary directory (via Tauri) and switch to it.
+ * Set the working directory to `value`. `value` must be a non-empty path the
+ * user explicitly chose; passing an empty string throws rather than silently
+ * creating a temp workspace (that fallback was removed — see CHANGELOG for
+ * the temp-workspace deletion rationale).
  */
-export async function setTempDirectory(
-  options: ApplyDirectoryOptions = {},
-): Promise<void> {
-  if (!hasTauriRuntime()) {
-    await applyDirectory("", { ...options, save: false, temp: false });
-    return;
-  }
-  const next = await createTempDirectory();
-  if (!next) throw new Error(t("cwd.create_unavailable"));
-  const { scaffoldProjectConfig } = await import("./config");
-  await scaffoldProjectConfig(next);
-  await applyDirectory(next, { ...options, save: false, temp: true });
+export async function setDirectory(value: string, options: ApplyDirectoryOptions = {}): Promise<void> {
+  const next = typeof value === "string" ? value.trim() : ""
+  if (!next) throw new Error(t("cwd.path_required"))
+  await applyDirectory(next, { ...options, save: true })
 }
 
-// ── ensureDefaultDirectory / ensureWorkspaceDirectory ──
+// ── ensureDefaultDirectory ──
 
 /**
- * Ensure a default working directory is set, creating a temp directory if
- * neither a saved nor temp directory is available.
- * Returns true when a new temp directory was created.
+ * Preserve the current runtime directory, restore the user's last explicit
+ * directory, or select the server's explicit launch directory. A directory-free
+ * startup remains write-free until the operator submits real work.
  */
 export async function ensureDefaultDirectory(): Promise<boolean> {
+  if (settingsStore.directory) return true
   if (settingsStore.savedDirectory) {
-    setSettingsStore("directory", settingsStore.savedDirectory);
-    setSettingsStore("directoryMode", "custom");
-    return false;
+    setProjectDirectoryContext(settingsStore.savedDirectory, false)
+    return true
   }
-  if (settingsStore.tempDirectory) {
-    setSettingsStore("directory", settingsStore.tempDirectory);
-    setSettingsStore("directoryMode", "temp");
-    return false;
+  const discovery = await loadDiscoveredProjects()
+  setProjectDirectoryContext(discovery.defaultDirectory, false)
+  return Boolean(discovery.defaultDirectory)
+}
+
+async function createAnonymousProject(): Promise<string> {
+  const result: unknown = await apiJson("global/projects/anonymous", { method: "POST" })
+  if (
+    !result ||
+    typeof result !== "object" ||
+    typeof (result as Record<string, unknown>).directory !== "string" ||
+    !(result as Record<string, string>).directory.trim()
+  ) {
+    throw new Error("global/projects/anonymous returned an invalid directory")
   }
-  if (!hasTauriRuntime()) return false;
-  const next = await createTempDirectory();
-  if (!next) return false;
-  const scaffoldProjectConfig = (window as any).scaffoldProjectConfig;
-  if (typeof scaffoldProjectConfig === "function") {
-    await scaffoldProjectConfig(next);
-  }
-  setSettingsStore("tempDirectory", next);
-  setSettingsStore("directory", next);
-  setSettingsStore("savedDirectory", "");
-  setSettingsStore("directoryMode", "temp");
-  const persistFn = (window as any).persistOverlaySettings;
-  if (typeof persistFn === "function") await persistFn();
-  return true;
+  return (result as Record<string, string>).directory.trim()
 }
 
 /**
- * Ensure the workspace directory is resolved. If the active directory is
- * already set, returns it immediately; otherwise loads meta from the server
- * and falls back to the `path.directory` value returned by the server.
+ * Ensure the workspace directory is resolved. Returns the active directory
+ * resolved by `ensureDefaultDirectory()` from the current runtime, an explicit
+ * saved choice, or the server's explicit launch directory. An unscoped startup
+ * remains directory-free.
  */
 export async function ensureWorkspaceDirectory(): Promise<string> {
-  if (activeDirectory()) return activeDirectory();
- // Load meta via (sets boardStore.path).
-  const { loadMeta } = await import("./meta");
-  if (typeof loadMeta === "function") await loadMeta();
-  if (!settingsStore.directory && (boardStore.path as any)?.directory) {
-    setSettingsStore("directory", (boardStore.path as any).directory);
-  }
-  return activeDirectory();
-}
-
-// ── currentExecutionDirectory ──
-
-/**
- * Sort priority for goal-run status values used by currentExecutionDirectory.
- */
-function goalRunPriority(status: unknown): number {
-  if (status === "running") return 0;
-  if (status === "blocked") return 1;
-  if (status === "accepted") return 2;
-  if (status === "queued") return 3;
-  if (status === "completed") return 4;
-  if (status === "failed") return 5;
-  if (status === "aborted") return 6;
-  return 7;
-}
-
-/**
- * Return the workspace directory of the highest-priority active goal run.
- */
-export function currentExecutionDirectory(): string {
-  const goalRuns: unknown[] = Array.isArray(boardStore.board?.goalRuns)
-    ? boardStore.board.goalRuns
-    : [];
-  const rows = goalRuns
-    .filter(
-      (item: any) =>
-        typeof item?.workspaceDir === "string" && item.workspaceDir.trim(),
-    )
-    .toSorted(
-      (a: any, b: any) =>
-        goalRunPriority(a?.status) - goalRunPriority(b?.status) ||
-        (b?.time?.updated || 0) - (a?.time?.updated || 0),
-    );
-  return (rows[0] as any)?.workspaceDir?.trim() || "";
+  return activeDirectory()
 }

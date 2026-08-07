@@ -1,15 +1,62 @@
 import { fn } from "@/util/fn"
 import z from "zod"
+import { Log } from "@/util/log"
 import { Session } from "."
 
 import { Message } from "./message"
 import { Identifier } from "@/id/id"
 import { Snapshot } from "@/snapshot"
 
-import { Storage } from "@/storage/storage"
 import { Bus } from "@/bus"
+import { Filesystem } from "@/util/filesystem"
+import { Instance } from "@/project/instance"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
 
 export namespace SessionSummary {
+  const log = Log.create({ service: "session.summary" })
+
+  export async function readDiff(sessionID: string): Promise<Snapshot.FileDiff[]> {
+    const target = ProjectRuntimePaths.sessionDiffPath(Instance.directory, Instance.project.id, sessionID)
+    try {
+      return await Filesystem.readJson<Snapshot.FileDiff[]>(target)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return []
+      throw error
+    }
+  }
+
+  export async function writeDiff(sessionID: string, diff: Snapshot.FileDiff[]): Promise<void> {
+    const target = ProjectRuntimePaths.sessionDiffPath(Instance.directory, Instance.project.id, sessionID)
+    await Filesystem.writeAtomic(target, JSON.stringify(diff, null, 2))
+  }
+
+  function storageErrorMessage(error: unknown): string {
+    const value = error as NodeJS.ErrnoException
+    const message = error instanceof Error ? error.message : String(error)
+    return value?.code ? `${value.code}: ${message}` : message
+  }
+
+  export async function publishDiff(input: {
+    sessionID: string
+    diff: Snapshot.FileDiff[]
+  }): Promise<{ stored: true } | { stored: false; error: string }> {
+    try {
+      await writeDiff(input.sessionID, input.diff)
+    } catch (error) {
+      const message = storageErrorMessage(error)
+      log.error("session diff storage failed; completed turn remains authoritative", {
+        sessionID: input.sessionID,
+        error: message,
+      })
+      return { stored: false, error: message }
+    }
+    Bus.publish(Session.Event.Diff, {
+      sessionID: input.sessionID,
+      diff: input.diff,
+    })
+    return { stored: true }
+  }
+
   function unquoteGitPath(input: string) {
     if (!input.startsWith('"')) return input
     if (!input.endsWith('"')) return input
@@ -73,15 +120,19 @@ export namespace SessionSummary {
     }),
     async (input) => {
       const all = await Session.messages({ sessionID: input.sessionID })
-      await Promise.all([
-        summarizeSession({ sessionID: input.sessionID, messages: all }),
-        summarizeMessage({ messageID: input.messageID, messages: all }),
-      ])
+      await summarizeSession({ sessionID: input.sessionID, messages: all })
     },
   )
 
   async function summarizeSession(input: { sessionID: string; messages: Message.WithParts[] }) {
-    const diffs = await computeDiff({ messages: input.messages })
+    const diffs = await computeDiff({ messages: input.messages }).catch((err) => {
+      log.warn("computeDiff failed; refusing to persist session summary from invalid snapshot state", {
+        sessionID: input.sessionID,
+        error: err,
+      })
+      return undefined
+    })
+    if (!diffs) return
     await Session.setSummary({
       sessionID: input.sessionID,
       summary: {
@@ -89,26 +140,16 @@ export namespace SessionSummary {
         deletions: diffs.reduce((sum, x) => sum + x.deletions, 0),
         files: diffs.length,
       },
-    }).catch(() => undefined)
-    await Storage.write(["session_diff", input.sessionID], diffs)
-    Bus.publish(Session.Event.Diff, {
-      sessionID: input.sessionID,
-      diff: diffs,
+    }).catch((err) => {
+      // Don't take down the diff/event publish below — this is best-effort
+      // metadata. But surface the cause so a stuck overlay summary header can
+      // be traced to a write failure instead of disappearing silently.
+      log.warn("setSummary failed; overlay header may be stale", {
+        sessionID: input.sessionID,
+        error: err,
+      })
     })
-  }
-
-  async function summarizeMessage(input: { messageID: string; messages: Message.WithParts[] }) {
-    const messages = input.messages.filter(
-      (m) => m.info.id === input.messageID || (m.info.role === "assistant" && m.info.parentID === input.messageID),
-    )
-    const msgWithParts = messages.find((m) => m.info.id === input.messageID)!
-    const userMsg = msgWithParts.info as Message.User
-    const diffs = await computeDiff({ messages })
-    userMsg.summary = {
-      ...userMsg.summary,
-      diffs,
-    }
-    await Session.updateMessage(userMsg).catch(() => undefined)
+    await publishDiff({ sessionID: input.sessionID, diff: diffs })
   }
 
   export const diff = fn(
@@ -117,7 +158,7 @@ export namespace SessionSummary {
       messageID: Identifier.schema("message").optional(),
     }),
     async (input) => {
-      const diffs = await Storage.read<Snapshot.FileDiff[]>(["session_diff", input.sessionID]).catch(() => [])
+      const diffs = await readDiff(input.sessionID)
       const next = diffs.map((item) => {
         const file = unquoteGitPath(item.file)
         if (file === item.file) return item
@@ -127,7 +168,10 @@ export namespace SessionSummary {
         }
       })
       const changed = next.some((item, i) => item.file !== diffs[i]?.file)
-      if (changed) Storage.write(["session_diff", input.sessionID], next).catch(() => {})
+      if (changed)
+        writeDiff(input.sessionID, next).catch((err) => {
+          log.warn("session_diff storage write failed", { sessionID: input.sessionID, error: String(err) })
+        })
       return next
     },
   )

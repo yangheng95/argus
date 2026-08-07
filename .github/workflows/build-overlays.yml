@@ -37,7 +37,9 @@ jobs:
         shell: bash
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: ./.github/actions/setup-bun
 
@@ -60,7 +62,17 @@ jobs:
             libssl-dev \
             libgtk-3-dev \
             libayatana-appindicator3-dev \
-            librsvg2-dev
+            librsvg2-dev \
+            ripgrep \
+            xdg-utils
+
+      - name: Install macOS runtime dependencies
+        if: runner.os == 'macOS'
+        run: brew install ripgrep
+
+      - name: Install Windows runtime dependencies
+        if: runner.os == 'Windows'
+        run: choco install ripgrep --yes --no-progress
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -68,27 +80,13 @@ jobs:
         with:
           workspaces: packages/overlay/src-tauri -> target
 
-      - name: Build bound overlay
-        working-directory: packages/overlay
-        run: bun run build
-
-      - name: Stage overlay artifact
-        shell: bash
-        run: |
-          OUT="packages/overlay/dist-artifacts/${{ matrix.platform }}"
-          mkdir -p "$OUT"
-          cp -f packages/overlay/src-tauri/target/release/opencorvus-overlay* "$OUT/" 2>/dev/null || true
-          find packages/overlay/src-tauri/target/release/bundle -type f -exec cp {} "$OUT/" \; 2>/dev/null || true
-
-      - name: Validate overlay assets
-        run: >
-          bun ./script/check-release-assets.ts overlay
-          --dir packages/overlay/dist-artifacts/${{ matrix.platform }}
-          --platform "${{ matrix.platform }}"
-          --version "${{ steps.version.outputs.version }}"
+      - name: Package GUI installers
+        env:
+          OPENCORVUS_VERSION: ${{ steps.version.outputs.version }}
+        run: bun run package:gui-installer-matrix
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: overlay-${{ matrix.platform }}
           path: packages/overlay/dist-artifacts/${{ matrix.platform }}

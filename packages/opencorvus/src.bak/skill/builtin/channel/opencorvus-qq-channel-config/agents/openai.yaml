@@ -1,4 +1,0 @@
-interface:
-  display_name: "OpenCorvus QQ Bot Channel Config"
-  short_description: "Configure QQ Bot channel integration for OpenCorvus"
-  default_prompt: "Use $opencorvus-qq-channel-config to set up or debug QQ Bot channel integration for OpenCorvus."

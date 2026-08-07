@@ -1,17 +1,11 @@
 import { semver } from "bun"
 import { text } from "node:stream/consumers"
-import { Log } from "../util/log"
 import { Process } from "../util/process"
+import { BunExecutable } from "./executable"
 
 export namespace PackageRegistry {
-  const log = Log.create({ service: "bun" })
-
-  function which() {
-    return process.execPath
-  }
-
-  export async function info(pkg: string, field: string, cwd?: string): Promise<string | null> {
-    const result = Process.spawn([which(), "info", pkg, field], {
+  export async function info(pkg: string, field: string, cwd?: string): Promise<string> {
+    const result = Process.spawnHost([BunExecutable.resolve(), "info", pkg, field], {
       cwd,
       stdout: "pipe",
       stderr: "pipe",
@@ -26,22 +20,21 @@ export namespace PackageRegistry {
     const stderr = result.stderr ? await text(result.stderr) : ""
 
     if (code !== 0) {
-      log.warn("bun info failed", { pkg, field, code, stderr })
-      return null
+      const detail = stderr.trim()
+      throw new Error(
+        detail
+          ? `bun info failed for ${pkg} field ${field} with exit code ${code}: ${detail}`
+          : `bun info failed for ${pkg} field ${field} with exit code ${code}`,
+      )
     }
 
     const value = stdout.trim()
-    if (!value) return null
+    if (!value) throw new Error(`bun info returned an empty ${field} value for ${pkg}`)
     return value
   }
 
   export async function isOutdated(pkg: string, cachedVersion: string, cwd?: string): Promise<boolean> {
     const latestVersion = await info(pkg, "version", cwd)
-    if (!latestVersion) {
-      log.warn("Failed to resolve latest version, using cached", { pkg, cachedVersion })
-      return false
-    }
-
     const isRange = /[\s^~*xX<>|=]/.test(cachedVersion)
     if (isRange) return !semver.satisfies(latestVersion, cachedVersion)
 

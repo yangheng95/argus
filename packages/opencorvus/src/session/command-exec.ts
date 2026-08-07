@@ -1,19 +1,24 @@
 import z from "zod"
 import { Identifier } from "../id/id"
 import { Message } from "./message"
-import { Agent } from "../agent/agent"
+import { PrimaryAssistantRegistry } from "../agent/primary-assistant-registry"
 import { Provider } from "../provider/provider"
+import { resolveAgentModelRef } from "../agent/model"
 import { Bus } from "../bus"
 import { Plugin } from "../plugin"
 import { Command } from "../command"
 import { $ } from "bun"
 import { ConfigMarkdown } from "../config/markdown"
+import { EffectiveConfig } from "../config/effective"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { Session } from "."
-import { SessionPromptState } from "./prompt-state"
+import { SessionPromptState } from "./prompt/state"
+import { sessionLifecycleOrderKey } from "./status"
+import { resolvePromptParts } from "./prompt/parts"
+import type { PromptInput } from "./prompt/schema"
 
 export namespace SessionCommand {
-  const { log, lastModel } = SessionPromptState
+  const { log } = SessionPromptState
 
   export const CommandInput = z.object({
     messageID: Identifier.schema("message").optional(),
@@ -42,10 +47,28 @@ export namespace SessionCommand {
   const placeholderRegex = /\$(\d+)/g
   const quoteTrimRegex = /^["']|["']$/g
 
-  export async function command(input: CommandInput) {
+  export async function command(
+    input: CommandInput,
+    prompt: (input: PromptInput) => Promise<Message.WithParts>,
+  ) {
     log.info("command", input)
     const cmd = await Command.get(input.command)
-    const agentName = cmd.agent ?? input.agent ?? (await Agent.defaultAgent())
+    const session = await Session.get(input.sessionID)
+    const config = await EffectiveConfig.effective({ sessionID: input.sessionID })
+    const requestedAgentID = cmd.agent ?? input.agent ?? (await PrimaryAssistantRegistry.defaultID({ config }))
+    if (!PrimaryAssistantRegistry.isID(requestedAgentID)) {
+      const error = new NamedError.Unknown({
+        message: `Command agent ${JSON.stringify(requestedAgentID)} is not a primary assistant`,
+      })
+      Bus.publish(Session.Event.Error, {
+        sessionID: input.sessionID,
+        orderKey: sessionLifecycleOrderKey(input.sessionID),
+        error: error.toObject(),
+      })
+      throw error
+    }
+    const agent = await PrimaryAssistantRegistry.get(requestedAgentID, { config })
+    const agentName = agent.name
 
     const raw = input.arguments.match(argsRegex) ?? []
     const args = raw.map((arg) => arg.replace(quoteTrimRegex, ""))
@@ -89,70 +112,37 @@ export namespace SessionCommand {
     }
     template = template.trim()
 
-    const taskModel = await (async () => {
-      if (cmd.model) {
-        return Provider.parseModel(cmd.model)
-      }
-      if (cmd.agent) {
-        const cmdAgent = await Agent.get(cmd.agent)
-        if (cmdAgent?.model) {
-          return cmdAgent.model
-        }
-      }
-      if (input.model) return Provider.parseModel(input.model)
-      return await lastModel(input.sessionID)
-    })()
+    // Single model resolver (spec §13.1). Deliberately normalizes the old
+    // ad-hoc order (cmd.model > cmd.agent.model > input.model > default) to
+    // the canonical precedence: per-request explicit (cmd.model, else
+    // input.model) > session overlay > base agent.<name>.model > base model.
+    // Consolidating the parallel derivation is the rule 8 goal.
+    const explicitModel = cmd.model
+      ? Provider.parseModel(cmd.model)
+      : input.model
+        ? Provider.parseModel(input.model)
+        : null
+    const taskModel = await resolveAgentModelRef(agentName, {
+      explicitModel,
+      sessionID: input.sessionID,
+    })
 
     try {
-      await Provider.getModel(taskModel.providerID, taskModel.modelID)
+      await Provider.getModel(taskModel.providerID, taskModel.modelID, { config })
     } catch (e) {
       if (Provider.ModelNotFoundError.isInstance(e)) {
         const { providerID, modelID, suggestions } = e.data
         const hint = suggestions?.length ? ` Did you mean: ${suggestions.join(", ")}?` : ""
         Bus.publish(Session.Event.Error, {
           sessionID: input.sessionID,
+          orderKey: sessionLifecycleOrderKey(input.sessionID),
           error: new NamedError.Unknown({ message: `Model not found: ${providerID}/${modelID}.${hint}` }).toObject(),
         })
       }
       throw e
     }
-    const agent = await Agent.get(agentName)
-    if (!agent) {
-      const available = await Agent.list().then((agents) => agents.filter((a) => !a.hidden).map((a) => a.name))
-      const hint = available.length ? ` Available agents: ${available.join(", ")}` : ""
-      const error = new NamedError.Unknown({ message: `Agent not found: "${agentName}".${hint}` })
-      Bus.publish(Session.Event.Error, {
-        sessionID: input.sessionID,
-        error: error.toObject(),
-      })
-      throw error
-    }
-
-    const { SessionPrompt } = await import("./prompt")
-    const templateParts = await SessionPrompt.resolvePromptParts(template)
-    const isSubtask = (agent.mode === "subagent" && cmd.subtask !== false) || cmd.subtask === true
-    const parts = isSubtask
-      ? [
-          {
-            type: "subtask" as const,
-            agent: agent.name,
-            description: cmd.description ?? "",
-            command: input.command,
-            model: {
-              providerID: taskModel.providerID,
-              modelID: taskModel.modelID,
-            },
-            prompt: templateParts.find((y) => y.type === "text")?.text ?? "",
-          },
-        ]
-      : [...templateParts, ...(input.parts ?? [])]
-
-    const userAgent = isSubtask ? (input.agent ?? (await Agent.defaultAgent())) : agentName
-    const userModel = isSubtask
-      ? input.model
-        ? Provider.parseModel(input.model)
-        : await lastModel(input.sessionID)
-      : taskModel
+    const templateParts = await resolvePromptParts(template, { config })
+    const parts = [...templateParts, ...(input.parts ?? [])]
 
     await Plugin.trigger(
       "command.execute.before",
@@ -164,14 +154,16 @@ export namespace SessionCommand {
       { parts },
     )
 
-    const result = (await SessionPrompt.prompt({
+    const result = await prompt({
       sessionID: input.sessionID,
+      author: "user",
       messageID: input.messageID,
-      model: userModel,
-      agent: userAgent,
+      model: taskModel,
+      agent: agentName,
+      byteMaterializationProjectID: session.projectID,
       parts,
       variant: input.variant,
-    })) as Message.WithParts
+    })
 
     Bus.publish(Command.Event.Executed, {
       name: input.command,

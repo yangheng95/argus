@@ -302,6 +302,18 @@ export namespace Patch {
     return { type: MaybeApplyPatch.NotApplyPatch }
   }
 
+  export async function assertAddFileTargetDoesNotExist(filePath: string) {
+    await fs.lstat(filePath).then(
+      () => {
+        throw new Error(`apply_patch verification failed: Add File target already exists: ${filePath}`)
+      },
+      (error) => {
+        if (error?.code === "ENOENT") return
+        throw error
+      },
+    )
+  }
+
   // File content manipulation
   interface ApplyPatchFileUpdate {
     unified_diff: string
@@ -317,6 +329,14 @@ export namespace Patch {
       throw new Error(`Failed to read file ${filePath}: ${error}`)
     }
 
+    return deriveNewContentsFromContent(filePath, originalContent, chunks)
+  }
+
+  export function deriveNewContentsFromContent(
+    filePath: string,
+    originalContent: string,
+    chunks: UpdateFileChunk[],
+  ): ApplyPatchFileUpdate {
     let originalLines = originalContent.split("\n")
 
     // Drop trailing empty element for consistent line counting
@@ -525,6 +545,10 @@ export namespace Patch {
     const deleted: string[] = []
 
     for (const hunk of hunks) {
+      if (hunk.type === "add") await assertAddFileTargetDoesNotExist(hunk.path)
+    }
+
+    for (const hunk of hunks) {
       switch (hunk.type) {
         case "add":
           // Create parent directories
@@ -533,7 +557,7 @@ export namespace Patch {
             await fs.mkdir(addDir, { recursive: true })
           }
 
-          await fs.writeFile(hunk.path, hunk.contents, "utf-8")
+          await fs.writeFile(hunk.path, hunk.contents, { encoding: "utf-8", flag: "wx" })
           added.push(hunk.path)
           log.info(`Added file: ${hunk.path}`)
           break
@@ -615,6 +639,15 @@ export namespace Patch {
 
           switch (hunk.type) {
             case "add":
+              try {
+                await assertAddFileTargetDoesNotExist(resolvedPath)
+              } catch (error) {
+                return {
+                  type: MaybeApplyPatchVerified.CorrectnessError,
+                  error: error as Error,
+                }
+              }
+
               changes.set(resolvedPath, {
                 type: "add",
                 content: hunk.contents,

@@ -18,7 +18,6 @@ import {
   type PromptRequest,
   type ResumeSessionRequest,
   type ResumeSessionResponse,
-  type Role,
   type SessionInfo,
   type SetSessionModelRequest,
   type SetSessionModeRequest,
@@ -32,29 +31,164 @@ import { Log } from "../util/log"
 import { pathToFileURL } from "bun"
 import { Filesystem } from "../util/filesystem"
 import { ACPSessionManager } from "./session"
-import type { ACPConfig } from "./types"
+import type { ACPConfig, ACPSessionState } from "./types"
 import { Provider } from "../provider/provider"
-import { Agent as AgentModule } from "../agent/agent"
+import { PrimaryAssistantRegistry } from "@/agent/primary-assistant-registry"
 import { Installation } from "@/installation"
-import { Message } from "@/session/message"
-import { textAudience, textForACP } from "@/session/part-visibility"
+import { Message, Todo } from "@/session"
 import { Config } from "@/config/config"
-import { Todo } from "@/session/todo"
+import { Instance } from "@/project/instance"
 import { z } from "zod"
 import { LoadAPIKeyError } from "ai"
-import type { AssistantMessage, Event, OpencodeClient, SessionMessageResponse, ToolPart } from "@opencorvus-ai/sdk/v2"
+import type { Event, OpenCorvusClient, SessionMessageResponse, ToolPart, VisibleMessage } from "@opencorvus-ai/sdk"
 import { applyPatch } from "diff"
+import { renderToolFailureCause } from "@/session/tool-failure-cause"
+import { AttachmentStore } from "@/storage/attachment-store"
+import { decodeDataUrlBase64, decodeRawBase64Payload } from "@/session/text-mime"
 
 type ModeOption = { id: string; name: string; description?: string }
+type AcpPrimarySurface = { availableModes: ModeOption[]; defaultModeID: string }
 type ModelOption = { modelId: string; name: string }
+type AssistantMessage = Extract<VisibleMessage, { role: "assistant" }>
 
 const DEFAULT_VARIANT_VALUE = "default"
+
+export function resolveAcpPrimaryMode(input: {
+  availableModes: readonly ModeOption[]
+  currentModeID?: string
+  defaultModeID: string
+}): string {
+  const selected = input.currentModeID ?? input.defaultModeID
+  if (!input.availableModes.some((mode) => mode.id === selected)) {
+    const source = input.currentModeID !== undefined ? "current" : "default"
+    throw new Error(`ACP ${source} primary assistant ${JSON.stringify(selected)} is not available`)
+  }
+  return selected
+}
+
+export function resolvePersistedAcpPrimaryMode(input: AcpPrimarySurface & {
+  messages: readonly { info: { id?: string; role: string; agent?: unknown } }[]
+}): string {
+  const lastUser = input.messages.findLast((message) => message.info.role === "user")?.info
+  if (!lastUser) {
+    return resolveAcpPrimaryMode({
+      availableModes: input.availableModes,
+      defaultModeID: input.defaultModeID,
+    })
+  }
+  if (
+    typeof lastUser.agent !== "string" ||
+    lastUser.agent.length === 0 ||
+    lastUser.agent.trim() !== lastUser.agent
+  ) {
+    throw new Error(
+      `ACP persisted user message ${JSON.stringify(lastUser.id ?? "<unknown>")} requires an exact primary assistant agent`,
+    )
+  }
+  return resolveAcpPrimaryMode({
+    availableModes: input.availableModes,
+    currentModeID: lastUser.agent,
+    defaultModeID: input.defaultModeID,
+  })
+}
+
+type AcpSessionListCursor = {
+  updated: number
+  sessionID: string
+}
+
+type AcpSessionListItem = {
+  id: string
+  time: {
+    updated: number
+  }
+}
+
+function invalidAcpSessionListCursor(cursor: string): RequestError {
+  return RequestError.invalidParams(
+    { cursor },
+    "ACP session list cursor must be the nextCursor token returned by unstable_listSessions",
+  )
+}
+
+function decodeAcpSessionListCursor(cursor: string): AcpSessionListCursor {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(cursor)
+  } catch {
+    throw invalidAcpSessionListCursor(cursor)
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw invalidAcpSessionListCursor(cursor)
+  }
+
+  const record = parsed as Record<string, unknown>
+  const updated = record.updated
+  const sessionID = record.sessionID
+  if (
+    typeof updated !== "number" ||
+    !Number.isFinite(updated) ||
+    typeof sessionID !== "string" ||
+    sessionID.trim() !== sessionID ||
+    sessionID.length === 0
+  ) {
+    throw invalidAcpSessionListCursor(cursor)
+  }
+  return { updated, sessionID }
+}
+
+function encodeAcpSessionListCursor(session: AcpSessionListItem): string {
+  return JSON.stringify({
+    updated: session.time.updated,
+    sessionID: session.id,
+  })
+}
+
+function compareAcpSessionListItems(left: AcpSessionListItem, right: AcpSessionListItem): number {
+  const updated = right.time.updated - left.time.updated
+  if (updated !== 0) return updated
+  return right.id.localeCompare(left.id)
+}
+
+function acpSessionListItemAfterCursor(session: AcpSessionListItem, cursor: AcpSessionListCursor): boolean {
+  return session.time.updated < cursor.updated || (session.time.updated === cursor.updated && session.id < cursor.sessionID)
+}
+
+async function toolImageAttachmentContent(attachments: Message.FilePart[] | undefined): Promise<ToolCallContent[]> {
+  if (!attachments?.length) return []
+  const content: ToolCallContent[] = []
+  for (const attachment of attachments) {
+    if (!attachment.mime.startsWith("image/")) continue
+    const dataUrl =
+      (await AttachmentStore.dataUrlFromReference(attachment.url, attachment.mime)) ??
+      (attachment.url.startsWith("data:") ? attachment.url : undefined)
+    if (!dataUrl) {
+      throw new Error(`ACP tool image attachment ${attachment.filename ?? attachment.url} is not a stored attachment or data URL`)
+    }
+    const match = dataUrl.match(/^data:([^;]+);base64,(.*)$/)
+    if (!match) {
+      throw new Error(`ACP tool image attachment ${attachment.filename ?? attachment.url} is not a valid base64 data URL`)
+    }
+    const payload = decodeDataUrlBase64(dataUrl, `ACP tool image attachment ${attachment.filename ?? attachment.url}`)
+    decodeRawBase64Payload(payload, `ACP tool image attachment ${attachment.filename ?? attachment.url}`)
+    content.push({
+      type: "content",
+      content: {
+        type: "image",
+        mimeType: match[1] || attachment.mime,
+        data: payload,
+        uri: pathToFileURL(attachment.filename ?? "tool-result-image.png").href,
+      },
+    })
+  }
+  return content
+}
 
 export namespace ACP {
   const log = Log.create({ service: "acp-agent" })
 
   async function getContextLimit(
-    sdk: OpencodeClient,
+    sdk: OpenCorvusClient,
     providerID: string,
     modelID: string,
     directory: string,
@@ -74,17 +208,20 @@ export namespace ACP {
 
   async function sendUsageUpdate(
     connection: AgentSideConnection,
-    sdk: OpencodeClient,
+    sdk: OpenCorvusClient,
     sessionID: string,
     directory: string,
+    history?: readonly SessionMessageResponse[],
   ): Promise<void> {
-    const messages = await sdk.session
-      .messages({ sessionID, directory }, { throwOnError: true })
-      .then((x) => x.data)
-      .catch((error) => {
-        log.error("failed to fetch messages for usage update", { error })
-        return undefined
-      })
+    const messages =
+      history ??
+      (await sdk.session
+        .messages({ sessionID, directory }, { throwOnError: true })
+        .then((x) => x.data)
+        .catch((error) => {
+          log.error("failed to fetch messages for usage update", { error })
+          return undefined
+        }))
 
     if (!messages) return
 
@@ -121,7 +258,7 @@ export namespace ACP {
       })
   }
 
-  export async function init({ sdk: _sdk }: { sdk: OpencodeClient }) {
+  export async function init({ sdk: _sdk }: { sdk: OpenCorvusClient }) {
     return {
       create: (connection: AgentSideConnection, fullConfig: ACPConfig) => {
         return new Agent(connection, fullConfig)
@@ -132,7 +269,7 @@ export namespace ACP {
   export class Agent implements ACPAgent {
     private connection: AgentSideConnection
     private config: ACPConfig
-    private sdk: OpencodeClient
+    private sdk: OpenCorvusClient
     private sessionManager: ACPSessionManager
     private eventAbort = new AbortController()
     private eventStarted = false
@@ -213,6 +350,7 @@ export namespace ACP {
                   await this.sdk.permission.reply({
                     requestID: permission.id,
                     reply: "reject",
+                    autoReply: false,
                     directory,
                   })
                   return undefined
@@ -223,6 +361,7 @@ export namespace ACP {
                 await this.sdk.permission.reply({
                   requestID: permission.id,
                   reply: "reject",
+                  autoReply: false,
                   directory,
                 })
                 return
@@ -247,6 +386,7 @@ export namespace ACP {
               await this.sdk.permission.reply({
                 requestID: permission.id,
                 reply: res.outcome.optionId as "once" | "always" | "reject",
+                autoReply: false,
                 directory,
               })
             })
@@ -345,9 +485,16 @@ export namespace ACP {
                     },
                   },
                 ]
+                content.push(...(await toolImageAttachmentContent(part.state.attachments)))
 
                 if (kind === "edit") {
-                  const input = part.state.input
+                  // P0 (commit f4b08c75b) relaxed ToolStatePending/Running/
+                  // Error.input to `z.unknown()`. Narrow before keyed access.
+                  const rawInput = part.state.input
+                  const input: Record<string, unknown> =
+                    rawInput && typeof rawInput === "object" && !Array.isArray(rawInput)
+                      ? (rawInput as Record<string, unknown>)
+                      : {}
                   const filePath = typeof input["filePath"] === "string" ? input["filePath"] : ""
                   const oldText = typeof input["oldString"] === "string" ? input["oldString"] : ""
                   const newText =
@@ -408,9 +555,6 @@ export namespace ACP {
                       },
                     },
                   })
-                  .catch((error) => {
-                    log.error("failed to send tool completed to ACP", { error })
-                  })
                 return
               }
               case "error":
@@ -431,12 +575,12 @@ export namespace ACP {
                           type: "content",
                           content: {
                             type: "text",
-                            text: part.state.error,
+                            text: renderToolFailureCause((part.state as any).failure),
                           },
                         },
                       ],
                       rawOutput: {
-                        error: part.state.error,
+                        error: renderToolFailureCause((part.state as any).failure),
                         metadata: part.state.metadata,
                       },
                     },
@@ -476,7 +620,7 @@ export namespace ACP {
           const part = message.parts.find((p) => p.id === props.partID)
           if (!part) return
 
-          if (part.type === "text" && props.field === "text" && textForACP(part)) {
+          if (part.type === "text" && props.field === "text") {
             await this.connection
               .sessionUpdate({
                 sessionId,
@@ -567,20 +711,31 @@ export namespace ACP {
 
     async newSession(params: NewSessionRequest) {
       const directory = params.cwd
+      let sessionId: string | undefined
       try {
-        const model = await defaultModel(this.config, directory)
+        const [model, primarySurface] = await Promise.all([
+          defaultModel(this.config, directory),
+          this.loadPrimarySurface(directory),
+        ])
+        const modeId = resolveAcpPrimaryMode({
+          availableModes: primarySurface.availableModes,
+          defaultModeID: primarySurface.defaultModeID,
+        })
 
         // Store ACP session state
-        const state = await this.sessionManager.create(params.cwd, params.mcpServers, model)
-        const sessionId = state.id
+        const state = await this.sessionManager.create(params.cwd, params.mcpServers, model, modeId)
+        sessionId = state.id
 
         log.info("creating_session", { sessionId, mcpServers: params.mcpServers.length })
 
-        const load = await this.loadSessionMode({
-          cwd: directory,
-          mcpServers: params.mcpServers,
-          sessionId,
-        })
+        const load = await this.loadSessionMode(
+          {
+            cwd: directory,
+            mcpServers: params.mcpServers,
+            sessionId,
+          },
+          { model, primarySurface },
+        )
 
         return {
           sessionId,
@@ -589,100 +744,81 @@ export namespace ACP {
           _meta: load._meta,
         }
       } catch (e) {
-        const error = Message.fromError(e, {
-          providerID: this.config.defaultModel?.providerID ?? "unknown",
+        return await this.cleanupRejectedSessionInitializationAndThrow({
+          errorValue: e,
+          sessionId,
+          directory,
+          previousState: undefined,
+          deletePersistent: sessionId !== undefined,
         })
-        if (LoadAPIKeyError.isInstance(error)) {
-          throw RequestError.authRequired()
-        }
-        throw e
       }
     }
 
     async loadSession(params: LoadSessionRequest) {
       const directory = params.cwd
       const sessionId = params.sessionId
+      const previousState = this.sessionManager.snapshot(sessionId)
 
       try {
-        const model = await defaultModel(this.config, directory)
+        const [model, primarySurface, messages] = await Promise.all([
+          defaultModel(this.config, directory),
+          this.loadPrimarySurface(directory),
+          this.loadSessionHistory(directory, sessionId),
+        ])
+        const modeId = resolvePersistedAcpPrimaryMode({ ...primarySurface, messages })
 
         // Store ACP session state
-        await this.sessionManager.load(sessionId, params.cwd, params.mcpServers, model)
+        await this.sessionManager.load(sessionId, params.cwd, params.mcpServers, model, modeId)
 
         log.info("load_session", { sessionId, mcpServers: params.mcpServers.length })
 
-        const result = await this.loadSessionMode({
-          cwd: directory,
-          mcpServers: params.mcpServers,
-          sessionId,
-        })
+        const result = await this.loadSessionMode(
+          {
+            cwd: directory,
+            mcpServers: params.mcpServers,
+            sessionId,
+          },
+          { model, primarySurface },
+        )
 
-        // Replay session history
-        const messages = await this.sdk.session
-          .messages(
-            {
-              sessionID: sessionId,
-              directory,
-            },
-            { throwOnError: true },
-          )
-          .then((x) => x.data)
-          .catch((err) => {
-            log.error("unexpected error when fetching message", { error: err })
-            return undefined
-          })
-
-        const lastUser = messages?.findLast((m) => m.info.role === "user")?.info as
-          | (Record<string, unknown> & { id: string; role: string; model?: { providerID: string; modelID: string }; agent?: string })
-          | undefined
-        if (lastUser?.role === "user" && lastUser.model) {
-          result.models.currentModelId = `${lastUser.model.providerID}/${lastUser.model.modelID}`
-          this.sessionManager.setModel(sessionId, {
-            providerID: lastUser.model.providerID,
-            modelID: lastUser.model.modelID,
-          })
-          if (result.modes?.availableModes.some((m) => m.id === lastUser.agent)) {
-            result.modes.currentModeId = lastUser.agent as string
-            this.sessionManager.setMode(sessionId, lastUser.agent as string)
-          }
-        }
-
-        for (const msg of messages ?? []) {
+        // Replay the same history snapshot used to restore the exact Primary identity.
+        for (const msg of messages) {
           log.debug("replay message", msg)
           await this.processMessage(msg)
         }
 
-        await sendUsageUpdate(this.connection, this.sdk, sessionId, directory)
+        await sendUsageUpdate(this.connection, this.sdk, sessionId, directory, messages)
 
         return result
       } catch (e) {
-        const error = Message.fromError(e, {
-          providerID: this.config.defaultModel?.providerID ?? "unknown",
+        return await this.cleanupRejectedSessionInitializationAndThrow({
+          errorValue: e,
+          sessionId,
+          directory,
+          previousState,
+          deletePersistent: false,
         })
-        if (LoadAPIKeyError.isInstance(error)) {
-          throw RequestError.authRequired()
-        }
-        throw e
       }
     }
 
     async unstable_listSessions(params: ListSessionsRequest): Promise<ListSessionsResponse> {
       try {
-        const cursor = params.cursor ? Number(params.cursor) : undefined
+        const cursor =
+          params.cursor === undefined || params.cursor === null ? undefined : decodeAcpSessionListCursor(params.cursor)
         const limit = 100
 
         const sessions = await this.sdk.session
           .list(
             {
               directory: params.cwd ?? undefined,
-              roots: true,
+              roots: "true",
             },
             { throwOnError: true },
           )
           .then((x) => x.data ?? [])
 
-        const sorted = sessions.toSorted((a, b) => b.time.updated - a.time.updated)
-        const filtered = cursor ? sorted.filter((s) => s.time.updated < cursor) : sorted
+        const sorted = sessions.toSorted(compareAcpSessionListItems)
+        const filtered = cursor ? sorted.filter((session) => acpSessionListItemAfterCursor(session, cursor)) : sorted
         const page = filtered.slice(0, limit)
 
         const entries: SessionInfo[] = page.map((session) => ({
@@ -693,7 +829,7 @@ export namespace ACP {
         }))
 
         const last = page[page.length - 1]
-        const next = filtered.length > limit && last ? String(last.time.updated) : undefined
+        const next = filtered.length > limit && last ? encodeAcpSessionListCursor(last) : undefined
 
         const response: ListSessionsResponse = {
           sessions: entries,
@@ -702,7 +838,7 @@ export namespace ACP {
         return response
       } catch (e) {
         const error = Message.fromError(e, {
-          providerID: this.config.defaultModel?.providerID ?? "unknown",
+          providerID: "unknown",
         })
         if (LoadAPIKeyError.isInstance(error)) {
           throw RequestError.authRequired()
@@ -714,9 +850,14 @@ export namespace ACP {
     async unstable_forkSession(params: ForkSessionRequest): Promise<ForkSessionResponse> {
       const directory = params.cwd
       const mcpServers = params.mcpServers ?? []
+      let sessionId: string | undefined
+      let previousState: ACPSessionState | undefined
 
       try {
-        const model = await defaultModel(this.config, directory)
+        const [model, primarySurface] = await Promise.all([
+          defaultModel(this.config, directory),
+          this.loadPrimarySurface(directory),
+        ])
 
         const forked = await this.sdk.session
           .fork(
@@ -732,47 +873,39 @@ export namespace ACP {
           throw new Error("Fork session returned no data")
         }
 
-        const sessionId = forked.id
-        await this.sessionManager.load(sessionId, directory, mcpServers, model)
+        sessionId = forked.id
+        previousState = this.sessionManager.snapshot(sessionId)
+        const messages = await this.loadSessionHistory(directory, sessionId)
+        const modeId = resolvePersistedAcpPrimaryMode({ ...primarySurface, messages })
+        await this.sessionManager.load(sessionId, directory, mcpServers, model, modeId)
 
         log.info("fork_session", { sessionId, mcpServers: mcpServers.length })
 
-        const mode = await this.loadSessionMode({
-          cwd: directory,
-          mcpServers,
-          sessionId,
-        })
+        const mode = await this.loadSessionMode(
+          {
+            cwd: directory,
+            mcpServers,
+            sessionId,
+          },
+          { model, primarySurface },
+        )
 
-        const messages = await this.sdk.session
-          .messages(
-            {
-              sessionID: sessionId,
-              directory,
-            },
-            { throwOnError: true },
-          )
-          .then((x) => x.data)
-          .catch((err) => {
-            log.error("unexpected error when fetching message", { error: err })
-            return undefined
-          })
-
-        for (const msg of messages ?? []) {
+        for (const msg of messages) {
           log.debug("replay message", msg)
           await this.processMessage(msg)
         }
 
-        await sendUsageUpdate(this.connection, this.sdk, sessionId, directory)
+        await sendUsageUpdate(this.connection, this.sdk, sessionId, directory, messages)
 
         return mode
       } catch (e) {
-        const error = Message.fromError(e, {
-          providerID: this.config.defaultModel?.providerID ?? "unknown",
+        return await this.cleanupRejectedSessionInitializationAndThrow({
+          errorValue: e,
+          sessionId,
+          directory,
+          previousState,
+          deletePersistent: sessionId !== undefined,
         })
-        if (LoadAPIKeyError.isInstance(error)) {
-          throw RequestError.authRequired()
-        }
-        throw e
       }
     }
 
@@ -780,30 +913,39 @@ export namespace ACP {
       const directory = params.cwd
       const sessionId = params.sessionId
       const mcpServers = params.mcpServers ?? []
+      const previousState = this.sessionManager.snapshot(sessionId)
 
       try {
-        const model = await defaultModel(this.config, directory)
-        await this.sessionManager.load(sessionId, directory, mcpServers, model)
+        const [model, primarySurface, messages] = await Promise.all([
+          defaultModel(this.config, directory),
+          this.loadPrimarySurface(directory),
+          this.loadSessionHistory(directory, sessionId),
+        ])
+        const modeId = resolvePersistedAcpPrimaryMode({ ...primarySurface, messages })
+        await this.sessionManager.load(sessionId, directory, mcpServers, model, modeId)
 
         log.info("resume_session", { sessionId, mcpServers: mcpServers.length })
 
-        const result = await this.loadSessionMode({
-          cwd: directory,
-          mcpServers,
-          sessionId,
-        })
+        const result = await this.loadSessionMode(
+          {
+            cwd: directory,
+            mcpServers,
+            sessionId,
+          },
+          { model, primarySurface },
+        )
 
-        await sendUsageUpdate(this.connection, this.sdk, sessionId, directory)
+        await sendUsageUpdate(this.connection, this.sdk, sessionId, directory, messages)
 
         return result
       } catch (e) {
-        const error = Message.fromError(e, {
-          providerID: this.config.defaultModel?.providerID ?? "unknown",
+        return await this.cleanupRejectedSessionInitializationAndThrow({
+          errorValue: e,
+          sessionId,
+          directory,
+          previousState,
+          deletePersistent: false,
         })
-        if (LoadAPIKeyError.isInstance(error)) {
-          throw RequestError.authRequired()
-        }
-        throw e
       }
     }
 
@@ -864,9 +1006,16 @@ export namespace ACP {
                   },
                 },
               ]
+              content.push(...(await toolImageAttachmentContent(toolPart.state.attachments)))
 
               if (kind === "edit") {
-                const input = toolPart.state.input
+                // P0 (commit f4b08c75b) relaxed ToolStatePending/Running/
+                // Error.input to `z.unknown()`. Narrow before field access.
+                const rawInput = toolPart.state.input
+                const input: Record<string, unknown> =
+                  rawInput && typeof rawInput === "object" && !Array.isArray(rawInput)
+                    ? (rawInput as Record<string, unknown>)
+                    : {}
                 const filePath = typeof input["filePath"] === "string" ? input["filePath"] : ""
                 const oldText = typeof input["oldString"] === "string" ? input["oldString"] : ""
                 const newText =
@@ -927,9 +1076,6 @@ export namespace ACP {
                     },
                   },
                 })
-                .catch((err) => {
-                  log.error("failed to send tool completed to ACP", { error: err })
-                })
               break
             case "error":
               this.toolStarts.delete(toolPart.callID)
@@ -949,12 +1095,12 @@ export namespace ACP {
                         type: "content",
                         content: {
                           type: "text",
-                          text: toolPart.state.error,
+                          text: renderToolFailureCause((toolPart.state as any).failure),
                         },
                       },
                     ],
                     rawOutput: {
-                      error: toolPart.state.error,
+                      error: renderToolFailureCause((toolPart.state as any).failure),
                       metadata: toolPart.state.metadata,
                     },
                   },
@@ -967,8 +1113,6 @@ export namespace ACP {
         } else if (part["type"] === "text") {
           const textStr = part["text"] as string | undefined
           if (textStr) {
-            const scope = textAudience(part as Parameters<typeof textAudience>[0])
-            const audience: Role[] | undefined = scope ? [scope] : undefined
             await this.connection
               .sessionUpdate({
                 sessionId,
@@ -977,7 +1121,6 @@ export namespace ACP {
                   content: {
                     type: "text",
                     text: textStr,
-                    ...(audience && { annotations: { audience } }),
                   },
                 },
               })
@@ -998,25 +1141,42 @@ export namespace ACP {
           const mime = (part["mime"] as string | undefined) || "application/octet-stream"
           const messageChunk = message.info.role === "user" ? "user_message_chunk" : "agent_message_chunk"
 
-          if (url && url.startsWith("file://")) {
+          const storedAttachment = url ? AttachmentStore.nameFromUrl(url) : undefined
+          const replayUrl = storedAttachment ? await AttachmentStore.dataUrlFromReference(url!, mime) : url
+          if (storedAttachment && !replayUrl) {
+            throw new Error(`ACP replay attachment ${url} is not resolvable`)
+          }
+
+          if (replayUrl && (replayUrl.startsWith("http://") || replayUrl.startsWith("https://"))) {
+            await this.connection
+              .sessionUpdate({
+                sessionId,
+                update: {
+                  sessionUpdate: messageChunk,
+                  content: { type: "resource_link", uri: replayUrl, name: filename, mimeType: mime },
+                },
+              })
+              .catch((err) => {
+                log.error("failed to send remote resource_link to ACP", { error: err })
+              })
+          } else if (replayUrl && replayUrl.startsWith("file://")) {
             // Local file reference - send as resource_link
             await this.connection
               .sessionUpdate({
                 sessionId,
                 update: {
                   sessionUpdate: messageChunk,
-                  content: { type: "resource_link", uri: url, name: filename, mimeType: mime },
+                  content: { type: "resource_link", uri: replayUrl, name: filename, mimeType: mime },
                 },
               })
               .catch((err) => {
                 log.error("failed to send resource_link to ACP", { error: err })
               })
-          } else if (url && url.startsWith("data:")) {
+          } else if (replayUrl && replayUrl.startsWith("data:")) {
             // Embedded content - parse data URL and send as appropriate block type
-            const base64Match = url.match(/^data:([^;]+);base64,(.*)$/)
-            const dataMime = base64Match?.[1]
-            const base64Data = base64Match?.[2] ?? ""
-
+            const base64Data = decodeDataUrlBase64(replayUrl, `ACP replay file URL ${filename}`)
+            const dataMime = replayUrl.slice("data:".length, replayUrl.indexOf(",")).split(";")[0]
+            const decodedBytes = decodeRawBase64Payload(base64Data, `ACP replay file URL ${filename}`)
             const effectiveMime = dataMime || mime
 
             if (effectiveMime.startsWith("image/")) {
@@ -1034,9 +1194,6 @@ export namespace ACP {
                     },
                   },
                 })
-                .catch((err) => {
-                  log.error("failed to send image to ACP", { error: err })
-                })
             } else {
               // Non-image: text types get decoded, binary types stay as blob
               const isText = effectiveMime.startsWith("text/") || effectiveMime === "application/json"
@@ -1045,7 +1202,7 @@ export namespace ACP {
                 ? {
                     uri: fileUri,
                     mimeType: effectiveMime,
-                    text: Buffer.from(base64Data, "base64").toString("utf-8"),
+                    text: decodedBytes.toString("utf-8"),
                   }
                 : { uri: fileUri, mimeType: effectiveMime, blob: base64Data }
 
@@ -1062,7 +1219,9 @@ export namespace ACP {
                 })
             }
           }
-          // URLs that don't match file:// or data: are skipped (unsupported)
+          if (!replayUrl || !/^data:|^file:\/\/|^https?:\/\//.test(replayUrl)) {
+            throw new Error(`ACP replay file URL ${url ?? "<missing>"} is not supported`)
+          }
         } else if (part["type"] === "reasoning") {
           const textStr = part["text"] as string | undefined
           if (textStr) {
@@ -1114,47 +1273,48 @@ export namespace ACP {
         })
     }
 
-    private async loadAvailableModes(directory: string): Promise<ModeOption[]> {
-      const agents = await this.config.sdk.app
-        .agents(
+    private async loadPrimarySurface(directory: string): Promise<AcpPrimarySurface> {
+      return Instance.provide({
+        directory,
+        fn: async () => {
+          const config = await Config.get()
+          const primaries = await PrimaryAssistantRegistry.list({ config })
+          const availableModes = primaries
+            .filter((primary) => primary.hidden !== true)
+            .map((primary) => ({
+              id: primary.name,
+              name: primary.name,
+              description: primary.description,
+            }))
+          const defaultModeID = await PrimaryAssistantRegistry.defaultID({ config })
+          return { availableModes, defaultModeID }
+        },
+      })
+    }
+
+    private async loadSessionHistory(directory: string, sessionId: string): Promise<SessionMessageResponse[]> {
+      return this.sdk.session
+        .messages(
           {
+            sessionID: sessionId,
             directory,
           },
           { throwOnError: true },
         )
-        .then((resp) => resp.data!)
-
-      return agents
-        .filter((agent) => agent.mode !== "subagent" && !agent.hidden)
-        .map((agent) => ({
-          id: agent.name,
-          name: agent.name,
-          description: agent.description,
-        }))
+        .then((response) => {
+          if (!Array.isArray(response.data)) {
+            throw new Error(`Session ${sessionId} history response missing messages`)
+          }
+          return response.data
+        })
     }
 
-    private async resolveModeState(
-      directory: string,
-      sessionId: string,
-    ): Promise<{ availableModes: ModeOption[]; currentModeId?: string }> {
-      const availableModes = await this.loadAvailableModes(directory)
-      const currentModeId =
-        this.sessionManager.get(sessionId).modeId ||
-        (await (async () => {
-          if (!availableModes.length) return undefined
-          const defaultAgentName = await AgentModule.defaultAgent()
-          const resolvedModeId =
-            availableModes.find((mode) => mode.name === defaultAgentName)?.id ?? availableModes[0].id
-          this.sessionManager.setMode(sessionId, resolvedModeId)
-          return resolvedModeId
-        })())
-
-      return { availableModes, currentModeId }
-    }
-
-    private async loadSessionMode(params: LoadSessionRequest) {
+    private async loadSessionMode(
+      params: LoadSessionRequest,
+      input: { model: { providerID: string; modelID: string }; primarySurface: AcpPrimarySurface },
+    ) {
       const directory = params.cwd
-      const model = await defaultModel(this.config, directory)
+      const model = input.model
       const sessionId = params.sessionId
 
       const providers = await this.sdk.config.providers({ directory }).then((x) => x.data!.providers)
@@ -1165,14 +1325,10 @@ export namespace ACP {
         this.sessionManager.setVariant(sessionId, undefined)
       }
       const availableModels = buildAvailableModels(entries, { includeVariants: true })
-      const modeState = await this.resolveModeState(directory, sessionId)
-      const currentModeId = modeState.currentModeId
-      const modes = currentModeId
-        ? {
-            availableModes: modeState.availableModes,
-            currentModeId,
-          }
-        : undefined
+      const modes = {
+        availableModes: input.primarySurface.availableModes,
+        currentModeId: this.sessionManager.get(sessionId).modeId,
+      }
 
       const commands = await this.config.sdk.command
         .list(
@@ -1199,6 +1355,7 @@ export namespace ACP {
         if ("type" in server) {
           mcpServers[server.name] = {
             url: server.url,
+            transport: "sse",
             headers: server.headers.reduce<Record<string, string>>((acc, { name, value }) => {
               acc[name] = value
               return acc
@@ -1219,18 +1376,15 @@ export namespace ACP {
 
       await Promise.all(
         Object.entries(mcpServers).map(async ([key, mcp]) => {
-          await this.sdk.mcp
-            .add(
-              {
-                directory,
-                name: key,
-                config: mcp,
-              },
-              { throwOnError: true },
-            )
-            .catch((error) => {
-              log.error("failed to add mcp server", { name: key, error })
-            })
+          const response = await this.sdk.mcp.add(
+            {
+              directory,
+              name: key,
+              config: mcp,
+            },
+            { throwOnError: true },
+          )
+          assertMcpServerAttached(key, response)
         }),
       )
 
@@ -1259,6 +1413,52 @@ export namespace ACP {
       }
     }
 
+    private async cleanupRejectedSessionInitialization(params: {
+      sessionId: string | undefined
+      directory: string
+      previousState: ACPSessionState | undefined
+      deletePersistent: boolean
+    }) {
+      if (!params.sessionId) return
+      this.sessionManager.restore(params.sessionId, params.previousState)
+      if (!params.deletePersistent) return
+      await this.sdk.session.delete(
+        {
+          sessionID: params.sessionId,
+          directory: params.directory,
+        },
+        { throwOnError: true },
+      )
+    }
+
+    private async cleanupRejectedSessionInitializationAndThrow(params: {
+      errorValue: unknown
+      sessionId: string | undefined
+      directory: string
+      previousState: ACPSessionState | undefined
+      deletePersistent: boolean
+    }): Promise<never> {
+      try {
+        await this.cleanupRejectedSessionInitialization(params)
+      } catch (cleanupError) {
+        throw new AggregateError(
+          [params.errorValue, cleanupError],
+          `ACP session initialization cleanup failed for ${params.sessionId ?? "uncreated session"}`,
+        )
+      }
+      this.throwACPRequestError(params.errorValue)
+    }
+
+    private throwACPRequestError(errorValue: unknown): never {
+      const error = Message.fromError(errorValue, {
+        providerID: "unknown",
+      })
+      if (LoadAPIKeyError.isInstance(error)) {
+        throw RequestError.authRequired()
+      }
+      throw errorValue
+    }
+
     async unstable_setSessionModel(params: SetSessionModelRequest) {
       const session = this.sessionManager.get(params.sessionId)
       const providers = await this.sdk.config
@@ -1283,11 +1483,13 @@ export namespace ACP {
 
     async setSessionMode(params: SetSessionModeRequest): Promise<SetSessionModeResponse | void> {
       const session = this.sessionManager.get(params.sessionId)
-      const availableModes = await this.loadAvailableModes(session.cwd)
-      if (!availableModes.some((mode) => mode.id === params.modeId)) {
-        throw new Error(`Agent not found: ${params.modeId}`)
-      }
-      this.sessionManager.setMode(params.sessionId, params.modeId)
+      const primarySurface = await this.loadPrimarySurface(session.cwd)
+      const modeId = resolveAcpPrimaryMode({
+        availableModes: primarySurface.availableModes,
+        currentModeID: params.modeId,
+        defaultModeID: primarySurface.defaultModeID,
+      })
+      this.sessionManager.setMode(params.sessionId, modeId)
     }
 
     async prompt(params: PromptRequest) {
@@ -1300,23 +1502,25 @@ export namespace ACP {
       if (!current) {
         this.sessionManager.setModel(session.id, model)
       }
-      const agent = session.modeId ?? (await AgentModule.defaultAgent())
+      if (typeof session.modeId !== "string" || session.modeId.length === 0) {
+        throw new Error(`ACP session ${sessionID} has no initialized primary assistant mode`)
+      }
+      const primarySurface = await this.loadPrimarySurface(directory)
+      const agent = resolveAcpPrimaryMode({
+        availableModes: primarySurface.availableModes,
+        currentModeID: session.modeId,
+        defaultModeID: primarySurface.defaultModeID,
+      })
 
       const parts: Array<
-        | { type: "text"; text: string; synthetic?: boolean; ignored?: boolean }
-        | { type: "file"; url: string; filename: string; mime: string }
+        { type: "text"; text: string } | { type: "file"; url: string; filename: string; mime: string }
       > = []
       for (const part of params.prompt) {
         switch (part.type) {
           case "text":
-            const audience = part.annotations?.audience
-            const forAssistant = audience?.length === 1 && audience[0] === "assistant"
-            const forUser = audience?.length === 1 && audience[0] === "user"
             parts.push({
               type: "text" as const,
               text: part.text,
-              ...(forAssistant && { synthetic: true }),
-              ...(forUser && { ignored: true }),
             })
             break
           case "image": {
@@ -1327,18 +1531,27 @@ export namespace ACP {
                 type: "file",
                 url: `data:${part.mimeType};base64,${part.data}`,
                 filename,
-                mime: part.mimeType,
-              })
-            } else if (part.uri && part.uri.startsWith("http:")) {
-              parts.push({
-                type: "file",
-                url: part.uri,
-                filename,
-                mime: part.mimeType,
-              })
+                  mime: part.mimeType,
+                })
+              } else if (part.uri && isHttpUri(part.uri)) {
+                parts.push({
+                  type: "file",
+                  url: part.uri,
+                  filename,
+                  mime: part.mimeType,
+                })
+              } else if (parsed.type === "file") {
+                parts.push({
+                  type: "file",
+                  url: parsed.url,
+                  filename: parsed.filename,
+                  mime: part.mimeType,
+                })
+              } else {
+                throw new Error(`Unsupported ACP image URI: ${part.uri ?? "<missing>"}`)
+              }
+              break
             }
-            break
-          }
 
           case "resource_link":
             const parsed = parseUri(part.uri)
@@ -1498,7 +1711,8 @@ export namespace ACP {
       case "write":
         return "edit"
 
-      case "grep":
+      case "search_code":
+      case "external_code_search":
       case "glob":
       case "context7_resolve_library_id":
       case "context7_get_library_docs":
@@ -1513,89 +1727,43 @@ export namespace ACP {
     }
   }
 
-  function toLocations(toolName: string, input: Record<string, any>): { path: string }[] {
+  function toLocations(toolName: string, rawInput: unknown): { path: string }[] {
+    // P0 (commit f4b08c75b) relaxed ToolStatePending/Running/Error.input to
+    // `z.unknown()` — narrow to an object surface before keyed access; treat
+    // any non-string field as absent.
+    const input: Record<string, unknown> =
+      rawInput && typeof rawInput === "object" && !Array.isArray(rawInput) ? (rawInput as Record<string, unknown>) : {}
     const tool = toolName.toLocaleLowerCase()
+    const filePath = typeof input["filePath"] === "string" ? input["filePath"] : ""
+    const dirPath = typeof input["path"] === "string" ? input["path"] : ""
     switch (tool) {
       case "read":
       case "edit":
       case "write":
-        return input["filePath"] ? [{ path: input["filePath"] }] : []
+        return filePath ? [{ path: filePath }] : []
       case "glob":
-      case "grep":
-        return input["path"] ? [{ path: input["path"] }] : []
+      case "search_code":
+        return dirPath ? [{ path: dirPath }] : []
       case "bash":
         return []
       case "list":
-        return input["path"] ? [{ path: input["path"] }] : []
+        return dirPath ? [{ path: dirPath }] : []
       default:
         return []
     }
   }
 
-  async function defaultModel(config: ACPConfig, cwd?: string) {
-    const sdk = config.sdk
-    const configured = config.defaultModel
-    if (configured) return configured
-
+  // R5.1 item 8: the ACP default model has exactly ONE source — the single
+  // `resolveConfiguredModelRef` resolver (session overlay > project base).
+  // The previous `config.defaultModel` short-circuit was a parallel
+  // production model source (rule 8) and is removed (rule 16, no compat).
+  async function defaultModel(_config: ACPConfig, cwd?: string) {
     const directory = cwd ?? process.cwd()
-
-    const specified = await sdk.config
-      .get({ directory }, { throwOnError: true })
-      .then((resp) => {
-        const cfg = resp.data
-        if (!cfg || !cfg.model) return undefined
-        const parsed = Provider.parseModel(cfg.model)
-        return {
-          providerID: parsed.providerID,
-          modelID: parsed.modelID,
-        }
-      })
-      .catch((error) => {
-        log.error("failed to load user config for default model", { error })
-        return undefined
-      })
-
-    const providers = await sdk.config
-      .providers({ directory }, { throwOnError: true })
-      .then((x) => x.data?.providers ?? [])
-      .catch((error) => {
-        log.error("failed to list providers for default model", { error })
-        return []
-      })
-
-    if (specified && providers.length) {
-      const provider = providers.find((p) => p.id === specified.providerID)
-      if (provider && provider.models[specified.modelID]) return specified
-    }
-
-    if (specified && !providers.length) return specified
-
-    const opencorvusProvider = providers.find((p) => p.id === "opencorvus")
-    if (opencorvusProvider) {
-      if (opencorvusProvider.models["big-pickle"]) {
-        return { providerID: "opencorvus", modelID: "big-pickle" }
-      }
-      const [best] = Provider.sort(Object.values(opencorvusProvider.models))
-      if (best) {
-        return {
-          providerID: best.providerID,
-          modelID: best.id,
-        }
-      }
-    }
-
-    const models = providers.flatMap((provider) => Object.values(provider.models) as Provider.Model[])
-    const [best] = Provider.sort(models)
-    if (best) {
-      return {
-        providerID: best.providerID,
-        modelID: best.id,
-      }
-    }
-
-    if (specified) return specified
-
-    return { providerID: "opencorvus", modelID: "big-pickle" }
+    const { resolveConfiguredModelRef } = await import("@/agent/model")
+    return Instance.provide({
+      directory,
+      fn: () => resolveConfiguredModelRef(),
+    })
   }
 
   function parseUri(
@@ -1634,6 +1802,15 @@ export namespace ACP {
         type: "text",
         text: uri,
       }
+    }
+  }
+
+  function isHttpUri(uri: string): boolean {
+    try {
+      const protocol = new URL(uri).protocol
+      return protocol === "http:" || protocol === "https:"
+    } catch {
+      return false
     }
   }
 
@@ -1745,5 +1922,23 @@ export namespace ACP {
     }
 
     return { model: parsed, variant: undefined }
+  }
+}
+
+function assertMcpServerAttached(name: string, response: unknown): void {
+  const data =
+    response && typeof response === "object" && "data" in response
+      ? (response as { data?: unknown }).data
+      : undefined
+  const status =
+    data && typeof data === "object" && !Array.isArray(data)
+      ? (data as Record<string, { status?: unknown; error?: unknown }>)[name]
+      : undefined
+  if (!status || typeof status !== "object") {
+    throw new Error(`MCP server ${name} did not return an attachment status`)
+  }
+  if (status.status !== "connected") {
+    const reason = typeof status.error === "string" && status.error.trim() ? `: ${status.error.trim()}` : ""
+    throw new Error(`MCP server ${name} failed to attach with status ${String(status.status)}${reason}`)
   }
 }

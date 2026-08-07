@@ -11,6 +11,8 @@ import { EOL } from "os"
 import path from "path"
 import * as prompts from "@clack/prompts"
 import { which } from "@/util/which"
+import { EngineService } from "@/task-api"
+import { randomUUID } from "node:crypto"
 
 function pagerCmd(): string[] {
   const lessOptions = ["-R", "-S"]
@@ -135,7 +137,15 @@ export const SessionDeleteCommand = cmd({
       const spinner = prompts.spinner()
       spinner.start(`Deleting ${targets.length} session${suffix}...`)
       for (const target of targets) {
-        await Session.remove(target.id)
+        await EngineService.deleteSession(target.id, {
+          cancellationOrigin: {
+            actor: "user",
+            source: "session.delete",
+            surface: "api",
+            requestID: randomUUID(),
+            reason: "session deleted from the command-line interface",
+          },
+        })
       }
       spinner.stop(`Deleted ${targets.length} session${suffix}`)
     })
@@ -177,7 +187,7 @@ export const SessionListCommand = cmd({
       const shouldPaginate = process.stdout.isTTY && !args.maxCount && args.format === "table"
 
       if (shouldPaginate) {
-        const proc = Process.spawn(pagerCmd(), {
+        const proc = Process.spawnHost(pagerCmd(), {
           stdin: "pipe",
           stdout: "inherit",
           stderr: "inherit",

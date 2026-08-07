@@ -1,10 +1,7 @@
 import { Instance } from "@/project/instance"
-import { Database, desc, eq, and, like } from "@/storage/db"
-import {
-  OrchestratorTaskTable,
-  OrchestratorEvaluationTable,
-  OrchestratorGoalTable,
-} from "@/orchestrator/orchestrator.sql"
+import { Database, desc, eq, and, isNotNull, isNull, like, sql } from "@/storage/db"
+import { EngineTaskTable, EngineGoalTable } from "@/engine"
+import { deriveTaskStatus, isTaskActive, isTaskCompleted, isTaskFailed } from "@/engine/task-status"
 import { Tool } from "./tool"
 import z from "zod"
 
@@ -13,7 +10,7 @@ const DESCRIPTION = `Query orchestrator analytics for task history, completion r
 Actions:
 - **summary**: Get aggregate statistics for the current project (total tasks, pass rate, median completion time).
 - **search**: Search tasks by title/request text, status, or date range.
-- **goal_stats**: Get goal pass/fail statistics across all tasks.`
+- **goal_stats**: Get current Delivery Slice contract statistics across all tasks.`
 
 export const AnalyticsTool = Tool.define("analytics", {
   description: DESCRIPTION,
@@ -28,7 +25,12 @@ export const AnalyticsTool = Tool.define("analytics", {
         .enum(["queued", "active", "completed", "failed", "cancelled"])
         .optional()
         .describe("Filter by task status"),
-      limit: z.number().int().positive().optional().describe("Max results (default: 20)"),
+      limit: z
+        .number()
+        .int()
+        .positive()
+        .default(20)
+        .describe("Maximum number of matching task rows to return from the analytics search."),
     }),
     z.object({
       action: z.literal("goal_stats"),
@@ -39,12 +41,12 @@ export const AnalyticsTool = Tool.define("analytics", {
 
     if (args.action === "summary") {
       const tasks = Database.use((db) =>
-        db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.project_id, projectID)).all(),
+        db.select().from(EngineTaskTable).where(eq(EngineTaskTable.project_id, projectID)).all(),
       )
       const total = tasks.length
-      const completed = tasks.filter((t) => t.status === "completed").length
-      const failed = tasks.filter((t) => t.status === "failed").length
-      const running = tasks.filter((t) => t.status === "active").length
+      const completed = tasks.filter(isTaskCompleted).length
+      const failed = tasks.filter(isTaskFailed).length
+      const running = tasks.filter(isTaskActive).length
       const blocked = 0
 
       // 计算完成时间中位数
@@ -55,47 +57,64 @@ export const AnalyticsTool = Tool.define("analytics", {
         .sort((a, b) => a - b)
       const median = durations.length > 0 ? durations[Math.floor((durations.length - 1) / 2)] : null
 
-      // 评估通过率
-      const evals = Database.use((db) =>
-        db
-          .select()
-          .from(OrchestratorEvaluationTable)
-          .innerJoin(OrchestratorTaskTable, eq(OrchestratorEvaluationTable.task_id, OrchestratorTaskTable.id))
-          .where(eq(OrchestratorTaskTable.project_id, projectID))
-          .all(),
-      )
-      const totalEvals = evals.length
-      const passedEvals = evals.filter((e) => e.orchestrator_evaluation.status === "passed").length
-
       return {
         title: "Project Analytics Summary",
         metadata: {},
-        output: JSON.stringify({
-          total_tasks: total,
-          completed,
-          failed,
-          running,
-          blocked,
-          pass_rate: total > 0 ? `${Math.round((completed / total) * 100)}%` : "N/A",
-          evaluation_pass_rate: totalEvals > 0 ? `${Math.round((passedEvals / totalEvals) * 100)}%` : "N/A",
-          median_completion_ms: median,
-          median_completion_readable: median ? `${Math.round(median / 1000)}s` : "N/A",
-        }, null, 2),
+        output: JSON.stringify(
+          {
+            total_tasks: total,
+            completed,
+            failed,
+            running,
+            blocked,
+            pass_rate: total > 0 ? `${Math.round((completed / total) * 100)}%` : "N/A",
+            median_completion_ms: median,
+            median_completion_readable: median ? `${Math.round(median / 1000)}s` : "N/A",
+          },
+          null,
+          2,
+        ),
       }
     }
 
     if (args.action === "search") {
-      const limit = args.limit ?? 20
-      const conditions = [eq(OrchestratorTaskTable.project_id, projectID)]
-      if (args.status) conditions.push(eq(OrchestratorTaskTable.status, args.status))
-      if (args.query) conditions.push(like(OrchestratorTaskTable.title, `%${args.query}%`))
+      const limit = args.limit
+      const conditions = [eq(EngineTaskTable.project_id, projectID)]
+      if (args.status) {
+        // Phase-6-f-2: status column gone; translate to fact conditions.
+        const cancelledMark = sql`json_extract(${EngineTaskTable.metadata}, '$.cancelled') = 1`
+        switch (args.status) {
+          case "queued":
+            conditions.push(isNull(EngineTaskTable.time_started))
+            conditions.push(isNull(EngineTaskTable.time_completed))
+            break
+          case "active":
+            conditions.push(isNotNull(EngineTaskTable.time_started))
+            conditions.push(isNull(EngineTaskTable.time_completed))
+            break
+          case "completed":
+            conditions.push(isNotNull(EngineTaskTable.time_completed))
+            conditions.push(isNull(EngineTaskTable.error))
+            conditions.push(sql`(${cancelledMark}) IS NOT TRUE`)
+            break
+          case "failed":
+            conditions.push(isNotNull(EngineTaskTable.time_completed))
+            conditions.push(isNotNull(EngineTaskTable.error))
+            conditions.push(sql`(${cancelledMark}) IS NOT TRUE`)
+            break
+          case "cancelled":
+            conditions.push(cancelledMark)
+            break
+        }
+      }
+      if (args.query) conditions.push(like(EngineTaskTable.title, `%${args.query}%`))
 
       const tasks = Database.use((db) =>
         db
           .select()
-          .from(OrchestratorTaskTable)
+          .from(EngineTaskTable)
           .where(and(...conditions))
-          .orderBy(desc(OrchestratorTaskTable.time_updated))
+          .orderBy(desc(EngineTaskTable.time_updated))
           .limit(limit)
           .all(),
       )
@@ -103,11 +122,11 @@ export const AnalyticsTool = Tool.define("analytics", {
       const results = tasks.map((t) => ({
         id: t.id,
         title: t.title,
-        status: t.status,
+        status: deriveTaskStatus(t),
         priority: t.priority,
         created: new Date(t.time_created).toISOString(),
         updated: new Date(t.time_updated).toISOString(),
-        duration_ms: t.time_started && t.time_completed ? (t.time_completed - t.time_started) : null,
+        duration_ms: t.time_started && t.time_completed ? t.time_completed - t.time_started : null,
       }))
 
       return {
@@ -121,30 +140,27 @@ export const AnalyticsTool = Tool.define("analytics", {
       const goals = Database.use((db) =>
         db
           .select()
-          .from(OrchestratorGoalTable)
-          .innerJoin(OrchestratorTaskTable, eq(OrchestratorGoalTable.task_id, OrchestratorTaskTable.id))
-          .where(eq(OrchestratorTaskTable.project_id, projectID))
+          .from(EngineGoalTable)
+          .innerJoin(EngineTaskTable, eq(EngineGoalTable.task_id, EngineTaskTable.id))
+          .where(eq(EngineTaskTable.project_id, projectID))
           .all(),
       )
       const total = goals.length
-      const passed = goals.filter((g) => g.orchestrator_goal.status === "passed").length
-      const failed = goals.filter((g) => g.orchestrator_goal.status === "failed").length
-      const pending = goals.filter((g) => g.orchestrator_goal.status === "pending").length
-      const blocking = goals.filter((g) => g.orchestrator_goal.priority === "blocking").length
-      const advisory = goals.filter((g) => g.orchestrator_goal.priority === "advisory").length
+      const blocking = goals.filter((g) => g.engine_goal.priority === "blocking").length
+      const advisory = goals.filter((g) => g.engine_goal.priority === "advisory").length
 
       return {
         title: "Goal Statistics",
         metadata: {},
-        output: JSON.stringify({
-          total_goals: total,
-          passed,
-          failed,
-          pending,
-          blocking,
-          advisory,
-          pass_rate: total > 0 ? `${Math.round((passed / total) * 100)}%` : "N/A",
-        }, null, 2),
+        output: JSON.stringify(
+          {
+            total_goals: total,
+            blocking,
+            advisory,
+          },
+          null,
+          2,
+        ),
       }
     }
 

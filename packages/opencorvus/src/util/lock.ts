@@ -16,10 +16,18 @@ export async function withKeyedLock<T>(
     if (remaining <= 0) {
       throw new Error(`withKeyedLock timeout: key="${key}" waited ${timeoutMs}ms`)
     }
-    await Promise.race([
-      locks.get(key)!.catch(() => undefined),
-      new Promise<void>((resolve) => setTimeout(resolve, remaining)),
-    ])
+    let timeout: ReturnType<typeof setTimeout> | undefined
+    try {
+      await Promise.race([
+        locks.get(key)!.catch(() => undefined),
+        new Promise<void>((resolve) => {
+          timeout = setTimeout(resolve, remaining)
+          timeout.unref?.()
+        }),
+      ])
+    } finally {
+      if (timeout) clearTimeout(timeout)
+    }
   }
   const promise = fn()
   locks.set(key, promise)
@@ -37,7 +45,7 @@ export namespace Lock {
       readers: number
       writer: boolean
       waitingReaders: (() => void)[]
-      waitingWriters: (() => void)[]
+      waitingWriters: Array<{ acquire(): void }>
     }
   >()
 
@@ -61,7 +69,7 @@ export namespace Lock {
     if (lock.waitingWriters.length > 0) {
       const nextWriter = lock.waitingWriters.shift()!
       try {
-        nextWriter()
+        nextWriter.acquire()
       } catch {
         // If the resolve callback throws, the writer never acquired the lock.
         // Re-run process to wake the next waiter and prevent permanent deadlock.
@@ -86,55 +94,87 @@ export namespace Lock {
     }
   }
 
-  export async function read(key: string): Promise<Disposable> {
+  export async function read(key: string, onAcquire?: () => void): Promise<Disposable> {
     const lock = get(key)
 
-    return new Promise((resolve) => {
-      if (!lock.writer && lock.waitingWriters.length === 0) {
+    return new Promise((resolve, reject) => {
+      const acquire = () => {
         lock.readers++
+        try {
+          onAcquire?.()
+        } catch (error) {
+          lock.readers--
+          process(key)
+          reject(error)
+          return
+        }
         resolve({
           [Symbol.dispose]: () => {
             lock.readers--
             process(key)
           },
         })
+      }
+      if (!lock.writer && lock.waitingWriters.length === 0) {
+        acquire()
       } else {
-        lock.waitingReaders.push(() => {
-          lock.readers++
-          resolve({
-            [Symbol.dispose]: () => {
-              lock.readers--
-              process(key)
-            },
-          })
-        })
+        lock.waitingReaders.push(acquire)
       }
     })
   }
 
-  export async function write(key: string): Promise<Disposable> {
+  export function reserveWrite(key: string): { acquired: Promise<Disposable>; cancel(): void } {
     const lock = get(key)
-
-    return new Promise((resolve) => {
-      if (!lock.writer && lock.readers === 0) {
+    let acquiredLease: Disposable | undefined
+    let cancelled = false
+    let resolveAcquired!: (lease: Disposable) => void
+    const acquired = new Promise<Disposable>((resolve) => {
+      resolveAcquired = resolve
+    })
+    const noop: Disposable = { [Symbol.dispose]: () => undefined }
+    const waiter = {
+      acquire() {
+        if (cancelled) {
+          resolveAcquired(noop)
+          process(key)
+          return
+        }
         lock.writer = true
-        resolve({
+        let released = false
+        acquiredLease = {
           [Symbol.dispose]: () => {
+            if (released) return
+            released = true
             lock.writer = false
             process(key)
           },
-        })
-      } else {
-        lock.waitingWriters.push(() => {
-          lock.writer = true
-          resolve({
-            [Symbol.dispose]: () => {
-              lock.writer = false
-              process(key)
-            },
-          })
-        })
-      }
-    })
+        }
+        resolveAcquired(acquiredLease)
+      },
+    }
+    if (!lock.writer && lock.readers === 0) {
+      waiter.acquire()
+    } else {
+      lock.waitingWriters.push(waiter)
+    }
+    return {
+      acquired,
+      cancel() {
+        if (cancelled) return
+        cancelled = true
+        if (acquiredLease) {
+          acquiredLease[Symbol.dispose]()
+          return
+        }
+        const index = lock.waitingWriters.indexOf(waiter)
+        if (index >= 0) lock.waitingWriters.splice(index, 1)
+        resolveAcquired(noop)
+        process(key)
+      },
+    }
+  }
+
+  export async function write(key: string): Promise<Disposable> {
+    return reserveWrite(key).acquired
   }
 }

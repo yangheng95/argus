@@ -1,79 +1,68 @@
 /**
- * Architect Agent types — cross-goal coordination contracts.
+ * Architect Agent types — authoritative goal decomposer.
  *
- * The Architect Agent sits between Decompose and Plan:
- * - Reads ALL GoalContracts (full set, not per-goal)
- * - Resolves abstract exports/imports into precise contracts
- * - Writes binding consensus to Decision Log
- * - Outputs ArchitectBlueprint for Planner context injection
+ * The Architect sits between Requirements and Dispatch. It reads the
+ * requirement list + foundational decisions, explores the codebase, and
+ * produces a ContractGraph and goal set with requirement-derived acceptance coverage, fidelity coverage,
+ * assembly ownership, and cross-goal interface contracts in one Task-scoped occurrence.
  */
-
-// ---------------------------------------------------------------------------
-// RecommendedNext — every sub-agent outputs call recommendations
-// ---------------------------------------------------------------------------
-
-/** A recommendation from a sub-agent for what the Task Agent should do next. */
-export interface RecommendedNext {
-  /** Target agent/tool name. */
-  agent: string
-  /** Arguments to pass (e.g., { goalID: "..." }). */
-  args?: Record<string, unknown>
-  /** Why this is recommended. */
-  reason: string
-  /** 0-1 confidence score. */
-  confidence: number
-  /** How strongly the agent recommends this action. */
-  priority: "required" | "suggested" | "optional"
-}
+import type { GoalContractFields } from "@/pipeline/types"
+import type { ParsedRequirement, RequirementsDecision } from "@/requirements/types"
+import type { AssemblyOwnerEntry, ReferenceCoverageEntry, SourceCoverageEntry } from "./fidelity"
+import type { ArchitectContractGraph } from "./contract-graph"
+import type { GoalGraphRemoval } from "@/engine/goal-graph-projection"
+import type {
+  ArtifactReadLocator,
+  EngineArtifactLocator,
+} from "@opencorvus-ai/plugin/artifact-catalog"
 
 // ---------------------------------------------------------------------------
 // Architect Decision Log key categories
 // ---------------------------------------------------------------------------
 
-/** The 6 key categories that Architect Agent writes to Decision Log. */
-export type ArchitectDecisionKey =
-  | "directory_blueprint"
-  | "interface_contract"
-  | "export_manifest"
-  | "shared_type"
-  | "naming_convention"
-  | "dependency_order"
+/** Architect graph artifacts are persisted as task-scoped engine artifacts. */
+export type ArchitectDecisionKey = "architect_contract_graph"
 
 // ---------------------------------------------------------------------------
-// ArchitectBlueprint — structured summary injected into Planner context
+// ArchitectContract — one cross-goal consensus entry
 // ---------------------------------------------------------------------------
 
-/** A single contract entry resolved by the Architect Agent. */
 export interface ArchitectContract {
-  /** Which Decision Log key category this belongs to. */
   category: ArchitectDecisionKey
-  /** Human-readable title. */
   title: string
-  /** The precise specification (e.g., actual TypeScript interface code). */
-  spec: string
-  /** Which goal IDs this contract relates to. */
-  goalIDs: string[]
+  contractGraph: ArchitectContractGraph
 }
 
-/**
- * Structured output of the Architect Agent.
- * Injected into Planner context so each goal knows the precise cross-goal contracts.
- */
-export interface ArchitectBlueprint {
-  /** All resolved contracts. */
-  contracts: ArchitectContract[]
-  /** One-line summary of what was decided. */
-  summary: string
+export interface ArchitectFidelityCoverage {
+  sourceCoverage: SourceCoverageEntry[]
+  referenceCoverage: ReferenceCoverageEntry[]
+  assemblyOwners: AssemblyOwnerEntry[]
 }
 
 // ---------------------------------------------------------------------------
-// ArchitectResult — full return value from Architect Agent
+// ArchitectArtifact — durable planning facts
 // ---------------------------------------------------------------------------
 
-export interface ArchitectResult {
-  blueprint: ArchitectBlueprint
-  /** Number of Decision Log entries written. */
-  entriesWritten: number
-  /** Recommended next actions for Task Agent. */
-  recommendedNext: RecommendedNext[]
+export interface ArchitectArtifact {
+  inputFacts: {
+    requirementSetArtifactLocator?: EngineArtifactLocator
+    priorGoalGraphProjectionArtifactLocator?: EngineArtifactLocator
+    sourceArtifactLocators: ArtifactReadLocator[]
+    observedArtifactLocators: ArtifactReadLocator[]
+  }
+  /** Goal facts produced by the Architect. Architecture review is independent
+   *  advisory evidence recorded after Build; it does not prescribe a repair
+   *  route or re-upsert and mutate this goal set by itself. */
+  goals: GoalContractFields[]
+  /** Exact prior Goal revisions removed from the next graph membership. */
+  removedGoals: GoalGraphRemoval[]
+  fidelity: ArchitectFidelityCoverage
+  /** Cross-goal interface contracts returned with temporary goal ids; orchestrator remaps before persistence. */
+  contractGraph: ArchitectContractGraph
 }
+
+// ---------------------------------------------------------------------------
+// Re-export primitives the Architect receives from Requirements as input.
+// ---------------------------------------------------------------------------
+
+export type { ParsedRequirement, RequirementsDecision } from "@/requirements/types"

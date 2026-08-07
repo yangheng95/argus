@@ -1,6 +1,0 @@
-interface:
-  display_name: "OpenCorvus Mattermost Channel Config"
-  short_description: "Configure Mattermost channel integration for OpenCorvus"
-  default_prompt: "Use $opencorvus-mattermost-channel-config to set up or debug Mattermost channel integration for OpenCorvus."
-
-

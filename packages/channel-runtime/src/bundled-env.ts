@@ -1,9 +1,10 @@
-import { mkdir } from "node:fs/promises"
-import os from "node:os"
+import { randomUUID } from "node:crypto"
+import { mkdir, open, readFile, rename, rm } from "node:fs/promises"
 import path from "node:path"
+import lockfile from "proper-lockfile"
+import { channelRuntimePaths } from "./runtime-paths"
 
 const BUNDLE_FILE_ENV = "OPENCORVUS_CHANNEL_BUNDLED_ENV_FILE"
-const STATE_FILE_ENV = "OPENCORVUS_CHANNEL_BUNDLED_STATE_FILE"
 const TTL_HOURS_ENV = "OPENCORVUS_CHANNEL_BUNDLED_TTL_HOURS"
 const DEFAULT_BUNDLE_FILE = ".env.bundle"
 const DEFAULT_TTL_HOURS = 24
@@ -40,22 +41,8 @@ function bundleFile() {
   return resolve(process.env[BUNDLE_FILE_ENV] ?? DEFAULT_BUNDLE_FILE)
 }
 
-function stateDir() {
-  const home = os.homedir()
-  if (process.platform === "win32") {
-    const base = process.env.LOCALAPPDATA ?? path.join(home, "AppData", "Local")
-    return path.join(base, "opencorvus", "channel-runtime")
-  }
-  if (process.env.XDG_STATE_HOME) {
-    return path.join(process.env.XDG_STATE_HOME, "opencorvus", "channel-runtime")
-  }
-  return path.join(home, ".local", "state", "opencorvus", "channel-runtime")
-}
-
 function stateFile() {
-  const input = process.env[STATE_FILE_ENV]
-  if (input) return resolve(input)
-  return path.join(stateDir(), STATE_FILE_NAME)
+  return path.join(channelRuntimePaths().state, "channel-runtime", STATE_FILE_NAME)
 }
 
 function parseValue(input: string) {
@@ -85,21 +72,80 @@ function parseBundle(raw: string) {
 }
 
 async function readState(file: string) {
-  const handle = Bun.file(file)
-  if (!(await handle.exists())) return
+  const raw = await readFile(file, "utf8").catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return undefined
+    throw new Error(`Failed to read bundled env state ${file}: ${error.message}`, { cause: error })
+  })
+  if (raw === undefined) return
+  let data: unknown
   try {
-    const data = await handle.json()
-    const val = (data as Partial<State>).first_used_at
-    if (typeof val !== "number" || !Number.isFinite(val) || val <= 0) return
-    return { first_used_at: val }
-  } catch {
-    return
+    data = JSON.parse(raw)
+  } catch (error) {
+    throw new Error(`Invalid bundled env state JSON ${file}: ${String(error)}`, { cause: error })
   }
+  if (
+    !data ||
+    typeof data !== "object" ||
+    Array.isArray(data) ||
+    Object.keys(data).length !== 1 ||
+    typeof (data as Partial<State>).first_used_at !== "number" ||
+    !Number.isFinite((data as State).first_used_at) ||
+    (data as State).first_used_at <= 0
+  ) {
+    throw new Error(`Invalid bundled env state ${file}: expected one positive finite first_used_at timestamp`)
+  }
+  return { first_used_at: (data as State).first_used_at }
 }
 
 async function writeState(file: string, firstUsedAt: number) {
   await mkdir(path.dirname(file), { recursive: true })
-  await Bun.write(file, JSON.stringify({ first_used_at: firstUsedAt } satisfies State))
+  const temporary = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.${randomUUID()}.tmp`)
+  let handle: Awaited<ReturnType<typeof open>> | undefined
+  try {
+    handle = await open(temporary, "wx", 0o600)
+    await handle.writeFile(JSON.stringify({ first_used_at: firstUsedAt } satisfies State))
+    await handle.sync()
+    await handle.close()
+    handle = undefined
+    await rename(temporary, file)
+    if (process.platform !== "win32") {
+      const directory = await open(path.dirname(file), "r")
+      try {
+        await directory.sync()
+      } finally {
+        await directory.close()
+      }
+    }
+  } finally {
+    await handle?.close().catch(() => undefined)
+    await rm(temporary, { force: true }).catch(() => undefined)
+  }
+}
+
+async function claimFirstUsedAt(file: string, now: number) {
+  await mkdir(path.dirname(file), { recursive: true })
+  const owner = `${file}.owner`
+  const ownerHandle = await open(owner, "a", 0o600)
+  await ownerHandle.close()
+  const release = await lockfile.lock(owner, {
+    realpath: false,
+    stale: 30_000,
+    update: 5_000,
+    retries: {
+      retries: 200,
+      factor: 1,
+      minTimeout: 10,
+      maxTimeout: 25,
+    },
+  })
+  try {
+    const current = await readState(file)
+    if (current) return current.first_used_at
+    await writeState(file, now)
+    return now
+  } finally {
+    await release()
+  }
 }
 
 export async function applyBundledEnv(now = Date.now()): Promise<BundledEnvResult> {
@@ -133,11 +179,7 @@ export async function applyBundledEnv(now = Date.now()): Promise<BundledEnvResul
     }
   }
 
-  const cur = await readState(state)
-  const firstUsedAt = cur?.first_used_at ?? now
-  if (!cur) {
-    await writeState(state, firstUsedAt)
-  }
+  const firstUsedAt = await claimFirstUsedAt(state, now)
 
   const expireAtMs = firstUsedAt + ttlMs()
   const expired = now > expireAtMs

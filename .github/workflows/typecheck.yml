@@ -11,7 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Setup Bun
         uses: ./.github/actions/setup-bun
@@ -21,10 +23,13 @@ jobs:
 
       - name: Verify generated SDK and OpenAPI
         run: |
-          bun ./packages/sdk/js/script/build.ts
+          ./script/generate.ts
           bun --cwd packages/opencorvus dev generate > /tmp/openapi.generated.json
           diff -u /tmp/openapi.generated.json packages/sdk/openapi.json
-          git diff --exit-code -- packages/sdk/js/src/v2/gen packages/sdk/openapi.json
+          bun ./script/generated-artifacts.ts --check-clean-worktree
+
+      - name: Verify generated API docs
+        run: bun run ./packages/opencorvus/script/docs/render-api-md.ts --check
 
       - name: Run typecheck
         run: bunx turbo run typecheck

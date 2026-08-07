@@ -59,7 +59,7 @@ if (Script.release) {
     if (pending > 0) {
       await $`git cherry-pick HEAD..origin/dev`
     }
-    await $`git push origin HEAD --tags --no-verify --force-with-lease`
+    await $`git push origin HEAD --tags --force-with-lease`
     await new Promise((resolve) => setTimeout(resolve, 5_000))
   }
 

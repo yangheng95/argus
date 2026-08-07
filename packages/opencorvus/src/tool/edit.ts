@@ -16,7 +16,9 @@ import { FileTime } from "../file/time"
 import { Filesystem } from "../util/filesystem"
 import { Instance } from "../project/instance"
 import { Snapshot } from "@/snapshot"
-import { assertExternalDirectory } from "./external-directory"
+import { assertBuildWriteDirectory, assertExternalDirectory } from "./external-directory"
+import { Patch } from "../patch"
+import { taskFiles, taskProcessIdentity } from "./task-files"
 
 const MAX_DIAGNOSTICS_PER_FILE = 20
 
@@ -42,6 +44,7 @@ export const EditTool = Tool.define("edit", {
     replaceAll: z.boolean().optional().describe("Replace all occurrences of oldString (default false)"),
   }),
   async execute(params, ctx) {
+    const processIdentity = taskProcessIdentity(ctx, "Edit tool")
     if (!params.filePath) {
       throw new Error("filePath is required")
     }
@@ -51,6 +54,8 @@ export const EditTool = Tool.define("edit", {
     }
 
     const filePath = path.isAbsolute(params.filePath) ? params.filePath : path.join(Instance.directory, params.filePath)
+    const files = taskFiles(ctx)
+    await assertBuildWriteDirectory(ctx, filePath)
     await assertExternalDirectory(ctx, filePath)
 
     let diff = ""
@@ -58,7 +63,11 @@ export const EditTool = Tool.define("edit", {
     let contentNew = ""
     await FileTime.withLock(filePath, async () => {
       if (params.oldString === "") {
-        const existed = await Filesystem.exists(filePath)
+        const existing = await files.lstat(filePath).catch((error: NodeJS.ErrnoException) => {
+          if (error.code === "ENOENT") return undefined
+          throw error
+        })
+        if (existing) throw new Error(`apply_patch verification failed: Add File target already exists: ${filePath}`)
         contentNew = params.newString
         diff = trimDiff(createTwoFilesPatch(filePath, filePath, contentOld, contentNew))
         await ctx.ask({
@@ -70,23 +79,25 @@ export const EditTool = Tool.define("edit", {
             diff,
           },
         })
-        await Filesystem.write(filePath, params.newString)
+        await files.mkdir(path.dirname(filePath), { recursive: true })
+        await files.writeFile(filePath, params.newString, { encoding: "utf-8", flag: "wx" })
         await Bus.publish(File.Event.Edited, {
           file: filePath,
+          processAuthority: { kind: "task", ...processIdentity },
         })
         await Bus.publish(FileWatcher.Event.Updated, {
           file: filePath,
-          event: existed ? "change" : "add",
+          event: "add",
         })
         FileTime.read(ctx.sessionID, filePath)
         return
       }
 
-      const stats = Filesystem.stat(filePath)
+      const stats = await files.stat(filePath).catch(() => undefined)
       if (!stats) throw new Error(`File ${filePath} not found`)
       if (stats.isDirectory()) throw new Error(`Path is a directory, not a file: ${filePath}`)
       await FileTime.assert(ctx.sessionID, filePath)
-      contentOld = await Filesystem.readText(filePath)
+      contentOld = await files.readFile(filePath, "utf8")
       const ending = detectLineEnding(contentOld)
       const old = convertToLineEnding(normalizeLineEndings(params.oldString), ending)
       const next = convertToLineEnding(normalizeLineEndings(params.newString), ending)
@@ -105,15 +116,16 @@ export const EditTool = Tool.define("edit", {
         },
       })
 
-      await Filesystem.write(filePath, contentNew)
+      await files.writeFile(filePath, contentNew)
       await Bus.publish(File.Event.Edited, {
         file: filePath,
+        processAuthority: { kind: "task", ...processIdentity },
       })
       await Bus.publish(FileWatcher.Event.Updated, {
         file: filePath,
         event: "change",
       })
-      contentNew = await Filesystem.readText(filePath)
+      contentNew = await files.readFile(filePath, "utf8")
       diff = trimDiff(
         createTwoFilesPatch(filePath, filePath, normalizeLineEndings(contentOld), normalizeLineEndings(contentNew)),
       )
@@ -167,31 +179,6 @@ export const EditTool = Tool.define("edit", {
 
 export type Replacer = (content: string, find: string) => Generator<string, void, unknown>
 
-// Similarity thresholds for block anchor fallback matching
-const SINGLE_CANDIDATE_SIMILARITY_THRESHOLD = 0.0
-const MULTIPLE_CANDIDATES_SIMILARITY_THRESHOLD = 0.3
-
-/**
- * Levenshtein distance algorithm implementation
- */
-function levenshtein(a: string, b: string): number {
-  // Handle empty strings
-  if (a === "" || b === "") {
-    return Math.max(a.length, b.length)
-  }
-  const matrix = Array.from({ length: a.length + 1 }, (_, i) =>
-    Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)),
-  )
-
-  for (let i = 1; i <= a.length; i++) {
-    for (let j = 1; j <= b.length; j++) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1
-      matrix[i][j] = Math.min(matrix[i - 1][j] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j - 1] + cost)
-    }
-  }
-  return matrix[a.length][b.length]
-}
-
 export const SimpleReplacer: Replacer = function* (_content, find) {
   yield find
 }
@@ -233,141 +220,6 @@ export const LineTrimmedReplacer: Replacer = function* (content, find) {
 
       yield content.substring(matchStartIndex, matchEndIndex)
     }
-  }
-}
-
-export const BlockAnchorReplacer: Replacer = function* (content, find) {
-  const originalLines = content.split("\n")
-  const searchLines = find.split("\n")
-
-  if (searchLines.length < 3) {
-    return
-  }
-
-  if (searchLines[searchLines.length - 1] === "") {
-    searchLines.pop()
-  }
-
-  const firstLineSearch = searchLines[0].trim()
-  const lastLineSearch = searchLines[searchLines.length - 1].trim()
-  const searchBlockSize = searchLines.length
-
-  // Collect all candidate positions where both anchors match
-  const candidates: Array<{ startLine: number; endLine: number }> = []
-  for (let i = 0; i < originalLines.length; i++) {
-    if (originalLines[i].trim() !== firstLineSearch) {
-      continue
-    }
-
-    // Look for the matching last line after this first line
-    for (let j = i + 2; j < originalLines.length; j++) {
-      if (originalLines[j].trim() === lastLineSearch) {
-        candidates.push({ startLine: i, endLine: j })
-        break // Only match the first occurrence of the last line
-      }
-    }
-  }
-
-  // Return immediately if no candidates
-  if (candidates.length === 0) {
-    return
-  }
-
-  // Handle single candidate scenario (using relaxed threshold)
-  if (candidates.length === 1) {
-    const { startLine, endLine } = candidates[0]
-    const actualBlockSize = endLine - startLine + 1
-
-    let similarity = 0
-    let linesToCheck = Math.min(searchBlockSize - 2, actualBlockSize - 2) // Middle lines only
-
-    if (linesToCheck > 0) {
-      for (let j = 1; j < searchBlockSize - 1 && j < actualBlockSize - 1; j++) {
-        const originalLine = originalLines[startLine + j].trim()
-        const searchLine = searchLines[j].trim()
-        const maxLen = Math.max(originalLine.length, searchLine.length)
-        if (maxLen === 0) {
-          continue
-        }
-        const distance = levenshtein(originalLine, searchLine)
-        similarity += (1 - distance / maxLen) / linesToCheck
-
-        // Exit early when threshold is reached
-        if (similarity >= SINGLE_CANDIDATE_SIMILARITY_THRESHOLD) {
-          break
-        }
-      }
-    } else {
-      // No middle lines to compare, just accept based on anchors
-      similarity = 1.0
-    }
-
-    if (similarity >= SINGLE_CANDIDATE_SIMILARITY_THRESHOLD) {
-      let matchStartIndex = 0
-      for (let k = 0; k < startLine; k++) {
-        matchStartIndex += originalLines[k].length + 1
-      }
-      let matchEndIndex = matchStartIndex
-      for (let k = startLine; k <= endLine; k++) {
-        matchEndIndex += originalLines[k].length
-        if (k < endLine) {
-          matchEndIndex += 1 // Add newline character except for the last line
-        }
-      }
-      yield content.substring(matchStartIndex, matchEndIndex)
-    }
-    return
-  }
-
-  // Calculate similarity for multiple candidates
-  let bestMatch: { startLine: number; endLine: number } | null = null
-  let maxSimilarity = -1
-
-  for (const candidate of candidates) {
-    const { startLine, endLine } = candidate
-    const actualBlockSize = endLine - startLine + 1
-
-    let similarity = 0
-    let linesToCheck = Math.min(searchBlockSize - 2, actualBlockSize - 2) // Middle lines only
-
-    if (linesToCheck > 0) {
-      for (let j = 1; j < searchBlockSize - 1 && j < actualBlockSize - 1; j++) {
-        const originalLine = originalLines[startLine + j].trim()
-        const searchLine = searchLines[j].trim()
-        const maxLen = Math.max(originalLine.length, searchLine.length)
-        if (maxLen === 0) {
-          continue
-        }
-        const distance = levenshtein(originalLine, searchLine)
-        similarity += 1 - distance / maxLen
-      }
-      similarity /= linesToCheck // Average similarity
-    } else {
-      // No middle lines to compare, just accept based on anchors
-      similarity = 1.0
-    }
-
-    if (similarity > maxSimilarity) {
-      maxSimilarity = similarity
-      bestMatch = candidate
-    }
-  }
-
-  // Threshold judgment
-  if (maxSimilarity >= MULTIPLE_CANDIDATES_SIMILARITY_THRESHOLD && bestMatch) {
-    const { startLine, endLine } = bestMatch
-    let matchStartIndex = 0
-    for (let k = 0; k < startLine; k++) {
-      matchStartIndex += originalLines[k].length + 1
-    }
-    let matchEndIndex = matchStartIndex
-    for (let k = startLine; k <= endLine; k++) {
-      matchEndIndex += originalLines[k].length
-      if (k < endLine) {
-        matchEndIndex += 1
-      }
-    }
-    yield content.substring(matchStartIndex, matchEndIndex)
   }
 }
 
@@ -636,7 +488,6 @@ export function replace(content: string, oldString: string, newString: string, r
   for (const replacer of [
     SimpleReplacer,
     LineTrimmedReplacer,
-    BlockAnchorReplacer,
     WhitespaceNormalizedReplacer,
     IndentationFlexibleReplacer,
     EscapeNormalizedReplacer,

@@ -1,7 +1,9 @@
 import { InstanceBootstrap } from "../project/bootstrap"
 import { Instance } from "../project/instance"
+import { Server } from "../server/server"
 
 export async function bootstrap<T>(directory: string, cb: () => Promise<T>) {
+  Server.installInProcessClient()
   return Instance.provide({
     directory,
     init: InstanceBootstrap,

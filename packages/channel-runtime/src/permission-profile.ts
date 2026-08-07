@@ -47,7 +47,6 @@ const profiles = {
     vision_analyze: "allow",
     skill: "allow",
     task: "allow",
-    tui: "allow",
     automation: "allow",
     question: "deny",
     doom_loop: "deny",
@@ -82,14 +81,13 @@ const profiles = {
 
 export type PermissionProfile = keyof typeof profiles
 
-export function pickPermissionProfile(input: string | undefined): {
-  profile: PermissionProfile
-  invalid: boolean
-} {
+export function pickPermissionProfile(input: string | undefined): PermissionProfile {
   const raw = input?.trim().toLowerCase()
-  if (!raw) return { profile: "standard", invalid: false }
-  if (raw in profiles) return { profile: raw as PermissionProfile, invalid: false }
-  return { profile: "standard", invalid: true }
+  if (!raw) return "standard"
+  if (raw in profiles) return raw as PermissionProfile
+  throw new Error(
+    `Unknown OPENCORVUS_CHANNEL_PERMISSION_PROFILE="${input}". Valid profiles: ${Object.keys(profiles).join(", ")}`,
+  )
 }
 
 export function permissionForProfile(profile: PermissionProfile): Record<string, string> {

@@ -3,7 +3,9 @@
 // so they are easy to audit and test.
 //
 // Side-effects that depend on runtime data (config parse results, server
-// startup, Flag namespace, TUI context) stay in their original modules.
+// startup, Flag namespace, runtime context) stay in their original modules.
+
+import { SystemProxy } from "./system-proxy"
 
 declare const OPENCORVUS_EMBEDDED_ENV: Record<string, string> | undefined
 
@@ -49,9 +51,27 @@ export function installProcessShims() {
   // 4. Prevent ai-sdk from logging warnings to stdout
   //    https://github.com/vercel/ai/blob/2dc67e0ef538307f21368db32d5a12345d98831b/packages/ai/src/logger/log-warnings.ts#L85
   muteAISdkWarnings()
-}
 
-export const installRuntimeShims = installProcessShims
+  // 5. Auto-detect the operating-system proxy before any network client or
+  //    child process starts. Explicit env values remain authoritative.
+  //    Bun's fetch only honors HTTP_PROXY / HTTPS_PROXY / NO_PROXY env vars
+  //    and ignores the OS-level proxy configuration (Internet Options /
+  //    Settings → Network → Proxy / WPAD). On corporate VMs that ship a
+  //    system proxy this leaves outbound fetches going direct, which can be
+  //    firewalled. Project the selected platform source into standard env
+  //    vars once so Bun and spawned tools share one proxy fact.
+  try {
+    const projection = SystemProxy.install()
+    if (projection?.pacUrl && !projection.http && !projection.https && !projection.all) {
+      process.stderr.write(
+        `[opencorvus bootstrap] ${projection.source} Proxy Auto-Configuration (PAC) detected: ${projection.pacUrl}. ` +
+          `Bun cannot execute PAC JavaScript — configure a static system proxy or explicit HTTPS_PROXY.\n`,
+      )
+    }
+  } catch (error) {
+    warn("detect system proxy", error)
+  }
+}
 
 export function muteAISdkWarnings() {
   // @ts-ignore

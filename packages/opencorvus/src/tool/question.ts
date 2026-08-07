@@ -6,27 +6,27 @@ import DESCRIPTION from "./question.txt"
 export const QuestionTool = Tool.define("question", {
   description: DESCRIPTION,
   parameters: z.object({
-    questions: z.array(Question.Info.omit({ custom: true })).describe("Questions to ask"),
+    questions: z.array(Question.Info).min(1).max(4).describe("1-4 questions to ask in a single turn."),
   }),
   async execute(params, ctx) {
-    const answers = await Question.ask({
+    const result = await Question.askAndFormat({
       sessionID: ctx.sessionID,
       questions: params.questions,
       tool: ctx.callID ? { messageID: ctx.messageID, callID: ctx.callID } : undefined,
     })
-
-    function format(answer: Question.Answer | undefined) {
-      if (!answer?.length) return "Unanswered"
-      return answer.join(", ")
-    }
-
-    const formatted = params.questions.map((q, i) => `"${q.question}"="${format(answers[i])}"`).join(", ")
-
     return {
       title: `Asked ${params.questions.length} question${params.questions.length > 1 ? "s" : ""}`,
-      output: `User has answered your questions: ${formatted}. You can now continue with the user's answers in mind.`,
+      output: result.output,
       metadata: {
-        answers,
+        status: result.status,
+        answers: result.answers,
+        ...(result.status === "expired"
+          ? {
+              requestID: result.requestID,
+              timeExpires: result.timeExpires,
+              timeResolved: result.timeResolved,
+            }
+          : {}),
       },
     }
   },

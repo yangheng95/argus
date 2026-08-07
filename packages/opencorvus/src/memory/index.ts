@@ -1,14 +1,16 @@
-import { Database, and, desc, eq, isNull, sql } from "@/storage/db"
-import {
-  MemoryFileTable,
-  MemoryChunkTable,
-  type MemoryKind,
-  type MemoryScope,
-  type MemorySource,
-} from "./memory.sql"
+import { Database, and, desc, eq, sql } from "@/storage/db"
+import { MemoryFileTable, MemoryChunkTable } from "./memory.sql"
 import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
 import { MemorySearch } from "./search"
+import type {
+  MemoryChunk as MemoryChunkRecord,
+  MemoryFile as MemoryFileRecord,
+  MemoryKind,
+  MemoryScope,
+  MemorySearchResult,
+  MemorySource,
+} from "./types"
 
 export namespace Memory {
   const log = Log.create({ service: "memory" })
@@ -30,55 +32,15 @@ export namespace Memory {
   export type Scope = MemoryScope
   export type Kind = MemoryKind
   export type Source = MemorySource
-  export type QueryScope = Scope | "all"
-
-  export interface MemoryFile {
-    id: string
-    projectId: string
-    sessionID?: string
-    scope: Scope
-    title: string
-    source: Source
-    kind: Kind
-    key?: string
-    importance: number
-    confidence: number
-    timeCreated: number
-    timeUpdated: number
-  }
-
-  export interface MemoryChunk {
-    id: string
-    fileId: string
-    projectId: string
-    content: string
-    tokenCount: number
-    timeCreated: number
-    timeUpdated: number
-  }
-
-  export interface SearchResult {
-    chunkId: string
-    fileId: string
-    fileTitle: string
-    content: string
-    scope: Scope
-    sessionID?: string
-    source: Source
-    kind: Kind
-    key?: string
-    importance: number
-    confidence: number
-    score: number
-    timeCreated: number
-  }
+  export type MemoryFile = MemoryFileRecord
+  export type MemoryChunk = MemoryChunkRecord
+  export type SearchResult = MemorySearchResult
 
   function fromFile(row: typeof MemoryFileTable.$inferSelect): MemoryFile {
     return {
       id: row.id,
       projectId: row.project_id,
-      sessionID: row.session_id ?? undefined,
-      scope: row.scope,
+      scope: "project",
       title: row.title,
       source: row.source,
       kind: row.kind,
@@ -120,39 +82,34 @@ export namespace Memory {
     return chunks.length > 0 ? chunks : [markdown.trim()]
   }
 
-  function clampMetric(value: number | undefined, fallback: number) {
-    if (typeof value !== "number" || Number.isNaN(value)) return fallback
+  function clampMetric(value: number | undefined, defaultValue: number) {
+    if (typeof value !== "number" || Number.isNaN(value)) return defaultValue
     return Math.max(0, Math.min(100, Math.round(value)))
   }
 
-  function ftsInsert(chunkId: string, projectId: string, content: string) {
-    try {
-      Database.use((db) =>
-        db.run(
-          sql`INSERT INTO memory_fts (content, chunk_id, project_id) VALUES (${content}, ${chunkId}, ${projectId})`,
-        ),
-      )
-    } catch (err) {
-      log.warn("FTS insert failed (FTS5 may not be available)", { chunkId, err })
-    }
+  function ftsInsert(db: Database.TxOrDb, chunkId: string, projectId: string, content: string) {
+    db.run(sql`INSERT INTO memory_fts (content, chunk_id, project_id) VALUES (${content}, ${chunkId}, ${projectId})`)
   }
 
-  function ftsDelete(chunkId: string) {
-    try {
-      Database.use((db) => db.run(sql`DELETE FROM memory_fts WHERE chunk_id = ${chunkId}`))
-    } catch (err) {
-      log.warn("FTS delete failed", { chunkId, err })
-    }
+  function ftsDeleteInProject(db: Database.TxOrDb, chunkId: string, projectId: string) {
+    db.run(sql`DELETE FROM memory_fts WHERE chunk_id = ${chunkId} AND project_id = ${projectId}`)
   }
 
-  function ftsDeleteByFile(fileId: string) {
+  function ftsDeleteByFileInProject(db: Database.TxOrDb, fileId: string, projectId: string) {
     try {
-      const chunkIds = Database.use((db) =>
-        db.select({ id: MemoryChunkTable.id }).from(MemoryChunkTable).where(eq(MemoryChunkTable.file_id, fileId)).all(),
-      )
-      for (const { id } of chunkIds) ftsDelete(id)
+      const chunkIds = db
+        .select({ id: MemoryChunkTable.id })
+        .from(MemoryChunkTable)
+        .where(and(eq(MemoryChunkTable.file_id, fileId), eq(MemoryChunkTable.project_id, projectId)))
+        .all()
+      for (const { id } of chunkIds) ftsDeleteInProject(db, id, projectId)
     } catch (err) {
-      log.warn("FTS delete by file failed", { fileId, err })
+      throw new Error(
+        `FTS delete by file failed for ${fileId} in project ${projectId}: ${err instanceof Error ? err.message : String(err)}`,
+        {
+          cause: err,
+        },
+      )
     }
   }
 
@@ -213,13 +170,7 @@ export namespace Memory {
     return [...new Set(variants.filter(Boolean))]
   }
 
-  function findByKey(input: {
-    projectId: string
-    scope: Scope
-    sessionID?: string
-    kind: Kind
-    key: string
-  }) {
+  function findByKey(input: { projectId: string; kind: Kind; key: string }) {
     const row = Database.use((db) =>
       db
         .select()
@@ -227,12 +178,8 @@ export namespace Memory {
         .where(
           and(
             eq(MemoryFileTable.project_id, input.projectId),
-            eq(MemoryFileTable.scope, input.scope),
             eq(MemoryFileTable.kind, input.kind),
             eq(MemoryFileTable.key, input.key),
-            input.scope === "session"
-              ? eq(MemoryFileTable.session_id, input.sessionID ?? "")
-              : isNull(MemoryFileTable.session_id),
           ),
         )
         .get(),
@@ -277,12 +224,7 @@ export namespace Memory {
     return true
   }
 
-  function deriveAtomicMemories(input: {
-    title: string
-    content: string
-    promoteScope: Scope
-    sessionID?: string
-  }) {
+  function deriveAtomicMemories(input: { title: string; content: string }) {
     const seen = new Set<string>()
     const sections = parseSections(input.content)
     const kind: Exclude<Kind, "episode" | "note"> = "fact"
@@ -292,8 +234,6 @@ export namespace Memory {
       content: string
       kind: Exclude<Kind, "episode" | "note">
       key: string
-      scope: Scope
-      sessionID?: string
       importance: number
       confidence: number
     }> = []
@@ -318,8 +258,6 @@ export namespace Memory {
           }),
           kind,
           key,
-          scope: input.promoteScope,
-          sessionID: input.promoteScope === "session" ? input.sessionID : undefined,
           importance,
           confidence: atomicConfidence(kind),
         })
@@ -333,19 +271,13 @@ export namespace Memory {
     title: string
     source: Source
     projectId: string
-    scope?: Scope
-    sessionID?: string
     kind?: Kind
     key?: string
     importance?: number
     confidence?: number
   }) {
-    const scope = input.scope ?? "global"
     const kind = input.kind ?? "note"
     const key = input.key ? normalizeKey(input.key) : undefined
-    if (scope === "session" && !input.sessionID) {
-      throw new Error("sessionID is required when creating a session-scoped memory")
-    }
     const id = Identifier.ascending("memory")
     const now = Date.now()
     Database.use((db) =>
@@ -354,8 +286,6 @@ export namespace Memory {
         .values({
           id,
           project_id: input.projectId,
-          session_id: scope === "session" ? input.sessionID! : null,
-          scope,
           title: input.title,
           source: input.source,
           kind,
@@ -368,17 +298,14 @@ export namespace Memory {
     log.info("created memory file", {
       id,
       title: input.title,
-      scope,
       source: input.source,
       kind,
       key,
-      sessionID: input.sessionID,
     })
     return {
       id,
       projectId: input.projectId,
-      sessionID: scope === "session" ? input.sessionID : undefined,
-      scope,
+      scope: "project",
       title: input.title,
       source: input.source,
       kind,
@@ -392,6 +319,7 @@ export namespace Memory {
 
   function updateFile(input: {
     fileId: string
+    projectId: string
     title: string
     source: Source
     kind: Kind
@@ -412,10 +340,10 @@ export namespace Memory {
           confidence: clampMetric(input.confidence, DEFAULT_CONFIDENCE[input.kind]),
           time_updated: now,
         })
-        .where(eq(MemoryFileTable.id, input.fileId))
+        .where(and(eq(MemoryFileTable.id, input.fileId), eq(MemoryFileTable.project_id, input.projectId)))
         .run(),
     )
-    return getFile(input.fileId)
+    return getFileInProject({ fileId: input.fileId, projectId: input.projectId })
   }
 
   export function writeChunks(fileId: string, projectId: string, markdown: string) {
@@ -423,10 +351,11 @@ export namespace Memory {
     const chunks: MemoryChunk[] = []
     const now = Date.now()
 
-    ftsDeleteByFile(fileId)
-
     Database.transaction((db) => {
-      db.delete(MemoryChunkTable).where(eq(MemoryChunkTable.file_id, fileId)).run()
+      ftsDeleteByFileInProject(db, fileId, projectId)
+      db.delete(MemoryChunkTable)
+        .where(and(eq(MemoryChunkTable.file_id, fileId), eq(MemoryChunkTable.project_id, projectId)))
+        .run()
       for (const text of texts) {
         const id = Identifier.ascending("memchunk")
         const tokenCount = estimateTokens(text)
@@ -448,11 +377,13 @@ export namespace Memory {
           timeCreated: now,
           timeUpdated: now,
         })
+        ftsInsert(db, id, projectId, text)
       }
-      db.update(MemoryFileTable).set({ time_updated: now }).where(eq(MemoryFileTable.id, fileId)).run()
+      db.update(MemoryFileTable)
+        .set({ time_updated: now })
+        .where(and(eq(MemoryFileTable.id, fileId), eq(MemoryFileTable.project_id, projectId)))
+        .run()
     })
-
-    for (const chunk of chunks) ftsInsert(chunk.id, projectId, chunk.content)
 
     log.info("wrote memory chunks", { fileId, count: chunks.length })
     return chunks
@@ -463,51 +394,47 @@ export namespace Memory {
     content: string
     source: Source
     projectId: string
-    scope?: Scope
-    sessionID?: string
     kind?: Kind
     key?: string
     importance?: number
     confidence?: number
   }) {
-    const scope = input.scope ?? "global"
-    const kind = input.kind ?? "note"
-    const key = input.key ? normalizeKey(input.key) : undefined
-    const existing = key
-      ? findByKey({
+    return Database.transaction(() => {
+      const kind = input.kind ?? "note"
+      const key = input.key ? normalizeKey(input.key) : undefined
+      const existing = key
+        ? findByKey({
+            projectId: input.projectId,
+            kind,
+            key,
+          })
+        : null
+      const file =
+        existing ??
+        createFile({
+          title: input.title,
+          source: input.source,
           projectId: input.projectId,
-          scope,
-          sessionID: scope === "session" ? input.sessionID : undefined,
           kind,
           key,
+          importance: input.importance,
+          confidence: input.confidence,
         })
-      : null
-    const file =
-      existing ??
-      createFile({
-        title: input.title,
-        source: input.source,
-        projectId: input.projectId,
-        scope,
-        sessionID: scope === "session" ? input.sessionID : undefined,
-        kind,
-        key,
-        importance: input.importance,
-        confidence: input.confidence,
-      })
-    if (existing) {
-      updateFile({
-        fileId: existing.id,
-        title: input.title,
-        source: input.source,
-        kind,
-        key,
-        importance: input.importance,
-        confidence: input.confidence,
-      })
-    }
-    writeChunks(file.id, input.projectId, input.content)
-    return getFile(file.id)!
+      if (existing) {
+        updateFile({
+          fileId: existing.id,
+          projectId: input.projectId,
+          title: input.title,
+          source: input.source,
+          kind,
+          key,
+          importance: input.importance,
+          confidence: input.confidence,
+        })
+      }
+      writeChunks(file.id, input.projectId, input.content)
+      return getFileInProject({ fileId: file.id, projectId: input.projectId })!
+    })
   }
 
   export function captureEpisode(input: {
@@ -515,9 +442,6 @@ export namespace Memory {
     content: string
     source: Source
     projectId: string
-    scope?: Scope
-    sessionID?: string
-    promoteScope?: Scope
     importance?: number
     confidence?: number
     atomics?: Array<{
@@ -527,15 +451,11 @@ export namespace Memory {
       importance?: number
     }>
   }) {
-    const scope = input.scope ?? "global"
-    const promoteScope = input.promoteScope ?? scope
     const episode = writeFile({
       title: input.title,
       content: input.content,
       source: input.source,
       projectId: input.projectId,
-      scope,
-      sessionID: scope === "session" ? input.sessionID : undefined,
       kind: "episode",
       importance: input.importance ?? DEFAULT_IMPORTANCE.episode,
       confidence: input.confidence ?? DEFAULT_CONFIDENCE.episode,
@@ -551,47 +471,40 @@ export namespace Memory {
         const key = normalizeKey(`${atom.kind}-${text}`)
         if (!key || seen.has(key)) return []
         seen.add(key)
-        const atomScope = atom.kind === "profile" ? "global" as Scope : promoteScope
-        return [writeFile({
-          title: buildAtomicTitle(atom.kind, text),
-          content: buildAtomicContent({
+        return [
+          writeFile({
+            title: buildAtomicTitle(atom.kind, text),
+            content: buildAtomicContent({
+              kind: atom.kind,
+              text,
+              episodeTitle: input.title,
+              section: atom.section,
+            }),
+            source: "reflection",
+            projectId: input.projectId,
             kind: atom.kind,
-            text,
-            episodeTitle: input.title,
-            section: atom.section,
+            key,
+            importance: atom.importance ?? DEFAULT_IMPORTANCE[atom.kind],
+            confidence: DEFAULT_CONFIDENCE[atom.kind],
           }),
-          source: "reflection",
-          projectId: input.projectId,
-          scope: atomScope,
-          sessionID: atomScope === "session" ? input.sessionID : undefined,
-          kind: atom.kind,
-          key,
-          importance: atom.importance ?? DEFAULT_IMPORTANCE[atom.kind],
-          confidence: DEFAULT_CONFIDENCE[atom.kind],
-        })]
+        ]
       })
       log.info("captured episode memory (structured atomics)", {
         fileId: episode.id,
         derived: derived.length,
-        scope,
-        promoteScope,
         source: input.source,
       })
     } else {
-      // Legacy path: derive atomics as facts with flat importance
+      // Heuristic path: caller didn't supply structured atomics, derive from text as facts with flat importance
       derived = deriveAtomicMemories({
         title: input.title,
         content: input.content,
-        promoteScope,
-        sessionID: input.sessionID,
       }).map((item) =>
         writeFile({
           title: item.title,
           content: item.content,
           source: "reflection",
           projectId: input.projectId,
-          scope: item.scope,
-          sessionID: item.scope === "session" ? item.sessionID : undefined,
           kind: item.kind,
           key: item.key,
           importance: item.importance,
@@ -601,8 +514,6 @@ export namespace Memory {
       log.info("captured episode memory", {
         fileId: episode.id,
         derived: derived.length,
-        scope,
-        promoteScope,
         source: input.source,
       })
     }
@@ -612,8 +523,6 @@ export namespace Memory {
   export function search(input: {
     query: string
     projectId: string
-    sessionID?: string
-    scope?: QueryScope
     limit?: number
     minScore?: number
     temporalDecay?: boolean
@@ -626,8 +535,6 @@ export namespace Memory {
   export function recall(input: {
     query: string
     projectId: string
-    sessionID?: string
-    scope?: QueryScope
     limit?: number
     minScore?: number
     includeEpisodes?: boolean
@@ -640,24 +547,21 @@ export namespace Memory {
         const primary = search({
           query,
           projectId: input.projectId,
-          sessionID: input.sessionID,
-          scope: input.scope ?? "all",
           limit: limit * 2,
           minScore,
           kinds: ["profile", "lesson", "fact", "note"],
         })
-        const secondary = input.includeEpisodes === false
-          ? []
-          : search({
-              query,
-              projectId: input.projectId,
-              sessionID: input.sessionID,
-              scope: input.scope ?? "all",
-              limit,
-              minScore: Math.max(0.06, minScore - 0.04),
-              kinds: ["episode"],
-              temporalDecay: true,
-            })
+        const secondary =
+          input.includeEpisodes === false
+            ? []
+            : search({
+                query,
+                projectId: input.projectId,
+                limit,
+                minScore: Math.max(0.06, minScore - 0.04),
+                kinds: ["episode"],
+                temporalDecay: true,
+              })
         return [...primary, ...secondary]
       })
       .filter((item) => {
@@ -671,8 +575,6 @@ export namespace Memory {
   export function promptSection(input: {
     query: string
     projectId: string
-    sessionID?: string
-    scope?: QueryScope
     limit?: number
     minScore?: number
     heading?: string
@@ -692,8 +594,10 @@ export namespace Memory {
     return lines.join("\n")
   }
 
-  export function listFiles(input: { projectId: string; sessionID?: string; scope?: QueryScope; kinds?: Kind[] }) {
-    const scope = input.scope ?? "all"
+  export function listFiles(input: {
+    projectId: string
+    kinds?: Kind[]
+  }) {
     const rows = Database.use((db) =>
       db
         .select()
@@ -702,19 +606,26 @@ export namespace Memory {
         .orderBy(desc(MemoryFileTable.time_updated), desc(MemoryFileTable.time_created))
         .all(),
     )
-    return rows
-      .map(fromFile)
-      .filter((row) => {
-        if (input.kinds && input.kinds.length > 0 && !input.kinds.includes(row.kind)) return false
-        if (scope === "global") return row.scope === "global"
-        if (scope === "session") return row.scope === "session" && row.sessionID === input.sessionID
-        if (row.scope === "global") return true
-        return row.sessionID === input.sessionID
-      })
+    const files = rows.map(fromFile)
+    const kinds = input.kinds
+    if (!kinds || kinds.length === 0) return files
+    return files.filter((row) => kinds.includes(row.kind))
   }
 
   export function getFile(fileId: string) {
     const row = Database.use((db) => db.select().from(MemoryFileTable).where(eq(MemoryFileTable.id, fileId)).get())
+    if (!row) return null
+    return fromFile(row)
+  }
+
+  export function getFileInProject(input: { fileId: string; projectId: string }) {
+    const row = Database.use((db) =>
+      db
+        .select()
+        .from(MemoryFileTable)
+        .where(and(eq(MemoryFileTable.id, input.fileId), eq(MemoryFileTable.project_id, input.projectId)))
+        .get(),
+    )
     if (!row) return null
     return fromFile(row)
   }
@@ -734,12 +645,43 @@ export namespace Memory {
     }))
   }
 
-  export function deleteFile(fileId: string) {
-    ftsDeleteByFile(fileId)
-    Database.transaction((db) => {
-      db.delete(MemoryChunkTable).where(eq(MemoryChunkTable.file_id, fileId)).run()
-      db.delete(MemoryFileTable).where(eq(MemoryFileTable.id, fileId)).run()
+  export function getChunksInProject(input: { fileId: string; projectId: string }) {
+    const rows = Database.use((db) =>
+      db
+        .select()
+        .from(MemoryChunkTable)
+        .where(and(eq(MemoryChunkTable.file_id, input.fileId), eq(MemoryChunkTable.project_id, input.projectId)))
+        .all(),
+    )
+    return rows.map((row) => ({
+      id: row.id,
+      fileId: row.file_id,
+      projectId: row.project_id,
+      content: row.content,
+      tokenCount: row.token_count,
+      timeCreated: row.time_created,
+      timeUpdated: row.time_updated,
+    }))
+  }
+
+  export function deleteFileInProject(input: { fileId: string; projectId: string }) {
+    const deletedFile = Database.transaction((db) => {
+      const file = db
+        .select()
+        .from(MemoryFileTable)
+        .where(and(eq(MemoryFileTable.id, input.fileId), eq(MemoryFileTable.project_id, input.projectId)))
+        .get()
+      if (!file) return null
+      ftsDeleteByFileInProject(db, input.fileId, input.projectId)
+      db.delete(MemoryChunkTable)
+        .where(and(eq(MemoryChunkTable.file_id, input.fileId), eq(MemoryChunkTable.project_id, input.projectId)))
+        .run()
+      db.delete(MemoryFileTable)
+        .where(and(eq(MemoryFileTable.id, input.fileId), eq(MemoryFileTable.project_id, input.projectId)))
+        .run()
+      return fromFile(file)
     })
-    log.info("deleted memory file", { fileId })
+    if (deletedFile) log.info("deleted memory file", { fileId: input.fileId, projectId: input.projectId })
+    return deletedFile
   }
 }

@@ -1,0 +1,174 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 940" width="100%" height="100%">
+  <defs>
+    <style>
+      text { font-family: 'Segoe UI', Arial, sans-serif; }
+      .ingress { fill: #fef3c7; stroke: #f59e0b; stroke-width: 1.5; rx: 8; }
+      .dialog { fill: #dbeafe; stroke: #2563eb; stroke-width: 2; rx: 8; }
+      .acp     { fill: #e0e7ff; stroke: #6366f1; stroke-width: 1.5; rx: 8; }
+      .http    { fill: #ecfdf5; stroke: #10b981; stroke-width: 1.5; rx: 8; }
+      .cp      { fill: #f5f3ff; stroke: #8b5cf6; stroke-width: 1.5; rx: 8; }
+      .ctrl    { fill: #fce7f3; stroke: #db2777; stroke-width: 1.5; rx: 8; }
+      .bus     { fill: #fefce8; stroke: #ca8a04; stroke-width: 1.5; rx: 8; }
+      .ext     { fill: #f1f5f9; stroke: #64748b; stroke-width: 1.5; rx: 8; }
+      .ext-squad{ fill: #ecfdf5; stroke: #10b981; stroke-width: 1.5; rx: 8; }
+      .ext-plug{ fill: #fff7ed; stroke: #ea580c; stroke-width: 1.5; rx: 8; }
+      .ext-mcp { fill: #eff6ff; stroke: #2563eb; stroke-width: 1.5; rx: 8; }
+      .ext-acp { fill: #faf5ff; stroke: #9333ea; stroke-width: 1.5; rx: 8; }
+      .core    { fill: #ede9fe; stroke: #7c3aed; stroke-width: 2; rx: 10; }
+      .arrow   { stroke: #475569; stroke-width: 1.6; fill: none; marker-end: url(#ar); }
+      .ev      { stroke: #ca8a04; stroke-width: 1.4; fill: none; stroke-dasharray: 4 3; marker-end: url(#ae); }
+      .title{ font-size: 18px; font-weight: 700; fill: #0f172a; text-anchor: middle; }
+      .subtitle{ font-size: 12px; fill: #64748b; text-anchor: middle; }
+      .h1 { font-size: 14px; font-weight: 700; fill: #0f172a; text-anchor: start; }
+      .h2 { font-size: 13px; font-weight: 600; fill: #1e293b; text-anchor: middle; }
+      .h3 { font-size: 11px; font-weight: 600; fill: #334155; text-anchor: middle; }
+      .body { font-size: 10.5px; fill: #475569; text-anchor: middle; }
+      .code { font-family: 'Cascadia Code',Consolas,monospace; font-size: 10px; fill: #334155; text-anchor: middle; }
+      .note { font-size: 10px; fill: #94a3b8; text-anchor: start; font-style: italic; }
+      .tag  { font-size: 10px; fill: #64748b; text-anchor: middle; }
+    </style>
+    <marker id="ar" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#475569"/></marker>
+    <marker id="ae" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#ca8a04"/></marker>
+  </defs>
+
+  <text class="title" x="620" y="28">图 3 — 控制面与扩展入口</text>
+  <text class="subtitle" x="620" y="48">入站消息路由 · 多工作区代理 · 事件总线 · 四类扩展入口</text>
+
+  <!-- ================== 入站入口（顶部四列） ================== -->
+  <text class="h1" x="40" y="84" style="fill:#64748b;font-size:12px">入站入口（4 条路径，最终都汇入 EngineService / Session）</text>
+  <line x1="40" y1="90" x2="1200" y2="90" stroke="#e2e8f0"/>
+
+  <rect class="ingress" x="40" y="104" width="280" height="96"/>
+  <text class="h2" x="180" y="124">ChannelIngress</text>
+  <text class="code" x="180" y="140">channel/ingress.ts</text>
+  <text class="body" x="180" y="160">外部渠道 · Slack/HTTP/bot</text>
+  <text class="body" x="180" y="176">确定性路由 · 不过 LLM</text>
+  <text class="body" x="180" y="192">task_id 绑定查找</text>
+
+  <rect class="dialog" x="340" y="104" width="280" height="96"/>
+  <text class="h2" x="480" y="124" style="fill:#1d4ed8">ControlMessage (LLM)</text>
+  <text class="code" x="480" y="140">control/message.ts</text>
+  <text class="body" x="480" y="160">本地 / 自然语言对话层</text>
+  <text class="body" x="480" y="176">PanelCapabilityRegistry 白名单</text>
+  <text class="body" x="480" y="192">受限 panel tool action + 自然回复</text>
+
+  <rect class="acp" x="640" y="104" width="280" height="96"/>
+  <text class="h2" x="780" y="124" style="fill:#4f46e5">ACP</text>
+  <text class="code" x="780" y="140">acp/</text>
+  <text class="body" x="780" y="160">外部编辑器 (Zed 等)</text>
+  <text class="body" x="780" y="176">编辑器 = client</text>
+  <text class="body" x="780" y="192">OpenCorvus = agent</text>
+
+  <rect class="http" x="940" y="104" width="260" height="96"/>
+  <text class="h2" x="1070" y="124" style="fill:#047857">HTTP / SSE</text>
+  <text class="code" x="1070" y="140">server/routes/...</text>
+  <text class="body" x="1070" y="160">overlay · CLI</text>
+  <text class="body" x="1070" y="176">task-event SSE 路由</text>
+  <text class="body" x="1070" y="192">消费 Bus 事件</text>
+
+  <!-- ControlMessage 说明条 -->
+  <rect fill="#fefce8" stroke="#eab308" stroke-width="1" x="40" y="212" width="1160" height="34" rx="6"/>
+  <text class="h3" x="620" y="232">ControlMessage.handle / handleStream — surface = panel / gateway route / ChannelId；capability action 进入 EngineService / Session / Question</text>
+
+  <!-- ================== 核心汇聚 ================== -->
+  <rect class="core" x="360" y="266" width="520" height="60"/>
+  <text class="h2" x="620" y="290" style="fill:#5b21b6">EngineService / Session / Question</text>
+  <text class="code" x="620" y="310">task-api/index.ts · session/ · question/</text>
+
+  <path class="arrow" d="M 180 200 Q 180 240 420 266"/>
+  <path class="arrow" d="M 480 200 L 520 266"/>
+  <path class="arrow" d="M 780 200 L 720 266"/>
+  <path class="arrow" d="M 1070 200 Q 1070 240 820 266"/>
+
+  <!-- ================== 中层: workspace / control / bus / trace ================== -->
+  <text class="h1" x="40" y="360" style="fill:#64748b;font-size:12px">中层（控制 · 多工作区 · 事件横切）</text>
+  <line x1="40" y1="366" x2="1200" y2="366" stroke="#e2e8f0"/>
+
+  <!-- workspace -->
+  <rect class="cp" x="40" y="380" width="380" height="150"/>
+  <text class="h2" x="230" y="402" style="fill:#6d28d9">workspace — 项目元数据</text>
+  <text class="code" x="230" y="418">workspace/</text>
+  <text class="body" x="230" y="440">workspace metadata records</text>
+  <text class="body" x="230" y="456">server/routes/*</text>
+  <text class="body" x="230" y="472">util/sse.ts</text>
+  <text class="body" x="230" y="488">project/path headers</text>
+  <text class="body" x="230" y="512" style="fill:#94a3b8;font-style:italic">前台进程读取项目边界</text>
+
+  <!-- control -->
+  <rect class="ctrl" x="440" y="380" width="340" height="150"/>
+  <text class="h2" x="610" y="402" style="fill:#be185d">control — 外部控制账号</text>
+  <text class="code" x="610" y="418">control/</text>
+  <text class="body" x="610" y="440">control_account 表</text>
+  <text class="body" x="610" y="456">message-schema.ts (入站 schema)</text>
+  <text class="body" x="610" y="472">普通 Session message · tool part</text>
+  <text class="body" x="610" y="498" style="fill:#94a3b8;font-style:italic">真实 final message + tool refs</text>
+  <text class="body" x="610" y="514" style="fill:#94a3b8;font-style:italic">无独立 timeline / summary copy</text>
+
+  <!-- bus + trace -->
+  <rect class="bus" x="800" y="380" width="400" height="150"/>
+  <text class="h2" x="1000" y="402" style="fill:#854d0e">Bus + Trace — 事件横切</text>
+  <text class="code" x="1000" y="418">bus/ · trace/</text>
+  <text class="body" x="1000" y="440">BusEvent.define(name, schema)</text>
+  <text class="body" x="1000" y="456">GlobalBus.publish</text>
+  <text class="body" x="1000" y="476">AgentTrace.record* → JSONL</text>
+  <text class="body" x="1000" y="492">AgentTrace.record* → Bus.publish</text>
+  <text class="body" x="1000" y="514" style="fill:#94a3b8;font-style:italic">AgentTrace + LLMTrace sinks</text>
+
+  <!-- 横向事件流 -->
+  <path class="ev" d="M 1000 530 Q 1000 560 1070 560 Q 1070 340 1070 200"/>
+
+  <!-- ================== 扩展入口（底部四列） ================== -->
+  <text class="h1" x="40" y="572" style="fill:#64748b;font-size:12px">四类扩展入口（语义不同，勿混用）</text>
+  <line x1="40" y1="578" x2="1200" y2="578" stroke="#e2e8f0"/>
+
+  <rect class="ext-squad" x="40" y="592" width="280" height="196"/>
+  <text class="h2" x="180" y="614" style="fill:#047857">Expert Squad</text>
+  <text class="code" x="180" y="630">expert-squad.jsonc</text>
+  <text class="body" x="180" y="652">动态 Agent capability 投影</text>
+  <text class="body" x="180" y="668">Skills / tools / MCP</text>
+  <text class="body" x="180" y="690" style="font-weight:600">运行身份:</text>
+  <text class="code" x="180" y="708">projection agent ID</text>
+  <text class="code" x="180" y="724">PromptProfileResolver</text>
+  <text class="code" x="180" y="740">单一内部 runtime</text>
+  <text class="body" x="180" y="766" style="fill:#94a3b8;font-style:italic">package-scoped 扩展</text>
+
+  <rect class="ext-plug" x="340" y="592" width="280" height="196"/>
+  <text class="h2" x="480" y="614" style="fill:#c2410c">Plugin</text>
+  <text class="code" x="480" y="630">plugin/</text>
+  <text class="body" x="480" y="652">可信进程内扩展</text>
+  <text class="body" x="480" y="668">Hook / auth / service</text>
+  <text class="body" x="480" y="690" style="font-weight:600">入口:</text>
+  <text class="code" x="480" y="708">plugin/index.ts</text>
+  <text class="code" x="480" y="724">可信代码 · 严格失败</text>
+  <text class="body" x="480" y="752" style="fill:#94a3b8;font-style:italic">in-process 执行</text>
+  <text class="body" x="480" y="768" style="fill:#94a3b8;font-style:italic">失败归属调用者</text>
+
+  <rect class="ext-mcp" x="640" y="592" width="280" height="196"/>
+  <text class="h2" x="780" y="614" style="fill:#1d4ed8">MCP</text>
+  <text class="code" x="780" y="630">mcp/</text>
+  <text class="body" x="780" y="652">Model Context Protocol</text>
+  <text class="body" x="780" y="668">接入外部工具服务</text>
+  <text class="body" x="780" y="690" style="font-weight:600">方向:</text>
+  <text class="body" x="780" y="708">OpenCorvus = client / host</text>
+  <text class="body" x="780" y="724">调用 remote MCP server</text>
+  <text class="body" x="780" y="752" style="fill:#94a3b8;font-style:italic">远程协议 · 序列化开销</text>
+
+  <rect class="ext-acp" x="940" y="592" width="260" height="196"/>
+  <text class="h2" x="1070" y="614" style="fill:#7e22ce">ACP</text>
+  <text class="code" x="1070" y="630">acp/</text>
+  <text class="body" x="1070" y="652">Agent Client Protocol</text>
+  <text class="body" x="1070" y="668">外部编辑器集成</text>
+  <text class="body" x="1070" y="690" style="font-weight:600">方向:</text>
+  <text class="body" x="1070" y="708">编辑器 = client</text>
+  <text class="body" x="1070" y="724">OpenCorvus = agent</text>
+  <text class="body" x="1070" y="752" style="fill:#94a3b8;font-style:italic">入站路径之一</text>
+
+  <!-- 警告条 -->
+  <rect fill="#fff1f2" stroke="#f43f5e" stroke-width="1" x="40" y="810" width="1160" height="42" rx="6"/>
+  <text class="h3" x="620" y="830" style="fill:#be123c">常见误区: Expert Squad ≠ Plugin（前者投影 capability，后者提供 hooks/services）· MCP 远程 / Plugin in-process · ACP 是入站协议</text>
+  <text class="note" x="620" y="846" style="text-anchor:middle">LLM Provider 是另一条独立扩展轴 (provider/) · 见 06-provider.md</text>
+
+  <!-- 底部指引 -->
+  <text class="note" x="40" y="884">详见 03-control.md · Agent 生命周期见 01-agents.md · 数据表见 02-data.md · 扩展细节见 04-extensions.md</text>
+  <text class="note" x="40" y="902">黄线 = Bus/Trace 事件流 · 实线黑箭头 = 同步调用</text>
+</svg>

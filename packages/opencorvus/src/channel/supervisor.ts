@@ -1,7 +1,10 @@
 import { Instance } from "@/project/instance"
 import { Installation } from "@/installation"
 import { Log } from "@/util/log"
+import { requireServerUrl } from "@/server/runtime-url"
 import { ChannelCatalog, channelEnv } from "./catalog"
+import { NamedError } from "@opencorvus-ai/util/error"
+import z from "zod"
 
 const log = Log.create({ service: "channel.supervisor" })
 
@@ -11,6 +14,8 @@ type InProcessRuntime = { stop(): Promise<void> }
 
 type State = {
   runtime?: InProcessRuntime
+  cleanupPending: Set<InProcessRuntime>
+  lifecycleTail: Promise<void>
   status: RuntimeStatus
   detail: string
   signature: string
@@ -19,8 +24,19 @@ type State = {
 }
 
 export namespace ChannelSupervisor {
+  export const RuntimeStartError = NamedError.create(
+    "ChannelRuntimeStartError",
+    z.object({
+      message: z.string(),
+      detail: z.string(),
+      channels: z.array(z.string()),
+    }),
+  )
+
   const state = Instance.state<State>(
     () => ({
+      cleanupPending: new Set(),
+      lifecycleTail: Promise.resolve(),
       status: "disabled",
       detail: "No managed channel runtime active.",
       signature: "",
@@ -28,33 +44,38 @@ export namespace ChannelSupervisor {
       logs: [],
     }),
     async (current) => {
-      await stop(current)
+      await withLifecycleOwner(current, () => stop(current))
     },
+    "channel-supervisor",
   )
 
   export async function sync(config?: Record<string, unknown>) {
     const current = await state()
-    const next = desired(config)
-    if (next.status === "disabled" || next.status === "unavailable") {
-      await stop(current)
-      current.status = next.status
-      current.detail = next.detail
-      current.signature = ""
-      current.channels = []
+    return withLifecycleOwner(current, async () => {
+      const next = desired(config)
+      if (next.status === "disabled" || next.status === "unavailable") {
+        await stop(current)
+        current.status = next.status
+        current.detail = next.detail
+        current.signature = ""
+        current.channels = []
+        return snapshot(current)
+      }
+      if (current.signature === next.signature && current.runtime && current.status === "running") {
+        return snapshot(current)
+      }
+      await syncRuntime(current, next)
       return snapshot(current)
-    }
-    if (current.signature === next.signature && current.runtime && current.status === "running") {
-      return snapshot(current)
-    }
-    await syncRuntime(current, next)
-    return snapshot(current)
+    })
   }
 
   export async function restart(config?: Record<string, unknown>) {
     const current = await state()
-    const next = desired(config)
-    await syncRuntime(current, next, true)
-    return snapshot(current)
+    return withLifecycleOwner(current, async () => {
+      const next = desired(config)
+      await syncRuntime(current, next, true)
+      return snapshot(current)
+    })
   }
 
   export async function status() {
@@ -80,12 +101,41 @@ export namespace ChannelSupervisor {
   }
 }
 
+function withLifecycleOwner<T>(current: State, operation: () => Promise<T>): Promise<T> {
+  const ownedOperation = async () => {
+    await settlePendingCleanup(current)
+    return operation()
+  }
+  const result = current.lifecycleTail.then(ownedOperation, ownedOperation)
+  current.lifecycleTail = result.then(
+    () => undefined,
+    () => undefined,
+  )
+  return result
+}
+
+async function settlePendingCleanup(current: State) {
+  const pending = [...current.cleanupPending]
+  if (pending.length === 0) return
+  const results = await Promise.allSettled(
+    pending.map(async (runtime) => {
+      await runtime.stop()
+      current.cleanupPending.delete(runtime)
+    }),
+  )
+  const failures = results.flatMap((result) => (result.status === "rejected" ? [result.reason] : []))
+  if (failures.length > 0) {
+    throw new AggregateError(failures, `Channel runtime cleanup retry failed for ${failures.length} owner(s)`)
+  }
+}
+
 function desired(config?: Record<string, unknown>) {
   if (!Installation.isLocal()) {
     return {
       status: "unavailable" as const,
       detail: "Managed channel runtime is only available in local development installs.",
       env: undefined,
+      channelProtocol: false,
       signature: "",
       channels: [] as string[],
     }
@@ -95,7 +145,8 @@ function desired(config?: Record<string, unknown>) {
   const channels: string[] = []
 
   for (const item of ChannelCatalog) {
-    const next = channelEnv(item.id, channel[item.id], process.env)
+    if (item.implementation.kind === "planned") continue
+    const next = channelEnv(item.id, channel[item.id], {})
     if (!next) continue
     Object.assign(env, next)
     channels.push(item.id)
@@ -106,13 +157,13 @@ function desired(config?: Record<string, unknown>) {
       status: "disabled" as const,
       detail: "No managed channel runtime configured.",
       env: undefined,
+      channelProtocol: false,
       signature: "",
       channels,
     }
   }
 
-  env.OPENCORVUS_CHANNEL_SERVER_URL = process.env.OPENCORVUS_SERVER_URL || "http://127.0.0.1:7878"
-  env.OPENCORVUS_CHANNEL_PROTOCOL = "1"
+  env.OPENCORVUS_CHANNEL_SERVER_URL = requireServerUrl().toString().replace(/\/+$/, "")
   env.OPENCORVUS_PROJECT_DIR = Instance.directory
   env.OPENCORVUS_CONFIG_CONTENT = JSON.stringify(config ?? {})
 
@@ -120,7 +171,8 @@ function desired(config?: Record<string, unknown>) {
     status: "starting" as const,
     detail: `Launching managed runtime for ${channels.join(", ")}.`,
     env,
-    signature: JSON.stringify({ env, channels }),
+    channelProtocol: true,
+    signature: JSON.stringify({ env, channels, channelProtocol: true }),
     channels,
   }
 }
@@ -140,30 +192,37 @@ async function syncRuntime(current: State, next: ReturnType<typeof desired>, for
   current.channels = next.channels
 
   try {
-    current.runtime = await startInProcess(next.env, current)
+    current.runtime = await startInProcess(next.env, current, next.channelProtocol)
     current.status = "running"
     current.detail = `Managed runtime active for ${next.channels.join(", ")}.`
   } catch (error) {
+    const detail = `Channel runtime failed: ${String(error)}`
     current.status = "error"
-    current.detail = `Channel runtime failed: ${String(error)}`
+    current.detail = detail
     log.error("channel runtime failed", { error: String(error) })
+    throw new ChannelSupervisor.RuntimeStartError(
+      {
+        message: detail,
+        detail,
+        channels: [...next.channels],
+      },
+      { cause: error },
+    )
   }
 }
 
 async function stop(current: State) {
   const runtime = current.runtime
-  current.runtime = undefined
-  if (runtime) {
-    await runtime.stop().catch(() => undefined)
-  }
+  if (!runtime) return
+  await runtime.stop()
+  if (current.runtime === runtime) current.runtime = undefined
 }
 
-async function startInProcess(env: Record<string, string>, current: State): Promise<InProcessRuntime> {
-  // Apply channel env vars to current process (don't overwrite existing)
-  for (const [key, value] of Object.entries(env)) {
-    if (!process.env[key]) process.env[key] = value
-  }
-
+async function startInProcess(
+  env: Record<string, string>,
+  current: State,
+  channelProtocol: boolean,
+): Promise<InProcessRuntime> {
   // Dynamic import to avoid loading channel-runtime when not needed
   const { ChannelRuntime } = await import("../../../channel-runtime/src/core")
   const { registerAdapters, ADAPTER_HINT } = await import("../../../channel-runtime/src/registry")
@@ -180,9 +239,8 @@ async function startInProcess(env: Record<string, string>, current: State): Prom
   const { SignalAdapter } = await import("../../../channel-runtime/src/adapters/signal")
   const { WeComAdapter } = await import("../../../channel-runtime/src/adapters/wecom")
   const { DingTalkAdapter } = await import("../../../channel-runtime/src/adapters/dingtalk")
-  const { QQAdapter } = await import("../../../channel-runtime/src/adapters/qq")
   const { applyDashscopeRuntime } = await import("../../../channel-runtime/src/dashscope")
-  const { STTPipeline } = await import("../../../channel-runtime/src/stt/pipeline")
+  const { createConfiguredSTT } = await import("../../../channel-runtime/src/stt/setup")
   const { VisionPipeline } = await import("../../../channel-runtime/src/vision")
 
   const dashscope = await applyDashscopeRuntime()
@@ -190,33 +248,34 @@ async function startInProcess(env: Record<string, string>, current: State): Prom
 
   const runtime = new ChannelRuntime({
     baseUrl: serverUrl,
+    directory: env.OPENCORVUS_PROJECT_DIR,
+    channelProtocol,
     sharedMode: process.env.OPENCORVUS_SHARED_SESSION_MODE === "1",
     sharedFile: process.env.OPENCORVUS_SHARED_SESSION_FILE,
   })
 
-  // STT pipeline (best-effort, no hard failure)
-  try {
-    const sttPipeline = new STTPipeline({
-      providers: (process.env.STT_PROVIDERS ?? "groq,openai-whisper,deepgram,google-gemini,local-cli").split(","),
-      language: process.env.STT_LANGUAGE,
-    })
-    await sttPipeline.init().catch(() => undefined)
+  const sttPipeline = await createConfiguredSTT(env)
+  if (sttPipeline) {
     runtime.setSTT(sttPipeline)
-  } catch { /* STT optional */ }
+  }
 
   // Vision pipeline (optional)
   if (dashscope.key && process.env.OPENCORVUS_VISION_MODEL) {
     try {
-      runtime.setVision(new VisionPipeline({
-        apiKey: dashscope.key,
-        baseURL: dashscope.baseURL,
-        model: process.env.OPENCORVUS_VISION_MODEL,
-      }))
-    } catch { /* Vision optional */ }
+      runtime.setVision(
+        new VisionPipeline({
+          apiKey: dashscope.key,
+          baseURL: dashscope.baseURL,
+          model: process.env.OPENCORVUS_VISION_MODEL,
+        }),
+      )
+    } catch {
+      /* Vision optional */
+    }
   }
 
   // Register adapters
-  const adapters = registerAdapters(runtime, process.env, {
+  const adapters = registerAdapters(runtime, env, {
     slack: (opts: any) => new SlackAdapter(opts),
     telegram: (opts: any) => new TelegramAdapter(opts),
     discord: (opts: any) => new DiscordAdapter(opts),
@@ -230,7 +289,6 @@ async function startInProcess(env: Record<string, string>, current: State): Prom
     signal: (opts: any) => new SignalAdapter(opts),
     wecom: (opts: any) => new WeComAdapter(opts),
     dingtalk: (opts: any) => new DingTalkAdapter(opts),
-    qq: (opts: any) => new QQAdapter(opts),
   })
   for (const warn of adapters.warns) {
     log.warn("channel adapter skip", { message: warn })
@@ -243,7 +301,20 @@ async function startInProcess(env: Record<string, string>, current: State): Prom
     appendLog(current, `Registered: ${name}`)
   }
 
-  await runtime.start()
+  try {
+    await runtime.start()
+  } catch (startupError) {
+    try {
+      await runtime.stop()
+    } catch (cleanupError) {
+      current.cleanupPending.add(runtime)
+      throw new AggregateError(
+        [startupError, cleanupError],
+        `Channel runtime startup and rollback failed for ${adapters.names.join(", ")}`,
+      )
+    }
+    throw startupError
+  }
   log.info("channel runtime started", { channels: adapters.names })
   appendLog(current, `Channel runtime active: ${adapters.names.join(", ")}`)
 

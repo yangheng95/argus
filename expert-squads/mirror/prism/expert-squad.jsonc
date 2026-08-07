@@ -1,0 +1,799 @@
+{
+  "schema_version": 1,
+  "namespace": "mirror",
+  "id": "prism",
+  "name": "Mirror Prism",
+  "label": "Mirror Prism",
+  "description": "A lean fixed-profile Mirror Prism squad that converges any evidenced reference product into one complete original AInvest subsystem, including every business-required associated subpage, shared capability, cross-route state, and end-to-end journey, through source discovery, AInvest authority mapping, planning, Product Requirements Documents, rendered design, implementation, and MirrorTest acceptance.",
+  "version": "2026.08.07.1",
+  "product_pillars": ["code"],
+  "readme": "README.md",
+  "selector": {
+    "summary": "Use to converge any evidenced reference product into one complete original AInvest subsystem inside a fixed Mirror Prism profile.",
+    "selection_guidance": "Select Mirror Prism when an arbitrary reference product must become a complete AInvest subsystem through Product Requirements, original AInvest design, implementation, and acceptance. The supplied page is a discovery entry: the delivery includes every evidenced business-required associated subpage and their shared journeys. Do not select it for clone, replica, port, screenshot-parity, or reference-parity delivery; the dedicated Frontend Replica Expert Squad owns those requests.",
+    "instructions": "selector.md"
+  },
+  "capability_projection": {
+    "scheduler": {
+      "base_role": "orchestrator",
+      "prompt": "agents/orchestrator/system.md",
+      "inherit_base_tools": true,
+      "built_in_tool_ids": [
+        "dispatch_agent",
+        "manage_task",
+        "read"
+      ],
+      "default_skill_refs": [],
+      "package_skill_refs": [
+        "prism/orchestrator/prism-delivery-coordination"
+      ],
+      "default_tool_refs": [],
+      "package_tool_refs": [
+        "prism/shared/opentest-protocol-engine",
+        "prism/shared/opentest-runner"
+      ],
+      "default_mcp_server_refs": [],
+      "package_mcp_server_refs": [],
+      "default_mcp_tool_refs": [],
+      "package_mcp_tool_refs": [],
+      "default_mcp_prompt_refs": [],
+      "package_mcp_prompt_refs": [],
+      "default_mcp_resource_refs": [],
+      "package_mcp_resource_refs": []
+    },
+    "agents": {
+      "prism-source-observer": {
+        "inherit_base_tools": true,
+        "built_in_tool_ids": [],
+        "default_skill_refs": [],
+        "package_skill_refs": [
+          "prism/prism-source-observer/source-observation",
+          "prism/shared/agent-browser",
+          "prism/shared/consulting-analysis",
+          "prism/shared/dense-financial-ui",
+          "prism/shared/get-ui",
+          "prism/shared/get-ux",
+          "prism/shared/ifind-search",
+          "prism/shared/playwright-cli",
+          "prism/shared/search-anything",
+          "prism/shared/web-read"
+        ],
+        "default_tool_refs": [],
+        "package_tool_refs": [
+          "prism/shared/ifind-search",
+          "prism/shared/publish-source-observation"
+        ],
+        "default_mcp_server_refs": [],
+        "package_mcp_server_refs": [],
+        "default_mcp_tool_refs": [],
+        "package_mcp_tool_refs": [],
+        "default_mcp_prompt_refs": [],
+        "package_mcp_prompt_refs": [],
+        "default_mcp_resource_refs": [],
+        "package_mcp_resource_refs": [],
+        "label": "Prism Source Observer",
+        "description": "Produces Prism-owned evidence for authorized reference products and professional workflows before subsystem convergence.",
+        "base_role": "delegated-worker",
+        "prompt": "agents/prism-source-observer/system.md"
+      },
+      "mirror-prd-ainvest-feature-mapper": {
+        "inherit_base_tools": true,
+        "built_in_tool_ids": [],
+        "default_skill_refs": [],
+        "package_skill_refs": [
+          "prism/mirror-prd-ainvest-feature-mapper/ainvest-feature-mapping",
+          "prism/shared/ainvest-wiki"
+        ],
+        "default_tool_refs": [],
+        "package_tool_refs": [],
+        "default_mcp_server_refs": [],
+        "package_mcp_server_refs": [],
+        "default_mcp_tool_refs": [],
+        "package_mcp_tool_refs": [],
+        "default_mcp_prompt_refs": [],
+        "package_mcp_prompt_refs": [],
+        "default_mcp_resource_refs": [],
+        "package_mcp_resource_refs": [],
+        "label": "Mirror PRD AInvest Feature Mapper",
+        "description": "Maps two to four route-applicable AInvest capabilities and the complete cited AInvest design authority for every Prism delivery.",
+        "base_role": "delegated-worker",
+        "prompt": "agents/mirror-prd-ainvest-feature-mapper/system.md"
+      },
+      "mirror-prd-asset-curator": {
+        "inherit_base_tools": true,
+        "built_in_tool_ids": [],
+        "default_skill_refs": [],
+        "package_skill_refs": [
+          "prism/mirror-prd-asset-curator/source-asset-curation"
+        ],
+        "default_tool_refs": [],
+        "package_tool_refs": [
+          "prism/shared/materialize-asset"
+        ],
+        "default_mcp_server_refs": [],
+        "package_mcp_server_refs": [],
+        "default_mcp_tool_refs": [],
+        "package_mcp_tool_refs": [],
+        "default_mcp_prompt_refs": [],
+        "package_mcp_prompt_refs": [],
+        "default_mcp_resource_refs": [],
+        "package_mcp_resource_refs": [],
+        "label": "Mirror PRD Asset Curator",
+        "description": "Combines accepted reference-surface evidence with the mapper authority, creates one provenance ledger, and materializes every required approved AInvest delivery asset.",
+        "base_role": "delegated-worker",
+        "prompt": "agents/mirror-prd-asset-curator/system.md"
+      },
+      "mirror-prd-author": {
+        "inherit_base_tools": true,
+        "built_in_tool_ids": [],
+        "default_skill_refs": [],
+        "package_skill_refs": [
+          "prism/mirror-prd-author/product-requirements-authoring"
+        ],
+        "default_tool_refs": [],
+        "package_tool_refs": [],
+        "default_mcp_server_refs": [],
+        "package_mcp_server_refs": [],
+        "default_mcp_tool_refs": [],
+        "package_mcp_tool_refs": [],
+        "default_mcp_prompt_refs": [],
+        "package_mcp_prompt_refs": [],
+        "default_mcp_resource_refs": [],
+        "package_mcp_resource_refs": [],
+        "label": "Mirror PRD Subsystem Author",
+        "description": "Authors the complete AInvest subsystem Product Requirements Document set for every closure member, shared capability, cross-route state, and end-to-end journey from reference evidence and the mandatory mapper authority.",
+        "base_role": "delegated-worker",
+        "prompt": "agents/mirror-prd-author/system.md"
+      },
+      "mirror-prd-general-researcher": {
+        "inherit_base_tools": true,
+        "built_in_tool_ids": [
+          "websearch",
+          "apply_patch",
+          "bash"
+        ],
+        "default_skill_refs": [],
+        "package_skill_refs": [
+          "prism/mirror-prd-general-researcher/source-system-mapping"
+        ],
+        "default_tool_refs": [
+          "default/tool/webpage_extract",
+          "default/tool/webpage_compile",
+          "default/tool/webpage_runtime_state"
+        ],
+        "package_tool_refs": [],
+        "default_mcp_server_refs": [],
+        "package_mcp_server_refs": [],
+        "default_mcp_tool_refs": [
+          "default/mcp/browser/tool/session_create",
+          "default/mcp/browser/tool/session_destroy",
+          "default/mcp/browser/tool/viewport_set",
+          "default/mcp/browser/tool/navigate",
+          "default/mcp/browser/tool/diagnostics_get",
+          "default/mcp/browser/tool/screenshot",
+          "default/mcp/browser/tool/observe",
+          "default/mcp/browser/tool/click",
+          "default/mcp/browser/tool/hover",
+          "default/mcp/browser/tool/type",
+          "default/mcp/browser/tool/press_key",
+          "default/mcp/browser/tool/select_option",
+          "default/mcp/browser/tool/check",
+          "default/mcp/browser/tool/uncheck",
+          "default/mcp/browser/tool/scroll",
+          "default/mcp/browser/tool/wait_for_selector",
+          "default/mcp/browser/tool/wait_for_load"
+        ],
+        "package_mcp_tool_refs": [],
+        "default_mcp_prompt_refs": [],
+        "package_mcp_prompt_refs": [],
+        "default_mcp_resource_refs": [],
+        "package_mcp_resource_refs": [],
+        "label": "Mirror PRD General Researcher",
+        "description": "Captures the bounded reference product family, structure, data semantics, journeys, and observation evidence for later AInvest convergence.",
+        "base_role": "frontend-research",
+        "prompt": "agents/mirror-prd-general-researcher/system.md"
+      },
+      "mirror-prd-reviewer": {
+        "inherit_base_tools": true,
+        "built_in_tool_ids": [],
+        "default_skill_refs": [],
+        "package_skill_refs": [
+          "prism/mirror-prd-reviewer/product-requirements-review"
+        ],
+        "default_tool_refs": [],
+        "package_tool_refs": [],
+        "default_mcp_server_refs": [],
+        "package_mcp_server_refs": [],
+        "default_mcp_tool_refs": [],
+        "package_mcp_tool_refs": [],
+        "default_mcp_prompt_refs": [],
+        "package_mcp_prompt_refs": [],
+        "default_mcp_resource_refs": [],
+        "package_mcp_resource_refs": [],
+        "label": "Mirror PRD Independent Reviewer",
+        "description": "Independently checks the complete AInvest subsystem Product Requirements Document set for closure completeness, mapper traceability, implementability, accessibility, and connected journeys.",
+        "base_role": "integrity",
+        "prompt": "agents/mirror-prd-reviewer/system.md"
+      },
+      "mirror-prd-stage-planner": {
+        "inherit_base_tools": true,
+        "built_in_tool_ids": [],
+        "default_skill_refs": [],
+        "package_skill_refs": [
+          "prism/mirror-prd-stage-planner/delivery-planning"
+        ],
+        "default_tool_refs": [],
+        "package_tool_refs": [],
+        "default_mcp_server_refs": [],
+        "package_mcp_server_refs": [],
+        "default_mcp_tool_refs": [],
+        "package_mcp_tool_refs": [],
+        "default_mcp_prompt_refs": [],
+        "package_mcp_prompt_refs": [],
+        "default_mcp_resource_refs": [],
+        "package_mcp_resource_refs": [],
+        "label": "Mirror PRD Stage Planner",
+        "description": "Publishes the sole ordinary non-Goal AInvest delivery plan from accepted reference-system evidence and mandatory mapper authority.",
+        "base_role": "delegated-worker",
+        "prompt": "agents/mirror-prd-stage-planner/system.md"
+      },
+      "mirror-prd-ui-researcher": {
+        "inherit_base_tools": true,
+        "built_in_tool_ids": [
+          "websearch"
+        ],
+        "default_skill_refs": [],
+        "package_skill_refs": [
+          "prism/mirror-prd-ui-researcher/source-ui-research"
+        ],
+        "default_tool_refs": [
+          "default/tool/webpage_extract",
+          "default/tool/webpage_compile",
+          "default/tool/webpage_runtime_state"
+        ],
+        "package_tool_refs": [],
+        "default_mcp_server_refs": [],
+        "package_mcp_server_refs": [],
+        "default_mcp_tool_refs": [
+          "default/mcp/browser/tool/session_create",
+          "default/mcp/browser/tool/session_destroy",
+          "default/mcp/browser/tool/viewport_set",
+          "default/mcp/browser/tool/navigate",
+          "default/mcp/browser/tool/diagnostics_get",
+          "default/mcp/browser/tool/screenshot",
+          "default/mcp/browser/tool/observe",
+          "default/mcp/browser/tool/click",
+          "default/mcp/browser/tool/hover",
+          "default/mcp/browser/tool/type",
+          "default/mcp/browser/tool/press_key",
+          "default/mcp/browser/tool/select_option",
+          "default/mcp/browser/tool/check",
+          "default/mcp/browser/tool/uncheck",
+          "default/mcp/browser/tool/scroll",
+          "default/mcp/browser/tool/wait_for_selector",
+          "default/mcp/browser/tool/wait_for_load"
+        ],
+        "package_mcp_tool_refs": [],
+        "default_mcp_prompt_refs": [],
+        "package_mcp_prompt_refs": [],
+        "default_mcp_resource_refs": [],
+        "package_mcp_resource_refs": [],
+        "label": "Mirror PRD User Interface Researcher",
+        "description": "Observes reference desktop hierarchy, components, states, motion, and accessibility without overriding the AInvest output authority.",
+        "base_role": "frontend-research",
+        "prompt": "agents/mirror-prd-ui-researcher/system.md"
+      },
+      "mirror-design-integrator": {
+        "inherit_base_tools": true,
+        "built_in_tool_ids": [],
+        "default_skill_refs": [],
+        "package_skill_refs": [
+          "prism/mirror-design-integrator/design-integration-review"
+        ],
+        "default_tool_refs": [],
+        "package_tool_refs": [],
+        "default_mcp_server_refs": [],
+        "package_mcp_server_refs": [],
+        "default_mcp_tool_refs": [
+          "default/mcp/browser/tool/session_create",
+          "default/mcp/browser/tool/session_destroy",
+          "default/mcp/browser/tool/viewport_set",
+          "default/mcp/browser/tool/navigate",
+          "default/mcp/browser/tool/diagnostics_get",
+          "default/mcp/browser/tool/screenshot",
+          "default/mcp/browser/tool/observe",
+          "default/mcp/browser/tool/click",
+          "default/mcp/browser/tool/hover",
+          "default/mcp/browser/tool/type",
+          "default/mcp/browser/tool/press_key",
+          "default/mcp/browser/tool/select_option",
+          "default/mcp/browser/tool/check",
+          "default/mcp/browser/tool/uncheck",
+          "default/mcp/browser/tool/scroll",
+          "default/mcp/browser/tool/wait_for_selector",
+          "default/mcp/browser/tool/wait_for_load"
+        ],
+        "package_mcp_tool_refs": [],
+        "default_mcp_prompt_refs": [],
+        "package_mcp_prompt_refs": [],
+        "default_mcp_resource_refs": [],
+        "package_mcp_resource_refs": [],
+        "label": "Mirror Design Integrator",
+        "description": "Verifies complete subsystem closure, associated-subpage coverage, shared navigation/state and asset consistency, connected journeys, diagnostics, and final delivery integrity.",
+        "base_role": "integrity",
+        "prompt": "agents/mirror-design-integrator/system.md"
+      },
+      "mirror-design-page-designer": {
+        "inherit_base_tools": true,
+        "built_in_tool_ids": [],
+        "default_skill_refs": [
+          "default/skill/design-taste-frontend"
+        ],
+        "package_skill_refs": [
+          "prism/mirror-design-page-designer/route-design-production",
+          "prism/shared/claude-design",
+          "prism/shared/design-md"
+        ],
+        "default_tool_refs": [],
+        "package_tool_refs": [],
+        "default_mcp_server_refs": [],
+        "package_mcp_server_refs": [],
+        "default_mcp_tool_refs": [
+          "default/mcp/browser/tool/session_create",
+          "default/mcp/browser/tool/session_destroy",
+          "default/mcp/browser/tool/viewport_set",
+          "default/mcp/browser/tool/navigate",
+          "default/mcp/browser/tool/diagnostics_get",
+          "default/mcp/browser/tool/screenshot",
+          "default/mcp/browser/tool/observe",
+          "default/mcp/browser/tool/click",
+          "default/mcp/browser/tool/hover",
+          "default/mcp/browser/tool/type",
+          "default/mcp/browser/tool/press_key",
+          "default/mcp/browser/tool/select_option",
+          "default/mcp/browser/tool/check",
+          "default/mcp/browser/tool/uncheck",
+          "default/mcp/browser/tool/scroll",
+          "default/mcp/browser/tool/wait_for_selector",
+          "default/mcp/browser/tool/wait_for_load"
+        ],
+        "package_mcp_tool_refs": [],
+        "default_mcp_prompt_refs": [],
+        "package_mcp_prompt_refs": [],
+        "default_mcp_resource_refs": [],
+        "package_mcp_resource_refs": [],
+        "label": "Mirror Design Subsystem Designer",
+        "description": "Produces one coherent original AInvest desktop design subsystem covering every accepted surface, associated subpage, shared shell/state, and cross-route journey.",
+        "base_role": "frontend-design",
+        "prompt": "agents/mirror-design-page-designer/system.md"
+      },
+      "mirror-design-visual-reviewer": {
+        "inherit_base_tools": true,
+        "built_in_tool_ids": [],
+        "default_skill_refs": [],
+        "package_skill_refs": [
+          "prism/mirror-design-visual-reviewer/route-design-review"
+        ],
+        "default_tool_refs": [],
+        "package_tool_refs": [],
+        "default_mcp_server_refs": [],
+        "package_mcp_server_refs": [],
+        "default_mcp_tool_refs": [
+          "default/mcp/browser/tool/session_create",
+          "default/mcp/browser/tool/session_destroy",
+          "default/mcp/browser/tool/viewport_set",
+          "default/mcp/browser/tool/navigate",
+          "default/mcp/browser/tool/diagnostics_get",
+          "default/mcp/browser/tool/screenshot",
+          "default/mcp/browser/tool/observe",
+          "default/mcp/browser/tool/click",
+          "default/mcp/browser/tool/hover",
+          "default/mcp/browser/tool/type",
+          "default/mcp/browser/tool/press_key",
+          "default/mcp/browser/tool/select_option",
+          "default/mcp/browser/tool/check",
+          "default/mcp/browser/tool/uncheck",
+          "default/mcp/browser/tool/scroll",
+          "default/mcp/browser/tool/wait_for_selector",
+          "default/mcp/browser/tool/wait_for_load"
+        ],
+        "package_mcp_tool_refs": [],
+        "default_mcp_prompt_refs": [],
+        "package_mcp_prompt_refs": [],
+        "default_mcp_resource_refs": [],
+        "package_mcp_resource_refs": [],
+        "label": "Mirror Design Visual Reviewer",
+        "description": "Renders and independently reviews the original AInvest design against its Product Requirements Document, mapper authority, current screenshots, and required behavior.",
+        "base_role": "visual-qa",
+        "prompt": "agents/mirror-design-visual-reviewer/system.md"
+      },
+      "mirror-code-integration-implementer": {
+        "inherit_base_tools": true,
+        "built_in_tool_ids": [],
+        "default_skill_refs": [],
+        "package_skill_refs": [
+          "prism/mirror-code-integration-implementer/code-system-integration"
+        ],
+        "default_tool_refs": [],
+        "package_tool_refs": [],
+        "default_mcp_server_refs": [],
+        "package_mcp_server_refs": [],
+        "default_mcp_tool_refs": [
+          "default/mcp/browser/tool/session_create",
+          "default/mcp/browser/tool/session_destroy",
+          "default/mcp/browser/tool/viewport_set",
+          "default/mcp/browser/tool/navigate",
+          "default/mcp/browser/tool/diagnostics_get",
+          "default/mcp/browser/tool/screenshot",
+          "default/mcp/browser/tool/observe",
+          "default/mcp/browser/tool/click",
+          "default/mcp/browser/tool/hover",
+          "default/mcp/browser/tool/type",
+          "default/mcp/browser/tool/press_key",
+          "default/mcp/browser/tool/select_option",
+          "default/mcp/browser/tool/check",
+          "default/mcp/browser/tool/uncheck",
+          "default/mcp/browser/tool/scroll",
+          "default/mcp/browser/tool/wait_for_selector",
+          "default/mcp/browser/tool/wait_for_load"
+        ],
+        "package_mcp_tool_refs": [],
+        "default_mcp_prompt_refs": [],
+        "package_mcp_prompt_refs": [],
+        "default_mcp_resource_refs": [],
+        "package_mcp_resource_refs": [],
+        "label": "Mirror Code Integration Implementer",
+        "description": "Materializes and repairs the complete task-scoped subsystem across shared routing, navigation, components, services, state continuity, deep links, recovery, and repository findings.",
+        "base_role": "build",
+        "prompt": "agents/mirror-code-integration-implementer/system.md"
+      },
+      "mirror-code-implementer": {
+        "inherit_base_tools": true,
+        "built_in_tool_ids": [],
+        "default_skill_refs": [],
+        "package_skill_refs": [
+          "prism/mirror-code-implementer/route-implementation"
+        ],
+        "default_tool_refs": [],
+        "package_tool_refs": [],
+        "default_mcp_server_refs": [],
+        "package_mcp_server_refs": [],
+        "default_mcp_tool_refs": [
+          "default/mcp/browser/tool/session_create",
+          "default/mcp/browser/tool/session_destroy",
+          "default/mcp/browser/tool/viewport_set",
+          "default/mcp/browser/tool/navigate",
+          "default/mcp/browser/tool/diagnostics_get",
+          "default/mcp/browser/tool/screenshot",
+          "default/mcp/browser/tool/observe",
+          "default/mcp/browser/tool/click",
+          "default/mcp/browser/tool/hover",
+          "default/mcp/browser/tool/type",
+          "default/mcp/browser/tool/press_key",
+          "default/mcp/browser/tool/select_option",
+          "default/mcp/browser/tool/check",
+          "default/mcp/browser/tool/uncheck",
+          "default/mcp/browser/tool/scroll",
+          "default/mcp/browser/tool/wait_for_selector",
+          "default/mcp/browser/tool/wait_for_load"
+        ],
+        "package_mcp_tool_refs": [],
+        "default_mcp_prompt_refs": [],
+        "package_mcp_prompt_refs": [],
+        "default_mcp_resource_refs": [],
+        "package_mcp_resource_refs": [],
+        "label": "Mirror Code Subsystem Implementer",
+        "description": "Implements the complete AInvest subsystem Product Requirements/design set in the existing application architecture, including every closure member and its connected behavior.",
+        "base_role": "build",
+        "prompt": "agents/mirror-code-implementer/system.md"
+      },
+      "mirror-code-integrity-reviewer": {
+        "inherit_base_tools": true,
+        "built_in_tool_ids": [],
+        "default_skill_refs": [],
+        "package_skill_refs": [
+          "prism/mirror-code-integrity-reviewer/code-integration-review"
+        ],
+        "default_tool_refs": [],
+        "package_tool_refs": [],
+        "default_mcp_server_refs": [],
+        "package_mcp_server_refs": [],
+        "default_mcp_tool_refs": [
+          "default/mcp/browser/tool/session_create",
+          "default/mcp/browser/tool/session_destroy",
+          "default/mcp/browser/tool/viewport_set",
+          "default/mcp/browser/tool/navigate",
+          "default/mcp/browser/tool/diagnostics_get",
+          "default/mcp/browser/tool/screenshot",
+          "default/mcp/browser/tool/observe",
+          "default/mcp/browser/tool/click",
+          "default/mcp/browser/tool/hover",
+          "default/mcp/browser/tool/type",
+          "default/mcp/browser/tool/press_key",
+          "default/mcp/browser/tool/select_option",
+          "default/mcp/browser/tool/check",
+          "default/mcp/browser/tool/uncheck",
+          "default/mcp/browser/tool/scroll",
+          "default/mcp/browser/tool/wait_for_selector",
+          "default/mcp/browser/tool/wait_for_load"
+        ],
+        "package_mcp_tool_refs": [],
+        "default_mcp_prompt_refs": [],
+        "package_mcp_prompt_refs": [],
+        "default_mcp_resource_refs": [],
+        "package_mcp_resource_refs": [],
+        "label": "Mirror Code Integrity Reviewer",
+        "description": "Runs repository-native validation and verifies complete subsystem behavior, closure-member coverage, connected integration, and evidence integrity.",
+        "base_role": "integrity",
+        "prompt": "agents/mirror-code-integrity-reviewer/system.md"
+      },
+      "mirror-code-visual-reviewer": {
+        "inherit_base_tools": true,
+        "built_in_tool_ids": [],
+        "default_skill_refs": [],
+        "package_skill_refs": [
+          "prism/mirror-code-visual-reviewer/route-implementation-review"
+        ],
+        "default_tool_refs": [],
+        "package_tool_refs": [],
+        "default_mcp_server_refs": [],
+        "package_mcp_server_refs": [],
+        "default_mcp_tool_refs": [
+          "default/mcp/browser/tool/session_create",
+          "default/mcp/browser/tool/session_destroy",
+          "default/mcp/browser/tool/viewport_set",
+          "default/mcp/browser/tool/navigate",
+          "default/mcp/browser/tool/diagnostics_get",
+          "default/mcp/browser/tool/screenshot",
+          "default/mcp/browser/tool/observe",
+          "default/mcp/browser/tool/click",
+          "default/mcp/browser/tool/hover",
+          "default/mcp/browser/tool/type",
+          "default/mcp/browser/tool/press_key",
+          "default/mcp/browser/tool/select_option",
+          "default/mcp/browser/tool/check",
+          "default/mcp/browser/tool/uncheck",
+          "default/mcp/browser/tool/scroll",
+          "default/mcp/browser/tool/wait_for_selector",
+          "default/mcp/browser/tool/wait_for_load"
+        ],
+        "package_mcp_tool_refs": [],
+        "default_mcp_prompt_refs": [],
+        "package_mcp_prompt_refs": [],
+        "default_mcp_resource_refs": [],
+        "package_mcp_resource_refs": [],
+        "label": "Mirror Code Visual Reviewer",
+        "description": "Reviews the complete implemented AInvest subsystem against all approved rendered designs, connected journeys, and the mapper revision using real browser evidence.",
+        "base_role": "visual-qa",
+        "prompt": "agents/mirror-code-visual-reviewer/system.md"
+      },
+      "opentest-integrity-reviewer": {
+        "inherit_base_tools": true,
+        "built_in_tool_ids": [],
+        "default_skill_refs": [],
+        "package_skill_refs": [
+          "prism/opentest-integrity-reviewer/test-review"
+        ],
+        "default_tool_refs": [],
+        "package_tool_refs": [
+          "prism/shared/opentest-protocol-engine",
+          "prism/shared/opentest-runner"
+        ],
+        "default_mcp_server_refs": [],
+        "package_mcp_server_refs": [],
+        "default_mcp_tool_refs": [],
+        "package_mcp_tool_refs": [],
+        "default_mcp_prompt_refs": [],
+        "package_mcp_prompt_refs": [],
+        "default_mcp_resource_refs": [],
+        "package_mcp_resource_refs": [],
+        "label": "MirrorTest Integrity Reviewer",
+        "description": "Reviews test validity, execution evidence, protocol conformance, and acceptance claims.",
+        "base_role": "integrity",
+        "prompt": "agents/opentest-integrity-reviewer/system.md"
+      },
+      "opentest-test-implementer": {
+        "inherit_base_tools": true,
+        "built_in_tool_ids": [],
+        "default_skill_refs": [],
+        "package_skill_refs": [
+          "prism/opentest-test-implementer/test-implementation"
+        ],
+        "default_tool_refs": [],
+        "package_tool_refs": [
+          "prism/shared/opentest-protocol-engine",
+          "prism/shared/opentest-runner"
+        ],
+        "default_mcp_server_refs": [],
+        "package_mcp_server_refs": [],
+        "default_mcp_tool_refs": [],
+        "package_mcp_tool_refs": [],
+        "default_mcp_prompt_refs": [],
+        "package_mcp_prompt_refs": [],
+        "default_mcp_resource_refs": [],
+        "package_mcp_resource_refs": [],
+        "label": "MirrorTest Test Implementer",
+        "description": "Implements and runs positive non-UI contract tests through the parsed MirrorTest protocol contract.",
+        "base_role": "build",
+        "prompt": "agents/opentest-test-implementer/system.md"
+      },
+      "opentest-visual-reviewer": {
+        "inherit_base_tools": true,
+        "built_in_tool_ids": [],
+        "default_skill_refs": [],
+        "package_skill_refs": [
+          "prism/opentest-visual-reviewer/visual-test-review"
+        ],
+        "default_tool_refs": [],
+        "package_tool_refs": [],
+        "default_mcp_server_refs": [],
+        "package_mcp_server_refs": [],
+        "default_mcp_tool_refs": [
+          "default/mcp/browser/tool/session_create",
+          "default/mcp/browser/tool/session_destroy",
+          "default/mcp/browser/tool/viewport_set",
+          "default/mcp/browser/tool/navigate",
+          "default/mcp/browser/tool/diagnostics_get",
+          "default/mcp/browser/tool/screenshot",
+          "default/mcp/browser/tool/observe",
+          "default/mcp/browser/tool/click",
+          "default/mcp/browser/tool/hover",
+          "default/mcp/browser/tool/type",
+          "default/mcp/browser/tool/press_key",
+          "default/mcp/browser/tool/select_option",
+          "default/mcp/browser/tool/check",
+          "default/mcp/browser/tool/uncheck",
+          "default/mcp/browser/tool/scroll",
+          "default/mcp/browser/tool/wait_for_selector",
+          "default/mcp/browser/tool/wait_for_load"
+        ],
+        "package_mcp_tool_refs": [],
+        "default_mcp_prompt_refs": [],
+        "package_mcp_prompt_refs": [],
+        "default_mcp_resource_refs": [],
+        "package_mcp_resource_refs": [],
+        "label": "MirrorTest Visual Reviewer",
+        "description": "Performs live AInvest graphical-interface interaction, screenshot capture, and personal visual review.",
+        "base_role": "visual-qa",
+        "prompt": "agents/opentest-visual-reviewer/system.md"
+      }
+    },
+    "virtual_workflows": {
+      "mirror-prism-ainvest": {
+        "label": "Mirror Prism Universal AInvest Delivery",
+        "description": "One fixed-profile Task observes any authorized reference product and converges the evidence-backed complete subsystem closure into AInvest Product Requirements, original AInvest design, production implementation, and independent MirrorTest acceptance.",
+        "nodes": {
+          "prism-source-observer": {
+            "agent_id": "prism-source-observer",
+            "description": "Observes every operator-authorized reference product and named comparison scope before AInvest convergence planning.",
+            "depends_on": [],
+          },
+          "mirror-prd-general-researcher": {
+            "agent_id": "mirror-prd-general-researcher",
+            "description": "Derives the complete reference route set, evidence-backed subsystem closure, delivery surfaces, shared capabilities, connected journeys, and canonical system-project contract from accepted source observation.",
+            "depends_on": [
+              "prism-source-observer"
+            ],
+          },
+          "mirror-prd-ainvest-feature-mapper": {
+            "agent_id": "mirror-prd-ainvest-feature-mapper",
+            "description": "Maps route-applicable AInvest capabilities and persists the sole product/design authority artifact.",
+            "depends_on": [
+              "mirror-prd-general-researcher"
+            ],
+          },
+          "mirror-prd-stage-planner": {
+            "agent_id": "mirror-prd-stage-planner",
+            "description": "Publishes one ordinary non-Goal AInvest delivery plan that owns the complete subsystem closure from the system contract and product/design authority.",
+            "depends_on": [
+              "mirror-prd-ainvest-feature-mapper"
+            ],
+          },
+          "mirror-prd-ui-researcher": {
+            "agent_id": "mirror-prd-ui-researcher",
+            "description": "Produces product-observation, interaction, accessibility, screenshot, diagnostic, and asset-candidate evidence for every AInvest delivery surface without assigning visual-parity authority.",
+            "depends_on": [
+              "mirror-prd-stage-planner"
+            ],
+          },
+          "mirror-prd-asset-curator": {
+            "agent_id": "mirror-prd-asset-curator",
+            "description": "Materializes approved bytes and builds the accepted asset ledger from the current AInvest delivery-surface evidence packet.",
+            "depends_on": [
+              "mirror-prd-ui-researcher"
+            ],
+          },
+          "mirror-prd-author": {
+            "agent_id": "mirror-prd-author",
+            "description": "Authors the complete connected AInvest subsystem Product Requirements Document set from the system contract, subsystem closure, mapper authority, surface evidence, and asset ledger.",
+            "depends_on": [
+              "mirror-prd-ainvest-feature-mapper",
+              "mirror-prd-asset-curator",
+              "mirror-prd-general-researcher",
+              "mirror-prd-ui-researcher"
+            ],
+          },
+          "mirror-prd-reviewer": {
+            "agent_id": "mirror-prd-reviewer",
+            "description": "Independently checks subsystem-closure completeness, connected behavior, and the AInvest Product Requirements Documents' wiki/design-system traceability.",
+            "depends_on": [
+              "mirror-prd-ainvest-feature-mapper",
+              "mirror-prd-author"
+            ],
+          },
+          "mirror-design-page-designer": {
+            "agent_id": "mirror-design-page-designer",
+            "description": "Produces one coherent design subsystem for every closure member, shared shell/state, and connected journey once for the Task through frontend_design mode greenfield_original.",
+            "depends_on": [
+              "mirror-prd-ainvest-feature-mapper",
+              "mirror-prd-reviewer"
+            ],
+          },
+          "mirror-design-visual-reviewer": {
+            "agent_id": "mirror-design-visual-reviewer",
+            "description": "Renders and independently reviews the complete connected AInvest subsystem design with fresh task-scoped browser evidence.",
+            "depends_on": [
+              "mirror-design-page-designer"
+            ],
+          },
+          "mirror-design-integrator": {
+            "agent_id": "mirror-design-integrator",
+            "description": "Reviews complete AInvest subsystem closure, associated-subpage coverage, shared navigation/state, asset consistency, diagnostics, and cross-route design integrity.",
+            "depends_on": [
+              "mirror-design-visual-reviewer"
+            ],
+          },
+          "mirror-code-implementer": {
+            "agent_id": "mirror-code-implementer",
+            "description": "Implements the entire closure-owned AInvest Product Requirements/design set as one connected subsystem in the existing application architecture.",
+            "depends_on": [
+              "mirror-design-integrator"
+            ],
+          },
+          "mirror-code-visual-reviewer": {
+            "agent_id": "mirror-code-visual-reviewer",
+            "description": "Reviews every implemented closure member and connected journey against the approved subsystem design using real browser evidence.",
+            "depends_on": [
+              "mirror-code-implementer"
+            ],
+          },
+          "mirror-code-integration-implementer": {
+            "agent_id": "mirror-code-integration-implementer",
+            "description": "Materializes the complete AInvest router, shell, shared services/state, deep links, recovery paths, and cross-route journeys for the reviewed subsystem implementation.",
+            "depends_on": [
+              "mirror-code-visual-reviewer"
+            ],
+          },
+          "mirror-code-integrity-reviewer": {
+            "agent_id": "mirror-code-integrity-reviewer",
+            "description": "Runs repository-native validation and verifies complete AInvest subsystem behavior, closure-member coverage, connected integration, and evidence integrity.",
+            "depends_on": [
+              "mirror-code-integration-implementer"
+            ],
+          },
+          "opentest-test-implementer": {
+            "agent_id": "opentest-test-implementer",
+            "description": "Extracts the successful AInvest non-UI contract and implements its positive acceptance tests.",
+            "depends_on": [
+              "mirror-code-integration-implementer"
+            ],
+          },
+          "opentest-integrity-reviewer": {
+            "agent_id": "opentest-integrity-reviewer",
+            "description": "Reviews AInvest test validity, execution evidence, protocol conformance, and acceptance claims.",
+            "depends_on": [
+              "opentest-test-implementer"
+            ],
+          },
+          "opentest-visual-reviewer": {
+            "agent_id": "opentest-visual-reviewer",
+            "description": "Performs live interaction across every AInvest subsystem closure member and end-to-end journey, captures current screenshots, and personally reviews the connected experience.",
+            "depends_on": [
+              "opentest-test-implementer"
+            ],
+          }
+        }
+      }
+    }
+  }
+}

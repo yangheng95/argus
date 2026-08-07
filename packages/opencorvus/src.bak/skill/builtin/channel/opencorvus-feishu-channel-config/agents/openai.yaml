@@ -1,6 +1,0 @@
-interface:
-  display_name: "OpenCorvus Feishu Channel Config"
-  short_description: "Configure Feishu or Lark channel integration for OpenCorvus"
-  default_prompt: "Use $opencorvus-feishu-channel-config to set up or debug Feishu or Lark channel integration for OpenCorvus."
-
-

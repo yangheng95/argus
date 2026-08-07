@@ -1,5 +1,6 @@
 import type { ChannelAdapter, MessageHandler } from "../adapter"
 import { adapt, path, type Serve, type Server } from "./http"
+import { decryptCallbackEnvelope, encryptedXml, verifyCallbackSignature } from "./callback-crypto"
 
 function pick(xml: string, tag: string) {
   const cdata = new RegExp(`<${tag}><!\\[CDATA\\[(.*?)\\]\\]><\\/${tag}>`)
@@ -15,6 +16,8 @@ export class WeComAdapter implements ChannelAdapter {
   private corpId: string
   private secret: string
   private agentId: string
+  private callbackToken: string
+  private encodingAesKey: string
   private host: string
   private port: number
   private hook: string
@@ -27,6 +30,8 @@ export class WeComAdapter implements ChannelAdapter {
     corpId: string
     secret: string
     agentId: string
+    token: string
+    encodingAesKey: string
     host?: string
     port?: number
     path?: string
@@ -35,6 +40,10 @@ export class WeComAdapter implements ChannelAdapter {
     this.corpId = opts.corpId
     this.secret = opts.secret
     this.agentId = opts.agentId
+    this.callbackToken = opts.token
+    this.encodingAesKey = opts.encodingAesKey
+    if (!this.callbackToken.trim()) throw new Error("WeCom callback token is required")
+    if (!this.encodingAesKey.trim()) throw new Error("WeCom EncodingAESKey is required")
     this.host = opts.host ?? "0.0.0.0"
     this.port = opts.port ?? 16672
     this.hook = path(opts.path, "/wecom")
@@ -143,11 +152,20 @@ export class WeComAdapter implements ChannelAdapter {
     if (url.pathname !== this.hook) return new Response("Not Found", { status: 404 })
     if (req.method === "GET") {
       const echostr = url.searchParams.get("echostr")
-      return new Response(echostr ?? "ok")
+      if (!echostr) return new Response("ok")
+      if (!this.valid(url, echostr)) return new Response("forbidden", { status: 401 })
+      const plain = this.decrypt(echostr)
+      if (!plain) return new Response("forbidden", { status: 401 })
+      return new Response(plain)
     }
     if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 })
 
-    const xml = await req.text()
+    const raw = await req.text()
+    const encrypted = encryptedXml(raw)
+    if (!encrypted) return new Response("invalid body", { status: 400 })
+    if (!this.valid(url, encrypted)) return new Response("forbidden", { status: 401 })
+    const xml = this.decrypt(encrypted)
+    if (!xml) return new Response("forbidden", { status: 401 })
     if (!this.handler) return new Response("success")
     const type = pick(xml, "MsgType")
     if (type !== "text") return new Response("success")
@@ -165,6 +183,28 @@ export class WeComAdapter implements ChannelAdapter {
       text,
     })
     return new Response("success")
+  }
+
+  private valid(url: URL, encrypted: string) {
+    return verifyCallbackSignature({
+      token: this.callbackToken,
+      timestamp: url.searchParams.get("timestamp"),
+      nonce: url.searchParams.get("nonce"),
+      encrypted,
+      signature: url.searchParams.get("msg_signature"),
+    })
+  }
+
+  private decrypt(encrypted: string) {
+    try {
+      return decryptCallbackEnvelope({
+        encodingAesKey: this.encodingAesKey,
+        encrypted,
+        receiveId: this.corpId,
+      })
+    } catch {
+      return undefined
+    }
   }
 
   private async auth() {

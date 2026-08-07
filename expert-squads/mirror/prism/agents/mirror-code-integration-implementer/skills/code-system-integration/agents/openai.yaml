@@ -1,0 +1,4 @@
+interface:
+  display_name: "Code System Integration"
+  short_description: "Role-local Mirror Prism guidance"
+  default_prompt: "Execute only this role contract from accepted evidence."

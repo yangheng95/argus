@@ -4,7 +4,6 @@ import { $ } from "bun"
 import z from "zod"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { Log } from "../util/log"
-import { iife } from "@/util/iife"
 import { Flag } from "../flag/flag"
 
 declare global {
@@ -15,7 +14,7 @@ declare global {
 export namespace Installation {
   const log = Log.create({ service: "installation" })
 
-  export type Method = Awaited<ReturnType<typeof method>>
+  export type Method = "native" | "unknown"
 
   export const Event = {
     Updated: BusEvent.define(
@@ -57,60 +56,13 @@ export namespace Installation {
     return CHANNEL === "local"
   }
 
-  export async function method() {
-    if (process.execPath.includes(path.join(".opencorvus", "bin"))) return "curl"
-    if (process.execPath.includes(path.join(".local", "bin"))) return "curl"
-    const exec = process.execPath.toLowerCase()
+  export function methodForExecutable(execPath: string): Method {
+    return execPath.includes(path.join(".opencorvus", "bin")) ? "native" : "unknown"
+  }
 
-    const checks = [
-      {
-        name: "npm" as const,
-        command: () => $`npm list -g --depth=0`.throws(false).quiet().text(),
-      },
-      {
-        name: "yarn" as const,
-        command: () => $`yarn global list`.throws(false).quiet().text(),
-      },
-      {
-        name: "pnpm" as const,
-        command: () => $`pnpm list -g --depth=0`.throws(false).quiet().text(),
-      },
-      {
-        name: "bun" as const,
-        command: () => $`bun pm ls -g`.throws(false).quiet().text(),
-      },
-      {
-        name: "brew" as const,
-        command: () => $`brew list --formula opencorvus`.throws(false).quiet().text(),
-      },
-      {
-        name: "scoop" as const,
-        command: () => $`scoop list opencorvus`.throws(false).quiet().text(),
-      },
-      {
-        name: "choco" as const,
-        command: () => $`choco list --limit-output opencorvus`.throws(false).quiet().text(),
-      },
-    ]
-
-    checks.sort((a, b) => {
-      const aMatches = exec.includes(a.name)
-      const bMatches = exec.includes(b.name)
-      if (aMatches && !bMatches) return -1
-      if (!aMatches && bMatches) return 1
-      return 0
-    })
-
-    for (const check of checks) {
-      const output = await check.command()
-      const installedName =
-        check.name === "brew" || check.name === "choco" || check.name === "scoop" ? "opencorvus" : "opencorvus-ai"
-      if (output.includes(installedName)) {
-        return check.name
-      }
-    }
-
-    return "unknown"
+  export async function method(): Promise<Method> {
+    const detected = methodForExecutable(process.execPath)
+    return detected
   }
 
   export const UpgradeFailedError = NamedError.create(
@@ -120,64 +72,17 @@ export namespace Installation {
     }),
   )
 
-  async function getBrewFormula() {
-    const tapFormula = await $`brew list --formula yangheng95/tap/opencorvus`.throws(false).quiet().text()
-    if (tapFormula.includes("opencorvus")) return "yangheng95/tap/opencorvus"
-    const coreFormula = await $`brew list --formula opencorvus`.throws(false).quiet().text()
-    if (coreFormula.includes("opencorvus")) return "opencorvus"
-    return "opencorvus"
-  }
-
   export async function upgrade(method: Method, target: string) {
-    let cmd
-    switch (method) {
-      case "curl":
-        cmd = $`curl -fsSL https://opencorvus.ai/install | bash`.env({
-          ...process.env,
-          VERSION: target,
-        })
-        break
-      case "npm":
-        cmd = $`npm install -g opencorvus-ai@${target}`
-        break
-      case "pnpm":
-        cmd = $`pnpm install -g opencorvus-ai@${target}`
-        break
-      case "bun":
-        cmd = $`bun install -g opencorvus-ai@${target}`
-        break
-      case "brew": {
-        const formula = await getBrewFormula()
-        if (formula.includes("/")) {
-          cmd =
-            $`brew tap yangheng95/tap && cd "$(brew --repo yangheng95/tap)" && git pull --ff-only && brew upgrade ${formula}`.env(
-              {
-                HOMEBREW_NO_AUTO_UPDATE: "1",
-                ...process.env,
-              },
-            )
-          break
-        }
-        cmd = $`brew upgrade ${formula}`.env({
-          HOMEBREW_NO_AUTO_UPDATE: "1",
-          ...process.env,
-        })
-        break
-      }
-      case "choco":
-        cmd = $`echo Y | choco upgrade opencorvus --version=${target}`
-        break
-      case "scoop":
-        cmd = $`scoop install opencorvus@${target}`
-        break
-      default:
-        throw new Error(`Unknown method: ${method}`)
-    }
+    if (method !== "native")
+      throw new Error(`OpenCorvus is not running from a native installation: ${process.execPath}`)
+    const cmd = $`curl -fsSL https://opencorvus.ai/install | bash`.env({
+      ...process.env,
+      VERSION: target,
+    })
     const result = await cmd.quiet().throws(false)
     if (result.exitCode !== 0) {
-      const stderr = method === "choco" ? "not running from an elevated command shell" : result.stderr.toString("utf8")
       throw new UpgradeFailedError({
-        stderr: stderr,
+        stderr: result.stderr.toString("utf8"),
       })
     }
     log.info("upgraded", {
@@ -189,68 +94,13 @@ export namespace Installation {
     await $`${process.execPath} --version`.nothrow().quiet().text()
   }
 
-  export const VERSION = process.env.OPENCORVUS_VERSION?.trim() || (typeof OPENCORVUS_VERSION === "string" ? OPENCORVUS_VERSION : "local")
-  export const CHANNEL = process.env.OPENCORVUS_CHANNEL?.trim() || (typeof OPENCORVUS_CHANNEL === "string" ? OPENCORVUS_CHANNEL : "local")
+  export const VERSION =
+    process.env.OPENCORVUS_VERSION?.trim() || (typeof OPENCORVUS_VERSION === "string" ? OPENCORVUS_VERSION : "local")
+  export const CHANNEL =
+    process.env.OPENCORVUS_CHANNEL?.trim() || (typeof OPENCORVUS_CHANNEL === "string" ? OPENCORVUS_CHANNEL : "local")
   export const USER_AGENT = `opencorvus/${CHANNEL}/${VERSION}/${Flag.OPENCORVUS_CLIENT}`
 
-  export async function latest(installMethod?: Method) {
-    const detectedMethod = installMethod || (await method())
-
-    if (detectedMethod === "brew") {
-      const formula = await getBrewFormula()
-      if (formula.includes("/")) {
-        const infoJson = await $`brew info --json=v2 ${formula}`.quiet().text()
-        const info = JSON.parse(infoJson)
-        const version = info.formulae?.[0]?.versions?.stable
-        if (!version) throw new Error(`Could not detect version for tap formula: ${formula}`)
-        return version
-      }
-      return fetch("https://formulae.brew.sh/api/formula/opencorvus.json")
-        .then((res) => {
-          if (!res.ok) throw new Error(res.statusText)
-          return res.json()
-        })
-        .then((data: any) => data.versions.stable)
-    }
-
-    if (detectedMethod === "npm" || detectedMethod === "bun" || detectedMethod === "pnpm") {
-      const registry = await iife(async () => {
-        const r = (await $`npm config get registry`.quiet().nothrow().text()).trim()
-        const reg = r || "https://registry.npmjs.org"
-        return reg.endsWith("/") ? reg.slice(0, -1) : reg
-      })
-      const channel = CHANNEL
-      return fetch(`${registry}/opencorvus-ai/${channel}`)
-        .then((res) => {
-          if (!res.ok) throw new Error(res.statusText)
-          return res.json()
-        })
-        .then((data: any) => data.version)
-    }
-
-    if (detectedMethod === "choco") {
-      return fetch(
-        "https://community.chocolatey.org/api/v2/Packages?$filter=Id%20eq%20%27opencorvus%27%20and%20IsLatestVersion&$select=Version",
-        { headers: { Accept: "application/json;odata=verbose" } },
-      )
-        .then((res) => {
-          if (!res.ok) throw new Error(res.statusText)
-          return res.json()
-        })
-        .then((data: any) => data.d.results[0].Version)
-    }
-
-    if (detectedMethod === "scoop") {
-      return fetch("https://raw.githubusercontent.com/ScoopInstaller/Main/master/bucket/opencorvus.json", {
-        headers: { Accept: "application/json" },
-      })
-        .then((res) => {
-          if (!res.ok) throw new Error(res.statusText)
-          return res.json()
-        })
-        .then((data: any) => data.version)
-    }
-
+  export async function latest() {
     return fetch("https://api.github.com/repos/yangheng95/opencorvus/releases/latest")
       .then((res) => {
         if (!res.ok) throw new Error(res.statusText)

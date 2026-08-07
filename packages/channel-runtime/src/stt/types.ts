@@ -1,3 +1,11 @@
+export interface AudioSource {
+  mime: string // "audio/ogg", "audio/webm", etc.
+  filename?: string
+  size?: number
+  duration?: number // seconds, filled when platform provides it
+  read(maxFileSizeBytes: number): Promise<Buffer>
+}
+
 export interface AudioBuffer {
   data: Buffer
   mime: string // "audio/ogg", "audio/webm", etc.
@@ -20,7 +28,7 @@ export interface STTProvider {
 }
 
 export interface STTConfig {
-  providers: string[] // provider names in priority order
+  provider: string // single speech-to-text provider name
   language?: string // default language hint
   maxFileSizeBytes?: number // default 25MB
 }

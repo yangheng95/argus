@@ -1,15 +1,24 @@
 import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
-import { streamText } from "ai"
 import { Config } from "../../config/config"
-import { Provider } from "../../provider/provider"
-import { ModelsDev } from "../../provider/models"
-import { ProviderAuth } from "../../provider/auth"
 import { Auth } from "../../auth"
-import { mapValues } from "remeda"
+import { Provider } from "../../provider/provider"
+import { discoverProviderModels, testProviderConnection } from "../../provider/operations"
+import { NativeAgentRegistryLifecycle } from "@/agent/native-agent-registry-lifecycle"
+import { ProviderAuth } from "../../provider/auth"
+import { ProviderRemovalReceipt, removeProvider } from "../../provider/removal"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+import { settleCanonicalProviderCatalogInvalidation, settleProviderRefreshInvalidation } from "../provider-refresh"
+import { ProviderAccountUsage } from "../../provider/account-usage"
+
+const ProviderAuthMutationResponse = z
+  .object({
+    ok: z.literal(true),
+    issues: Provider.LoadIssue.array(),
+  })
+  .strict()
 
 export const ProviderRoutes = lazy(() =>
   new Hono()
@@ -26,9 +35,11 @@ export const ProviderRoutes = lazy(() =>
               "application/json": {
                 schema: resolver(
                   z.object({
-                    all: ModelsDev.Provider.array(),
+                    all: Provider.Info.array(),
                     default: z.record(z.string(), z.string()),
                     connected: z.array(z.string()),
+                    accountUsage: ProviderAccountUsage.Capabilities,
+                    issues: Provider.LoadIssue.array(),
                   }),
                 ),
               },
@@ -37,11 +48,23 @@ export const ProviderRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        const config = await Config.get()
+        const configIssues: Provider.LoadIssue[] = []
+        const config = await Config.get().catch((error) => {
+          const authError = Auth.findReadError(error)
+          configIssues.push({
+            phase: authError ? "auth.read" : "config.read",
+            message: authError?.message ?? (error instanceof Error ? error.message : String(error)),
+          })
+          return {} as Config.Info
+        })
         const disabled = new Set(config.disabled_providers ?? [])
         const enabled = config.enabled_providers ? new Set(config.enabled_providers) : undefined
 
-        const allProviders = await ModelsDev.get()
+        // Sourced from the augmented provider database so built-ins
+        // registered outside models.dev (hexin) are visible in the
+        // catalog even when the operator has not configured a key.
+        const loaded = await Provider.catalog({ config })
+        const allProviders = loaded.database
         const filteredProviders: Record<string, (typeof allProviders)[string]> = {}
         for (const [key, value] of Object.entries(allProviders)) {
           if ((enabled ? enabled.has(key) : true) && !disabled.has(key)) {
@@ -49,11 +72,8 @@ export const ProviderRoutes = lazy(() =>
           }
         }
 
-        const connected = await Provider.list()
-        const providers = Object.assign(
-          mapValues(filteredProviders, (x) => Provider.fromModelsDevProvider(x)),
-          connected,
-        )
+        const connected = loaded.providers
+        const providers = Object.assign(filteredProviders, connected)
         return c.json({
           all: Object.values(providers),
           default: Object.fromEntries(
@@ -63,6 +83,8 @@ export const ProviderRoutes = lazy(() =>
             }),
           ),
           connected: Object.keys(connected),
+          accountUsage: ProviderAccountUsage.capabilities(),
+          issues: Provider.dedupeLoadIssues([...configIssues, ...loaded.issues]),
         })
       },
     )
@@ -85,6 +107,173 @@ export const ProviderRoutes = lazy(() =>
       }),
       async (c) => {
         return c.json(await ProviderAuth.methods())
+      },
+    )
+    .delete(
+      "/:providerID",
+      describeRoute({
+        summary: "Delete a project provider",
+        description:
+          "Commit removal of the project provider declaration, provider model references, enabled or disabled references, and its saved credential under one durable mutation owner.",
+        operationId: "provider.remove",
+        responses: {
+          200: {
+            description: "Provider removal receipt",
+            content: { "application/json": { schema: resolver(ProviderRemovalReceipt) } },
+          },
+          ...errors(400),
+        },
+      }),
+      validator("param", z.object({ providerID: z.string().trim().min(1) })),
+      async (c) =>
+        c.json(
+          await removeProvider({
+            providerID: c.req.valid("param").providerID,
+            scope: "project",
+          }),
+        ),
+    )
+    .post(
+      "/refresh",
+      describeRoute({
+        summary: "Refresh the provider registry",
+        description:
+          "Pulls api.json from the configured registry URL and atomically replaces the durable canonical catalog declaration. Configured live model identities use the separate models refresh route. The runtime never refreshes implicitly.",
+        operationId: "provider.refresh",
+        responses: {
+          200: {
+            description: "Refresh outcome",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    ok: z.boolean(),
+                    fetchedAt: z.number().optional(),
+                    error: z.string().optional(),
+                    issues: Provider.LoadIssue.array().optional(),
+                  }),
+                ),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        const result = await Provider.refreshCatalog()
+        if (result.ok) {
+          const issues = await settleCanonicalProviderCatalogInvalidation()
+          return c.json({ ...result, ...(issues.length > 0 ? { issues } : {}) })
+        }
+        return c.json(result)
+      },
+    )
+    .post(
+      "/models/refresh",
+      describeRoute({
+        summary: "Refresh configured provider model lists",
+        description:
+          "Refresh live model identities for configured providers without refreshing the provider registry declaration, then reset provider state so downstream callers see the updated list.",
+        operationId: "provider.models.refresh",
+        responses: {
+          200: {
+            description: "Refresh result",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    ok: z.boolean(),
+                    fetchedAt: z.number().optional(),
+                    providers: z
+                      .array(
+                        z.object({
+                          providerID: z.literal("hexin"),
+                          count: z.number(),
+                          ids: z.array(z.string()),
+                        }),
+                      )
+                      .optional(),
+                    error: z.string().optional(),
+                    issues: Provider.LoadIssue.array().optional(),
+                  }),
+                ),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        const result = await Provider.refreshModels()
+        if (result.ok) {
+          const issues = await settleCanonicalProviderCatalogInvalidation()
+          return c.json({ ...result, ...(issues.length > 0 ? { issues } : {}) })
+        }
+        return c.json(result)
+      },
+    )
+    .get(
+      "/:providerID/account-usage",
+      describeRoute({
+        summary: "Get Provider account usage",
+        description:
+          "Fetch the selected Provider's normalized account usage using server-owned credentials without exposing credentials to the Overlay.",
+        operationId: "provider.account.usage",
+        responses: {
+          200: {
+            description: "Provider account usage lookup result",
+            content: {
+              "application/json": {
+                schema: resolver(ProviderAccountUsage.Response),
+              },
+            },
+          },
+        },
+      }),
+      validator("param", z.object({ providerID: z.string().trim().min(1) })),
+      async (c) => c.json(await ProviderAccountUsage.read(c.req.valid("param").providerID, await Config.get())),
+    )
+    .post(
+      "/discover-models",
+      describeRoute({
+        summary: "Discover OpenAI-compatible provider models",
+        description:
+          "Fetches the explicit OpenAI-compatible /models endpoint for a user-supplied base URL. This route only runs when requested by the operator; provider startup remains offline-first.",
+        operationId: "provider.discover.models",
+        responses: {
+          200: {
+            description: "Discovered model IDs",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    ok: z.boolean(),
+                    models: z.array(z.string()),
+                    count: z.number(),
+                    error: z.string().optional(),
+                  }),
+                ),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      validator(
+        "json",
+        z.object({
+          api: z.string().min(1).meta({ description: "OpenAI-compatible base URL, usually ending in /v1" }),
+          apiKey: z.string().optional().meta({ description: "Optional API key used as a Bearer token" }),
+          providerID: z
+            .string()
+            .optional()
+            .meta({ description: "Optional provider ID whose saved auth key may be used" }),
+        }),
+      ),
+      async (c) => {
+        const result = await discoverProviderModels(c.req.valid("json"), {
+          config: Config.get,
+          global: false,
+        })
+        return c.json(result.body, result.status)
       },
     )
     .post(
@@ -128,104 +317,11 @@ export const ProviderRoutes = lazy(() =>
           .optional(),
       ),
       async (c) => {
-        const providerID = c.req.valid("param").providerID
-        const body = c.req.valid("json") ?? {}
-        const provider = await Provider.getProvider(providerID)
-        if (!provider) {
-          return c.json(
-            {
-              ok: false,
-              status: "error",
-              providerID,
-              modelID: body.modelID ?? "",
-              message: "Provider is not configured. Set API key or auth first.",
-            },
-            400,
-          )
-        }
-
-        const modelID = body.modelID ?? Provider.sort(Object.values(provider.models))[0]?.id
-        if (!modelID) {
-          return c.json(
-            {
-              ok: false,
-              status: "error",
-              providerID,
-              modelID: "",
-              message: "Provider has no available models.",
-            },
-            400,
-          )
-        }
-
-        try {
-          const model = await Provider.getModel(providerID, modelID)
-          const language = await Provider.getLanguage(model)
-          const auth = await Auth.get(providerID)
-          const isCodexOauth = providerID === "openai" && auth?.type === "oauth"
-          const stream = streamText({
-            model: language,
-            ...(isCodexOauth ? {} : { maxOutputTokens: 64 }),
-            abortSignal: AbortSignal.timeout(30_000),
-            messages: [
-              {
-                role: "user",
-                content: "Reply with OK.",
-              },
-            ],
-            ...(isCodexOauth && {
-              providerOptions: {
-                openai: {
-                  store: false,
-                  instructions: "You are a coding assistant. Reply concisely.",
-                },
-              },
-            }),
-          })
-
-          // Consume the full stream to detect error parts that streamText
-          // may swallow (turning them into a generic "No output generated").
-          let hasOutput = false
-          const streamErrors: string[] = []
-          for await (const part of stream.fullStream) {
-            if (part.type === "text-delta" || part.type === "reasoning-delta") {
-              hasOutput = true
-            }
-            if (part.type === "error") {
-              const err = part.error
-              streamErrors.push(err instanceof Error ? err.message : String(err))
-            }
-          }
-
-          if (streamErrors.length > 0) {
-            return c.json({
-              ok: false,
-              status: "error",
-              providerID,
-              modelID,
-              message: streamErrors.join("; "),
-            })
-          }
-
-          return c.json({
-            ok: true,
-            status: "connected",
-            providerID,
-            modelID,
-            message: "Provider is reachable.",
-          })
-        } catch (error) {
-          // Surface the original cause when the SDK wraps errors
-          const cause = error instanceof Error && error.cause instanceof Error ? error.cause : undefined
-          const message = cause?.message || (error instanceof Error ? error.message : String(error))
-          return c.json({
-            ok: false,
-            status: "error",
-            providerID,
-            modelID,
-            message,
-          })
-        }
+        const result = await testProviderConnection(c.req.valid("param").providerID, c.req.valid("json")?.modelID, {
+          config: Config.get,
+          global: false,
+        })
+        return c.json(result.body, result.status)
       },
     )
     .post(
@@ -277,7 +373,7 @@ export const ProviderRoutes = lazy(() =>
             description: "Auth executed successfully",
             content: {
               "application/json": {
-                schema: resolver(z.boolean()),
+                schema: resolver(ProviderAuthMutationResponse),
               },
             },
           },
@@ -301,7 +397,11 @@ export const ProviderRoutes = lazy(() =>
         const providerID = c.req.valid("param").providerID
         const { method, inputs } = c.req.valid("json")
         await ProviderAuth.execute({ providerID, method, inputs })
-        return c.json(true)
+        const issues = await settleProviderRefreshInvalidation([
+          { phase: "cache.provider", run: Provider.reset },
+          { phase: "cache.native-agents", run: NativeAgentRegistryLifecycle.reset },
+        ])
+        return c.json({ ok: true as const, issues })
       },
     )
     .post(
@@ -357,7 +457,7 @@ export const ProviderRoutes = lazy(() =>
             description: "OAuth callback processed successfully",
             content: {
               "application/json": {
-                schema: resolver(z.boolean()),
+                schema: resolver(ProviderAuthMutationResponse),
               },
             },
           },
@@ -385,7 +485,11 @@ export const ProviderRoutes = lazy(() =>
           method,
           code,
         })
-        return c.json(true)
+        const issues = await settleProviderRefreshInvalidation([
+          { phase: "cache.provider", run: Provider.reset },
+          { phase: "cache.native-agents", run: NativeAgentRegistryLifecycle.reset },
+        ])
+        return c.json({ ok: true as const, issues })
       },
     ),
 )

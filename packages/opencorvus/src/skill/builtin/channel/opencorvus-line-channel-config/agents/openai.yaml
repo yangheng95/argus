@@ -1,6 +1,0 @@
-interface:
-  display_name: "OpenCorvus LINE Channel Config"
-  short_description: "Configure LINE channel integration for OpenCorvus"
-  default_prompt: "Use $opencorvus-line-channel-config to set up or debug LINE channel integration for OpenCorvus."
-
-

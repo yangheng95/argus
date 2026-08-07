@@ -1,582 +1,420 @@
-import z from "zod"
-import { findSpecSnapshot, viewSpecSnapshot } from "@/orchestrator/store"
+import { deriveTaskStatus, isTaskActive, isTaskQueued, taskTerminalReason } from "@/engine/task-status"
 import {
-  OrchestratorArtifactTable,
-  OrchestratorChannelBindingTable,
-  OrchestratorDeliveryTable,
-  OrchestratorEvaluationTable,
-  OrchestratorGoalRunTable,
-  OrchestratorGoalTable,
-  OrchestratorInteractionRequestTable,
-  OrchestratorPlanNodeTable,
-  OrchestratorPlanVersionTable,
-  OrchestratorProgressSnapshotTable,
-  OrchestratorRunTable,
-  OrchestratorTaskTable,
-} from "@/orchestrator/orchestrator.sql"
-import { EvaluationCheck } from "@/orchestrator/model"
-import { Instance } from "@/project/instance"
+  listCurrentGoals,
+  listTaskRows,
+  resolveCurrentGoalMembershipContext,
+  viewTask,
+  viewInteraction,
+  viewBuildHostObservationArtifact,
+  type ArtifactRow,
+} from "@/engine/store"
+import {
+  EngineArtifactTable,
+  EngineChannelBindingTable,
+  EngineGoalTable,
+  EngineInteractionRequestTable,
+  EngineProgressSnapshotTable,
+  EngineTaskTable,
+} from "@/engine"
 import { ProtocolEventTable } from "@/protocol/protocol.sql"
-import { Database, desc, eq, sql } from "@/storage/db"
-import { WorkbenchTaskNoteTable } from "./workbench.sql"
+import { Database, and, desc, eq, sql } from "@/storage/db"
+import { timelineOrderKey } from "@/timeline/order"
 import { compileBrief } from "./brief"
+import { Project } from "@/project/project"
+import { sessionInvocationTopologyForTask, taskExecutionProjectionForTask } from "@/orchestrator/task-event"
+import { parseAcceptanceSpecs } from "@/acceptance/types"
+import { requirementIDsFromAcceptanceSpecs } from "@/requirements/traceability"
+import { ArchitectContractGraphSchema } from "@/architect/contract-graph"
+import type { RequirementSet } from "@/requirements/types"
+import { deriveDeliverySliceFacts } from "./delivery-slice-facts"
+import { parseDispatchLineagePayload } from "@/engine/dispatch-lineage"
+import { findTaskCompletionDecisionForTerminalTime } from "@/engine/completion-decision"
+import { IntegrityReviewArtifactPayloadSchema } from "@/integrity/review-artifact"
+import { VisualReviewArtifactPayloadSchema } from "@/visual-qa/persist"
+import { FactCheckReviewArtifactSchema } from "@/fact-check/schema"
+import { parseProcessRecoveryFactContext } from "@/engine/process-recovery-fact"
+import { MessageTable } from "@/session/session.sql"
 
 const BOARD_SNAPSHOT_LIMIT = 80
-const BOARD_CHANGED_FILE_LIMIT = 80
 const BOARD_SUMMARY_LIMIT = 4000
+const BOARD_ARTIFACT_STRING_LIMIT = 1200
+const BOARD_ARTIFACT_ARRAY_LIMIT = 8
+const BOARD_ARTIFACT_OBJECT_DEPTH_LIMIT = 3
 
-const boardCache = new Map<string, { tag: string; board: ReturnType<typeof buildBoard> }>()
+function artifactPayloadRecord(payload: unknown): Record<string, unknown> {
+  return payload && typeof payload === "object" && !Array.isArray(payload) ? (payload as Record<string, unknown>) : {}
+}
 
 export function compileBoard(input: { taskID: string }) {
-  const task = Database.use((db) => db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, input.taskID)).get())
+  const task = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, input.taskID)).get())
   if (!task) throw new Error(`Task not found: ${input.taskID}`)
   const tag = boardTagForTask(task)
-  const cached = boardCache.get(task.id)
-  if (cached?.tag === tag) return cached.board
-  const board = buildBoard(task)
-  boardCache.set(task.id, { tag, board })
-  return board
+  const lastSequence = latestTaskProtocolSequence(task.id)
+  return buildBoard(task, tag, taskDirectory(task), lastSequence)
 }
 
 export function boardTag(input: { taskID: string }) {
-  const task = Database.use((db) => db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, input.taskID)).get())
+  const task = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, input.taskID)).get())
   if (!task) throw new Error(`Task not found: ${input.taskID}`)
   return boardTagForTask(task)
 }
 
-function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
-  const run = task.active_run_id
-    ? Database.use((db) => db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.id, task.active_run_id!)).get())
-    : undefined
-  const plan = task.active_plan_version_id
-    ? Database.use((db) => db.select().from(OrchestratorPlanVersionTable).where(eq(OrchestratorPlanVersionTable.id, task.active_plan_version_id!)).get())
-    : undefined
-  const goals = Database.use((db) =>
-    db
-      .select()
-      .from(OrchestratorGoalTable)
-      .where(eq(OrchestratorGoalTable.task_id, task.id))
-      .orderBy(OrchestratorGoalTable.order_index)
-      .all(),
-  )
-  const planNodes = plan
-    ? Database.use((db) =>
-        db
-          .select()
-          .from(OrchestratorPlanNodeTable)
-          .where(eq(OrchestratorPlanNodeTable.plan_version_id, plan.id))
-          .orderBy(OrchestratorPlanNodeTable.order_index)
-          .all(),
-      )
-    : []
-  const goalRunRows = run
-    ? Database.use((db) =>
-        db
-          .select()
-          .from(OrchestratorGoalRunTable)
-          .where(eq(OrchestratorGoalRunTable.coordinator_run_id, run.id))
-          .all(),
-      )
-    : []
-  const goalRunSessionMap = new Map(goalRunRows.map((r) => [r.goal_id, r.session_id]))
+function buildBoard(
+  task: typeof EngineTaskTable.$inferSelect,
+  snapshotVersion: string,
+  directory: string,
+  lastSequence = latestTaskProtocolSequence(task.id),
+) {
+  const goals = listCurrentGoals(task.id)
   const interactions = Database.use((db) =>
     db
       .select()
-      .from(OrchestratorInteractionRequestTable)
-      .where(eq(OrchestratorInteractionRequestTable.task_id, task.id))
-      .orderBy(OrchestratorInteractionRequestTable.time_created)
+      .from(EngineInteractionRequestTable)
+      .where(eq(EngineInteractionRequestTable.task_id, task.id))
+      .orderBy(EngineInteractionRequestTable.time_created)
       .all(),
-  )
-  const notes = Database.use((db) =>
-    db
-      .select()
-      .from(WorkbenchTaskNoteTable)
-      .where(eq(WorkbenchTaskNoteTable.task_id, task.id))
-      .orderBy(desc(WorkbenchTaskNoteTable.time_created))
-      .limit(12)
-      .all()
-      .reverse(),
   )
   const brief = compileBrief({
     taskID: task.id,
-    runID: run?.id ?? undefined,
-    planVersionID: plan?.id ?? undefined,
     sessionID: task.session_id ?? undefined,
   })
-  const staging = notes.filter((note) =>
-    ["plan_hint", "goal_update", "operator_note", "constraint", "decision"].includes(note.kind),
-  )
-  const history = notes.filter((note) => ["user_request", "summary"].includes(note.kind))
-  const allDeliveries = Database.use((db) =>
-    db
-      .select()
-      .from(OrchestratorDeliveryTable)
-      .where(eq(OrchestratorDeliveryTable.task_id, task.id))
-      .orderBy(OrchestratorDeliveryTable.time_created)
-      .all(),
-  )
-  const delivery = run ? allDeliveries.filter((item) => item.run_id === run.id).at(-1) : undefined
-  const latestDelivery = delivery ?? allDeliveries.at(-1)
-  const allEvaluations = Database.use((db) =>
-    db
-      .select()
-      .from(OrchestratorEvaluationTable)
-      .where(eq(OrchestratorEvaluationTable.task_id, task.id))
-      .orderBy(OrchestratorEvaluationTable.time_created)
-      .all(),
-  )
-  const evaluation = run ? allEvaluations.filter((item) => item.run_id === run.id).at(-1) : undefined
-  const latestEvaluation = evaluation ?? allEvaluations.at(-1)
-  const acceptedEvaluation = [...allEvaluations]
-    .reverse()
-    .find((item) => item.verdict === "accepted" || item.status === "passed")
-  const acceptedDelivery = acceptedEvaluation?.delivery_id
-    ? allDeliveries.find((item) => item.id === acceptedEvaluation.delivery_id)
-    : undefined
   const bindings = Database.use((db) =>
     db
       .select()
-      .from(OrchestratorChannelBindingTable)
-      .where(eq(OrchestratorChannelBindingTable.task_id, task.id))
-      .orderBy(OrchestratorChannelBindingTable.time_created)
+      .from(EngineChannelBindingTable)
+      .where(eq(EngineChannelBindingTable.task_id, task.id))
+      .orderBy(EngineChannelBindingTable.time_created)
       .all(),
   )
-  const artifacts = run
-    ? Database.use((db) =>
-        db
-          .select()
-          .from(OrchestratorArtifactTable)
-          .where(eq(OrchestratorArtifactTable.run_id, run.id))
-          .orderBy(OrchestratorArtifactTable.time_created)
-          .all(),
-      )
-    : []
-  const latestArtifacts =
-    artifacts.length > 0
-      ? artifacts
-      : latestDelivery
-        ? Database.use((db) =>
-            db
-              .select()
-              .from(OrchestratorArtifactTable)
-              .where(eq(OrchestratorArtifactTable.delivery_id, latestDelivery.id))
-              .orderBy(OrchestratorArtifactTable.time_created)
-              .all(),
-          )
-        : []
-  const snapshots = Database.use((db) =>
+  const artifacts = Database.use((db) =>
     db
       .select()
-      .from(OrchestratorProgressSnapshotTable)
-      .where(eq(OrchestratorProgressSnapshotTable.task_id, task.id))
-      .orderBy(desc(OrchestratorProgressSnapshotTable.time_created))
-      .limit(BOARD_SNAPSHOT_LIMIT * 4)
-      .all()
-      .reverse(),
+      .from(EngineArtifactTable)
+      .where(eq(EngineArtifactTable.task_id, task.id))
+      .orderBy(EngineArtifactTable.time_created, EngineArtifactTable.id)
+      .all(),
   )
-  const compactSnapshots = compactBoardSnapshots(snapshots).slice(-BOARD_SNAPSHOT_LIMIT)
   const pendingInteractions = interactions.filter((item) => item.status === "pending")
+  const executionProjection = taskExecutionProjectionForTask(task.id)
   const currentFailure = boardFailure({
     task,
-    run,
     interactions: pendingInteractions,
-    evaluation: latestEvaluation,
   })
   const overview = boardOverview({
     task,
-    run,
     pendingInteractions,
-    candidateDelivery: latestDelivery,
-    acceptedDelivery,
-    evaluation: latestEvaluation,
     currentFailure,
+    executionProjection,
   })
-
-  const specRow = task.active_spec_version_id ? findSpecSnapshot(task.active_spec_version_id) : undefined
-  const specSnapshot = specRow ? viewSpecSnapshot(specRow) : undefined
 
   // lastSequence: must use the same sequence space as protocol_event.seq
   // (auto-incrementing integer), NOT timestamps. The panel's monotonic guard
   // compares this against SSE event.sequence — mismatched number spaces
   // would cause ALL SSE events to be silently discarded.
-  const lastSequence = Database.use((db) =>
-    db.select({ seq: sql<number>`coalesce(max(seq), 0)` })
-      .from(ProtocolEventTable)
-      .where(eq(ProtocolEventTable.task_id, task.id))
-      .get()?.seq ?? 0
-  )
-
+  const goalFields = buildGoalFields(task, goals, artifacts, executionProjection)
+  const project = Project.get(task.project_id)
   return {
-      lastSequence,
-      spec: specSnapshot,
-      task: {
-        id: task.id,
-        projectID: task.project_id,
-        directory: Instance.directory,
-        sessionID: task.session_id ?? undefined,
-        activePlanVersionID: task.active_plan_version_id ?? undefined,
-        activeRunID: task.active_run_id ?? undefined,
-        requestID: task.request_id ?? undefined,
-        source: task.source,
-        title: task.title,
-        request: task.request,
-        status: task.status,
-        priority: task.priority,
-        blockingReason: task.blocking_reason ?? undefined,
-        error: task.error ?? undefined,
-        budget: task.budget
-          ? {
-              maxRuns: task.budget.max_runs,
-              maxEvaluations: task.budget.max_evaluations,
-              maxWallTimeMs: task.budget.max_wall_time_ms,
-            }
-          : undefined,
-        metadata: task.metadata ?? undefined,
-        time: {
-          created: task.time_created,
-          updated: task.time_updated,
-          started: task.time_started ?? undefined,
-          completed: task.time_completed ?? undefined,
-        },
+    snapshotVersion,
+    lastSequence,
+    ...goalFields,
+    project: project
+      ? {
+          id: project.id,
+          name: project.name,
+          worktree: project.worktree,
+        }
+      : undefined,
+    task: viewTask(task, { directory }),
+    interactions: interactions.map(viewInteraction),
+    channels: bindings.map((item) => ({
+      id: item.id,
+      platform: item.platform,
+      channel: item.channel,
+      thread: item.thread,
+      payload: item.payload ?? undefined,
+      time: {
+        created: item.time_created,
+        updated: item.time_updated,
       },
-      plan: plan
-        ? {
-            id: plan.id,
-            taskID: plan.task_id,
-            version: plan.version,
-            status: plan.status,
-            summary: plan.summary,
-            prompt: plan.prompt,
-            metadata: plan.metadata ?? undefined,
-            time: {
-              created: plan.time_created,
-              updated: plan.time_updated,
-            },
-          }
-        : undefined,
-      planNodes: planNodes.map((node) => ({
-        id: node.id,
-        goalID: node.goal_id ?? undefined,
-        kind: node.kind,
-        title: node.title,
-        brief: node.brief,
-        orderIndex: node.order_index,
-      })),
-      goalRuns: goalRunRows.map((gr) => ({
-        id: gr.id,
-        goalID: gr.goal_id,
-        status: gr.status,
-        sessionID: gr.session_id ?? undefined,
-        workspaceDir: gr.workspace_dir ?? undefined,
-        error: gr.error ?? undefined,
-        time: {
-          created: gr.time_created,
-          updated: gr.time_updated,
-          started: gr.time_started ?? undefined,
-          completed: gr.time_completed ?? undefined,
-        },
-      })),
-      run: run
-        ? {
-            id: run.id,
-            taskID: run.task_id,
-            planVersionID: run.plan_version_id ?? undefined,
-            sessionID: run.session_id ?? undefined,
-            executor: run.executor,
-            status: run.status,
-            phase: run.phase,
-            blockingReason: run.blocking_reason ?? undefined,
-            error: run.error ?? undefined,
-            retryCount: run.retry_count,
-            executorRef: run.executor_ref
-              ? {
-                  sessionID: run.executor_ref.session_id,
-                  queueTaskID: run.executor_ref.queue_task_id,
-                }
-              : undefined,
-            metadata: run.metadata ?? undefined,
-            time: {
-              created: run.time_created,
-              updated: run.time_updated,
-              started: run.time_started ?? undefined,
-              completed: run.time_completed ?? undefined,
-            },
-          }
-        : undefined,
-      delivery: viewBoardDelivery(latestDelivery),
-      candidateDelivery: viewBoardDelivery(latestDelivery),
-      acceptedDelivery: viewBoardDelivery(acceptedDelivery),
-      evaluation: viewBoardEvaluation(latestEvaluation),
-      interactions: interactions.map((item) => ({
-        id: item.id,
-        taskID: item.task_id,
-        runID: item.run_id,
-        sessionID: item.session_id ?? undefined,
-        externalID: item.external_id,
-        type: item.request_type,
-        status: item.status,
-        title: item.title,
-        body: item.body,
-        payload: item.payload ?? undefined,
-        response: item.response ?? undefined,
-        time: {
-          created: item.time_created,
-          updated: item.time_updated,
-          resolved: item.time_resolved ?? undefined,
-        },
-      })),
-      channels: bindings.map((item) => ({
-        id: item.id,
-        platform: item.platform,
-        channel: item.channel,
-        thread: item.thread,
-        payload: item.payload ?? undefined,
-        time: {
-          created: item.time_created,
-          updated: item.time_updated,
-        },
-      })),
-      artifacts: latestArtifacts
-        .filter((item) => item.kind !== "diff" && item.kind !== "changed_file")
-        .map((item) => ({
-        id: item.id,
-        taskID: item.task_id,
-        runID: item.run_id,
-        deliveryID: item.delivery_id ?? undefined,
-        kind: item.kind,
-        label: item.label,
-        payload: compactArtifactPayload(item.kind, item.payload),
-        time: {
-          created: item.time_created,
-          updated: item.time_updated,
-        },
-      })),
-      snapshots: compactSnapshots.map((item) => ({
-        id: item.id,
-        taskID: item.task_id,
-        status: item.status,
-        summary: item.summary,
-        payload: compactSnapshotPayload(item.payload),
-        time: {
-          created: item.time_created,
-          updated: item.time_updated,
-        },
-      })),
-      overview,
-      brief: {
-        content: brief.content,
-        updated_at: brief.updatedAt ?? Date.now(),
+    })),
+    sessionInvocationTopology: sessionInvocationTopologyForTask(task.id),
+    executionProjection,
+    processIncidents: taskProcessIncidents(task.id, executionProjection),
+    artifacts: artifacts.map((item) => ({
+      id: item.id,
+      taskID: item.task_id,
+      locator: {
+        source: "engine_artifact" as const,
+        artifact_id: item.id,
+        catalog_revision: item.catalog_revision,
+        expected_sha256: item.payload_sha256,
       },
-      lanes: [
-        {
-          id: "run",
-          title: "Run",
-          cards: run
-            ? [
-                {
-                  id: run.id,
-                  kind: "run" as const,
-                  title: `${run.executor} / ${run.phase}`,
-                  detail: run.error ?? task.blocking_reason ?? undefined,
-                  status: run.status,
-                  time: run.time_updated,
-                  metadata: run.executor_ref ?? undefined,
-                },
-              ]
-            : [],
-        },
-        {
-          id: "delivery",
-          title: "Delivery",
-          cards: latestDelivery
-            ? [
-                {
-                  id: latestDelivery.id,
-                  kind: "note" as const,
-                  title: latestDelivery.status,
-                  detail: latestDelivery.summary,
-                  status: latestDelivery.status,
-                  time: latestDelivery.time_updated,
-                  metadata: latestDelivery.result ?? undefined,
-                },
-              ]
-            : [],
-        },
-        {
-          id: "goals",
-          title: "Dynamic Goals",
-          cards: goals
-            .toSorted((a, b) => {
-              const score = (value: string) => (value === "pending" ? 0 : value === "failed" ? 1 : 2)
-              return score(a.status) - score(b.status)
-            })
-            .map((goal) => ({
-              id: goal.id,
-              kind: "goal" as const,
-              title: goal.title,
-              detail: goal.done_definition,
-              status: goal.status,
-              time: goal.time_updated,
-              metadata: {
-                ...(goal.metadata as Record<string, unknown> | null ?? {}),
-                sessionID: goalRunSessionMap.get(goal.id) ?? undefined,
-              },
-            })),
-        },
-        {
-          id: "staging",
-          title: "Staging",
-          cards: staging.slice(-8).map((note) => ({
-            id: note.id,
-            kind: note.kind === "plan_hint" ? ("plan_hint" as const) : ("note" as const),
-            title: note.kind,
-            detail: note.content,
-            status: note.source,
-            time: note.time_created,
-            metadata: note.metadata ?? undefined,
-          })),
-        },
-        {
-          id: "blockers",
-          title: "Blockers",
-          cards: interactions
-            .filter((item) => item.status === "pending")
-            .map((item) => ({
-              id: item.id,
-              kind: "interaction" as const,
-              title: item.title,
-              detail: item.body,
-              status: item.status,
-              time: item.time_updated,
-              metadata: {
-                type: item.request_type,
-              },
-            })),
-        },
-        {
-          id: "notes",
-          title: "History",
-          cards: history.slice(-8).map((note) => ({
-            id: note.id,
-            kind: note.kind === "plan_hint" ? ("plan_hint" as const) : ("note" as const),
-            title: note.kind,
-            detail: note.content,
-            status: note.source,
-            time: note.time_created,
-          })),
-        },
-      ],
+      kind: item.kind,
+      label: item.label,
+      payload:
+        item.kind === "build_host_observation"
+          ? compactBuildObservationPayload(item)
+          : compactArtifactPayload(item.kind, item.payload),
+      time: {
+        created: item.time_created,
+        updated: item.time_updated,
+      },
+    })),
+    overview,
+    brief: {
+      content: brief.content,
+      updated_at: brief.updatedAt ?? Date.now(),
+    },
   }
 }
 
-function boardTagForTask(task: typeof OrchestratorTaskTable.$inferSelect) {
-  const run = task.active_run_id
-    ? Database.use((db) => db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.id, task.active_run_id!)).get())
-    : undefined
-  const plan = task.active_plan_version_id
-    ? Database.use((db) => db.select().from(OrchestratorPlanVersionTable).where(eq(OrchestratorPlanVersionTable.id, task.active_plan_version_id!)).get())
-    : undefined
+function taskDirectory(task: typeof EngineTaskTable.$inferSelect) {
+  return listTaskRows([task])[0]?.directory ?? ""
+}
+
+function latestTaskProtocolSequence(taskID: string) {
+  return Database.use(
+    (db) =>
+      db
+        .select({ seq: sql<number>`coalesce(max(seq), 0)` })
+        .from(ProtocolEventTable)
+        .where(eq(ProtocolEventTable.task_id, taskID))
+        .get()?.seq ?? 0,
+  )
+}
+
+function taskProcessIncidents(taskID: string, executionProjection: ReturnType<typeof taskExecutionProjectionForTask>) {
+  const streamRows = Database.use((db) =>
+    db
+      .select({
+        eventID: ProtocolEventTable.id,
+        sessionID: ProtocolEventTable.session_id,
+        emittedAt: ProtocolEventTable.emitted_at,
+        payload: ProtocolEventTable.payload,
+      })
+      .from(ProtocolEventTable)
+      .where(and(eq(ProtocolEventTable.task_id, taskID), eq(ProtocolEventTable.type, "session.error")))
+      .orderBy(ProtocolEventTable.emitted_at, ProtocolEventTable.seq)
+      .all(),
+  )
+  const streamIncidents = streamRows.map((row) => {
+    if (!row.sessionID) throw new Error(`Task ${taskID} process incident ${row.eventID} has no Session identity`)
+    const payload = artifactPayloadRecord(row.payload)
+    const error = artifactPayloadRecord(payload.error)
+    const errorData = artifactPayloadRecord(error.data)
+    const occurrence = artifactPayloadRecord(payload.failureOccurrence)
+    const errorName = typeof error.name === "string" ? error.name.trim() : ""
+    if (!errorName) throw new Error(`Task ${taskID} process incident ${row.eventID} has no canonical error name`)
+    const message = [payload.summary, error.message, errorData.message].find(
+      (value): value is string => typeof value === "string" && value.trim().length > 0,
+    )
+    const assistantMessageID =
+      typeof occurrence.assistant_message_id === "string" && occurrence.assistant_message_id.trim()
+        ? occurrence.assistant_message_id
+        : undefined
+    return {
+      id: row.eventID,
+      source: "session_stream" as const,
+      sessionID: row.sessionID,
+      errorName,
+      ...(message ? { message } : {}),
+      ...(assistantMessageID ? { assistantMessageID } : {}),
+      emittedAt: row.emittedAt,
+    }
+  })
+  const infrastructureRows = Database.use((db) =>
+    db
+      .select({
+        id: EngineArtifactTable.id,
+        label: EngineArtifactTable.label,
+        payload: EngineArtifactTable.payload,
+        timeCreated: EngineArtifactTable.time_created,
+      })
+      .from(EngineArtifactTable)
+      .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "task-infrastructure-error")))
+      .orderBy(EngineArtifactTable.time_created, EngineArtifactTable.id)
+      .all(),
+  )
+  const recoveryInputMessageIDs = new Set<string>()
+  const infrastructureIncidents = infrastructureRows.map((row) => {
+    const payload = artifactPayloadRecord(row.payload)
+    const operation = typeof payload.operation === "string" ? payload.operation : "infrastructure"
+    const isRecovery =
+      operation === "handoff-process-owned-task-execution" || operation === "recover-interrupted-task-execution"
+    const recovery = isRecovery ? parseProcessRecoveryFactContext(payload.context, row.id) : undefined
+    const affectedExecutions = recovery?.affected_subjects.map((subject) => {
+      if (subject.kind !== "affected_created_session") recoveryInputMessageIDs.add(subject.input_message_id)
+      return {
+        sessionID: subject.session_id,
+        ...(subject.kind !== "affected_created_session" ? { inputMessageID: subject.input_message_id } : {}),
+      }
+    })
+    const errorName = typeof payload.errorName === "string" ? payload.errorName : "InfrastructureError"
+    return {
+      id: row.id,
+      source: "infrastructure" as const,
+      ...(typeof payload.sessionID === "string" ? { sessionID: payload.sessionID } : {}),
+      ...(recovery?.physical_evidence.kind === "managed_process_occurrence"
+        ? { processOccurrenceID: recovery.physical_evidence.process_occurrence_id }
+        : {}),
+      ...(affectedExecutions ? { affectedExecutions } : {}),
+      errorName,
+      message: typeof payload.reason === "string" ? `${operation}: ${payload.reason}` : operation,
+      emittedAt: row.timeCreated,
+    }
+  })
+  const lifecycleIncidents = executionProjection.occurrences.flatMap((occurrence) => {
+    if (recoveryInputMessageIDs.has(occurrence.inputMessageID)) return []
+    const latest = occurrence.latest
+    if (
+      !latest ||
+      latest.status.type !== "terminal" ||
+      (latest.status.reason !== "error" && latest.status.reason !== "aborted")
+    ) {
+      return []
+    }
+    return [
+      {
+        id: latest.eventID,
+        source: "execution_lifecycle" as const,
+        sessionID: occurrence.sessionID,
+        inputMessageID: occurrence.inputMessageID,
+        errorName: latest.status.reason === "aborted" ? "ExecutionAborted" : "ExecutionError",
+        ...(latest.status.error ? { message: latest.status.error } : {}),
+        emittedAt: latest.emittedAt,
+      },
+    ]
+  })
+  const inputAuthorityForAssistant = (assistantMessageID: string, sessionID: string): string | undefined => {
+    let messageID: string | undefined = assistantMessageID
+    const visited = new Set<string>()
+    while (messageID && !visited.has(messageID)) {
+      visited.add(messageID)
+      const message = Database.use((db) =>
+        db
+          .select({ sessionID: MessageTable.session_id, data: MessageTable.data })
+          .from(MessageTable)
+          .where(eq(MessageTable.id, messageID!))
+          .get(),
+      )
+      if (!message || message.sessionID !== sessionID) return undefined
+      if (message.data.role === "user") return messageID
+      messageID =
+        message.data.role === "assistant" && "parentID" in message.data && typeof message.data.parentID === "string"
+          ? message.data.parentID
+          : undefined
+    }
+    return undefined
+  }
+  const independentStreamIncidents = streamIncidents.filter((incident) => {
+    if (!incident.assistantMessageID) return true
+    const inputMessageID = inputAuthorityForAssistant(incident.assistantMessageID, incident.sessionID)
+    return !inputMessageID || !recoveryInputMessageIDs.has(inputMessageID)
+  })
+  return [...independentStreamIncidents, ...infrastructureIncidents, ...lifecycleIncidents].sort(
+    (left, right) => left.emittedAt - right.emittedAt || left.id.localeCompare(right.id),
+  )
+}
+
+function taskSessionTreeVersion(taskID: string) {
+  return (
+    Database.use((db) =>
+      db.get<{
+        count: number
+        updated: number
+        statusSeq: number
+        statusUpdated: number
+        incidentSeq: number
+        incidentUpdated: number
+      }>(sql`
+        WITH RECURSIVE session_tree(id) AS (
+          SELECT session_id FROM engine_task WHERE id = ${taskID} AND session_id IS NOT NULL
+          UNION ALL
+          SELECT s.id FROM session s JOIN session_tree st ON s.parent_id = st.id
+        )
+        SELECT
+          count(distinct s.id) AS count,
+          coalesce(max(s.time_updated), 0) AS updated,
+          coalesce(max(pe.seq), 0) AS statusSeq,
+          coalesce(max(pe.emitted_at), 0) AS statusUpdated,
+          coalesce(max(incident.seq), 0) AS incidentSeq,
+          coalesce(max(incident.emitted_at), 0) AS incidentUpdated
+        FROM session_tree st
+        JOIN session s ON s.id = st.id
+        LEFT JOIN protocol_event pe ON pe.session_id = s.id AND pe.type = 'agent.execution.lifecycle'
+        LEFT JOIN protocol_event incident ON incident.session_id = s.id AND incident.type = 'session.error'
+      `),
+    ) ?? { count: 0, updated: 0, statusSeq: 0, statusUpdated: 0, incidentSeq: 0, incidentUpdated: 0 }
+  )
+}
+
+function boardTagForTask(task: typeof EngineTaskTable.$inferSelect) {
+  const sessionTree = taskSessionTreeVersion(task.id)
   const goals = Database.use((db) =>
     db
       .select({
         count: sql<number>`count(*)`,
-        updated: sql<number>`coalesce(max(${OrchestratorGoalTable.time_updated}), 0)`,
+        updated: sql<number>`coalesce(max(${EngineGoalTable.time_updated}), 0)`,
       })
-      .from(OrchestratorGoalTable)
-      .where(eq(OrchestratorGoalTable.task_id, task.id))
+      .from(EngineGoalTable)
+      .where(eq(EngineGoalTable.task_id, task.id))
       .get(),
   )
   const interactions = Database.use((db) =>
     db
       .select({
         count: sql<number>`count(*)`,
-        updated: sql<number>`coalesce(max(${OrchestratorInteractionRequestTable.time_updated}), 0)`,
+        updated: sql<number>`coalesce(max(${EngineInteractionRequestTable.time_updated}), 0)`,
       })
-      .from(OrchestratorInteractionRequestTable)
-      .where(eq(OrchestratorInteractionRequestTable.task_id, task.id))
-      .get(),
-  )
-  const deliveries = Database.use((db) =>
-    db
-      .select({
-        count: sql<number>`count(*)`,
-        updated: sql<number>`coalesce(max(${OrchestratorDeliveryTable.time_updated}), 0)`,
-      })
-      .from(OrchestratorDeliveryTable)
-      .where(eq(OrchestratorDeliveryTable.task_id, task.id))
-      .get(),
-  )
-  const evaluations = Database.use((db) =>
-    db
-      .select({
-        count: sql<number>`count(*)`,
-        updated: sql<number>`coalesce(max(${OrchestratorEvaluationTable.time_updated}), 0)`,
-      })
-      .from(OrchestratorEvaluationTable)
-      .where(eq(OrchestratorEvaluationTable.task_id, task.id))
+      .from(EngineInteractionRequestTable)
+      .where(eq(EngineInteractionRequestTable.task_id, task.id))
       .get(),
   )
   const artifacts = Database.use((db) =>
     db
       .select({
         count: sql<number>`count(*)`,
-        updated: sql<number>`coalesce(max(${OrchestratorArtifactTable.time_updated}), 0)`,
+        updated: sql<number>`coalesce(max(${EngineArtifactTable.time_updated}), 0)`,
       })
-      .from(OrchestratorArtifactTable)
-      .where(eq(OrchestratorArtifactTable.task_id, task.id))
+      .from(EngineArtifactTable)
+      .where(eq(EngineArtifactTable.task_id, task.id))
       .get(),
   )
   const bindings = Database.use((db) =>
     db
       .select({
         count: sql<number>`count(*)`,
-        updated: sql<number>`coalesce(max(${OrchestratorChannelBindingTable.time_updated}), 0)`,
+        updated: sql<number>`coalesce(max(${EngineChannelBindingTable.time_updated}), 0)`,
       })
-      .from(OrchestratorChannelBindingTable)
-      .where(eq(OrchestratorChannelBindingTable.task_id, task.id))
+      .from(EngineChannelBindingTable)
+      .where(eq(EngineChannelBindingTable.task_id, task.id))
       .get(),
   )
   const snapshots = Database.use((db) =>
     db
       .select({
         count: sql<number>`count(*)`,
-        updated: sql<number>`coalesce(max(${OrchestratorProgressSnapshotTable.time_updated}), 0)`,
+        updated: sql<number>`coalesce(max(${EngineProgressSnapshotTable.time_updated}), 0)`,
       })
-      .from(OrchestratorProgressSnapshotTable)
-      .where(eq(OrchestratorProgressSnapshotTable.task_id, task.id))
-      .get(),
-  )
-  const noteStats = Database.use((db) =>
-    db
-      .select({
-        count: sql<number>`count(*)`,
-        updated: sql<number>`coalesce(max(${WorkbenchTaskNoteTable.time_updated}), 0)`,
-      })
-      .from(WorkbenchTaskNoteTable)
-      .where(eq(WorkbenchTaskNoteTable.task_id, task.id))
+      .from(EngineProgressSnapshotTable)
+      .where(eq(EngineProgressSnapshotTable.task_id, task.id))
       .get(),
   )
   return [
     task.id,
     task.time_created,
     task.time_updated,
-    task.budget?.max_runs ?? "",
-    task.budget?.max_evaluations ?? "",
-    task.budget?.max_wall_time_ms ?? "",
-    run?.id ?? "",
-    run?.time_updated ?? 0,
-    plan?.id ?? "",
-    plan?.time_updated ?? 0,
+    task.budget?.max_executor_groups ?? "",
+    sessionTree.count,
+    sessionTree.updated,
+    sessionTree.statusSeq,
+    sessionTree.statusUpdated,
+    sessionTree.incidentSeq,
+    sessionTree.incidentUpdated,
     goals?.count ?? 0,
     goals?.updated ?? 0,
-    noteStats?.count ?? 0,
-    noteStats?.updated ?? 0,
     interactions?.count ?? 0,
     interactions?.updated ?? 0,
-    deliveries?.count ?? 0,
-    deliveries?.updated ?? 0,
-    evaluations?.count ?? 0,
-    evaluations?.updated ?? 0,
     artifacts?.count ?? 0,
     artifacts?.updated ?? 0,
     bindings?.count ?? 0,
@@ -591,49 +429,35 @@ function clipBoard(input: string) {
   return `${input.slice(0, BOARD_SUMMARY_LIMIT)}\n...[truncated]`
 }
 
-function compactBoardSnapshots(
-  input: Array<{
-    id: string
-    task_id: string
-    status: string
-    summary: string
-    payload: unknown
-    time_created: number
-    time_updated: number
-  }>,
-) {
-  return input.reduce<typeof input>((acc, item) => {
-    const prev = acc.at(-1)
-    if (prev && prev.status === item.status && prev.summary === item.summary) {
-      acc[acc.length - 1] = item
-      return acc
-    }
-    acc.push(item)
-    return acc
-  }, [])
+function clipArtifactString(input: string) {
+  if (input.length <= BOARD_ARTIFACT_STRING_LIMIT) return input
+  return `${input.slice(0, BOARD_ARTIFACT_STRING_LIMIT)}\n...[truncated ${input.length - BOARD_ARTIFACT_STRING_LIMIT} chars]`
 }
 
-function compactSnapshotPayload(input: unknown) {
-  if (!input || typeof input !== "object") return undefined
-  const item = input as Record<string, unknown>
-  return {
-    kind: typeof item.kind === "string" ? item.kind : undefined,
-    stage: typeof item.stage === "string" ? item.stage : undefined,
-    mode: typeof item.mode === "string" ? item.mode : undefined,
-    branch: typeof item.branch === "string" ? item.branch : undefined,
-    commit: typeof item.commit === "string" ? item.commit : undefined,
-    message: typeof item.message === "string" ? clipBoard(item.message) : undefined,
-    snapshot: typeof item.snapshot === "string" ? item.snapshot : undefined,
-    note: typeof item.note === "string" ? clipBoard(item.note) : undefined,
-    description: typeof item.description === "string" ? clipBoard(item.description) : undefined,
-    status: typeof item.status === "string" ? item.status : undefined,
-    blockingReason: typeof item.blockingReason === "string" ? clipBoard(item.blockingReason) : undefined,
-    error: typeof item.error === "string" ? clipBoard(item.error) : undefined,
-    activeRunID: typeof item.activeRunID === "string" ? item.activeRunID : undefined,
-    conflicts: typeof item.conflicts === "number" ? item.conflicts : undefined,
-    dirty: typeof item.dirty === "boolean" ? item.dirty : undefined,
-    deliveryID: typeof item.deliveryID === "string" ? item.deliveryID : undefined,
+function compactArtifactValue(input: unknown, depth = 0): unknown {
+  if (typeof input === "string") return clipArtifactString(input)
+  if (input == null || typeof input !== "object") return input
+  if (Array.isArray(input)) {
+    const items = input.slice(0, BOARD_ARTIFACT_ARRAY_LIMIT).map((item) => compactArtifactValue(item, depth + 1))
+    if (input.length <= BOARD_ARTIFACT_ARRAY_LIMIT) return items
+    return {
+      items,
+      truncated: true,
+      total: input.length,
+    }
   }
+  if (depth >= BOARD_ARTIFACT_OBJECT_DEPTH_LIMIT) {
+    return {
+      truncated: true,
+      keys: Object.keys(input as Record<string, unknown>).slice(0, BOARD_ARTIFACT_ARRAY_LIMIT),
+    }
+  }
+  return Object.fromEntries(
+    Object.entries(input as Record<string, unknown>).map(([key, value]) => [
+      key,
+      compactArtifactValue(value, depth + 1),
+    ]),
+  )
 }
 
 function compactArtifactPayload(kind: string, input: unknown) {
@@ -646,92 +470,31 @@ function compactArtifactPayload(kind: string, input: unknown) {
       output: typeof item.output === "string" ? clipBoard(item.output) : undefined,
     }
   }
-  if (kind === "report") {
-    return Object.fromEntries(
-      Object.entries(item).map(([key, value]) => [
-        key,
-        typeof value === "string" ? clipBoard(value) : value,
-      ]),
-    )
-  }
-  return item
+  return compactArtifactValue(item)
 }
 
-function boardChecks(input: unknown) {
-  if (!Array.isArray(input)) return []
-  return input.flatMap((item) => {
-    const parsed = EvaluationCheck.safeParse(item)
-    return parsed.success ? [parsed.data] : []
-  })
-}
-
-function viewBoardDelivery(
-  row:
-    | (typeof OrchestratorDeliveryTable.$inferSelect)
-    | undefined,
-) {
-  if (!row) return undefined
-  const result = (row.result ?? {}) as Record<string, unknown>
+function compactBuildObservationPayload(row: typeof EngineArtifactTable.$inferSelect) {
+  const observation = viewBuildHostObservationArtifact(row)
   return {
-    id: row.id,
-    taskID: row.task_id,
-    runID: row.run_id,
-    status: row.status,
-    summary: clipBoard(row.summary),
-    result: {
-      summary: clipBoard(String(result.summary ?? row.summary)),
-      changedFiles: Array.isArray(result.changed_files)
-        ? result.changed_files.filter((item): item is string => typeof item === "string").slice(0, BOARD_CHANGED_FILE_LIMIT)
-        : [],
-      diffs: Array.isArray(result.diffs)
-        ? result.diffs
-            .filter((d: any): d is Record<string, unknown> => d && typeof d === "object" && typeof d.file === "string")
-            .slice(0, BOARD_CHANGED_FILE_LIMIT)
-            .map((d: any) => ({
-              file: d.file as string,
-              additions: typeof d.additions === "number" ? d.additions : 0,
-              deletions: typeof d.deletions === "number" ? d.deletions : 0,
-              status: d.status ?? (!d.before && d.after ? "added" : d.before && !d.after ? "deleted" : "modified"),
-            }))
-        : [],
-      artifacts: Array.isArray(result.artifacts) ? result.artifacts.slice(0, 12) : [],
-      publish: result.publish && typeof result.publish === "object" ? result.publish : undefined,
-    },
-    time: {
-      created: row.time_created,
-      updated: row.time_updated,
-    },
-  }
-}
-
-function viewBoardEvaluation(
-  row:
-    | (typeof OrchestratorEvaluationTable.$inferSelect)
-    | undefined,
-) {
-  if (!row) return undefined
-  return {
-    id: row.id,
-    taskID: row.task_id,
-    runID: row.run_id,
-    deliveryID: row.delivery_id ?? undefined,
-    status: row.status,
-    verdict: row.verdict,
-    summary: clipBoard(row.summary),
-    checks: boardChecks(row.checks),
-    time: {
-      created: row.time_created,
-      updated: row.time_updated,
-      completed: row.time_completed ?? undefined,
-    },
+    task_id: observation.task_id,
+    session_id: observation.session_id,
+    final_message_id: observation.final_message_id,
+    execution_mode: observation.execution_mode,
+    contribution_commit_ref: observation.commit_ref,
+    published_commit_ref: observation.published_commit_ref,
+    primary_base_commit_ref: observation.primary_base_commit_ref,
+    primary_terminal_commit_ref: observation.primary_terminal_commit_ref,
+    diff_base_ref: observation.diff_base_ref,
+    diff_head_ref: observation.diff_head_ref,
+    diffs: observation.diffs,
+    observed_artifact_locators: observation.observed_artifact_locators,
+    source_artifact_locators: observation.source_artifact_locators,
   }
 }
 
 function boardFailure(input: {
-  task: typeof OrchestratorTaskTable.$inferSelect
-  run: (typeof OrchestratorRunTable.$inferSelect) | undefined
-  interactions: Array<typeof OrchestratorInteractionRequestTable.$inferSelect>
-  evaluation: (typeof OrchestratorEvaluationTable.$inferSelect) | undefined
+  task: typeof EngineTaskTable.$inferSelect
+  interactions: Array<typeof EngineInteractionRequestTable.$inferSelect>
 }) {
   const interaction = input.interactions[0]
   if (interaction) {
@@ -745,19 +508,12 @@ function boardFailure(input: {
       checks: undefined,
     }
   }
-  if (input.evaluation && input.evaluation.status !== "passed") {
+  const terminalReason = taskTerminalReason(input.task)
+  if (terminalReason === "interrupted") {
     return {
-      source: "evaluation" as const,
-      title: "Latest acceptance failed",
-      summary: clipBoard(input.evaluation.summary),
-      checks: boardChecks(input.evaluation.checks),
-    }
-  }
-  if (input.run?.error) {
-    return {
-      source: "run" as const,
-      title: "Current run failed",
-      summary: clipBoard(input.run.error),
+      source: "task" as const,
+      title: "Task interrupted",
+      summary: clipBoard(input.task.error ?? "Task execution was interrupted."),
       checks: undefined,
     }
   }
@@ -769,59 +525,52 @@ function boardFailure(input: {
       checks: undefined,
     }
   }
-  const blocking = input.task.blocking_reason ?? input.run?.blocking_reason
-  if (!blocking) return undefined
-  return {
-    source: input.run?.blocking_reason ? ("run" as const) : ("task" as const),
-    title: "Task is blocked",
-    summary: clipBoard(blocking),
-    checks: undefined,
-  }
+  return undefined
 }
 
 function boardOverview(input: {
-  task: typeof OrchestratorTaskTable.$inferSelect
-  run: (typeof OrchestratorRunTable.$inferSelect) | undefined
-  pendingInteractions: Array<typeof OrchestratorInteractionRequestTable.$inferSelect>
-  candidateDelivery: (typeof OrchestratorDeliveryTable.$inferSelect) | undefined
-  acceptedDelivery: (typeof OrchestratorDeliveryTable.$inferSelect) | undefined
-  evaluation: (typeof OrchestratorEvaluationTable.$inferSelect) | undefined
+  task: typeof EngineTaskTable.$inferSelect
+  pendingInteractions: Array<typeof EngineInteractionRequestTable.$inferSelect>
   currentFailure:
     | {
-        source: "task" | "run" | "interaction" | "evaluation"
+        source: "task" | "interaction"
         title: string
         summary: string
-        checks?: Array<z.infer<typeof EvaluationCheck>>
       }
     | undefined
+  executionProjection: ReturnType<typeof taskExecutionProjectionForTask>
 }) {
-  const active = ["queued", "active"].includes(input.task.status)
-  const canResume = Boolean(input.run) && !active && input.pendingInteractions.length === 0
+  const derivedStatus = deriveTaskStatus(input.task)
+  const terminalReason = taskTerminalReason(input.task)
+  const active = derivedStatus === "queued" || derivedStatus === "active"
+  const terminal = derivedStatus === "completed" || derivedStatus === "failed" || derivedStatus === "cancelled"
+  const canRetry = terminal && input.pendingInteractions.length === 0
   const headline =
     input.pendingInteractions.length > 0
       ? "Waiting on human input"
-      : input.task.status === "completed"
-        ? "Accepted delivery is ready"
-        : input.task.status === "failed"
-          ? "Current attempt failed acceptance"
-          : input.task.status === "cancelled"
-            ? "Task was cancelled"
-            : input.task.status === "active"
-              ? input.task.blocking_reason
-                ? "Task is blocked"
-                : "Task is actively progressing"
-              : "Task is queued"
+      : derivedStatus === "completed"
+        ? "Task completed"
+        : terminalReason === "interrupted"
+          ? "Task was interrupted"
+          : derivedStatus === "failed"
+            ? "Task ended with a recorded failure"
+            : derivedStatus === "cancelled"
+              ? "Task was cancelled"
+              : derivedStatus === "active"
+                ? "Task is actively progressing"
+                : "Task is queued"
+  const activeExecutionCount = input.executionProjection.occurrences.filter(
+    (occurrence) => occurrence.latest?.status.type === "streaming" || occurrence.latest?.status.type === "retry",
+  ).length
   const summary =
     input.pendingInteractions.length > 0
       ? `${input.pendingInteractions.length} interaction${input.pendingInteractions.length > 1 ? "s" : ""} need attention before the task can continue.`
-      : input.task.status === "completed" && input.acceptedDelivery
-        ? clipBoard(input.acceptedDelivery.summary)
-        : input.currentFailure?.summary ??
-          (input.candidateDelivery
-            ? clipBoard(input.candidateDelivery.summary)
-            : input.run
-              ? `Current run is in ${input.run.phase}.`
-              : "Task is ready for the first run.")
+      : derivedStatus === "completed"
+        ? "The Orchestrator completed this Task. Review its visible decision message, tool call, domain artifacts, Delivery Slice revisions, and Host observations."
+        : (input.currentFailure?.summary ??
+          (activeExecutionCount > 0
+            ? `${activeExecutionCount} execution occurrence${activeExecutionCount > 1 ? "s are" : " is"} currently active.`
+            : "Task is ready for its next scheduler decision."))
   const nextStep =
     input.pendingInteractions.length > 0
       ? {
@@ -829,28 +578,36 @@ function boardOverview(input: {
           title: "Resolve the pending interaction",
           detail: "Reply to the permission or question request to unblock the task.",
         }
-      : input.task.status === "failed"
-        ? {
-            kind: "replan" as const,
-            title: "Replan from the latest failure",
-            detail: "Review the failed acceptance result, tighten the scope if needed, then replan or retry.",
-          }
-        : input.task.status === "cancelled"
+      : derivedStatus === "failed"
+        ? terminalReason === "interrupted"
+          ? {
+              kind: "retry" as const,
+              title: "Retry after interruption",
+              detail: "The server interrupted this attempt. Retry will continue from the latest durable task context.",
+            }
+          : {
+              kind: "replan" as const,
+              title: "Replan from the latest failure",
+              detail:
+                "Review the visible failure and evidence facts, tighten the scope if needed, then replan or retry.",
+            }
+        : derivedStatus === "cancelled"
           ? {
               kind: "retry" as const,
               title: "Retry if the task should continue",
-              detail: "The task is cancelled. Retry will queue a new run from the latest context.",
+              detail: "The task is cancelled. Retry will resume from the latest durable context.",
             }
-            : input.task.status === "completed"
-              ? {
-                  kind: "review_delivery" as const,
-                  title: "Review the accepted delivery",
-                  detail: "Inspect the accepted result, changed files, and evaluation evidence before closing the loop.",
-                }
-              : active
+          : derivedStatus === "completed"
+            ? {
+                kind: "review_acceptance" as const,
+                title: "Review the completion facts",
+                detail:
+                  "Inspect the Orchestrator decision message, Delivery Slice reviews, Host observations, and every domain artifact.",
+              }
+            : active
               ? {
                   kind: "observe" as const,
-                  title: "Monitor the active run",
+                  title: "Monitor active execution",
                   detail: "Watch progress, handle blockers quickly, and keep follow-up instructions concise.",
                 }
               : {
@@ -865,9 +622,287 @@ function boardOverview(input: {
     currentFailure: input.currentFailure,
     nextStep,
     controls: {
-      canRetry: canResume,
-      canReplan: canResume && Boolean(input.task.active_plan_version_id ?? input.run?.plan_version_id),
-      canCancel: Boolean(input.run) && ["queued", "active"].includes(input.task.status),
+      canRetry,
+      canReplan: canRetry,
+      canCancel: isTaskQueued(input.task) || isTaskActive(input.task),
     },
+  }
+}
+
+type ReviewAssociationProjection = {
+  deliverySliceRevisionIDs: string[]
+  judgment: "accepted" | "rejected" | "inconclusive"
+}
+
+function reviewAssociationProjection(
+  artifact: ArtifactRow,
+  dispatches: Array<{ sessionID: string; deliverySliceRevisionIDs: string[] }>,
+): ReviewAssociationProjection | undefined {
+  if (artifact.kind === "integrity_review") {
+    const payload = IntegrityReviewArtifactPayloadSchema.parse(artifact.payload)
+    const judgment =
+      payload.verdict === "pass" ? "accepted" : payload.verdict === "needs_correction" ? "rejected" : "inconclusive"
+    return { deliverySliceRevisionIDs: payload.goal_ids, judgment }
+  }
+  if (artifact.kind === "visual_review") {
+    const payload = VisualReviewArtifactPayloadSchema.parse(artifact.payload)
+    const judgment =
+      payload.review.accepted === true ? "accepted" : payload.review.accepted === false ? "rejected" : "inconclusive"
+    return { deliverySliceRevisionIDs: payload.goal_ids, judgment }
+  }
+  if (artifact.kind === "fact_check_review") {
+    const payload = FactCheckReviewArtifactSchema.parse(artifact.payload)
+    const deliverySliceRevisionIDs = dispatches
+      .filter((dispatch) => dispatch.sessionID === payload.fact_check_session_id)
+      .flatMap((dispatch) => dispatch.deliverySliceRevisionIDs)
+    const judgment =
+      payload.review.overall_verdict === "clean"
+        ? "accepted"
+        : payload.review.overall_verdict === "needs_orchestrator_action"
+          ? "rejected"
+          : "inconclusive"
+    return { deliverySliceRevisionIDs: [...new Set(deliverySliceRevisionIDs)], judgment }
+  }
+  return undefined
+}
+
+function normalizedBoardPath(input: string) {
+  return input
+    .trim()
+    .replaceAll("\\", "/")
+    .replace(/^\.\//, "")
+    .replace(/^\/+|\/+$/g, "")
+}
+
+function ownedPathContainsFile(ownedPaths: readonly string[], file: string) {
+  const normalizedFile = normalizedBoardPath(file)
+  return ownedPaths.some((ownedPath) => {
+    const normalizedOwnedPath = normalizedBoardPath(ownedPath)
+    if (normalizedOwnedPath === ".") return normalizedFile.length > 0
+    return (
+      normalizedOwnedPath.length > 0 &&
+      (normalizedFile === normalizedOwnedPath || normalizedFile.startsWith(`${normalizedOwnedPath}/`))
+    )
+  })
+}
+
+function buildGoalFields(
+  task: typeof EngineTaskTable.$inferSelect,
+  goals: Array<typeof EngineGoalTable.$inferSelect>,
+  artifacts: ArtifactRow[],
+  executionProjection: ReturnType<typeof taskExecutionProjectionForTask>,
+) {
+  const membership = resolveCurrentGoalMembershipContext(task.id)
+  const identityByRevisionID = new Map(membership.goals.map((context) => [context.deliverySliceRevisionID, context]))
+  const activeExecutionSessionIDs = new Set(
+    executionProjection.occurrences
+      .filter((occurrence) => occurrence.latest?.status.type !== "terminal")
+      .map((occurrence) => occurrence.sessionID),
+  )
+  const dispatchLineages = artifacts
+    .filter((artifact) => artifact.kind === "dispatch_lineage")
+    .map((artifact) => ({
+      artifact,
+      payload: parseDispatchLineagePayload(artifact.payload, artifact.id),
+    }))
+  const completedAt = deriveTaskStatus(task) === "completed" ? task.time_completed : null
+  const currentCompletionDecision =
+    completedAt === null
+      ? undefined
+      : findTaskCompletionDecisionForTerminalTime({ taskID: task.id, timeCompleted: completedAt })
+  const taskWorkflowDispatches = dispatchLineages.map((lineage) => ({
+    artifactID: lineage.artifact.id,
+    sessionID: lineage.payload.child_session_id,
+    deliverySliceRevisionIDs: lineage.payload.delivery_slice_revision_ids,
+  }))
+  const reviewProjections = artifacts.flatMap((artifact) => {
+    const projection = reviewAssociationProjection(artifact, taskWorkflowDispatches)
+    return projection ? [{ artifact, projection }] : []
+  })
+  const buildObservations = artifacts
+    .filter((artifact) => artifact.kind === "build_host_observation")
+    .map((artifact) => viewBuildHostObservationArtifact(artifact))
+  const contributionForRevision = (deliverySliceRevisionID: string, ownedPaths: readonly string[]) => {
+    const subjectSessionIDs = new Set(
+      taskWorkflowDispatches
+        .filter((dispatch) => dispatch.deliverySliceRevisionIDs.includes(deliverySliceRevisionID))
+        .map((dispatch) => dispatch.sessionID),
+    )
+    const observations = buildObservations.filter(
+      (observation) =>
+        observation.session_id &&
+        subjectSessionIDs.has(observation.session_id) &&
+        observation.diffs.some((diff) => ownedPathContainsFile(ownedPaths, diff.file)),
+    )
+    const filesByPath = new Map<
+      string,
+      { file: string; status: string; additions: number; deletions: number; isBinary: boolean }
+    >()
+    for (const observation of observations) {
+      for (const diff of observation.diffs) {
+        if (!ownedPathContainsFile(ownedPaths, diff.file)) continue
+        filesByPath.set(normalizedBoardPath(diff.file), {
+          file: diff.file,
+          status: diff.status,
+          additions: diff.additions,
+          deletions: diff.deletions,
+          isBinary: diff.is_binary,
+        })
+      }
+    }
+    return {
+      observationArtifactIDs: observations.map((observation) => observation.id),
+      sessionIDs: [
+        ...new Set(observations.flatMap((observation) => (observation.session_id ? [observation.session_id] : []))),
+      ],
+      files: [...filesByPath.values()].sort((left, right) => left.file.localeCompare(right.file)),
+      contributionCommitRefs: [
+        ...new Set(observations.flatMap((observation) => (observation.commit_ref ? [observation.commit_ref] : []))),
+      ],
+      publishedCommitRefs: [
+        ...new Set(
+          observations.flatMap((observation) =>
+            observation.published_commit_ref ? [observation.published_commit_ref] : [],
+          ),
+        ),
+      ],
+      diffRefs: observations.flatMap((observation) =>
+        observation.diff_base_ref && observation.diff_head_ref
+          ? [{ base: observation.diff_base_ref, head: observation.diff_head_ref }]
+          : [],
+      ),
+    }
+  }
+  const factsForRevision = (deliverySliceRevisionID: string) => {
+    const subjectDispatches = taskWorkflowDispatches.filter((dispatch) =>
+      dispatch.deliverySliceRevisionIDs.includes(deliverySliceRevisionID),
+    )
+    const activeSessionIDs = subjectDispatches
+      .filter((dispatch) => activeExecutionSessionIDs.has(dispatch.sessionID))
+      .map((dispatch) => dispatch.sessionID)
+    const applicableDispatchArtifactIDs = new Set(subjectDispatches.map((dispatch) => dispatch.artifactID))
+    const scopedReviewProjections = reviewProjections.filter(({ projection }) =>
+      projection.deliverySliceRevisionIDs.includes(deliverySliceRevisionID),
+    )
+    const scopedArtifacts = [
+      ...artifacts.filter((artifact) => applicableDispatchArtifactIDs.has(artifact.id)),
+      ...scopedReviewProjections.map(({ artifact }) => artifact),
+    ]
+    const reviewAssociations = scopedReviewProjections.map(({ artifact, projection }) => ({
+      artifactID: artifact.id,
+      deliverySliceRevisionID,
+      judgment: projection.judgment,
+    }))
+    return deriveDeliverySliceFacts({
+      deliverySliceRevisionID,
+      associatedSessionIDs: subjectDispatches.map((dispatch) => dispatch.sessionID),
+      activeSessionIDs,
+      evidenceArtifactIDs: scopedArtifacts.map((artifact) => artifact.id),
+      reviewAssociations,
+      ...(currentCompletionDecision
+        ? {
+            completionDecision: {
+              artifactID: currentCompletionDecision.id,
+              acceptedDeliverySliceRevisionIDs: currentCompletionDecision.payload.accepted_delivery_slice_revision_ids,
+            },
+          }
+        : {}),
+    })
+  }
+  const boardGoals = goals.map((goal) => {
+    const identity = identityByRevisionID.get(goal.id)
+    if (!identity) throw new Error(`Current Delivery Slice revision ${goal.id} has no membership identity`)
+    return {
+      goalID: goal.id,
+      deliverySliceID: identity.deliverySliceID,
+      deliverySliceRevisionID: identity.deliverySliceRevisionID,
+      revision: identity.revision,
+      ...(identity.priorRevisionID ? { priorRevisionID: identity.priorRevisionID } : {}),
+      orderKey: timelineOrderKey({
+        domain: "board_goal",
+        time: goal.time_created,
+        id: goal.id,
+      }),
+      goalTitle: goal.title,
+      goalObjective: goal.objective?.trim() ? goal.objective.trim() : undefined,
+      kind: goal.kind,
+      ownedPaths: goal.owned_paths,
+      ...factsForRevision(goal.id),
+      contribution: contributionForRevision(goal.id, goal.owned_paths),
+      orderIndex: goal.order_index,
+      acceptanceSpecs: parseAcceptanceSpecs(goal.acceptance_specs, `engine_goal ${goal.id}.acceptance_specs`),
+      priority: (goal.priority ?? "blocking") as "blocking" | "advisory",
+    }
+  })
+  return {
+    goals: boardGoals,
+    requirements: buildRequirementSetRequirements(artifacts, goals, currentCompletionDecision),
+    architect: buildArchitectSummary(artifacts),
+  }
+}
+
+function buildRequirementSetRequirements(
+  artifacts: ArtifactRow[],
+  goals: Array<Pick<typeof EngineGoalTable.$inferSelect, "id" | "requirement_set_artifact_id" | "acceptance_specs">>,
+  completionDecision: ReturnType<typeof findTaskCompletionDecisionForTerminalTime>,
+) {
+  return artifacts
+    .filter((artifact) => artifact.kind === "requirement_set")
+    .flatMap((artifact) => {
+      const requirementSet = artifact.payload as unknown as RequirementSet
+      return requirementSet.requirements.map((requirement) => {
+        const claimingGoals = goals.filter(
+          (goal) =>
+            goal.requirement_set_artifact_id === artifact.id &&
+            requirementIDsFromAcceptanceSpecs(
+              parseAcceptanceSpecs(goal.acceptance_specs, `engine_goal(${goal.id}).acceptance_specs`),
+            ).includes(requirement.id),
+        )
+        const claimingDeliverySliceRevisionIDs = claimingGoals.map((goal) => goal.id)
+        const acceptedRevisionIDs = new Set(completionDecision?.payload.accepted_delivery_slice_revision_ids ?? [])
+        const acceptedDeliverySliceRevisionIDs = claimingDeliverySliceRevisionIDs.filter((goalID) =>
+          acceptedRevisionIDs.has(goalID),
+        )
+        return {
+          id: `${artifact.id}:${requirement.id}`,
+          description: requirement.description,
+          type: requirement.type === "explicit" ? ("explicit" as const) : ("inferred" as const),
+          priority: "blocking" as const,
+          acceptance: {
+            accepted:
+              claimingDeliverySliceRevisionIDs.length > 0 &&
+              acceptedDeliverySliceRevisionIDs.length === claimingDeliverySliceRevisionIDs.length,
+            claimingDeliverySliceRevisionIDs,
+            acceptedDeliverySliceRevisionIDs,
+            ...(completionDecision ? { completionDecisionArtifactID: completionDecision.id } : {}),
+          },
+        }
+      })
+    })
+}
+
+/** Build architect summary from the Architect Contract Graph artifact. */
+function buildArchitectSummary(artifacts: ArtifactRow[]) {
+  const graphs = artifacts
+    .filter((artifact) => artifact.kind === "architect_contract_graph")
+    .map((artifact) => ({
+      artifactID: artifact.id,
+      graph: ArchitectContractGraphSchema.parse((artifact.payload as { graph?: unknown } | null | undefined)?.graph),
+    }))
+  if (graphs.length === 0) return undefined
+  const categories = [...new Set(graphs.flatMap(({ graph }) => graph.contracts.map((contract) => contract.kind)))]
+  const contractCount = graphs.reduce((count, { graph }) => count + graph.contracts.length, 0)
+  return {
+    summary: `${graphs.length} ContractGraph artifact(s) and ${contractCount} interface contracts; every artifact remains visible.`,
+    contractCount,
+    categories,
+    decisions: graphs.flatMap(({ artifactID, graph }) => [
+      ...graph.contracts.map((contract) => ({
+        key: `${artifactID}:${contract.kind}`,
+        value: `${contract.name}: ${contract.summary}`,
+        reason: `artifact=${artifactID}; producer=${contract.producer_goal_id}; consumers=${contract.consumer_goal_ids.join(", ") || "(none)"}`,
+        goalID: contract.producer_goal_id,
+      })),
+    ]),
   }
 }

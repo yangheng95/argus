@@ -1,0 +1,372 @@
+/**
+ * Capability profiles for Hexin-gateway models.
+ *
+ * The gateway's /v1/models endpoint only returns {id, object, created,
+ * owned_by}. This table describes behavioral capabilities that are not
+ * authoritative limit metadata. Context and output limits come from the
+ * gateway's /v1/model/info response during explicit refresh.
+ *
+ * Unknown model IDs fall through to a conservative default (toolcall-capable
+ * text-only, no reasoning/image/pdf) and log a warning so the table can be
+ * updated.
+ */
+import { Log } from "../util/log"
+import { GLM_EVALUATION_TEMPERATURE, THINKING_MODEL_TOP_P } from "./sampling"
+
+const log = Log.create({ service: "hexin-profiles" })
+
+export interface HexinModelProfile {
+  name: string
+  family: string
+  reasoning: boolean
+  temperature?: boolean
+  attachment: boolean
+  image_in: boolean
+  pdf_in: boolean
+  toolcall: boolean
+  interleaved?: false | { field: "reasoning_content" | "reasoning_details" }
+  transform?: {
+    sampling?: {
+      temperature?: number
+      topP?: number
+      topK?: number
+    }
+    options?: Record<string, unknown>
+  }
+}
+
+const DEFAULT_PROFILE: HexinModelProfile = {
+  name: "",
+  family: "unknown",
+  reasoning: false,
+  temperature: true,
+  attachment: false,
+  image_in: false,
+  pdf_in: false,
+  toolcall: true,
+  interleaved: false,
+}
+
+interface Matcher {
+  test: (id: string) => boolean
+  profile: Omit<HexinModelProfile, "name">
+  contractIDs?: readonly string[]
+}
+
+const MATCHERS: Matcher[] = [
+  // Claude Sonnet 4.6 variants: Hexin /v1/model/info reported
+  // max_input_tokens 1000000 and max_output_tokens 64000 on 2026-06-27
+  // for claude-sonnet-4-6, claude-sonnet-4-6-bak,
+  // cy-claude-sonnet-4-6, and cy-claude-sonnet-4-6-v2.
+  {
+    test: (id) => /(^|\/)(?:cy-)?claude-sonnet-4-6(?:-v2|-bak)?$/i.test(id),
+    profile: {
+      family: "claude",
+      reasoning: true,
+      attachment: true,
+      image_in: true,
+      pdf_in: true,
+      toolcall: true,
+    },
+  },
+  // Claude family — reasoning + vision + pdf
+  {
+    test: (id) => /claude-haiku/i.test(id),
+    profile: {
+      family: "claude",
+      reasoning: false,
+      attachment: true,
+      image_in: true,
+      pdf_in: true,
+      toolcall: true,
+    },
+  },
+  {
+    test: (id) => /claude-(sonnet|opus)|Claude-\d/i.test(id),
+    profile: {
+      family: "claude",
+      reasoning: true,
+      attachment: true,
+      image_in: true,
+      pdf_in: true,
+      toolcall: true,
+    },
+  },
+  // OpenAI GPT family
+  // Order matters: specific matchers (mini / nano / codex) first, then the
+  // vision-capable GPT-5.x full model, then the generic default.
+  //
+  // The vision capability of the `gpt-5.x` full model (here gpt-5.4) was
+  // verified against the hexin gateway on 2026-04-21 with a multimodal
+  // image_url payload — HTTP 200 and an accurate description came back, so
+  // `image_in: true` is evidence-backed. `pdf_in` and `reasoning` were
+  // NOT verified in that probe; keep them false until evidence arrives.
+  // mini / nano / codex branches stay conservative for the same reason —
+  // each one needs its own probe before flipping its flags.
+  {
+    test: (id) => /^gpt-5\.5$/i.test(id),
+    profile: {
+      family: "gpt-5",
+      reasoning: true,
+      attachment: true,
+      image_in: true,
+      pdf_in: false,
+      toolcall: true,
+    },
+  },
+  {
+    test: (id) => /^gpt-5\.4$/i.test(id),
+    profile: {
+      family: "gpt-5",
+      reasoning: true,
+      attachment: true,
+      image_in: true,
+      pdf_in: false,
+      toolcall: true,
+    },
+  },
+  {
+    test: (id) => /^gpt-5\.\d+-mini/i.test(id),
+    profile: {
+      family: "gpt-5",
+      reasoning: false,
+      attachment: false,
+      image_in: false,
+      pdf_in: false,
+      toolcall: true,
+    },
+  },
+  {
+    test: (id) => /^gpt-5\.\d+-nano/i.test(id),
+    profile: {
+      family: "gpt-5",
+      reasoning: false,
+      attachment: false,
+      image_in: false,
+      pdf_in: false,
+      toolcall: true,
+    },
+  },
+  {
+    // Only the bare `gpt-5.X` id — no `-chat`, `-preview`, `-2025-xx` etc.
+    // Variants were not probed individually and OpenAI has historically
+    // differed on chat vs. base vs. preview capability matrices, so leave
+    // them to the generic default until there is evidence for each.
+    test: (id) => /^gpt-5\.\d+$/i.test(id),
+    profile: {
+      family: "gpt-5",
+      reasoning: false,
+      attachment: true,
+      image_in: true,
+      pdf_in: false,
+      toolcall: true,
+    },
+  },
+  {
+    test: (id) => /^gpt-/i.test(id),
+    profile: {
+      family: "gpt-5",
+      reasoning: false,
+      attachment: false,
+      image_in: false,
+      pdf_in: false,
+      toolcall: true,
+    },
+  },
+  // Gemini — image output
+  {
+    test: (id) => /gemini/i.test(id),
+    profile: {
+      family: "gemini",
+      reasoning: false,
+      attachment: true,
+      image_in: true,
+      pdf_in: false,
+      toolcall: true,
+    },
+  },
+  // Kimi K2.5: Hexin /v1/model/info reported max_tokens,
+  // max_input_tokens, and max_output_tokens as 262144 on 2026-06-27.
+  {
+    test: (id) => /(^|\/)kimi-k2\.5$/i.test(id),
+    contractIDs: ["kimi-k2.5"],
+    profile: {
+      family: "kimi",
+      reasoning: true,
+      attachment: true,
+      image_in: true,
+      pdf_in: false,
+      toolcall: true,
+      interleaved: { field: "reasoning_content" },
+    },
+  },
+  // Kimi K2.6: thinking is enabled by default; fixed sampling and
+  // reasoning_content round-tripping are required by Moonshot's API contract.
+  // Hexin /v1/model/info reported max_tokens, max_input_tokens, and
+  // max_output_tokens as 262144 on 2026-06-27. The generated provider
+  // snapshot marks Kimi K2.6 image-capable; keep PDF disabled here until
+  // the exact Hexin route is verified for PDF input.
+  {
+    test: (id) => /(^|\/)kimi-k2\.6$/i.test(id),
+    contractIDs: ["kimi-k2.6"],
+    profile: {
+      family: "kimi",
+      reasoning: true,
+      temperature: false,
+      attachment: true,
+      image_in: true,
+      pdf_in: false,
+      toolcall: true,
+      interleaved: { field: "reasoning_content" },
+    },
+  },
+  // Kimi K2.7 Code: direct Hexin probe accepted image input and returned
+  // reasoning_content. The same route rejects arbitrary temperature values;
+  // keep fixed Moonshot sampling and leave PDF disabled until verified.
+  // Hexin /v1/model/info reported max_tokens, max_input_tokens, and
+  // max_output_tokens as 262144 on 2026-06-27.
+  {
+    test: (id) => /(^|\/)kimi-k2\.7-code$/i.test(id),
+    contractIDs: ["kimi-k2.7-code"],
+    profile: {
+      family: "kimi",
+      reasoning: true,
+      temperature: false,
+      attachment: true,
+      image_in: true,
+      pdf_in: false,
+      toolcall: true,
+      interleaved: { field: "reasoning_content" },
+    },
+  },
+  // Kimi
+  {
+    test: (id) => /kimi/i.test(id),
+    profile: {
+      family: "kimi",
+      reasoning: false,
+      attachment: false,
+      image_in: false,
+      pdf_in: false,
+      toolcall: true,
+    },
+  },
+  // GLM (General Language Model) 5.x defaults to thinking mode and carries
+  // preserved reasoning through reasoning_content on OpenAI-compatible APIs.
+  {
+    test: (id) => /(^|\/)glm-5(?:\.\d+)?$/i.test(id),
+    contractIDs: ["glm-5", "glm-5.1"],
+    profile: {
+      family: "glm",
+      reasoning: true,
+      attachment: false,
+      image_in: false,
+      pdf_in: false,
+      toolcall: true,
+      interleaved: { field: "reasoning_content" },
+      transform: {
+        sampling: {
+          temperature: GLM_EVALUATION_TEMPERATURE,
+          topP: THINKING_MODEL_TOP_P,
+        },
+        options: {
+          thinking: {
+            type: "enabled",
+            clear_thinking: false,
+          },
+        },
+      },
+    },
+  },
+  // GLM (General Language Model)
+  {
+    test: (id) => /^glm-|\/glm-/i.test(id),
+    profile: {
+      family: "glm",
+      reasoning: false,
+      attachment: false,
+      image_in: false,
+      pdf_in: false,
+      toolcall: true,
+    },
+  },
+  // Qwen 3.7 Max runs in thinking mode behind Hexin/LiteLLM and rejects
+  // required/object tool_choice. Mark it as reasoning so SessionLoop uses
+  // soft tool choice for terminal and structured-output turns.
+  {
+    test: (id) => /(^|\/)qwen3\.7-max$/i.test(id),
+    contractIDs: ["qwen3.7-max"],
+    profile: {
+      family: "qwen",
+      reasoning: true,
+      attachment: true,
+      image_in: true,
+      pdf_in: false,
+      toolcall: true,
+      interleaved: { field: "reasoning_content" },
+    },
+  },
+  // Qwen
+  {
+    test: (id) => /qwen/i.test(id),
+    profile: {
+      family: "qwen",
+      reasoning: false,
+      attachment: false,
+      image_in: false,
+      pdf_in: false,
+      toolcall: true,
+    },
+  },
+  // Doubao
+  {
+    test: (id) => /doubao/i.test(id),
+    profile: {
+      family: "doubao",
+      reasoning: false,
+      attachment: false,
+      image_in: false,
+      pdf_in: false,
+      toolcall: true,
+    },
+  },
+  // MiniMax
+  {
+    test: (id) => /minimax/i.test(id),
+    profile: {
+      family: "minimax",
+      reasoning: false,
+      attachment: false,
+      image_in: false,
+      pdf_in: false,
+      toolcall: true,
+    },
+  },
+]
+
+function displayName(id: string): string {
+  const trimmed = id.replace(/^[^/]+\//, "")
+  return trimmed.replace(/[-_.]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+export function profileFor(id: string): HexinModelProfile {
+  for (const matcher of MATCHERS) {
+    if (matcher.test(id)) {
+      return { ...matcher.profile, name: displayName(id) }
+    }
+  }
+  log.warn("no profile for hexin model — using conservative default", { id })
+  return { ...DEFAULT_PROFILE, name: displayName(id) }
+}
+
+export function interleavedReasoningProfileContractIDs(): string[] {
+  return MATCHERS.flatMap((matcher) =>
+    typeof matcher.profile.interleaved === "object" ? Array.from(matcher.contractIDs ?? []) : [],
+  )
+}
+
+export function interleavedReasoningProfileContractGaps(): string[] {
+  return MATCHERS.filter(
+    (matcher) => typeof matcher.profile.interleaved === "object" && !matcher.contractIDs?.length,
+  ).map((matcher) => matcher.profile.family)
+}

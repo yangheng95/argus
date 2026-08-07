@@ -1,15 +1,15 @@
 import { RequestError, type McpServer } from "@agentclientprotocol/sdk"
 import type { ACPSessionState } from "./types"
 import { Log } from "@/util/log"
-import type { OpencodeClient } from "@opencorvus-ai/sdk/v2"
+import type { OpenCorvusClient } from "@opencorvus-ai/sdk"
 
 const log = Log.create({ service: "acp-session-manager" })
 
 export class ACPSessionManager {
   private sessions = new Map<string, ACPSessionState>()
-  private sdk: OpencodeClient
+  private sdk: OpenCorvusClient
 
-  constructor(sdk: OpencodeClient) {
+  constructor(sdk: OpenCorvusClient) {
     this.sdk = sdk
   }
 
@@ -17,10 +17,26 @@ export class ACPSessionManager {
     return this.sessions.get(sessionId)
   }
 
-  async create(cwd: string, mcpServers: McpServer[], model?: ACPSessionState["model"]): Promise<ACPSessionState> {
+  snapshot(sessionId: string): ACPSessionState | undefined {
+    const state = this.sessions.get(sessionId)
+    return state ? cloneSessionState(state) : undefined
+  }
+
+  restore(sessionId: string, snapshot: ACPSessionState | undefined): void {
+    if (snapshot) this.sessions.set(sessionId, cloneSessionState(snapshot))
+    else this.sessions.delete(sessionId)
+  }
+
+  async create(
+    cwd: string,
+    mcpServers: McpServer[],
+    model: ACPSessionState["model"],
+    modeId: string,
+  ): Promise<ACPSessionState> {
     const session = await this.sdk.session
       .create(
         {
+          kind: "assistant",
           directory: cwd,
         },
         { throwOnError: true },
@@ -36,6 +52,7 @@ export class ACPSessionManager {
       mcpServers,
       createdAt: new Date(),
       model: resolvedModel,
+      modeId,
     }
     log.info("creating_session", { state })
 
@@ -47,7 +64,8 @@ export class ACPSessionManager {
     sessionId: string,
     cwd: string,
     mcpServers: McpServer[],
-    model?: ACPSessionState["model"],
+    model: ACPSessionState["model"],
+    modeId: string,
   ): Promise<ACPSessionState> {
     const session = await this.sdk.session
       .get(
@@ -67,6 +85,7 @@ export class ACPSessionManager {
       mcpServers,
       createdAt: new Date(session.time.created),
       model: resolvedModel,
+      modeId,
     }
     log.info("loading_session", { state })
 
@@ -112,5 +131,14 @@ export class ACPSessionManager {
     session.modeId = modeId
     this.sessions.set(sessionId, session)
     return session
+  }
+}
+
+function cloneSessionState(input: ACPSessionState): ACPSessionState {
+  return {
+    ...input,
+    mcpServers: input.mcpServers.map((server) => ({ ...server }) as McpServer),
+    createdAt: new Date(input.createdAt),
+    model: input.model ? { ...input.model } : undefined,
   }
 }

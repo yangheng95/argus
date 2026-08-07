@@ -1,0 +1,4 @@
+interface:
+  display_name: "Source System Mapping"
+  short_description: "Role-local Mirror Prism guidance"
+  default_prompt: "Execute only this role contract from accepted evidence."

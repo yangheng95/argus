@@ -1,5 +1,7 @@
 import { Bot, InputFile } from "grammy"
+import { createHttpAudioSource } from "./audio-download"
 import type { AudioAttachment, ChannelAdapter, MessageHandler } from "../adapter"
+import { assertSTTAudioSize } from "../stt/limits"
 
 export class TelegramAdapter implements ChannelAdapter {
   readonly platform = "telegram"
@@ -40,9 +42,13 @@ export class TelegramAdapter implements ChannelAdapter {
       const thread = String(ctx.message.reply_to_message?.message_id ?? ctx.message.message_id)
       const user = String(ctx.from.id)
 
-      const audio = await this.downloadTelegramFile(ctx.message.voice.file_id, "audio/ogg", ctx.message.voice.duration)
-
-      if (!audio) return
+      const audio = this.createTelegramAudioSource(
+        ctx.message.voice.file_id,
+        "audio/ogg",
+        ctx.message.voice.duration,
+        undefined,
+        ctx.message.voice.file_size,
+      )
 
       await this.handler({
         platform: this.platform,
@@ -63,14 +69,13 @@ export class TelegramAdapter implements ChannelAdapter {
       const thread = String(ctx.message.reply_to_message?.message_id ?? ctx.message.message_id)
       const user = String(ctx.from.id)
 
-      const audio = await this.downloadTelegramFile(
+      const audio = this.createTelegramAudioSource(
         ctx.message.audio.file_id,
         ctx.message.audio.mime_type ?? "audio/mpeg",
         ctx.message.audio.duration,
         ctx.message.audio.file_name,
+        ctx.message.audio.file_size,
       )
-
-      if (!audio) return
 
       await this.handler({
         platform: this.platform,
@@ -87,38 +92,37 @@ export class TelegramAdapter implements ChannelAdapter {
     console.log(`[Telegram] Bot started (long polling)`)
   }
 
-  private async downloadTelegramFile(
+  private createTelegramAudioSource(
     fileId: string,
     mime: string,
     duration?: number,
     filename?: string,
-  ): Promise<AudioAttachment | undefined> {
-    try {
-      const file = await this.bot.api.getFile(fileId)
-      const filePath = file.file_path
-      if (!filePath) {
-        console.error("[Telegram] getFile returned no file_path")
-        return undefined
-      }
+    metadataSize?: number,
+  ): AudioAttachment {
+    return {
+      mime,
+      filename,
+      size: metadataSize,
+      duration,
+      read: async (maxFileSizeBytes) => {
+        if (metadataSize !== undefined) {
+          assertSTTAudioSize(metadataSize, maxFileSizeBytes)
+        }
+        const file = await this.bot.api.getFile(fileId)
+        const filePath = file.file_path
+        if (!filePath) {
+          throw new Error("[Telegram] getFile returned no file_path")
+        }
 
-      const url = `https://api.telegram.org/file/bot${this.token}/${filePath}`
-      const res = await fetch(url, { signal: AbortSignal.timeout(30_000) })
-      if (!res.ok) {
-        console.error(`[Telegram] Failed to download file: ${res.status}`)
-        return undefined
-      }
-
-      const buffer = Buffer.from(await res.arrayBuffer())
-      return {
-        data: buffer,
-        mime,
-        filename,
-        size: buffer.length,
-        duration,
-      }
-    } catch (err) {
-      console.error("[Telegram] Audio download error:", err)
-      return undefined
+        const url = `https://api.telegram.org/file/bot${this.token}/${filePath}`
+        return createHttpAudioSource({
+          url,
+          mime,
+          filename,
+          size: file.file_size ?? metadataSize,
+          duration,
+        }).read(maxFileSizeBytes)
+      },
     }
   }
 

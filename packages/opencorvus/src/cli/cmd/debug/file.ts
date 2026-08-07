@@ -77,7 +77,7 @@ const FileTreeCommand = cmd({
       default: process.cwd(),
     }),
   async handler(args) {
-    const files = await Ripgrep.tree({ cwd: args.dir, limit: 200 })
+    const files = await Ripgrep.treeHost({ cwd: args.dir, limit: 200 })
     console.log(JSON.stringify(files, null, 2))
   },
 })

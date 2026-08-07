@@ -4,7 +4,9 @@ import z from "zod"
 import { File } from "../../file"
 import { Ripgrep } from "../../file/ripgrep"
 import { LSP } from "../../lsp"
+import { SymbolSchema } from "../../lsp/schema"
 import { Instance } from "../../project/instance"
+import { errors, namedErrorResponse } from "../error"
 import { lazy } from "../../util/lazy"
 
 export const FileRoutes = lazy(() =>
@@ -24,6 +26,7 @@ export const FileRoutes = lazy(() =>
               },
             },
           },
+          ...errors(500),
         },
       }),
       validator(
@@ -34,7 +37,7 @@ export const FileRoutes = lazy(() =>
       ),
       async (c) => {
         const pattern = c.req.valid("query").pattern
-        const result = await Ripgrep.search({
+        const result = await Ripgrep.searchHost({
           cwd: Instance.directory,
           pattern,
           limit: 10,
@@ -57,6 +60,7 @@ export const FileRoutes = lazy(() =>
               },
             },
           },
+          ...errors(500),
         },
       }),
       validator(
@@ -93,7 +97,7 @@ export const FileRoutes = lazy(() =>
             description: "Symbols",
             content: {
               "application/json": {
-                schema: resolver(LSP.Symbol.array()),
+                schema: resolver(SymbolSchema.array()),
               },
             },
           },
@@ -106,12 +110,9 @@ export const FileRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        /*
-      const query = c.req.valid("query").query
-      const result = await LSP.workspaceSymbol(query)
-      return c.json(result)
-      */
-        return c.json([])
+        const query = c.req.valid("query").query
+        const result = await LSP.workspaceSymbol(query)
+        return c.json(result)
       },
     )
     .get(
@@ -158,6 +159,8 @@ export const FileRoutes = lazy(() =>
               },
             },
           },
+          404: namedErrorResponse("File not found", "FileNotFoundError"),
+          500: namedErrorResponse("File read failed", "UnknownError"),
         },
       }),
       validator(
@@ -170,6 +173,167 @@ export const FileRoutes = lazy(() =>
         const path = c.req.valid("query").path
         const content = await File.read(path)
         return c.json(content)
+      },
+    )
+    .patch(
+      "/file/content",
+      describeRoute({
+        summary: "Write file",
+        description: "Write text content to an existing editable file in the project directory.",
+        operationId: "file.write",
+        responses: {
+          200: {
+            description: "Updated file content",
+            content: {
+              "application/json": {
+                schema: resolver(File.Content),
+              },
+            },
+          },
+          ...errors(400, 404, 500),
+        },
+      }),
+      validator(
+        "json",
+        z.object({
+          path: z.string(),
+          content: z.string(),
+        }),
+      ),
+      async (c) => {
+        const input = c.req.valid("json")
+        const content = await File.writeText(input.path, input.content)
+        return c.json(content)
+      },
+    )
+    .post(
+      "/file/item",
+      describeRoute({
+        summary: "Create file item",
+        description: "Create one file or directory under an existing project directory without overwriting.",
+        operationId: "file.create",
+        responses: {
+          200: {
+            description: "Created file node",
+            content: {
+              "application/json": {
+                schema: resolver(File.Node),
+              },
+            },
+          },
+          ...errors(400, 404, 409),
+        },
+      }),
+      validator("json", File.CreateRequest),
+      async (c) => {
+        const input = c.req.valid("json")
+        const node = await File.create(input)
+        return c.json(node)
+      },
+    )
+    .post(
+      "/file/item/copy",
+      describeRoute({
+        summary: "Copy file item",
+        description: "Copy one file or directory within the project directory without overwriting.",
+        operationId: "file.copy",
+        responses: {
+          200: {
+            description: "Copied file node",
+            content: {
+              "application/json": {
+                schema: resolver(File.CopyResult),
+              },
+            },
+          },
+          ...errors(400, 404, 409),
+        },
+      }),
+      validator("json", File.CopyRequest),
+      async (c) => {
+        const input = c.req.valid("json")
+        const result = await File.copy(input)
+        return c.json(result)
+      },
+    )
+    .patch(
+      "/file/item",
+      describeRoute({
+        summary: "Move file item",
+        description: "Move or rename one file or directory within the project directory without overwriting.",
+        operationId: "file.move",
+        responses: {
+          200: {
+            description: "Moved file node",
+            content: {
+              "application/json": {
+                schema: resolver(File.MoveResult),
+              },
+            },
+          },
+          ...errors(400, 404, 409),
+        },
+      }),
+      validator("json", File.MoveRequest),
+      async (c) => {
+        const input = c.req.valid("json")
+        const result = await File.move(input)
+        return c.json(result)
+      },
+    )
+    .delete(
+      "/file/item",
+      describeRoute({
+        summary: "Delete file item",
+        description: "Delete one project file or directory recursively. The project root cannot be deleted.",
+        operationId: "file.delete",
+        responses: {
+          200: {
+            description: "Deleted file path",
+            content: {
+              "application/json": {
+                schema: resolver(File.DeleteResult),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator(
+        "query",
+        z.object({
+          path: z.string(),
+        }),
+      ),
+      async (c) => {
+        const path = c.req.valid("query").path
+        const result = await File.remove({ path })
+        return c.json(result)
+      },
+    )
+    .post(
+      "/file/upload",
+      describeRoute({
+        summary: "Upload files",
+        description: "Write dropped files into an existing project directory without overwriting existing files.",
+        operationId: "file.upload",
+        responses: {
+          200: {
+            description: "Uploaded files",
+            content: {
+              "application/json": {
+                schema: resolver(File.UploadResult.array()),
+              },
+            },
+          },
+          ...errors(400, 409),
+        },
+      }),
+      validator("json", File.UploadRequest),
+      async (c) => {
+        const input = c.req.valid("json")
+        const result = await File.upload(input)
+        return c.json(result)
       },
     )
     .get(

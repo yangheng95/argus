@@ -8,7 +8,7 @@ type Call = {
 }
 
 function objectValue(value: unknown) {
-  return value && typeof value === "object" ? value as Record<string, unknown> : undefined
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : undefined
 }
 
 function stringValue(value: unknown) {
@@ -31,7 +31,10 @@ async function callFinish(hook: TextHooks | undefined, event: Parameters<NonNull
   await hook?.onFinish?.(event)
 }
 
-async function callStepFinish(hook: TextHooks | undefined, event: Parameters<NonNullable<TextHooks["onStepFinish"]>>[0]) {
+async function callStepFinish(
+  hook: TextHooks | undefined,
+  event: Parameters<NonNullable<TextHooks["onStepFinish"]>>[0],
+) {
   await hook?.onStepFinish?.(event)
 }
 
@@ -114,7 +117,11 @@ export function createToolInputCapture() {
   }
 }
 
-export function createTrackedToolCapture<T>(toolName: string, schema: ZodType<T>, onCapture?: (value: T) => void | Promise<void>) {
+export function createTrackedToolCapture<T>(
+  toolName: string,
+  schema: ZodType<T>,
+  onCapture?: (value: T) => void | Promise<void>,
+) {
   const base = createToolInputCapture()
   let captured: T | undefined
   let notified = false

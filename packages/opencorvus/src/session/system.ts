@@ -1,26 +1,14 @@
 import os from "os"
 import { Instance } from "../project/instance"
+import { Project } from "../project/project"
 import { Shell } from "@/shell/shell"
-import { Config } from "@/config/config"
-import { Skill } from "@/skill"
-import { PermissionNext } from "@/permission/next"
+import { EffectiveConfig } from "@/config/effective"
+import type { ResolvedSkillSurface } from "@/skill/surface"
+import type { Config } from "@/config/config"
 
 import PROMPT_SYSTEM from "./prompt/system.txt"
 import type { Provider } from "@/provider/provider"
-import type { Agent } from "@/agent/agent"
-
-const TUI_WORKFLOW = [
-  "<tui-workflow>",
-  "If the `tui` tool is available, prefer this control flow for deterministic TUI automation:",
-  "1) Call `tui` with action `status` first.",
-  "2) If runtime is not running and you need managed control, call `tui` with action `start`.",
-  "3) Submit work via `tui` action `submit_task` (preferred) or `append_prompt` + `submit_prompt`.",
-  "4) Use `tui` action `status` to monitor runtime and session progress.",
-  "5) Use `tui` action `execute_command` only for explicit UI commands (open dialogs, cycling, paging).",
-  "6) Avoid blind command chains; always check `status` before and after major actions.",
-  "Command aliases are exposed by `tui.status.commands.aliases`.",
-  "</tui-workflow>",
-].join("\n")
+import type { SessionAgentRuntime } from "@/agent/session-agent-runtime"
 
 function platformName(): string {
   switch (process.platform) {
@@ -52,21 +40,28 @@ function utcOffset(now: Date): string {
 }
 
 export namespace SystemPrompt {
+  export function requestLanguage(): string {
+    return [
+      "## Response Language",
+      "",
+      "Answer in the language used by the current request's authored instructions. Treat quoted source text, code, paths, commands, identifiers, API names, and runtime protocol scaffolding as content to preserve, not evidence that changes the response language. If the request explicitly asks for a response language, follow that request.",
+    ].join("\n")
+  }
+
   /** Resolve the core system prompt string, respecting config.prompt.core_header override. */
   export async function instructions(): Promise<string> {
-    const cfg = await Config.get()
+    const cfg = await EffectiveConfig.effective()
     return cfg.prompt?.["core_header"] ?? PROMPT_SYSTEM
   }
 
-  export async function provider(model: Provider.Model) {
-    const cfg = await Config.get()
+  export async function provider(model: Provider.Model, opts?: { sessionID?: string }) {
+    const cfg = await EffectiveConfig.effective(opts?.sessionID ? { sessionID: opts.sessionID } : undefined)
     const override = cfg.prompt?.["core_header"]
     if (override) return [override]
     return [PROMPT_SYSTEM]
   }
 
   export async function environment(model: Provider.Model) {
-    const project = Instance.project
     const platform = platformName()
     const arch = process.arch
     const hostname = os.hostname()
@@ -82,42 +77,63 @@ export namespace SystemPrompt {
         `<env>`,
         `  Working directory: ${Instance.directory}`,
         `  Workspace root folder: ${Instance.worktree}`,
-        `  Is directory a git repo: ${project.vcs === "git" ? "yes" : "no"}`,
+        `  Is directory a git repo: ${Project.isGitRepo(Instance.directory) ? "yes" : "no"}`,
         `  Platform: ${platform} (${arch})`,
         `  Hostname: ${hostname}`,
         `  Shell: ${shell}`,
         ...(display ? [`  Display-Server: ${display}`] : []),
         `  Today's date: ${now.toDateString()}`,
-        `  Current time (ISO-8601): ${now.toISOString()}`,
         `  Local timezone: ${zone} (UTC${utcOffset(now)})`,
         `</env>`,
       ].join("\n"),
-      TUI_WORKFLOW,
     ]
   }
 
-  export async function skills(agent: Agent.Info): Promise<string | undefined> {
-    if (PermissionNext.disabled(["skill"], agent.permission).has("skill")) return
-
-    const all = await Skill.all()
-    const accessible = all.filter((skill) => {
-      const rule = PermissionNext.evaluate("skill", skill.name, agent.permission)
-      return rule.action !== "deny"
-    })
-    if (accessible.length === 0) return
-
-    const platform = process.platform
-    const compatible = accessible.filter(
-      (s) => s.platforms.length === 0 || s.platforms.includes(platform as "win32" | "darwin" | "linux"),
-    )
-    if (compatible.length === 0) return
+  export async function skills(
+    _agent: SessionAgentRuntime,
+    input: { surface: ResolvedSkillSurface },
+  ): Promise<string | undefined> {
+    const surface = input.surface
+    if (!surface.tool_available) return
+    const mission = surface.family === "mission"
+    const toolID = surface.tool_id
+    const directive = mission ? "mission" : "skill"
+    const label = mission ? "Mission Skill" : "Skill"
+    const compatible = surface.skills.filter((skill) => skill.enabled)
+    const skillRows =
+      compatible.length === 0
+        ? ["- none: No enabled skills are currently mounted for this agent in this turn."]
+        : compatible.map((s) => `- ${s.name}: ${s.description}`)
 
     return [
-      "Skills provide specialized instructions and workflows for specific tasks.",
-      "Use the skill tool to load a skill when a task matches its description.",
+      `## ${label} Policy`,
+      "",
+      mission
+        ? "Mission Skills are curated orchestration contracts for coordinating Mission-owned work across one or more fixed-profile Tasks."
+        : "Skills are curated, tested workflows for recurring task shapes (webpage cloning, spec research, acceptance verification, etc.). Each skill bundles the task contract, evidence expectations, and resource files.",
+      `The \`${toolID}\` tool can search mounted skills. Call it without a name to list them, or with \`query\` to fuzzy-search mounted skill titles and SKILL.md contents before loading an exact skill name.`,
+      "",
+      `### Mounted ${label}s`,
+      "The entries below are already mounted for this agent in the current turn. Treat them as the agent's available skill surface, not as optional global suggestions.",
+      "",
+      "### Check First",
+      "1. Before planning or tool use, inspect `<available_skills>` and decide whether the current task overlaps any mounted skill description.",
+      `2. If the task wording is ambiguous, call the \`${toolID}\` tool with \`query\` to fuzzy-search mounted skill titles and SKILL.md contents.`,
+      `3. When a mounted skill is relevant, call the \`${toolID}\` tool with its exact name to load the full instructions into context **before** you start executing.`,
+      `4. When the loaded instructions require a relative supporting file, call the \`${toolID}\` tool again with the same exact \`name\` and that relative \`file\` path. Never send a materialized Skill cache path to the project \`read\` tool.`,
+      "5. Follow the loaded skill's evidence and output contract rather than improvising. Do not repeat acquisition tools once the required evidence artifacts already exist.",
+      "6. If several mounted skills could apply, load the most specific one first; load additional skills only if the task spans their domains.",
+      "",
+      `### Explicit User ${label} Directives`,
+      `A visible user-authored directive in the exact form \`@${directive}("<exact-name>")\` is mandatory, not a search hint. For every such directive, call the \`${toolID}\` tool with that exact name ${
+        mission
+          ? "before planning, writing Mission state, or creating a child Task"
+          : "before planning, delegation, or other execution"
+      }. Never substitute a similar name, silently ignore the directive, or claim the ${label} was loaded without the real tool result.`,
+      `Explicit directives are additive: after loading every named ${label}, you may still search for and load other mounted ${label}s when the task spans additional workflows.`,
       "",
       "<available_skills>",
-      ...compatible.map((s) => `- ${s.name}: ${s.description}`),
+      ...skillRows,
       "</available_skills>",
     ].join("\n")
   }

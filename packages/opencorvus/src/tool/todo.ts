@@ -2,6 +2,7 @@ import z from "zod"
 import { Tool } from "./tool"
 import DESCRIPTION_WRITE from "./todowrite.txt"
 import { Todo } from "../session/todo"
+import { TodoStore } from "../session/todo-store"
 
 export const TodoWriteTool = Tool.define("todowrite", {
   description: DESCRIPTION_WRITE,
@@ -16,7 +17,7 @@ export const TodoWriteTool = Tool.define("todowrite", {
       metadata: {},
     })
 
-    await Todo.update({
+    await TodoStore.update({
       sessionID: ctx.sessionID,
       todos: params.todos,
     })
@@ -41,7 +42,7 @@ export const TodoReadTool = Tool.define("todoread", {
       metadata: {},
     })
 
-    const todos = await Todo.get(ctx.sessionID)
+    const todos = await TodoStore.get(ctx.sessionID)
     return {
       title: `${todos.filter((x) => x.status !== "completed").length} todos`,
       metadata: {

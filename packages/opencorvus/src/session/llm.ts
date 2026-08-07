@@ -1,29 +1,34 @@
-import { Installation } from "@/installation"
 import { Provider } from "@/provider/provider"
+import { ProviderLLM } from "@/provider/llm"
 import { Log } from "@/util/log"
-import {
-  streamText,
-  wrapLanguageModel,
-  type ModelMessage,
-  type StreamTextResult,
-  type Tool,
-  type ToolSet,
-  tool,
-  jsonSchema,
-} from "ai"
+import { Bus } from "@/bus"
+import type { ModelMessage, StopCondition, Tool, ToolSet } from "ai"
+// Use the wrapped streamText from @/llm/api — its Proxy returns
+// `abortableIterable(fullStream, composed)`, which is the only thing that
+// rescues a Bun-fetch-backed reader.read() from parking forever when the
+// LLM-activity gate fires its abort signal. Importing the raw "ai" form
+// bypassed the Proxy and silently parked sub-agents (architect, requirements,
+// build) for 14–25 min during alibaba-coding-plan-cn streams (audit §12,
+// 2026-04-30 r5/r6/r7 bench evidence). Rule 8 — single source.
+import { streamText } from "@/llm/api"
+import type { TextHooks } from "@/llm/api"
 import { mergeDeep, pipe } from "remeda"
 import { ProviderTransform } from "@/provider/transform"
-import { Config } from "@/config/config"
+import { EffectiveConfig } from "@/config/effective"
 import { Instance } from "@/project/instance"
-import type { Agent } from "@/agent/agent"
-import type { Message } from "./message"
+import type { SessionAgentRuntime } from "@/agent/session-agent-runtime"
+import { PrimaryAssistantRegistry } from "@/agent/primary-assistant-registry"
+import { withObservableWorkNarrative } from "@/prompt/fragments/observable-work-narrative"
+import { Message } from "./message"
+import { SessionEvents } from "./events"
+import { sessionLifecycleOrderKey } from "./status"
 import { Plugin } from "@/plugin"
 import { SystemPrompt } from "./system"
 import { Flag } from "@/flag/flag"
 import { PermissionNext } from "@/permission/next"
 import { Auth } from "@/auth"
-import { LLMTrace } from "./llm-trace"
-import { ulid } from "ulid"
+import { AgentTrace } from "@/trace"
+import { sessionParentID, taskIDForSession } from "@/engine/task-session-lineage"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
@@ -33,53 +38,85 @@ export namespace LLM {
     user: Message.User
     sessionID: string
     model: Provider.Model
-    agent: Agent.Info
+    agentID: string
+    agent: SessionAgentRuntime
     system: string[]
     abort: AbortSignal
     messages: ModelMessage[]
     small?: boolean
     tools: Record<string, Tool>
     retries?: number
-    toolChoice?: "auto" | "required" | "none"
+    stopWhen?: StopCondition<ToolSet> | Array<StopCondition<ToolSet>>
+    /**
+     * Optional provider-level tool selection passed through to streamText.
+     * Session completion never pins or requires a terminal tool; a selected
+     * tool is only an explicit caller preference for that provider turn.
+     */
+    toolChoice?: "auto" | "required" | "none" | { type: "tool"; toolName: string }
+    stream?: TextHooks
+    runtimeSystemMode?: "complete"
   }
 
-  export type StreamOutput = StreamTextResult<ToolSet, unknown>
+  export type StreamOutput = ReturnType<typeof streamText<ToolSet>>
 
-  export async function stream(input: StreamInput) {
+  export type StreamResult = ReturnType<typeof streamText<ToolSet>>
+
+  export async function composeSystem(input: {
+    agentID: string
+    agent: SessionAgentRuntime
+    model: Provider.Model
+    system: string[]
+    user: Message.User
+    sessionID?: string
+    runtimeSystemMode?: "complete"
+  }) {
+    const agent = input.agent
+    const completeSystemMode = input.runtimeSystemMode === "complete"
+    const providerPrompt = completeSystemMode
+      ? []
+      : agent.prompt
+        ? [[agent.prompt, agent.promptAppend].filter(Boolean).join("\n")]
+        : await SystemPrompt.provider(input.model, { sessionID: input.sessionID })
+    const composed = [
+      // use agent prompt otherwise provider prompt, unless caller supplied
+      // a complete system prompt for this turn
+      ...providerPrompt,
+      // any custom prompt passed into this call
+      ...input.system,
+    ]
+      .filter((x) => x)
+      .join("\n")
+    return [
+      !completeSystemMode && PrimaryAssistantRegistry.isID(input.agentID)
+        ? withObservableWorkNarrative(composed)
+        : composed,
+    ]
+  }
+
+  export async function stream(input: StreamInput): Promise<StreamResult> {
+    const config = await EffectiveConfig.effective({ sessionID: input.sessionID })
+    const agent = input.agent
     const l = log
       .clone()
       .tag("providerID", input.model.providerID)
       .tag("modelID", input.model.id)
       .tag("sessionID", input.sessionID)
       .tag("small", (input.small ?? false).toString())
-      .tag("agent", input.agent.name)
-      .tag("mode", input.agent.mode)
+      .tag("agent", input.agentID)
     l.info("stream", {
       modelID: input.model.id,
       providerID: input.model.providerID,
     })
     const [language, cfg, provider, auth] = await Promise.all([
-      Provider.getLanguage(input.model),
-      Config.get(),
-      Provider.getProvider(input.model.providerID),
+      Provider.getLanguage(input.model, { config }),
+      Promise.resolve(config),
+      Provider.getProvider(input.model.providerID, { config }),
       Auth.get(input.model.providerID),
     ])
     const isOpenaiOauth = provider.id === "openai" && auth?.type === "oauth"
 
-    const system: string[] = []
-    const providerPrompt = input.agent.prompt ? [input.agent.prompt] : await SystemPrompt.provider(input.model)
-    system.push(
-      [
-        // use agent prompt otherwise provider prompt
-        ...providerPrompt,
-        // any custom prompt passed into this call
-        ...input.system,
-        // any custom prompt from last user message
-        ...(input.user.system ? [input.user.system] : []),
-      ]
-        .filter((x) => x)
-        .join("\n"),
-    )
+    const system = await composeSystem({ ...input, agent, sessionID: input.sessionID })
+    system[0] = [system[0], SystemPrompt.requestLanguage()].filter(Boolean).join("\n\n")
 
     const header = system[0]
     await Plugin.trigger(
@@ -106,28 +143,30 @@ export namespace LLM {
     const options: Record<string, any> = pipe(
       base,
       mergeDeep(input.model.options),
-      mergeDeep(input.agent.options),
+      mergeDeep(agent.options),
       mergeDeep(variant),
     )
     if (isOpenaiOauth) {
       options.instructions = system.join("\n")
     }
 
+    const maxOutputTokens = ProviderTransform.maxOutputTokens(input.model)
     const params = await Plugin.trigger(
       "chat.params",
       {
         sessionID: input.sessionID,
-        agent: input.agent,
+        agent,
         model: input.model,
         provider,
         message: input.user,
       },
       {
         temperature: input.model.capabilities.temperature
-          ? (input.agent.temperature ?? ProviderTransform.temperature(input.model))
+          ? (agent.temperature ?? ProviderTransform.temperature(input.model))
           : undefined,
-        topP: input.agent.topP ?? ProviderTransform.topP(input.model),
+        topP: agent.topP ?? ProviderTransform.topP(input.model),
         topK: ProviderTransform.topK(input.model),
+        maxOutputTokens,
         options,
       },
     )
@@ -136,7 +175,7 @@ export namespace LLM {
       "chat.headers",
       {
         sessionID: input.sessionID,
-        agent: input.agent,
+        agent,
         model: input.model,
         provider,
         message: input.user,
@@ -146,11 +185,12 @@ export namespace LLM {
       },
     )
 
-    const maxOutputTokens =
-      provider.id.includes("github-copilot") ? undefined : ProviderTransform.maxOutputTokens(input.model)
-
-    const tools = await resolveTools(input)
-    const providerOptions = ProviderTransform.providerOptions(input.model, params.options)
+    const tools = await resolveTools({ ...input, agent })
+    const toolChoice = input.toolChoice
+    const providerOptions = ProviderTransform.providerOptions(
+      input.model,
+      ProviderTransform.optionsForToolChoice(input.model, params.options, toolChoice),
+    )
     const requestHeaders = {
       ...(input.model.providerID.startsWith("opencorvus")
         ? {
@@ -159,164 +199,68 @@ export namespace LLM {
             "x-opencorvus-request": input.user.id,
             "x-opencorvus-client": Flag.OPENCORVUS_CLIENT,
           }
-        : input.model.providerID !== "anthropic"
-          ? {
-              "User-Agent": `opencorvus/${Installation.VERSION}`,
-            }
-          : undefined),
-      ...input.model.headers,
+        : ProviderLLM.baseHeaders(input.model, input.sessionID)),
       ...headers,
     }
-    const requestMessages = [
-      ...system.map(
-        (x): ModelMessage => ({
-          role: "system",
-          content: x,
-        }),
-      ),
-      ...input.messages,
-    ]
+    const systemText = system.join("\n")
+    const requestMessages = input.messages
 
-    // LiteLLM and some Anthropic proxies require the tools parameter to be present
-    // when message history contains tool calls, even if no tools are being used.
-    // Add a dummy tool that is never called to satisfy this validation.
-    // This is enabled for:
-    // 1. Providers with "litellm" in their ID or API ID (auto-detected)
-    // 2. Providers with explicit "litellmProxy: true" option (opt-in for custom gateways)
-    const isLiteLLMProxy =
-      provider.options?.["litellmProxy"] === true ||
-      input.model.providerID.toLowerCase().includes("litellm") ||
-      input.model.api.id.toLowerCase().includes("litellm")
-
-    if (isLiteLLMProxy && Object.keys(tools).length === 0 && hasToolCalls(input.messages)) {
-      tools["_noop"] = tool({
-        description:
-          "Placeholder for LiteLLM/Anthropic proxy compatibility - required when message history contains tool calls but no active tools are needed",
-        inputSchema: jsonSchema({ type: "object", properties: {} }),
-        execute: async () => ({ output: "", title: "", metadata: {} }),
-      })
-    }
-
-    const STREAM_INACTIVITY_MS = 2 * 60 * 1000
-
-    const inactivityAbort = new AbortController()
-    let inactivityTimer: ReturnType<typeof setTimeout> | undefined
-
-    const resetInactivityTimer = () => {
-      if (inactivityTimer !== undefined) clearTimeout(inactivityTimer)
-      inactivityTimer = setTimeout(() => {
-        l.warn("stream inactivity timeout", { inactivityMs: STREAM_INACTIVITY_MS, modelID: input.model.id, providerID: input.model.providerID })
-        inactivityAbort.abort(new Error(`LLM stream stalled: no tokens received for ${STREAM_INACTIVITY_MS / 1000}s`))
-      }, STREAM_INACTIVITY_MS)
-    }
-
-    const clearInactivityTimer = () => {
-      if (inactivityTimer !== undefined) {
-        clearTimeout(inactivityTimer)
-        inactivityTimer = undefined
+    if (AgentTrace.isEnabled()) {
+      const parentSessionID = sessionParentID(input.sessionID)
+      const taskID = taskIDForSession(input.sessionID)
+      if (taskID) {
+        AgentTrace.recordLLMRequest({
+          sessionID: input.sessionID,
+          parentSessionID,
+          taskID,
+          agentName: input.agentID,
+          agentMode: "runtime",
+          model: { providerID: input.model.providerID, modelID: input.model.id },
+          small: input.small,
+          toolChoice,
+          requestMessageID: input.user.id,
+          tools: Object.keys(tools),
+        })
       }
     }
 
-    resetInactivityTimer()
-    input.abort.addEventListener("abort", clearInactivityTimer, { once: true })
-
-    const trace = LLMTrace.begin({
-      callID: ulid(),
-      sessionID: input.sessionID,
-      userMessageID: input.user.id,
-      model: {
-        providerID: input.model.providerID,
-        modelID: input.model.id,
-      },
-      agent: {
-        name: input.agent.name,
-        mode: input.agent.mode,
-      },
-      small: input.small ?? false,
-      request: {
-        system,
-        messages: requestMessages,
-        tools: Object.keys(tools),
-        toolChoice: input.toolChoice ?? null,
-        maxRetries: input.retries ?? 0,
-        maxOutputTokens: maxOutputTokens ?? null,
-        temperature: params.temperature ?? null,
-        topP: params.topP ?? null,
-        topK: params.topK ?? null,
-        headers: requestHeaders,
-        providerOptions,
-      },
-    })
-
     const result = streamText({
-      onChunk() {
-        resetInactivityTimer()
-      },
       onError(event) {
-        clearInactivityTimer()
-        l.error("stream error", {
-          error: event.error,
+        void input.stream?.onError?.(event)
+        const error = Message.fromError(event.error, { providerID: input.model.providerID })
+        Bus.publish(SessionEvents.Error, {
+          sessionID: input.sessionID,
+          orderKey: sessionLifecycleOrderKey(input.sessionID),
+          error,
         })
-        trace.error(event.error)
+        l.error("stream error", {
+          error,
+        })
       },
-      onStepFinish(step) {
-        trace.step(step)
-      },
-      onAbort(event) {
-        clearInactivityTimer()
-        trace.abort(event)
-      },
-      onFinish(event) {
-        clearInactivityTimer()
-        trace.finish(event)
-      },
-      async experimental_repairToolCall(failed) {
-        const lower = failed.toolCall.toolName.toLowerCase()
-        if (lower !== failed.toolCall.toolName && tools[lower]) {
-          l.info("repairing tool call", {
-            tool: failed.toolCall.toolName,
-            repaired: lower,
-          })
-          return {
-            ...failed.toolCall,
-            toolName: lower,
-          }
-        }
-        return {
-          ...failed.toolCall,
-          input: JSON.stringify({
-            tool: failed.toolCall.toolName,
-            error: failed.error?.message ?? "unknown error",
-          }),
-          toolName: "invalid",
-        }
-      },
+      // Tool-call repair (name-normalization + discriminated-union legal-value
+      // enumeration) is installed once at the `@/llm/api` streamText wrapper —
+      // single source for every caller (see session/repair-hint.ts
+      // createToolCallRepair). Do not re-add a per-call repair here.
       temperature: params.temperature,
       topP: params.topP,
       topK: params.topK,
       providerOptions,
-      activeTools: Object.keys(tools).filter((x) => x !== "invalid"),
+      activeTools: Object.keys(tools),
       tools,
-      toolChoice: input.toolChoice,
-      maxOutputTokens,
-      abortSignal: AbortSignal.any([input.abort, inactivityAbort.signal]),
+      toolChoice,
+      ...(isOpenaiOauth ? {} : { system: systemText }),
+      maxOutputTokens: params.maxOutputTokens,
+      abortSignal: input.abort,
+      // Disable the wrapper's 5 s default soft timeout — the LLM-activity
+      // gate (`withLLMActivity` in session/processor.ts) is the canonical
+      // idle/timeout authority and composes its own abort signal into
+      // `input.abort`. A second timeout here would race it.
+      timeoutMs: false,
       headers: requestHeaders,
       maxRetries: input.retries ?? 0,
+      stopWhen: input.stopWhen,
       messages: requestMessages,
-      model: wrapLanguageModel({
-        model: language,
-        middleware: [
-          {
-            async transformParams(args) {
-              if (args.type === "stream") {
-                // @ts-expect-error
-                args.params.prompt = ProviderTransform.message(args.params.prompt, input.model, options)
-              }
-              return args.params
-            },
-          },
-        ],
-      }),
+      model: ProviderLLM.wrapModel(language, input.model, options),
       experimental_telemetry: {
         isEnabled: cfg.experimental?.openTelemetry,
         metadata: {
@@ -325,10 +269,6 @@ export namespace LLM {
         },
       },
     })
-    // Expose inactivity timer control so the processor can pause the timer
-    // during tool execution (tools like bash/bun test can run for minutes).
-    ;(result as any).pauseInactivityTimer = clearInactivityTimer
-    ;(result as any).resumeInactivityTimer = resetInactivityTimer
     return result
   }
 
@@ -340,17 +280,5 @@ export namespace LLM {
       }
     }
     return input.tools
-  }
-
-  // Check if messages contain any tool-call content
-  // Used to determine if a dummy tool should be added for LiteLLM proxy compatibility
-  export function hasToolCalls(messages: ModelMessage[]): boolean {
-    for (const msg of messages) {
-      if (!Array.isArray(msg.content)) continue
-      for (const part of msg.content) {
-        if (part.type === "tool-call" || part.type === "tool-result") return true
-      }
-    }
-    return false
   }
 }

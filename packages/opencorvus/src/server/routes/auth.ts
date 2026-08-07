@@ -1,9 +1,19 @@
 import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
+import { NativeAgentRegistryLifecycle } from "@/agent/native-agent-registry-lifecycle"
 import { Auth } from "@/auth"
+import { Provider } from "@/provider/provider"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+import { settleProviderRefreshInvalidation } from "../provider-refresh"
+
+const AuthMutationResponse = z
+  .object({
+    ok: z.literal(true),
+    issues: Provider.LoadIssue.array(),
+  })
+  .strict()
 
 export const AuthRoutes = lazy(() =>
   new Hono()
@@ -18,7 +28,7 @@ export const AuthRoutes = lazy(() =>
             description: "Successfully set authentication credentials",
             content: {
               "application/json": {
-                schema: resolver(z.boolean()),
+                schema: resolver(AuthMutationResponse),
               },
             },
           },
@@ -36,7 +46,11 @@ export const AuthRoutes = lazy(() =>
         const providerID = c.req.valid("param").providerID
         const info = c.req.valid("json")
         await Auth.set(providerID, info)
-        return c.json(true)
+        const issues = await settleProviderRefreshInvalidation([
+          { phase: "cache.provider", run: Provider.resetAll },
+          { phase: "cache.native-agents", run: NativeAgentRegistryLifecycle.resetAll },
+        ])
+        return c.json({ ok: true as const, issues })
       },
     )
     .delete(
@@ -50,7 +64,7 @@ export const AuthRoutes = lazy(() =>
             description: "Successfully removed authentication credentials",
             content: {
               "application/json": {
-                schema: resolver(z.boolean()),
+                schema: resolver(AuthMutationResponse),
               },
             },
           },
@@ -66,7 +80,11 @@ export const AuthRoutes = lazy(() =>
       async (c) => {
         const providerID = c.req.valid("param").providerID
         await Auth.remove(providerID)
-        return c.json(true)
+        const issues = await settleProviderRefreshInvalidation([
+          { phase: "cache.provider", run: Provider.resetAll },
+          { phase: "cache.native-agents", run: NativeAgentRegistryLifecycle.resetAll },
+        ])
+        return c.json({ ok: true as const, issues })
       },
     ),
 )

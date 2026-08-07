@@ -1,6 +1,5 @@
 import { cmd } from "./cmd"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
 import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js"
 import * as prompts from "@clack/prompts"
 import { UI } from "../ui"
@@ -9,11 +8,9 @@ import { McpAuth } from "../../mcp/auth"
 import { McpOAuthProvider } from "../../mcp/oauth-provider"
 import { Config } from "../../config/config"
 import { Instance } from "../../project/instance"
+import { Project } from "../../project/project"
 import { Installation } from "../../installation"
-import path from "path"
 import { Global } from "../../global"
-import { modify, applyEdits } from "jsonc-parser"
-import { Filesystem } from "../../util/filesystem"
 import { Bus } from "../../bus"
 
 function getAuthStatusIcon(status: MCP.AuthStatus): string {
@@ -38,6 +35,10 @@ function getAuthStatusText(status: MCP.AuthStatus): string {
   }
 }
 
+function currentMcpAuthKey(mcpName: string): string {
+  return McpAuth.scopedKey({ projectID: Instance.project.id, mcpName })
+}
+
 type McpEntry = NonNullable<Config.Info["mcp"]>[string]
 
 type McpConfigured = Config.Mcp
@@ -45,7 +46,13 @@ function isMcpConfigured(config: McpEntry): config is McpConfigured {
   return typeof config === "object" && config !== null && "type" in config
 }
 
+type McpDisabled = { enabled: false }
+function isMcpDisabledOverride(config: McpEntry): config is McpDisabled {
+  return typeof config === "object" && config !== null && !("type" in config) && config.enabled === false
+}
+
 type McpRemote = Extract<McpConfigured, { type: "remote" }>
+type McpRemoteTransport = NonNullable<McpRemote["transport"]>
 function isMcpRemote(config: McpEntry): config is McpRemote {
   return isMcpConfigured(config) && config.type === "remote"
 }
@@ -55,6 +62,8 @@ export const McpCommand = cmd({
   describe: "manage MCP (Model Context Protocol) servers",
   builder: (yargs) =>
     yargs
+      .command(McpBrowserCommand)
+      .command(McpComputerCommand)
       .command(McpAddCommand)
       .command(McpListCommand)
       .command(McpAuthCommand)
@@ -62,6 +71,28 @@ export const McpCommand = cmd({
       .command(McpDebugCommand)
       .demandCommand(),
   async handler() {},
+})
+
+export const McpBrowserCommand = cmd({
+  command: "browser",
+  describe: false,
+  async handler() {
+    const { BrowserMCPNodeLauncher } = await import("../../mcp/browser/node-launcher")
+    if (process.env.MCP_TRANSPORT === "http") {
+      await BrowserMCPNodeLauncher.serveHttp()
+      return
+    }
+    await BrowserMCPNodeLauncher.serveHostStdio()
+  },
+})
+
+export const McpComputerCommand = cmd({
+  command: "computer",
+  describe: false,
+  async handler() {
+    const { ComputerMCP } = await import("../../mcp/computer")
+    await ComputerMCP.serveStdio()
+  },
 })
 
 export const McpListCommand = cmd({
@@ -79,8 +110,9 @@ export const McpListCommand = cmd({
         const mcpServers = config.mcp ?? {}
         const statuses = await MCP.status()
 
-        const servers = Object.entries(mcpServers).filter((entry): entry is [string, McpConfigured] =>
-          isMcpConfigured(entry[1]),
+        const servers = Object.entries(mcpServers).filter(
+          (entry): entry is [string, McpConfigured | McpDisabled] =>
+            isMcpConfigured(entry[1]) || isMcpDisabledOverride(entry[1]),
         )
 
         if (servers.length === 0) {
@@ -110,6 +142,12 @@ export const McpListCommand = cmd({
           } else if (status.status === "disabled") {
             statusIcon = "○"
             statusText = "disabled"
+          } else if (status.status === "disconnected") {
+            statusIcon = "○"
+            statusText = "disconnected"
+          } else if (status.status === "connecting") {
+            statusIcon = "◌"
+            statusText = "connecting"
           } else if (status.status === "needs_auth") {
             statusIcon = "⚠"
             statusText = "needs authentication"
@@ -123,7 +161,11 @@ export const McpListCommand = cmd({
             hint = "\n    " + status.error
           }
 
-          const typeHint = serverConfig.type === "remote" ? serverConfig.url : serverConfig.command.join(" ")
+          const typeHint = isMcpDisabledOverride(serverConfig)
+            ? "disabled by config"
+            : serverConfig.type === "remote"
+              ? serverConfig.url
+              : serverConfig.command.join(" ")
           prompts.log.info(
             `${statusIcon} ${name} ${UI.Style.TEXT_DIM}${statusText}${hint}\n    ${UI.Style.TEXT_DIM}${typeHint}`,
           )
@@ -162,12 +204,13 @@ export const McpAuthCommand = cmd({
 
         if (oauthServers.length === 0) {
           prompts.log.warn("No OAuth-capable MCP servers configured")
-          prompts.log.info("Remote MCP servers support OAuth by default. Add a remote server in opencorvus.json:")
+          prompts.log.info("Remote MCP servers support OAuth by default. Add a remote server in opencorvus.jsonc:")
           prompts.log.info(`
   "mcp": {
     "my-server": {
       "type": "remote",
-      "url": "https://example.com/mcp"
+      "url": "https://example.com/mcp",
+      "transport": "streamable-http"
     }
   }`)
           prompts.outro("Done")
@@ -253,6 +296,7 @@ export const McpAuthCommand = cmd({
     "${serverName}": {
       "type": "remote",
       "url": "${serverConfig.url}",
+      "transport": "${serverConfig.transport}",
       "oauth": {
         "clientId": "your-client-id",
         "clientSecret": "your-client-secret"
@@ -333,8 +377,13 @@ export const McpLogoutCommand = cmd({
         UI.empty()
         prompts.intro("MCP OAuth Logout")
 
+        const config = await Config.get()
+        const mcpServers = config.mcp ?? {}
         const credentials = await McpAuth.all()
-        const serverNames = Object.keys(credentials)
+        const serverNames = Object.entries(mcpServers)
+          .filter((entry): entry is [string, McpRemote] => isMcpRemote(entry[1]) && entry[1].oauth !== false)
+          .map(([name]) => name)
+          .filter((name) => !!credentials[currentMcpAuthKey(name)])
 
         if (serverNames.length === 0) {
           prompts.log.warn("No MCP OAuth credentials stored")
@@ -347,7 +396,7 @@ export const McpLogoutCommand = cmd({
           const selected = await prompts.select({
             message: "Select MCP server to logout",
             options: serverNames.map((name) => {
-              const entry = credentials[name]
+              const entry = credentials[currentMcpAuthKey(name)]
               const hasTokens = !!entry.tokens
               const hasClient = !!entry.clientInfo
               let hint = ""
@@ -365,7 +414,7 @@ export const McpLogoutCommand = cmd({
           serverName = selected
         }
 
-        if (!credentials[serverName]) {
+        if (!credentials[currentMcpAuthKey(serverName)]) {
           prompts.log.error(`No credentials found for: ${serverName}`)
           prompts.outro("Done")
           return
@@ -380,41 +429,11 @@ export const McpLogoutCommand = cmd({
 })
 
 async function resolveConfigPath(baseDir: string, global = false) {
-  // Check for existing config files (prefer .jsonc over .json, check .opencorvus/ subdirectory too)
-  const candidates = [path.join(baseDir, "opencorvus.json"), path.join(baseDir, "opencorvus.jsonc")]
-
-  if (!global) {
-    candidates.push(
-      path.join(baseDir, ".opencorvus", "opencorvus.json"),
-      path.join(baseDir, ".opencorvus", "opencorvus.jsonc"),
-    )
-  }
-
-  for (const candidate of candidates) {
-    if (await Filesystem.exists(candidate)) {
-      return candidate
-    }
-  }
-
-  // Default to opencorvus.json if none exist
-  return candidates[0]
-}
-
-async function addMcpToConfig(name: string, mcpConfig: Config.Mcp, configPath: string) {
-  let text = "{}"
-  if (await Filesystem.exists(configPath)) {
-    text = await Filesystem.readText(configPath)
-  }
-
-  // Use jsonc-parser to modify while preserving comments
-  const edits = modify(text, ["mcp", name], mcpConfig, {
-    formattingOptions: { tabSize: 2, insertSpaces: true },
+  return Config.resolveMcpConfigFile({
+    baseDirectory: baseDir,
+    worktree: global ? undefined : Instance.worktree,
+    global,
   })
-  const result = applyEdits(text, edits)
-
-  await Filesystem.write(configPath, result)
-
-  return configPath
 }
 
 export const McpAddCommand = cmd({
@@ -427,17 +446,15 @@ export const McpAddCommand = cmd({
         UI.empty()
         prompts.intro("Add MCP server")
 
-        const project = Instance.project
-
         // Resolve config paths eagerly for hints
         const [projectConfigPath, globalConfigPath] = await Promise.all([
-          resolveConfigPath(Instance.worktree),
+          resolveConfigPath(Instance.directory),
           resolveConfigPath(Global.Path.config, true),
         ])
 
         // Determine scope
         let configPath = globalConfigPath
-        if (project.vcs === "git") {
+        if (Project.isGitRepo(Instance.directory)) {
           const scopeResult = await prompts.select({
             message: "Location",
             options: [
@@ -493,7 +510,7 @@ export const McpAddCommand = cmd({
             command: command.split(" "),
           }
 
-          await addMcpToConfig(name, mcpConfig, configPath)
+          await Config.writeMcpConfigEntry(name, mcpConfig, configPath)
           prompts.log.success(`MCP server "${name}" added to ${configPath}`)
           prompts.outro("MCP server added successfully")
           return
@@ -511,6 +528,23 @@ export const McpAddCommand = cmd({
             },
           })
           if (prompts.isCancel(url)) throw new UI.CancelledError()
+
+          const transport = await prompts.select({
+            message: "Select remote MCP transport",
+            options: [
+              {
+                label: "Streamable HTTP",
+                value: "streamable-http" satisfies McpRemoteTransport,
+                hint: "Use for standard remote MCP endpoints",
+              },
+              {
+                label: "SSE",
+                value: "sse" satisfies McpRemoteTransport,
+                hint: "Use only when the server requires SSE",
+              },
+            ],
+          })
+          if (prompts.isCancel(transport)) throw new UI.CancelledError()
 
           const useOAuth = await prompts.confirm({
             message: "Does this server require OAuth authentication?",
@@ -552,6 +586,7 @@ export const McpAddCommand = cmd({
               mcpConfig = {
                 type: "remote",
                 url,
+                transport,
                 oauth: {
                   clientId,
                   ...(clientSecret && { clientSecret }),
@@ -561,6 +596,7 @@ export const McpAddCommand = cmd({
               mcpConfig = {
                 type: "remote",
                 url,
+                transport,
                 oauth: {},
               }
             }
@@ -568,10 +604,11 @@ export const McpAddCommand = cmd({
             mcpConfig = {
               type: "remote",
               url,
+              transport,
             }
           }
 
-          await addMcpToConfig(name, mcpConfig, configPath)
+          await Config.writeMcpConfigEntry(name, mcpConfig, configPath)
           prompts.log.success(`MCP server "${name}" added to ${configPath}`)
         }
 
@@ -627,7 +664,7 @@ export const McpDebugCommand = cmd({
         const authStatus = await MCP.getAuthStatus(serverName)
         prompts.log.info(`Auth status: ${getAuthStatusIcon(authStatus)} ${getAuthStatusText(authStatus)}`)
 
-        const entry = await McpAuth.get(serverName)
+        const entry = await McpAuth.get(currentMcpAuthKey(serverName))
         if (entry?.tokens) {
           prompts.log.info(`  Access token: ${entry.tokens.accessToken.substring(0, 20)}...`)
           if (entry.tokens.expiresAt) {
@@ -649,11 +686,13 @@ export const McpDebugCommand = cmd({
 
         const spinner = prompts.spinner()
         spinner.start("Testing connection...")
+        const debugTimeout = MCP.effectiveTimeout(serverConfig, config.experimental?.mcp_timeout)
 
         // Test basic HTTP connectivity first
         try {
           const response = await fetch(serverConfig.url, {
             method: "POST",
+            ...MCP.mcpFetchRequestInit(debugTimeout),
             headers: {
               "Content-Type": "application/json",
               Accept: "application/json, text/event-stream",
@@ -683,8 +722,10 @@ export const McpDebugCommand = cmd({
 
             // Try to discover OAuth metadata
             const oauthConfig = typeof serverConfig.oauth === "object" ? serverConfig.oauth : undefined
+            const authKey = currentMcpAuthKey(serverName)
             const authProvider = new McpOAuthProvider(
               serverName,
+              authKey,
               serverConfig.url,
               {
                 clientId: oauthConfig?.clientId,
@@ -694,23 +735,26 @@ export const McpDebugCommand = cmd({
               {
                 onRedirect: async () => {},
               },
+              McpAuth.revision(authKey),
             )
 
             prompts.log.info("Testing OAuth flow (without completing authorization)...")
 
-            // Try creating transport with auth provider to trigger discovery
-            const transport = new StreamableHTTPClientTransport(new URL(serverConfig.url), {
+            // Try creating the configured remote transport with auth provider to trigger discovery.
+            const { name: transportName, transport } = MCP.createRemoteTransport(
+              serverConfig,
               authProvider,
-            })
+              MCP.mcpFetchRequestInit(debugTimeout),
+            )
 
+            let client: Client | undefined
             try {
-              const client = new Client({
+              client = new Client({
                 name: "opencorvus-debug",
                 version: Installation.VERSION,
               })
-              await client.connect(transport)
-              prompts.log.success("Connection successful (already authenticated)")
-              await client.close()
+              await client.connect(transport, MCP.mcpRequestOptions(debugTimeout))
+              prompts.log.success(`Connection successful via ${transportName} (already authenticated)`)
             } catch (error) {
               if (error instanceof UnauthorizedError) {
                 prompts.log.info(`OAuth flow triggered: ${error.message}`)
@@ -725,6 +769,17 @@ export const McpDebugCommand = cmd({
               } else {
                 prompts.log.error(`Connection error: ${error instanceof Error ? error.message : String(error)}`)
               }
+            } finally {
+              await client?.close().catch((closeError) => {
+                prompts.log.error(
+                  `Failed to close debug MCP client: ${closeError instanceof Error ? closeError.message : String(closeError)}`,
+                )
+              })
+              await transport.close().catch((closeError) => {
+                prompts.log.error(
+                  `Failed to close debug MCP transport: ${closeError instanceof Error ? closeError.message : String(closeError)}`,
+                )
+              })
             }
           } else if (response.status >= 200 && response.status < 300) {
             prompts.log.success("Server responded successfully (no auth required or already authenticated)")

@@ -1,0 +1,723 @@
+{
+  "meta": {
+    "title": "AI 编程工具选型研究（结构化数据）",
+    "research_window": "2026-08-01 ～ 2026-08-08",
+    "access_date": "2026-08-02",
+    "original_access_date": "2026-08-01",
+    "review_date": "2026-08-02",
+    "review_verdict": "全部 12 个官方 source_urls 于 2026-08-02 复核一致（0 变更 / 0 未确认）",
+    "timezone": "Asia/Singapore UTC+8",
+    "currency": "USD",
+    "report_path": "specs/artifacts/ai-coding-tools-selection-report.md",
+    "delivery_chain": "research-studio-planner → research-studio-researcher → universal-build → research-studio-analyst → fact-checker → research-studio-writer",
+    "fact_check_verdict": "minor_corrections (13 verified / 1 minor correction / 0 unresolved)",
+    "fact_check_note": "『预算敏感替代：OpenAI Codex（ChatGPT Business $20/user/mo annual）或 Amazon Q Developer Pro（$19/user/mo）』属于 recommendations R2，不属于 direct_answer；本数据文件将该推荐归入 recommendations 数组。"
+  },
+  "team_sizes": [10, 30, 100],
+  "intensities": ["LIGHT", "STANDARD", "HEAVY"],
+  "intensity_tier_assumptions": {
+    "note": "ASSUMED（章程 §3.1），非官方口径",
+    "LIGHT": "约 5,000-15,000 次请求/月/人（≈250-750 次对话）或约 10M-30M tokens/月/人",
+    "STANDARD": "约 15,000-40,000 次请求/月/人或约 30M-100M tokens/月/人",
+    "HEAVY": "约 40,000+ 次请求/月/人或约 100M+ tokens/月/人"
+  },
+  "tools": [
+    {
+      "id": "github-copilot",
+      "name": "GitHub Copilot",
+      "pricing_tiers": [
+        { "tier": "Free", "monthly_cost_original": "$0", "currency": "USD" },
+        { "tier": "Pro", "monthly_cost_original": "$10/user/mo", "currency": "USD" },
+        { "tier": "Pro+", "monthly_cost_original": "$39/user/mo", "currency": "USD" },
+        { "tier": "Max", "monthly_cost_original": "$100/user/mo", "currency": "USD" },
+        { "tier": "Business", "monthly_cost_original": "$19/user/mo", "currency": "USD" },
+        { "tier": "Enterprise", "monthly_cost_original": "varies (PARTIAL)", "currency": "USD" }
+      ],
+      "usage_allowance": "Free 2000 completions+50 chat/mo；Pro unlimited completions+$15 credits；Pro+ 4x usage+$70 credits；Max 2.9x Pro+$200 credits；credits 1=$0.01",
+      "ide_support": ["VS Code", "Visual Studio", "Xcode", "JetBrains", "Neovim", "Eclipse", "Raycast", "SSMS", "Zed"],
+      "cli": true,
+      "agent_capability": "agent mode / cloud agent / Copilot CLI programmatic / delegate Claude Code+Codex / MCP / 30+ models",
+      "admin_dimensions": {
+        "sso": "SAML SSO (Business+)",
+        "usage_metrics": true,
+        "ip_indemnity": true,
+        "audit_logs": "audit logs (Pro+)"
+      },
+      "security_dimensions": {
+        "certification": "enterprise-grade (Business+)",
+        "public_code_filter": true,
+        "dpa_gdpr": true
+      },
+      "data_usage": "Business/Enterprise no-training；Individual opt-out；IDE prompts not retained；other 28 days",
+      "source_urls": [
+        "https://github.com/features/copilot/plans",
+        "https://docs.github.com/en/billing/managing-billing-for-github-copilot/about-billing-for-github-copilot"
+      ],
+      "access_date": "2026-08-01",
+      "comparability": "COMPARABLE",
+      "comparability_partial_notes": "Enterprise 档价格 varies (PARTIAL)"
+    },
+    {
+      "id": "cursor",
+      "name": "Cursor (Anysphere)",
+      "pricing_tiers": [
+        { "tier": "Hobby", "monthly_cost_original": "$0", "currency": "USD" },
+        { "tier": "Pro", "monthly_cost_original": "$20/mo", "currency": "USD" },
+        { "tier": "Pro+", "monthly_cost_original": "$60/mo", "currency": "USD" },
+        { "tier": "Ultra", "monthly_cost_original": "$200/mo", "currency": "USD" },
+        { "tier": "Teams Standard", "monthly_cost_original": "$40/user/mo", "currency": "USD" },
+        { "tier": "Teams Premium", "monthly_cost_original": "$120/user/mo", "currency": "USD" },
+        { "tier": "Enterprise", "monthly_cost_original": "custom (PARTIAL)", "currency": "USD" }
+      ],
+      "usage_allowance": "Pro $20 Other Models+generous Cursor Models；Pro+ $70 Other Models；Ultra $400 Other Models；token rate $0.25/MTok (Teams+)；Daily Agent $60-100/mo、power $200+/mo 为官方 docs 指引（cursor.com/docs/account/pricing，2026-08-02）",
+      "ide_support": ["Cursor editor", "CLI", "cloud agents", "iOS"],
+      "cli": true,
+      "agent_capability": "agent mode / Composer / Grok 4.5 / Bugbot / MCP+skills+hooks / BYOK",
+      "admin_dimensions": {
+        "sso": "SAML+OIDC (Teams+)",
+        "scim": "SCIM (Enterprise)",
+        "central_billing": true,
+        "usage_analytics": true,
+        "audit_logs": true
+      },
+      "security_dimensions": {
+        "certification": "SOC 2 Type II",
+        "pentest": "annual pentest",
+        "privacy_mode": "Privacy Mode (all plans)",
+        "data_residency": "no China infra；CMEK；residency +10% uplift"
+      },
+      "data_usage": "Privacy Mode=no training；residency +10% uplift",
+      "source_urls": [
+        "https://cursor.com/pricing",
+        "https://cursor.com/docs/account/pricing",
+        "https://cursor.com/security"
+      ],
+      "access_date": "2026-08-01",
+      "comparability": "COMPARABLE",
+      "comparability_partial_notes": "Enterprise 档价格 custom (PARTIAL)"
+    },
+    {
+      "id": "claude-code",
+      "name": "Claude Code (Anthropic)",
+      "pricing_tiers": [
+        { "tier": "Pro (捆绑 Claude Code)", "monthly_cost_original": "$20/mo ($200/yr)", "currency": "USD" },
+        { "tier": "Max", "monthly_cost_original": "from $100/mo (5x/20x)", "currency": "USD" },
+        { "tier": "Team Standard", "monthly_cost_original": "$20/seat/mo annual ($25 monthly)", "currency": "USD" },
+        { "tier": "Team Premium", "monthly_cost_original": "$100/seat/mo annual ($125 monthly)", "currency": "USD" },
+        { "tier": "Enterprise", "monthly_cost_original": "$20/seat+usage at API rates", "currency": "USD" }
+      ],
+      "bundling": "无独立订阅；捆绑在全部付费 Claude 订阅内",
+      "usage_allowance": "5h rolling window+weekly caps；无固定请求数；context 200k/500k",
+      "ide_support": ["terminal CLI", "VS Code+JetBrains extensions", "desktop+web+mobile"],
+      "cli": true,
+      "agent_capability": "multi-step / tool calls / MCP / subagents / Claude Code for Enterprise",
+      "api_pricing": {
+        "Opus5": "$5/$25 per MTok",
+        "Sonnet5": "$2/$10 intro till 2026-08-31 then $3/$15 per MTok",
+        "Haiku4.5": "$1/$5 per MTok",
+        "Fable5": "$10/$50 per MTok",
+        "batch": "50% off",
+        "Managed Agents": "$0.08/session-hr",
+        "WebSearch": "$10/1K"
+      },
+      "admin_dimensions": {
+        "sso": true,
+        "scim": true,
+        "audit_logs": true,
+        "compliance_api": true,
+        "rbac": true,
+        "custom_retention": true,
+        "ip_allowlisting": true,
+        "hipaa_ready": true
+      },
+      "security_dimensions": {
+        "enterprise_controls": "enterprise controls (Team+)",
+        "claude_security": "Claude Security (beta)"
+      },
+      "data_usage": "Team/Enterprise no-training by default；individual opt-out",
+      "source_urls": ["https://claude.com/pricing"],
+      "access_date": "2026-08-01",
+      "comparability": "COMPARABLE",
+      "comparability_partial_notes": "Enterprise 超额按 API 计价（$20/seat+usage）"
+    },
+    {
+      "id": "openai-codex",
+      "name": "OpenAI Codex",
+      "pricing_tiers": [
+        { "tier": "Go", "monthly_cost_original": "$8/mo", "currency": "USD" },
+        { "tier": "Plus", "monthly_cost_original": "$20/mo", "currency": "USD" },
+        { "tier": "Pro", "monthly_cost_original": "from $100 (5x) or $200 (20x)/mo", "currency": "USD" },
+        {
+          "tier": "Business",
+          "monthly_cost_original": "$20/user/mo annual ($25 monthly), 2+ users",
+          "currency": "USD"
+        },
+        { "tier": "Enterprise", "monthly_cost_original": "contact sales (PARTIAL)", "currency": "USD" }
+      ],
+      "bundling": "捆绑在 ChatGPT Free/Go/Plus/Pro/Business/Enterprise 内",
+      "usage_allowance": "Plus: Sol10-100/Terra25-200/Luna250-2000 per 5h；Business: Sol10-100/Terra25-200/Luna250-2000 per 5h（与 Plus 相同，2026-08-02 复核确认）；Pro 5x: Sol50-500/Terra125-1000/Luna1250-10000 per 5h；Pro 20x: Sol200-2000/Terra500-4000/Luna5000-40000 per 5h",
+      "ide_support": ["Codex CLI", "IDE extension", "ChatGPT desktop+web", "iOS", "cloud"],
+      "cli": true,
+      "agent_capability": "multi-step / worktrees+git / AGENTS.md / Skills / subagents / MCP / scheduled tasks / GitHub review / non-interactive",
+      "api_pricing": { "Sol": "125in/750out per MTok", "Terra": "50/300 per MTok", "Luna": "5/30 per MTok" },
+      "admin_dimensions": {
+        "sso": "SAML SSO+MFA (Business+)",
+        "scim_ekm_rbac": "SCIM+EKM+RBAC (Enterprise)",
+        "compliance_api": true,
+        "analytics": true
+      },
+      "security_dimensions": {
+        "encryption": "TLS 1.2 / AES-256",
+        "bug_bounty": true,
+        "certification": "SOC2+ISO (Enterprise)"
+      },
+      "data_usage": "Business no-training by default；individual opt-out",
+      "source_urls": ["https://developers.openai.com/codex/pricing", "https://openai.com/chatgpt/pricing/"],
+      "access_date": "2026-08-01",
+      "comparability": "COMPARABLE",
+      "comparability_partial_notes": "Enterprise 档价格 contact sales (PARTIAL)"
+    },
+    {
+      "id": "windsurf-devin",
+      "name": "Windsurf (merged into Devin)",
+      "pricing_tiers": [
+        { "tier": "Free", "monthly_cost_original": "$0", "currency": "USD" },
+        { "tier": "Pro", "monthly_cost_original": "$20/mo", "currency": "USD" },
+        { "tier": "Max", "monthly_cost_original": "$200/mo", "currency": "USD" },
+        { "tier": "Teams", "monthly_cost_original": "$80/mo plan + $40/full dev seat", "currency": "USD" },
+        { "tier": "Enterprise", "monthly_cost_original": "custom (PARTIAL)", "currency": "USD" }
+      ],
+      "pricing_note": "windsurf.com/pricing 现渲染 Devin 定价",
+      "usage_allowance": "未在收集范围内给出独立额度明细（随 Devin 产品）",
+      "ide_support": ["Devin Desktop", "ACP integrations", "CLI"],
+      "cli": true,
+      "agent_capability": "cloud agents / SWE 1.7 / parallel sessions / Slack+Teams+Linear+Jira",
+      "admin_dimensions": {
+        "central_billing": "central billing (Teams)",
+        "admin_dashboard": true,
+        "sso": "SAML+OIDC (Enterprise)",
+        "vpc": "VPC (Enterprise)"
+      },
+      "security_dimensions": {
+        "enterprise_admin_controls": true,
+        "teamspace_isolation": true
+      },
+      "data_usage": "standalone Windsurf policy 不再位于该 URL（PARTIAL）——训练/保留/传输政策无法从官方确认",
+      "source_urls": ["https://windsurf.com/pricing"],
+      "access_date": "2026-08-01",
+      "comparability": "PARTIAL",
+      "comparability_partial_notes": "独立数据政策页失效；Enterprise 价格 custom；额度明细随 Devin"
+    },
+    {
+      "id": "jetbrains-ai",
+      "name": "JetBrains AI Assistant",
+      "pricing_tiers": [
+        { "tier": "AI Free", "monthly_cost_original": "$0 (3 credits/30d)", "currency": "USD" },
+        { "tier": "AI Pro Individual", "monthly_cost_original": "$10/mo (10 credits)", "currency": "USD" },
+        { "tier": "AI Ultimate Individual", "monthly_cost_original": "$30/mo (35 credits)", "currency": "USD" },
+        { "tier": "AI Pro Org", "monthly_cost_original": "$20/mo (20 credits)", "currency": "USD" },
+        { "tier": "AI Ultimate Org", "monthly_cost_original": "$60/mo (70 credits)", "currency": "USD" },
+        { "tier": "AI Enterprise", "monthly_cost_original": "$60/mo", "currency": "USD" }
+      ],
+      "credit_system": "1 credit=$1；top-ups available；credits per month: Free3/Pro10-20/Ultimate35-70/Enterprise70+",
+      "usage_allowance": "credits per month：Free 3 / Pro 10-20 / Ultimate 35-70 / Enterprise 70+",
+      "ide_support": ["JetBrains IDEs (full suite)", "AI Pro in All Products Pack"],
+      "cli": false,
+      "agent_capability": "AI Assistant / Junie agent / Grazie / local+cloud completions",
+      "admin_dimensions": {
+        "org_tier": "AI Enterprise org tier (SSO/SCIM per docs)"
+      },
+      "security_dimensions": {
+        "enterprise_compliance": "enterprise compliance per JetBrains docs (PARTIAL：无独立认证细节页)"
+      },
+      "data_usage": "official AI service license terms (PARTIAL：无独立数据政策页)",
+      "source_urls": ["https://www.jetbrains.com/help/ai-assistant/licensing-and-subscriptions.html"],
+      "access_date": "2026-08-01",
+      "comparability": "COMPARABLE",
+      "comparability_partial_notes": "安全认证细节与数据政策独立页缺失"
+    },
+    {
+      "id": "amazon-q-developer",
+      "name": "Amazon Q Developer",
+      "pricing_tiers": [
+        { "tier": "Free", "monthly_cost_original": "$0", "currency": "USD" },
+        { "tier": "Pro", "monthly_cost_original": "$19/user/mo", "currency": "USD" },
+        { "tier": "Enterprise", "monthly_cost_original": "AWS enterprise contract (PARTIAL)", "currency": "USD" }
+      ],
+      "overage": "$0.003/LOC beyond 4K LOC pool",
+      "usage_allowance": "Free 50 agentic requests/mo + transformation 1,000 LOC/mo；Pro increased limits + 4K LOC/mo transformation pooled",
+      "ide_support": ["IDE plugins", "CLI", "AWS Console"],
+      "cli": true,
+      "agent_capability": "agentic coding / Q&A chat / transformation agents",
+      "admin_dimensions": {
+        "iam_identity_center": "IAM Identity Center dashboard (Pro)",
+        "per_use_activation": true
+      },
+      "security_dimensions": {
+        "reference_tracking": true,
+        "suppress_public_code": true,
+        "ip_indemnity": "IP indemnity (Pro)"
+      },
+      "data_usage": "Free opt-out；Pro automatically opted out",
+      "source_urls": ["https://aws.amazon.com/q/developer/pricing/"],
+      "access_date": "2026-08-01",
+      "comparability": "COMPARABLE",
+      "comparability_partial_notes": "Enterprise 档价格 AWS enterprise contract (PARTIAL)"
+    },
+    {
+      "id": "tabnine",
+      "name": "Tabnine (Tricentis)",
+      "pricing_tiers": [
+        { "tier": "Code Assistant", "monthly_cost_original": "$39/user/mo annual", "currency": "USD" },
+        { "tier": "Agentic Platform", "monthly_cost_original": "$59/user/mo annual", "currency": "USD" }
+      ],
+      "pricing_note": "own-LLM unlimited；Tabnine LLM=provider price+5%；headless add-on",
+      "usage_allowance": "reserved token quota model",
+      "ide_support": ["all major IDEs"],
+      "cli": true,
+      "agent_capability": "agentic workflows / Tabnine CLI / Context Engine / MCP / headless agents",
+      "admin_dimensions": {
+        "sso": true,
+        "governance": true,
+        "analytics": true,
+        "auditability": true,
+        "per_user_llm_control": true
+      },
+      "security_dimensions": {
+        "zero_retention": true,
+        "no_training": true,
+        "deployment": "VPC+on-prem+air-gapped",
+        "certification": "SOC2+ISO27001",
+        "ip_indemnification": true
+      },
+      "data_usage": "zero retention；no sharing",
+      "source_urls": ["https://www.tabnine.com/pricing"],
+      "access_date": "2026-08-01",
+      "comparability": "COMPARABLE"
+    },
+    {
+      "id": "cline-aider",
+      "name": "Cline / Aider (open source)",
+      "pricing_tiers": [
+        { "tier": "BYO", "monthly_cost_original": "no subscription；BYO model API costs", "currency": "USD" }
+      ],
+      "usage_allowance": "无官方统一额度（随模型供应商）",
+      "ide_support": ["Cline: VS Code ext", "Aider: terminal CLI"],
+      "cli": true,
+      "agent_capability": "multi-step agent (Cline) / pair-programming (Aider) / MCP (Cline)",
+      "admin_dimensions": { "none": true },
+      "security_dimensions": { "local_context": true, "model_provider_policies": "model provider policies apply" },
+      "data_usage": "local context；model provider policies apply",
+      "source_urls": [],
+      "access_date": "2026-08-01",
+      "comparability": "NOT-COMPARABLE",
+      "not_comparable_reason": "无官方企业定价/政策；按章程 §3.3 排除主矩阵"
+    }
+  ],
+  "benchmarks": {
+    "method_summary": {
+      "isolation": "git clone /Users/yangheng/Desktop/opencorvus → /tmp/opencorvus-bench-20260801-002025（完整克隆，T4 需祖先提交 8310bf69）；clone head ea8ba625b247ace24ac8f32f5d0e692011f33f17；主工作区只读；禁 worktree/git reset/git clean/git checkout --；不提交不推送",
+      "dependency_materialization": "bun install 3295 packages；物化 packages/sdk/js/dist（gitignored，从主工作区复制）；物化后四包 typecheck 基线 exit=0",
+      "per_run_isolation": "12 次运行 12 次恢复（git restore --source=HEAD --staged --worktree -- . + 删除 untracked 基准产出）",
+      "claude_command_template_redacted": "claude -p --no-session-persistence --output-format stream-json --include-partial-messages --verbose --permission-mode=bypassPermissions --disallowedTools=Task,EnterWorktree,ExitWorktree --effort=medium --max-budget-usd=5 \"$(cat /tmp/prompts/TN.txt)\"",
+      "codex_command_template_redacted": "codex exec --cd /tmp/opencorvus-bench-20260801-002025 --sandbox workspace-write --json --ephemeral -o /tmp/bench-logs/TN-codex.last.txt \"$(cat /tmp/prompts/TN.txt)\"",
+      "codex_budget_note": "codex 0.145.0 无 --max-budget-usd 参数（经 --help 确认），以 --sandbox workspace-write + prompt 限界替代",
+      "success_criteria": "claude: exit=0 + is_error=false + subtype=success + 独立验收；codex: exit=0 + 最终消息 + 独立验收",
+      "incident_log": "一次恢复误 rm tracked 文件，立即用 git restore --source=HEAD -- <path> 精确恢复（rule 22.1），无数据丢失",
+      "timestamps_source": "shell 记录 unix 秒（date +%s），duration=end-start",
+      "evidence_artifacts": "/tmp/bench-logs/（65 文件），非交付物",
+      "no_secrets": "所有 prompt 与命令未包含 .env/token/密码/内网凭据"
+    },
+    "tools": [
+      {
+        "tool_id": "claude",
+        "tool_version": "2.1.220 (Claude Code)",
+        "per_task": [
+          {
+            "task_id": "T1",
+            "quality": 5,
+            "duration_min": 4.78,
+            "human_interventions": 0,
+            "files_changed": 9,
+            "insertions": 108,
+            "deletions": 2,
+            "acceptance_passed": true,
+            "verification": "channel-config tsc EXIT=0；channel-runtime tsgo EXIT=0；registry.test.ts 14 pass/0 fail；假 SMTP 实跑 EmailAdapter 序列正确"
+          },
+          {
+            "task_id": "T2",
+            "quality": 5,
+            "duration_min": 7.97,
+            "human_interventions": 0,
+            "files_changed": 2,
+            "insertions": 26,
+            "deletions": 6,
+            "acceptance_passed": true,
+            "verification": "opencorvus tsc EXIT=0；新单测 5 pass/0 fail；类型探针报 TS2339（类型安全真正恢复）"
+          },
+          {
+            "task_id": "T3",
+            "quality": 5,
+            "duration_min": 2.58,
+            "human_interventions": 0,
+            "files_changed": 1,
+            "insertions": 0,
+            "deletions": 0,
+            "acceptance_passed": true,
+            "verification": "bun test contract-positive.test.ts 29 pass/0 fail（111 expects，全正向）"
+          },
+          {
+            "task_id": "T4",
+            "quality": 5,
+            "duration_min": 4.32,
+            "human_interventions": 0,
+            "files_changed": 1,
+            "insertions": 0,
+            "deletions": 0,
+            "acceptance_passed": true,
+            "verification": "逐条与 git show ea8ba625 比对一致；.png 实为 JPEG、孤儿资产两发现属实"
+          },
+          {
+            "task_id": "T5",
+            "quality": 5,
+            "duration_min": 4.6,
+            "human_interventions": 0,
+            "files_changed": 1,
+            "insertions": 0,
+            "deletions": 0,
+            "acceptance_passed": true,
+            "verification": "19 处唯一包路径引用全部真实；03-control.md:84 逐字匹配"
+          },
+          {
+            "task_id": "T6",
+            "quality": 5,
+            "duration_min": 1.17,
+            "human_interventions": 0,
+            "files_changed": 1,
+            "insertions": 15,
+            "deletions": 0,
+            "acceptance_passed": true,
+            "verification": "opencorvus tsc EXIT=0；既有测试 4 pass/0 fail"
+          }
+        ],
+        "summary": { "mean_quality": 5.0, "total_duration_min": 25.42, "total_human_interventions": 0 }
+      },
+      {
+        "tool_id": "codex",
+        "tool_version": "0.145.0 (codex-cli)",
+        "per_task": [
+          {
+            "task_id": "T1",
+            "quality": 4,
+            "duration_min": 5.58,
+            "human_interventions": 0,
+            "files_changed": 6,
+            "insertions": 88,
+            "deletions": 1,
+            "acceptance_passed": true,
+            "verification": "两包 tsc/tsgo EXIT=0；但 registry.test.ts 12 pass/2 fail（未补 .env.example 与 READY_CHANNELS 计数，破坏既有契约测试）"
+          },
+          {
+            "task_id": "T2",
+            "quality": 2,
+            "duration_min": 4.12,
+            "human_interventions": 0,
+            "files_changed": 2,
+            "insertions": 6,
+            "deletions": 4,
+            "acceptance_passed": true,
+            "verification": "opencorvus tsc EXIT=0；新单测 1 pass/0 fail；类型探针 tsc exit=0 不报错——value 仍为 any（表象修复）"
+          },
+          {
+            "task_id": "T3",
+            "quality": 5,
+            "duration_min": 2.6,
+            "human_interventions": 0,
+            "files_changed": 1,
+            "insertions": 0,
+            "deletions": 0,
+            "acceptance_passed": true,
+            "verification": "bun test 9 pass/0 fail（43 expects，全正向；覆盖面窄于 claude）"
+          },
+          {
+            "task_id": "T4",
+            "quality": 5,
+            "duration_min": 3.08,
+            "human_interventions": 0,
+            "files_changed": 1,
+            "insertions": 0,
+            "deletions": 0,
+            "acceptance_passed": true,
+            "verification": "4 组引用与 git show ea8ba625 逐字一致；JPEG/80-160% 缩放范围两发现属实"
+          },
+          {
+            "task_id": "T5",
+            "quality": 5,
+            "duration_min": 5.55,
+            "human_interventions": 0,
+            "files_changed": 1,
+            "insertions": 0,
+            "deletions": 0,
+            "acceptance_passed": true,
+            "verification": "18 处唯一包路径引用全部真实；27 渠道（13 native/14 planned）精确核实"
+          },
+          {
+            "task_id": "T6",
+            "quality": 5,
+            "duration_min": 1.37,
+            "human_interventions": 0,
+            "files_changed": 1,
+            "insertions": 15,
+            "deletions": 0,
+            "acceptance_passed": true,
+            "verification": "opencorvus tsc EXIT=0；既有测试 4 pass/0 fail（与 claude 产出 diff 目标哈希一致）"
+          }
+        ],
+        "summary": { "mean_quality": 4.33, "total_duration_min": 22.3, "total_human_interventions": 0 }
+      }
+    ],
+    "not_tested": [
+      { "tool_id": "copilot", "status": "NOT_TESTED", "reason": "command -v copilot 探测失败（未安装）" },
+      { "tool_id": "aider", "status": "NOT_TESTED", "reason": "command -v aider 探测失败（未安装）" },
+      { "tool_id": "cursor", "status": "NOT_TESTED", "reason": "command -v cursor 探测失败（未安装；GUI 应用无 CLI）" },
+      { "tool_id": "gh", "status": "PROBED_ONLY", "reason": "gh 可用但为 GitHub CLI，非 AI 编程工具基准目标" }
+    ],
+    "tool_probe": {
+      "date": "2026-08-01",
+      "command_checked": "command -v claude codex gh copilot aider cursor",
+      "available": {
+        "claude": "/Users/yangheng/.local/bin/claude (2.1.220)",
+        "codex": "/Users/yangheng/.local/bin/codex (codex-cli 0.145.0)",
+        "gh": "/opt/homebrew/bin/gh"
+      },
+      "not_found": ["copilot", "aider", "cursor"],
+      "runtime": { "bun": "1.3.13", "node": "v24.18.0" }
+    }
+  },
+  "cost_model": {
+    "method": "每格成本=席位成本（per-seat×官方单价×12×N）+超额用量成本（仅官方给出可换算单位时计算，否则 NO_CONVERSION）+企业合同一次性/最低承诺成本（Enterprise 档多 PARTIAL 未纳入）；输出团队年度成本 USD/年；强度档用量为 ASSUMED（章程 §3.1）；团队未提供预算上限→只输出绝对成本与相对对比，不假设预算。",
+    "per_tool_seat_cost": [
+      {
+        "tool": "github-copilot",
+        "team_plan": "Business",
+        "unit_price_original": "$19/user/mo",
+        "currency": "USD",
+        "per_seat_annual_usd": 228,
+        "team_annual_usd": { "n10": 2280, "n30": 6840, "n100": 22800 },
+        "overage_policy": "Business 档 credits 未公开；Pro/Pro+/Max 个人档 credits $15/$70/$200 per mo 不适用于团队档",
+        "overage_conversion": "NO_CONVERSION（Business 无公开超额单价）"
+      },
+      {
+        "tool": "cursor",
+        "team_plan": "Teams Standard",
+        "unit_price_original": "$40/user/mo",
+        "currency": "USD",
+        "per_seat_annual_usd": 480,
+        "team_annual_usd": { "n10": 4800, "n30": 14400, "n100": 48000 },
+        "overage_policy": "Other Models 用量；token rate $0.25/MTok (Teams+)；Pro/Pro+/Ultra 套餐 Other Models credits $20/$70/$400 per mo",
+        "overage_conversion": "$0.25/MTok（官方）；LIGHT 10-30M tokens≈$2.5-7.5/mo/人、STANDARD 30-100M≈$7.5-25/mo/人、HEAVY 100M+≈$25+/mo/人（ASSUMED 超额按量，未计 credits 抵扣）"
+      },
+      {
+        "tool": "claude-code",
+        "team_plan": "Claude Team Standard（捆绑 Claude Code）",
+        "unit_price_original": "$20/seat/mo annual",
+        "currency": "USD",
+        "per_seat_annual_usd": 240,
+        "team_annual_usd": { "n10": 2400, "n30": 7200, "n100": 24000 },
+        "overage_policy": "订阅共享用量池，5h rolling window+weekly caps；Team Premium $100/seat/mo annual；Enterprise $20/seat+usage at API rates",
+        "overage_conversion": "订阅档超额 NO_CONVERSION；API 模式官方单价 Opus5 $5/$25、Sonnet5 $2/$10 intro till 2026-08-31 then $3/$15、Haiku4.5 $1/$5 per MTok（HEAVY 走 API 按实际 token 计，ASSUMED）"
+      },
+      {
+        "tool": "openai-codex",
+        "team_plan": "ChatGPT Business（捆绑 Codex）",
+        "unit_price_original": "$20/user/mo annual ($25 monthly), 2+ users",
+        "currency": "USD",
+        "per_seat_annual_usd": 240,
+        "team_annual_usd": { "n10": 2400, "n30": 7200, "n100": 24000 },
+        "overage_policy": "订阅内 5h window 档位（Plus/Business/Pro 5x/Pro 20x 每 5h Sol/Terra/Luna 上限；Business 与 Plus 相同：Sol10-100/Terra25-200/Luna250-2000）；超出按 API 按量",
+        "overage_conversion": "Business per-5h 额度已公开（与 Plus 相同：Sol10-100/Terra25-200/Luna250-2000），官方无 $↔credit 固定换算率 → 仍 NO_CONVERSION；API 官方单价 Sol125in/750out、Terra50/300、Luna5/30 per MTok（仅个人档位可换算）"
+      },
+      {
+        "tool": "windsurf-devin",
+        "team_plan": "Teams（$80/mo plan + $40/full dev seat）",
+        "unit_price_original": "$80/mo plan + $40/full dev seat",
+        "currency": "USD",
+        "per_seat_annual_usd": 480,
+        "team_annual_usd": { "n10": 5760, "n30": 15360, "n100": 48960 },
+        "overage_policy": "平台费 $80/mo 恒定 + 每 full dev seat $40/mo；含 $960/年平台费",
+        "overage_conversion": "NO_CONVERSION（无公开超额单价）"
+      },
+      {
+        "tool": "jetbrains-ai",
+        "team_plan": "AI Ultimate Org",
+        "unit_price_original": "$60/mo (70 credits)",
+        "currency": "USD",
+        "per_seat_annual_usd": 720,
+        "team_annual_usd": { "n10": 7200, "n30": 21600, "n100": 72000 },
+        "overage_policy": "credits 配额 Free3/Pro10-20/Ultimate35-70/Enterprise70+ per mo；1 credit=$1；top-ups available",
+        "overage_conversion": "$1/credit（官方）；超额=(实际消耗-70 credits)×$1/mo/人（ASSUMED）"
+      },
+      {
+        "tool": "amazon-q-developer",
+        "team_plan": "Pro",
+        "unit_price_original": "$19/user/mo",
+        "currency": "USD",
+        "per_seat_annual_usd": 228,
+        "team_annual_usd": { "n10": 2280, "n30": 6840, "n100": 22800 },
+        "overage_policy": "Free 50 agentic requests/mo；Pro increased limits + 4K LOC/mo transformation pooled；overage $0.003/LOC beyond 4K LOC pool",
+        "overage_conversion": "$0.003/LOC（官方，transformation 超额）；agentic requests 超额单价未公开→NO_CONVERSION"
+      },
+      {
+        "tool": "tabnine",
+        "team_plan": "Agentic Platform",
+        "unit_price_original": "$59/user/mo annual",
+        "currency": "USD",
+        "per_seat_annual_usd": 708,
+        "team_annual_usd": { "n10": 7080, "n30": 21240, "n100": 70800 },
+        "overage_policy": "own-LLM unlimited；Tabnine LLM=provider price+5%；headless add-on",
+        "overage_conversion": "own-LLM 无超额；Tabnine LLM 超额=provider 价格+5%（官方公式）"
+      }
+    ],
+    "source_urls": {
+      "github-copilot": "https://github.com/features/copilot/plans",
+      "cursor": "https://cursor.com/pricing",
+      "claude-code": "https://claude.com/pricing",
+      "openai-codex": "https://openai.com/chatgpt/pricing/",
+      "windsurf-devin": "https://windsurf.com/pricing",
+      "jetbrains-ai": "https://www.jetbrains.com/help/ai-assistant/licensing-and-subscriptions.html",
+      "amazon-q-developer": "https://aws.amazon.com/q/developer/pricing/",
+      "tabnine": "https://www.tabnine.com/pricing"
+    },
+    "access_date": "2026-08-01"
+  },
+  "claims": [
+    {
+      "id": "C1",
+      "claim": "GitHub Copilot Business 档 $19/user/mo，Business/Enterprise 数据默认不用于训练，支持 SAML SSO、审计日志、IP 赔偿与 DPA/GDPR",
+      "confidence": "HIGH",
+      "scope": "S1 官方文档事实（L1/L2/L3），访问日期 2026-08-01",
+      "uncertainty": "Enterprise 档价格为 varies(PARTIAL)，未纳入单价模型"
+    },
+    {
+      "id": "C2",
+      "claim": "Claude Code 无独立订阅，捆绑在 Claude 付费订阅内（Pro $20/mo / Max from $100 / Team Standard $20/seat/mo annual / Team Premium $100/seat/mo annual），Team/Enterprise 默认不训练",
+      "confidence": "HIGH",
+      "scope": "S1 官方定价事实（L1），访问日期 2026-08-01",
+      "uncertainty": "Enterprise 超额按 API 计价（$20/seat+usage）"
+    },
+    {
+      "id": "C3",
+      "claim": "Claude Code 实测 6/6 任务 quality=5、验收全通过、0 人工介入、总耗时 25.42 分钟；T2 类型安全缺陷被真正修复（独立类型探针报 TS2339，阳性对照有效）",
+      "confidence": "HIGH",
+      "scope": "S2 实测（隔离克隆 /tmp/opencorvus-bench-20260801-002025，head ea8ba625）",
+      "uncertainty": "实测为单次运行快照；评分由执行 agent 独立复核给出"
+    },
+    {
+      "id": "C4",
+      "claim": "Codex 实测 T1 破坏既有契约测试（registry.test.ts 12 pass/2 fail），T2 为表象修复（类型探针 tsc exit=0 不报错，value 仍为 any），quality 2/5，平均 4.33",
+      "confidence": "HIGH",
+      "scope": "S2 实测（codex-cli 0.145.0）",
+      "uncertainty": "codex 0.145.0 无 --max-budget-usd 参数，预算控制以 --sandbox workspace-write+prompt 限界替代"
+    },
+    {
+      "id": "C5",
+      "claim": "实测方法满足章程 §8 硬约束：/tmp 隔离克隆、主工作区只读、禁 worktree/git reset/git clean/git checkout --、12 次运行 12 次恢复、不提交不推送、prompt 无密钥",
+      "confidence": "HIGH",
+      "scope": "S2 方法审计",
+      "uncertainty": "无"
+    },
+    {
+      "id": "C6",
+      "claim": "Cline/Aider 无官方企业定价/政策，判定 NOT-COMPARABLE 并按章程 3.3 排除主矩阵；copilot/aider/cursor 本机不可用（command -v 失败）标注 NOT_TESTED",
+      "confidence": "HIGH",
+      "scope": "S1 取舍结论 + S2 工具探测（2026-08-01）",
+      "uncertainty": "NOT_TESTED 工具能力评估仅基于官方文档"
+    },
+    {
+      "id": "C7",
+      "claim": "Windsurf 已并入 Devin，windsurf.com/pricing 现渲染 Devin 定价（Free $0/Pro $20/Max $200/Teams $80 plan+$40 seat/Enterprise custom），独立数据政策页失效（PARTIAL）",
+      "confidence": "MEDIUM",
+      "scope": "S1 官方页面事实（L1），访问日期 2026-08-01",
+      "uncertainty": "产品合并期间数据政策与额度细节随 Devin 演进"
+    },
+    {
+      "id": "C8",
+      "claim": "成本模型每格=席位成本（官方单价×12×N）+超额（仅官方单位可算）+企业最低承诺（Enterprise PARTIAL 未纳入）；全矩阵已给出，超额多数 NO_CONVERSION",
+      "confidence": "MEDIUM",
+      "scope": "S3 模型（基于 S1 官方单价 + 章程口径）",
+      "uncertainty": "强度档用量为 ASSUMED；超额换算依赖假设；Enterprise custom 价格未纳入"
+    }
+  ],
+  "limitations": [
+    {
+      "id": "L1",
+      "limitation": "价格/额度/政策为 2026-08-01 快照，属动态事实；交付超 14 天需标 STALE，采购前须复核",
+      "impact": "数字可能过期，不能作为远期采购合同唯一依据"
+    },
+    {
+      "id": "L2",
+      "limitation": "Enterprise 档价格多为 PARTIAL/custom，未纳入单价模型；企业合同最低承诺成本缺失",
+      "impact": "成本模型仅覆盖可公开单价档位，企业谈判价不可比"
+    },
+    {
+      "id": "L3",
+      "limitation": "实测仅覆盖本机可用的 claude 与 codex；Copilot/Cursor/Aider NOT_TESTED，Agent 能力/CLI 质量仅官方文档（L2）支撑",
+      "impact": "对 Copilot/Cursor 的 Agent 维度结论置信度低于 claude/codex"
+    },
+    {
+      "id": "L4",
+      "limitation": "强度档用量为 ASSUMED（章程 §3.1），超额部分基于假设换算；无厂商官方人均用量统计",
+      "impact": "超额成本为区间/情景估算，非官方承诺"
+    },
+    {
+      "id": "L5",
+      "limitation": "Windsurf 独立数据使用政策页已失效（PARTIAL），训练/保留/传输政策无法从官方确认",
+      "impact": "数据使用维度对 Windsurf 不可完全审计，采购前需厂商确认"
+    },
+    {
+      "id": "L6",
+      "limitation": "transport-protocol 既有 contract.test.ts:103 存在 1 项 pre-existing 失败（fixture/schema 漂移，与本次评测无关）",
+      "impact": "仓库既有契约测试并非全绿基线，属预存技术债，不影响本评测结论"
+    },
+    { "id": "L7", "limitation": "S3 依赖 S1+S2 闭合；若后续补充其他工具实测需重算", "impact": "结论随证据集扩展而更新" }
+  ],
+  "recommendations": [
+    {
+      "id": "R1",
+      "recommendation": "组合首选：GitHub Copilot Business（多 IDE 全覆盖+CLI/agent+Business 默认不训练+SSO/审计/DPA）+ Claude Code（Claude Team/Enterprise 订阅捆绑，实测 6/6 满分、无训练、RBAC/合规 API）",
+      "rationale": "7 维覆盖最全（Copilot）与实测质量最高（Claude Code）互补；两者企业治理/数据政策均可审计",
+      "condition": "需同时采购 IDE 补全与重型 agent 任务能力；预算按席位成本 Copilot $228/人/年 + Claude Team $240/人/年"
+    },
+    {
+      "id": "R2",
+      "recommendation": "预算敏感替代：OpenAI Codex（ChatGPT Business $20/user/mo annual）或 Amazon Q Developer Pro（$19/user/mo）",
+      "rationale": "两者团队档单价最低（$228-240/人/年），均默认不训练，具备 agent/CLI 能力",
+      "condition": "接受 Codex 实测 T1 破坏契约测试、T2 表象修复的风险（需严格验收命令+类型探针）",
+      "fact_check_note": "该推荐属于 recommendations R2，不属于 direct_answer（fact-check minor_corrections 已确认）"
+    },
+    {
+      "id": "R3",
+      "recommendation": "IDE 原生体验优先：Cursor Teams（Privacy Mode 全档、SOC 2 Type II、$0.25/MTok 超额可算）",
+      "rationale": "Cursor 在隐私与安全认证维度强，且超额单价可换算",
+      "condition": "需补充 Cursor CLI 实测（本机当前 NOT_TESTED）；Daily Agent $60-100/mo 为官方 docs 指引（cursor.com/docs/account/pricing，2026-08-02）；数据驻留 +10% 成本需评估"
+    },
+    {
+      "id": "R4",
+      "recommendation": "JetBrains 生态团队：JetBrains AI Ultimate Org（$60/mo/70 credits，1 credit=$1）；AWS 生态团队：Amazon Q Pro（$19/user/mo）",
+      "rationale": "生态绑定场景下治理/账单与现有平台集成成本最低",
+      "condition": "JetBrains credits 口径与 token/请求不可直接换算（NO_CONVERSION 项禁止估计）"
+    },
+    {
+      "id": "R5",
+      "recommendation": "排除：Cline/Aider（无官方企业契约，NOT-COMPARABLE）；Windsurf/Devin 谨慎（数据政策页 PARTIAL，采购前需厂商书面确认）",
+      "rationale": "章程 §3.3/§3.4 判定标准",
+      "condition": "若团队坚持开源/自管，走 BYO 模型 API 成本建模（本章程非目标）"
+    },
+    {
+      "id": "R6",
+      "recommendation": "所有决策前按新鲜度规则复核官方页：定价/额度/政策访问日期 2026-08-01，交付超 14 天标 STALE；Enterprise 档需厂商报价后重算成本模型",
+      "rationale": "动态数据规则（章程 §6）",
+      "condition": "采购正式化阶段执行"
+    }
+  ]
+}

@@ -1,177 +1,79 @@
-import { QuestionTool } from "./question"
-import { BashTool } from "./bash"
-import { EditTool } from "./edit"
-import { GlobTool } from "./glob"
-import { GrepTool } from "./grep"
-import { BatchTool } from "./batch"
-import { ReadTool } from "./read"
-import { TaskTool } from "./task"
-import { TodoReadTool, TodoWriteTool } from "./todo"
-import { WebFetchTool } from "./webfetch"
-import { WriteTool } from "./write"
-import { InvalidTool } from "./invalid"
-import { SkillTool } from "./skill"
-import type { Agent } from "../agent/agent"
+import { createBatchTool } from "./batch"
 import { Tool } from "./tool"
-import { Instance } from "../project/instance"
 import { Config } from "../config/config"
-import path from "path"
-import { type ToolContext as PluginToolContext, type ToolDefinition } from "@opencorvus-ai/plugin"
-import z from "zod"
 import { Plugin } from "../plugin"
-import { WebSearchTool } from "./websearch"
-import { CodeSearchTool } from "./codesearch"
-import { Flag } from "@/flag/flag"
 import { Log } from "@/util/log"
-import { LspTool } from "./lsp"
-import { Truncate } from "./truncation"
-
-import { AnalyticsTool } from "./analytics"
-import { ApplyPatchTool } from "./apply_patch"
-import { MemoryTool } from "./memory"
-import { ScheduleTool } from "./schedule"
-import { PlannerTool } from "./planner"
-import { PanelTool } from "./panel"
-import { TuiTool } from "./tui"
-import { TaskReportTool } from "./task-report"
-import { PlanEnterTool, PlanExitTool } from "./plan"
-import { SpecEnterTool, SpecExitTool } from "./spec"
-import { Glob } from "../util/glob"
-import { pathToFileURL } from "url"
+import { AgentToolPool } from "@/agent/tool-pool-contract"
+import { assertBuiltInToolProviderClosure, builtInGlobalTools, builtInToolProviderState } from "./global-tools"
+import { BATCH_TOOL_ID, TASK_ARTIFACT_TOOL_IDS } from "./tool-id-catalog"
+import { isSkillFamilyToolID } from "./skill"
+import type { RuntimeTemplateID } from "@/agent/runtime-template-id"
+import { RuntimeTemplateRegistry } from "@/agent/runtime-template-registry"
+import type { SessionAgentRuntime } from "@/agent/session-agent-runtime"
+import { PermissionNext } from "@/permission/next"
+import { visibleExecutionToolIDs } from "./execution-surface"
 
 export namespace ToolRegistry {
   const log = Log.create({ service: "tool.registry" })
 
-  export const state = Instance.state(async () => {
-    const custom = [] as Tool.Info[]
-
-    const matches = await Config.directories().then((dirs) =>
-      dirs.flatMap((dir) =>
-        Glob.scanSync("{tool,tools}/*.{js,ts}", { cwd: dir, absolute: true, dot: true, symlink: true }),
-      ),
-    )
-    if (matches.length) await Config.waitForDependencies()
-    for (const match of matches) {
-      const namespace = path.basename(match, path.extname(match))
-      try {
-        const mod = await import(pathToFileURL(match).href)
-        for (const [id, def] of Object.entries<ToolDefinition>(mod)) {
-          custom.push(fromPlugin(id === "default" ? namespace : `${namespace}_${id}`, def))
-        }
-      } catch (err) {
-        log.warn("failed to load custom tool", { path: match, error: err })
-      }
-    }
-
-    const plugins = await Plugin.list()
-    for (const plugin of plugins) {
-      for (const [id, def] of Object.entries(plugin.tool ?? {})) {
-        custom.push(fromPlugin(id, def))
-      }
-    }
-
-    return { custom }
-  })
-
-  function fromPlugin(id: string, def: ToolDefinition): Tool.Info {
-    return {
-      id,
-      init: async (initCtx) => ({
-        parameters: z.object(def.args),
-        description: def.description,
-        execute: async (args, ctx) => {
-          const pluginCtx = {
-            ...ctx,
-            directory: Instance.directory,
-            worktree: Instance.worktree,
-          } as unknown as PluginToolContext
-          const result = await def.execute(args as any, pluginCtx)
-          const out = await Truncate.output(result, {}, initCtx?.agent)
-          return {
-            title: "",
-            output: out.truncated ? out.content : result,
-            metadata: { truncated: out.truncated, outputPath: out.truncated ? out.outputPath : undefined },
-          }
-        },
-      }),
-    }
-  }
-
-  export async function register(tool: Tool.Info) {
-    const { custom } = await state()
-    const idx = custom.findIndex((t) => t.id === tool.id)
-    if (idx >= 0) {
-      custom.splice(idx, 1, tool)
-      return
-    }
-    custom.push(tool)
-  }
-
-  async function all(): Promise<Tool.Info[]> {
-    const custom = await state().then((x) => x.custom)
-    const config = await Config.get()
-    const question = ["app", "cli", "desktop"].includes(Flag.OPENCORVUS_CLIENT) || Flag.OPENCORVUS_ENABLE_QUESTION_TOOL
-
-    return [
-      InvalidTool,
-      ...(question ? [QuestionTool] : []),
-      BashTool,
-      ReadTool,
-      GlobTool,
-      GrepTool,
-      EditTool,
-      WriteTool,
-      TaskTool,
-      PlanEnterTool,
-      PlanExitTool,
-      SpecEnterTool,
-      SpecExitTool,
-      WebFetchTool,
-      TodoWriteTool,
-      TodoReadTool,
-      WebSearchTool,
-      CodeSearchTool,
-      SkillTool,
-      ApplyPatchTool,
-      MemoryTool,
-      ScheduleTool,
-      PlannerTool,
-      PanelTool,
-      TuiTool,
-      TaskReportTool,
-      AnalyticsTool,
-      ...(Flag.OPENCORVUS_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
-      ...(config.experimental?.batch_tool === true ? [BatchTool] : []),
-      ...custom,
-    ]
+  async function all(): Promise<readonly Tool.Info[]> {
+    return builtInGlobalTools()
   }
 
   export async function ids() {
     return all().then((x) => x.map((t) => t.id))
   }
 
-  export async function tools(
+  type ToolVisibility =
+    | { kind: "agent-template" }
+    | { kind: "projected-worker"; toolIDs: readonly string[]; batchTargetExclusions: readonly string[] }
+
+  async function materialize(
     model: {
       providerID: string
       modelID: string
     },
-    agent?: Agent.Info,
+    agent?: SessionAgentRuntime,
+    agentID?: string,
+    config?: Config.Info,
+    visibility: ToolVisibility = { kind: "agent-template" },
   ) {
-    const tools = await all()
+    let items = await all()
+    const providerEnvironment = { batchToolEnabled: config?.experimental?.batch_tool === true }
+
+    const visibleToolIDs =
+      visibility.kind === "projected-worker"
+        ? new Set(visibility.toolIDs)
+        : agent
+          ? AgentToolPool.visibleToolIDs(agent.tools)
+          : undefined
+    if (visibleToolIDs) items = items.filter((t) => visibleToolIDs.has(t.id))
+    items = items.filter((toolInfo) => builtInToolProviderState(toolInfo.id, providerEnvironment) !== "unavailable")
+
+    const batchToolAllowed =
+      builtInToolProviderState(BATCH_TOOL_ID, providerEnvironment) === "available" &&
+      (!visibleToolIDs || visibleToolIDs.has(BATCH_TOOL_ID))
+
     const result = await Promise.all(
-      tools
+      items
         .filter((t) => {
-          // use apply tool in same format as codex
-          const usePatch =
-            model.modelID.includes("gpt-") && !model.modelID.includes("oss") && !model.modelID.includes("gpt-4")
-          if (t.id === "apply_patch") return usePatch
-          if (t.id === "edit" || t.id === "write") return !usePatch
+          // SessionLoop initializes SkillTool from the exact projected-agent
+          // skill surface after the rest of the turn tool set is known.
+          if (isSkillFamilyToolID(t.id)) return false
+
+          if (visibility.kind === "agent-template") {
+            // Native agents retain their provider-specific editing interface.
+            const usePatch =
+              model.modelID.includes("gpt-") && !model.modelID.includes("oss") && !model.modelID.includes("gpt-4")
+            if (t.id === "apply_patch") return usePatch
+            if (t.id === "edit" || t.id === "write") return !usePatch
+          }
 
           return true
         })
         .map(async (t) => {
-          using _ = log.time(t.id)
-          const tool = await t.init({ agent })
+          using _ = log.timeDebug(t.id)
+          const tool = await t.init({ agentID, config })
           const output = {
             description: tool.description,
             parameters: tool.parameters,
@@ -185,6 +87,133 @@ export namespace ToolRegistry {
           }
         }),
     )
+    if (batchToolAllowed) {
+      const batchTargetExclusions =
+        visibility.kind === "projected-worker" ? new Set(visibility.batchTargetExclusions) : new Set<string>()
+      const batchTargets = result.filter((item) => !batchTargetExclusions.has(item.id))
+      if (batchTargets.length > 0) {
+        const batchInfo = createBatchTool(batchTargets)
+        const tool = await batchInfo.init({ agentID, config })
+        const output = {
+          description: tool.description,
+          parameters: tool.parameters,
+        }
+        await Plugin.trigger("tool.definition", { toolID: batchInfo.id }, output)
+        result.push({
+          id: batchInfo.id,
+          ...tool,
+          description: output.description,
+          parameters: output.parameters,
+        })
+      }
+    }
+    if (visibility.kind === "projected-worker") {
+      const requested = visibility.toolIDs
+      const requestedSet = new Set(requested)
+      if (requestedSet.size !== requested.length) {
+        throw new Error("Projected worker registry tool IDs must be unique")
+      }
+      const expected = [...requestedSet]
+        .filter((toolID) => builtInToolProviderState(toolID, providerEnvironment) !== "deferred")
+        .sort()
+      const actual = result.map((item) => item.id).sort()
+      if (new Set(actual).size !== actual.length || JSON.stringify(actual) !== JSON.stringify(expected)) {
+        throw new Error(
+          `Projected worker registry materialization mismatch: expected ${expected.join(",") || "<none>"}, found ${actual.join(",") || "<none>"}`,
+        )
+      }
+    }
     return result
+  }
+
+  export async function tools(
+    model: {
+      providerID: string
+      modelID: string
+    },
+    config?: Config.Info,
+  ) {
+    return materialize(model, undefined, undefined, config, { kind: "agent-template" })
+  }
+
+  export async function runtimeTools(
+    model: { providerID: string; modelID: string },
+    agent: SessionAgentRuntime,
+    agentID: string,
+    config: Config.Info,
+  ) {
+    return materialize(model, agent, agentID, config, { kind: "agent-template" })
+  }
+
+  export async function projectedWorkerTools(
+    model: {
+      providerID: string
+      modelID: string
+    },
+    agent: SessionAgentRuntime,
+    agentID: string,
+    runtimeTemplateID: RuntimeTemplateID,
+    config: Config.Info,
+    toolIDs: readonly string[],
+    policy: {
+      sessionPermission?: PermissionNext.Ruleset
+      toolSwitches?: Readonly<Record<string, boolean>>
+      batchTargetExclusions: readonly string[]
+    },
+  ) {
+    RuntimeTemplateRegistry.get(runtimeTemplateID)
+    if (new Set(toolIDs).size !== toolIDs.length) {
+      throw new Error("Projected worker registry tool IDs must be unique")
+    }
+    if (new Set(policy.batchTargetExclusions).size !== policy.batchTargetExclusions.length) {
+      throw new Error("Projected worker batch target exclusions must be unique")
+    }
+    const projectable = AgentToolPool.projectableRuntimeTemplateBuiltInToolIDs(runtimeTemplateID)
+    const providerEnvironment = { batchToolEnabled: config.experimental?.batch_tool === true }
+    for (const toolID of toolIDs) {
+      if (!projectable.has(toolID)) {
+        throw new Error(`Runtime template ${runtimeTemplateID} cannot project registry tool ${JSON.stringify(toolID)}`)
+      }
+      if (builtInToolProviderState(toolID, providerEnvironment) === "unavailable") {
+        throw new Error(
+          `Runtime template ${runtimeTemplateID} cannot materialize unavailable registry tool ${JSON.stringify(toolID)}`,
+        )
+      }
+    }
+    assertBuiltInToolProviderClosure(toolIDs, providerEnvironment, `Runtime template ${runtimeTemplateID}`)
+    const permission = PermissionNext.merge(agent.permission, policy.sessionPermission)
+    const policyVisibleToolIDs = new Set(
+      visibleExecutionToolIDs({
+        toolIDs,
+        permission,
+        switches: policy.toolSwitches,
+      }),
+    )
+    const requiredTransportToolIDs = new Set<string>(
+      TASK_ARTIFACT_TOOL_IDS.filter((toolID) => toolIDs.includes(toolID)),
+    )
+    let visibleToolIDs = toolIDs.filter(
+      (toolID) => policyVisibleToolIDs.has(toolID) || requiredTransportToolIDs.has(toolID),
+    )
+    if (visibleToolIDs.includes(BATCH_TOOL_ID)) {
+      const batchTargetExclusions = new Set(policy.batchTargetExclusions)
+      const batchTargets = visibleToolIDs.filter(
+        (toolID) =>
+          toolID !== BATCH_TOOL_ID &&
+          !batchTargetExclusions.has(toolID) &&
+          builtInToolProviderState(toolID, providerEnvironment) !== "deferred",
+      )
+      if (batchTargets.length === 0) visibleToolIDs = visibleToolIDs.filter((toolID) => toolID !== BATCH_TOOL_ID)
+    }
+    const tools = await materialize(model, agent, agentID, config, {
+      kind: "projected-worker",
+      toolIDs: visibleToolIDs,
+      batchTargetExclusions: policy.batchTargetExclusions,
+    })
+    return {
+      tools,
+      visibleToolIDs: Object.freeze([...visibleToolIDs]) as readonly string[],
+      permission,
+    }
   }
 }

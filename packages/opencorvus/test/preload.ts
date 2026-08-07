@@ -1,42 +1,66 @@
 // IMPORTANT: Set env vars BEFORE any imports from src/ directory
-// xdg-basedir reads env vars at import time, so we must set these first
-import os from "os"
 import path from "path"
 import fs from "fs/promises"
 import { afterAll } from "bun:test"
+import {
+  createManagedTemporaryDirectory,
+  currentOpenCorvusRuntimePaths,
+  removeManagedDirectoryTree,
+  removeManagedDirectoryTreeSync,
+} from "@opencorvus-ai/util/runtime-directories"
 
-// Set XDG env vars FIRST, before any src/ imports
-const dir = path.join(os.tmpdir(), "opencorvus-test-data-" + process.pid)
-await fs.mkdir(dir, { recursive: true })
-afterAll(async () => {
-  const { Database } = await import("../src/storage/db")
-  const { Log } = await import("../src/util/log")
-  Database.close()
-  const busy = (error: unknown) =>
-    typeof error === "object" && error !== null && "code" in error && error.code === "EBUSY"
-  const rm = async (left: number): Promise<void> => {
-    Bun.gc(true)
-    await Bun.sleep(100)
-    return fs.rm(dir, { recursive: true, force: true }).catch((error) => {
-      if (!busy(error)) throw error
-      if (left <= 1) {
-        Log.Default.warn("test cleanup skipped due to persistent EBUSY", { dir, error })
-        return
-      }
-      return rm(left - 1)
-    })
-  }
+const testRunsRoot = path.join(currentOpenCorvusRuntimePaths().temporary, "tests")
+const dir = await createManagedTemporaryDirectory(testRunsRoot, `${process.pid}-`)
+const runtimeRoot = path.join(dir, "runtime-root")
+const temporaryDirectory = path.join(runtimeRoot, "tmp")
+await fs.mkdir(temporaryDirectory, { recursive: true })
+process.env["OPENCORVUS_TEST_PROCESS_ROOT"] = dir
+process.env["OPENCORVUS_TEST_RUNS_ROOT"] = testRunsRoot
+process.env["TEMP"] = temporaryDirectory
+process.env["TMP"] = temporaryDirectory
+process.env["TMPDIR"] = temporaryDirectory
 
-  // Windows can keep SQLite WAL handles alive until GC finalizers run, so we
-  // force GC and retry teardown to avoid flaky EBUSY in test cleanup.
-  await rm(30)
+process.once("exit", () => {
+  removeManagedDirectoryTreeSync(dir)
 })
 
-process.env["XDG_DATA_HOME"] = path.join(dir, "share")
-process.env["XDG_CACHE_HOME"] = path.join(dir, "cache")
-process.env["XDG_CONFIG_HOME"] = path.join(dir, "config")
-process.env["XDG_STATE_HOME"] = path.join(dir, "state")
-process.env["OPENCORVUS_MODELS_PATH"] = path.join(import.meta.dir, "tool", "fixtures", "models-api.json")
+afterAll(
+  async () => {
+    const failures: unknown[] = []
+    const { Database } = await import("../src/storage/db")
+    const { Log } = await import("../src/util/log")
+    try {
+      await Database.awaitEffectIdle(60_000)
+    } catch (error) {
+      failures.push(error)
+    }
+    try {
+      Database.close()
+    } catch (error) {
+      failures.push(error)
+    }
+    try {
+      await Log.close()
+    } catch (error) {
+      failures.push(error)
+    }
+    try {
+      await removeManagedDirectoryTree(dir)
+    } catch (error) {
+      failures.push(error)
+    }
+    if (failures.length === 1) throw failures[0]
+    if (failures.length > 1) throw new AggregateError(failures, "Test preload database and directory cleanup failed")
+  },
+  120_000,
+)
+
+process.env["XDG_DATA_HOME"] = path.join(dir, "cross-desktop-group-data")
+process.env["XDG_CACHE_HOME"] = path.join(dir, "cross-desktop-group-cache")
+process.env["XDG_CONFIG_HOME"] = path.join(dir, "cross-desktop-group-config")
+process.env["XDG_STATE_HOME"] = path.join(dir, "cross-desktop-group-state")
+process.env["OPENCORVUS_HOME"] = runtimeRoot
+process.env["OPENCORVUS_MODELS_PATH"] = path.join(dir, "models.json")
 
 // Set test home directory to isolate tests from user's actual home directory
 // This prevents tests from picking up real user configs/skills from ~/.claude/skills
@@ -49,9 +73,9 @@ const testManagedConfigDir = path.join(dir, "managed")
 process.env["OPENCORVUS_TEST_MANAGED_CONFIG_DIR"] = testManagedConfigDir
 
 // Write the cache version file to prevent global/index.ts from clearing the cache
-const cacheDir = path.join(dir, "cache", "opencorvus")
+const cacheDir = path.join(runtimeRoot, "cache")
 await fs.mkdir(cacheDir, { recursive: true })
-await fs.writeFile(path.join(cacheDir, "version"), "14")
+await fs.writeFile(path.join(cacheDir, "version"), "21")
 
 // Clear provider env vars to ensure clean test state
 delete process.env["ANTHROPIC_API_KEY"]
@@ -76,9 +100,19 @@ delete process.env["SAMBANOVA_API_KEY"]
 
 // Now safe to import from src/
 const { Log } = await import("../src/util/log")
+const { ModelsDev } = await import("../src/provider/models")
+const modelFixture = JSON.parse(
+  await fs.readFile(path.join(import.meta.dir, "..", "src", "provider", "models-bootstrap.json"), "utf8"),
+)
+await fs.writeFile(process.env["OPENCORVUS_MODELS_PATH"], JSON.stringify(ModelsDev.withLocalProviders(modelFixture)))
 
-Log.init({
+await Log.init({
   print: false,
   dev: true,
   level: "DEBUG",
 })
+
+const { installDefaultControlPlaneToolLoaders } = await import("../src/tool/control-plane-tool-composition")
+installDefaultControlPlaneToolLoaders()
+const { installDefaultTaskWakeRuntime } = await import("../src/scheduler/task-wake-composition")
+installDefaultTaskWakeRuntime()

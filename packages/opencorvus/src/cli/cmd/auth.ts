@@ -11,9 +11,8 @@ import { Global } from "../../global"
 import { Plugin } from "../../plugin"
 import { Instance } from "../../project/instance"
 import type { Hooks } from "@opencorvus-ai/plugin"
-import { Process } from "../../util/process"
-import { text } from "node:stream/consumers"
 import { entries } from "@/util/object"
+import { ProviderAuth } from "@/provider/auth"
 
 type PluginAuth = NonNullable<Hooks["auth"]>
 
@@ -21,7 +20,7 @@ type PluginAuth = NonNullable<Hooks["auth"]>
  * Handle plugin-based authentication flow.
  * Returns true if auth was handled, false if it should fall through to default handling.
  */
-async function handlePluginAuth(plugin: { auth: PluginAuth }, provider: string): Promise<boolean> {
+export async function handlePluginAuth(plugin: { auth: PluginAuth }, provider: string): Promise<boolean> {
   let index = 0
   if (plugin.auth.methods.length > 1) {
     const method = await prompts.select({
@@ -43,7 +42,7 @@ async function handlePluginAuth(plugin: { auth: PluginAuth }, provider: string):
   const inputs: Record<string, string> = {}
   if (method.prompts) {
     for (const prompt of method.prompts) {
-      if (prompt.condition && !prompt.condition(inputs)) {
+      if (prompt.when && !ProviderAuth.matchesWhen(prompt.when, inputs)) {
         continue
       }
       if (prompt.type === "select") {
@@ -98,6 +97,7 @@ async function handlePluginAuth(plugin: { auth: PluginAuth }, provider: string):
           await Auth.set(saveProvider, {
             type: "api",
             key: result.key,
+            metadata: result.metadata,
           })
         }
         spinner.stop("Login successful")
@@ -130,6 +130,7 @@ async function handlePluginAuth(plugin: { auth: PluginAuth }, provider: string):
           await Auth.set(saveProvider, {
             type: "api",
             key: result.key,
+            metadata: result.metadata,
           })
         }
         prompts.log.success("Login successful")
@@ -141,22 +142,40 @@ async function handlePluginAuth(plugin: { auth: PluginAuth }, provider: string):
   }
 
   if (method.type === "api") {
-    if (method.authorize) {
-      const result = await method.authorize(inputs)
-      if (result.type === "failed") {
-        prompts.log.error("Failed to authorize")
-      }
-      if (result.type === "success") {
-        const saveProvider = result.provider ?? provider
-        await Auth.set(saveProvider, {
-          type: "api",
-          key: result.key,
-        })
-        prompts.log.success("Login successful")
-      }
+    const key = await prompts.password({
+      message: "Enter your API key",
+      validate: (x) => (x && x.length > 0 ? undefined : "Required"),
+    })
+    if (prompts.isCancel(key)) throw new UI.CancelledError()
+
+    const metadata = Object.keys(inputs).length ? { metadata: inputs } : {}
+    const authorizeApi = method.authorize
+    if (!authorizeApi) {
+      await Auth.set(provider, {
+        type: "api",
+        key,
+        ...metadata,
+      })
       prompts.outro("Done")
       return true
     }
+
+    const result = await authorizeApi(inputs)
+    if (result.type === "failed") {
+      prompts.log.error("Failed to authorize")
+    }
+    if (result.type === "success") {
+      const saveProvider = result.provider ?? provider
+      const merged = { ...(metadata.metadata ?? {}), ...(result.metadata ?? {}) }
+      await Auth.set(saveProvider, {
+        type: "api",
+        key: result.key ?? key,
+        ...(Object.keys(merged).length ? { metadata: merged } : {}),
+      })
+      prompts.log.success("Login successful")
+    }
+    prompts.outro("Done")
+    return true
   }
 
   return false
@@ -265,32 +284,11 @@ export const AuthLoginCommand = cmd({
         prompts.intro("Add credential")
         if (args.url) {
           const wellknown = await fetch(`${args.url}/.well-known/opencorvus`).then((x) => x.json() as any)
-          prompts.log.info(`Running \`${wellknown.auth.command.join(" ")}\``)
-          const proc = Process.spawn(wellknown.auth.command, {
-            stdout: "pipe",
-          })
-          if (!proc.stdout) {
-            prompts.log.error("Failed")
-            prompts.outro("Done")
-            return
+          if (wellknown?.auth?.command) {
+            throw new Error("Remote well-known auth commands are disabled; configure provider credentials locally.")
           }
-          const [exit, token] = await Promise.all([proc.exited, text(proc.stdout)])
-          if (exit !== 0) {
-            prompts.log.error("Failed")
-            prompts.outro("Done")
-            return
-          }
-          await Auth.set(args.url, {
-            type: "wellknown",
-            key: wellknown.auth.env,
-            token: token.trim(),
-          })
-          prompts.log.success("Logged into " + args.url)
-          prompts.outro("Done")
-          return
+          throw new Error("Remote well-known auth is unsupported; configure provider credentials locally.")
         }
-        await ModelsDev.refresh().catch(() => {})
-
         const config = await Config.get()
 
         const disabled = new Set(config.disabled_providers ?? [])
@@ -309,11 +307,10 @@ export const AuthLoginCommand = cmd({
         const priority: Record<string, number> = {
           opencorvus: 0,
           anthropic: 1,
-          "github-copilot": 2,
-          openai: 3,
-          google: 4,
-          openrouter: 5,
-          vercel: 6,
+          openai: 2,
+          google: 3,
+          openrouter: 4,
+          vercel: 5,
         }
         const pluginProviders = resolvePluginProviders({
           hooks: await Plugin.list(),
@@ -385,7 +382,7 @@ export const AuthLoginCommand = cmd({
           }
 
           prompts.log.warn(
-            `This only stores a credential for ${provider} - you will need configure it in opencorvus.json, check the docs for examples.`,
+            `This only stores a credential for ${provider} - you will need configure it in opencorvus.jsonc, check the docs for examples.`,
           )
         }
 
@@ -394,7 +391,7 @@ export const AuthLoginCommand = cmd({
             "Amazon Bedrock authentication priority:\n" +
               "  1. Bearer token (AWS_BEARER_TOKEN_BEDROCK or /connect)\n" +
               "  2. AWS credential chain (profile, access keys, IAM roles, EKS IRSA)\n\n" +
-              "Configure via opencorvus.json options (profile, region, endpoint) or\n" +
+              "Configure via opencorvus.jsonc options (profile, region, endpoint) or\n" +
               "AWS environment variables (AWS_PROFILE, AWS_REGION, AWS_ACCESS_KEY_ID, AWS_WEB_IDENTITY_TOKEN_FILE).",
           )
         }

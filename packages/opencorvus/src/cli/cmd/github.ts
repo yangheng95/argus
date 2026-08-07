@@ -20,6 +20,7 @@ import { UI } from "../ui"
 import { cmd } from "./cmd"
 import { ModelsDev } from "../../provider/models"
 import { Instance } from "@/project/instance"
+import { Project } from "@/project/project"
 import { bootstrap } from "../bootstrap"
 import { Session } from "../../session"
 import { Identifier } from "../../id/id"
@@ -137,12 +138,22 @@ const AGENT_REACTION = "eyes"
 const WORKFLOW_FILE = ".github/workflows/opencorvus.yml"
 
 // Event categories for routing
+// COMMENT_EVENTS: user events with a comment body that can contain an inline OpenCorvus command
 // USER_EVENTS: triggered by user actions, have actor/issueId, support reactions/comments
 // REPO_EVENTS: triggered by automation, no actor/issueId, output to logs/PR only
-const USER_EVENTS = ["issue_comment", "pull_request_review_comment", "issues", "pull_request"] as const
+const COMMENT_EVENTS = ["issue_comment", "pull_request_review_comment"] as const
 const REPO_EVENTS = ["schedule", "workflow_dispatch"] as const
+const PROMPT_REQUIRED_EVENTS = ["issues", ...REPO_EVENTS] as const
+const PROMPT_REQUIRED_EVENT_DESCRIPTIONS: Record<(typeof PROMPT_REQUIRED_EVENTS)[number], string> = {
+  issues: "issues",
+  schedule: "scheduled and workflow_dispatch",
+  workflow_dispatch: "scheduled and workflow_dispatch",
+}
+const USER_EVENTS = [...COMMENT_EVENTS, "issues", "pull_request"] as const
 const SUPPORTED_EVENTS = [...USER_EVENTS, ...REPO_EVENTS] as const
 
+type CommentEvent = (typeof COMMENT_EVENTS)[number]
+type PromptRequiredEvent = (typeof PROMPT_REQUIRED_EVENTS)[number]
 type UserEvent = (typeof USER_EVENTS)[number]
 type RepoEvent = (typeof REPO_EVENTS)[number]
 
@@ -186,6 +197,10 @@ export function formatPromptTooLargeError(files: { filename: string; content: st
   return `PROMPT_TOO_LARGE: The prompt exceeds the model's context limit.${fileDetails}`
 }
 
+export async function summarizeGitHubActionResponse(response: string, chat: (message: string) => Promise<string>) {
+  return await chat(`Summarize the following in less than 40 characters:\n\n${response}`)
+}
+
 export const GithubCommand = cmd({
   command: "github",
   describe: "manage GitHub agent",
@@ -206,11 +221,7 @@ export const GithubInstallCommand = cmd({
           const app = await getAppInfo()
           await installGitHubApp()
 
-          const providers = await ModelsDev.get().then((p) => {
-            // TODO: add guide for copilot, for now just hide it
-            delete p["github-copilot"]
-            return p
-          })
+          const providers = await ModelsDev.get()
 
           const provider = await promptProvider()
           const model = await promptModel()
@@ -241,14 +252,13 @@ export const GithubInstallCommand = cmd({
                 "",
                 "    3. Go to a GitHub issue and comment `/oc summarize` to see the agent in action",
                 "",
-                "   Learn more about the GitHub agent - https://opencorvus.ai/docs/github/#usage-examples",
+                "   Learn more about the GitHub agent - https://opencorvus.ai/docs/operations/github-action/",
               ].join("\n"),
             )
           }
 
           async function getAppInfo() {
-            const project = Instance.project
-            if (project.vcs !== "git") {
+            if (!Project.isGitRepo(Instance.directory)) {
               prompts.log.error(`Could not find git repository. Please run this command from a git repository.`)
               throw new UI.CancelledError()
             }
@@ -398,7 +408,7 @@ jobs:
       issues: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -424,14 +434,10 @@ export const GithubRunCommand = cmd({
       .option("event", {
         type: "string",
         describe: "GitHub mock event to run the agent for",
-      })
-      .option("token", {
-        type: "string",
-        describe: "GitHub personal access token (github_pat_********)",
       }),
   async handler(args) {
     await bootstrap(process.cwd(), async () => {
-      const isMock = args.token || args.event
+      const isMock = Boolean(args.event)
 
       const context = isMock ? (JSON.parse(args.event!) as Context) : github.context
       if (!SUPPORTED_EVENTS.includes(context.eventName as (typeof SUPPORTED_EVENTS)[number])) {
@@ -444,8 +450,8 @@ export const GithubRunCommand = cmd({
       // REPO_EVENTS: no actor/issueId, output to logs/PR only
       const isUserEvent = USER_EVENTS.includes(context.eventName as UserEvent)
       const isRepoEvent = REPO_EVENTS.includes(context.eventName as RepoEvent)
-      const isCommentEvent = ["issue_comment", "pull_request_review_comment"].includes(context.eventName)
-      const isIssuesEvent = context.eventName === "issues"
+      const isCommentEvent = COMMENT_EVENTS.includes(context.eventName as CommentEvent)
+      const isPromptRequiredEvent = PROMPT_REQUIRED_EVENTS.includes(context.eventName as PromptRequiredEvent)
       const isScheduleEvent = context.eventName === "schedule"
       const isWorkflowDispatchEvent = context.eventName === "workflow_dispatch"
 
@@ -477,13 +483,12 @@ export const GithubRunCommand = cmd({
       let octoRest: Octokit
       let octoGraph: typeof graphql
       let gitConfig: string
-      let session: { id: string; title: string; version: string }
+      let session: Session.Info
       let exitCode = 0
       type PromptFiles = Awaited<ReturnType<typeof getUserPrompt>>["promptFiles"]
       const triggerCommentId = isCommentEvent
         ? (payload as IssueCommentEvent | PullRequestReviewCommentEvent).comment.id
         : undefined
-      const useGithubToken = normalizeUseGithubToken()
       const commentType = isCommentEvent
         ? context.eventName === "pull_request_review_comment"
           ? "pr_review"
@@ -491,27 +496,15 @@ export const GithubRunCommand = cmd({
         : undefined
 
       try {
-        if (useGithubToken) {
-          const githubToken = process.env["GITHUB_TOKEN"]
-          if (!githubToken) {
-            throw new Error(
-              "GITHUB_TOKEN environment variable is not set. When using use_github_token, you must provide GITHUB_TOKEN.",
-            )
-          }
-          appToken = githubToken
-        } else {
-          const actionToken = isMock ? args.token! : await getOidcToken()
-          appToken = await exchangeForAppToken(actionToken)
-        }
+        const actionToken = await getOidcToken()
+        appToken = await exchangeForAppToken(actionToken)
         octoRest = new Octokit({ auth: appToken })
         octoGraph = graphql.defaults({
           headers: { authorization: `token ${appToken}` },
         })
 
         const { userPrompt, promptFiles } = await getUserPrompt()
-        if (!useGithubToken) {
-          await configureGit(appToken)
-        }
+        await configureGit(appToken)
         // Skip permission check and reactions for repo events (no actor to check, no issue to react to)
         if (isUserEvent) {
           await assertPermissions()
@@ -520,7 +513,9 @@ export const GithubRunCommand = cmd({
 
         // Setup opencorvus session
         const repoData = await fetchRepo()
-        session = await Session.create({
+        session = await Session.createNext({
+          kind: "assistant",
+          directory: Instance.directory,
           permission: [
             {
               permission: "question",
@@ -561,11 +556,7 @@ export const GithubRunCommand = cmd({
               summary,
               `${response}\n\nTriggered by ${triggerType}${footer()}`,
             )
-            if (pr) {
-              console.log(`Created PR #${pr}`)
-            } else {
-              console.log("Skipped PR creation (no new commits)")
-            }
+            console.log(`Created PR #${pr}`)
           } else {
             console.log("Response:", response)
           }
@@ -631,14 +622,10 @@ export const GithubRunCommand = cmd({
               summary,
               `${response}\n\nCloses #${issueId}${footer()}`,
             )
-            if (pr) {
-          await createComment(`Created PR #${pr}${footer()}`)
-            } else {
-          await createComment(`${response}${footer()}`)
-            }
+            await createComment(`Created PR #${pr}${footer()}`)
             await removeReaction(commentType)
           } else {
-        await createComment(`${response}${footer()}`)
+            await createComment(`${response}${footer()}`)
             await removeReaction(commentType)
           }
         }
@@ -659,10 +646,8 @@ export const GithubRunCommand = cmd({
         // Also output the clean error message for the action to capture
         //core.setOutput("prepare_error", e.message);
       } finally {
-        if (!useGithubToken) {
-          await restoreGitConfig()
-          await revokeAppToken()
-        }
+        await restoreGitConfig()
+        await revokeAppToken()
       }
       process.exit(exitCode)
 
@@ -689,14 +674,6 @@ export const GithubRunCommand = cmd({
         if (value === "true") return true
         if (value === "false") return false
         throw new Error(`Invalid share value: ${value}. Share must be a boolean.`)
-      }
-
-      function normalizeUseGithubToken() {
-        const value = process.env["USE_GITHUB_TOKEN"]
-        if (!value) return false
-        if (value === "true") return true
-        if (value === "false") return false
-        throw new Error(`Invalid use_github_token value: ${value}. Must be a boolean.`)
       }
 
       function normalizeOidcBaseUrl(): string {
@@ -737,9 +714,9 @@ export const GithubRunCommand = cmd({
       async function getUserPrompt() {
         const customPrompt = process.env["PROMPT"]
         // For repo events and issues events, PROMPT is required since there's no comment to extract from
-        if (isRepoEvent || isIssuesEvent) {
+        if (isPromptRequiredEvent) {
           if (!customPrompt) {
-            const eventType = isRepoEvent ? "scheduled and workflow_dispatch" : "issues"
+            const eventType = PROMPT_REQUIRED_EVENT_DESCRIPTIONS[context.eventName as PromptRequiredEvent]
             throw new Error(`PROMPT input is required for ${eventType} events`)
           }
           return { userPrompt: customPrompt, promptFiles: [] }
@@ -839,7 +816,7 @@ export const GithubRunCommand = cmd({
           bash: ["Bash", UI.Style.TEXT_DANGER_BOLD],
           edit: ["Edit", UI.Style.TEXT_SUCCESS_BOLD],
           glob: ["Glob", UI.Style.TEXT_INFO_BOLD],
-          grep: ["Grep", UI.Style.TEXT_INFO_BOLD],
+          search_code: ["Search Code", UI.Style.TEXT_INFO_BOLD],
           list: ["List", UI.Style.TEXT_INFO_BOLD],
           read: ["Read", UI.Style.TEXT_HIGHLIGHT_BOLD],
           write: ["Write", UI.Style.TEXT_SUCCESS_BOLD],
@@ -863,10 +840,11 @@ export const GithubRunCommand = cmd({
 
           if (part.type === "tool" && part.state.status === "completed") {
             const [tool, color] = TOOL[part.tool] ?? [part.tool, UI.Style.TEXT_INFO_BOLD]
-            const title =
-              part.state.title || Object.keys(part.state.input).length > 0
-                ? JSON.stringify(part.state.input)
-                : "Unknown"
+            const input =
+              part.state.input && typeof part.state.input === "object" && !Array.isArray(part.state.input)
+                ? part.state.input
+                : {}
+            const title = part.state.title || Object.keys(input).length > 0 ? JSON.stringify(input) : "Unknown"
             console.log()
             printEvent(color, tool, title)
           }
@@ -886,14 +864,7 @@ export const GithubRunCommand = cmd({
       }
 
       async function summarize(response: string) {
-        try {
-          return await chat(`Summarize the following in less than 40 characters:\n\n${response}`)
-        } catch (e) {
-          const title = issueEvent
-            ? issueEvent.issue.title
-            : (payload as PullRequestReviewCommentEvent).pull_request.title
-          return `Fix issue: ${title}`
-        }
+        return await summarizeGitHubActionResponse(response, chat)
       }
 
       async function chat(message: string, files: PromptFiles = []) {
@@ -901,13 +872,15 @@ export const GithubRunCommand = cmd({
 
         const result = await SessionPrompt.prompt({
           sessionID: session.id,
+          author: isScheduleEvent ? "github-action" : "user",
+          byteMaterializationProjectID: session.projectID,
           messageID: Identifier.ascending("message"),
           variant,
           model: {
             providerID,
             modelID,
           },
-          // agent is omitted - server will use default_agent from config or fall back to "build"
+          // agent is omitted - server will use default_agent from config or the built-in "coding" default.
           parts: [
             {
               id: Identifier.ascending("part"),
@@ -955,6 +928,8 @@ export const GithubRunCommand = cmd({
         console.log("Requesting summary from agent...")
         const summary = await SessionPrompt.prompt({
           sessionID: session.id,
+          author: "github-action",
+          byteMaterializationProjectID: session.projectID,
           messageID: Identifier.ascending("message"),
           variant,
           model: {
@@ -1003,20 +978,12 @@ export const GithubRunCommand = cmd({
       }
 
       async function exchangeForAppToken(token: string) {
-        const response = token.startsWith("github_pat_")
-          ? await fetch(`${oidcBaseUrl}/exchange_github_app_token_with_pat`, {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-              body: JSON.stringify({ owner, repo }),
-            })
-          : await fetch(`${oidcBaseUrl}/exchange_github_app_token`, {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            })
+        const response = await fetch(`${oidcBaseUrl}/exchange_github_app_token`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
 
         if (!response.ok) {
           const responseJson = (await response.json()) as { error?: string }
@@ -1035,7 +1002,7 @@ export const GithubRunCommand = cmd({
 
         console.log("Configuring git...")
         const config = "http.https://github.com/.extraheader"
-        // actions/checkout@v6 no longer stores credentials in .git/config,
+        // actions/checkout@v7 no longer stores credentials in .git/config,
         // so this may not exist - use nothrow() to handle gracefully
         const ret = await $`git config --local --get ${config}`.nothrow()
         if (ret.exitCode === 0) {
@@ -1164,19 +1131,18 @@ Co-authored-by: ${actor} <${actor}@users.noreply.github.com>"`
         }
       }
 
-      // Verify commits exist between base ref and a branch using rev-list.
-      // Falls back to fetching from origin when local refs are missing
-      // (common in shallow clones from actions/checkout).
-      async function hasNewCommits(base: string, head: string) {
-        const result = await $`git rev-list --count ${base}..${head}`.nothrow()
-        if (result.exitCode !== 0) {
-          console.log(`rev-list failed, fetching origin/${base}...`)
-          await $`git fetch origin ${base} --depth=1`.nothrow()
-          const retry = await $`git rev-list --count origin/${base}..${head}`.nothrow()
-          if (retry.exitCode !== 0) return true // assume dirty if we can't tell
-          return parseInt(retry.stdout.toString().trim()) > 0
+      async function assertRemoteBranchHasCommits(base: string, head: string) {
+        const comparison = await withRetry(() =>
+          octoRest.rest.repos.compareCommitsWithBasehead({
+            owner,
+            repo,
+            basehead: `${base}...${head}`,
+          }),
+        )
+        const aheadBy = comparison.data.ahead_by
+        if (typeof aheadBy !== "number" || aheadBy <= 0) {
+          throw new Error(`No commits between ${base} and ${head}`)
         }
-        return parseInt(result.stdout.toString().trim()) > 0
       }
 
       async function assertPermissions() {
@@ -1298,61 +1264,37 @@ Co-authored-by: ${actor} <${actor}@users.noreply.github.com>"`
         })
       }
 
-      async function createPR(base: string, branch: string, title: string, body: string): Promise<number | null> {
+      async function createPR(base: string, branch: string, title: string, body: string): Promise<number> {
         console.log("Creating pull request...")
 
-        // Check if an open PR already exists for this head→base combination
-        // This handles the case where the agent created a PR via gh pr create during its run
-        try {
-          const existing = await withRetry(() =>
-            octoRest.rest.pulls.list({
-              owner,
-              repo,
-              head: `${owner}:${branch}`,
-              base,
-              state: "open",
-            }),
-          )
+        const existing = await withRetry(() =>
+          octoRest.rest.pulls.list({
+            owner,
+            repo,
+            head: `${owner}:${branch}`,
+            base,
+            state: "open",
+          }),
+        )
 
-          if (existing.data.length > 0) {
-            console.log(`PR #${existing.data[0].number} already exists for branch ${branch}`)
-            return existing.data[0].number
-          }
-        } catch (e) {
-          // If the check fails, proceed to create - we'll get a clear error if a PR already exists
-          console.log(`Failed to check for existing PR: ${e}`)
+        if (existing.data.length > 0) {
+          console.log(`PR #${existing.data[0].number} already exists for branch ${branch}`)
+          return existing.data[0].number
         }
 
-        // Verify there are commits between base and head before creating the PR.
-        // In shallow clones, the branch can appear dirty but share the same
-        // commit as the base, causing a 422 from GitHub.
-        if (!(await hasNewCommits(base, branch))) {
-          console.log(`No commits between ${base} and ${branch}, skipping PR creation`)
-          return null
-        }
+        await assertRemoteBranchHasCommits(base, branch)
 
-        try {
-          const pr = await withRetry(() =>
-            octoRest.rest.pulls.create({
-              owner,
-              repo,
-              head: branch,
-              base,
-              title,
-              body,
-            }),
-          )
-          return pr.data.number
-        } catch (e: unknown) {
-          // Handle "No commits between X and Y" validation error from GitHub.
-          // This can happen when the branch was pushed but has no new commits
-          // relative to the base (e.g. shallow clone edge cases).
-          if (e instanceof Error && e.message.includes("No commits between")) {
-            console.log(`GitHub rejected PR: ${e.message}`)
-            return null
-          }
-          throw e
-        }
+        const pr = await withRetry(() =>
+          octoRest.rest.pulls.create({
+            owner,
+            repo,
+            head: branch,
+            base,
+            title,
+            body,
+          }),
+        )
+        return pr.data.number
       }
 
       async function withRetry<T>(fn: () => Promise<T>, retries = 1, delayMs = 5000): Promise<T> {

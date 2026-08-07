@@ -1,72 +1,64 @@
 import z from "zod"
-import { Tool } from "./tool"
 import { Memory } from "@/memory"
+import { SessionMemory } from "@/memory/session-memory"
 import { Instance } from "@/project/instance"
+import { Tool } from "./tool"
 
 const MemoryKinds = ["note", "episode", "fact", "lesson", "profile"] as const
 
-const DESCRIPTION = `Scoped memory store for project knowledge.
+const DESCRIPTION = `Memory access for the current Session document and reusable project knowledge.
 
-**Mandatory recall**: Before answering about prior work, decisions, dates, or project history, ALWAYS recall memory first.
+Session memory is exactly one read-only Markdown checkpoint named \`MEMORY.MD\`, generated only by successful conversation compaction. Project semantic memory stores reusable knowledge across Sessions.
 
-**Proactive writing**: Write memory whenever you discover useful knowledge — do not wait until task end. Write test commands, build steps, deployment procedures, environment configs, non-obvious gotchas, root causes, effective patterns, task summaries, historical decisions, inspirations, and ideas.
+Never store credentials, application programming interface (API) keys, tokens, passwords, private keys, or other secrets in either memory surface. Required behavior belongs in AGENTS.md or checked-in project records, not generated memory.
+
+Before answering about prior work, decisions, dates, or project history, search project semantic memory. Use \`session_read\` only when the current compaction checkpoint is directly relevant; never attempt to mutate it.
 
 Actions:
-- **search**: Search session memory, global memory, or both. Use BEFORE answering from memory.
-- **get**: Retrieve full content of a memory file by ID. Use after search to read detailed content.
-- **write**: Save important knowledge. Prefer typed memory: lesson (gotchas, patterns, inspirations), fact (setup, config, env, test/deploy commands), episode (task summaries, history), profile (stable constraints).
-- **list**: Browse saved memory files by scope.
-- **delete**: Remove outdated or incorrect memory by file ID.`
+- **session_read**: Read the current Session MEMORY.MD.
+- **search**: Search reusable project semantic memory.
+- **get**: Retrieve a project semantic-memory file by ID.
+- **write**: Save reusable project knowledge.
+- **list**: Browse project semantic-memory files.
+- **delete**: Remove a project semantic-memory file by ID.`
 
 export const MemoryTool = Tool.define("memory", {
   description: DESCRIPTION,
   parameters: z.discriminatedUnion("action", [
     z.object({
+      action: z.literal("session_read"),
+    }),
+    z.object({
       action: z.literal("search"),
-      query: z.string().describe("Search query — keywords, phrases, or a question about past knowledge"),
-      scope: z
-        .enum(["all", "global", "session"])
-        .optional()
-        .describe("Which memory scope to search (default: all)"),
+      query: z.string().describe("Keywords, phrases, or a question about reusable project knowledge"),
       maxResults: z
-        .preprocess((v) => (typeof v === "string" ? Number(v) : v), z.number().int().min(1).max(50).optional())
-        .describe("Max results (default: 6)"),
+        .preprocess((value) => (typeof value === "string" ? Number(value) : value), z.number().int().min(1).max(50).optional())
+        .describe("Maximum number of ranked memory search results to return"),
       minScore: z
-        .preprocess((v) => (typeof v === "string" ? Number(v) : v), z.number().min(0).max(1).optional())
-        .describe("Min relevance score 0-1 (default: 0.1)"),
+        .preprocess((value) => (typeof value === "string" ? Number(value) : value), z.number().min(0).max(1).optional())
+        .describe("Minimum relevance score from 0 to 1"),
     }),
     z.object({
       action: z.literal("get"),
-      fileId: z.string().describe("Memory file ID to retrieve"),
+      fileId: z.string().describe("Project semantic-memory file ID to retrieve"),
     }),
     z.object({
       action: z.literal("write"),
-      title: z.string().describe("Short descriptive title (e.g. 'Project architecture decisions')"),
-      content: z.string().describe("Markdown content to save. Use ## headings to organize sections."),
-      kind: z
-        .enum(MemoryKinds)
-        .optional()
-        .describe("Memory kind (default: note). Use lesson/fact/profile for atomic long-term memory and episode for summaries."),
-      scope: z
-        .enum(["global", "session"])
-        .optional()
-        .describe("Storage scope (default: global)"),
+      title: z.string().describe("Short descriptive title"),
+      content: z.string().describe("Markdown content containing reusable project knowledge"),
+      kind: z.enum(MemoryKinds).optional().describe("Semantic-memory kind"),
+      key: z.string().optional().describe("Stable identifier for idempotent project-memory upserts"),
     }),
     z.object({
       action: z.literal("list"),
-      scope: z
-        .enum(["all", "global", "session"])
-        .optional()
-        .describe("Which memory scope to list (default: all)"),
     }),
     z.object({
       action: z.literal("delete"),
-      fileId: z.string().describe("Memory file ID to delete"),
+      fileId: z.string().describe("Project semantic-memory file ID to delete"),
     }),
   ]),
   async execute(params, ctx) {
     const projectId = Instance.project.id
-    const planMode = ctx.extra?.planMode === true || ctx.agent === "plan"
 
     await ctx.ask({
       permission: "memory",
@@ -76,44 +68,42 @@ export const MemoryTool = Tool.define("memory", {
     })
 
     switch (params.action) {
+      case "session_read": {
+        const document = await SessionMemory.read(ctx.sessionID)
+        return {
+          title: document ? SessionMemory.filename : "Session memory empty",
+          output: JSON.stringify({ document }),
+          metadata: {},
+        }
+      }
+
       case "search": {
         const results = Memory.search({
           query: params.query,
           projectId,
-          sessionID: ctx.sessionID,
-          scope: params.scope,
           limit: params.maxResults,
           minScore: params.minScore,
         })
-        if (results.length === 0) {
-          return {
-            title: "No memories found",
-            output: JSON.stringify({ results: [], query: params.query }),
-            metadata: {},
-          }
-        }
-        // Format results with citations for downstream prompts.
-        const formatted = results.map((r) => ({
-          fileId: r.fileId,
-          fileTitle: r.fileTitle,
-          scope: r.scope,
-          kind: r.kind,
-          source: r.source,
-          importance: r.importance,
-          confidence: r.confidence,
-          score: Number(r.score.toFixed(4)),
-          snippet: r.content.slice(0, 700),
-          citation: `memory:${r.fileId}`,
+        const formatted = results.map((result) => ({
+          fileId: result.fileId,
+          fileTitle: result.fileTitle,
+          kind: result.kind,
+          source: result.source,
+          importance: result.importance,
+          confidence: result.confidence,
+          score: Number(result.score.toFixed(4)),
+          snippet: result.content.slice(0, 700),
+          citation: `memory:${result.fileId}`,
         }))
         return {
-          title: `${results.length} memories found`,
+          title: formatted.length > 0 ? `${formatted.length} memories found` : "No memories found",
           output: JSON.stringify({ results: formatted, query: params.query }),
           metadata: {},
         }
       }
 
       case "get": {
-        const file = Memory.getFile(params.fileId)
+        const file = Memory.getFileInProject({ fileId: params.fileId, projectId })
         if (!file) {
           return {
             title: "Not found",
@@ -121,47 +111,37 @@ export const MemoryTool = Tool.define("memory", {
             metadata: {},
           }
         }
-        const chunks = Memory.getChunks(params.fileId)
-        const text = chunks.map((c) => c.content).join("\n\n")
+        const chunks = Memory.getChunksInProject({ fileId: params.fileId, projectId })
         return {
           title: file.title,
           output: JSON.stringify({
             fileId: file.id,
             title: file.title,
             source: file.source,
-            scope: file.scope,
-            sessionID: file.sessionID,
             kind: file.kind,
             key: file.key,
             importance: file.importance,
             confidence: file.confidence,
-            text,
+            text: chunks.map((chunk) => chunk.content).join("\n\n"),
           }),
           metadata: {},
         }
       }
 
       case "write": {
-        if (planMode) {
-          throw new Error("memory.write is disabled in plan mode. Only read-only memory actions are allowed.")
-        }
-        const scope = params.scope ?? "global"
         const file = Memory.writeFile({
           title: params.title,
           content: params.content,
           source: "agent",
           projectId,
-          scope,
-          sessionID: scope === "session" ? ctx.sessionID : undefined,
           kind: params.kind,
+          key: params.key,
         })
         return {
           title: `Saved: ${params.title}`,
           output: JSON.stringify({
             fileId: file.id,
             title: params.title,
-            scope,
-            sessionID: file.sessionID,
             kind: file.kind,
             key: file.key,
             importance: file.importance,
@@ -172,35 +152,27 @@ export const MemoryTool = Tool.define("memory", {
       }
 
       case "list": {
-        const files = Memory.listFiles({
-          projectId,
-          sessionID: ctx.sessionID,
-          scope: params.scope,
-        })
-        const formatted = files.map((f) => ({
-          id: f.id,
-          title: f.title,
-          source: f.source,
-          scope: f.scope,
-          sessionID: f.sessionID,
-          kind: f.kind,
-          key: f.key,
-          importance: f.importance,
-          confidence: f.confidence,
-          created: new Date(f.timeCreated).toISOString(),
-        }))
+        const files = Memory.listFiles({ projectId })
         return {
           title: `${files.length} memory files`,
-          output: JSON.stringify({ files: formatted }),
+          output: JSON.stringify({
+            files: files.map((file) => ({
+              id: file.id,
+              title: file.title,
+              source: file.source,
+              kind: file.kind,
+              key: file.key,
+              importance: file.importance,
+              confidence: file.confidence,
+              created: new Date(file.timeCreated).toISOString(),
+            })),
+          }),
           metadata: {},
         }
       }
 
       case "delete": {
-        if (planMode) {
-          throw new Error("memory.delete is disabled in plan mode. Only read-only memory actions are allowed.")
-        }
-        const file = Memory.getFile(params.fileId)
+        const file = Memory.deleteFileInProject({ fileId: params.fileId, projectId })
         if (!file) {
           return {
             title: "Not found",
@@ -208,16 +180,9 @@ export const MemoryTool = Tool.define("memory", {
             metadata: {},
           }
         }
-        Memory.deleteFile(params.fileId)
         return {
           title: `Deleted: ${file.title}`,
-          output: JSON.stringify({
-            deleted: true,
-            fileId: params.fileId,
-            title: file.title,
-            scope: file.scope,
-            sessionID: file.sessionID,
-          }),
+          output: JSON.stringify({ deleted: true, fileId: params.fileId, title: file.title }),
           metadata: {},
         }
       }

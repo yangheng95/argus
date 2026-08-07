@@ -22,25 +22,30 @@ function createNoopClient() {
     permission: {
       reply: async () => ({ data: {}, error: undefined }),
     },
+    task: {
+      bindings: async () => ({ data: [], error: undefined }),
+    },
     session: {
       create: async () => ({ data: { id: "session_mock" }, error: undefined }),
       get: async () => ({ data: undefined, error: undefined }),
       message: async () => ({ data: { parts: [] }, error: undefined }),
-      promptAsync: async () => ({ data: {}, error: undefined }),
-    },
-    tui: {
-      runtime: {
-        start: async () => ({ data: {}, error: undefined }),
-        submitTask: async () => ({
-          data: {
-            accepted: true,
-            taskID: "task_mock",
-            waited: false,
-            completed: false,
-          },
-          error: undefined,
-        }),
-      },
+      promptAsync: async () => ({ data: { taskID: "task_mock" }, error: undefined }),
+      promptAsyncStatus: async () => ({
+        data: {
+          taskID: "task_mock",
+          sessionID: "session_mock",
+          status: "completed" as const,
+          retryCount: 0,
+          maxRetries: 0,
+          source: "test",
+          prompt: "",
+          error: null,
+          startedAt: 1,
+          completedAt: 2,
+          updatedAt: 2,
+        },
+        error: undefined,
+      }),
     },
   }
 }
@@ -52,19 +57,13 @@ function createNoopServer() {
   }
 }
 
-function createNoopTui() {
-  return {
-    close() {},
-  }
-}
-
 export class OpenCorvusClientMock {
   auth = createNoopClient().auth
   channel = createNoopClient().channel
   event = createNoopClient().event
   permission = createNoopClient().permission
+  task = createNoopClient().task
   session = createNoopClient().session
-  tui = createNoopClient().tui
 }
 
 export const OpencodeClientMock = OpenCorvusClientMock
@@ -82,8 +81,6 @@ export const sdkMock = {
   createOpencodeClient: () => createNoopClient(),
   createOpenCorvusServer: async () => createNoopServer(),
   createOpencodeServer: async () => createNoopServer(),
-  createOpenCorvusTui: () => createNoopTui(),
-  createOpencodeTui: () => createNoopTui(),
   OpenCorvusClient: OpenCorvusClientMock,
   OpencodeClient: OpencodeClientMock,
 }

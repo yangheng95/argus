@@ -13,6 +13,8 @@ import fs from "fs/promises"
 import path from "path"
 import { fileURLToPath } from "url"
 
+import { overlayPackageName, overlayServerDistName, overlayServerFileName } from "./artifact-names"
+
 const dir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const repo = path.resolve(dir, "../..")
 const opencorvus = path.resolve(repo, "packages/opencorvus")
@@ -24,9 +26,7 @@ const IMAGE_NAME = "opencorvus-overlay-builder"
 
 type Target = "linux-x64" | "linux-arm64"
 
-const argTargets = process.argv
-  .filter((a) => a.startsWith("--target="))
-  .map((a) => a.split("=")[1] as Target)
+const argTargets = process.argv.filter((a) => a.startsWith("--target=")).map((a) => a.split("=")[1] as Target)
 const targets: Target[] = argTargets.length > 0 ? argTargets : ["linux-x64", "linux-arm64"]
 
 async function fileExists(p: string) {
@@ -58,9 +58,7 @@ function tauriArgs() {
 /** Convert Windows path to Docker-compatible path (for -v mounts in Git Bash/MINGW). */
 function toDockerPath(p: string): string {
   if (process.platform === "win32") {
-    return p
-      .replace(/^([A-Za-z]):[/\\]/, (_, d) => `/${d.toLowerCase()}/`)
-      .replaceAll("\\", "/")
+    return p.replace(/^([A-Za-z]):[/\\]/, (_, d) => `/${d.toLowerCase()}/`).replaceAll("\\", "/")
   }
   return p
 }
@@ -79,15 +77,16 @@ async function ensureDockerImage(platform: "linux/amd64" | "linux/arm64") {
 for (const target of targets) {
   const [, arch] = target.split("-") as [string, "x64" | "arm64"]
   const dockerPlatform = arch === "x64" ? "linux/amd64" : "linux/arm64"
-  const packageName = `opencorvus-overlay-${target}`
+  const packageName = overlayPackageName("linux", arch)
 
   console.log(`\n=== overlay ${target} (Docker) ===`)
 
   // Verify pre-built opencorvus binary exists
-  const serverBin = path.join(opencorvus, "dist", `opencorvus-linux-${arch}`, "opencorvus")
+  const serverDir = path.join(opencorvus, "dist", overlayServerDistName("linux", arch))
+  const serverBin = path.join(serverDir, overlayServerFileName("linux"))
   if (!(await fileExists(serverBin))) {
     console.error(`ERROR: opencorvus binary not found: ${serverBin}`)
-    console.error("Run first: cd packages/opencorvus && bun run build --all")
+    console.error("Run first: cd packages/opencorvus && bun run build --overlay-server --all")
     process.exit(1)
   }
 
@@ -110,7 +109,7 @@ for (const target of targets) {
     --platform ${dockerPlatform}
     -v ${toDockerPath(path.join(dir, "src"))}:/overlay/src:ro
     -v ${toDockerPath(tauriDir)}:/overlay/src-tauri
-    -v ${toDockerPath(serverBin)}:/overlay/embedded/opencorvus:ro
+    -v ${toDockerPath(serverDir)}:/overlay/embedded/opencorvus:ro
     -v ${cargoVol}:/root/.cargo/registry
     -v ${targetVol}:/overlay/src-tauri/target
     -w /overlay/src-tauri

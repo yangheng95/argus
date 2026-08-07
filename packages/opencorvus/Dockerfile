@@ -1,18 +1,55 @@
-FROM alpine AS base
+FROM debian:bookworm-slim
 
-# Disable the runtime transpiler cache by default inside Docker containers.
-# On ephemeral containers, the cache is not useful
+ARG OPENCORVUS_BINARY_NAME=opencorvus-linux-x64
 ARG BUN_RUNTIME_TRANSPILER_CACHE_PATH=0
+
+# UI means User Interface. Containers serve it from the embedded Linux binary,
+# so no sibling ui directory is copied into the image.
 ENV BUN_RUNTIME_TRANSPILER_CACHE_PATH=${BUN_RUNTIME_TRANSPILER_CACHE_PATH}
-RUN apk add libgcc libstdc++ ripgrep
+ENV OPENCORVUS_BIN=/opt/opencorvus/opencorvus
+ENV OPENCORVUS_HOME=/var/lib/opencorvus
+ENV OPENCORVUS_PROJECT_DIR=/workspace
+ENV OPENCORVUS_HOSTNAME=0.0.0.0
+ENV OPENCORVUS_PORT=7878
 
-FROM base AS build-amd64
-COPY dist/opencorvus-linux-x64-baseline-musl/bin/opencorvus /usr/local/bin/opencorvus
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+  ca-certificates \
+  chromium \
+  file \
+  git \
+  libgcc-s1 \
+  libstdc++6 \
+  nodejs \
+  npm \
+  && rm -rf /var/lib/apt/lists/*
 
-FROM base AS build-arm64
-COPY dist/opencorvus-linux-arm64-musl/bin/opencorvus /usr/local/bin/opencorvus
+WORKDIR /workspace
 
-ARG TARGETARCH
-FROM build-${TARGETARCH}
-RUN opencorvus --version
-ENTRYPOINT ["opencorvus"]
+COPY packages/opencorvus/dist/binary/${OPENCORVUS_BINARY_NAME}/opencorvus-bundle.tar.gz /tmp/opencorvus-bundle.tar.gz
+COPY script/opencorvus-container-entrypoint.sh /usr/local/bin/opencorvus-container-entrypoint
+
+RUN rm -rf /opt/opencorvus \
+  && mkdir -p /opt/opencorvus /var/lib/opencorvus /workspace \
+  && tar -xzf /tmp/opencorvus-bundle.tar.gz -C /opt/opencorvus \
+  && rm /tmp/opencorvus-bundle.tar.gz \
+  && chmod 755 /opt/opencorvus/opencorvus /opt/opencorvus/bin/rg /opt/opencorvus/bin/officecli /opt/opencorvus/browser-mcp-node/node /usr/local/bin/opencorvus-container-entrypoint \
+  && chmod 0777 /var/lib/opencorvus /workspace \
+  && /opt/opencorvus/opencorvus --version \
+  && test -x /opt/opencorvus/bin/rg \
+  && /opt/opencorvus/bin/rg --version \
+  && test -x /opt/opencorvus/bin/officecli \
+  && /opt/opencorvus/bin/officecli --version \
+  && test -f /opt/opencorvus/licenses/OfficeCLI-LICENSE \
+  && test -f /opt/opencorvus/licenses/OfficeCLI-RUNTIME-LOCK.json \
+  && test -x /opt/opencorvus/browser-mcp-node/node \
+  && /opt/opencorvus/browser-mcp-node/node --version \
+  && test -f /opt/opencorvus/browser-mcp-node/browser.mjs \
+  && test -f /opt/opencorvus/browser-mcp-node/node_modules/playwright/index.js \
+  && node --version \
+  && git --version \
+  && chromium --version
+
+EXPOSE 7878
+
+ENTRYPOINT ["/usr/local/bin/opencorvus-container-entrypoint"]

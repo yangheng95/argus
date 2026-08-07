@@ -1,17 +1,17 @@
-import { text } from "node:stream/consumers"
 import { BunProc } from "../bun"
 import { Instance } from "../project/instance"
 import { Filesystem } from "../util/filesystem"
-import { Process } from "../util/process"
 import { Flag } from "@/flag/flag"
 import { which } from "@/util/which"
+import { runFormatterProcess, type FormatterProcessAuthority } from "./process"
 
 export interface Info {
   name: string
   command: string[]
   environment?: Record<string, string>
   extensions: string[]
-  enabled(): Promise<boolean>
+  timeout?: number
+  enabled(timeoutMs: number, authority: FormatterProcessAuthority): Promise<boolean>
 }
 
 export const gofmt: Info = {
@@ -210,21 +210,19 @@ export const rlang: Info = {
   name: "air",
   command: ["air", "format", "$FILE"],
   extensions: [".R"],
-  async enabled() {
+  async enabled(timeoutMs, authority) {
     const airPath = which("air")
     if (airPath == null) return false
 
     try {
-      const proc = Process.spawn(["air", "--help"], {
-        stdout: "pipe",
-        stderr: "pipe",
+      const result = await runFormatterProcess(authority, {
+        command: ["air", "--help"],
+        timeoutMs,
+        captureOutput: true,
       })
-      await proc.exited
-      if (!proc.stdout) return false
-      const output = await text(proc.stdout)
 
       // Check for "Air: An R language server and formatter"
-      const firstLine = output.split("\n")[0]
+      const firstLine = result.stdout.split("\n")[0]
       const hasR = firstLine.includes("R language")
       const hasFormatter = firstLine.includes("formatter")
       return hasR && hasFormatter
@@ -238,12 +236,14 @@ export const uvformat: Info = {
   name: "uv",
   command: ["uv", "format", "--", "$FILE"],
   extensions: [".py", ".pyi"],
-  async enabled() {
-    if (await ruff.enabled()) return false
+  async enabled(timeoutMs, authority) {
+    if (await ruff.enabled(timeoutMs, authority)) return false
     if (which("uv") !== null) {
-      const proc = Process.spawn(["uv", "format", "--help"], { stderr: "pipe", stdout: "pipe" })
-      const code = await proc.exited
-      return code === 0
+      const result = await runFormatterProcess(authority, {
+        command: ["uv", "format", "--help"],
+        timeoutMs,
+      })
+      return result.exitCode === 0
     }
     return false
   },

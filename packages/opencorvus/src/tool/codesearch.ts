@@ -1,39 +1,9 @@
 import z from "zod"
 import { Tool } from "./tool"
 import DESCRIPTION from "./codesearch.txt"
-import { abortAfterAny } from "../util/abort"
+import { exaMcpCall } from "./exa-mcp"
 
-const API_CONFIG = {
-  BASE_URL: "https://mcp.exa.ai",
-  ENDPOINTS: {
-    CONTEXT: "/mcp",
-  },
-} as const
-
-interface McpCodeRequest {
-  jsonrpc: string
-  id: number
-  method: string
-  params: {
-    name: string
-    arguments: {
-      query: string
-      tokensNum: number
-    }
-  }
-}
-
-interface McpCodeResponse {
-  jsonrpc: string
-  result: {
-    content: Array<{
-      type: string
-      text: string
-    }>
-  }
-}
-
-export const CodeSearchTool = Tool.define("codesearch", {
+export const ExternalCodeSearchTool = Tool.define("external_code_search", {
   description: DESCRIPTION,
   parameters: z.object({
     query: z
@@ -52,7 +22,7 @@ export const CodeSearchTool = Tool.define("codesearch", {
   }),
   async execute(params, ctx) {
     await ctx.ask({
-      permission: "codesearch",
+      permission: "external_code_search",
       patterns: [params.query],
       always: ["*"],
       metadata: {
@@ -61,72 +31,24 @@ export const CodeSearchTool = Tool.define("codesearch", {
       },
     })
 
-    const codeRequest: McpCodeRequest = {
-      jsonrpc: "2.0",
-      id: 1,
-      method: "tools/call",
-      params: {
-        name: "get_code_context_exa",
-        arguments: {
-          query: params.query,
-          tokensNum: params.tokensNum || 5000,
-        },
+    const text = await exaMcpCall({
+      sessionID: ctx.sessionID,
+      name: "get_code_context_exa",
+      arguments: {
+        query: params.query,
+        tokensNum: params.tokensNum || 5000,
       },
-    }
+      timeoutMs: 30000,
+      signal: ctx.abort,
+      label: "Code search",
+    })
 
-    const { signal, clearTimeout } = abortAfterAny(30000, ctx.abort)
-
-    try {
-      const headers: Record<string, string> = {
-        accept: "application/json, text/event-stream",
-        "content-type": "application/json",
-      }
-
-      const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CONTEXT}`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(codeRequest),
-        signal,
-      })
-
-      clearTimeout()
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`Code search error (${response.status}): ${errorText}`)
-      }
-
-      const responseText = await response.text()
-
-      // Parse SSE response
-      const lines = responseText.split("\n")
-      for (const line of lines) {
-        if (line.startsWith("data: ")) {
-          const data: McpCodeResponse = JSON.parse(line.substring(6))
-          if (data.result && data.result.content && data.result.content.length > 0) {
-            return {
-              output: data.result.content[0].text,
-              title: `Code search: ${params.query}`,
-              metadata: {},
-            }
-          }
-        }
-      }
-
-      return {
-        output:
-          "No code snippets or documentation found. Please try a different query, be more specific about the library or programming concept, or check the spelling of framework names.",
-        title: `Code search: ${params.query}`,
-        metadata: {},
-      }
-    } catch (error) {
-      clearTimeout()
-
-      if (error instanceof Error && error.name === "AbortError") {
-        throw new Error("Code search request timed out")
-      }
-
-      throw error
+    return {
+      output:
+        text ??
+        "No code snippets or documentation found. Please try a different query, be more specific about the library or programming concept, or check the spelling of framework names.",
+      title: `External code search: ${params.query}`,
+      metadata: {},
     }
   },
 })

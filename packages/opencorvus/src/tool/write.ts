@@ -11,7 +11,8 @@ import { FileTime } from "../file/time"
 import { Filesystem } from "../util/filesystem"
 import { Instance } from "../project/instance"
 import { trimDiff } from "./edit"
-import { assertExternalDirectory } from "./external-directory"
+import { assertBuildWriteDirectory, assertExternalDirectory } from "./external-directory"
+import { taskFiles, taskProcessIdentity } from "./task-files"
 
 const MAX_DIAGNOSTICS_PER_FILE = 20
 const MAX_PROJECT_DIAGNOSTICS_FILES = 5
@@ -23,11 +24,15 @@ export const WriteTool = Tool.define("write", {
     filePath: z.string().describe("The absolute path to the file to write (must be absolute, not relative)"),
   }),
   async execute(params, ctx) {
+    const processIdentity = taskProcessIdentity(ctx, "Write tool")
     const filepath = path.isAbsolute(params.filePath) ? params.filePath : path.join(Instance.directory, params.filePath)
+    await assertBuildWriteDirectory(ctx, filepath)
     await assertExternalDirectory(ctx, filepath)
 
-    const exists = await Filesystem.exists(filepath)
-    const contentOld = exists ? await Filesystem.readText(filepath) : ""
+    const files = taskFiles(ctx)
+    const stat = await files.stat(filepath).catch(() => undefined)
+    const exists = Boolean(stat)
+    const contentOld = exists ? await files.readFile(filepath, "utf8") : ""
     if (exists) await FileTime.assert(ctx.sessionID, filepath)
 
     const diff = trimDiff(createTwoFilesPatch(filepath, filepath, contentOld, params.content))
@@ -41,9 +46,11 @@ export const WriteTool = Tool.define("write", {
       },
     })
 
-    await Filesystem.write(filepath, params.content)
+    await files.mkdir(path.dirname(filepath), { recursive: true })
+    await files.writeFile(filepath, params.content)
     await Bus.publish(File.Event.Edited, {
       file: filepath,
+      processAuthority: { kind: "task", ...processIdentity },
     })
     await Bus.publish(FileWatcher.Event.Updated, {
       file: filepath,

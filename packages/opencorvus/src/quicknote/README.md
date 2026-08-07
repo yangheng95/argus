@@ -1,6 +1,6 @@
 # AI-QuickNote 模块
 
-快速笔记模块，提供文本处理、笔记存储和 API 接口功能。
+快速笔记模块，提供文本处理、笔记创建存储和当前已挂载的创建接口。
 
 ## 功能特性
 
@@ -30,11 +30,13 @@ const summary = generateSummary("很长的内容...")
 
 ```typescript
 interface QuickNote {
-  note_id: string      // UUID 格式：nte_xxxxx
-  content: string      // 笔记内容（最多 2000 字符）
-  summary: string      // 自动生成的摘要（最多 100 字符）
-  tags: string[]       // 标签数组
-  status: "draft" | "published" | "archived"  // 笔记状态
+  note_id: string // UUID 格式：nte_xxxxx
+  content: string // 笔记内容（最多 2000 字符）
+  summary: string // 自动生成的摘要（最多 100 字符）
+  tags: string // 标签 JSON 字符串，当前创建流程写入 "[]"
+  status: string // 笔记状态，当前创建流程写入 "draft"
+  created_at: number // 创建时间戳
+  updated_at: number // 更新时间戳
 }
 ```
 
@@ -47,9 +49,7 @@ POST /api/v1/notes
 Content-Type: application/json
 
 {
-  "content": "笔记内容",
-  "tags": ["标签 1", "标签 2"],
-  "user_id": "用户 ID"
+  "content": "笔记内容"
 }
 ```
 
@@ -62,47 +62,26 @@ Content-Type: application/json
 }
 ```
 
-#### 获取笔记
-
-```http
-GET /api/v1/notes/:id
-```
-
-响应：
-
-```json
-{
-  "note_id": "nte_abc123...",
-  "content": "笔记内容",
-  "summary": "摘要",
-  "tags": ["标签 1"],
-  "status": "draft"
-}
-```
+当前 HTTP（Hypertext Transfer Protocol，超文本传输协议）只挂载创建接口。查询和删除能力只暴露在内部服务函数中，尚未定义 HTTP 路由。
 
 ### 4. 服务层 API
 
 ```typescript
-import { QuickNoteService } from "@/quicknote"
+import { createNote, getNote, listNotes, deleteNote } from "@/quicknote"
 
 // 创建笔记
-const note = await QuickNoteService.createNote({
+const note = createNote({
   content: "笔记内容",
-  tags: ["测试"],
-  user_id: "user123",
 })
 
 // 获取笔记
-const retrieved = QuickNoteService.getNoteById(note.note_id)
-
-// 更新状态
-QuickNoteService.updateNoteStatus(note.note_id, "published")
+const retrieved = getNote(note.note_id)
 
 // 删除笔记
-QuickNoteService.deleteNote(note.note_id)
+const deleted = deleteNote(note.note_id)
 
-// 获取用户的所有笔记
-const userNotes = QuickNoteService.getNotesByUser("user123")
+// 获取所有笔记
+const notes = listNotes()
 ```
 
 ## 文件结构
@@ -112,11 +91,9 @@ src/quicknote/
 ├── quicknote.sql.ts    # 数据库 Schema
 ├── text-processor.ts   # 文本处理工具
 ├── service.ts          # 服务层
+├── routes.ts           # API 路由
 ├── index.ts            # 模块入口
 └── README.md           # 本文档
-
-src/server/routes/
-└── quicknote.ts        # API 路由
 
 test/quicknote/
 ├── text-processor.test.ts  # 文本处理测试

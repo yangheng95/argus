@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
+  background: #f6f7f9;
+  color: #1f2937;
+}
+
+/* 桌面单端：固定最大内容宽度，不做响应式断点 */
+.site-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 24px 32px 64px;
+}
+
+.section-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 4px;
+}
+
+.section-subtitle {
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 16px;
+}
+
+.formula-box {
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  color: #334155;
+  margin: 8px 0 12px;
+  line-height: 1.7;
+}
+
+th.mat-head {
+  background: #f3f4f6;
+  color: #374151;
+  font-weight: 600;
+  font-size: 12.5px;
+  text-align: left;
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  vertical-align: middle;
+}
+
+td.mat-cell {
+  font-size: 12.5px;
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  vertical-align: top;
+  color: #374151;
+  line-height: 1.55;
+}

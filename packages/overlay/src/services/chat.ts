@@ -1,69 +1,80 @@
 // ── Chat Service ──
 // Responsibilities:
-// - Manage staged chat attachments (add / remove / take metadata)
-// - Manage the active chat AbortController (stop / abort targets)
-// - Expose pure predicates: canComposeChat, chatAbortTargets, chatAbortTarget
+// - Manage pending chat metadata
+// - Manage the active chat AbortController and its exact remote abort target
 // - Provide conversationTarget / conversationTargetKey helpers
-// - Expose panelResultNavigates predicate
 // This module owns no render-side effects. Callers drive UI updates through
 // reactive Solid stores.
 
-import { apiJson } from "./api";
+import { apiJson } from "./api"
 import {
   messageStore,
   setChatRequest,
   abortChatRequest,
   setChatAttachments,
-  setMessages,
-  mergeLoadedConversationMessages,
-} from "../store/messages";
-import { boardStore, setTasksData } from "../store/board";
-import { appStore, setConnectionStatus } from "../store/app";
-import { workspaceMode } from "./workspace";
-import {
-  selectTask,
-  submitMessage,
-  createTask,
-} from "./task";
-import { syntheticTextMessage } from "../utils/transcript";
+  type ChatAbortTarget,
+  type ChatRequestState,
+} from "../store/messages"
+import { boardStore, loadBoard, loadTasks, activeTaskID, activeSessionID } from "../store/board"
+import { appStore, setConnectionStatus } from "../store/app"
+import { workspaceMode } from "./workspace"
+import { currentOpenCorvusModel, currentOpenCorvusPromptModel, selectTask } from "./task"
+import { setSessionExpertSquadActive } from "./expert-squad"
+import { ingestPersistedConversationMessage } from "./tree-writer"
+import { conversationSourceDirectory } from "./conversation"
+import { taskOwningDirectory } from "./task-directory"
+import { directoryScopedPath, taskScopedPath } from "./task-path"
+import { requestTaskCancellation } from "./task-cancellation"
 
 // ── Types ──
 
-export interface ChatAbortTarget {
-  kind: "run" | "session" | "task";
-  runID?: string;
-  sessionID?: string;
-  taskID?: string;
-}
-
 export interface ConversationTarget {
-  kind: "task" | "empty";
-  taskID?: string;
+  kind: "task" | "empty"
+  taskID?: string
 }
-
-// ── Constants ──
-
-const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024; // 10 MB
 
 // ── Helpers ──
 
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+export function classifyPanelMessageTarget(input: {
+  selectedTaskID?: string
+  boardTaskID?: string
+  tasks?: any[]
+}): "create" | "task" | "reload" | "orphan" {
+  const selectedTaskID = String(input.selectedTaskID || "").trim()
+  if (!selectedTaskID) return "create"
+  if (selectedTaskID === String(input.boardTaskID || "").trim()) return "task"
+  const tasks = Array.isArray(input.tasks) ? input.tasks : []
+  return tasks.some((item: any) => item?.task?.id === selectedTaskID) ? "reload" : "orphan"
 }
 
-function currentTaskSessionID(): string {
-  return (
-    boardStore.board?.task?.sessionID ||
-    boardStore.tasks.find(
-      (item: any) => item?.task?.id === boardStore.selectedTaskID,
-    )?.task?.sessionID ||
-    ""
-  );
+async function resolvePanelMessageTaskID(): Promise<string> {
+  const selectedTaskID = String(activeTaskID() || "").trim()
+  if (!selectedTaskID) return ""
+
+  let target = classifyPanelMessageTarget({
+    selectedTaskID,
+    boardTaskID: boardStore.board?.task?.id,
+    tasks: boardStore.tasks,
+  })
+
+  if (target === "orphan") {
+    await loadTasks()
+    target = classifyPanelMessageTarget({
+      selectedTaskID,
+      boardTaskID: boardStore.board?.task?.id,
+      tasks: boardStore.tasks,
+    })
+  }
+
+  if (target === "task") return selectedTaskID
+
+  if (target === "reload") {
+    await selectTask(selectedTaskID)
+    return String(activeTaskID() || "").trim()
+  }
+
+  await selectTask("")
+  return ""
 }
 
 // ── Public: conversationTarget ──
@@ -72,13 +83,13 @@ function currentTaskSessionID(): string {
  * Returns the current conversation target (task or empty).
  */
 export function conversationTarget(): ConversationTarget {
-  if (boardStore.selectedTaskID) {
+  if (activeTaskID()) {
     return {
       kind: "task",
-      taskID: boardStore.selectedTaskID,
-    };
+      taskID: activeTaskID(),
+    }
   }
-  return { kind: "empty" };
+  return { kind: "empty" }
 }
 
 // ── Public: conversationTargetKey ──
@@ -86,24 +97,9 @@ export function conversationTarget(): ConversationTarget {
 /**
  * Stable string key for the current conversation target.
  */
-export function conversationTargetKey(
-  target: ConversationTarget = conversationTarget(),
-): string {
-  if (target.taskID) return `task:${target.taskID}`;
-  return "empty";
-}
-
-// ── Public: panelResultNavigates ──
-
-/**
- * Returns true if the panel result should trigger task navigation.
- */
-export function panelResultNavigates(result: any): boolean {
-  if (!result || typeof result !== "object") return false;
-  const action = result.local_action?.type;
-  if (action === "select_task") return true;
-  if (result.task_id) return true;
-  return false;
+export function conversationTargetKey(target: ConversationTarget = conversationTarget()): string {
+  if (target.taskID) return `task:${target.taskID}`
+  return "empty"
 }
 
 // ── Public: canComposeChat ──
@@ -112,65 +108,15 @@ export function panelResultNavigates(result: any): boolean {
  * Returns true when the chat composer should be enabled.
  */
 export function canComposeChat(): boolean {
-  if (!appStore.connected) return false;
- // Derive workspace mode from store state.
- // "task" mode: a task is selected.
- // "empty" mode: no task selected, no session-only workspace.
- // Both allow composing. All other modes (e.g. a pure session workspace
- // with no associated task) are not represented in the Solid stores yet,
- // so we fall back to checking the helper if available.
-  const mode = workspaceMode();
-  return mode === "empty" || mode === "task";
-}
-
-// ── Public: chatAbortTargets ──
-
-/**
- * Returns ordered list of abort targets for the active chat request.
- * @param seed Optional initial target to prepend (from the request object).
- */
-export function chatAbortTargets(seed?: ChatAbortTarget): ChatAbortTarget[] {
-  const items: ChatAbortTarget[] = [];
-  const seen = new Set<string>();
-
-  const push = (target: ChatAbortTarget | undefined | null): void => {
-    if (!target) return;
-    const key =
-      target.kind === "run"
-        ? `run:${target.runID}`
-        : target.kind === "session"
-          ? `session:${target.sessionID}`
-          : target.kind === "task"
-            ? `task:${target.taskID}`
-            : "";
-    if (!key || seen.has(key)) return;
-    seen.add(key);
-    items.push(target);
-  };
-
-  push(seed);
-  if (!boardStore.selectedTaskID) return items;
-
-  const runID = boardStore.board?.task?.activeRunID || "";
-  if (runID) {
-    push({ kind: "run", runID });
-  }
-  const sessionID = currentTaskSessionID();
-  if (sessionID) {
-    push({ kind: "session", sessionID });
-  }
-  push({ kind: "task", taskID: boardStore.selectedTaskID });
-
-  return items;
-}
-
-// ── Public: chatAbortTarget ──
-
-/**
- * Returns the first (highest-priority) abort target, or null if none.
- */
-export function chatAbortTarget(seed?: ChatAbortTarget): ChatAbortTarget | null {
-  return chatAbortTargets(seed)[0] || null;
+  if (!appStore.connected) return false
+  if (activeSessionID()) return true
+  // Derive workspace mode from store state.
+  // "task" mode: a task is selected.
+  // "empty" mode: no task selected, no session-only workspace.
+  // Both allow composing. All other modes (e.g. a pure session workspace
+  // with no associated task) are not represented in the Solid stores yet.
+  const mode = workspaceMode()
+  return mode === "empty" || mode === "task"
 }
 
 // ── Internal: abortChatTarget ──
@@ -178,117 +124,37 @@ export function chatAbortTarget(seed?: ChatAbortTarget): ChatAbortTarget | null 
 /**
  * Send a remote abort/cancel request for a single target.
  */
-async function abortChatTargetRemote(target: ChatAbortTarget): Promise<boolean> {
-  if (!target) return false;
-  if (target.kind === "run" && target.runID) {
-    await apiJson(`run/${encodeURIComponent(target.runID)}/abort`, {
-      method: "POST",
-    });
-    return true;
+async function abortChatTargetRemote(target: ChatAbortTarget): Promise<void> {
+  if (target.kind === "task") {
+    await requestTaskCancellation({
+      taskID: target.taskID,
+      directory: target.directory,
+      surface: "overlay.chat_request_stop",
+      reason: "Operator stopped the active task chat request",
+    })
+    return
   }
-  if (target.kind === "task" && target.taskID) {
-    await apiJson(`task/${encodeURIComponent(target.taskID)}/cancel`, {
+  await apiJson(
+    directoryScopedPath(`session/${encodeURIComponent(target.sessionID)}/abort`, target.directory, "abort session"),
+    {
       method: "POST",
-    });
-    return true;
-  }
-  if (target.kind === "session" && target.sessionID) {
-    await apiJson(`session/${encodeURIComponent(target.sessionID)}/abort`, {
-      method: "POST",
-    });
-    return true;
-  }
-  return false;
+    },
+  )
 }
 
 // ── Public: stopChatRequest ──
 
-export interface StopChatRequestOptions {
-  /** If false, skip sending remote abort.  Defaults to true. */
-  remote?: boolean;
-  /** If false, this is not a manual user abort.  Defaults to true. */
-  manual?: boolean;
-}
-
 /**
- * Abort the active chat request and optionally cancel the remote run/task.
+ * Abort the active chat request and cancel its exact remote session or task.
  * Returns true if the abort was dispatched, false if no active request.
  */
-export async function stopChatRequest(
-  options: StopChatRequestOptions = {},
-): Promise<boolean> {
-  const request = messageStore.chatRequest as any;
-  if (!request || request.stopping) return false;
+export async function stopChatRequest(): Promise<boolean> {
+  const request = messageStore.chatRequest
+  if (!request) return false
 
- // Mark as stopping to prevent re-entrant calls
-  request.aborted = true;
-  request.manualAbort = options.manual !== false;
-  request.stopping = true;
-  request.recovery?.stop();
-
- // Abort the local fetch
-  request.controller?.abort?.();
-
- // Clear the store reference
-  abortChatRequest();
-
-  if (options.remote === false) return true;
-
-  const targets = chatAbortTargets(request.target);
-  if (targets.length === 0) return true;
-
-  try {
-    for (const target of targets) {
-      try {
-        await abortChatTargetRemote(target);
-        return true;
-      } catch (e) {
-        console.warn("[stopChatRequest] Failed to abort target", {
-          error: String(e),
-          target,
-        });
-      }
-    }
-    return false;
-  } finally {
-    request.stopping = false;
-  }
-}
-
-// ── Public: addChatAttachment ──
-
-/**
- * Add a file attachment to the staged chat attachments list.
- * Returns an error string if validation fails, or null on success.
- */
-export async function addChatAttachment(file: File): Promise<string | null> {
-  if (!file) return "No file provided";
-  if (file.size > MAX_ATTACHMENT_SIZE) {
-    return "file_too_large";
-  }
-  const url = await fileToDataUrl(file);
-  const next = [
-    ...messageStore.chatAttachments,
-    {
-      mime: file.type || "application/octet-stream",
-      url,
-      filename: file.name,
-    },
-  ];
-  setChatAttachments(next);
-  return null;
-}
-
-// ── Public: removeChatAttachment ──
-
-/**
- * Remove a staged attachment by index.
- */
-export function removeChatAttachment(index: number): void {
-  const next = messageStore.chatAttachments.filter(
-    (_: any, i: number) => i !== index,
-  );
-  setChatAttachments(next);
+  abortChatRequest()
+  await abortChatTargetRemote(request.target)
+  return true
 }
 
 // ── Public: takeChatMetadata ──
@@ -297,219 +163,174 @@ export function removeChatAttachment(index: number): void {
  * Consume and return any pending metadata set via window.__ocNextChatMetadata.
  */
 export function takeChatMetadata(): Record<string, unknown> | undefined {
-  const win = window as any;
+  const win = window as any
   const meta =
-    win.__ocNextChatMetadata &&
-    typeof win.__ocNextChatMetadata === "object" &&
-    !Array.isArray(win.__ocNextChatMetadata)
+    win.__ocNextChatMetadata && typeof win.__ocNextChatMetadata === "object" && !Array.isArray(win.__ocNextChatMetadata)
       ? (win.__ocNextChatMetadata as Record<string, unknown>)
-      : undefined;
-  delete win.__ocNextChatMetadata;
-  return meta;
+      : undefined
+  delete win.__ocNextChatMetadata
+  return meta
 }
 
-// ── Panel message helpers ──
-
-export function mergeMessages(left: any[], right: any[]): any[] {
-  return mergeLoadedConversationMessages(left, right);
-}
-
-function appendPendingAssistantPart(
-  requestID: string,
-  type: "text" | "reasoning",
-  delta: string,
-): void {
-  const chunk = typeof delta === "string" ? delta : "";
-  if (!requestID || !chunk) return;
-  const messageID = `pending-assistant:${requestID}`;
-  const partID = `${messageID}:${type}`;
-  let found = false;
-  const next = messageStore.messages.map((message: any) => {
-    if (message?.info?.id !== messageID) return message;
-    found = true;
-    const parts = Array.isArray(message?.parts) ? [...message.parts] : [];
-    const index = parts.findIndex((part: any) => part?.id === partID);
-    if (index >= 0) {
-      const current = parts[index];
-      parts[index] = {
-        ...current,
-        type,
-        text: `${String(current?.text || "")}${chunk}`,
-      };
-    } else {
-      parts.push({
-        id: partID,
-        type,
-        text: chunk,
-        messageID,
-        sessionID: "",
-      });
-    }
-    return {
-      ...message,
-      parts,
-    };
-  });
-  if (!found) {
-    next.push({
-      _synthetic: true,
-      info: {
-        id: messageID,
-        role: "assistant",
-        time: { created: Date.now() },
-      },
-      parts: [
-        {
-          id: partID,
-          type,
-          text: chunk,
-          messageID,
-          sessionID: "",
-        },
-      ],
-    });
-  }
-  setMessages(next);
-}
-
-function insertPendingUserMessage(requestID: string, text: string): void {
-  setMessages([
-    ...messageStore.messages,
+function sessionPromptParts(text: string, attachments: any[], metadata: any): any[] {
+  const parts: any[] = [
     {
-      info: { id: `pending-user:${requestID}`, role: "user", time: { created: Date.now() } },
-      parts: [{ type: "text", text }],
+      type: "text",
+      text,
+      ...(metadata && Object.keys(metadata).length > 0 ? { metadata } : {}),
     },
-  ]);
-}
-
-function ensureTaskListEntry(
-  taskID: string,
-  requestID: string,
-  requestText: string,
-  resultMessage: string,
-): void {
-  if (!taskID) return;
-  const task = boardStore.board?.task && boardStore.board.task.id === taskID
-    ? boardStore.board.task
-    : null;
-  const now = Date.now();
-  const created = Number(task?.time?.created || now);
-  const updated = Number(task?.time?.updated || created);
-  const title = String(
-    task?.title ||
-    boardStore.board?.overview?.headline ||
-    requestText ||
-    resultMessage ||
-    taskID,
-  ).trim();
-  const entry = {
-    task: {
-      id: taskID,
-      requestID: requestID || task?.requestID || "",
-      title,
-      status: task?.status || "active",
-      directory: task?.directory || "",
-      time: {
-        created,
-        updated,
-      },
-    },
-    updated_at: updated,
-    pending_interactions: 0,
-  };
-  const rest = boardStore.tasks.filter((item: any) => item?.task?.id !== taskID);
-  setTasksData([entry, ...rest]);
-}
-
-async function applyPanelResult(result: any): Promise<void> {
-  const taskID = String(result?.task_id || result?.taskID || "");
-  const requestText = typeof result?._request === "string" ? result._request : "";
-  const requestID = String(result?._requestID || "");
-  if (taskID) {
-    ensureTaskListEntry(taskID, requestID, requestText, String(result?.message || ""));
-    await selectTask(taskID);
-    ensureTaskListEntry(taskID, requestID, requestText, String(result?.message || ""));
-    if (result?.message) {
-      const text = String(result.message);
-      const alreadyVisible = messageStore.messages.some((item: any) =>
-        (Array.isArray(item?.parts) ? item.parts : []).some(
-          (part: any) => part?.type === "text" && String(part?.text || "") === text,
-        ),
-      );
-      if (alreadyVisible) return;
-      setMessages(
-        mergeMessages(messageStore.messages, [
-          syntheticTextMessage("assistant", Date.now(), text),
-        ]),
-      );
-    }
-    return;
+  ]
+  for (const attachment of attachments) {
+    if (!attachment?.url || !attachment?.mime) continue
+    parts.push({
+      type: "file",
+      mime: String(attachment.mime),
+      url: String(attachment.url),
+      presentation: "attachment-index",
+      ...(attachment.filename ? { filename: String(attachment.filename) } : {}),
+    })
   }
-  if (result?.message) {
-    setMessages(
-      mergeMessages(messageStore.messages, [
-        syntheticTextMessage("assistant", Date.now(), String(result.message)),
-      ]),
-    );
-  }
+  return parts
 }
 
-export async function panelMessage(text: string, attachments: any[] = [], metadata: any = {}): Promise<any> {
-  const requestID = crypto.randomUUID();
-  const controller = new AbortController();
-  const request: any = {
+export async function promptSessionMessage(input: {
+  sessionID: string
+  directory: string
+  text: string
+  attachments?: any[]
+  metadata?: Record<string, unknown>
+  promptProfile?: string
+  model?: { providerID: string; modelID: string }
+}): Promise<any> {
+  const requestID = crypto.randomUUID()
+  const controller = new AbortController()
+  const request: ChatRequestState = {
     requestID,
     controller,
-    stopping: false,
-    aborted: false,
-    manualAbort: false,
-  };
-  insertPendingUserMessage(requestID, text);
-  setConnectionStatus("online");
-  setChatRequest(request as any);
+    target: {
+      kind: "session",
+      sessionID: input.sessionID,
+      directory: input.directory,
+    },
+  }
   try {
-    // If no task is selected, create a new task via direct API (no LLM round-trip)
-    if (!boardStore.selectedTaskID) {
-      const taskID = await createTask({
-        text,
-        attachments,
-        metadata,
-        signal: controller.signal,
-      });
-      if (taskID) {
-        await selectTask(taskID);
-        return { task_id: taskID };
-      }
-      throw new Error("Task creation returned no task_id");
+    setConnectionStatus("online")
+    setChatRequest(request)
+    if (input.promptProfile) {
+      await setSessionExpertSquadActive(input.sessionID, input.promptProfile, input.directory)
     }
-    // If a task is selected, send a follow-up message via the panel stream
-    const result = await submitMessage(text, attachments, {
-      requestID,
-      metadata,
-      signal: controller.signal,
-      onEvent: async (event) => {
-        const type = String(event?.type || "");
-        if (type === "reasoning_delta") {
-          appendPendingAssistantPart(requestID, "reasoning", String(event?.delta || ""));
-          return;
-        }
-        if (type === "message_delta") {
-          appendPendingAssistantPart(requestID, "text", String(event?.delta || ""));
-        }
+    const result = await apiJson(
+      directoryScopedPath(
+        `session/${encodeURIComponent(input.sessionID)}/prompt_async`,
+        input.directory,
+        "session prompt",
+      ),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          parts: sessionPromptParts(input.text, input.attachments ?? [], input.metadata ?? {}),
+          model: input.model ?? currentOpenCorvusPromptModel(),
+        }),
+        signal: controller.signal,
       },
-    });
-    await applyPanelResult({ ...(result as any), _request: text, _requestID: requestID });
-    return result;
-  } catch (error) {
-    if (request.manualAbort) throw error;
-    throw error;
+    )
+    ingestPersistedConversationMessage(result.user_message)
+    return result
   } finally {
-    if ((messageStore.chatRequest as any)?.requestID === request.requestID) {
-      setChatRequest(null as any);
+    if (messageStore.chatRequest?.requestID === request.requestID) {
+      setChatRequest(null)
+    }
+  }
+}
+
+export async function panelMessage(
+  text: string,
+  attachmentsOrMeta: any[] | Record<string, any> = [],
+  metadata: any = {},
+): Promise<any> {
+  const attachments = Array.isArray(attachmentsOrMeta) ? attachmentsOrMeta : []
+  const meta = Array.isArray(attachmentsOrMeta) ? metadata : attachmentsOrMeta
+  const promptProfile = typeof meta?.promptProfile === "string" ? meta.promptProfile : undefined
+  const explicitTarget =
+    meta?.target &&
+    typeof meta.target.taskID === "string" &&
+    typeof meta.target.directory === "string"
+      ? {
+          taskID: meta.target.taskID.trim(),
+          directory: meta.target.directory.trim(),
+        }
+      : undefined
+  const requestMetadata = { ...(meta && typeof meta === "object" && !Array.isArray(meta) ? meta : {}) }
+  delete requestMetadata.promptProfile
+  delete requestMetadata.target
+  const sessionID = activeSessionID()
+  if (sessionID && !explicitTarget) {
+    return promptSessionMessage({
+      sessionID,
+      directory: conversationSourceDirectory({ kind: "session", id: sessionID }),
+      text,
+      attachments,
+      metadata: requestMetadata,
+      promptProfile,
+      model: currentOpenCorvusPromptModel(),
+    })
+  }
+
+  const requestID = crypto.randomUUID()
+  const controller = new AbortController()
+  const requestBase = {
+    requestID,
+    controller,
+  }
+  let request: ChatRequestState | undefined
+  try {
+    const taskID = explicitTarget?.taskID || (await resolvePanelMessageTaskID())
+    if (!taskID) throw new Error("panelMessage: an Assistant session or task must be selected")
+    setConnectionStatus("online")
+    const directory = explicitTarget?.directory || taskOwningDirectory(taskID)
+    request = { ...requestBase, target: { kind: "task", taskID, directory } }
+    setChatRequest(request)
+    // Every status (active, queued, blocked, cancelled, completed, failed) →
+    // send message directly to the task. Status is display/audit context, not
+    // a routing gate; users sending a follow-up to any task expect the same
+    // conversation to continue, not a brand-new task.
+    const result = await apiJson(taskScopedPath(taskID, directory, "/message"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text,
+        source: typeof requestMetadata.source === "string" ? requestMetadata.source : "panel",
+        model: currentOpenCorvusModel(),
+        ...(Object.keys(requestMetadata).length > 0 ? { metadata: requestMetadata } : {}),
+        ...(promptProfile ? { promptProfile } : {}),
+        ...(attachments.length > 0
+          ? {
+              attachments: attachments.map((att) => ({
+                mime: att.mime,
+                url: att.url,
+                ...(att.filename ? { filename: att.filename } : {}),
+              })),
+            }
+          : {}),
+      }),
+      signal: controller.signal,
+    })
+    // Server returned the persisted user Message + parts. Project them
+    // through tree-writer immediately so the user sees their bubble before
+    // the SSE round-trip lands; messageStore live ingestion is retired.
+    ingestPersistedConversationMessage(result.user_message)
+    await loadBoard()
+    // The real conversation comes from board/transcript rehydration. Mirroring
+    // the route response locally would create a second, fake assistant turn.
+    return result
+  } finally {
+    if (request && messageStore.chatRequest?.requestID === request.requestID) {
+      setChatRequest(null)
     }
   }
 }
 
 // ── Re-export store accessors used by consumers ──
 
-export { setChatRequest, abortChatRequest, setChatAttachments };
+export { setChatRequest, abortChatRequest, setChatAttachments }

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, mock, test } from "bun:test"
 import { sdkMock } from "./sdk-mock"
 
 mock.module("@opencorvus-ai/sdk", () => sdkMock)
-mock.module("@opencorvus-ai/sdk/v2", () => sdkMock)
+mock.module("@opencorvus-ai/sdk", () => sdkMock)
 
 const { ChannelRuntime } = await import("../src/core")
 
@@ -31,4 +31,3 @@ describe("channel runtime tool status", () => {
     expect(status("bash", { command: "echo secret" })).toBe("`$ echo secret`")
   })
 })
-

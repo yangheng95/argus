@@ -2,7 +2,7 @@ import { describe, expect, mock, test } from "bun:test"
 import { sdkMock } from "./sdk-mock"
 
 mock.module("@opencorvus-ai/sdk", () => sdkMock)
-mock.module("@opencorvus-ai/sdk/v2", () => sdkMock)
+mock.module("@opencorvus-ai/sdk", () => sdkMock)
 
 const { ChannelRuntime } = await import("../src/core")
 
@@ -12,7 +12,7 @@ describe("channel runtime system prompt", () => {
     const prompt = core.buildSystemPrompt("slack")
 
     expect(prompt).toContain("The visibility principle")
-    expect(prompt).toContain("OpenCorvus TUI")
+    expect(prompt).toContain("Do not launch retired terminal UI processes")
     expect(prompt).toContain("Search memory at the start of each task")
   })
 
@@ -45,4 +45,3 @@ describe("channel runtime text formatting", () => {
     expect(parts.join("")).toBe(text)
   })
 })
-

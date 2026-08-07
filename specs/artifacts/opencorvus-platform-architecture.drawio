@@ -1,0 +1,358 @@
+<mxfile host="app.diagrams.net" modified="2026-07-31T00:00:00.000Z" agent="Claude Code" version="24.7.17" type="device">
+  <diagram id="opencorvus-platform-architecture" name="OpenCorvus 平台架构">
+    <mxGraphModel dx="2560" dy="1440" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2560" pageHeight="1440" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="bg" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#F6F8FB;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="0" y="0" width="2560" height="1440" as="geometry" />
+        </mxCell>
+
+        <mxCell id="title" value="OpenCorvus 平台架构 · 可伸缩的编排尺度" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;fontFamily=Microsoft YaHei;fontSize=32;fontStyle=1;fontColor=#16202a;" vertex="1" parent="1">
+          <mxGeometry x="48" y="34" width="1000" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="三条独立关系轴：&lt;b&gt;实线&lt;/b&gt; = 运行时请求流（入口 → Mission → 阶段 Task → 证据）　·　&lt;b&gt;虚线&lt;/b&gt; = 安装 / 供给与回流　·　&lt;b&gt;粗线&lt;/b&gt; = 平台底座支撑。单一来源约束：manifest id 唯一身份、prompt_profile.active 唯一激活来源、PromptProfileResolver 唯一投影面。" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;fontFamily=Microsoft YaHei;fontSize=14;fontColor=#4a5563;lineHeight=1.6;" vertex="1" parent="1">
+          <mxGeometry x="48" y="84" width="2100" height="44" as="geometry" />
+        </mxCell>
+
+        <!-- ================= BAND 1 : ENTRY ================= -->
+        <mxCell id="L1" value="① 用户入口与产品分发" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#FFFBF3;strokeColor=#9B7034;strokeWidth=1.5;dashed=1;dashPattern=8 5;verticalAlign=top;align=left;spacingLeft=24;spacingTop=12;fontFamily=Microsoft YaHei;fontSize=16;fontStyle=1;fontColor=#9B7034;" vertex="1" parent="1">
+          <mxGeometry x="48" y="136" width="2464" height="170" as="geometry" />
+        </mxCell>
+
+        <mxCell id="L1GA" value="交付形态 · 产品双支柱" style="rounded=1;arcSize=6;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#C9A56E;strokeWidth=1;dashed=1;dashPattern=4 4;verticalAlign=top;align=left;spacingLeft=14;spacingTop=5;fontFamily=Microsoft YaHei;fontSize=12;fontColor=#9B7034;" vertex="1" parent="1">
+          <mxGeometry x="88" y="196" width="900" height="96" as="geometry" />
+        </mxCell>
+        <mxCell id="CODE" value="&lt;b&gt;Code Scope&lt;/b&gt;　&lt;font style=&quot;font-size:11px&quot;&gt;代码与工程交付&lt;/font&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#FFF2DC;strokeColor=#9B7034;fontColor=#35240F;fontFamily=Microsoft YaHei;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="112" y="226" width="420" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="WORK" value="&lt;b&gt;Work Scope&lt;/b&gt;　&lt;font style=&quot;font-size:11px&quot;&gt;知识与业务交付&lt;/font&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#FFF2DC;strokeColor=#9B7034;fontColor=#35240F;fontFamily=Microsoft YaHei;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="552" y="226" width="412" height="56" as="geometry" />
+        </mxCell>
+
+        <mxCell id="L1GB" value="接入面 · 同一执行内核" style="rounded=1;arcSize=6;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#C9A56E;strokeWidth=1;dashed=1;dashPattern=4 4;verticalAlign=top;align=left;spacingLeft=14;spacingTop=5;fontFamily=Microsoft YaHei;fontSize=12;fontColor=#9B7034;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="196" width="1292" height="96" as="geometry" />
+        </mxCell>
+        <mxCell id="OVERLAY" value="&lt;b&gt;Client&lt;/b&gt;　&lt;font style=&quot;font-size:11px&quot;&gt;桌面主界面&lt;/font&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#FFF2DC;strokeColor=#9B7034;fontColor=#35240F;fontFamily=Microsoft YaHei;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="1204" y="226" width="400" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="APIENTRY" value="&lt;b&gt;API / SDK&lt;/b&gt;　&lt;font style=&quot;font-size:11px&quot;&gt;程序化接入&lt;/font&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#FFF2DC;strokeColor=#9B7034;fontColor=#35240F;fontFamily=Microsoft YaHei;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="1624" y="226" width="400" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="CHANNEL" value="&lt;b&gt;Channel&lt;/b&gt;　&lt;font style=&quot;font-size:11px&quot;&gt;IM · Email · IDE&lt;/font&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#FFF2DC;strokeColor=#9B7034;fontColor=#35240F;fontFamily=Microsoft YaHei;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="2044" y="226" width="404" height="56" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e_ga_gb" value="任一形态均可从任一接入面进入" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#9B7034;endArrow=blockThin;endFill=1;fontFamily=Microsoft YaHei;fontSize=11;fontColor=#7a5a29;labelBackgroundColor=#F6F8FB;verticalAlign=bottom;" edge="1" parent="1" source="L1GA" target="L1GB">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="988" y="244" as="sourcePoint" />
+            <mxPoint x="1180" y="244" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ================= BAND 2 : MISSION STAGE ORCHESTRATION ================= -->
+        <mxCell id="L2" value="② Mission 执行体系 · 跨专家团阶段编排与无人值守续跑" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#F4FBF7;strokeColor=#438266;strokeWidth=1.5;dashed=1;dashPattern=8 5;verticalAlign=top;align=left;spacingLeft=44;spacingTop=12;fontFamily=Microsoft YaHei;fontSize=16;fontStyle=1;fontColor=#438266;" vertex="1" parent="1">
+          <mxGeometry x="48" y="322" width="2464" height="340" as="geometry" />
+        </mxCell>
+
+        <mxCell id="MISSION" value="&lt;b&gt;Mission&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;长期目标的唯一持有者，也是唯一有权决定&lt;br&gt;下一个阶段与下一个专家团的实体&lt;br&gt;&lt;br&gt;按 squad 边界切分阶段 Task，&lt;br&gt;前一阶段 terminal acceptance 之后&lt;br&gt;才创建下一阶段&lt;/font&gt;" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#E5F5EB;strokeColor=#438266;strokeWidth=2.5;fontColor=#17372A;fontFamily=Microsoft YaHei;fontSize=16;verticalAlign=top;spacingTop=16;" vertex="1" parent="1">
+          <mxGeometry x="108" y="378" width="420" height="200" as="geometry" />
+        </mxCell>
+
+        <mxCell id="T1" value="&lt;b&gt;阶段 Task 1&lt;/b&gt;　&lt;font style=&quot;font-size:11px&quot;&gt;整个生命周期内 promptProfile 不变&lt;/font&gt;" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#E5F5EB;strokeColor=#438266;fontColor=#17372A;fontFamily=Microsoft YaHei;fontSize=15;verticalAlign=top;spacingTop=12;" vertex="1" parent="1">
+          <mxGeometry x="588" y="378" width="590" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="T1_SQ" value="builtin / research-studio　&lt;b&gt;Research Studio&lt;/b&gt;" style="rounded=1;arcSize=16;whiteSpace=wrap;html=1;fillColor=#EEE9FF;strokeColor=#7157A8;fontColor=#281D3D;fontFamily=Microsoft YaHei;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="608" y="426" width="550" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="T1_OUT" value="产出：有据可查的调研报告" style="rounded=1;arcSize=16;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#8FBFA8;fontColor=#17372A;fontFamily=Microsoft YaHei;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="608" y="478" width="550" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="T1_N" value="5 agents · 1 / 3 / 5 节点工作流" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontFamily=Microsoft YaHei;fontSize=11;fontColor=#4e7a66;" vertex="1" parent="1">
+          <mxGeometry x="608" y="530" width="550" height="28" as="geometry" />
+        </mxCell>
+
+        <mxCell id="T2" value="&lt;b&gt;阶段 Task 2&lt;/b&gt;　&lt;font style=&quot;font-size:11px&quot;&gt;整个生命周期内 promptProfile 不变&lt;/font&gt;" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#E5F5EB;strokeColor=#438266;fontColor=#17372A;fontFamily=Microsoft YaHei;fontSize=15;verticalAlign=top;spacingTop=12;" vertex="1" parent="1">
+          <mxGeometry x="1238" y="378" width="590" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="T2_SQ" value="mirror / prism　&lt;b&gt;Mirror Prism&lt;/b&gt;" style="rounded=1;arcSize=16;whiteSpace=wrap;html=1;fillColor=#EEE9FF;strokeColor=#7157A8;fontColor=#281D3D;fontFamily=Microsoft YaHei;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1258" y="426" width="550" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="T2_OUT" value="产出：PRD → 设计 → 实现的路由产品系统" style="rounded=1;arcSize=16;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#8FBFA8;fontColor=#17372A;fontFamily=Microsoft YaHei;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1258" y="478" width="550" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="T2_N" value="19 agents · 17 / 19 节点工作流" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontFamily=Microsoft YaHei;fontSize=11;fontColor=#4e7a66;" vertex="1" parent="1">
+          <mxGeometry x="1258" y="530" width="550" height="28" as="geometry" />
+        </mxCell>
+
+        <mxCell id="T3" value="&lt;b&gt;阶段 Task 3&lt;/b&gt;　&lt;font style=&quot;font-size:11px&quot;&gt;整个生命周期内 promptProfile 不变&lt;/font&gt;" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#E5F5EB;strokeColor=#438266;fontColor=#17372A;fontFamily=Microsoft YaHei;fontSize=15;verticalAlign=top;spacingTop=12;" vertex="1" parent="1">
+          <mxGeometry x="1888" y="378" width="590" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="T3_SQ" value="wujiang / opentest　&lt;b&gt;MirrorTest&lt;/b&gt;" style="rounded=1;arcSize=16;whiteSpace=wrap;html=1;fillColor=#EEE9FF;strokeColor=#7157A8;fontColor=#281D3D;fontFamily=Microsoft YaHei;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1908" y="426" width="550" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="T3_OUT" value="产出：独立测试证据与发布判定" style="rounded=1;arcSize=16;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#8FBFA8;fontColor=#17372A;fontFamily=Microsoft YaHei;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1908" y="478" width="550" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="T3_N" value="6 agents · 只做审计，不调试产品根因" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontFamily=Microsoft YaHei;fontSize=11;fontColor=#4e7a66;" vertex="1" parent="1">
+          <mxGeometry x="1908" y="530" width="550" height="28" as="geometry" />
+        </mxCell>
+
+        <mxCell id="WAKE" value="无人值守续跑：Automation（standalone · heartbeat · delay）　+　recurrence / next_run 轮询　+　session wake · task wake（durationMs）　——　无人在场的时段由调度唤醒 Mission 继续推进阶段，构成 7×24 长期编排" style="rounded=1;arcSize=16;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#438266;fontColor=#17372A;fontFamily=Microsoft YaHei;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="88" y="610" width="2384" height="36" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e_entry_mission" value="请求 · 目标" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#9B7034;endArrow=blockThin;endFill=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.26;entryDx=0;entryDy=0;fontFamily=Microsoft YaHei;fontSize=11;fontColor=#7a5a29;labelBackgroundColor=#F6F8FB;" edge="1" parent="1" source="L1GB" target="MISSION">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1826" y="314" />
+              <mxPoint x="68" y="314" />
+              <mxPoint x="68" y="430" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="e_m_t1" value="创建阶段 Task" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#438266;endArrow=blockThin;endFill=1;fontFamily=Microsoft YaHei;fontSize=11;fontColor=#2f6a51;labelBackgroundColor=#F4FBF7;verticalAlign=bottom;" edge="1" parent="1" source="MISSION" target="T1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_t1_t2" value="terminal Artifact 合同" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#438266;endArrow=blockThin;endFill=1;fontFamily=Microsoft YaHei;fontSize=11;fontColor=#2f6a51;labelBackgroundColor=#F4FBF7;verticalAlign=bottom;" edge="1" parent="1" source="T1" target="T2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_t2_t3" value="terminal Artifact 合同" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#438266;endArrow=blockThin;endFill=1;fontFamily=Microsoft YaHei;fontSize=11;fontColor=#2f6a51;labelBackgroundColor=#F4FBF7;verticalAlign=bottom;" edge="1" parent="1" source="T2" target="T3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e_t3_mission" value="terminal acceptance 与 failure ownership 只回到 Mission —— 领域专家团不选择下一个专家团" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#438266;dashed=1;dashPattern=6 4;endArrow=blockThin;endFill=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontFamily=Microsoft YaHei;fontSize=11;fontColor=#2f6a51;labelBackgroundColor=#F4FBF7;" edge="1" parent="1" source="T3" target="MISSION">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="2183" y="368" />
+              <mxPoint x="318" y="368" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="e_wake_mission" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#438266;endArrow=blockThin;endFill=1;exitX=0.0344;exitY=0;exitDx=0;exitDy=0;entryX=0.1476;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="WAKE" target="MISSION">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e_t3_channel" value="结果 · 证据回流" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=1.5;strokeColor=#438266;dashed=1;dashPattern=6 4;endArrow=blockThin;endFill=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;fontFamily=Microsoft YaHei;fontSize=11;fontColor=#2f6a51;labelBackgroundColor=#F6F8FB;" edge="1" parent="1" source="T3" target="CHANNEL">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="2528" y="478" />
+              <mxPoint x="2528" y="254" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="5" style="edgeStyle=orthogonalEdgeStyle;html=1;exitX=0;exitY=0.71;exitDx=0;exitDy=0;entryX=0.007;entryY=0.41;entryDx=0;entryDy=0;entryPerimeter=0;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="MISSION" target="L3">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="30" y="520" />
+              <mxPoint x="30" y="894" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="6" value="生成专家团" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontFamily=Microsoft YaHei;fontSize=11;fontColor=#4D4D4D;labelBackgroundColor=#F6F8FB;" vertex="1" connectable="0" parent="5">
+          <mxGeometry x="0.0945" y="3" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ================= BAND 3 COL A : MARKET ================= -->
+        <mxCell id="L3" value="③ 能力商城与扩展生态 · 供给侧" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#FFF6FA;strokeColor=#A55678;strokeWidth=1.5;dashed=1;dashPattern=8 5;verticalAlign=top;align=left;spacingLeft=24;spacingTop=12;fontFamily=Microsoft YaHei;fontSize=16;fontStyle=1;fontColor=#A55678;" vertex="1" parent="1">
+          <mxGeometry x="48" y="678" width="620" height="528" as="geometry" />
+        </mxCell>
+
+        <mxCell id="L3S1" value="专家团商城" style="rounded=1;arcSize=6;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#CE8FAB;strokeWidth=1;dashed=1;dashPattern=4 4;verticalAlign=top;align=left;spacingLeft=14;spacingTop=5;fontFamily=Microsoft YaHei;fontSize=12;fontColor=#A55678;" vertex="1" parent="1">
+          <mxGeometry x="72" y="730" width="572" height="230" as="geometry" />
+        </mxCell>
+        <mxCell id="SQUAD_CARD" value="&lt;b&gt;Expert Squad 商品&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;身份 · 版本 · 场景说明&lt;/font&gt;" style="rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#FFE8F2;strokeColor=#A55678;fontColor=#451C30;fontFamily=Microsoft YaHei;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="92" y="764" width="532" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="PACKAGE_INFO" value="&lt;b&gt;完整能力说明&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;Agents · Skills · Tools · MCP · Workflow&lt;/font&gt;" style="rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#FFE8F2;strokeColor=#A55678;fontColor=#451C30;fontFamily=Microsoft YaHei;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="92" y="828" width="532" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="SQUAD_INSTALL" value="&lt;b&gt;安装 / 更新&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;显式声明 Project 或 Global Scope&lt;/font&gt;" style="rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#FFE8F2;strokeColor=#A55678;strokeWidth=2;fontColor=#451C30;fontFamily=Microsoft YaHei;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="92" y="892" width="532" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="e_sc_pi" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=1.5;strokeColor=#A55678;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="SQUAD_CARD" target="PACKAGE_INFO">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_pi_si" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=1.5;strokeColor=#A55678;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="PACKAGE_INFO" target="SQUAD_INSTALL">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="L3S2" value="Skill 商城" style="rounded=1;arcSize=6;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#CE8FAB;strokeWidth=1;dashed=1;dashPattern=4 4;verticalAlign=top;align=left;spacingLeft=14;spacingTop=5;fontFamily=Microsoft YaHei;fontSize=12;fontColor=#A55678;" vertex="1" parent="1">
+          <mxGeometry x="72" y="990" width="572" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="SKILL_CARD" value="&lt;b&gt;Skill 商品&lt;/b&gt;　&lt;font style=&quot;font-size:11px&quot;&gt;知识 · 方法 · 操作指南&lt;/font&gt;" style="rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#FFE8F2;strokeColor=#A55678;fontColor=#451C30;fontFamily=Microsoft YaHei;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="92" y="1024" width="532" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="SKILL_INSTALL" value="&lt;b&gt;全局安装&lt;/b&gt;　&lt;font style=&quot;font-size:11px&quot;&gt;进入平台 Skill Pool&lt;/font&gt;" style="rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#FFE8F2;strokeColor=#A55678;strokeWidth=2;fontColor=#451C30;fontFamily=Microsoft YaHei;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="92" y="1086" width="532" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="e_skc_ski" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=1.5;strokeColor=#A55678;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="SKILL_CARD" target="SKILL_INSTALL">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ================= BAND 3 COL B : SQUAD PLATFORM ================= -->
+        <mxCell id="L4" value="④ 专家团平台 · 身份与投影" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#F8F6FF;strokeColor=#7157A8;strokeWidth=1.5;dashed=1;dashPattern=8 5;verticalAlign=top;align=left;spacingLeft=24;spacingTop=12;fontFamily=Microsoft YaHei;fontSize=16;fontStyle=1;fontColor=#7157A8;" vertex="1" parent="1">
+          <mxGeometry x="698" y="678" width="1000" height="528" as="geometry" />
+        </mxCell>
+
+        <mxCell id="REGISTRY" value="&lt;b&gt;Expert Squad Registry&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;发现 · 校验 · 严格身份&lt;br&gt;manifest id 是唯一身份&lt;/font&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#EEE9FF;strokeColor=#7157A8;fontColor=#281D3D;fontFamily=Microsoft YaHei;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="722" y="746" width="310" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="CATALOG" value="&lt;b&gt;Project + Global Catalog&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;合并后的唯一目录&lt;br&gt;拒绝重复 manifest id&lt;/font&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#EEE9FF;strokeColor=#7157A8;fontColor=#281D3D;fontFamily=Microsoft YaHei;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1042" y="746" width="310" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="RESOLVER" value="&lt;b&gt;PromptProfileResolver&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;唯一运行时投影面&lt;br&gt;来源 prompt_profile.active&lt;/font&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#EEE9FF;strokeColor=#7157A8;strokeWidth=2;fontColor=#281D3D;fontFamily=Microsoft YaHei;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1362" y="746" width="312" height="110" as="geometry" />
+        </mxCell>
+
+        <mxCell id="SQUAD" value="&lt;b&gt;自包含专家团 Package&lt;/b&gt;　&lt;font style=&quot;font-size:11px&quot;&gt;运行时闭包，禁止跨 package 私有依赖&lt;/font&gt;" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#EEE9FF;strokeColor=#7157A8;strokeWidth=2;fontColor=#281D3D;fontFamily=Microsoft YaHei;fontSize=15;verticalAlign=top;spacingTop=14;" vertex="1" parent="1">
+          <mxGeometry x="722" y="906" width="952" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="SQ1" value="Scheduler + Agents" style="rounded=1;arcSize=16;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9B85C8;fontColor=#281D3D;fontFamily=Microsoft YaHei;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="742" y="978" width="225" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="SQ2" value="Skills + Tools + MCP" style="rounded=1;arcSize=16;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9B85C8;fontColor=#281D3D;fontFamily=Microsoft YaHei;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="982" y="978" width="225" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="SQ3" value="Virtual Workflow&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;不可变 binding 契约&lt;/font&gt;" style="rounded=1;arcSize=16;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9B85C8;fontColor=#281D3D;fontFamily=Microsoft YaHei;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1222" y="978" width="225" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="SQ4" value="Assets + Prompt Overlay" style="rounded=1;arcSize=16;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9B85C8;fontColor=#281D3D;fontFamily=Microsoft YaHei;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1462" y="978" width="192" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="SQNOTE" value="package 之间只有阶段边界，没有运行时依赖；协作的调度语义见 ②" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontFamily=Microsoft YaHei;fontSize=11;fontColor=#5c4a80;" vertex="1" parent="1">
+          <mxGeometry x="742" y="1050" width="912" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e_reg_cat" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#7157A8;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="REGISTRY" target="CATALOG">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_cat_res" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#7157A8;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="CATALOG" target="RESOLVER">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_res_squad" value="投影 active 专家团的完整能力集合" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#7157A8;endArrow=blockThin;endFill=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.87;entryY=0;entryDx=0;entryDy=0;fontFamily=Microsoft YaHei;fontSize=11;fontColor=#5c4a80;labelBackgroundColor=#F8F6FF;" edge="1" parent="1" source="RESOLVER" target="SQUAD">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e_squad_t3" value="每个阶段 Task 按自己的 promptProfile 各挂载一次完整投影（图中示意其一）" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2.5;strokeColor=#7157A8;endArrow=blockThin;endFill=1;exitX=0.4496;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.71;entryDx=0;entryDy=0;fontFamily=Microsoft YaHei;fontSize=11;fontColor=#5c4a80;labelBackgroundColor=#F6F8FB;" edge="1" parent="1" source="SQUAD" target="T3">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1150" y="1214" />
+              <mxPoint x="2540" y="1214" />
+              <mxPoint x="2540" y="520" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="e_install_catalog" value="安装写入项目 / 全局根目录" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#A55678;dashed=1;dashPattern=7 4;endArrow=blockThin;endFill=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontFamily=Microsoft YaHei;fontSize=11;fontColor=#8c4462;labelBackgroundColor=#F6F8FB;" edge="1" parent="1" source="SQUAD_INSTALL" target="CATALOG">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="683" y="920" />
+              <mxPoint x="683" y="730" />
+              <mxPoint x="1197" y="730" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ================= BAND 3 COL C : SCALE EXAMPLES ================= -->
+        <mxCell id="L6" value="⑥ 可伸缩的编排尺度 · 同一 Package 协议下的实例" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#F8F6FF;strokeColor=#7157A8;strokeWidth=1.5;dashed=1;dashPattern=8 5;verticalAlign=top;align=left;spacingLeft=24;spacingTop=12;fontFamily=Microsoft YaHei;fontSize=16;fontStyle=1;fontColor=#7157A8;" vertex="1" parent="1">
+          <mxGeometry x="1728" y="678" width="784" height="528" as="geometry" />
+        </mxCell>
+
+        <mxCell id="PRISM" value="&lt;b&gt;重型专家团　Mirror Prism&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;mirror / prism　·　v2026.07.31.2　·　namespace = mirror&lt;/font&gt;" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#EEE9FF;strokeColor=#7157A8;strokeWidth=2.5;fontColor=#281D3D;fontFamily=Microsoft YaHei;fontSize=15;verticalAlign=top;spacingTop=12;" vertex="1" parent="1">
+          <mxGeometry x="1752" y="718" width="736" height="174" as="geometry" />
+        </mxCell>
+        <mxCell id="PRISM_R1" value="&lt;b&gt;19 Agents&lt;/b&gt;　·　PRD 7 → Design 3 → Code 4 → OpenTest 3" style="rounded=1;arcSize=16;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9B85C8;fontColor=#281D3D;fontFamily=Microsoft YaHei;fontSize=12;align=left;spacingLeft=14;" vertex="1" parent="1">
+          <mxGeometry x="1770" y="776" width="700" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="PRISM_R2" value="&lt;b&gt;2 Virtual Workflow&lt;/b&gt;　·　generic 17 节点 / ainvest 19 节点" style="rounded=1;arcSize=16;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9B85C8;fontColor=#281D3D;fontFamily=Microsoft YaHei;fontSize=12;align=left;spacingLeft=14;" vertex="1" parent="1">
+          <mxGeometry x="1770" y="804" width="700" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="PRISM_R3" value="&lt;b&gt;12 Package Skills&lt;/b&gt;　·　&lt;b&gt;6 Package Tools&lt;/b&gt;　·　lib + assets 私有闭包" style="rounded=1;arcSize=16;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9B85C8;fontColor=#281D3D;fontFamily=Microsoft YaHei;fontSize=12;align=left;spacingLeft=14;" vertex="1" parent="1">
+          <mxGeometry x="1770" y="832" width="700" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="PRISM_R4" value="10 个实现 / 视觉审查 agent 挂载 default browser MCP 工具集" style="rounded=1;arcSize=16;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9B85C8;fontColor=#281D3D;fontFamily=Microsoft YaHei;fontSize=12;align=left;spacingLeft=14;" vertex="1" parent="1">
+          <mxGeometry x="1770" y="860" width="700" height="26" as="geometry" />
+        </mxCell>
+
+        <mxCell id="RSTUDIO" value="&lt;b&gt;轻量专家团　Research Studio&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;builtin / research-studio　·　v2026.07.25.1　·　namespace = builtin&lt;/font&gt;" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F6F3FF;strokeColor=#9B85C8;strokeWidth=1.5;fontColor=#281D3D;fontFamily=Microsoft YaHei;fontSize=15;verticalAlign=top;spacingTop=12;" vertex="1" parent="1">
+          <mxGeometry x="1752" y="902" width="736" height="174" as="geometry" />
+        </mxCell>
+        <mxCell id="RS_R1" value="&lt;b&gt;5 Agents&lt;/b&gt;　·　planner → researcher → analyst → fact-checker → writer" style="rounded=1;arcSize=16;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C3B6E0;fontColor=#281D3D;fontFamily=Microsoft YaHei;fontSize=12;align=left;spacingLeft=14;" vertex="1" parent="1">
+          <mxGeometry x="1770" y="960" width="700" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="RS_R2" value="&lt;b&gt;3 Virtual Workflow&lt;/b&gt;　·　1 节点 / 3 节点 / 5 节点，按请求选择" style="rounded=1;arcSize=16;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C3B6E0;fontColor=#281D3D;fontFamily=Microsoft YaHei;fontSize=12;align=left;spacingLeft=14;" vertex="1" parent="1">
+          <mxGeometry x="1770" y="988" width="700" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="RS_R3" value="&lt;b&gt;0 Package Skill&lt;/b&gt;　·　&lt;b&gt;0 Package Tool&lt;/b&gt;　·　&lt;b&gt;0 私有 MCP&lt;/b&gt;" style="rounded=1;arcSize=16;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C3B6E0;fontColor=#281D3D;fontFamily=Microsoft YaHei;fontSize=12;align=left;spacingLeft=14;" vertex="1" parent="1">
+          <mxGeometry x="1770" y="1016" width="700" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="RS_R4" value="能力全部来自平台 base_role：delegated-worker · deep-research · fact-check" style="rounded=1;arcSize=16;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C3B6E0;fontColor=#281D3D;fontFamily=Microsoft YaHei;fontSize=12;align=left;spacingLeft=14;" vertex="1" parent="1">
+          <mxGeometry x="1770" y="1044" width="700" height="26" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ROSTER" value="已装载 7 个专家团（虚拟工作流节点规模）：research-studio 1/3/5　·　review-debug 2/5/7　·　mirror-watch 3/6/3　·　opentest 5/6/6　·　frontend-replica 5/10　·　frontend-innovate 12　·　prism 17/19" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C3B6E0;fontColor=#5c4a80;fontFamily=Microsoft YaHei;fontSize=11;align=left;spacingLeft=14;spacingRight=14;" vertex="1" parent="1">
+          <mxGeometry x="1752" y="1086" width="736" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="SCALE" value="&lt;b&gt;尺度轴&lt;/b&gt;：单个 Task 内 1 → 19 节点；跨 Task 由 Mission 串接任意多个专家团阶段。所有专家团共用同一路径（Registry → Catalog → Resolver → Mission-owned Task），伸缩只发生在 manifest 内部与阶段数量上，平台协议不变。" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#FAF8FF;gradientColor=#DCD3F0;gradientDirection=east;strokeColor=#7157A8;fontColor=#281D3D;fontFamily=Microsoft YaHei;fontSize=11;align=left;spacingLeft=14;spacingRight=14;" vertex="1" parent="1">
+          <mxGeometry x="1752" y="1146" width="736" height="52" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e_squad_zoom" value="放大" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#7157A8;dashed=1;dashPattern=3 3;endArrow=blockThin;endFill=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.621;entryDx=0;entryDy=0;fontFamily=Microsoft YaHei;fontSize=11;fontColor=#5c4a80;labelBackgroundColor=#F6F8FB;verticalAlign=bottom;" edge="1" parent="1" source="SQUAD" target="L6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ================= BAND 4 : INFRA ================= -->
+        <mxCell id="L5" value="⑤ OpenCorvus 统一基建 · 单一来源底座" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#F5F9FF;strokeColor=#4676B8;strokeWidth=1.5;dashed=1;dashPattern=8 5;verticalAlign=top;align=left;spacingLeft=24;spacingTop=10;fontFamily=Microsoft YaHei;fontSize=16;fontStyle=1;fontColor=#4676B8;" vertex="1" parent="1">
+          <mxGeometry x="48" y="1222" width="2464" height="156" as="geometry" />
+        </mxCell>
+        <mxCell id="SKILL_POOL" value="&lt;b&gt;Skill Pool + Tool&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;全局挂载面&lt;/font&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#E8F1FF;strokeColor=#4676B8;strokeWidth=2;fontColor=#17253B;fontFamily=Microsoft YaHei;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="72" y="1256" width="464" height="68" as="geometry" />
+        </mxCell>
+        <mxCell id="AGENT_RUNTIME" value="&lt;b&gt;Agent Runtime&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;会话 · 回合 · 工具循环 · base_role 基础能力&lt;/font&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#E8F1FF;strokeColor=#4676B8;fontColor=#17253B;fontFamily=Microsoft YaHei;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="556" y="1256" width="464" height="68" as="geometry" />
+        </mxCell>
+        <mxCell id="SCHED" value="&lt;b&gt;Scheduler 与调度&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;Automation · Task Queue · Session / Task Wake&lt;/font&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#E8F1FF;strokeColor=#4676B8;strokeWidth=2;fontColor=#17253B;fontFamily=Microsoft YaHei;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1040" y="1256" width="464" height="68" as="geometry" />
+        </mxCell>
+        <mxCell id="MCPNODE" value="&lt;b&gt;MCP&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;scoped provider 接入 · 含 default browser 工具集&lt;/font&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#E8F1FF;strokeColor=#4676B8;fontColor=#17253B;fontFamily=Microsoft YaHei;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1524" y="1256" width="464" height="68" as="geometry" />
+        </mxCell>
+        <mxCell id="CORE" value="&lt;b&gt;Core 数据与证据&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;Session · Task · Goal · Artifact · Evidence&lt;/font&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#E8F1FF;strokeColor=#4676B8;fontColor=#17253B;fontFamily=Microsoft YaHei;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="2008" y="1256" width="464" height="68" as="geometry" />
+        </mxCell>
+        <mxCell id="MODEL" value="LLM / Provider 接入层　·　全链路统一流式调用" style="rounded=1;arcSize=20;whiteSpace=wrap;html=1;fillColor=#D8E7FA;strokeColor=#4676B8;fontColor=#17253B;fontFamily=Microsoft YaHei;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="72" y="1332" width="2400" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e_infra_squad" value="统一运行时 · 数据 · 证据底座" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=4;strokeColor=#4676B8;endArrow=blockThin;endFill=1;exitX=0.3458;exitY=0;exitDx=0;exitDy=0;entryX=0.202;entryY=1;entryDx=0;entryDy=0;fontFamily=Microsoft YaHei;fontSize=11;fontColor=#2f5a91;labelBackgroundColor=#F6F8FB;verticalAlign=bottom;" edge="1" parent="1" source="L5" target="L4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_infra_market" value="目录 · 分发 · 权限" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=4;strokeColor=#4676B8;endArrow=blockThin;endFill=1;exitX=0.1631;exitY=0;exitDx=0;exitDy=0;entryX=0.648;entryY=1;entryDx=0;entryDy=0;fontFamily=Microsoft YaHei;fontSize=11;fontColor=#2f5a91;labelBackgroundColor=#F6F8FB;verticalAlign=bottom;" edge="1" parent="1" source="L5" target="L3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e_skill_pool" value="全局安装进入 Skill Pool" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#A55678;dashed=1;dashPattern=7 4;endArrow=blockThin;endFill=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontFamily=Microsoft YaHei;fontSize=11;fontColor=#8c4462;labelBackgroundColor=#F6F8FB;" edge="1" parent="1" source="SKILL_INSTALL" target="SKILL_POOL">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="358" y="1214" />
+              <mxPoint x="304" y="1214" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ================= LEGEND ================= -->
+        <mxCell id="legend" value="&lt;b&gt;缩写&lt;/b&gt;：API = Application Programming Interface（应用程序编程接口）；SDK = Software Development Kit（软件开发工具包）；IM = Instant Messaging（即时通讯）；IDE = Integrated Development Environment（集成开发环境）；MCP = Model Context Protocol（模型上下文协议）；LLM = Large Language Model（大语言模型）；PRD = Product Requirements Document（产品需求文档）。&#10;&lt;b&gt;读图方式&lt;/b&gt;：橙色 = 用户请求进入；绿色 = Mission 阶段编排主干，绿色虚线 = 验收与证据回流；粉色虚线 = 商城安装供给；紫色 = 专家团身份与投影；蓝色粗线 = 平台底座支撑。" style="text;html=1;strokeColor=#D6DEE8;fillColor=#FFFFFF;align=left;verticalAlign=top;whiteSpace=wrap;spacingLeft=16;spacingTop=8;rounded=1;arcSize=4;fontFamily=Microsoft YaHei;fontSize=12;fontColor=#4a5563;lineHeight=1.6;" vertex="1" parent="1">
+          <mxGeometry x="48" y="1386" width="2464" height="48" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

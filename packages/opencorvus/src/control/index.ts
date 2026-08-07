@@ -6,7 +6,6 @@ import z from "zod"
 export * from "./control.sql"
 export * from "./message"
 export * from "./message-schema"
-export * from "./timeline"
 
 export namespace Control {
   export const Account = z.object({

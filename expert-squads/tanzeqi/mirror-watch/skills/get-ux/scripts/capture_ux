@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+"""
+Capture UX workflow from a website using browser agent API.
+
+Usage:
+    python capture_ux.py --url "https://example.com" --intent "Explore homepage features" --name "Example Site" --api-endpoint "https://browser.example/api/browser-agent/save-process"
+"""
+
+import argparse
+import json
+import sys
+import urllib.request
+import urllib.error
+
+
+def capture_ux(url: str, intent: str, name: str, api_endpoint: str):
+    """Call browser agent API to capture UX workflow and save thumbnail."""
+
+    payload = {
+        "name": name,
+        "task_description": intent,
+        "url": url
+    }
+
+    headers = {
+        "Content-Type": "application/json"
+    }
+
+    try:
+        req = urllib.request.Request(
+            api_endpoint,
+            data=json.dumps(payload).encode('utf-8'),
+            headers=headers,
+            method='POST'
+        )
+
+        with urllib.request.urlopen(req, timeout=600) as response:
+            result = json.loads(response.read().decode('utf-8'))
+
+            # Output only: description, thumbnail path, and full image URL
+            print("=== UX Detailed DESCRIPTION ===")
+            print(result.get('description', 'No description available'))
+            print("\n=== chart-vis JSON code block ===")
+            print(result.get('flowchart', 'NO flowchart available'))
+            print("\n\n=== THUMBNAIL PATH ===")
+            print(result.get('thumbnail_image', 'No URL available'))
+            print("\n=== FULL IMAGE URL ===")
+            print(result.get('full_image', 'No URL available'))
+
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode('utf-8')
+        print(f"HTTP Error {e.code}: {error_body}", file=sys.stderr)
+        sys.exit(1)
+    except urllib.error.URLError as e:
+        print(f"URL Error: {e.reason}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Capture UX workflow from a website')
+    parser.add_argument('--url', required=True, help='Target website URL')
+    parser.add_argument('--intent', required=True, help='Brief description of what to explore')
+    parser.add_argument('--name', required=True, help='Descriptive name for this capture')
+    parser.add_argument('--api-endpoint', required=True, help='Exact browser agent API endpoint')
+
+    args = parser.parse_args()
+
+    capture_ux(args.url, args.intent, args.name, args.api_endpoint)
+
+
+if __name__ == "__main__":
+    main()

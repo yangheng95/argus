@@ -1,8 +1,25 @@
 import { Config } from "./config"
-import { Agent } from "@/agent/agent"
+import { HelperAgentRegistry } from "@/agent/helper-agent-registry"
+import { PrimaryAssistantRegistry } from "@/agent/primary-assistant-registry"
+import { AgentRoleContract } from "@/agent/role-contract"
+import { PromptProfile } from "@/agent/prompt-profile"
 
 import PROMPT_SYSTEM from "@/session/prompt/system.txt"
-import PROMPT_GENERATE from "@/agent/generate.txt"
+
+/** Native agents whose prompt is NOT consumed from prompt catalog config
+ *  at runtime. Surfacing them in the catalog is a UX trap: users edit the
+ *  card, hit Save, and nothing changes.
+ *  - orchestrator → dynamic prompt built per-trigger in `buildSystemParts`;
+ *    the small Host registry prompt only prevents inheritance of the generic
+ *    assistant core header, while task evidence and the active projection are
+ *    resolved for every invocation, so a user-editable static override has no place to land.
+ *  - summary is a promptless helper registry entry used only as a canonical
+ *    model identity by Host-owned summary operations. */
+const UNEDITABLE_AGENTS = new Set<string>(
+  Object.values(AgentRoleContract.all)
+    .filter((contract) => !contract.promptEditable)
+    .map((contract) => contract.id),
+)
 
 export namespace PromptCatalog {
   export interface Entry {
@@ -10,169 +27,134 @@ export namespace PromptCatalog {
     key: string
     label: string
     group: string
-    mode?: string
     prompt: string
+    editable_prompt: string
+    effective_prompt: string
+    active_profile: string
+    profile_prompt: string | null
     configured_prompt: string | null
     default_prompt: string
     inherits_core: boolean
+    prompt_mode: "override" | "append"
     description?: string
   }
 
-  /** Static metadata for system-scope prompt slots. */
+  export interface ListInput {
+    config?: Config.Info
+  }
+
+  /** Static metadata for system-scope prompt slots.
+   *  The core header is the only system-wide slot; it applies to every LLM call
+   *  regardless of which identity is running. Fixed-identity prompt overrides
+   *  live on `config.agent.{name}.prompt` or `.prompt_append`. Both surface as agent-scope entries
+   *  with distinct defaults from their owning fixed registry. */
   const SYSTEM_PROMPT_META: Array<{
     key: string
     label: string
     group: string
+    defaultPrompt: string
     description?: string
   }> = [
     {
       key: "core_header",
       label: "System Prompt",
       group: "core",
+      defaultPrompt: PROMPT_SYSTEM,
       description: "Unified system prompt applied to all models",
-    },
-    {
-      key: "agent_generate",
-      label: "Agent Generator",
-      group: "generator",
-      description: "Prompt used when generating new agent configurations",
-    },
-    {
-      key: "spec_system",
-      label: "Spec Agent",
-      group: "assistant",
-      description: "System prompt used by the spec agent when it extracts requirements and constraints",
-    },
-    {
-      key: "goal_system",
-      label: "Goal Agent",
-      group: "assistant",
-      description: "System prompt used by the goal agent when it decomposes spec requirements into executable implementation goals",
-    },
-    {
-      key: "planner_system",
-      label: "Planner Agent",
-      group: "assistant",
-      description: "System prompt used by the planner when it builds execution plans",
-    },
-    {
-      key: "evaluator_system",
-      label: "Evaluator Agent",
-      group: "assistant",
-      description: "System prompt used by the evaluator when it decides acceptance or replanning",
-    },
-    {
-      key: "delivery_system",
-      label: "Delivery Agent",
-      group: "assistant",
-      description: "System prompt used by the delivery agent when it verifies startup, fixes bugs, and makes the final acceptance decision",
     },
   ]
 
-  /**
-   * Resolve the built-in default prompt for a system-scope slot.
-   * Uses dynamic imports for orchestrator prompts to avoid circular dependency
-   * (agent modules import Config, and prompt-catalog lives next to Config).
-   */
-  async function defaultPromptForKey(key: string): Promise<string> {
-    switch (key) {
-      case "core_header":
-        return PROMPT_SYSTEM
-      case "agent_generate":
-        return PROMPT_GENERATE
-      case "spec_system":
-      case "goal_system":
-      case "decompose_system":
-      case "requirements_system": {
-        const { REQUIREMENTS_SYSTEM } = await import("@/requirements")
-        return REQUIREMENTS_SYSTEM
-      }
-      case "planner_system": {
-        const { PLANNER_SYSTEM_DEFAULT } = await import("@/types/planner")
-        return PLANNER_SYSTEM_DEFAULT
-      }
-      case "evaluator_system": {
-        const { EVALUATOR_DEFAULT_SYSTEM } = await import("@/types/evaluator")
-        return EVALUATOR_DEFAULT_SYSTEM
-      }
-      case "delivery_system": {
-        const { DELIVERY_AGENT_SYSTEM } = await import("@/delivery/agent")
-        return DELIVERY_AGENT_SYSTEM
-      }
-      default:
-        return ""
-    }
+  function agentGroup(agentName: string): "primary_agent" | "hidden_agent" {
+    if (PrimaryAssistantRegistry.isID(agentName)) return "primary_agent"
+    if (HelperAgentRegistry.isID(agentName)) return "hidden_agent"
+    throw new Error(`Prompt catalog identity ${agentName} is not owned by a fixed prompt registry`)
   }
 
-  /**
-   * Map from system-scope key to the agent name it covers.
-   * Agents with a system-scope entry are excluded from the agent-scope list
-   * so the catalog shows exactly one entry per logical agent.
-   */
-  const SYSTEM_COVERS_AGENT: Record<string, string> = {
-    spec_system: "spec",
-    goal_system: "goal",
-    planner_system: "plan",
-    evaluator_system: "evaluator",
-    delivery_system: "delivery",
-  }
-
-  function agentGroup(agent: Agent.Info): string {
-    if (agent.hidden) return "hidden_agent"
-    if (!agent.native) return "custom_agent"
-    if (agent.mode === "subagent") return "subagent"
-    // Assistant-level agents
-    if (["spec", "plan"].includes(agent.name)) return "assistant"
-    return "primary_agent"
-  }
-
-  export async function list(): Promise<Entry[]> {
-    const cfg = await Config.get()
+  export async function list(input: ListInput = {}): Promise<Entry[]> {
+    const cfg = input.config ?? (await Config.get())
     const configPrompts = cfg.prompt ?? {}
-    const agents = await Agent.list()
+    const activeProfile = PromptProfile.activeID(cfg)
+    const agents = [
+      ...(await PrimaryAssistantRegistry.list({ config: cfg })),
+      ...(await HelperAgentRegistry.list({ config: cfg })),
+    ]
 
     const entries: Entry[] = []
 
     // System-scope prompts
     for (const slot of SYSTEM_PROMPT_META) {
       const configured = configPrompts[slot.key] ?? null
-      const defaultPrompt = await defaultPromptForKey(slot.key)
+      const defaultPrompt = slot.defaultPrompt
       entries.push({
         scope: "system",
         key: slot.key,
         label: slot.label,
         group: slot.group,
         prompt: configured ?? defaultPrompt,
+        editable_prompt: configured ?? defaultPrompt,
+        effective_prompt: configured ?? defaultPrompt,
+        active_profile: activeProfile,
+        profile_prompt: null,
         configured_prompt: configured,
         default_prompt: defaultPrompt,
         inherits_core: false,
+        prompt_mode: "override",
         description: slot.description,
       })
     }
 
-    // Agent names already covered by a system-scope entry — skip to avoid duplicates
-    const coveredAgents = new Set(Object.values(SYSTEM_COVERS_AGENT))
-
-    // Agent-scope prompts (skip agents with a system-scope counterpart)
+    // Primary and Helper registries are the only prompt sources on this
+    // fixed-identity surface. Runtime templates and projected workers use
+    // their dedicated configuration and catalog surfaces. `prompt_mode`
+    // makes write semantics explicit:
+    // - override entries replace the runtime prompt with `config.agent.X.prompt`.
+    // - append entries keep the code-owned core and append
+    //   `config.agent.X.prompt_append`.
     for (const agent of agents) {
-      if (coveredAgents.has(agent.name)) continue
+      if (UNEDITABLE_AGENTS.has(agent.name)) continue
       const agentCfg = (cfg.agent ?? {})[agent.name]
-      const configuredPrompt = agentCfg?.prompt ?? null
-      // Use native default (before config override) for built-in agents
-      const nativeDefault = agent.native ? Agent.nativeDefaultPrompt(agent.name) : undefined
-      const defaultPrompt = nativeDefault ?? ""
-      // An agent inherits core if it has no own prompt, or if its default IS the core prompt
-      const inheritsCore = !configuredPrompt && (!defaultPrompt || defaultPrompt === PROMPT_SYSTEM)
+      if (!AgentRoleContract.isRoleID(agent.name)) {
+        throw new Error(`Native prompt registry identity ${agent.name} has no canonical role contract`)
+      }
+      const contract = AgentRoleContract.get(agent.name)
+      if (!contract.promptEditable) {
+        throw new Error(`Uneditable native prompt ${agent.name} reached the editable prompt catalog`)
+      }
+      const promptMode = AgentRoleContract.promptMode(agent.name)
+      if (promptMode === "none") continue
+      const configuredPrompt = promptMode === "append" ? (agentCfg?.prompt_append ?? null) : (agentCfg?.prompt ?? null)
+      const nativeDefault = PrimaryAssistantRegistry.isID(agent.name)
+        ? PrimaryAssistantRegistry.nativeDefaultPrompt(agent.name)
+        : HelperAgentRegistry.isID(agent.name)
+          ? HelperAgentRegistry.nativeDefaultPrompt(agent.name)
+          : undefined
+      if (nativeDefault === undefined) {
+        throw new Error(`Editable native prompt ${agent.name} has no registry-owned default`)
+      }
+      const defaultPrompt = nativeDefault
+      const basePrompt = promptMode === "append" ? defaultPrompt : (configuredPrompt ?? defaultPrompt)
+      const userAppend = promptMode === "append" ? configuredPrompt : null
+      const editablePrompt = promptMode === "append" ? (userAppend ?? "") : basePrompt
+      const effectivePrompt = [basePrompt, userAppend]
+        .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
+        .join("\n\n")
+      const prompt = editablePrompt
+      const inheritsCore =
+        promptMode === "override" && !configuredPrompt && (!defaultPrompt || defaultPrompt === PROMPT_SYSTEM)
       entries.push({
         scope: "agent",
         key: agent.name,
         label: agent.name,
-        group: agentGroup(agent),
-        mode: agent.mode,
-        prompt: configuredPrompt ?? defaultPrompt,
+        group: agentGroup(agent.name),
+        prompt,
+        editable_prompt: editablePrompt,
+        effective_prompt: effectivePrompt,
+        active_profile: activeProfile,
+        profile_prompt: null,
         configured_prompt: configuredPrompt,
         default_prompt: defaultPrompt,
         inherits_core: inheritsCore,
+        prompt_mode: promptMode,
         description: agent.description,
       })
     }
@@ -190,6 +172,6 @@ export namespace PromptCatalog {
     if (override) return override
     const meta = SYSTEM_PROMPT_META.find((s) => s.key === key)
     if (!meta) return undefined
-    return defaultPromptForKey(key)
+    return meta.defaultPrompt
   }
 }

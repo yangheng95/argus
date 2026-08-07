@@ -4,14 +4,11 @@ import { Identifier } from "@/id/id"
 export const ProtocolKind = z.enum(["command", "event", "reply"])
 export type ProtocolKind = z.infer<typeof ProtocolKind>
 
-export const ProtocolAggregate = z.enum(["task", "run", "goal_run", "interaction", "session", "stream"])
+export const ProtocolAggregate = z.enum(["task", "interaction", "session", "stream"])
 export type ProtocolAggregate = z.infer<typeof ProtocolAggregate>
 
 export const ProtocolInboxStatus = z.enum(["pending", "leased", "delivered", "dead_letter"])
 export type ProtocolInboxStatus = z.infer<typeof ProtocolInboxStatus>
-
-export const ProtocolStreamKind = z.enum(["text_delta", "reasoning_delta", "tool_delta", "status"])
-export type ProtocolStreamKind = z.infer<typeof ProtocolStreamKind>
 
 export const ProtocolEnvelope = z.object({
   id: Identifier.schema("protocol_event"),
@@ -20,8 +17,6 @@ export const ProtocolEnvelope = z.object({
   aggregate: ProtocolAggregate,
   aggregate_id: z.string().min(1),
   task_id: Identifier.schema("task").optional(),
-  run_id: Identifier.schema("run").optional(),
-  goal_run_id: Identifier.schema("goal_run").optional(),
   session_id: Identifier.schema("session").optional(),
   interaction_id: Identifier.schema("interaction").optional(),
   stream_id: z.string().min(1).optional(),
@@ -47,18 +42,4 @@ export const ProtocolInboxMessage = z.object({
   attempt: z.number().int().nonnegative(),
   visible_at: z.number().int().positive(),
   last_error: z.string().min(1).optional(),
-})
-
-export const ProtocolStreamChunk = z.object({
-  id: Identifier.schema("protocol_stream_chunk"),
-  stream_id: z.string().min(1),
-  task_id: Identifier.schema("task").optional(),
-  run_id: Identifier.schema("run").optional(),
-  goal_run_id: Identifier.schema("goal_run").optional(),
-  session_id: Identifier.schema("session").optional(),
-  kind: ProtocolStreamKind,
-  chunk_seq: z.number().int().nonnegative(),
-  text: z.string(),
-  payload: z.record(z.string(), z.unknown()).optional(),
-  emitted_at: z.number().int().positive(),
 })

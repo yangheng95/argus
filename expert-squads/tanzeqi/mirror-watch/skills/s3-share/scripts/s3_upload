@@ -1,0 +1,273 @@
+#!/usr/bin/env python3
+import boto3
+from botocore.exceptions import ClientError
+import os
+import argparse
+import sys
+import mimetypes
+import json
+from pathlib import Path
+import secrets
+import string
+
+
+#################
+#  S3 settings  #
+#################
+class S3Client:
+    def __init__(
+        self,
+        region,
+        bucket_name,
+        endpoint_url,
+        access_key,
+        secret_key,
+        url_expire_seconds,
+        external_host,
+    ):
+        self.region = region
+        self.bucket_name = bucket_name
+        self.endpoint_url = endpoint_url
+        self.access_key = access_key
+        self.secret_key = secret_key
+        self.url_expire_seconds = url_expire_seconds
+        self.external_host = external_host
+        if not self.access_key or not self.secret_key:
+            raise ValueError("S3ACCESSKEY and S3SECRETKEY are required")
+
+        # 创建 S3 客户端
+        self.s3_client = boto3.client(
+            "s3",
+            region_name=self.region,
+            endpoint_url=self.endpoint_url,
+            aws_access_key_id=self.access_key,
+            aws_secret_access_key=self.secret_key,
+        )
+
+    # 方法：上传文件（写操作）
+    def upload_file(self, local_file_path, s3_object_key, content_type):
+        self.s3_client.upload_file(
+            local_file_path,
+            self.bucket_name,
+            s3_object_key,
+            ExtraArgs={"ContentType": content_type},
+        )
+        print(
+            f"文件 '{local_file_path}' 已成功上传到 '{self.bucket_name}/{s3_object_key}'"
+        )
+
+    # 方法：下载文件（读操作）
+    def download_file(self, s3_object_key, local_file_path):
+        try:
+            self.s3_client.download_file(
+                self.bucket_name, s3_object_key, local_file_path
+            )
+            print(
+                f"文件 '{self.bucket_name}/{s3_object_key}' 已成功下载到 '{local_file_path}'"
+            )
+        except ClientError as e:
+            print(f"下载失败: {e}")
+
+    # 方法：生成预签名 URL（用于临时访问）
+    def generate_presigned_url(self, s3_object_key):
+        url = self.s3_client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": self.bucket_name, "Key": s3_object_key},
+            ExpiresIn=self.url_expire_seconds,
+        )
+        url = url.replace(self.endpoint_url, self.external_host).split("?")[0]
+        print(f"共享 URL: {url}")
+        return url
+
+    # 方法：列出 bucket 中所有文件名
+    def list_files(self):
+        try:
+            paginator = self.s3_client.get_paginator("list_objects_v2")
+            pages = paginator.paginate(Bucket=self.bucket_name)
+            all_files = []
+            for page in pages:
+                if "Contents" in page:
+                    for obj in page["Contents"]:
+                        all_files.append(obj["Key"])
+            return all_files
+        except ClientError as e:
+            print(f"列出文件失败: {e}")
+            return None
+
+    # 函数：检查 S3 连接是否成功
+    def ping(
+        self,
+    ):
+        try:
+            # 尝试 head_bucket 操作来检查连接和 bucket 存在
+            self.s3_client.head_bucket(Bucket=self.bucket_name)
+            print(f"连接成功：可以访问 bucket '{self.bucket_name}'。")
+            return True
+        except ClientError as e:
+            error_code = e.response["Error"]["Code"]
+            if error_code == "404":
+                print("连接失败：Bucket 不存在。")
+            elif error_code == "403":
+                print("连接失败：权限不足（检查 access_key 和 secret_key）。")
+            else:
+                print(f"连接失败：{e}")
+            return False
+        except Exception as e:
+            print(f"连接失败（可能网络问题）：{e}")
+            return False
+
+    def exists(self, s3_object_key):
+        try:
+            self.s3_client.head_object(Bucket=self.bucket_name, Key=s3_object_key)
+            return True
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "404":
+                return False
+            else:
+                raise  # 重新抛出其他错误，以便调用者处理
+
+
+S3REGION = os.environ["S3REGION"]
+S3BUCKET = os.environ["S3BUCKET"]
+S3URL = os.environ["S3URL"]
+S3ACCESSKEY = os.environ["S3ACCESSKEY"]
+S3SECRETKEY = os.environ["S3SECRETKEY"]
+
+
+S3HOST = os.environ["S3HOST"]
+import re
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Upload a file to S3 and generate a shared URL.")
+    parser.add_argument("file_path", help="Path to the file to upload")
+    args = parser.parse_args()
+
+    file_path = args.file_path
+    if not os.path.exists(file_path):
+        print(f"Error: File '{file_path}' not found.")
+        sys.exit(1)
+
+    # 7 days expiration (in seconds)
+    EXPIRE_SECONDS = 7 * 24 * 60 * 60
+
+    client = S3Client(
+        region=S3REGION,
+        bucket_name=S3BUCKET,
+        endpoint_url=S3URL,
+        access_key=S3ACCESSKEY,
+        secret_key=S3SECRETKEY,
+        url_expire_seconds=EXPIRE_SECONDS,
+        external_host=S3HOST        # 外部域名，用于输出外网可访问 URL
+    )
+
+    # Create filename: parentdirname_basename
+    abs_path = os.path.abspath(file_path)
+    parent_dir = os.path.basename(os.path.dirname(abs_path))
+    basename = os.path.basename(abs_path)
+    basename  = basename.split('.')[0] # remove extension for better readability
+
+    # If the parent directory is empty (e.g. root), just use basename, otherwise combine
+    chars = string.ascii_letters + string.digits
+    short_id = ''.join(secrets.choice(chars) for _ in range(3))
+
+    if parent_dir:
+        filename = f"{parent_dir}_{basename}_{short_id}"
+    else:
+        filename = f"{basename}_{short_id}"
+
+    # Guess content type
+    mime_type, _ = mimetypes.guess_type(file_path)
+    if mime_type is None:
+        raise ValueError(f"Unable to determine MIME type for '{file_path}'")
+
+    # Upload file
+    client.upload_file(file_path, filename, content_type=mime_type)
+
+    # Generate and print shared URL
+    url = client.generate_presigned_url(filename)
+
+    # generate success
+    if url:
+        p_path = Path(abs_path).parent
+        meta_path = p_path / "meta.json"
+
+        def extract_markdown_title(filepath: str) -> str | None:
+            with open(filepath, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+
+                    match = re.match(r"^#\s+(.+?)\s*$", line)
+                    if match:
+                        return match.group(1)
+
+            return None
+
+        def load_meta_as_entries(filepath: Path) -> list:
+            """Load meta.json as a list of entry objects."""
+            if filepath.exists():
+                with open(filepath, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if not isinstance(data, list) or any(not isinstance(entry, dict) for entry in data):
+                    raise ValueError("meta.json must contain an array of entry objects")
+                return data
+            return []
+
+        def next_major_version(entries: list) -> int:
+            """Get next major version (e.g., 2 if last was 1.0)."""
+            max_version = 0
+            for entry in entries:
+                version = entry.get("version", "0.0")
+                major = int(str(version).split(".")[0])
+                if major > max_version:
+                    max_version = major
+            return max_version + 1
+
+        def next_minor_version(entries: list) -> int:
+            """Get next minor version (e.g., 1 if last was 0.0)."""
+            max_minor = 0
+            for entry in entries:
+                version = entry.get("version", "0.0")
+                parts = str(version).split(".")
+                if len(parts) >= 2:
+                    minor = int(parts[1])
+                    if minor > max_minor:
+                        max_minor = minor
+            return max_minor + 1
+
+        entries = load_meta_as_entries(meta_path)
+
+        if 'final_report_ref' in basename:
+            report_title = extract_markdown_title(abs_path)
+            title = report_title
+            version = next_major_version(entries)
+            if report_title:
+                base_title = re.sub(r"\s+V\d+\.0$", "", report_title).strip()
+                title = f"{base_title} V{version}.0"
+
+            entries.append({
+                "version": f"{version}.0",
+                "title": title,
+                "s3_final_report_ref": url,
+            })
+
+            with open(meta_path, "w", encoding="utf-8") as f:
+                json.dump(entries, f, ensure_ascii=False, indent=4)
+
+        elif 'combined_research_ref' in basename:
+            research_title = extract_markdown_title(abs_path)
+            version = next_minor_version(entries)
+
+            entry = {
+                "version": f"{version}.0",
+                "s3_combined_research_ref": url,
+            }
+            if research_title:
+                entry["title"] = research_title
+
+            entries.append(entry)
+
+            with open(meta_path, "w", encoding="utf-8") as f:
+                json.dump(entries, f, ensure_ascii=False, indent=4)

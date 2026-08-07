@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenCorvus 业务指标与 1/3/6 个月推进方案</title>
+    <style>
+      :root {
+        --paper: #edf3f2;
+        --surface: #ffffff;
+        --surface-soft: #f5f9f8;
+        --ink: #17232d;
+        --muted: #596873;
+        --line: #cfddda;
+        --teal: #0c7f8f;
+        --teal-dark: #0b3d47;
+        --teal-soft: #e2f2f4;
+        --green: #2f7d5a;
+        --green-soft: #e7f4ec;
+        --amber: #9b6228;
+        --amber-soft: #fbf1e5;
+        --red: #9b3c3c;
+        --red-soft: #fbecec;
+        font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+      }
+
+      * { box-sizing: border-box; }
+      html { color: var(--ink); background: var(--paper); scroll-behavior: smooth; }
+      body { margin: 0; line-height: 1.62; }
+      a { color: var(--teal); }
+      .page { width: min(1180px, calc(100vw - 40px)); margin: 0 auto; padding: 42px 0 72px; }
+      .masthead {
+        display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 30px; align-items: end;
+        padding: 30px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface);
+        box-shadow: 0 16px 44px rgba(11, 61, 71, .08);
+      }
+      .eyebrow { margin: 0 0 10px; color: var(--teal); font-size: 12px; font-weight: 800; letter-spacing: .13em; }
+      h1 { max-width: 760px; margin: 0; color: var(--teal-dark); font-size: clamp(32px, 5vw, 54px); line-height: 1.13; letter-spacing: -.02em; }
+      .subtitle { max-width: 760px; margin: 16px 0 0; color: var(--muted); font-size: 16px; }
+      .north-star { border-left: 5px solid var(--teal); border-radius: 10px; padding: 18px 20px; background: var(--teal-soft); }
+      .north-star small { display: block; color: var(--teal); font-weight: 800; letter-spacing: .08em; }
+      .north-star strong { display: block; margin: 4px 0 5px; color: var(--teal-dark); font-size: 22px; }
+      .north-star p { margin: 0; color: var(--muted); font-size: 13px; }
+      .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+      .meta span { border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; color: var(--muted); background: var(--surface-soft); font-size: 12px; }
+
+      .section { margin-top: 34px; }
+      .section-head { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px; }
+      .section-no { flex: 0 0 auto; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; color: #fff; background: var(--teal-dark); font-weight: 800; }
+      h2 { margin: 0; font-size: 23px; line-height: 1.3; }
+      .section-lead { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+      .panel { border: 1px solid var(--line); border-radius: 14px; padding: 24px; background: var(--surface); }
+      .callout { border-left: 4px solid var(--amber); border-radius: 8px; padding: 13px 16px; color: #6f4c22; background: var(--amber-soft); }
+      .callout strong { color: var(--amber); }
+
+      .logic { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+      .logic-card { position: relative; min-height: 142px; border: 1px solid var(--line); border-radius: 12px; padding: 17px; background: var(--surface-soft); }
+      .logic-card:not(:last-child)::after { content: "→"; position: absolute; right: -18px; top: 48px; z-index: 2; color: var(--teal); font-weight: 900; }
+      .logic-card b { display: block; color: var(--teal-dark); font-size: 16px; }
+      .logic-card span { display: block; margin-top: 7px; color: var(--muted); font-size: 13px; }
+
+      .stages { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+      .stage { border: 1px solid var(--line); border-top: 5px solid var(--teal); border-radius: 12px; padding: 20px; background: var(--surface); }
+      .stage:nth-child(2) { border-top-color: var(--green); }
+      .stage:nth-child(3) { border-top-color: var(--amber); }
+      .stage small { color: var(--muted); font-weight: 800; letter-spacing: .06em; }
+      .stage h3 { margin: 5px 0 6px; color: var(--teal-dark); font-size: 21px; }
+      .stage p { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
+      .stage .number { color: var(--teal-dark); font-size: 31px; font-weight: 850; }
+      .stage ul { margin: 10px 0 0; padding-left: 18px; color: var(--muted); font-size: 13px; }
+
+      .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      caption { padding: 14px 16px 9px; color: var(--teal-dark); text-align: left; font-size: 16px; font-weight: 800; }
+      th, td { padding: 11px 13px; border-top: 1px solid var(--line); vertical-align: top; text-align: left; }
+      thead th { border-top: 0; color: #fff; background: var(--teal-dark); white-space: nowrap; }
+      tbody tr:nth-child(even) { background: var(--surface-soft); }
+      td.num { color: var(--teal-dark); font-weight: 800; white-space: nowrap; }
+      .good { color: var(--green); font-weight: 800; }
+      .warn { color: var(--amber); font-weight: 800; }
+      .bad { color: var(--red); font-weight: 800; }
+      .table-note { margin: 10px 2px 0; color: var(--muted); font-size: 12px; }
+
+      .phase { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 22px; margin-bottom: 16px; border: 1px solid var(--line); border-radius: 13px; padding: 22px; background: var(--surface); }
+      .phase-mark { border-right: 1px solid var(--line); padding-right: 18px; }
+      .phase-mark small { color: var(--teal); font-weight: 850; }
+      .phase-mark strong { display: block; margin-top: 3px; color: var(--teal-dark); font-size: 25px; }
+      .phase-mark span { color: var(--muted); font-size: 13px; }
+      .phase h3 { margin: 0 0 4px; font-size: 19px; }
+      .phase p { margin: 0 0 10px; color: var(--muted); }
+      .phase ul { margin: 0; padding-left: 20px; }
+      .accept { margin-top: 12px; border-radius: 8px; padding: 11px 13px; color: #235e45; background: var(--green-soft); font-size: 13px; }
+
+      .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+      .mini-panel { border: 1px solid var(--line); border-radius: 11px; padding: 17px; background: var(--surface-soft); }
+      .mini-panel h3 { margin: 0 0 8px; color: var(--teal-dark); font-size: 16px; }
+      .mini-panel ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13px; }
+      .formula { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+      .formula div { border: 1px dashed #a9c9c8; border-radius: 9px; padding: 12px; color: var(--teal-dark); background: #f6fbfa; font-size: 13px; }
+      .formula b { display: block; margin-bottom: 4px; }
+
+      .sources { color: var(--muted); font-size: 13px; }
+      .sources li { margin: 6px 0; }
+      footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+
+      @media (max-width: 860px) {
+        .masthead, .logic, .stages, .grid-2, .formula { grid-template-columns: 1fr; }
+        .logic-card:not(:last-child)::after { display: none; }
+        .phase { grid-template-columns: 1fr; }
+        .phase-mark { border-right: 0; border-bottom: 1px solid var(--line); padding: 0 0 12px; }
+      }
+
+      @media print {
+        @page { size: A4; margin: 15mm; }
+        html, body { background: #fff; }
+        .page { width: auto; padding: 0; }
+        .masthead, .panel, .stage, .phase, .table-wrap { box-shadow: none; break-inside: avoid; }
+        a { color: var(--ink); text-decoration: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="masthead">
+        <div>
+          <p class="eyebrow">OPENCORVUS · BUSINESS METRICS PLAN</p>
+          <h1>业务指标与 1/3/6 个月推进方案</h1>
+          <p class="subtitle">围绕“双通道专家团供给 + Mission 长程编排 + Evidence 验收闭环”，把平台建设转化为可证明的业务采用、交付质量、效率收益与 Benchmark 可信度。</p>
+          <div class="meta"><span>版本 1.0</span><span>2026-07-21</span><span>累计检查点：30 / 90 / 180 天</span><span>内部方案</span></div>
+        </div>
+        <aside class="north-star">
+          <small>北极星指标</small>
+          <strong>有效交付任务数</strong>
+          <p>已合并或上线、业务验收通过、自动验收通过，并且 14 天内没有回滚或严重缺陷的唯一真实任务。</p>
+        </aside>
+      </header>
+
+      <section class="section">
+        <div class="section-head"><span class="section-no">01</span><div><h2>指标设计的核心判断</h2><p class="section-lead">OpenCorvus 的价值不是“产出更多代码”，而是让真实任务形成稳定、可信、可复用的交付。</p></div></div>
+        <div class="panel">
+          <div class="logic">
+            <div class="logic-card"><b>真实采用</b><span>真实业务方向、真实用户和真实任务进入执行，不计算 Demo、空跑与重复提交。</span></div>
+            <div class="logic-card"><b>可信交付</b><span>业务验收与自动 Evidence 同时通过，失败、取消与阻塞保留在统计分母。</span></div>
+            <div class="logic-card"><b>效率收益</b><span>使用同类任务对照，测量周期、成本和人工接管，而不是主观判断“感觉更快”。</span></div>
+            <div class="logic-card"><b>规模复用</b><span>Expert Squad、Skill 与 MCP 只有完成真实复用和质量认证后才计入生产供给。</span></div>
+          </div>
+          <div class="callout" style="margin-top:16px"><strong>不建议作为一级 KPI：</strong>代码行数、PRD/设计稿数量、Skill/MCP 目录数量、原始 Session 数或单一 Benchmark 总分。这些数字可以用于过程诊断，但不能直接证明业务价值。</div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head"><span class="section-no">02</span><div><h2>1/3/6 个月总体安排</h2><p class="section-lead">三个阶段分别回答：能不能测、是否有效、能否规模化。</p></div></div>
+        <div class="stages">
+          <article class="stage"><small>第 1 个月 · 可测量</small><h3>基线与灯塔闭环</h3><div class="number">20+</div><p>累计有效交付</p><ul><li>2 个灯塔业务方向</li><li>100 个有效 Benchmark Case</li><li>补齐上线、缺陷、人工基线数据</li><li>不在首月强行宣称效率提升</li></ul></article>
+          <article class="stage"><small>第 3 个月 · 可证明</small><h3>业务改善得到验证</h3><div class="number">85+</div><p>累计有效交付</p><ul><li>3 个活跃业务方向</li><li>交付周期改善 ≥20%</li><li>相对直接 Agent 提升 ≥10 个百分点</li><li>30 天复用率 ≥45%</li></ul></article>
+          <article class="stage"><small>第 6 个月 · 可规模</small><h3>供给与运营闭环</h3><div class="number">280+</div><p>累计有效交付</p><ul><li>5 个活跃业务方向</li><li>12 个生产级业务 Expert Squad</li><li>25 万有效评测轨迹</li><li>有效交付率 ≥80%</li></ul></article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head"><span class="section-no">03</span><div><h2>业务应用核心指标</h2><p class="section-lead">数量类按阶段累计，比例类使用检查点前 30 天滚动窗口。</p></div></div>
+        <div class="table-wrap">
+          <table>
+            <caption>一级业务结果指标</caption>
+            <thead><tr><th>指标</th><th>1 个月</th><th>3 个月</th><th>6 个月</th><th>口径与约束</th></tr></thead>
+            <tbody>
+              <tr><td>活跃业务方向</td><td class="num">≥2</td><td class="num">≥3</td><td class="num">≥5</td><td>每方向累计 ≥10 个真实任务且 ≥2 名持续使用者</td></tr>
+              <tr><td>真实进入执行任务</td><td class="num">≥30</td><td class="num">≥120</td><td class="num">≥360</td><td>排除 Demo、空跑、重复提交；同一验收目标的子任务不重复计数</td></tr>
+              <tr><td>有效交付任务</td><td class="num">≥20</td><td class="num">≥85</td><td class="num">≥280</td><td>合并/上线 + 业务验收 + 自动验收 + 14 天质量观察</td></tr>
+              <tr><td>有效交付率</td><td class="num">≥65%</td><td class="num">≥72%</td><td class="num">≥80%</td><td>有效交付任务 ÷ 所有进入执行的真实任务</td></tr>
+              <tr><td>首轮验收通过率</td><td class="num">≥45%</td><td class="num">≥58%</td><td class="num">≥68%</td><td>无修复轮即通过的任务 ÷ 已终态任务</td></tr>
+              <tr><td>交付周期改善</td><td class="warn">建立基线</td><td class="num">≥20%</td><td class="num">≥30%</td><td>同类任务相对人工或直接 Coding Agent 的中位周期改善</td></tr>
+              <tr><td>14 天缺陷逃逸率</td><td class="num">≤8%</td><td class="num">≤5%</td><td class="num">≤3%</td><td>交付后 14 天内发生回滚或 P0/P1 缺陷的比例</td></tr>
+              <tr><td>30 天复用率</td><td class="num">≥30%</td><td class="num">≥45%</td><td class="num">≥55%</td><td>真实使用者 30 天内再次提交有效任务的比例</td></tr>
+              <tr><td>人工纠错/接管</td><td class="warn">建立基线</td><td class="num">≤1.5 次/交付</td><td class="num">≤1.0 次/交付</td><td>权限确认不计，修改方案、纠错或人工接管计入</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head"><span class="section-no">04</span><div><h2>供给与平台化指标</h2><p class="section-lead">验证架构蓝图中的双通道供给、长程 Mission、全渠道与 Evidence 能力是否成为真实生产能力。</p></div></div>
+        <div class="table-wrap">
+          <table>
+            <caption>Agent Team / Mission 平台指标</caption>
+            <thead><tr><th>指标</th><th>1 个月</th><th>3 个月</th><th>6 个月</th><th>生产级条件</th></tr></thead>
+            <tbody>
+              <tr><td>业务 Expert Squad</td><td class="num">≥2</td><td class="num">≥6</td><td class="num">≥12</td><td>每个完成 ≥3 个不同真实任务，执行成功率 ≥80%</td></tr>
+              <tr><td>通用 Skill/MCP</td><td class="num">≥4</td><td class="num">≥8</td><td class="num">≥12</td><td>有版本、负责人、自动化测试和可诊断失败证据</td></tr>
+              <tr><td>长程 Mission 有效交付</td><td class="num">≥5</td><td class="num">≥30</td><td class="num">≥120</td><td>跨小时或多节点，支持恢复，Evidence 完整</td></tr>
+              <tr><td>轻量导入资产占比</td><td class="warn">建立基线</td><td class="num">≥50%</td><td class="num">≥65%</td><td>导入型生产资产 ÷ 新增生产级资产，验证双通道规模化</td></tr>
+              <tr><td>生产入口</td><td class="num">3 个稳定</td><td class="num">≥6 个验证</td><td class="num">≥10 个可用</td><td>API、Overlay、Slack 首批；“存在 Adapter”不等于生产可用</td></tr>
+              <tr><td>14 通道契约验证</td><td class="num">≥3</td><td class="num">≥8</td><td class="num">14</td><td>覆盖真实消息流、权限交互和终态回传</td></tr>
+              <tr><td>服务可用性</td><td class="num">≥99.0%</td><td class="num">≥99.5%</td><td class="num">≥99.9%</td><td>生产窗口内任务成功受理且状态可查询</td></tr>
+              <tr><td>Checkpoint 恢复成功率</td><td class="num">≥90%</td><td class="num">≥95%</td><td class="num">≥98%</td><td>故障注入后从持久化事实继续执行</td></tr>
+              <tr><td>Evidence 完整率</td><td class="num">≥95%</td><td class="num">≥98%</td><td class="num">100%</td><td>每个必需验收项均有新鲜、可读取证据</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head"><span class="section-no">05</span><div><h2>Agent Benchmark 指标</h2><p class="section-lead">Benchmark 不只追求规模，还要保证真实、稳定、可复现，并能解释业务收益。</p></div></div>
+        <div class="table-wrap">
+          <table>
+            <caption>可信 Benchmark 与回流安排</caption>
+            <thead><tr><th>指标</th><th>1 个月</th><th>3 个月</th><th>6 个月</th><th>解释</th></tr></thead>
+            <tbody>
+              <tr><td>有效 Benchmark Case</td><td class="num">≥100</td><td class="num">≥300</td><td class="num">≥600</td><td>分层覆盖修复、功能、重构、视觉、长程与跨环境任务</td></tr>
+              <tr><td>真实内部任务占比</td><td class="num">≥50%</td><td class="num">≥60%</td><td class="num">≥70%</td><td>避免只优化公开题或合成题</td></tr>
+              <tr><td>有效评测轨迹</td><td class="num">≥1 万</td><td class="num">≥8 万</td><td class="num">≥25 万</td><td>绑定唯一 Case、真实执行、成本和完整终态证据；不用原始 Session 冲量</td></tr>
+              <tr><td>运行环境</td><td class="num">≥6</td><td class="num">≥10</td><td class="num">≥15</td><td>同时报告环境覆盖的真实任务量</td></tr>
+              <tr><td>相对直接 Agent 解决率提升</td><td class="warn">建立 A/B 基线</td><td class="num">≥10 个百分点</td><td class="num">≥15 个百分点</td><td>同 Case、模型、预算、环境与验收器，仅改变是否使用 OpenCorvus</td></tr>
+              <tr><td>Pass@1</td><td class="warn">建立基线</td><td class="num">≥60%</td><td class="num">≥70%</td><td>首次执行即满足全部验收条件</td></tr>
+              <tr><td>误通过率</td><td class="num">≤8%</td><td class="num">≤5%</td><td class="num">≤3%</td><td>自动判定通过、人工复核不通过</td></tr>
+              <tr><td>LLM-as-Judge 与人工一致率</td><td class="num">≥80%</td><td class="num">≥85%</td><td class="num">≥90%</td><td>双人复核样本与按任务类型分层抽样</td></tr>
+              <tr><td>重复运行波动</td><td class="num">≤8 个百分点</td><td class="num">≤5 个百分点</td><td class="num">≤3 个百分点</td><td>同 Case、同配置多次运行解决率极差</td></tr>
+              <tr><td>单个有效交付成本改善</td><td class="warn">建立基线</td><td class="num">≥15%</td><td class="num">≥25%</td><td>相对直接 Agent 的模型成本改善</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="table-note">“回流 Session ≥25 万”被改写为“有效评测轨迹 ≥25 万”：启动失败、空跑、重复提交或没有完整终态证据的 Session 不计入。</p>
+      </section>
+
+      <section class="section">
+        <div class="section-head"><span class="section-no">06</span><div><h2>阶段工作与验收</h2><p class="section-lead">每个检查点不仅看数字，还要求完成对应能力建设与可复核证据。</p></div></div>
+        <article class="phase">
+          <div class="phase-mark"><small>DAY 0–30</small><strong>第 1 个月</strong><span>可测量 · 灯塔闭环</span></div>
+          <div><h3>补齐数据协议，建立真实基线</h3><p>先回答“数据是否可信”，再回答“效率是否提升”。</p><ul><li>定义唯一任务、业务方向、复杂度、上线/合并、缺陷等级与人工干预事件。</li><li>关联 Task、Session cost/token、criteria results、Decision Log 和外部上线/缺陷记录。</li><li>选择两个灯塔方向，每个方向完成至少 10 个真实任务。</li><li>建立人工流程、直接 Coding Agent、OpenCorvus 三组对照。</li><li>形成 100 个分层 Case 与 LLM-as-Judge 人工校准集。</li></ul><div class="accept"><b>月末通过：</b>≥20 个有效交付，有效交付率 ≥65%，数据完整率 ≥95%；两个灯塔方向产生复用；至少一个长程 Mission 完成恢复演练。</div></div>
+        </article>
+        <article class="phase">
+          <div class="phase-mark"><small>DAY 31–90</small><strong>第 3 个月</strong><span>可证明 · 跨团队复用</span></div>
+          <div><h3>证明质量、周期或成本形成稳定改善</h3><p>把灯塔模式复制到第三个业务方向，并形成可重复的对照结果。</p><ul><li>累计完成 ≥85 个有效交付、≥30 个长程 Mission。</li><li>认证 6 个生产级业务 Expert Squad 和 8 个通用 Skill/MCP。</li><li>Benchmark 扩展到 300 Case、10 个环境和 8 万有效轨迹。</li><li>Judge 人工一致率提升到 ≥85%，误通过率压到 ≤5%。</li><li>发布按业务方向、任务类型、模型、资产、成本与失败根因切片的月报。</li></ul><div class="accept"><b>季末通过：</b>有效交付率 ≥72%，缺陷逃逸率 ≤5%；交付周期改善 ≥20% 或成本改善 ≥15%；相对直接 Agent 解决率提升 ≥10 个百分点；30 天复用率 ≥45%。</div></div>
+        </article>
+        <article class="phase">
+          <div class="phase-mark"><small>DAY 91–180</small><strong>第 6 个月</strong><span>可规模 · 运营闭环</span></div>
+          <div><h3>形成双通道供给、长程 Mission 与 Benchmark 复利</h3><p>增长必须同时满足质量、可靠性和复用护栏。</p><ul><li>扩展至 5 个活跃业务方向，累计 ≥280 个有效交付。</li><li>形成 12 个生产级业务 Expert Squad，其中轻量导入占比 ≥65%。</li><li>累计完成 ≥120 个长程 Mission，Checkpoint 恢复成功率 ≥98%。</li><li>Benchmark 达到 600 Case、15 个环境、25 万有效轨迹，内部任务占比 ≥70%。</li><li>建立资产月度淘汰机制和可审计经营看板。</li></ul><div class="accept"><b>六月末通过：</b>有效交付率 ≥80%，缺陷逃逸率 ≤3%；交付周期改善 ≥30%，成本改善 ≥25%；相对直接 Agent 提升 ≥15 个百分点；服务可用性 ≥99.9%，Evidence 完整率 100%。</div></div>
+        </article>
+      </section>
+
+      <section class="section">
+        <div class="section-head"><span class="section-no">07</span><div><h2>统计口径与数据单一来源</h2><p class="section-lead">OpenCorvus 已有任务、验收、指标、Token 与成本数据；首月重点补齐业务结果与外部质量关联。</p></div></div>
+        <div class="grid-2">
+          <div class="mini-panel"><h3>现有可直接采集</h3><ul><li>任务量、起止时间和终态：<code>engine_task</code></li><li>验收与 Evidence：<code>criteria_results</code>、metric result、artifact</li><li>成本与 Token：Session assistant usage</li><li>指标目标、底线和新鲜度：metrics schema</li></ul></div>
+          <div class="mini-panel"><h3>第 1 月必须补齐</h3><ul><li>业务方向、任务类型与复杂度标签</li><li>上线/合并引用与业务验收人</li><li>Task 与缺陷/回滚记录关联</li><li>合规匿名的使用者和团队标识</li><li>同 Case、同模型、同预算的对照协议</li></ul></div>
+        </div>
+        <div class="formula">
+          <div><b>有效交付率</b>有效交付任务 ÷ 所有进入执行的真实任务</div>
+          <div><b>周期改善</b>1 − OpenCorvus 中位周期 ÷ 对照组中位周期</div>
+          <div><b>成本改善</b>1 − OpenCorvus 单有效交付成本 ÷ 对照组成本</div>
+        </div>
+        <div class="callout" style="margin-top:14px"><strong>审计底线：</strong>失败、取消和阻塞任务必须保留在分母；没有新鲜 Evidence 的结果不得计为通过；每月人工抽检不少于 10% 的自动通过与 10% 的自动失败样本。</div>
+      </section>
+
+      <section class="section">
+        <div class="section-head"><span class="section-no">08</span><div><h2>经营节奏与责任分层</h2><p class="section-lead">用同一事实体系服务管理、业务、平台和 Benchmark 四类决策。</p></div></div>
+        <div class="grid-2">
+          <div class="mini-panel"><h3>看板分层</h3><ul><li><b>管理层：</b>有效交付、周期、缺陷、复用和成本。</li><li><b>业务负责人：</b>任务漏斗、未通过原因、收益案例和待沉淀资产。</li><li><b>平台团队：</b>可用性、恢复率、Evidence、通道与成本延迟。</li><li><b>Benchmark 团队：</b>Case 结构、解决率、误通过、Judge 一致率和波动。</li></ul></div>
+          <div class="mini-panel"><h3>评审节奏</h3><ul><li><b>每周：</b>数据完整性、失败根因和灯塔任务推进。</li><li><b>每月：</b>北极星指标、质量护栏和生产级资产认证。</li><li><b>第 1/3/6 月：</b>按阶段通过条件进行里程碑评审。</li><li><b>未达标：</b>明确未解决问题、影响、证据和根因，不能用数量增长包装。</li></ul></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head"><span class="section-no">09</span><div><h2>参考依据</h2><p class="section-lead">指标结合 OpenCorvus 当前实现、架构蓝图与软件交付/Agent 评测的公开方法。</p></div></div>
+        <div class="panel"><ul class="sources">
+          <li>OpenCorvus 架构蓝图：<code>/Users/yangheng/Downloads/opencorvus-arch.html</code></li>
+          <li>OpenCorvus 当前产品定位与工作流：仓库 <code>README.md</code></li>
+          <li>OpenCorvus 指标数据模型：<code>packages/opencorvus/src/metrics/metrics.sql.ts</code></li>
+          <li><a href="https://dora.dev/guides/dora-metrics/">DORA software delivery performance metrics</a></li>
+          <li><a href="https://openai.com/index/introducing-swe-bench-verified/">SWE-bench Verified</a> 与 <a href="https://www.swebench.com/">SWE-bench leaderboard</a></li>
+          <li><a href="https://metr.org/Early_2025_AI_Experienced_OS_Devs_Study-paper.pdf">METR experienced developer productivity study</a></li>
+        </ul></div>
+      </section>
+
+      <footer>OpenCorvus · 业务指标与 1/3/6 个月推进方案 · 数量类指标为累计值，比例类指标为检查点前 30 天滚动值。</footer>
+    </main>
+  </body>
+</html>

@@ -5,7 +5,6 @@ set -euo pipefail
 
 VERSION=""
 RELEASE_REPO=""
-WORK_DIR=""
 SKIP_INSTALL=0
 NO_UPLOAD=0
 
@@ -13,7 +12,6 @@ while [[ $# -gt 0 ]]; do
   case $1 in
     --version) VERSION="${2:?'--version requires a value'}"; shift 2 ;;
     --release-repo) RELEASE_REPO="${2:?'--release-repo requires a value'}"; shift 2 ;;
-    --work-dir) WORK_DIR="${2:?'--work-dir requires a value'}"; shift 2 ;;
     --skip-install) SKIP_INSTALL=1; shift ;;
     --no-upload) NO_UPLOAD=1; shift ;;
     *) echo "Unknown option: $1"; exit 1 ;;
@@ -33,26 +31,16 @@ VERSION="${VERSION#v}"
 
 export SSL_CERT_FILE="${SSL_CERT_FILE:-/usr/ssl/certs/ca-bundle.crt}"
 gh_cmd() { SSL_CERT_FILE="$SSL_CERT_FILE" gh "$@"; }
-curl_cmd() { SSL_CERT_FILE="$SSL_CERT_FILE" curl "$@"; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PKG_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-WORK_DIR="${WORK_DIR:-/tmp/oc-release-${VERSION}}"
-mkdir -p "$WORK_DIR"
 
 echo "════════════════════════════════════════════════════════"
 echo "  OpenCorvus Release Builder"
 echo "  version       : $VERSION"
 [[ -n "$RELEASE_REPO" ]] && echo "  release repo  : $RELEASE_REPO"
-echo "  work dir      : $WORK_DIR"
 [[ "$NO_UPLOAD" == "1" ]] && echo "  mode          : --no-upload (build only)"
 echo "════════════════════════════════════════════════════════"
-
-MODELS_JSON="$WORK_DIR/models-api-clean.json"
-echo ""
-echo "⬇ Fetching models.dev snapshot ..."
-curl_cmd -fsSL https://models.dev/api.json | tr -d '\n\r' > "$MODELS_JSON"
-echo "  Saved to $MODELS_JSON ($(wc -c < "$MODELS_JSON") bytes)"
 
 if [[ "$NO_UPLOAD" == "0" ]]; then
   echo ""
@@ -73,14 +61,12 @@ BUILD_ARGS=("--all")
 if [[ "$NO_UPLOAD" == "1" ]]; then
   env \
     SSL_CERT_FILE="$SSL_CERT_FILE" \
-    MODELS_DEV_API_JSON="$MODELS_JSON" \
     OPENCORVUS_VERSION="$VERSION" \
     OPENCORVUS_CHANNEL="latest" \
     bun run script/build.ts "${BUILD_ARGS[@]}"
 else
   env \
     SSL_CERT_FILE="$SSL_CERT_FILE" \
-    MODELS_DEV_API_JSON="$MODELS_JSON" \
     OPENCORVUS_RELEASE="1" \
     OPENCORVUS_VERSION="$VERSION" \
     OPENCORVUS_CHANNEL="latest" \

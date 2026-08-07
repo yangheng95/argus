@@ -2,16 +2,50 @@ import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
 import { Config } from "../../config/config"
-import { OrchestratorConfig } from "../../orchestrator/config"
+import { ConfigCandidateValidationError } from "@/config/candidate-validation"
+import { EffectiveConfig } from "@/config/effective"
+import { EngineConfig } from "../../engine/config"
 import { ChannelSupervisor } from "@/channel/supervisor"
+import { ConversationCapability } from "@/conversation/capability"
 import { Provider } from "../../provider/provider"
+import { NativeAgentRegistryLifecycle } from "@/agent/native-agent-registry-lifecycle"
 import { PromptCatalog } from "../../config/prompt-catalog"
+import { Instance } from "@/project/instance"
 import { mapValues } from "remeda"
-import { errors } from "../error"
+import { badRequestBody, errors, namedErrorResponse } from "../error"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
+import { testNetworkProxy } from "../../util/network-proxy-test"
+import { assertActiveProjectSession } from "../active-project-session"
 
 const log = Log.create({ service: "server" })
+
+const NetworkProxyTestRequest = z
+  .object({
+    proxy: Config.NetworkProxy,
+  })
+  .meta({ ref: "NetworkProxyTestRequest" })
+
+const NetworkProxyTestResponse = z
+  .object({
+    ok: z.boolean(),
+    status: z.enum(["connected", "error"]),
+    targetUrl: z.string(),
+    statusCode: z.number().optional(),
+    durationMs: z.number(),
+    message: z.string(),
+  })
+  .meta({ ref: "NetworkProxyTestResponse" })
+
+async function configResponse() {
+  const [raw, orch] = await Promise.all([Config.get(), EngineConfig.get()])
+  const userAsst = raw.assistant || {}
+  const assistant = {
+    ...userAsst,
+    max_executor_groups: userAsst.max_executor_groups ?? orch.max_executor_groups,
+  }
+  return { ...raw, assistant }
+}
 
 export const ConfigRoutes = lazy(() =>
   new Hono()
@@ -30,26 +64,19 @@ export const ConfigRoutes = lazy(() =>
               },
             },
           },
+          409: namedErrorResponse("Non-canonical configuration file", "NonCanonicalConfigFileError"),
         },
       }),
       async (c) => {
-        const [raw, orch] = await Promise.all([Config.get(), OrchestratorConfig.get()])
-        // Merge effective scalar assistant values so the frontend can display correct defaults.
-        const userAsst = raw.assistant || {}
-        const assistant = {
-          max_runs: userAsst.max_runs ?? orch.max_runs,
-          max_fix_runs: userAsst.max_fix_runs ?? orch.max_fix_runs,
-          max_executor_groups: userAsst.max_executor_groups ?? orch.max_executor_groups,
-          ...userAsst,
-        }
-        return c.json({ ...raw, assistant })
+        return c.json(await configResponse())
       },
     )
     .patch(
       "/",
       describeRoute({
         summary: "Update configuration (JSON Merge Patch)",
-        description: "Partially update OpenCorvus configuration. Accepts a partial config object (RFC 7396 JSON Merge Patch) — only include fields to change.",
+        description:
+          "Partially update OpenCorvus configuration per RFC 7396. Only include fields to change; set a field to null to delete it.",
         operationId: "config.update",
         responses: {
           200: {
@@ -61,19 +88,80 @@ export const ConfigRoutes = lazy(() =>
             },
           },
           ...errors(400),
+          409: namedErrorResponse("Non-canonical configuration file", "NonCanonicalConfigFileError"),
         },
       }),
-      validator("json", Config.Info.partial()),
+      // RFC 7396 patches can contain null deletion sentinels, so validate the
+      // fully merged candidate instead of attempting to parse the sparse patch.
+      validator("json", z.record(z.string(), z.unknown())),
       async (c) => {
-        const partial = c.req.valid("json")
-        // Config.update() internally reads current config and deep-merges
-        await Config.update(partial as Config.Info)
+        const partial = c.req.valid("json") as Record<string, unknown>
+        try {
+          await Config.updateProjectPatch(partial)
+        } catch (error) {
+          if (error instanceof Config.ProjectConfigCommittedReconcileError) {
+            return c.json(Config.committedMutationReceipt(error), 409)
+          }
+          if (ConversationCapability.InvalidAssignmentError.isInstance(error)) {
+            return c.json(badRequestBody(error.data.message), 400)
+          }
+          if (ConfigCandidateValidationError.isInstance(error)) {
+            return c.json(badRequestBody(error.data.message), 400)
+          }
+          if (Config.InvalidError.isInstance(error)) {
+            const issues = error.data.issues ?? []
+            if (!issues) throw error
+            const message = issues.map((issue) => `${issue.path.join(".") || "<root>"}: ${issue.message}`).join("; ")
+            return c.json(badRequestBody(`config: ${message}`), 400)
+          }
+          throw error
+        }
         const updated = await Config.get()
-        Provider.reset()
-        await ChannelSupervisor.sync(updated).catch((error) => {
-          log.warn("channel runtime sync failed", { error: String(error) })
-        })
-        return c.json(updated)
+        try {
+          await Provider.reset()
+          await NativeAgentRegistryLifecycle.reset()
+          await ChannelSupervisor.sync(updated)
+        } catch (error) {
+          return c.json(
+            Config.committedMutationReceipt(new Config.ProjectConfigCommittedReconcileError([error], updated)),
+            409,
+          )
+        }
+        return c.json(await configResponse())
+      },
+    )
+    .post(
+      "/proxy/test",
+      describeRoute({
+        summary: "Test network proxy",
+        description:
+          "Run a single HTTP request through the submitted network.proxy settings. This uses the edited proxy draft directly and never falls back to a direct request.",
+        operationId: "config.proxy.test",
+        responses: {
+          200: {
+            description: "Proxy test result",
+            content: {
+              "application/json": {
+                schema: resolver(NetworkProxyTestResponse),
+              },
+            },
+          },
+          400: {
+            description: "Proxy test result for an invalid proxy draft",
+            content: {
+              "application/json": {
+                schema: resolver(NetworkProxyTestResponse),
+              },
+            },
+          },
+        },
+      }),
+      validator("json", NetworkProxyTestRequest),
+      async (c) => {
+        const { proxy } = c.req.valid("json")
+        const result = await testNetworkProxy(proxy)
+        if (!proxy.url?.trim()) return c.json(result, 400)
+        return c.json(result)
       },
     )
     .get(
@@ -88,14 +176,27 @@ export const ConfigRoutes = lazy(() =>
             description: "Prompt catalog entries",
             content: {
               "application/json": {
-                schema: resolver(z.array(z.any())),
+                schema: resolver(z.array(z.unknown())),
               },
             },
           },
         },
       }),
+      validator(
+        "query",
+        z.object({
+          sessionID: z
+            .string()
+            .optional()
+            .meta({ description: "Optional root or child session id for session-effective prompt catalog view" }),
+        }),
+      ),
       async (c) => {
-        return c.json(await PromptCatalog.list())
+        const query = c.req.valid("query")
+        if (!query.sessionID) return c.json(await PromptCatalog.list())
+        await assertActiveProjectSession(query.sessionID)
+        const config = await EffectiveConfig.effective({ sessionID: query.sessionID })
+        return c.json(await PromptCatalog.list({ config }))
       },
     )
     .get(

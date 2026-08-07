@@ -4,12 +4,11 @@ import { permissionForProfile, pickPermissionProfile } from "../src/permission-p
 describe("channel permission profile", () => {
   test("defaults to standard profile", () => {
     const result = pickPermissionProfile(undefined)
-    expect(result).toEqual({ profile: "standard", invalid: false })
+    expect(result).toBe("standard")
   })
 
-  test("falls back to standard for unknown profile", () => {
-    const result = pickPermissionProfile("unknown")
-    expect(result).toEqual({ profile: "standard", invalid: true })
+  test("rejects unknown profile instead of using standard", () => {
+    expect(() => pickPermissionProfile("unknown")).toThrow("Unknown OPENCORVUS_CHANNEL_PERMISSION_PROFILE")
   })
 
   test("restricted blocks write-like tools", () => {
@@ -30,7 +29,7 @@ describe("channel permission profile", () => {
     expect(permission.question).toBe("deny")
   })
 
-  test("permissive remains fully enabled for compatibility", () => {
+  test("permissive remains fully enabled when selected explicitly", () => {
     const permission = permissionForProfile("permissive")
     expect(permission.bash).toBe("allow")
     expect(permission.edit).toBe("allow")
@@ -43,4 +42,3 @@ describe("channel permission profile", () => {
     expect(Object.keys(permission)).toHaveLength(0)
   })
 })
-

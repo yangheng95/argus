@@ -1,22 +1,28 @@
 import path from "path"
+import fs from "node:fs/promises"
+import { DEFAULT_PROMPT_PROFILE_ID } from "../../src/agent/prompt-profile"
+import { ExpertSquadRuntimeOverridesSchema } from "../../src/agent/runtime-override"
+import type { Config } from "../../src/config/config"
+
+export type BenchmarkAgentModelConfiguration = {
+  modelByAgent: Record<string, string>
+  expertSquads: NonNullable<Config.Info["expert_squads"]>
+}
 
 export async function loadBenchmarkEnv(metaDir: string, options?: { cwd?: string }) {
   const locked = new Set(
-    Object.entries(process.env)
-      .flatMap(([key, value]) => typeof value === "string" && value.trim() ? [key] : []),
+    Object.entries(process.env).flatMap(([key, value]) => (typeof value === "string" && value.trim() ? [key] : [])),
   )
   const packageRoot = path.resolve(metaDir, "../..")
   const repoRoot = path.resolve(metaDir, "../../../..")
   const cwd = options?.cwd ? path.resolve(options.cwd) : process.cwd()
-  const files = [...new Set([
-    path.join(repoRoot, ".env"),
-    path.join(packageRoot, ".env"),
-    path.join(cwd, ".env"),
-  ])]
+  const files = [...new Set([path.join(repoRoot, ".env"), path.join(packageRoot, ".env"), path.join(cwd, ".env")])]
   const loaded: string[] = []
 
   for (const file of files) {
-    const text = await Bun.file(file).text().catch(() => "")
+    const text = await Bun.file(file)
+      .text()
+      .catch(() => "")
     if (!text) continue
     loaded.push(file)
     for (const raw of text.split(/\r?\n/)) {
@@ -31,10 +37,7 @@ export async function loadBenchmarkEnv(metaDir: string, options?: { cwd?: string
         process.env[key] = ""
         continue
       }
-      if (
-        (value.startsWith("\"") && value.endsWith("\""))
-        || (value.startsWith("'") && value.endsWith("'"))
-      ) {
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
         process.env[key] = value.slice(1, -1)
         continue
       }
@@ -52,14 +55,88 @@ export function env(...keys: string[]) {
   }
 }
 
-export function prepareDashscopeEnv() {
-  // Keys should be set directly in .env with the exact names models.dev expects:
-  //   ALIBABA_CODING_PLAN_API_KEY  (for alibaba-coding-plan / alibaba-coding-plan-cn)
-  //   DASHSCOPE_API_KEY            (for alibaba / alibaba-cn)
-  // No implicit copying between variable names — each provider reads its own env var.
-  // Legacy aliases are still checked for backward compatibility but no longer copied.
-  const url = env("DASHSCOPE_API_URL", "CODING_DASHSCOPE_API_URL")
-  if (url) process.env.DASHSCOPE_API_URL ??= url
+export async function copyBenchmarkAuth(input: { sourceDataDirectory: string; benchmarkHome: string }) {
+  const source = path.join(input.sourceDataDirectory, "auth.json")
+  const targetDirectory = path.join(input.benchmarkHome, "data")
+  const target = path.join(targetDirectory, "auth.json")
+  await fs.mkdir(targetDirectory, { recursive: true })
+  try {
+    await fs.copyFile(source, target)
+    return { copied: true as const, source, target }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return { copied: false as const, source, target }
+    }
+    throw error
+  }
+}
+
+export async function provisionBenchmarkExpertSquad(input: { projectDirectory: string; profileID: string }) {
+  if (input.profileID === DEFAULT_PROMPT_PROFILE_ID) {
+    return { id: input.profileID, installationScope: "builtin" as const }
+  }
+  const { ExpertSquadPackageManager } = await import("../../src/expert-squad/manager")
+  return ExpertSquadPackageManager.installPayloadPackage({
+    projectDirectory: input.projectDirectory,
+    id: input.profileID,
+    installationScope: "project",
+  })
+}
+
+export async function readBenchmarkAgentModelMap(input: {
+  file: string
+  profileID: string
+}): Promise<BenchmarkAgentModelConfiguration> {
+  const file = path.resolve(input.file)
+  const value = JSON.parse(await fs.readFile(file, "utf8")) as unknown
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`benchmark agent model map must be a JSON object: ${file}`)
+  }
+  const modelByAgent = Object.fromEntries(Object.entries(value).map(([agentID, model]) => [agentID, model]))
+  if (Object.keys(modelByAgent).length === 0) {
+    throw new Error(`benchmark agent model map must declare at least one projected agent: ${file}`)
+  }
+  const expertSquads = ExpertSquadRuntimeOverridesSchema.parse({
+    [input.profileID]: {
+      agents: Object.fromEntries(
+        Object.entries(modelByAgent).map(([agentID, model]) => [agentID, { runtime: { model } }]),
+      ),
+    },
+  })
+  return {
+    modelByAgent: Object.fromEntries(
+      Object.entries(expertSquads[input.profileID]!.agents).map(([agentID, value]) => [agentID, value.runtime.model!]),
+    ),
+    expertSquads,
+  }
+}
+
+export async function assertBenchmarkAgentModelCoverage(input: {
+  projectDirectory: string
+  profileID: string
+  config: Config.Info
+  modelByAgent: Record<string, string>
+}) {
+  const { PromptProfileResolver } = await import("../../src/expert-squad/prompt-profile-resolver")
+  const projection = await PromptProfileResolver.resolveSkillProjection({
+    projectDirectory: input.projectDirectory,
+    config: input.config,
+  })
+  if (projection.expertSquadID !== input.profileID) {
+    throw new Error(
+      `benchmark active expert squad mismatch: expected ${input.profileID}, resolved ${projection.expertSquadID}`,
+    )
+  }
+  const expected = [...projection.projectedAgentIDs].sort()
+  const configured = Object.keys(input.modelByAgent).sort()
+  const missing = expected.filter((agentID) => !configured.includes(agentID))
+  const unexpected = configured.filter((agentID) => !expected.includes(agentID))
+  if (missing.length > 0 || unexpected.length > 0) {
+    throw new Error(
+      `benchmark agent model map must cover the exact ${input.profileID} projection; missing=${JSON.stringify(missing)} unexpected=${JSON.stringify(unexpected)}`,
+    )
+  }
+  return { agentCount: expected.length }
 }
 
 /**
@@ -81,7 +158,8 @@ export async function prepareLocalProviders() {
     const hexinUrl = env("HEXIN_OPENAI_URL")
     providers["hexin"] = {
       name: "Hexin OpenAI Gateway",
-      api: hexinUrl ? `${hexinUrl.replace(/\/+$/, "")}/v1` : "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1",
+      // api: hexinUrl ? `${hexinUrl.replace(/\/+$/, "")}/v1` : "https://aimemodeldev.myhexin.com/litellm/v1",
+      api: hexinUrl ? `${hexinUrl.replace(/\/+$/, "")}/v1` : "https://aimemodeldev.myhexin.com/litellm/v1",
       env: ["HEXIN_API_KEY"],
       models: {
         "gpt-5.4-mini": { name: "GPT-5.4 Mini", tool_call: true },
@@ -103,19 +181,21 @@ export async function prepareLocalProviders() {
   } catch {}
   const merged = {
     ...existing,
-    provider: { ...(existing.provider as Record<string, unknown> ?? {}), ...providers },
+    provider: { ...((existing.provider as Record<string, unknown>) ?? {}), ...providers },
   }
   await Bun.write(cfgPath, JSON.stringify(merged, null, 2))
 }
 
 export function dashscopeCodingKey() {
-  const key = env("DASHSCOPE_API_KEY", "CODING_DASHSCOPE_API_KEY", "ALIBABA_CODING_PLAN_API_KEY", "OPENCORVUS_EMBEDDED_DASHSCOPE_KEY")
+  const key = env("DASHSCOPE_API_KEY", "OPENCORVUS_EMBEDDED_DASHSCOPE_KEY")
   return key?.startsWith("sk-sp-") ? key : undefined
 }
 
+// `alibaba-coding-plan` (international) deliberately excluded — bench keys are
+// 国内 sk-sp-*, the international endpoint coding-intl.dashscope.aliyuncs.com
+// rejects them with HTTP 401. Use `-cn` exclusively (rule 8: no double source).
 const preferredProviders = [
   "alibaba-coding-plan-cn",
-  "alibaba-coding-plan",
   "alibaba-cn",
   "hexin",
   "google",
@@ -124,7 +204,6 @@ const preferredProviders = [
   "moonshotai-cn",
   "moonshotai",
   "huggingface",
-  "github-copilot",
 ]
 
 async function providerList() {
@@ -138,21 +217,21 @@ async function resetBenchmarkState() {
     import("../../src/project/instance"),
   ])
   Config.global.reset()
-  await Instance.disposeAll().catch(() => undefined)
+  await Instance.disposeAll()
 }
 
-function explicitModel(
-  providers: Awaited<ReturnType<typeof providerList>>,
-  explicit: string,
-  allowOpenAICodex = false,
-) {
+export function explicitModel(providers: Awaited<ReturnType<typeof providerList>>, explicit: string) {
+  if (explicit.startsWith("alibaba-coding-plan/")) {
+    throw new Error(
+      `benchmark model "${explicit}" rejected: international alibaba-coding-plan endpoint does not accept 国内 sk-sp-* keys (rule 8). Use alibaba-coding-plan-cn/<model> instead.`,
+    )
+  }
   if (explicit.includes("/")) return explicit
   for (const providerID of preferredProviders) {
     const provider = providers[providerID]
     if (provider?.models[explicit]) return `${providerID}/${explicit}`
   }
   for (const provider of Object.values(providers)) {
-    if (!allowOpenAICodex && provider.id === "openai-codex") continue
     if (provider.models[explicit]) return `${provider.id}/${explicit}`
   }
   throw new Error(`benchmark model not found: ${explicit}`)
@@ -163,7 +242,6 @@ export async function resolveBenchmarkModel(
   options?: {
     cwd?: string
     explicitKeys?: string[]
-    allowOpenAICodex?: boolean
   },
 ) {
   await resetBenchmarkState()
@@ -176,31 +254,12 @@ export async function resolveBenchmarkModel(
     directory: root,
     fn: async () => {
       const providers = await Provider.list()
-      const explicit = env(...(options?.explicitKeys ?? ["OPENCORVUS_BENCHMARK_MODEL", "OPENCORVUS_E2E_MODEL"]))
-      if (explicit) return explicitModel(providers, explicit, options?.allowOpenAICodex)
-      if (providers["alibaba-coding-plan-cn"]?.models["glm-5"]) return "alibaba-coding-plan-cn/glm-5"
-      if (providers["alibaba-coding-plan-cn"]?.models["kimi-k2.5"]) return "alibaba-coding-plan-cn/kimi-k2.5"
-      if (providers["hexin"]?.models["gpt-5.4-mini"]) return "hexin/gpt-5.4-mini"
-
-      for (const providerID of preferredProviders) {
-        const provider = providers[providerID]
-        if (!provider) continue
-        const [model] = Provider.sort(Object.values(provider.models))
-        if (model) return `${providerID}/${model.id}`
+      const explicitKeys = options?.explicitKeys ?? ["OPENCORVUS_BENCHMARK_MODEL", "OPENCORVUS_E2E_MODEL"]
+      const explicit = env(...explicitKeys)
+      if (!explicit) {
+        throw new Error(`benchmark model must be configured explicitly via ${explicitKeys.join(" or ")}`)
       }
-
-      const fallback = await Provider.defaultModel()
-      if (options?.allowOpenAICodex || !["openai-codex", "github-copilot"].includes(fallback.providerID)) {
-        return `${fallback.providerID}/${fallback.modelID}`
-      }
-
-      for (const provider of Object.values(providers)) {
-        if (provider.id === "openai-codex" || provider.id === "github-copilot") continue
-        const [model] = Provider.sort(Object.values(provider.models))
-        if (model) return `${provider.id}/${model.id}`
-      }
-
-      throw new Error("No live benchmark model available")
+      return explicitModel(providers, explicit)
     },
   })
 }

@@ -1,0 +1,372 @@
+{
+  "schema_version": 1,
+  "source_root_hint": "/Users/yangheng/Documents/output",
+  "source_pipeline": {
+    "path": "mirror-prism-pipeline/SKILL.md",
+    "version": "2.21.4"
+  },
+  "platform_surface_definitions": [
+    {
+      "id": "mission-task-orchestration",
+      "description": "Mission-owned fixed-profile Task creation, dependency queries, terminal evidence, and ownership-based resume."
+    },
+    {
+      "id": "package-resolution",
+      "description": "Strict Expert Squad Registry, package projection, SDK validation, and active package resolution."
+    },
+    {
+      "id": "repository-git",
+      "description": "Mission-owned canonical AInvest child-repository provisioning plus repository-bound delivery Git operations, commit, and push for every Prism Task."
+    },
+    {
+      "id": "browser-evidence",
+      "description": "Task-scoped webpage extraction, browser interaction, screenshots, focus paths, and diagnostics."
+    },
+    {
+      "id": "task-delivery",
+      "description": "One ordinary Planner-owned AInvest delivery plan followed by Task-scoped AInvest Product Requirements, original AInvest greenfield design, implementation, and review evidence."
+    },
+    {
+      "id": "opentest-review-debug",
+      "description": "MirrorTest acceptance ownership plus Review and Debug product-defect repair and fresh retest."
+    },
+    {
+      "id": "visible-terminal-evidence",
+      "description": "Visible Task messages, artifacts, reports, and terminal acceptance evidence."
+    }
+  ],
+  "excluded_sources": [
+    "mirror-prism-pipeline/SKILL.md_sol",
+    "mirror-prism-pipeline/scripts/__pycache__",
+    "prism-team/design-ux-researcher.md",
+    "prism-team/mirror-prism-prd-fallback.md",
+    "prism-team/mirror-prism-prd-old.md",
+    "skills/popular-web-designs"
+  ],
+  "imported_closures": [
+    {
+      "id": "skill.ainvest-wiki",
+      "source": "skills/ainvest-wiki",
+      "target": "expert-squads/mirror/prism/skills/ainvest-wiki",
+      "file_count": 22,
+      "source_sha256": "120cd9d393da73d7124fa558a6698a6639e97b8981cd4f984d0115d021495d5f",
+      "target_sha256": "9193eb09ae18c71e7e3da384935bffe3c059e7f0d21390382c67fdcdce6cd81b",
+      "normalization": "Quoted the YAML description and removed Markdown emphasis from that scalar; body and references are byte-identical."
+    },
+    {
+      "id": "skill.claude-design",
+      "source": "skills/claude-design",
+      "target": "expert-squads/mirror/prism/skills/claude-design",
+      "file_count": 1,
+      "source_sha256": "37a2963a184f62c7572aba20f278b050bf1a6f858858d82cef80574b8f3ecc88",
+      "target_sha256": "866989543d4fcdcbfa20e7261caf39cfb88c173201ead073ea75102d341d535b",
+      "normalization": "Moved source-only version, author, and platform keys under allowed metadata."
+    },
+    {
+      "id": "skill.design-md",
+      "source": "skills/design-md",
+      "target": "expert-squads/mirror/prism/skills/design-md",
+      "file_count": 2,
+      "source_sha256": "8b42a56a5fbdfcf74690877b2485b29f274ec9bd5b9305b37ae7045f81e276c1",
+      "target_sha256": "bdd20ff71936794941e4302ce8876c0538202a40420fc38d06687f2a61ef1e3c",
+      "normalization": "Moved source-only version, author, and platform keys under allowed metadata."
+    }
+  ],
+  "native_replacements": [
+    {
+      "id": "skill.web-cli",
+      "source": "skills/web-cli/SKILL.md",
+      "owners": [
+        {
+          "squad_id": "prism",
+          "agent_id": "mirror-prd-general-researcher"
+        },
+        {
+          "squad_id": "prism",
+          "agent_id": "mirror-prd-asset-curator"
+        },
+        {
+          "squad_id": "prism",
+          "agent_id": "mirror-prd-ui-researcher"
+        }
+      ],
+      "surfaces": [
+        "default/tool/webpage_extract",
+        "default/tool/webpage_compile",
+        "default/tool/webpage_runtime_state",
+        "websearch"
+      ]
+    },
+    {
+      "id": "skill.get-ui",
+      "source": "skills/get-ui",
+      "owners": [
+        {
+          "squad_id": "prism",
+          "agent_id": "mirror-prd-general-researcher"
+        },
+        {
+          "squad_id": "prism",
+          "agent_id": "mirror-prd-ui-researcher"
+        },
+        {
+          "squad_id": "prism",
+          "agent_id": "mirror-design-visual-reviewer"
+        }
+      ],
+      "surfaces": [
+        "default/mcp/browser/tool/navigate",
+        "default/mcp/browser/tool/observe",
+        "default/mcp/browser/tool/screenshot",
+        "default/mcp/browser/tool/diagnostics_get"
+      ]
+    },
+    {
+      "id": "skill.get-ux",
+      "source": "skills/get-ux",
+      "owners": [
+        {
+          "squad_id": "prism",
+          "agent_id": "mirror-design-visual-reviewer"
+        },
+        {
+          "squad_id": "opentest",
+          "agent_id": "opentest-visual-reviewer"
+        }
+      ],
+      "surfaces": [
+        "default/mcp/browser/tool/click",
+        "default/mcp/browser/tool/type",
+        "default/mcp/browser/tool/press_key",
+        "default/mcp/browser/tool/scroll",
+        "default/mcp/browser/tool/screenshot",
+        "default/mcp/browser/tool/diagnostics_get"
+      ]
+    }
+  ],
+  "role_capabilities": [
+    {
+      "id": "role.general-researcher",
+      "source": "prism-team/general-researcher.md",
+      "owner": {
+        "squad_id": "prism",
+        "agent_id": "mirror-prd-general-researcher"
+      },
+      "target_skill": "prism/mirror-prd-general-researcher/source-system-mapping"
+    },
+    {
+      "id": "role.competitor-scout",
+      "source": "prism-team/competitor-scout.md",
+      "owner": {
+        "squad_id": "prism",
+        "agent_id": "mirror-prd-general-researcher"
+      },
+      "target_skill": "prism/mirror-prd-general-researcher/source-system-mapping"
+    },
+    {
+      "id": "role.asset-collection",
+      "source": "prism-team/asset-collection.md",
+      "owner": {
+        "squad_id": "prism",
+        "agent_id": "mirror-prd-asset-curator"
+      },
+      "target_skill": "prism/mirror-prd-asset-curator/source-asset-curation"
+    },
+    {
+      "id": "role.design-ui-researcher",
+      "source": "prism-team/design-ui-researcher.md",
+      "owner": {
+        "squad_id": "prism",
+        "agent_id": "mirror-prd-ui-researcher"
+      },
+      "target_skill": "prism/mirror-prd-ui-researcher/source-ui-research"
+    },
+    {
+      "id": "role.ainvest-feature-mapper",
+      "source": "prism-team/ainvest-feature-mapper.md",
+      "owner": {
+        "squad_id": "prism",
+        "agent_id": "mirror-prd-ainvest-feature-mapper"
+      },
+      "target_skill": "prism/mirror-prd-ainvest-feature-mapper/ainvest-feature-mapping"
+    },
+    {
+      "id": "role.mirror-prism-prd",
+      "source": "prism-team/mirror-prism-prd.md",
+      "owner": {
+        "squad_id": "prism",
+        "agent_id": "mirror-prd-author"
+      },
+      "target_skill": "prism/mirror-prd-author/product-requirements-authoring"
+    },
+    {
+      "id": "role.thirdparty-reviewer-prd",
+      "source": "prism-team/thirdparty-reviewer-prd.md",
+      "owner": {
+        "squad_id": "prism",
+        "agent_id": "mirror-prd-reviewer"
+      },
+      "target_skill": "prism/mirror-prd-reviewer/product-requirements-review"
+    },
+    {
+      "id": "role.mirror-prism-design",
+      "source": "prism-team/mirror-prism-design.md",
+      "owner": {
+        "squad_id": "prism",
+        "agent_id": "mirror-design-integrator"
+      },
+      "target_skill": "prism/mirror-design-integrator/design-integration-review"
+    },
+    {
+      "id": "role.designer",
+      "source": "prism-team/designer.md",
+      "owner": {
+        "squad_id": "prism",
+        "agent_id": "mirror-design-page-designer"
+      },
+      "target_skill": "prism/mirror-design-page-designer/route-design-production"
+    },
+    {
+      "id": "role.mirror-prism-code",
+      "source": "prism-team/mirror-prism-code.md",
+      "owner": {
+        "squad_id": "prism",
+        "agent_id": "mirror-code-implementer"
+      },
+      "target_skill": "prism/mirror-code-implementer/route-implementation"
+    }
+  ],
+  "pipeline_assets": [
+    {
+      "id": "templates",
+      "source": "mirror-prism-pipeline/templates",
+      "file_count": 7,
+      "sha256": "0557ca5d5477fac2b8ad2fd70b91d0680d984a116724b4e47bf6863fcaf68fb1",
+      "owners": [
+        {
+          "kind": "squad",
+          "squad_id": "prism"
+        },
+        {
+          "kind": "squad",
+          "squad_id": "review-debug"
+        },
+        {
+          "kind": "squad",
+          "squad_id": "opentest"
+        }
+      ]
+    },
+    {
+      "id": "scripts",
+      "source": "mirror-prism-pipeline/scripts",
+      "file_count": 6,
+      "sha256": "c697197a5609da2c7ed3bf76f18b708399cdd574449080a9c8530a254ba3365a",
+      "owners": [
+        {
+          "kind": "platform",
+          "surface_id": "mission-task-orchestration"
+        },
+        {
+          "kind": "platform",
+          "surface_id": "repository-git"
+        }
+      ],
+      "excluded_globs": ["__pycache__"]
+    },
+    {
+      "id": "references",
+      "source": "mirror-prism-pipeline/references",
+      "file_count": 150,
+      "sha256": "9d35cc70dfdec3ba1910c3019f07b4c7fb7ea916bf679d798d2a9d2220d03c2b",
+      "owners": [
+        {
+          "kind": "squad",
+          "squad_id": "prism"
+        },
+        {
+          "kind": "squad",
+          "squad_id": "review-debug"
+        },
+        {
+          "kind": "squad",
+          "squad_id": "opentest"
+        },
+        {
+          "kind": "platform",
+          "surface_id": "package-resolution"
+        }
+      ],
+      "disposition": "Behavioral requirements are projected into current package contracts; retired Hermes CLI, cron, watchdog, provider fallback, compatibility, and historical incident recipes are not runtime capabilities."
+    }
+  ],
+  "collaborations": [],
+  "pipeline_groups": [
+    {
+      "id": "repository-boundary-and-kickoff",
+      "source_steps": ["0", "0b", "0.5", "1", "2", "3"],
+      "stage_bindings": [],
+      "platform_surfaces": ["mission-task-orchestration", "package-resolution", "repository-git"],
+      "unavailable_ids": ["remote-kanban"]
+    },
+    {
+      "id": "product-requirements",
+      "source_steps": ["4", "5"],
+      "stage_bindings": [],
+      "platform_surfaces": ["task-delivery", "browser-evidence"],
+      "unavailable_ids": []
+    },
+    {
+      "id": "design",
+      "source_steps": ["6", "7"],
+      "stage_bindings": [],
+      "platform_surfaces": ["browser-evidence", "task-delivery"],
+      "unavailable_ids": ["prism-high-fidelity-replication"]
+    },
+    {
+      "id": "implementation",
+      "source_steps": ["8", "9a", "9b", "10"],
+      "stage_bindings": [],
+      "platform_surfaces": ["task-delivery", "repository-git"],
+      "unavailable_ids": []
+    },
+    {
+      "id": "test-and-product-repair",
+      "source_steps": ["11", "12"],
+      "stage_bindings": [],
+      "platform_surfaces": ["opentest-review-debug"],
+      "unavailable_ids": []
+    },
+    {
+      "id": "repository-push",
+      "source_steps": ["13"],
+      "stage_bindings": [],
+      "platform_surfaces": ["repository-git"],
+      "unavailable_ids": []
+    },
+    {
+      "id": "report-and-delivery",
+      "source_steps": ["14"],
+      "stage_bindings": [],
+      "platform_surfaces": ["visible-terminal-evidence"],
+      "unavailable_ids": ["remote-kanban"]
+    },
+    {
+      "id": "monitoring-and-failure-triage",
+      "source_steps": ["monitoring", "failure-triage"],
+      "stage_bindings": [],
+      "platform_surfaces": ["mission-task-orchestration", "visible-terminal-evidence"],
+      "unavailable_ids": []
+    }
+  ],
+  "unavailable": [
+    {
+      "id": "remote-kanban",
+      "reason": "The source export lacks mirror-kanban/scripts/dispatch-bff.mjs and therefore lacks the official registration/delivery protocol."
+    },
+    {
+      "id": "prism-high-fidelity-replication",
+      "reason": "The original designer role made screenshot restoration conditional on explicit replication requests. Current Prism is original greenfield product delivery only; clone, replica, port, screenshot parity, region comparison, and source-geometry restoration are owned by the dedicated frontend-replica Expert Squad."
+    }
+  ]
+}

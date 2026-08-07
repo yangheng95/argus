@@ -14,6 +14,7 @@ export namespace ChannelRegistry {
   export const Info = z.object({
     id: z.string(),
     name: z.string(),
+    docs_url: z.string().url(),
     status: z.enum(["disabled", "configured", "partial", "missing"]),
     summary: z.string(),
     runtime_status: z.enum(["disabled", "unavailable", "starting", "running", "stopped", "error"]),
@@ -26,16 +27,14 @@ export namespace ChannelRegistry {
     const supervisor = await ChannelSupervisor.status()
     return Info.array().parse(
       ChannelCatalog.map((item) => {
-        const state = channelState(
-          item.id,
-          config.channel?.[item.id] as Record<string, unknown> | undefined,
-        )
-        const runtime = channelRuntime(supervisor, item.id)
+        const state = channelState(item.id, config.channel?.[item.id] as Record<string, unknown> | undefined, {})
+        const runtime = channelRuntime(supervisor, item)
         return {
           id: item.id,
           name: item.name,
+          docs_url: item.docsUrl,
           status: state.status,
-          summary: state.summary,
+          summary: item.implementation.kind === "planned" ? item.implementation.reason : state.summary,
           runtime_status: runtime.status,
           runtime_detail: runtime.detail,
           fields: item.fields.map((field) => ({
@@ -52,9 +51,12 @@ export namespace ChannelRegistry {
 
 function channelRuntime(
   supervisor: Awaited<ReturnType<typeof ChannelSupervisor.status>>,
-  channel: string,
+  channel: (typeof ChannelCatalog)[number],
 ) {
-  if (supervisor.channels.includes(channel)) {
+  if (channel.implementation.kind === "planned") {
+    return { status: "unavailable", detail: channel.implementation.reason } as const
+  }
+  if (supervisor.channels.includes(channel.id)) {
     return {
       status: supervisor.status,
       detail: supervisor.detail,

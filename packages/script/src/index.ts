@@ -1,5 +1,6 @@
 import { $, semver } from "bun"
 import path from "path"
+import { computeNextVersion } from "./version"
 
 const rootPkgPath = path.resolve(import.meta.dir, "../../../package.json")
 const rootPkg = await Bun.file(rootPkgPath).json()
@@ -60,11 +61,7 @@ const version = await (async () => {
       return next
     })
 
-  const [major, minor, patch] = latestVersion.split(".").map((x) => Number(x) || 0)
-  const bump = env.BUMP?.toLowerCase()
-  if (bump === "major") return `${major + 1}.0.0`
-  if (bump === "minor") return `${major}.${minor + 1}.0`
-  return `${major}.${minor}.${patch + 1}`
+  return computeNextVersion(latestVersion, env.BUMP?.toLowerCase())
 })()
 
 const bot = ["actions-user", "opencorvus", "opencorvus-agent[bot]"]

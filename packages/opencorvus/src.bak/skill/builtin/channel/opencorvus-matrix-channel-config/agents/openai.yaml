@@ -1,6 +1,0 @@
-interface:
-  display_name: "OpenCorvus Matrix Channel Config"
-  short_description: "Configure Matrix channel integration for OpenCorvus"
-  default_prompt: "Use $opencorvus-matrix-channel-config to set up or debug Matrix channel integration for OpenCorvus."
-
-

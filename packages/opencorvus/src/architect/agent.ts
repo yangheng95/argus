@@ -1,275 +1,373 @@
 /**
- * Architect Agent — cross-goal consensus coordination.
+ * Goal-graph adapter — authoritative goal decomposer + cross-goal coordinator.
  *
- * Position: After Decompose, before Plan. Task Agent decides when to invoke.
- * Reads ALL GoalContracts, explores codebase, resolves abstract exports/imports
- * into precise TypeScript contracts, writes binding consensus to Decision Log.
+ * The active expert package decides when to dispatch this capability and which
+ * projected consumers use its persisted goal graph.
  *
- * Hard boundaries (from architecture spec):
- * ✗ Cannot modify GoalContracts (immutable after Decompose)
- * ✗ Cannot execute code/commands
- * ✗ Cannot write/modify files
- * ✗ Cannot call other agents
- * ✗ Cannot change goal set
- * ✓ Only produces Decision Log entries + ArchitectBlueprint
+ * Authority:
+ * ✓ Produces the final goal set (add / modify / split / remove)
+ * ✓ Records REQ-N coverage through goal-local acceptance spec sources
+ * ✓ Records fidelity coverage and assembly ownership
+ * ✓ Resolves cross-goal interfaces into binding Decision Log contracts
+ *
+ * Constraints:
+ * ✗ Cannot execute code / commands
+ * ✗ Cannot write or modify user files
+ * ✗ Cannot call other projected agents
+ * ✗ Cannot modify persisted requirement rows
+ *
+ * Implementation: thin shell over `runAgentSession`. Agent-specific code
+ * is the user-prompt constructor and the architect output tool kit; the
+ * runner owns model resolution, session creation, system-prompt
+ * composition (base-role runtime template + projected agent prompt + mounted skills),
+ * stream-error capture, and abort signal propagation.
  */
-import { streamText, stepCountIs } from "ai"
-import type { TextHooks } from "@/llm/api"
-import { Provider } from "@/provider/provider"
-import { createPlannerTools } from "@/planner/tools"
+import {
+  agentCoordinationHandoffResult,
+  runAgentSession,
+  type AgentCoordinationHandoffResult,
+  type RunAgentSessionOutput,
+} from "@/agent/runner"
+import { createAgentContextTools } from "@/agent/context-tools"
+import { createAgentCoordinationRuntimeTools } from "@/agent/coordination-runtime-tools"
+import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
-import { toolGuard } from "@/util/tool-guard"
-import { AgentTrace } from "@/util/agent-trace"
-import { OrchestratorConfig } from "@/orchestrator/config"
-import { Config } from "@/config/config"
 import type { GoalContractFields } from "@/pipeline/types"
-import type { DecisionLog } from "@/decision-log"
-import type { ArchitectResult, ArchitectBlueprint, ArchitectContract, RecommendedNext, ArchitectDecisionKey } from "./types"
-import { parseYamlLikeList } from "@/util/parse-section-tags"
-import { extractTag } from "@/util/parse-section-tags"
-
-import ARCHITECT_CORE from "@/prompt/core/architect-core.txt"
+import type { PromptProfileResolver } from "@/expert-squad/prompt-profile-resolver"
+import { parseAcceptanceSpecs, renderSpecsAsText } from "@/acceptance/types"
+import type { ArchitectArtifact } from "./types"
+import {
+  createArchitectOutputTools,
+  type ArchitectCollector,
+  type ArchitectSelectedExistingGoals,
+  type RegisteredGoal,
+} from "./output-tools"
+import { renderUserRequestSection } from "@/intent/request-prompt"
+import { renderPromptSections, withAttachmentPromptSections } from "@/agent/prompt-projection"
+import { projectArchitectInput, type ArchitectInputRefs, type ArchitectPromptProjection } from "./input-projection"
+import { artifactProvenanceForAgentTurn, selectedArtifactLocatorsBeforePublication } from "@/agent/artifact-read-facts"
+import {
+  resolveCurrentGoalGraphProjectionArtifactLocator,
+  resolveGoalMembershipForProjectionArtifact,
+} from "@/engine/store"
+import { assertTaskAssistantProducerToolPart } from "@/engine/producer-turn"
+import { Instance } from "@/project/instance"
+import { artifactReadLocatorKey } from "@opencorvus-ai/plugin/artifact-catalog"
+import { resolveArchitectSelectedArtifactRoles, type ArchitectSelectedArtifactRoles } from "./selected-artifact-roles"
 
 const log = Log.create({ service: "architect-agent" })
 
-const VALID_CATEGORIES = new Set<ArchitectDecisionKey>([
-  "directory_blueprint", "interface_contract", "export_manifest",
-  "shared_type", "naming_convention", "dependency_order",
-])
+function architectOutputToolTurnIdentity(input: { taskID: string; toolName: string; options: unknown }) {
+  const options = input.options as
+    | {
+        toolCallId?: unknown
+        opencorvus?: Record<string, unknown>
+      }
+    | undefined
+  const meta = options?.opencorvus
+  const projectID = typeof meta?.projectID === "string" ? meta.projectID : ""
+  const sessionID = typeof meta?.sessionID === "string" ? meta.sessionID : ""
+  const messageID = typeof meta?.messageID === "string" ? meta.messageID : ""
+  const toolCallID = typeof meta?.toolCallID === "string" ? meta.toolCallID : ""
+  const toolPartID = typeof meta?.toolPartID === "string" ? meta.toolPartID : ""
+  const providerName = typeof meta?.providerName === "string" ? meta.providerName : ""
+  if (!projectID || !sessionID || !messageID || !toolCallID || !toolPartID || !providerName) {
+    throw new Error(
+      `${input.toolName}: Architect output tool is missing persisted project/session/message/call/part/tool identity.`,
+    )
+  }
+  if (projectID !== Instance.project.id) {
+    throw new Error(
+      `${input.toolName}: Architect output tool project ${projectID} does not match current project ${Instance.project.id}.`,
+    )
+  }
+  if (providerName !== input.toolName) {
+    throw new Error(
+      `${input.toolName}: Architect output tool provider ${providerName} does not match the visible tool name.`,
+    )
+  }
+  if (options?.toolCallId !== toolCallID) {
+    throw new Error(
+      `${input.toolName}: Architect output tool Software Development Kit call identifier does not match persisted identity.`,
+    )
+  }
+  assertTaskAssistantProducerToolPart({
+    taskID: input.taskID,
+    sessionID,
+    messageID,
+    expectedSessionKind: "architect",
+    toolPartID,
+    toolCallID,
+    visibleToolName: input.toolName,
+  })
+  return { sessionID, messageID }
+}
+
+function selectedCurrentGoalSeed(input: {
+  taskID: string
+  roles: ArchitectSelectedArtifactRoles
+}): ArchitectSelectedExistingGoals | undefined {
+  const selected = input.roles.currentGoalGraphProjection
+  if (!selected) return undefined
+  const membership = resolveGoalMembershipForProjectionArtifact({
+    taskID: input.taskID,
+    projectionArtifactLocator: selected.locator,
+  })
+  return {
+    sourceKey: artifactReadLocatorKey(selected.locator),
+    goals: membership.goals.map(({ goal }) => ({
+      id: goal.id,
+      title: goal.title,
+      objective: goal.objective,
+      acceptance_specs: parseAcceptanceSpecs(goal.acceptance_specs, `goal ${goal.id} acceptance_specs`),
+      owned_paths: [...goal.owned_paths],
+      priority: goal.priority,
+      kind: goal.kind as RegisteredGoal["kind"],
+    })),
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
 export namespace ArchitectAgent {
-  export async function coordinate(input: {
-    goals: GoalContractFields[]
-    taskRequest: string
-    taskTitle: string
-    taskID?: string
-    decisionLog: DecisionLog
+  export type CoordinateResult = ArchitectArtifact & { sessionID: string; finalMessageID: string }
+
+  export interface CoordinateInput extends ArchitectInputRefs {
+    /** Parent session — a child "architect" session is created under it. */
+    parentSessionID?: string
+    newSessionID?: string
+    existingSessionID?: string
+    continuationPrompt?: string
+    dispatchTurn?: import("@/orchestrator/dispatch-turn-projection").DispatchTurn
+    model?: { providerID: string; modelID: string }
     signal?: AbortSignal
-    stream?: TextHooks
     onStatus?: (summary: string) => void | Promise<void>
-  }): Promise<ArchitectResult> {
-    return run(input)
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Internal
-// ---------------------------------------------------------------------------
-
-async function run(input: {
-  goals: GoalContractFields[]
-  taskRequest: string
-  taskTitle: string
-  taskID?: string
-  decisionLog: DecisionLog
-  signal?: AbortSignal
-  stream?: TextHooks
-  onStatus?: (summary: string) => void | Promise<void>
-}): Promise<ArchitectResult> {
-  if (input.signal?.aborted) throw new Error("architect agent aborted")
-
-  const orchCfg = await OrchestratorConfig.get()
-  const { max_steps: MAX_STEPS, timeout_ms: TIMEOUT_MS } = orchCfg.architect
-
-  // Resolve model — use architect-specific model if configured, else default
-  const archModel = orchCfg.architect.model
-  let def: { providerID: string; modelID: string } | undefined
-  if (archModel) {
-    const [providerID, ...rest] = archModel.split("/")
-    const modelID = rest.join("/")
-    if (providerID && modelID) def = { providerID, modelID }
-  }
-  if (!def) def = await Provider.defaultModel().catch(() => undefined)
-  if (!def) throw new Error("no LLM model available for architect agent")
-
-  const model = await Provider.getModel(def.providerID, def.modelID)
-  const language = await Provider.getLanguage(model)
-
-  if (input.signal?.aborted) throw new Error("architect agent aborted after model resolution")
-
-  // Read-only codebase tools (architect cannot write files)
-  const guard = toolGuard(createPlannerTools(undefined, undefined))
-
-  await input.onStatus?.("Architect agent: coordinating cross-goal contracts")
-
-  const systemPrompt = await architectSystem()
-  const userPrompt = buildUserPrompt(input)
-
-  log.info("architect agent starting", {
-    goals: input.goals.length,
-    model: language.modelId,
-  })
-
-  const baseSignal = input.signal ?? AbortSignal.timeout(TIMEOUT_MS)
-  const stream = streamText({
-    model: language,
-    stopWhen: stepCountIs(MAX_STEPS),
-    tools: guard.tools,
-    maxOutputTokens: 16384,
-    abortSignal: AbortSignal.any([baseSignal, guard.signal]),
-    system: systemPrompt,
-    messages: [{ role: "user" as const, content: userPrompt }],
-    ...(input.stream?.onChunk ? { onChunk: input.stream.onChunk as any } : {}),
-    ...(input.stream?.onError ? { onError: input.stream.onError } : {}),
-    onStepFinish: guard.onStepFinish as any,
-  })
-
-  const [resultText, resultSteps, resultFinishReason] = await Promise.all([
-    stream.text,
-    stream.steps,
-    stream.finishReason,
-  ])
-
-  let allText = resultText?.trim() || ""
-  if (!allText) {
-    allText = resultSteps.map((s) => s.text).filter(Boolean).join("\n")
+    onSessionCreated?: (sessionID: string) => void | Promise<void>
+    onDispatchAuthorityCommit?: import("@/agent/runner").AgentDispatchAuthorityCommit
+    onRuntimeReady?: (sessionID: string) => void | Promise<void>
+    onTurnCompleted?: (turn: { sessionID: string; finalMessageID: string }) => void | Promise<void>
+    agentID: string
+    packageRevision: PromptProfileResolver.ResolvedPackageRevision
   }
 
-  const toolCallCount = resultSteps.reduce(
-    (sum, s) => sum + (Array.isArray((s as any).toolCalls) ? (s as any).toolCalls.length : 0),
-    0,
-  )
-
-  log.info("architect agent finished", {
-    steps: resultSteps.length,
-    finishReason: resultFinishReason,
-    textLength: allText.length,
-    toolCalls: toolCallCount,
-  })
-
-  AgentTrace.capture("architect", 1,
-    { system: systemPrompt, messages: [{ role: "user", content: userPrompt }] },
-    allText,
-    { model: language.modelId, toolCalls: toolCallCount, finishReason: resultFinishReason },
-  )
-
-  // Parse output
-  const blueprint = parseBlueprint(allText)
-  const recommendedNext = parseRecommendedNext(allText)
-
-  // Write contracts to Decision Log
-  let entriesWritten = 0
-  for (const contract of blueprint.contracts) {
-    if (!VALID_CATEGORIES.has(contract.category)) continue
-    input.decisionLog.append({
-      goalID: contract.goalIDs[0] || undefined,
-      phase: "architect",
-      key: contract.category,
-      value: `## ${contract.title}\n${contract.spec}`,
-      reason: `Architect consensus for goals: ${contract.goalIDs.join(", ")}`,
+  export async function coordinate(input: CoordinateInput): Promise<CoordinateResult | AgentCoordinationHandoffResult> {
+    const projection = projectArchitectInput(input)
+    const eligiblePriorLocators = () => {
+      const current = resolveCurrentGoalGraphProjectionArtifactLocator(input.taskID)
+      return current ? [current] : []
+    }
+    const priorBySourceKey = new Map<
+      string,
+      {
+        role: NonNullable<ArchitectSelectedArtifactRoles["currentGoalGraphProjection"]>
+        seed: ArchitectSelectedExistingGoals
+      }
+    >()
+    let outputToolKit: ReturnType<typeof createArchitectOutputTools>
+    outputToolKit = createArchitectOutputTools({
+      selectedExistingGoals: (options, toolName) => {
+        const turn = architectOutputToolTurnIdentity({
+          taskID: input.taskID,
+          toolName,
+          options,
+        })
+        const frozenSourceKey = outputToolKit.selectedExistingGoalSourceKey()
+        if (frozenSourceKey) return priorBySourceKey.get(frozenSourceKey)?.seed
+        const sourceArtifactLocators = selectedArtifactLocatorsBeforePublication({
+          sessionID: turn.sessionID,
+          assistantMessageID: turn.messageID,
+        })
+        const roles = resolveArchitectSelectedArtifactRoles({
+          taskID: input.taskID,
+          sourceArtifactLocators,
+          eligiblePriorGoalGraphProjectionArtifactLocators: eligiblePriorLocators,
+        })
+        const role = roles.currentGoalGraphProjection
+        const seed = selectedCurrentGoalSeed({ taskID: input.taskID, roles })
+        if (role && seed) priorBySourceKey.set(seed.sourceKey, { role, seed })
+        return seed
+      },
     })
-    entriesWritten++
+    const coordinationTools = await createAgentCoordinationRuntimeTools({
+      agentID: input.agentID,
+      taskID: input.taskID,
+      signal: input.signal,
+    })
+    const contextTools = await filterAgentTools({ ...createAgentContextTools(), ...coordinationTools }, "architect", {
+      taskID: input.taskID,
+      sessionID: input.parentSessionID,
+    })
+
+    const completeOutput = async (out: RunAgentSessionOutput<ArchitectCollector>): Promise<CoordinateResult> => {
+      await input.onTurnCompleted?.({
+        sessionID: out.session.id,
+        finalMessageID: out.finalMessage.info.id,
+      })
+
+      log.info("architect agent finished", {
+        sessionID: out.session.id,
+        streamErrors: out.streamErrors.length,
+      })
+
+      const provenance = artifactProvenanceForAgentTurn(out.session.id, out.finalMessage.info.id)
+      const sourceArtifactLocators = provenance.sourceArtifactLocators
+      const selectedRoles = resolveArchitectSelectedArtifactRoles({
+        taskID: input.taskID,
+        sourceArtifactLocators,
+        eligiblePriorGoalGraphProjectionArtifactLocators: eligiblePriorLocators,
+      })
+      const selectedRequirementSet = selectedRoles.requirementSet
+      const requirementSet = selectedRequirementSet?.artifact
+      const frozenPriorSourceKey = outputToolKit.selectedExistingGoalSourceKey()
+      const selectedPriorGoalGraph = frozenPriorSourceKey
+        ? priorBySourceKey.get(frozenPriorSourceKey)?.role
+        : selectedRoles.currentGoalGraphProjection
+      const finalSelectedSourceKeys = new Set(sourceArtifactLocators.map(artifactReadLocatorKey))
+      if (frozenPriorSourceKey && (!selectedPriorGoalGraph || !finalSelectedSourceKeys.has(frozenPriorSourceKey))) {
+        throw new Error(
+          `Architect collector prior ${frozenPriorSourceKey} is absent from final persisted selection provenance.`,
+        )
+      }
+      const collector = outputToolKit.snapshot()
+      const goals: GoalContractFields[] = collector.goals.map((goal) => ({
+        id: goal.id,
+        title: goal.title,
+        objective: goal.objective,
+        acceptance_specs: goal.acceptance_specs,
+        owned_paths: goal.owned_paths,
+        priority: goal.priority,
+        kind: goal.kind,
+      }))
+
+      log.info("architect agent output", {
+        goals: goals.length,
+        removed: collector.removed_goals.length,
+        sourceCoverage: collector.source_coverage.length,
+        referenceCoverage: collector.reference_coverage.length,
+        assemblyOwners: collector.assembly_owners.length,
+        contracts: collector.contract_graph.contracts.length,
+      })
+
+      return {
+        inputFacts: {
+          ...(selectedRequirementSet ? { requirementSetArtifactLocator: selectedRequirementSet.locator } : {}),
+          ...(selectedPriorGoalGraph
+            ? { priorGoalGraphProjectionArtifactLocator: selectedPriorGoalGraph.locator }
+            : {}),
+          sourceArtifactLocators,
+          observedArtifactLocators: provenance.observedArtifactLocators,
+        },
+        goals,
+        removedGoals: collector.removed_goals,
+        fidelity: {
+          sourceCoverage: collector.source_coverage,
+          referenceCoverage: collector.reference_coverage,
+          assemblyOwners: collector.assembly_owners,
+        },
+        contractGraph: collector.contract_graph,
+        sessionID: out.session.id,
+        finalMessageID: out.finalMessage.info.id,
+      }
+    }
+
+    log.info("architect agent starting", {
+      seedGoals: projection.goals.length,
+      requirements: projection.requirements.length,
+      decisions: projection.requirementDecisions.length,
+    })
+
+    const out = await runAgentSession({
+      agentID: input.agentID,
+      packageRevision: input.packageRevision,
+      workScope: input.workScope,
+      sessionTitle: `${input.agentID} (architect): ${projection.taskTitle}`,
+      newSessionID: input.newSessionID,
+      existingSessionID: input.existingSessionID,
+      continuationPrompt: input.continuationPrompt,
+      dispatchTurn: input.dispatchTurn,
+      parentSessionID: input.parentSessionID,
+      taskID: input.taskID,
+      model: input.model,
+      signal: input.signal,
+      onStatus: input.onStatus ?? (() => {}),
+      onSessionCreated: input.onSessionCreated ? (session) => input.onSessionCreated!(session.id) : undefined,
+      onDispatchAuthorityCommit: input.onDispatchAuthorityCommit
+        ? (session, descriptor) => input.onDispatchAuthorityCommit!(session.id, descriptor)
+        : undefined,
+      onRuntimeReady: input.onRuntimeReady ? (session) => input.onRuntimeReady!(session.id) : undefined,
+      toolKit: {
+        tools: { ...contextTools, ...outputToolKit.tools },
+        stageOwnedToolIDs: Object.keys(outputToolKit.tools),
+        getCollector: () => outputToolKit.getCollector(),
+      },
+      buildUserPrompt: () => buildArchitectUserPrompt(projection, input.agentID),
+    })
+
+    const coordinationHandoff = agentCoordinationHandoffResult(out)
+    if (coordinationHandoff) return coordinationHandoff
+    return await completeOutput(out)
   }
-
-  log.info("architect agent output", {
-    contracts: blueprint.contracts.length,
-    entriesWritten,
-    recommendedNext: recommendedNext.length,
-  })
-
-  return { blueprint, entriesWritten, recommendedNext }
 }
 
 // ---------------------------------------------------------------------------
 // Prompt construction
 // ---------------------------------------------------------------------------
 
-function buildUserPrompt(input: {
-  goals: GoalContractFields[]
-  taskRequest: string
-  taskTitle: string
-  decisionLog: DecisionLog
-}): string {
+export function buildArchitectUserPrompt(input: ArchitectPromptProjection, agentID: string): string {
   const sections: string[] = []
 
-  sections.push(`# Task\n\nTitle: ${input.taskTitle}\n\nRequest:\n${input.taskRequest}`)
+  sections.push(
+    `# Delegation\n\nOrchestrator is asking projected agent "${agentID}" to decompose this Task into versioned Delivery Slice contracts via the architect adapter. Every selected workflow node executes once for the Task; the Slices are delivery and acceptance subjects only.\n\n${input.instruction}`,
+  )
+  sections.push(
+    renderUserRequestSection({
+      heading: "# Task",
+      title: input.taskTitle,
+      request: input.taskRequest,
+      taskID: input.taskID,
+    }),
+  )
+  sections.push(
+    [
+      "# Input Contract",
+      "",
+      "The task title and bounded request excerpt above are the prompt-visible user input for this stage.",
+      "If requirements, foundational decisions, or selected artifact observations appear below, they are also authoritative.",
+      "When the excerpt is not enough, read or grep the exact request bundle path named above instead of relying on upstream summaries.",
+    ].join("\n"),
+  )
 
-  // All goals
-  const goalsText = input.goals.map((g) => [
-    `## ${g.id}: ${g.title}`,
-    `objective: ${g.objective}`,
-    `owned_paths: ${g.owned_paths.join(", ") || "(none)"}`,
-    `exports: ${g.exports.join("; ") || "(none)"}`,
-    `imports: ${g.imports.join("; ") || "(none)"}`,
-    `depends_on: ${g.depends_on.join(", ") || "(none)"}`,
-    `kind: ${g.kind}`,
-  ].join("\n")).join("\n\n")
+  const contextSection = renderPromptSections(
+    withAttachmentPromptSections(input.observationSections, input.attachments),
+  )
+  if (contextSection) sections.push(contextSection)
 
-  sections.push(`# GoalContracts (${input.goals.length} goals)\n\n${goalsText}`)
+  if (input.goals.length > 0) {
+    const goalsText = input.goals
+      .map((g) => {
+        const specs = g.acceptance_specs ?? []
+        return [
+          `## #G${(g.order_index ?? 0) + 1} ${g.id}: ${g.title}`,
+          `objective: ${g.objective}`,
+          `acceptance_specs (${specs.length}):\n${renderSpecsAsText(specs)}`,
+          `owned_paths: ${g.owned_paths.join(", ") || "(none)"}`,
+          `kind: ${g.kind}`,
+        ].join("\n")
+      })
+      .join("\n\n")
+    sections.push(`# Existing Goals (${input.goals.length})\n\n${goalsText}`)
+  }
 
-  // Existing Decision Log
   const dlSection = input.decisionLog.toPromptSection()
   if (dlSection) sections.push(dlSection)
 
   sections.push(
-    "Now explore the codebase to discover existing patterns, then resolve all cross-goal " +
-    "interfaces into precise TypeScript contracts. Output using section tags as described.",
+    "Explore the codebase, then register or refine the final goal set, " +
+      "including optional diagnostics and the goal contract graph. " +
+      "Inspect the registered graph facts when useful, then summarize the exact recorded facts and any missing or contradictory evidence in the visible final message.",
   )
 
   return sections.join("\n\n")
-}
-
-async function architectSystem(): Promise<string> {
-  const config = await Config.get()
-  const agentPrompt = (config.agent as Record<string, any> | undefined)?.architect?.prompt
-  return typeof agentPrompt === "string" ? agentPrompt : ARCHITECT_CORE
-}
-
-// ---------------------------------------------------------------------------
-// Output parsing
-// ---------------------------------------------------------------------------
-
-function parseBlueprint(text: string): ArchitectBlueprint {
-  const summary = extractTag(text, "architect_summary") || "Cross-goal coordination"
-  const contractsRaw = extractTag(text, "contracts") || ""
-
-  const contracts: ArchitectContract[] = []
-  if (contractsRaw.trim()) {
-    const items = parseYamlLikeList(contractsRaw)
-    for (const item of items) {
-      const category = item.category as ArchitectDecisionKey | undefined
-      if (!category || !VALID_CATEGORIES.has(category)) continue
-      contracts.push({
-        category,
-        title: item.title || category,
-        spec: item.spec || "",
-        goalIDs: splitCommaSeparated(item.goal_ids),
-      })
-    }
-  }
-
-  return { contracts, summary }
-}
-
-function parseRecommendedNext(text: string): RecommendedNext[] {
-  const raw = extractTag(text, "recommended_next") || ""
-  if (!raw.trim()) return []
-
-  const items = parseYamlLikeList(raw)
-  return items
-    .filter((item) => item.agent)
-    .map((item) => {
-      let args: Record<string, unknown> | undefined
-      if (item.args) {
-        try { args = JSON.parse(item.args) } catch { args = undefined }
-      }
-      return {
-        agent: item.agent!,
-        args,
-        reason: item.reason || "",
-        confidence: Math.min(1, Math.max(0, parseFloat(item.confidence || "0.5"))),
-        priority: (["required", "suggested", "optional"].includes(item.priority || "")
-          ? item.priority
-          : "suggested") as RecommendedNext["priority"],
-      }
-    })
-}
-
-function splitCommaSeparated(value: string | undefined): string[] {
-  if (!value || !value.trim()) return []
-  return value.split(/[,，]\s*/).map((s) => s.trim()).filter(Boolean)
 }

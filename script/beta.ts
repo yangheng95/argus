@@ -2,6 +2,7 @@
 
 import { $ } from "bun"
 
+// PR means Pull Request.
 interface PR {
   number: number
   title: string
@@ -38,16 +39,15 @@ async function conflicts() {
     .filter(Boolean)
 }
 
-async function cleanup() {
-  try {
-    await $`git merge --abort`
-  } catch {}
-  try {
-    await $`git checkout -- .`
-  } catch {}
-  try {
-    await $`git clean -fd`
-  } catch {}
+async function ensureCleanWorktree() {
+  const status = (await $`git status --porcelain=v1`.text()).trim()
+  if (status) {
+    throw new Error(`Cannot build beta from a dirty worktree:\n${status}`)
+  }
+}
+
+async function abortMerge() {
+  await $`git merge --abort`
 }
 
 async function fix(pr: PR, files: string[]) {
@@ -90,7 +90,8 @@ async function main() {
   }
 
   console.log("Fetching latest dev branch...")
-  await $`git fetch origin dev`
+  await ensureCleanWorktree()
+  await $`git fetch origin +refs/heads/dev:refs/remotes/origin/dev`
 
   console.log("Checking out beta branch...")
   await $`git checkout -B beta origin/dev`
@@ -103,7 +104,7 @@ async function main() {
 
     console.log("  Fetching PR head...")
     try {
-      await $`git fetch origin pull/${pr.number}/head:pr/${pr.number}`
+      await $`git fetch origin +refs/pull/${pr.number}/head:refs/heads/pr/${pr.number}`
     } catch (err) {
       console.log(`  Failed to fetch: ${err}`)
       failed.push({ number: pr.number, title: pr.title, reason: "Fetch failed" })
@@ -119,14 +120,14 @@ async function main() {
       if (files.length > 0) {
         console.log("  Failed to merge (conflicts)")
         if (!(await fix(pr, files))) {
-          await cleanup()
+          await abortMerge()
           failed.push({ number: pr.number, title: pr.title, reason: "Merge conflicts" })
           await commentOnPR(pr.number, "Merge conflicts with dev branch")
           continue
         }
       } else {
         console.log("  Failed to merge")
-        await cleanup()
+        await abortMerge()
         failed.push({ number: pr.number, title: pr.title, reason: "Merge failed" })
         await commentOnPR(pr.number, "Merge failed")
         continue
@@ -144,6 +145,7 @@ async function main() {
       await $`git add -A`
     } catch {
       console.log("  Failed to stage changes")
+      await abortMerge()
       failed.push({ number: pr.number, title: pr.title, reason: "Staging failed" })
       await commentOnPR(pr.number, "Failed to stage changes")
       continue
@@ -154,6 +156,7 @@ async function main() {
       await $`git commit -m ${commitMsg}`
     } catch (err) {
       console.log(`  Failed to commit: ${err}`)
+      await abortMerge()
       failed.push({ number: pr.number, title: pr.title, reason: "Commit failed" })
       await commentOnPR(pr.number, "Failed to commit changes")
       continue
@@ -174,10 +177,19 @@ async function main() {
   }
 
   console.log("\nChecking if beta branch has changes...")
-  await $`git fetch origin beta`
+  const remoteBetaRef = (await $`git ls-remote --heads origin beta`.text()).trim()
+  let remoteBetaHead = ""
+  let remoteTrees: string[] = []
+  if (remoteBetaRef) {
+    remoteBetaHead = remoteBetaRef.split(/\s+/)[0] ?? ""
+    if (!remoteBetaHead) throw new Error(`Could not parse remote beta ref: ${remoteBetaRef}`)
+    await $`git fetch origin +refs/heads/beta:refs/remotes/origin/beta`
+    remoteTrees = (await $`git log origin/dev..origin/beta --format=%T`.text()).split("\n")
+  } else {
+    console.log("Remote beta branch does not exist; first publish will create it")
+  }
 
   const localTree = await $`git rev-parse beta^{tree}`.text()
-  const remoteTrees = (await $`git log origin/dev..origin/beta --format=%T`.text()).split("\n")
 
   const matchIdx = remoteTrees.indexOf(localTree.trim())
   if (matchIdx !== -1) {
@@ -190,7 +202,11 @@ async function main() {
   }
 
   console.log("Force pushing beta branch...")
-  await $`git push origin beta --force --no-verify`
+  if (remoteBetaHead) {
+    await $`git push origin beta:beta --force-with-lease=refs/heads/beta:${remoteBetaHead}`
+  } else {
+    await $`git push origin beta:beta --force-with-lease=refs/heads/beta:`
+  }
 
   console.log("Successfully synced beta branch")
 }

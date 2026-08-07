@@ -1,0 +1,31 @@
+#!/bin/bash
+set -euo pipefail
+
+if [ "$#" -ne 4 ]; then
+    echo 'Usage: web_search <query> <channels_json> <size> <output>' >&2
+    exit 2
+fi
+
+: "${SEARCH_ANYTHING_ENDPOINT:?SEARCH_ANYTHING_ENDPOINT is required}"
+: "${SEARCH_ANYTHING_AUTH_HEADER:?SEARCH_ANYTHING_AUTH_HEADER is required}"
+: "${SEARCH_ANYTHING_USER_ID:?SEARCH_ANYTHING_USER_ID is required}"
+: "${SEARCH_ANYTHING_APP_ID:?SEARCH_ANYTHING_APP_ID is required}"
+
+QUERY="$1"
+CHANNELS_JSON="$2"
+SIZE="$3"
+OUTPUT="$4"
+
+REQUEST_BODY="$(jq -e -n \
+    --arg query "$QUERY" \
+    --argjson channels "$CHANNELS_JSON" \
+    --arg user_id "$SEARCH_ANYTHING_USER_ID" \
+    --arg app_id "$SEARCH_ANYTHING_APP_ID" \
+    --arg output "$OUTPUT" \
+    --argjson size "$SIZE" \
+    '{query:$query,channels:$channels,user_id:$user_id,app_id:$app_id,output:$output,size:$size}')"
+
+curl --fail-with-body --silent --show-error --request POST "$SEARCH_ANYTHING_ENDPOINT" \
+    --header 'Content-Type: application/json' \
+    --header "$SEARCH_ANYTHING_AUTH_HEADER" \
+    --data-raw "$REQUEST_BODY"

@@ -8,8 +8,9 @@ import * as Formatter from "./formatter"
 import { Config } from "../config/config"
 import { mergeDeep } from "remeda"
 import { Instance } from "../project/instance"
-import { Process } from "../util/process"
+import { createInstanceState } from "../project/instance-state"
 import { entries, values as objectValues } from "@/util/object"
+import { formatterTimeout, runFormatterProcess, type FormatterProcessAuthority } from "./process"
 
 export namespace Format {
   const log = Log.create({ service: "format" })
@@ -25,8 +26,8 @@ export namespace Format {
     })
   export type Status = z.infer<typeof Status>
 
-  const state = Instance.state(async () => {
-    const enabled: Record<string, boolean> = {}
+  const state = createInstanceState(async () => {
+    const enabled: Record<string, Record<string, boolean>> = {}
     const cfg = await Config.get()
 
     const formatters: Record<string, Formatter.Info> = {}
@@ -41,7 +42,9 @@ export namespace Format {
     for (const item of objectValues(Formatter as Record<string, Formatter.Info>)) {
       formatters[item.name] = item
     }
-    for (const [name, item] of entries((cfg.formatter ?? {}) as Exclude<NonNullable<Config.Info["formatter"]>, false>)) {
+    for (const [name, item] of entries(
+      (cfg.formatter ?? {}) as Exclude<NonNullable<Config.Info["formatter"]>, false>,
+    )) {
       if (item.disabled) {
         delete formatters[name]
         continue
@@ -67,25 +70,31 @@ export namespace Format {
       enabled,
       formatters,
     }
-  })
+  }, undefined, "format")
 
-  async function isEnabled(item: Formatter.Info) {
+  function authorityKey(authority: FormatterProcessAuthority) {
+    return authority.kind === "task" ? `task:${authority.taskID}:${authority.cwd}` : `host:${authority.cwd}`
+  }
+
+  async function isEnabled(item: Formatter.Info, authority: FormatterProcessAuthority) {
     const s = await state()
-    let status = s.enabled[item.name]
+    const statuses = (s.enabled[item.name] ??= {})
+    const key = authorityKey(authority)
+    let status = statuses[key]
     if (status === undefined) {
-      status = await item.enabled()
-      s.enabled[item.name] = status
+      status = await item.enabled(formatterTimeout(item.timeout), authority)
+      statuses[key] = status
     }
     return status
   }
 
-  async function getFormatter(ext: string) {
+  async function getFormatter(ext: string, authority: FormatterProcessAuthority) {
     const formatters = await state().then((x) => x.formatters)
     const result: Formatter.Info[] = []
     for (const item of objectValues(formatters)) {
       log.info("checking", { name: item.name, ext })
       if (!item.extensions.includes(ext)) continue
-      if (!(await isEnabled(item))) continue
+      if (!(await isEnabled(item, authority))) continue
       log.info("enabled", { name: item.name, ext })
       result.push(item)
     }
@@ -94,9 +103,10 @@ export namespace Format {
 
   export async function status() {
     const s = await state()
+    const authority = { kind: "host" as const, cwd: Instance.directory }
     const result: Status[] = []
     for (const formatter of objectValues(s.formatters)) {
-      const enabled = await isEnabled(formatter)
+      const enabled = await isEnabled(formatter, authority)
       result.push({
         name: formatter.name,
         extensions: formatter.extensions,
@@ -113,20 +123,18 @@ export namespace Format {
       log.info("formatting", { file })
       const ext = path.extname(file)
 
-      for (const item of await getFormatter(ext)) {
+      const authority = payload.properties.processAuthority
+      for (const item of await getFormatter(ext, authority)) {
         log.info("running", { command: item.command })
         try {
-          const proc = Process.spawn(
-            item.command.map((x) => x.replace("$FILE", file)),
-            {
-              cwd: Instance.directory,
-              env: { ...process.env, ...item.environment },
-              stdout: "ignore",
-              stderr: "ignore",
-            },
-          )
-          const exit = await proc.exited
-          if (exit !== 0)
+          const command = item.command.map((x) => x.replace("$FILE", file))
+          const options = {
+            command,
+            env: { ...process.env, ...item.environment },
+            timeoutMs: formatterTimeout(item.timeout),
+          }
+          const result = await runFormatterProcess(authority, options)
+          if (result.exitCode !== 0)
             log.error("failed", {
               command: item.command,
               ...item.environment,

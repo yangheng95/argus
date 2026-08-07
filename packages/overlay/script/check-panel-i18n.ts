@@ -2,11 +2,14 @@
 
 import { createHash } from "node:crypto"
 import { readdirSync, statSync } from "node:fs"
+import { createRequire } from "node:module"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import ts from "typescript"
+import type * as TypeScript from "typescript"
 
 const dir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
+const requireFromWorkspace = createRequire(path.join(dir, "..", "..", "package.json"))
+const ts = requireFromWorkspace("typescript") as typeof TypeScript
 
 // ── Panel files for revision hash ──
 // Only top-level .html and .js files in src/ are hashed. This keeps the
@@ -18,15 +21,17 @@ const panel = readdirSync(path.join(dir, "src"))
   .sort()
 
 // ── Source files for key-usage scanning ──
-// Scan all .html, .js, .ts, .tsx files in src/ recursively so that
-// i18n keys used by Solid components are recognised as "used".
+// Scan .html, .ts, .tsx files in src/ recursively so that i18n keys used
+// by Solid components are recognised as "used". main.js is the bundled
+// product of main.tsx — its t() calls may be renamed during bundling, so
+// it is skipped; main.tsx is authoritative.
 function collectSourceFiles(base: string): string[] {
   const result: string[] = []
   for (const entry of readdirSync(base)) {
     const full = path.join(base, entry)
     if (statSync(full).isDirectory()) {
       result.push(...collectSourceFiles(full))
-    } else if (/\.(?:html|[jt]sx?)$/.test(entry)) {
+    } else if (/\.(?:html|tsx?)$/.test(entry)) {
       result.push(full)
     }
   }
@@ -63,6 +68,16 @@ function callKey(input?: ts.Expression): string[] {
   if (ts.isStringLiteralLike(input) || ts.isNoSubstitutionTemplateLiteral(input)) return [input.text]
   if (ts.isParenthesizedExpression(input)) return callKey(input.expression)
   if (ts.isConditionalExpression(input)) return [...callKey(input.whenTrue), ...callKey(input.whenFalse)]
+  // Template literal with interpolation: e.g. `task.status.${status}`.
+  // The static head (up to the first `${`) is taken as a dotted prefix —
+  // any locale key starting with that prefix is considered referenced via
+  // the existing ancestor-match rule in referenced(). The trailing dot is
+  // trimmed so "task.status." becomes panel key "task.status".
+  if (ts.isTemplateExpression(input)) {
+    const head = input.head.text
+    if (head.endsWith(".")) return [head.slice(0, -1)]
+    return []
+  }
   return []
 }
 
@@ -74,9 +89,12 @@ function callName(input: ts.LeftHandSideExpression) {
 
 function functionName(node: ts.Node) {
   if (ts.isFunctionDeclaration(node) && node.name) return node.name.text
-  if ((ts.isFunctionExpression(node) || ts.isArrowFunction(node))
-    && ts.isVariableDeclaration(node.parent)
-    && ts.isIdentifier(node.parent.name)) return node.parent.name.text
+  if (
+    (ts.isFunctionExpression(node) || ts.isArrowFunction(node)) &&
+    ts.isVariableDeclaration(node.parent) &&
+    ts.isIdentifier(node.parent.name)
+  )
+    return node.parent.name.text
   return ""
 }
 
@@ -89,7 +107,7 @@ function callParam(input: ts.Expression | undefined, param: string): boolean {
 }
 
 function wrapperNames(source: ts.SourceFile) {
-  const names = new Set(["t", "tc", "errorText"])
+  const names = new Set(["t", "tc", "tArray", "errorText"])
   let changed = true
   while (changed) {
     changed = false
@@ -101,9 +119,11 @@ function wrapperNames(source: ts.SourceFile) {
           let hit = false
           const scan = (child: ts.Node) => {
             if (hit) return
-            if (ts.isCallExpression(child)
-              && names.has(callName(child.expression))
-              && callParam(child.arguments[0], param)) {
+            if (
+              ts.isCallExpression(child) &&
+              names.has(callName(child.expression)) &&
+              callParam(child.arguments[0], param)
+            ) {
               hit = true
               return
             }
@@ -132,8 +152,20 @@ function scriptKind(file: string): ts.ScriptKind {
 function scriptKeys(file: string, text: string) {
   const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, scriptKind(file))
   const names = wrapperNames(source)
-  const keys = new Set<string>()
+  const keys = new Set<string>(extract(text))
   const visit = (node: ts.Node) => {
+    if (
+      ts.isPropertyAssignment(node) &&
+      ts.isIdentifier(node.name) &&
+      (node.name.text === "labelKey" || node.name.text === "tabLabelKey" || node.name.text === "tooltipKey")
+    ) {
+      for (const key of callKey(node.initializer)) keys.add(key)
+    }
+    if (ts.isPropertyAssignment(node) && ts.isIdentifier(node.name) && node.name.text === "title") {
+      for (const key of callKey(node.initializer)) {
+        if (key.startsWith("chat.role.")) keys.add(key)
+      }
+    }
     if (ts.isCallExpression(node)) {
       const name = callName(node.expression)
       if (names.has(name)) {
@@ -156,20 +188,40 @@ function referenced(keys: string[], input: string) {
   )
 }
 
+// A panel key is "covered" by the locale when the locale either defines
+// it literally or defines at least one descendant key (for dynamic prefix
+// keys such as `task.status.${x}` → panelKey "task.status").
+function covered(localeKeys: string[], panelKey: string): boolean {
+  return localeKeys.includes(panelKey) || localeKeys.some((k) => k.startsWith(`${panelKey}.`))
+}
+
 // Revision hash: only panel files (index.html)
+// `path.relative` returns "src\index.html" on Windows and "src/index.html"
+// on Linux/macOS; the previous direct interpolation leaked that
+// difference into the sha256 input, so the same source tree produced
+// two divergent revisions across platforms (CI Linux vs Windows
+// developer pre-push hook). Normalise to forward-slash so the hash is
+// stable on every runner.
+function relPosix(file: string): string {
+  return path.relative(dir, file).replaceAll("\\", "/")
+}
 const panelText = await Promise.all(panel.map((file) => Bun.file(file).text()))
 const revision = createHash("sha256")
-  .update(panel.map((file, index) => `${path.relative(dir, file)}\n${panelText[index]}`).join("\n\n"))
+  .update(panel.map((file, index) => `${relPosix(file)}\n${panelText[index]}`).join("\n\n"))
   .digest("hex")
   .slice(0, 16)
 
 // Key-usage scan: all source files
 const sourceText = await Promise.all(sourceFiles.map((file) => Bun.file(file).text()))
-const panelKeys = [...new Set(sourceFiles.flatMap((file, index) => {
-  const text = sourceText[index]
-  if (file.endsWith(".html")) return extract(text)
-  return scriptKeys(file, text)
-}))].sort()
+const panelKeys = [
+  ...new Set(
+    sourceFiles.flatMap((file, index) => {
+      const text = sourceText[index]
+      if (file.endsWith(".html")) return extract(text)
+      return scriptKeys(file, text)
+    }),
+  ),
+].sort()
 
 const docs = await Promise.all(
   locale.map(async (file) => {
@@ -196,7 +248,7 @@ const docs = await Promise.all(
 
 const base = docs[0]
 for (const item of docs) {
-  const missing = panelKeys.filter((key) => !item.keys.includes(key))
+  const missing = panelKeys.filter((key) => !covered(item.keys, key))
   if (missing.length === 0) continue
   throw new Error(
     [
@@ -212,13 +264,11 @@ for (const item of docs) {
 for (const item of docs) {
   const unused = item.keys.filter((key) => !referenced(panelKeys, key))
   if (unused.length === 0) continue
-  // Warn but do not fail — bundled main.js renames t() calls so the scanner
-  // cannot detect all usages; keys for pending component restores also appear
-  // unused until those components are re-mounted.
-  console.warn(
+  throw new Error(
     [
-      `⚠ ${unused.length} potentially unused keys in ${path.relative(dir, item.file)}`,
-      `  ${unused.slice(0, 10).join(", ")}${unused.length > 10 ? ` … (${unused.length - 10} more)` : ""}`,
+      `Unused locale keys in ${path.relative(dir, item.file)}: ${unused.length}`,
+      ...unused.map((key) => `  ${key}`),
+      "Remove them from both en-US.json and zh-CN.json.",
     ].join("\n"),
   )
 }

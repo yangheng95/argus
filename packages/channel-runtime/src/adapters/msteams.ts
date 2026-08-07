@@ -1,8 +1,10 @@
 import type { ChannelAdapter, MessageHandler } from "../adapter"
 import { adapt, path, type Serve, type Server } from "./http"
+import { MSTeamsActivityAuth } from "./msteams-auth"
 
 type Activity = {
   type?: string
+  channelId?: string
   id?: string
   text?: string
   serviceUrl?: string
@@ -34,6 +36,7 @@ export class MSTeamsAdapter implements ChannelAdapter {
   private serve: Serve
   private server?: Server
   private session = new Map<string, Session>()
+  private activityAuth: MSTeamsActivityAuth
   private token?: string
   private expires = 0
 
@@ -44,6 +47,7 @@ export class MSTeamsAdapter implements ChannelAdapter {
     this.port = opts.port ?? 16669
     this.hook = path(opts.path, "/msteams")
     this.serve = adapt(opts.serve)
+    this.activityAuth = new MSTeamsActivityAuth({ appId: this.appId })
   }
 
   onMessage(handler: MessageHandler): void {
@@ -95,13 +99,15 @@ export class MSTeamsAdapter implements ChannelAdapter {
       conversation: { id: this.session.get(channel)?.conversationId ?? channel },
       ...(thread ? { replyToId: thread } : {}),
       ...(title ? { text: title } : {}),
-      attachments: [{
-        contentType: "application/vnd.microsoft.card.hero",
-        content: {
-          title: title ?? filename,
-          images: [{ url }],
+      attachments: [
+        {
+          contentType: "application/vnd.microsoft.card.hero",
+          content: {
+            title: title ?? filename,
+            images: [{ url }],
+          },
         },
-      }],
+      ],
     })
   }
 
@@ -145,6 +151,9 @@ export class MSTeamsAdapter implements ChannelAdapter {
     // Malformed JSON → 400 below
     const body = (await req.json().catch(() => undefined)) as Activity | undefined
     if (!body) return Response.json({ error: "invalid body" }, { status: 400 })
+    if (!(await this.activityAuth.verify(req, body))) {
+      return Response.json({ error: "invalid auth" }, { status: 401 })
+    }
     if (body.type !== "message") return Response.json({ ok: true })
     if (!this.handler) return Response.json({ ok: true })
 

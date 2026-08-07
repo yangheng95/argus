@@ -33,19 +33,11 @@ export function inferFamily(_key: string): CheckFamily {
   return "build"
 }
 
-export function matchSelectors<T extends { name: string; status: string }>(
-  selectors: string[],
-  checks: T[],
-): T[] {
-  return checks.filter((check) =>
-    selectors.some((selector) => matches(selector, check.name)),
-  )
+export function matchSelectors<T extends { name: string; status: string }>(selectors: string[], checks: T[]): T[] {
+  return checks.filter((check) => selectors.some((selector) => matches(selector, check.name)))
 }
 
-export function selectorsSatisfied(
-  selectors: string[],
-  checks: Array<{ name: string; status: string }>,
-): boolean {
+export function selectorsSatisfied(selectors: string[], checks: Array<{ name: string; status: string }>): boolean {
   if (selectors.length === 0) return true
   // Exclude skipped checks — a skipped check provides no evidence that the
   // check actually ran. Every declared selector must have at least one
@@ -53,9 +45,7 @@ export function selectorsSatisfied(
   // check never ran, which is not a pass.
   const activeChecks = checks.filter((check) => check.status !== "skipped")
   return selectors.every((selector) =>
-    activeChecks.some(
-      (check) => matches(selector, check.name) && check.status === "passed",
-    ),
+    activeChecks.some((check) => matches(selector, check.name) && check.status === "passed"),
   )
 }
 
@@ -71,4 +61,3 @@ export function selectorList(metadata: unknown): string[] {
   if (!Array.isArray(value)) return []
   return value.filter((item): item is string => typeof item === "string" && item.length > 0)
 }
-

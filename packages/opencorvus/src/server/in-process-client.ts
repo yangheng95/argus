@@ -1,6 +1,22 @@
-import { Server } from "@/server/server"
-
 export const IN_PROCESS_BASE_URL = "http://opencorvus.internal"
+
+type InProcessServerApp = {
+  fetch(request: Request): Response | Promise<Response>
+}
+
+let installedServerApp: InProcessServerApp | undefined
+
+export function installInProcessServerApp(app: InProcessServerApp): void {
+  if (installedServerApp && installedServerApp !== app) {
+    throw new Error("In-process server app is already installed")
+  }
+  installedServerApp = app
+}
+
+function serverApp(): InProcessServerApp {
+  if (!installedServerApp) throw new Error("In-process server app is not installed")
+  return installedServerApp
+}
 
 export function serverAuthorizationHeader() {
   const password = process.env.OPENCORVUS_SERVER_PASSWORD?.trim()
@@ -23,7 +39,7 @@ export function createInProcessRequest(
 
 export function createInProcessFetch(input?: { authorization?: string }) {
   return (async (request: RequestInfo | URL, init?: RequestInit) => {
-    return Server.App().fetch(createInProcessRequest(request, init, input?.authorization))
+    return serverApp().fetch(createInProcessRequest(request, init, input?.authorization))
   }) as typeof globalThis.fetch
 }
 
@@ -34,7 +50,7 @@ export async function fetchInProcessServer(input: {
   body?: string
   authorization?: string
 }) {
-  const response = await Server.App().fetch(
+  const response = await serverApp().fetch(
     createInProcessRequest(
       input.url,
       {

@@ -56,7 +56,7 @@ export class VisionPipeline {
 
     try {
       const url = `${this.baseURL}/chat/completions`
-      const fetchOpts: RequestInit & { tls?: any } = {
+      const fetchOpts: RequestInit = {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -64,17 +64,6 @@ export class VisionPipeline {
         },
         body: JSON.stringify(body),
         signal: controller.signal,
-      }
-
-      // Bun on Windows/MINGW may not trust certain CAs — disable strict TLS
-      // verification for the vision API if SSL_CERT_FILE is not configured.
-      if (process.platform === "win32" && !process.env.SSL_CERT_FILE) {
-        console.warn(
-          "[vision] WARNING: TLS certificate verification is DISABLED for the vision API. " +
-            "This weakens transport security. Set the SSL_CERT_FILE environment variable " +
-            "to a valid CA bundle path to restore full TLS verification.",
-        )
-        fetchOpts.tls = { rejectUnauthorized: false }
       }
 
       const res = await fetch(url, fetchOpts)
@@ -102,10 +91,7 @@ export class VisionPipeline {
     } catch (err) {
       // Re-throw with more context for diagnosis
       if (err instanceof DOMException && err.name === "AbortError") {
-        const reason = "timeout or SSL handshake failure"
-        throw new Error(
-          `Vision API aborted (${reason}). URL: ${this.baseURL}. Tip: set SSL_CERT_FILE env var on Windows.`,
-        )
+        throw new Error(`Vision API aborted (timeout or SSL handshake failure). URL: ${this.baseURL}.`)
       }
       throw err
     } finally {

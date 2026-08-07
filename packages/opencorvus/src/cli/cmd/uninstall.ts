@@ -3,7 +3,6 @@ import { UI } from "../ui"
 import * as prompts from "@clack/prompts"
 import { Installation } from "../../installation"
 import { Global } from "../../global"
-import { $ } from "bun"
 import fs from "fs/promises"
 import path from "path"
 import os from "os"
@@ -93,10 +92,14 @@ async function collectRemovalTargets(args: UninstallArgs, method: Installation.M
     { path: Global.Path.cache, label: "Cache", keep: false },
     { path: Global.Path.config, label: "Config", keep: args.keepConfig },
     { path: Global.Path.state, label: "State", keep: false },
+    { path: Global.Path.log, label: "Logs", keep: false },
+    { path: Global.Path.temporary, label: "Temporary files", keep: false },
+    { path: Global.Path.overlay, label: "Overlay runtime", keep: false },
+    { path: Global.Path.bin, label: "Binaries", keep: false },
   ]
 
-  const shellConfig = method === "curl" ? await getShellConfigFile() : null
-  const binary = method === "curl" ? process.execPath : null
+  const shellConfig = method === "native" ? await getShellConfigFile() : null
+  const binary = method === "native" ? process.execPath : null
 
   return { directories, shellConfig, binary }
 }
@@ -125,19 +128,6 @@ async function showRemovalSummary(targets: RemovalTargets, method: Installation.
 
   if (targets.shellConfig) {
     prompts.log.info(`  ✓ Shell PATH in ${shortenPath(targets.shellConfig)}`)
-  }
-
-  if (method !== "curl" && method !== "unknown") {
-    const cmds: Record<string, string> = {
-      npm: "npm uninstall -g opencorvus-ai",
-      pnpm: "pnpm uninstall -g opencorvus-ai",
-      bun: "bun remove -g opencorvus-ai",
-      yarn: "yarn global remove opencorvus-ai",
-      brew: "brew uninstall opencorvus",
-      choco: "choco uninstall opencorvus",
-      scoop: "scoop uninstall opencorvus",
-    }
-    prompts.log.info(`  ✓ Package: ${cmds[method] || method}`)
   }
 }
 
@@ -178,47 +168,13 @@ async function executeUninstall(method: Installation.Method, targets: RemovalTar
     }
   }
 
-  if (method !== "curl" && method !== "unknown") {
-    const cmds: Record<string, string[]> = {
-      npm: ["npm", "uninstall", "-g", "opencorvus-ai"],
-      pnpm: ["pnpm", "uninstall", "-g", "opencorvus-ai"],
-      bun: ["bun", "remove", "-g", "opencorvus-ai"],
-      yarn: ["yarn", "global", "remove", "opencorvus-ai"],
-      brew: ["brew", "uninstall", "opencorvus"],
-      choco: ["choco", "uninstall", "opencorvus"],
-      scoop: ["scoop", "uninstall", "opencorvus"],
-    }
-
-    const cmd = cmds[method]
-    if (cmd) {
-      spinner.start(`Running ${cmd.join(" ")}...`)
-      const result =
-        method === "choco"
-          ? await $`echo Y | choco uninstall opencorvus -y -r`.quiet().nothrow()
-          : await $`${cmd}`.quiet().nothrow()
-      if (result.exitCode !== 0) {
-        spinner.stop(`Package manager uninstall failed: exit code ${result.exitCode}`, 1)
-        if (
-          method === "choco" &&
-          result.stdout.toString("utf8").includes("not running from an elevated command shell")
-        ) {
-          prompts.log.warn(`You may need to run '${cmd.join(" ")}' from an elevated command shell`)
-        } else {
-          prompts.log.warn(`You may need to run manually: ${cmd.join(" ")}`)
-        }
-      } else {
-        spinner.stop("Package removed")
-      }
-    }
-  }
-
-  if (method === "curl" && targets.binary) {
+  if (method === "native" && targets.binary) {
     UI.empty()
     prompts.log.message("To finish removing the binary, run:")
     prompts.log.info(`  rm "${targets.binary}"`)
 
     const binDir = path.dirname(targets.binary)
-    if (binDir.includes(".opencorvus")) {
+    if (path.resolve(binDir) === path.resolve(Global.Path.bin)) {
       prompts.log.info(`  rmdir "${binDir}" 2>/dev/null`)
     }
   }
@@ -269,7 +225,7 @@ async function getShellConfigFile(): Promise<string | null> {
     if (!exists) continue
 
     const content = await Filesystem.readText(file).catch(() => "")
-    if (content.includes("# opencorvus") || content.includes(".opencorvus/bin")) {
+    if (content.includes("# opencorvus") || content.includes(Global.Path.bin)) {
       return file
     }
   }
@@ -294,14 +250,14 @@ async function cleanShellConfig(file: string) {
 
     if (skip) {
       skip = false
-      if (trimmed.includes(".opencorvus/bin") || trimmed.includes("fish_add_path")) {
+      if (trimmed.includes(Global.Path.bin) || trimmed.includes("fish_add_path")) {
         continue
       }
     }
 
     if (
-      (trimmed.startsWith("export PATH=") && trimmed.includes(".opencorvus/bin")) ||
-      (trimmed.startsWith("fish_add_path") && trimmed.includes(".opencorvus"))
+      (trimmed.startsWith("export PATH=") && trimmed.includes(Global.Path.bin)) ||
+      (trimmed.startsWith("fish_add_path") && trimmed.includes(Global.Path.bin))
     ) {
       continue
     }

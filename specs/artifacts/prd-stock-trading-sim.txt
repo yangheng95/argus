@@ -1,0 +1,2203 @@
+股票交易 Web 应用 template v2.0 （需要 architect 分解 > 30 goals 才可完成）
+============================
+
+交付一个接近成熟券商终端体验的商业级可运行 MVP，全栈实现行情、下单、持仓、资产、记录与风控闭环。
+UI 全面采用 Apple 设计语言（参照 macOS/iOS Stocks App + Apple HIG），在专业交易场景中实现
+「简洁、克制、层次分明、信息密度高但不拥挤」的质感。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 一、产品定位
+
+### 1.1 产品目标
+
+构建一个模拟 A 股交易 Web 终端，支持用户完成注册、登录、看盘、下单、撤单、持仓管理、
+收益分析和交易复盘。产品在功能层面覆盖一个真实券商 App 的核心交易链路，在体验层面
+达到 Apple 原生应用的设计水准。
+
+### 1.2 产品基调
+
+- **不是**: 通用 SaaS 仪表盘、管理后台、学习 demo、默认 Vite 页面
+- **是**: 一个让用户打开后第一反应是「这是一个真正的交易软件」的专业级 Web 应用
+- **设计参照**: macOS Stocks App、iOS Stocks App、Apple 官网产品页的排版节奏感、
+  Apple HIG 的组件规范与动效原则
+
+### 1.3 目标用户
+
+| 用户角色 | 核心需求 | 使用场景 | 关键体验指标 |
+|---------|---------|---------|------------|
+| 新手投资者 | 熟悉股票交易流程与术语 | 首次接触股票，通过模拟账户零风险学习 | 5 分钟内完成首次买入 |
+| 轻度交易者 | 模拟练习与策略试错 | 尝试不同买卖策略，观察盈亏变化 | 交易链路无歧义，数据实时可信 |
+| 产品/面试演示 | 展示完整交易闭环与实时 UI 能力 | 技术展示、产品路演、面试作品 | 视觉专业度、交互流畅度 |
+
+### 1.4 成功标准
+
+1. 用户可在 5 分钟内完成注册到第一次买入
+2. 行情刷新具有实时感（SSE 驱动，2 秒刷新），连接状态明确可感知
+3. 核心交易链路无歧义：可买、可卖、可撤、可查、可回看
+4. UI 具有 Apple 原生应用质感，不出现任何"默认 Vite 页面"或"普通管理后台"观感
+5. 所有页面在 1440px 桌面端呈现最佳信息密度
+6. 首屏加载 < 2s，交互响应 < 100ms（感知层面）
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 二、技术栈（固定）
+
+### 2.1 后端
+
+- **运行时**: Bun
+- **语言**: TypeScript (strict mode)
+- **框架**: Hono
+- **数据库**: SQLite via `bun:sqlite`，数据文件 `data/trading.db`
+- **实时推送**: Server-Sent Events (SSE) — 行情推送
+- **密码哈希**: `Bun.password.hash()` / `Bun.password.verify()`
+- **入口**: `index.ts`，同时服务 API 和前端静态资源
+
+### 2.2 前端
+
+- **框架**: React 19 + TypeScript
+- **脚手架**: Vite (react-ts 模板结构)
+- **路由**: React Router v7
+- **样式**: Tailwind CSS v4
+- **图表**: Recharts（K 线蜡烛图 + 均线叠加 + MACD 子图、分时图、成交量、资产曲线、市场热力图 Treemap）
+- **HTTP**: 原生 fetch + SSE EventSource
+- **前端目录**: `web/`，构建产物 `web/dist/`
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 三、项目结构
+
+```text
+index.ts                 # Hono 入口，挂载 API + SSE + 静态资源
+src/
+  db.ts                  # SQLite DDL + 初始化 + 种子数据
+  auth.ts                # 注册、登录、会话校验
+  market.ts              # 行情列表、个股详情、SSE 推送
+  trading.ts             # 下单、撤单、委托列表
+  portfolio.ts           # 持仓、资产汇总、自选股
+  history.ts             # 成交记录、资产曲线、交易复盘摘要
+  simulator.ts           # 行情模拟引擎（随机波动 + 趋势 + 撮合）
+  news.ts                # 个股新闻生成引擎（情绪驱动随机新闻，内存队列）
+  risk.ts                # 下单校验、资金冻结、持仓可卖校验
+web/
+  index.html
+  src/
+    main.tsx
+    App.tsx
+    api.ts               # API client + SSE 订阅
+    components/
+      market/            # 行情相关组件
+      trading/           # 交易相关组件
+      portfolio/         # 持仓相关组件
+      shared/            # 通用组件
+    pages/               # 页面级组件
+    hooks/               # 自定义 Hooks
+    styles/
+      theme.css          # Apple 设计系统变量、全局样式
+  tailwind.config.ts
+  vite.config.ts
+  tsconfig.json
+data/                    # SQLite 数据文件（gitignore）
+tests/
+  api.test.ts            # 后端 API 测试
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 四、Apple 设计系统
+
+本项目 UI 全面模拟 Apple 设计语言。以下是完整的设计系统定义，所有组件、页面、交互
+必须严格遵循。
+
+### 4.1 设计原则（来自 Apple HIG）
+
+1. **清晰 (Clarity)**: 文字清晰可读，图标精确易懂，功能显而易见。去除一切装饰性噪音。
+2. **遵从 (Deference)**: 内容是主角，UI 框架退居幕后。流畅的动效帮助用户理解空间关系，
+   但绝不抢夺注意力。
+3. **深度 (Depth)**: 通过层级、模糊、动效建立空间感。层与层之间的关系通过视觉深度自然表达。
+
+### 4.2 颜色系统
+
+采用 Apple 深色模式色板，在交易场景中保持专业感的同时具备 Apple 特有的柔和质感。
+与传统交易终端的「纯黑+高饱和强调色」不同，Apple 风格的深色模式使用带色倾向的深灰，
+强调色饱和度适中，整体氛围温润而非冰冷。
+
+#### 4.2.1 基础色板
+
+```css
+:root {
+  /* ── 背景层级（Apple 深色模式的多层灰，带微蓝色倾向） ── */
+  --color-bg-primary:       #000000;       /* 最底层，纯黑，用于页面背景 */
+  --color-bg-secondary:     #1c1c1e;       /* 二级面板/侧边栏背景 */
+  --color-bg-tertiary:      #2c2c2e;       /* 三级卡片/输入框背景 */
+  --color-bg-elevated:      #3a3a3c;       /* 弹窗/浮层/下拉菜单背景 */
+  --color-bg-grouped:       #1c1c1e;       /* 分组表格的组背景 */
+
+  /* ── 填充色（用于交互元素的不同状态） ── */
+  --color-fill-primary:     rgba(120, 120, 128, 0.36);  /* 输入框填充 */
+  --color-fill-secondary:   rgba(120, 120, 128, 0.32);  /* 次要填充 */
+  --color-fill-tertiary:    rgba(120, 120, 128, 0.24);  /* hover 状态 */
+  --color-fill-quaternary:  rgba(120, 120, 128, 0.18);  /* 最弱填充 */
+
+  /* ── 文字层级 ── */
+  --color-text-primary:     #ffffff;       /* 主文字，最高对比 */
+  --color-text-secondary:   #ebebf599;     /* 次要文字（60% 白） */
+  --color-text-tertiary:    #ebebf54d;     /* 占位符、说明文字（30% 白） */
+  --color-text-quaternary:  #ebebf52e;     /* 最弱文字（18% 白） */
+
+  /* ── 分隔线 ── */
+  --color-separator:        rgba(84, 84, 88, 0.65);     /* 标准分隔线 */
+  --color-separator-opaque: #38383a;                     /* 不透明分隔线 */
+
+  /* ── 系统强调色 ── */
+  --color-accent-blue:      #0a84ff;       /* 主交互色（按钮、链接、选中态） */
+  --color-accent-green:     #30d158;       /* 成功、涨 */
+  --color-accent-red:       #ff453a;       /* 错误、警告、跌 */
+  --color-accent-orange:    #ff9f0a;       /* 次要警告 */
+  --color-accent-yellow:    #ffd60a;       /* 提醒 */
+  --color-accent-teal:      #64d2ff;       /* 信息、辅助 */
+  --color-accent-indigo:    #5e5ce6;       /* 品牌、装饰 */
+
+  /* ── 交易专用语义色 ── */
+  --color-up:               #ff453a;       /* 涨（A 股惯例红涨） */
+  --color-down:             #30d158;       /* 跌（A 股惯例绿跌） */
+  --color-flat:             #ebebf599;     /* 平盘 */
+  --color-up-bg:            rgba(255, 69, 58, 0.15);    /* 涨背景闪烁 */
+  --color-down-bg:          rgba(48, 209, 88, 0.15);    /* 跌背景闪烁 */
+
+  /* ── 图表专用色 ── */
+  --color-chart-line:       #0a84ff;       /* 分时折线 */
+  --color-chart-area-up:    rgba(255, 69, 58, 0.20);    /* 涨时面积渐变 */
+  --color-chart-area-down:  rgba(48, 209, 88, 0.20);    /* 跌时面积渐变 */
+  --color-chart-candle-up:  #ff453a;       /* K线涨实体 */
+  --color-chart-candle-down:#30d158;       /* K线跌实体 */
+  --color-chart-ma5:        #ff9f0a;       /* MA5 橙 */
+  --color-chart-ma10:       #64d2ff;       /* MA10 青 */
+  --color-chart-ma20:       #bf5af2;       /* MA20 紫 */
+  --color-chart-macd-dif:   #0a84ff;       /* MACD DIF 蓝 */
+  --color-chart-macd-dea:   #ff9f0a;       /* MACD DEA 橙 */
+  --color-chart-grid:       rgba(84, 84, 88, 0.3);      /* 网格线 */
+  --color-chart-crosshair:  rgba(235, 235, 245, 0.3);   /* 十字线 */
+}
+```
+
+#### 4.2.2 颜色使用规则
+
+1. **永远不要在深色背景上使用纯白文字的 100% opacity**：主文字用 `#ffffff`，次要文字
+   必须降低 opacity，形成层级。
+2. **涨跌色只用于有语义的数值**：股票代码、名称不染色，只有价格、涨跌额、涨跌幅、
+   盈亏数字才使用涨跌色。
+3. **分隔线使用半透明色**，不要用实线颜色，这是 Apple 深色模式的关键特征。
+4. **背景层级严格递进**：页面 → 面板 → 卡片 → 弹窗，每一层比上一层亮一个级别。
+
+### 4.3 排版系统
+
+模拟 Apple SF Pro 字体族的排版节奏。Web 环境下使用 Inter 作为英数等宽替代，
+中文使用 -apple-system 回退链。
+
+#### 4.3.1 字体栈
+
+```css
+:root {
+  /* 主字体（界面文字） */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text",
+               "Helvetica Neue", "PingFang SC", "Hiragino Sans GB",
+               "Microsoft YaHei", sans-serif;
+
+  /* 等宽数字字体（价格、金额、数量） */
+  --font-mono: "SF Mono", "JetBrains Mono", "Fira Code", "Cascadia Code",
+               "Consolas", monospace;
+
+  /* 数字专用样式 */
+  --font-tabular: "Inter";  /* Inter 支持 font-variant-numeric: tabular-nums */
+}
+```
+
+#### 4.3.2 字号体系（Apple HIG 标准 Dynamic Type 映射）
+
+| Token | 用途 | 大小 | 行高 | 字重 | 字间距 |
+|-------|------|------|------|------|--------|
+| `--text-large-title` | 页面主标题 | 34px | 41px | 700 (Bold) | 0.37px |
+| `--text-title-1` | 区块标题 | 28px | 34px | 700 (Bold) | 0.36px |
+| `--text-title-2` | 卡片标题 | 22px | 28px | 700 (Bold) | 0.35px |
+| `--text-title-3` | 子标题 | 20px | 25px | 600 (Semibold) | 0.38px |
+| `--text-headline` | 列表标题行 | 17px | 22px | 600 (Semibold) | -0.41px |
+| `--text-body` | 正文 | 17px | 22px | 400 (Regular) | -0.41px |
+| `--text-callout` | 标注文字 | 16px | 21px | 400 (Regular) | -0.32px |
+| `--text-subheadline` | 次要标题 | 15px | 20px | 400 (Regular) | -0.24px |
+| `--text-footnote` | 脚注 | 13px | 18px | 400 (Regular) | -0.08px |
+| `--text-caption-1` | 说明 | 12px | 16px | 400 (Regular) | 0px |
+| `--text-caption-2` | 最小文字 | 11px | 13px | 400 (Regular) | 0.07px |
+
+#### 4.3.3 数字排版规则
+
+- 所有价格、金额、数量字段必须启用 `font-variant-numeric: tabular-nums`
+- 价格大数字（如个股详情页的最新价）使用 `--text-large-title` + `font-weight: 700`
+- 表格中的数值使用 `--font-mono`，确保列对齐不跳动
+- 千分位分隔符使用半角逗号（如 `1,000,000.00`）
+- 盈亏百分比带正负号（如 `+3.2%` / `-1.5%`）
+
+### 4.4 间距系统（8pt 网格）
+
+Apple HIG 使用 8pt 基准网格。所有间距必须是 4 的倍数（最小 4px），常用值为 8 的倍数。
+
+```css
+:root {
+  --space-0:    0px;
+  --space-1:    4px;     /* 最小间距：图标与文字、行内元素间 */
+  --space-2:    8px;     /* 紧凑间距：列表项内部、标签间 */
+  --space-3:    12px;    /* 常规间距：卡片内元素间 */
+  --space-4:    16px;    /* 标准间距：卡片内边距、列表项间 */
+  --space-5:    20px;    /* 区块间距 */
+  --space-6:    24px;    /* 面板内边距 */
+  --space-7:    32px;    /* 大区块间距 */
+  --space-8:    40px;    /* 页面边距 */
+  --space-9:    48px;    /* 章节间距 */
+  --space-10:   64px;    /* 最大间距 */
+}
+```
+
+#### 间距应用规则
+
+- 页面左右边距：桌面端 `--space-8`（40px），平板 `--space-6`（24px）
+- 卡片内边距：`--space-4`（16px），大卡片 `--space-6`（24px）
+- 表格行高：最小 44px（Apple 推荐的最小可点击区域）
+- 表格单元格内边距：水平 `--space-3`（12px），垂直 `--space-2`（8px）
+- 相邻卡片间距：`--space-3`（12px）
+- 区块标题与内容间距：`--space-3`（12px）
+- 导航栏高度：52px
+
+### 4.5 圆角系统
+
+Apple 使用「连续圆角（Squircle / Superellipse）」而非标准 CSS `border-radius` 的
+几何圆弧。Web 环境中无法原生实现 Squircle，使用略大的 `border-radius` 值近似模拟。
+
+```css
+:root {
+  --radius-xs:    4px;     /* 小型元素：徽章、标签 */
+  --radius-sm:    8px;     /* 中型元素：按钮、输入框 */
+  --radius-md:    12px;    /* 卡片、面板 */
+  --radius-lg:    16px;    /* 大卡片、弹窗 */
+  --radius-xl:    20px;    /* 浮层、底部弹窗 */
+  --radius-full:  9999px;  /* 药丸形：Segmented Control 内选中态、标签 */
+}
+```
+
+### 4.6 阴影与层级
+
+Apple 深色模式中，阴影效果较浅色模式更为克制。层级主要通过背景色递进 + 边框 + 微弱
+阴影共同实现。
+
+```css
+:root {
+  /* Apple 深色模式阴影（极其克制） */
+  --shadow-sm:   0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md:   0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg:   0 8px 32px rgba(0, 0, 0, 0.5);
+  --shadow-xl:   0 16px 48px rgba(0, 0, 0, 0.6);
+
+  /* 弹窗阴影 */
+  --shadow-popover: 0 4px 16px rgba(0, 0, 0, 0.5),
+                    0 0 0 0.5px rgba(255, 255, 255, 0.1);
+
+  /* 卡片内发光边框（Apple 深色模式的标志性效果） */
+  --border-card:  0.5px solid rgba(255, 255, 255, 0.08);
+}
+```
+
+### 4.7 毛玻璃与材质 (Vibrancy)
+
+Apple 深色模式的标志性特征：半透明 + 高斯模糊背景，让层与层之间产生深度感。
+
+```css
+/* 侧边栏 / 导航栏的毛玻璃效果 */
+.material-thin {
+  background: rgba(28, 28, 30, 0.72);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+}
+
+/* 弹窗 / 浮层的毛玻璃效果 */
+.material-thick {
+  background: rgba(44, 44, 46, 0.80);
+  backdrop-filter: saturate(180%) blur(40px);
+  -webkit-backdrop-filter: saturate(180%) blur(40px);
+}
+
+/* 顶部导航栏 */
+.material-navbar {
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: var(--border-card);
+}
+```
+
+### 4.8 图标规范
+
+- 使用 Lucide React 图标库（风格最接近 Apple SF Symbols 的开源方案）
+- 图标大小：导航栏 24px，列表项 20px，按钮内 16px，徽章内 12px
+- 图标 stroke-width: 1.5（Apple SF Symbols 的标准粗细）
+- 图标颜色跟随文字层级，不额外上色（除非有语义需求）
+
+### 4.9 动效系统
+
+Apple 动效三原则：自然（弹性曲线）、即时（不拖泥带水）、有意义（反映状态变化）。
+
+#### 4.9.1 缓动曲线
+
+```css
+:root {
+  /* Apple 标准缓动 */
+  --ease-default:    cubic-bezier(0.25, 0.1, 0.25, 1.0);    /* 通用 */
+  --ease-in:         cubic-bezier(0.42, 0, 1, 1);            /* 元素退出 */
+  --ease-out:        cubic-bezier(0, 0, 0.58, 1);            /* 元素进入 */
+  --ease-in-out:     cubic-bezier(0.42, 0, 0.58, 1);         /* 状态切换 */
+  --ease-spring:     cubic-bezier(0.34, 1.56, 0.64, 1);      /* 弹性（慎用） */
+}
+```
+
+#### 4.9.2 时长标准
+
+| 场景 | 时长 | 说明 |
+|------|------|------|
+| 微交互（hover、press） | 100ms | 即时反馈 |
+| 状态切换（tab 切换、toggle） | 200ms | 快速过渡 |
+| 面板展开/折叠 | 250ms | 清晰可见但不拖沓 |
+| 页面转场 | 300ms | 标准转场 |
+| 复杂动画（首屏入场） | 400-600ms | 分段入场 |
+| 价格闪烁 | 300ms | 涨跌色背景淡出 |
+| 数字滚动 | 400ms | 滚轮动画 |
+
+#### 4.9.3 必须实现的动效
+
+1. **价格闪烁**: SSE 推送后，价格发生变化的单元格触发背景色闪烁：
+   - 涨：`var(--color-up-bg)` → 透明，300ms ease-out
+   - 跌：`var(--color-down-bg)` → 透明，300ms ease-out
+   - 平：无动画
+   - 实现方式：CSS `@keyframes flash-up / flash-down`，通过 className 触发
+
+2. **数字滚动 (Odometer)**: 核心金额数字（总资产、可用资金、盈亏）变化时，
+   数字从旧值到新值做垂直滚轮动画：
+   - 每位数字独立滚动，高位先到位
+   - 使用 `requestAnimationFrame` + CSS `translateY` + `clip-path` 实现
+   - 时长 400ms，缓动 `--ease-out`
+   - 不引入第三方库
+
+3. **首屏分段入场**: 页面元素按视觉层级分段淡入 + 微上移：
+   - 第一段（导航栏）：0ms 延迟
+   - 第二段（顶部摘要卡片）：100ms 延迟
+   - 第三段（主内容区）：200ms 延迟
+   - 第四段（底部表格/图表）：300ms 延迟
+   - 每段：opacity 0→1 + translateY(8px→0)，时长 400ms
+
+4. **Tab / Segmented Control 切换**: 选中指示器（背景色块）在选项间平滑滑动，
+   200ms ease-in-out
+
+5. **Toast 通知**: 从顶部滑入（translateY(-100%→0)），300ms ease-out；
+   3 秒后自动滑出
+
+6. **按钮 press**: 按下时 scale(0.97)，释放回弹 scale(1)，100ms
+
+7. **卡片 hover**: 微弱亮度提升（background-color 过渡到 `--color-bg-tertiary`），
+   200ms
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 五、设计原则（交易场景特化）
+
+1. **实时优先**: 行情、委托状态、持仓盈亏必须实时响应，不允许用户依赖刷新页面确认结果。
+2. **交易优先**: 页面结构围绕「看盘 → 判断 → 下单 → 跟踪 → 复盘」组织，
+   而不是围绕 CRUD 菜单组织。
+3. **Apple 式高密度**: 信息密度高，但通过层级、留白、分组保持清晰。
+   与传统交易终端的「像素级压缩」不同，Apple 风格允许适度留白，
+   通过排版层级而非颜色堆砌来传达信息优先级。
+4. **结果可解释**: 每笔订单的状态变化、成交价格、资金变化必须能在界面上追溯。
+5. **风控前置**: 在输入阶段就提示可买数量、可卖数量、价格区间与错误原因，
+   减少提交后报错。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 六、全局布局框架
+
+### 6.1 导航结构
+
+采用 Apple macOS 风格的顶部导航栏 + 内容区结构。
+导航栏固定在页面顶部，使用毛玻璃效果（`material-navbar`），内容区滚动时
+导航栏保持可见。
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ 🔲 Logo + 品牌名   │  行情  │  持仓  │  记录  │    [用户头像 ▾] │  ← 导航栏（52px 高，毛玻璃）
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│                        内容区域                                  │
+│                                                                 │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### 导航栏详细规格
+
+- 高度：52px
+- 内边距：水平 40px
+- 背景：`material-navbar`（毛玻璃）
+- 底部边框：`var(--border-card)`
+- Logo 区域（左侧）：
+  - 品牌图标（24×24）+ 品牌名文字，`--text-headline` 字号，`font-weight: 600`
+  - 品牌名右侧追加小号标签 `模拟` 或 `DEMO`，使用 `--text-caption-2`，
+    背景 `var(--color-fill-tertiary)`，圆角 `--radius-xs`
+- 导航项（居中）：
+  - 使用 Apple 风格的文字导航，不用图标
+  - 导航项文字：`--text-body`，`font-weight: 400`
+  - 当前页面的导航项：`font-weight: 600`，文字颜色 `var(--color-text-primary)`
+  - 非当前页面：`var(--color-text-secondary)`
+  - hover：`var(--color-text-primary)`，200ms 过渡
+  - 导航项间距：`--space-7`（32px）
+- 用户区域（右侧）：
+  - 用户名文字 + 下拉箭头图标
+  - 点击展开下拉菜单：「账户信息」「退出登录」
+  - 下拉菜单使用 `material-thick` 毛玻璃 + `--shadow-popover`
+
+### 6.2 内容区域
+
+- 顶部距导航栏：`--space-6`（24px）
+- 最大内容宽度：1440px，居中
+- 左右边距：`--space-8`（40px）
+
+### 6.3 连接状态指示
+
+- 位于导航栏右侧（用户区域左边）
+- `已连接`：绿色圆点（6px，`var(--color-accent-green)`）+ 文字，均为 `--text-caption-1`
+- `重连中`：橙色圆点 + 脉冲动画 + 文字
+- `已断开`：红色圆点 + 文字；同时页面顶部出现全宽横幅提示条（非阻塞），
+  背景 `var(--color-accent-red)` 15% opacity，文字提示「行情连接中断，正在重连...」
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 七、页面详细设计
+
+### 7.1 登录页 (`/login`)
+
+#### 布局
+
+全屏居中的登录卡片，背景为纯黑 + 微弱渐变噪点纹理。
+页面正中央放置登录卡片，卡片上方是品牌标识区域。
+
+```
+┌──────────────────────────────────────────────┐
+│                                              │
+│                                              │
+│               🔲 品牌 Logo                    │
+│            「模拟交易终端」                     │
+│                                              │
+│         ┌──────────────────────┐             │
+│         │                      │             │
+│         │    用户名输入框       │             │
+│         │                      │             │
+│         │    密码输入框         │             │
+│         │                      │             │
+│         │    [ 登 录 ]         │             │
+│         │                      │             │
+│         │  还没有账户？注册     │             │
+│         │                      │             │
+│         └──────────────────────┘             │
+│                                              │
+│       「模拟账户，不涉及真实资金交易」          │
+│                                              │
+└──────────────────────────────────────────────┘
+```
+
+#### 卡片规格
+
+- 宽度：400px
+- 内边距：`--space-7`（32px）
+- 背景：`var(--color-bg-secondary)`
+- 圆角：`--radius-lg`（16px）
+- 边框：`var(--border-card)`
+- 阴影：`var(--shadow-lg)`
+
+#### 品牌标识区域
+
+- 品牌 Logo：48×48，居中
+- 品牌名：「模拟交易终端」，`--text-title-2`，居中，间距 `--space-3`
+- 副标题：「安全无风险的股票交易学习平台」，`--text-subheadline`，
+  `var(--color-text-secondary)`，居中
+
+#### 输入框规格
+
+- 宽度：100%
+- 高度：44px（Apple 推荐最小交互尺寸）
+- 背景：`var(--color-fill-primary)`
+- 圆角：`--radius-sm`（8px）
+- 无边框（Apple 深色模式输入框风格）
+- 内边距：水平 `--space-4`（16px）
+- placeholder 颜色：`var(--color-text-tertiary)`
+- 聚焦态：`outline: 2px solid var(--color-accent-blue)`，`outline-offset: -2px`
+- 输入框间距：`--space-3`（12px）
+- 标签文字：输入框上方，`--text-subheadline`，`var(--color-text-secondary)`，
+  距输入框 `--space-2`（8px）
+
+#### 登录按钮
+
+- 宽度：100%
+- 高度：44px
+- 背景：`var(--color-accent-blue)`
+- 圆角：`--radius-sm`（8px）
+- 文字：`--text-body`，`font-weight: 600`，白色
+- hover：亮度提升 10%（`filter: brightness(1.1)`）
+- press：`scale(0.97)`，100ms
+- loading 态：文字替换为旋转圆环动画（Apple 风格的白色 spinner）
+- 禁用态：opacity 0.5，cursor not-allowed
+
+#### 错误提示
+
+- 出现在输入框下方，`--text-footnote`，`var(--color-accent-red)`
+- 左侧带 ⚠ 图标（Lucide `AlertCircle`，12px）
+- 进入动画：fadeIn + translateY(-4px→0)，200ms
+
+#### 底部声明
+
+- 卡片下方 `--space-5`（20px）处
+- 「模拟账户，不涉及真实资金交易」
+- `--text-caption-1`，`var(--color-text-tertiary)`，居中
+
+### 7.2 注册页 (`/register`)
+
+#### 布局
+
+与登录页相同的全屏居中卡片布局，增加「确认密码」输入框。
+
+#### 字段
+
+1. 用户名输入框：
+   - placeholder：「请输入用户名」
+   - 校验规则：3-20 字符，字母数字下划线
+   - 实时校验：输入时检查格式（仅前端校验），提交时检查用户名是否已存在
+
+2. 密码输入框：
+   - placeholder：「请输入密码」
+   - 右侧眼睛图标切换明文/密文
+   - 校验规则：6-32 字符
+
+3. 确认密码输入框：
+   - placeholder：「请再次输入密码」
+   - 实时校验：与密码字段是否一致
+
+#### 注册按钮
+
+- 样式与登录按钮一致
+- 文字：「注册并开始交易」
+
+#### 注册成功
+
+- 不使用弹窗，直接跳转到行情首页
+- 页面顶部出现成功 Toast：「注册成功！初始资金 ¥1,000,000 已到账」
+- Toast 带绿色左边框，3 秒后自动消失
+
+#### 底部链接
+
+- 「已有账户？登录」，文字链接样式，`var(--color-accent-blue)`
+
+### 7.3 行情首页 (`/`)
+
+#### 整体布局
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ 导航栏（毛玻璃）                                                     │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐               │
+│ │ 总资产    │ │ 可用资金  │ │ 持仓市值  │ │ 当日盈亏  │  ← 资产概览条  │
+│ └──────────┘ └──────────┘ └──────────┘ └──────────┘               │
+│                                                                     │
+│ ┌──────────────────────────────────┐  ┌────────────────────────┐   │
+│ │                                  │  │ 自选股                  │   │
+│ │     行情报价表格（10只股票）       │  │  ···                   │   │
+│ │                                  │  ├────────────────────────┤   │
+│ │                                  │  │ 涨幅榜 Top 3           │   │
+│ │                                  │  │ 跌幅榜 Top 3           │   │
+│ │                                  │  ├────────────────────────┤   │
+│ ├──────────────────────────────────┤  │ 市场新闻               │   │
+│ │                                  │  │  ···                   │   │
+│ │     市场热力图 (Treemap)          │  │                        │   │
+│ │                                  │  │                        │   │
+│ └──────────────────────────────────┘  └────────────────────────┘   │
+│                                                                     │
+│ ┌─────────────────────────────────────────────────────────────────┐ │
+│ │ 📰 新闻 ticker 滚动条                                          │ │
+│ └─────────────────────────────────────────────────────────────────┘ │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+#### 7.3.1 资产概览条
+
+- 布局：4 个等宽卡片，水平排列，间距 `--space-3`（12px）
+- 每个卡片：
+  - 背景：`var(--color-bg-secondary)`
+  - 圆角：`--radius-md`（12px）
+  - 边框：`var(--border-card)`
+  - 内边距：`--space-4`（16px）
+  - 标签文字（上方）：`--text-caption-1`，`var(--color-text-secondary)`
+  - 数值文字（下方）：`--text-title-2`，`font-weight: 700`
+  - 数值使用 `AnimatedNumber` 组件，变化时播放滚轮动画
+- 各卡片内容：
+  1. 总资产：标签「总资产」，数值 `¥1,234,567.00`，白色
+  2. 可用资金：标签「可用资金」，数值，白色
+  3. 持仓市值：标签「持仓市值」，数值，白色
+  4. 当日盈亏：标签「当日盈亏」，数值带 +/- 符号，涨跌色
+     - 数值下方追加一行涨跌幅百分比，`--text-caption-1`，涨跌色
+
+#### 7.3.2 行情报价表格
+
+- 位于左侧主区域上半部
+- 卡片容器：
+  - 背景：`var(--color-bg-secondary)`
+  - 圆角：`--radius-md`（12px）
+  - 边框：`var(--border-card)`
+  - 内边距：0（表格撑满卡片）
+- 卡片标题区域：
+  - 高度：44px
+  - 内边距：水平 `--space-4`
+  - 文字：「全部行情」，`--text-headline`
+  - 右侧：SSE 状态指示点（与导航栏呼应）
+
+##### 表格列定义
+
+| 列 | 宽度 | 对齐 | 字号 | 说明 |
+|----|------|------|------|------|
+| 代码 | 100px | 左 | `--text-callout`, mono | 股票代码，如 SH600001 |
+| 名称 | 120px | 左 | `--text-callout` | 中文名称 |
+| 最新价 | 100px | 右 | `--text-callout`, mono, bold | 涨跌色 |
+| 涨跌额 | 90px | 右 | `--text-footnote`, mono | 带 +/- 前缀，涨跌色 |
+| 涨跌幅 | 80px | 右 | `--text-footnote`, mono | 带 % 后缀，涨跌色，药丸背景 |
+| 成交量 | 90px | 右 | `--text-footnote`, mono | 使用万/亿简写 |
+| 最高 | 80px | 右 | `--text-footnote`, mono | 红色 |
+| 最低 | 80px | 右 | `--text-footnote`, mono | 绿色 |
+
+##### 涨跌幅列样式
+
+- 涨跌幅数值使用药丸形背景（`--radius-full`）
+- 涨：文字 `var(--color-up)`，背景 `var(--color-up-bg)`
+- 跌：文字 `var(--color-down)`，背景 `var(--color-down-bg)`
+- 平：文字 `var(--color-flat)`，无背景
+- 药丸内边距：水平 8px，垂直 2px
+
+##### 表格行为
+
+- 表头：
+  - 背景：`var(--color-bg-tertiary)`
+  - 文字：`--text-caption-1`，`var(--color-text-secondary)`
+  - 高度：36px
+  - 分隔线：底部 `var(--color-separator)`
+- 数据行：
+  - 高度：44px
+  - 分隔线：底部 `var(--color-separator)`（最后一行无分隔线）
+  - hover：背景过渡到 `var(--color-fill-quaternary)`，200ms
+  - 点击：整行可点击，进入个股详情页，cursor: pointer
+  - 价格闪烁：SSE 推送后若价格变化，该单元格触发 flash 动画（见 4.9.3）
+
+#### 7.3.3 市场热力图
+
+- 位于左侧主区域下半部
+- 卡片容器与报价表格一致
+- 卡片标题：「市场热力图」
+- Treemap 规格：
+  - 使用 Recharts `<Treemap>`
+  - 10 只股票平均分布节点面积（不按市值加权）
+  - 节点颜色按涨跌幅线性插值：
+    - `+10%` → `#991b1b`（深红）
+    - `+5%` → `#ff453a`（红）
+    - `0%` → `#2c2c2e`（中性灰）
+    - `-5%` → `#30d158`（绿）
+    - `-10%` → `#064e3b`（深绿）
+  - 节点内容：
+    - 上方：股票名称，`--text-footnote`，白色
+    - 下方：涨跌幅（带 +/- 符号），`--text-caption-1`，白色
+  - 节点圆角：`--radius-xs`（4px）
+  - 节点间距：2px
+  - hover：tooltip 显示完整信息（代码、名称、最新价、涨跌额、成交量）
+  - 每次 SSE 推送后颜色直接更新（不做动画过渡，避免 Treemap 重排抖动）
+
+#### 7.3.4 右侧辅助区
+
+宽度：320px，固定。
+
+##### 自选股卡片
+
+- 标题：「自选」，右侧「编辑」文字按钮
+- 列表项：
+  - 左侧：股票名称 + 代码（次要色）
+  - 右侧：最新价 + 涨跌幅（涨跌色）
+  - 列表项高度：44px
+  - 分隔线：`var(--color-separator)`
+  - 点击进入个股详情
+- 空状态：
+  - 居中显示：星形图标（Lucide `Star`，48px，`var(--color-text-tertiary)`）
+  - 文字：「还没有自选股」，`--text-subheadline`，`var(--color-text-tertiary)`
+  - 下方：「在行情列表中点击 ☆ 添加」，`--text-caption-1`
+
+##### 涨幅榜 / 跌幅榜
+
+- 标题：「涨幅榜」/「跌幅榜」
+- 各显示 Top 3
+- 列表项：排名数字（1/2/3）+ 名称 + 涨跌幅（涨跌色药丸）
+- 列表项高度：36px
+
+##### 市场新闻卡片
+
+- 标题：「市场动态」
+- 显示最新 5 条新闻
+- 每条新闻：
+  - 标题：`--text-footnote`，单行截断（ellipsis）
+  - 来源 + 时间：`--text-caption-2`，`var(--color-text-tertiary)`
+  - 左侧情绪指示条：2px 宽竖线
+    - 利好：`var(--color-up)`
+    - 利空：`var(--color-down)`
+    - 中性：`var(--color-text-tertiary)`
+  - 新闻间距：`--space-3`
+  - 点击可展开摘要（在当前卡片内展开，不跳转）
+
+#### 7.3.5 新闻 Ticker 滚动条
+
+- 位于页面底部
+- 全宽条形区域
+- 背景：`var(--color-bg-secondary)`
+- 高度：36px
+- 左侧：「快讯」标签，`--text-caption-1`，`var(--color-accent-blue)`，固定不滚动
+- 右侧：最新 5 条市场新闻标题，CSS marquee 横向滚动，速度 50px/s
+- hover 时暂停滚动
+- 新闻标题间以「|」分隔，`var(--color-text-tertiary)`
+
+### 7.4 股票详情 + 交易页 (`/stock/:code`)
+
+#### 整体布局
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ 导航栏                                                              │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│ ← 返回    SH600001 浦发银行                                         │
+│                                                                     │
+│ ¥8.52     +0.02 (+0.24%)     成交量: 12.3万                        │
+│                                                                     │
+│ ┌──────────────────────────────────────┐  ┌──────────────────────┐ │
+│ │                                      │  │  [买入] [卖出]        │ │
+│ │  [分时] [5分] [15分] [日K]           │  │                      │ │
+│ │                                      │  │  价格输入框           │ │
+│ │                                      │  │                      │ │
+│ │        图表区域                       │  │  数量输入框           │ │
+│ │     （分时图 / K线图）                │  │  [100][500][1000][全仓]│ │
+│ │                                      │  │                      │ │
+│ │                                      │  │  可买: 11700股        │ │
+│ │                                      │  │  预计金额: ¥99,684    │ │
+│ │        MACD 子图                      │  │                      │ │
+│ │                                      │  │  [确认买入]           │ │
+│ │        成交量子图                      │  │                      │ │
+│ │                                      │  │                      │ │
+│ └──────────────────────────────────────┘  └──────────────────────┘ │
+│                                                                     │
+│ ┌──────── [当前委托] [成交记录] [个股新闻] ─────────────────────────┐ │
+│ │                                                                   │ │
+│ │    委托/成交/新闻 内容                                             │ │
+│ │                                                                   │ │
+│ └───────────────────────────────────────────────────────────────────┘ │
+│                                                                     │
+│ 开盘: 8.50   最高: 8.65   最低: 8.42   昨收: 8.50                   │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+#### 7.4.1 顶部信息区
+
+- 返回按钮：`←` + 「返回」文字，`var(--color-accent-blue)`，点击返回行情首页
+- 股票标识行：
+  - 股票代码：`--text-subheadline`，`var(--color-text-secondary)`，mono 字体
+  - 股票名称：`--text-title-1`，`font-weight: 700`
+  - 自选按钮：星形图标（☆ 未加入 / ★ 已加入），点击切换
+- 价格行：
+  - 最新价：`--text-large-title`（34px），`font-weight: 700`，涨跌色
+  - 涨跌额：`--text-title-3`，涨跌色，带 +/- 前缀
+  - 涨跌幅：药丸形背景，涨跌色
+  - 成交量：`--text-subheadline`，`var(--color-text-secondary)`
+- 摘要数据行：
+  - 开盘 / 最高 / 最低 / 昨收，4 组「标签:数值」水平排列
+  - 标签：`--text-caption-1`，`var(--color-text-tertiary)`
+  - 数值：`--text-callout`，mono 字体
+  - 最高用红色，最低用绿色，其余白色
+
+#### 7.4.2 图表区
+
+- 占据左侧主区域，宽度约 65%
+- 卡片容器：背景 `var(--color-bg-secondary)`，圆角 `--radius-md`，边框 `var(--border-card)`
+
+##### 图表类型切换（Segmented Control）
+
+- Apple 风格 Segmented Control：
+  - 整体背景：`var(--color-fill-primary)`
+  - 圆角：`--radius-sm`（8px）
+  - 高度：32px
+  - 选中项：白色背景（`var(--color-bg-tertiary)`），`--shadow-sm`，
+    圆角 `--radius-xs`（6px），200ms 滑动过渡
+  - 未选中项：透明背景，`var(--color-text-secondary)`
+  - 选中文字：`var(--color-text-primary)`，`font-weight: 600`
+- 选项：`分时` | `1分` | `5分` | `15分` | `30分` | `60分` | `日K`
+
+> **完整图表规格见 `prd-technical-indicators.txt`**
+> 包括 6 种 K 线画法、7 种主图叠加指标、18 种副图技术指标、
+> 画线工具、图表交互（缩放/平移/十字线）、后端指标计算引擎。
+
+##### 分时图（默认）
+
+- Recharts `ComposedChart`
+- 折线：`var(--color-chart-line)`（蓝），strokeWidth 1.5
+- 面积渐变：
+  - 当日涨时：从 `var(--color-chart-area-up)` 渐变到透明
+  - 当日跌时：从 `var(--color-chart-area-down)` 渐变到透明
+  - 基准线从昨收价处展开
+- 成交量 Bar：下方占总高度 15%，Bar 颜色随当根涨跌方向
+- X 轴：`HH:mm` 格式，每 30 分钟一个刻度
+- Y 轴：价格，保留 2 位小数
+- 网格线：`var(--color-chart-grid)`，虚线（dashArray: 4 4）
+- 昨收基准线：水平虚线，`var(--color-text-tertiary)`，标注「昨收 ¥8.50」
+
+##### K 线蜡烛图
+
+- Recharts `ComposedChart`
+- 蜡烛实体：
+  - 通过自定义 `shape` 函数绘制 SVG 矩形（open/close 实体）
+  - 涨时实体：`var(--color-chart-candle-up)`（红），空心或实心均可（此处用实心）
+  - 跌时实体：`var(--color-chart-candle-down)`（绿），实心
+  - 平收：`var(--color-flat)`（灰），极窄横线
+  - 实体边框：同色加深 20%，strokeWidth 0.5
+- 上下影线：
+  - 在 shape 函数中用 SVG `<line>` 绘制 high→max(open,close) 和 min(open,close)→low
+  - 影线颜色同实体颜色
+  - strokeWidth: 1
+- MA 均线叠加：
+  - MA5：`var(--color-chart-ma5)`（橙 `#ff9f0a`），strokeWidth 1，opacity 0.85
+  - MA10：`var(--color-chart-ma10)`（青 `#64d2ff`），strokeWidth 1，opacity 0.85
+  - MA20：`var(--color-chart-ma20)`（紫 `#bf5af2`），strokeWidth 1，opacity 0.85
+  - 作为 Recharts `<Line>` 叠加在蜡烛图上方
+- 成交量子图：
+  - K 线图下方独立区域，占图表总高度约 20%
+  - Bar 按当根蜡烛方向染色（涨红/跌绿）
+  - 与主图共用 X 轴，独立 Y 轴
+- MACD 子图：
+  - 成交量子图下方，占图表总高度约 25%
+  - DIF 折线：`var(--color-chart-macd-dif)`（蓝）
+  - DEA 折线：`var(--color-chart-macd-dea)`（橙）
+  - BAR 柱状图：正值红 / 负值绿
+  - 零轴线：水平细线
+  - 与主图共用 X 轴，独立 Y 轴
+- X 轴格式：
+  - 分时/5m/15m：`HH:mm`
+  - 日 K：`MM/DD`
+- 鼠标交互：
+  - 移动时显示全宽 crosshair 线，颜色 `var(--color-chart-crosshair)`，0.5px
+  - Tooltip 固定在图表左上角（不随鼠标移动），避免遮挡主体
+  - Tooltip 内容：OHLCV + 当前 MA5/MA10/MA20 + MACD DIF/DEA/BAR 数值
+  - Tooltip 背景：`material-thick` 毛玻璃，圆角 `--radius-sm`
+
+#### 7.4.3 交易面板
+
+- 位于右侧，宽度约 35%，最小宽度 320px
+- 卡片容器：背景 `var(--color-bg-secondary)`，圆角 `--radius-md`
+
+##### 买入/卖出切换
+
+- Apple 风格 Segmented Control（与图表周期切换样式一致）
+- 两个选项：「买入」（选中时背景带红色倾向）/ 「卖出」（选中时背景带绿色倾向）
+- 买入 tab 选中：背景 `var(--color-up-bg)`，文字 `var(--color-up)`
+- 卖出 tab 选中：背景 `var(--color-down-bg)`，文字 `var(--color-down)`
+
+##### 价格输入
+
+- 标签：「委托价格」，`--text-subheadline`，`var(--color-text-secondary)`
+- 输入框：
+  - 高度 44px，背景 `var(--color-fill-primary)`，圆角 `--radius-sm`
+  - 左侧「-」按钮，右侧「+」按钮（步进 0.01）
+  - 数值居中显示，mono 字体
+  - 默认填入当前价格
+- 价格范围提示：输入框下方，`--text-caption-2`，`var(--color-text-tertiary)`
+  - 「限价范围: ¥7.65 ~ ¥9.35（±10%）」
+
+##### 数量输入
+
+- 标签：「委托数量」
+- 输入框规格同价格输入
+- 左侧「-」右侧「+」按钮（步进 100）
+- 快捷数量按钮行：
+  - 4 个药丸形按钮并排：`100` `500` `1000` `全仓`
+  - 背景 `var(--color-fill-tertiary)`，圆角 `--radius-full`
+  - 高度 28px
+  - hover：`var(--color-fill-secondary)`
+  - 选中：`var(--color-accent-blue)` 15% opacity，文字 `var(--color-accent-blue)`
+  - 「全仓」按钮：计算 `Math.floor(可用资金 / 价格 / 100) * 100` 并填入
+- 数量校验提示：
+  - 输入不是 100 整数倍时立即提示：「数量必须为 100 的整数倍（1 手 = 100 股）」
+  - `--text-caption-2`，`var(--color-accent-orange)`
+
+##### 交易信息摘要
+
+- 分隔线后，背景略深
+- 行项：每行「标签 — 数值」左右分布
+- 买入模式：
+  - 可买数量：`X 股`
+  - 预计金额：`¥XXX,XXX.XX`
+  - 可用资金：`¥XXX,XXX.XX`
+- 卖出模式：
+  - 可卖数量：`X 股`
+  - 预计金额：`¥XXX,XXX.XX`
+  - 持仓成本：`¥XX.XX`
+- 数值使用 mono 字体，`var(--color-text-primary)`
+- 标签使用 `--text-footnote`，`var(--color-text-secondary)`
+
+##### 提交按钮
+
+- 固定在面板底部
+- 宽度 100%，高度 48px
+- 买入模式：
+  - 背景 `var(--color-up)`，文字白色，`font-weight: 600`
+  - 文字：「买入 浦发银行」
+- 卖出模式：
+  - 背景 `var(--color-down)`，文字白色
+  - 文字：「卖出 浦发银行」
+- 圆角 `--radius-sm`（8px）
+- hover：亮度 +10%
+- press：`scale(0.97)`
+- 禁用态（资金/持仓不足）：opacity 0.4，显示原因文字
+
+##### 下单确认
+
+- 点击提交按钮后弹出确认弹窗（Apple 风格 Alert Dialog）
+- 弹窗：
+  - 宽度 300px
+  - 背景 `material-thick` 毛玻璃
+  - 圆角 `--radius-lg`
+  - 阴影 `--shadow-xl`
+  - 标题：「确认买入」/「确认卖出」，`--text-headline`
+  - 内容：摘要信息（股票、价格、数量、金额），`--text-body`
+  - 按钮组：
+    - 「取消」：文字按钮，`var(--color-accent-blue)`
+    - 「确认」：实心按钮，买入红 / 卖出绿
+  - 按钮间以细分隔线隔开
+- 弹窗入场动画：scale(1.1→1) + opacity(0→1)，200ms
+- 背景遮罩：纯黑 40% opacity
+
+##### 下单结果 Toast
+
+- 成功：「买入委托已提交 — SH600001 浦发银行 800股 × ¥8.52」
+  - 绿色左边框，3 秒后消失
+- 失败：「下单失败 — 可用资金不足，还需 ¥XXX」
+  - 红色左边框，5 秒后消失
+
+#### 7.4.4 底部 Tab 区域
+
+- Apple 风格文字 Tab：
+  - Tab 项文字：`--text-subheadline`
+  - 选中：`var(--color-text-primary)`，底部 2px 指示线（`var(--color-accent-blue)`）
+  - 未选中：`var(--color-text-secondary)`
+- 三个 Tab：「当前委托」|「成交记录」|「个股新闻」
+
+##### 当前委托 Tab
+
+- 表格列：时间 | 方向 | 价格 | 数量 | 状态 | 操作
+- 方向列：「买入」红色 /「卖出」绿色
+- 状态列：
+  - `pending`：橙色药丸「待成交」
+  - `filled`：绿色药丸「已成交」
+  - `cancelled`：灰色药丸「已撤销」
+- 操作列：`pending` 状态显示「撤单」文字按钮，`var(--color-accent-red)`
+- 空状态：「暂无委托记录」
+
+##### 成交记录 Tab
+
+- 最近 10 条成交记录
+- 表格列：时间 | 方向 | 成交价 | 数量 | 金额
+
+##### 个股新闻 Tab
+
+- 最新 20 条新闻卡片
+- 每条卡片：
+  - 左侧：情绪徽章 pill
+    - 利好：红色背景 `var(--color-up-bg)`，红色文字，「利好」
+    - 利空：绿色背景 `var(--color-down-bg)`，绿色文字，「利空」
+    - 中性：灰色背景 `var(--color-fill-tertiary)`，灰色文字，「中性」
+    - pill 圆角 `--radius-full`，内边距水平 8px 垂直 2px
+  - 右侧上方：来源 + 时间，`--text-caption-2`，`var(--color-text-tertiary)`
+  - 标题：`--text-callout`，`font-weight: 500`
+  - 摘要：默认折叠，点击标题展开
+    - 展开动画：高度从 0 展开，250ms ease-out
+    - 摘要文字：`--text-footnote`，`var(--color-text-secondary)`
+  - 卡片间距：`--space-2`
+  - 卡片 hover：左侧出现 2px 竖条（accent 色）+ 背景轻微提亮
+
+### 7.5 持仓页 (`/portfolio`)
+
+#### 整体布局
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ 导航栏                                                              │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ │
+│ │ 总资产    │ │ 可用资金  │ │ 冻结资金  │ │ 持仓市值  │ │ 总盈亏    │ │
+│ └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘ │
+│                                                                     │
+│ ┌─────────────────────────────────────┐  ┌────────────────────────┐ │
+│ │                                     │  │ 仓位结构               │ │
+│ │   每日资产曲线（最近30天）            │  │                        │ │
+│ │                                     │  │  持仓集中度             │ │
+│ │                                     │  │  最大持仓               │ │
+│ │                                     │  │  盈利: X只              │ │
+│ │                                     │  │  亏损: X只              │ │
+│ └─────────────────────────────────────┘  └────────────────────────┘ │
+│                                                                     │
+│ ┌───────────────────────────────────────────────────────────────────┐│
+│ │ 持仓列表                                                         ││
+│ │  股票 | 数量 | 可卖 | 成本价 | 现价 | 市值 | 盈亏额 | 盈亏率     ││
+│ │  ···                                                             ││
+│ └───────────────────────────────────────────────────────────────────┘│
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+#### 7.5.1 资产概览条
+
+- 5 个卡片水平排列，规格同行情首页资产概览条
+- 各卡片内容：
+  1. 总资产：`¥X,XXX,XXX.XX`，白色，`AnimatedNumber`
+  2. 可用资金：白色
+  3. 冻结资金：橙色（`var(--color-accent-orange)`）
+  4. 持仓市值：白色
+  5. 总盈亏：涨跌色，附带收益率百分比
+
+#### 7.5.2 资产曲线图
+
+- Recharts `AreaChart`
+- 折线：`var(--color-accent-blue)`，strokeWidth 2
+- 面积：从蓝到透明渐变
+- X 轴：日期 `MM/DD`
+- Y 轴：金额
+- 网格线：`var(--color-chart-grid)`
+- hover tooltip：显示日期 + 总资产 + 当日涨跌
+
+#### 7.5.3 仓位结构卡
+
+- 内容：
+  - 持仓集中度：最大持仓占总市值百分比，圆形进度条可视化
+  - 最大持仓：股票名称 + 占比
+  - 盈利股票数：数字 + 绿色
+  - 亏损股票数：数字 + 红色
+
+#### 7.5.4 持仓列表
+
+- 卡片标题：「当前持仓」
+- 表格列：
+
+| 列 | 对齐 | 说明 |
+|----|------|------|
+| 股票 | 左 | 代码 + 名称（代码为次要色） |
+| 数量 | 右 | mono |
+| 可卖 | 右 | mono，若 < 数量则橙色 |
+| 成本价 | 右 | mono，2 位小数 |
+| 现价 | 右 | mono，涨跌色 |
+| 市值 | 右 | mono，千分位 |
+| 盈亏额 | 右 | 涨跌色，带 +/- |
+| 盈亏率 | 右 | 涨跌色药丸，带 % |
+
+- 行点击进入个股详情页
+- 空状态：
+  - 居中：空钱包图标（Lucide `Wallet`，48px，`var(--color-text-tertiary)`）
+  - 文字：「暂无持仓」
+  - 下方按钮：「去行情页看看」，文字链接样式
+
+### 7.6 交易记录页 (`/history`)
+
+#### 整体布局
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ 导航栏                                                              │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│ ┌──────────────┐  ┌──────────────┐  ┌──────────────┐              │
+│ │ 今日成交额    │  │ 成交笔数      │  │ 已实现盈亏    │              │
+│ └──────────────┘  └──────────────┘  └──────────────┘              │
+│                                                                     │
+│ 筛选栏: [全部股票 ▾] [全部方向 ▾]                                    │
+│                                                                     │
+│ ┌───────────────────────────────────────────────────────────────────┐│
+│ │ 成交记录表格                                                      ││
+│ │  时间 | 股票 | 方向 | 数量 | 价格 | 金额 | 状态                    ││
+│ │  ···                                                             ││
+│ │                                                                   ││
+│ │  [ 加载更多 ]                                                      ││
+│ └───────────────────────────────────────────────────────────────────┘│
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+#### 7.6.1 顶部摘要条
+
+- 3 个卡片：今日成交额、成交笔数、已实现盈亏
+- 样式同其他页面资产卡片
+
+#### 7.6.2 筛选栏
+
+- 两个下拉选择器，Apple 风格：
+  - 背景 `var(--color-fill-primary)`，圆角 `--radius-sm`
+  - 高度 36px
+  - 右侧下拉箭头图标
+  - 选项：
+    - 股票：「全部股票」+ 10 只股票名称
+    - 方向：「全部方向」「买入」「卖出」
+- 下拉菜单：`material-thick` 毛玻璃，圆角 `--radius-md`，`--shadow-popover`
+
+#### 7.6.3 成交记录表格
+
+- 表格列：
+
+| 列 | 对齐 | 说明 |
+|----|------|------|
+| 时间 | 左 | `YYYY-MM-DD HH:mm:ss` |
+| 股票 | 左 | 代码 + 名称 |
+| 方向 | 居中 | 「买入」红 /「卖出」绿，药丸样式 |
+| 数量 | 右 | mono |
+| 价格 | 右 | mono，2 位小数 |
+| 金额 | 右 | mono，千分位 |
+| 状态 | 居中 | 状态药丸 |
+
+- 分页：底部「加载更多」按钮（不用传统分页器）
+- 空状态：「暂无成交记录」+ 交易图标
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 八、通用组件规格
+
+### 8.1 AnimatedNumber（数字滚动组件）
+
+- Props: `value: number`, `prefix?: string`（如 `¥`）, `decimals?: number`
+- 行为：每次 value 变化时播放从旧值到新值的垂直滚轮动画
+- 实现要点：
+  - 将数字拆分为每位数字（含小数点、逗号）
+  - 每位数字独立滚动，使用 `translateY` 实现
+  - 高位先到位，低位稍有延迟（stagger 20ms）
+  - 使用 `requestAnimationFrame` 驱动
+  - CSS `overflow: hidden` + `clip-path` 裁剪
+  - 总时长 400ms，缓动 `--ease-out`
+- 不引入第三方动画库
+
+### 8.2 PriceFlash（价格闪烁组件）
+
+- Props: `value: number`, `prevValue: number`
+- 行为：当 value !== prevValue 时，触发背景色闪烁
+- CSS keyframes:
+  ```css
+  @keyframes flash-up {
+    from { background-color: var(--color-up-bg); }
+    to { background-color: transparent; }
+  }
+  @keyframes flash-down {
+    from { background-color: var(--color-down-bg); }
+    to { background-color: transparent; }
+  }
+  ```
+- 动画时长 300ms，ease-out
+
+### 8.3 SegmentedControl（分段控制器）
+
+- Props: `options: string[]`, `value: string`, `onChange: (v: string) => void`
+- Apple 标准样式（见 4.9.3 中 Tab/Segmented Control 描述）
+- 选中指示器在选项间平滑滑动，200ms ease-in-out
+- 高度 32px
+- 可选 variant: `default` | `buy-sell`（买入卖出特殊配色）
+
+### 8.4 Toast 通知组件
+
+- 位置：页面右上角，距顶部 `--space-9`（导航栏下方）
+- 宽度：360px
+- 背景：`material-thick` 毛玻璃
+- 圆角：`--radius-md`
+- 左侧色条：4px 宽，成功绿 / 错误红 / 信息蓝
+- 内容：标题 + 描述文字
+- 关闭按钮：右上角 × 图标
+- 入场动画：从右侧滑入（translateX(100%→0)），300ms ease-out
+- 自动消失：成功 3 秒，错误 5 秒
+- 多条 toast 垂直堆叠，间距 `--space-2`
+
+### 8.5 EmptyState（空状态组件）
+
+- Props: `icon: LucideIcon`, `title: string`, `description?: string`, `action?: { label: string, onClick: () => void }`
+- 布局：垂直居中
+- 图标：48px，`var(--color-text-tertiary)`
+- 标题：`--text-headline`，`var(--color-text-secondary)`
+- 描述：`--text-subheadline`，`var(--color-text-tertiary)`
+- 操作按钮：文字按钮样式
+
+### 8.6 StatusBadge（状态徽章组件）
+
+- Props: `status: 'pending' | 'filled' | 'cancelled'` 或 `sentiment: 'positive' | 'negative' | 'neutral'`
+- 药丸形状：圆角 `--radius-full`，内边距水平 8px 垂直 2px
+- 颜色映射：
+  - pending / neutral：灰色系
+  - filled / positive：绿色系（成交）/ 红色系（利好）
+  - cancelled / negative：灰暗色 / 绿色系（利空）
+
+### 8.7 DataCard（数据卡片组件）
+
+- Props: `label: string`, `value: number | string`, `trend?: 'up' | 'down' | 'flat'`, `animated?: boolean`
+- 标签在上，数值在下
+- 数值可选使用 AnimatedNumber
+- trend 控制数值颜色
+
+### 8.8 ConfirmDialog（确认对话框）
+
+- Apple Alert 风格
+- 居中弹窗，宽度 300px
+- `material-thick` 毛玻璃背景
+- 标题 + 内容 + 按钮组（水平排列，分隔线隔开）
+- 遮罩层：纯黑 40% opacity
+- 入场：scale(1.1→1) + opacity(0→1)，200ms
+- ESC 键关闭
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 九、API 接口设计
+
+### 9.1 认证与会话
+
+| 方法 | 路径 | 描述 | 认证 |
+|------|------|------|------|
+| POST | `/api/auth/register` | 用户名+密码注册，初始资金 1,000,000 | 否 |
+| POST | `/api/auth/login` | 登录返回 Bearer token | 否 |
+| GET | `/api/auth/me` | 获取当前登录用户基础信息与账户余额 | 是 |
+| POST | `/api/auth/logout` | 注销当前会话 | 是 |
+
+#### 注册 `POST /api/auth/register`
+
+请求体：
+```json
+{
+  "username": "string (3-20字符，字母数字下划线)",
+  "password": "string (6-32字符)"
+}
+```
+
+成功响应 201：
+```json
+{
+  "user": {
+    "id": 1,
+    "username": "trader1",
+    "balance": 1000000,
+    "frozen_balance": 0,
+    "created_at": 1712000000
+  },
+  "token": "Bearer xxx"
+}
+```
+
+错误响应：
+- 400: `{ "error": "用户名长度必须在3-20字符之间" }`
+- 400: `{ "error": "密码长度必须在6-32字符之间" }`
+- 409: `{ "error": "用户名已存在" }`
+
+#### 登录 `POST /api/auth/login`
+
+请求体：
+```json
+{
+  "username": "string",
+  "password": "string"
+}
+```
+
+成功响应 200：
+```json
+{
+  "user": {
+    "id": 1,
+    "username": "trader1",
+    "balance": 987654.32,
+    "frozen_balance": 12345.00,
+    "created_at": 1712000000
+  },
+  "token": "Bearer xxx"
+}
+```
+
+错误响应：
+- 401: `{ "error": "用户名或密码错误" }`
+
+#### 当前用户 `GET /api/auth/me`
+
+成功响应 200：
+```json
+{
+  "id": 1,
+  "username": "trader1",
+  "balance": 987654.32,
+  "frozen_balance": 12345.00,
+  "created_at": 1712000000
+}
+```
+
+### 9.2 行情中心
+
+| 方法 | 路径 | 描述 | 认证 |
+|------|------|------|------|
+| GET | `/api/market/stocks` | 股票列表 | 是 |
+| GET | `/api/market/stocks/:code` | 单只股票详情 | 是 |
+| GET | `/api/market/stocks/:code/kline` | K 线数据 | 是 |
+| GET | `/api/market/overview` | 大盘摘要 | 是 |
+| GET | `/api/market/heatmap` | 热力图数据 | 是 |
+| GET | `/api/market/sse` | SSE 实时行情推送 | 是 |
+| GET | `/api/market/watchlist` | 自选股列表 | 是 |
+| POST | `/api/market/watchlist` | 添加自选股 | 是 |
+| DELETE | `/api/market/watchlist/:code` | 删除自选股 | 是 |
+
+#### 股票列表 `GET /api/market/stocks`
+
+响应 200：
+```json
+{
+  "stocks": [
+    {
+      "code": "SH600001",
+      "name": "浦发银行",
+      "current_price": 8.52,
+      "change": 0.02,
+      "change_percent": 0.24,
+      "volume": 123456,
+      "high_price": 8.65,
+      "low_price": 8.42,
+      "open_price": 8.50,
+      "prev_close": 8.50
+    }
+  ]
+}
+```
+
+#### K 线数据 `GET /api/market/stocks/:code/kline?period=1m|5m|15m|1d`
+
+响应 200：
+```json
+{
+  "code": "SH600001",
+  "period": "5m",
+  "data": [
+    {
+      "time": 1712000000,
+      "open": 8.50,
+      "high": 8.55,
+      "low": 8.48,
+      "close": 8.52,
+      "volume": 12345,
+      "ma5": 8.51,
+      "ma10": 8.49,
+      "ma20": 8.47,
+      "macd_dif": 0.012,
+      "macd_dea": 0.008,
+      "macd_bar": 0.008
+    }
+  ]
+}
+```
+
+#### 大盘摘要 `GET /api/market/overview`
+
+响应 200：
+```json
+{
+  "up_count": 6,
+  "down_count": 3,
+  "flat_count": 1,
+  "total_volume": 1234567,
+  "top_gainers": [
+    { "code": "SH600009", "name": "上海机场", "change_percent": 3.2 }
+  ],
+  "top_losers": [
+    { "code": "SH600010", "name": "包钢股份", "change_percent": -2.8 }
+  ]
+}
+```
+
+#### 热力图数据 `GET /api/market/heatmap`
+
+响应 200：
+```json
+{
+  "stocks": [
+    {
+      "code": "SH600001",
+      "name": "浦发银行",
+      "change_percent": 0.24,
+      "current_price": 8.52,
+      "volume": 123456
+    }
+  ]
+}
+```
+
+#### SSE 实时行情 `GET /api/market/sse`
+
+每 2 秒推送一次全量快照：
+```
+event: market
+data: {"stocks":[...], "timestamp": 1712000000}
+
+event: market
+data: {"stocks":[...], "timestamp": 1712000002}
+```
+
+每条 stock 数据结构同 `/api/market/stocks` 中的单只股票。
+
+#### 自选股 `POST /api/market/watchlist`
+
+请求体：
+```json
+{ "stock_code": "SH600001" }
+```
+
+响应 201：
+```json
+{ "message": "添加成功" }
+```
+
+### 9.3 新闻接口
+
+| 方法 | 路径 | 描述 | 认证 |
+|------|------|------|------|
+| GET | `/api/news/:code` | 个股新闻列表 | 是 |
+| GET | `/api/news/market` | 全市场新闻 | 是 |
+
+#### 个股新闻 `GET /api/news/:code?limit=20&offset=0`
+
+响应 200：
+```json
+{
+  "news": [
+    {
+      "id": "uuid",
+      "stock_code": "SH600001",
+      "title": "浦发银行主力资金大单净流入，机构持续增持信号明显",
+      "summary": "市场分析人士指出...",
+      "sentiment": "positive",
+      "source": "东方财富",
+      "impact": "high",
+      "created_at": 1712000000
+    }
+  ],
+  "total": 50
+}
+```
+
+### 9.4 交易中心
+
+| 方法 | 路径 | 描述 | 认证 |
+|------|------|------|------|
+| POST | `/api/trading/buy` | 限价买入 | 是 |
+| POST | `/api/trading/sell` | 限价卖出 | 是 |
+| POST | `/api/trading/cancel/:id` | 撤销挂单 | 是 |
+| GET | `/api/trading/orders` | 当前委托单列表 | 是 |
+| GET | `/api/trading/orders/history` | 历史委托列表 | 是 |
+
+#### 买入 `POST /api/trading/buy`
+
+请求体：
+```json
+{
+  "stock_code": "SH600001",
+  "quantity": 100,
+  "price": 8.52
+}
+```
+
+成功响应 201：
+```json
+{
+  "order": {
+    "id": 1,
+    "stock_code": "SH600001",
+    "direction": "buy",
+    "quantity": 100,
+    "price": 8.52,
+    "frozen_amount": 852.00,
+    "status": "pending",
+    "created_at": 1712000000
+  },
+  "account": {
+    "balance": 999148.00,
+    "frozen_balance": 852.00
+  }
+}
+```
+
+错误响应：
+- 400: `{ "error": "数量必须为100的整数倍" }`
+- 400: `{ "error": "委托价格超出限价范围（当前价 ±10%）" }`
+- 400: `{ "error": "可用资金不足，需要 ¥852.00，可用 ¥500.00" }`
+- 404: `{ "error": "股票代码不存在" }`
+
+#### 卖出 `POST /api/trading/sell`
+
+请求体：同买入。
+
+错误响应：
+- 400: `{ "error": "持仓不足，可卖 0 股" }`
+
+#### 撤单 `POST /api/trading/cancel/:id`
+
+成功响应 200：
+```json
+{
+  "order": {
+    "id": 1,
+    "status": "cancelled"
+  },
+  "account": {
+    "balance": 1000000.00,
+    "frozen_balance": 0
+  }
+}
+```
+
+错误响应：
+- 400: `{ "error": "订单已成交，无法撤销" }`
+- 403: `{ "error": "无权操作此订单" }`
+
+#### 委托列表 `GET /api/trading/orders`
+
+响应 200：
+```json
+{
+  "orders": [
+    {
+      "id": 1,
+      "stock_code": "SH600001",
+      "stock_name": "浦发银行",
+      "direction": "buy",
+      "quantity": 100,
+      "price": 8.52,
+      "frozen_amount": 852.00,
+      "status": "pending",
+      "filled_at": null,
+      "created_at": 1712000000
+    }
+  ]
+}
+```
+
+### 9.5 持仓与资产
+
+| 方法 | 路径 | 描述 | 认证 |
+|------|------|------|------|
+| GET | `/api/portfolio` | 当前持仓 | 是 |
+| GET | `/api/portfolio/summary` | 资产摘要 | 是 |
+| GET | `/api/portfolio/exposure` | 仓位结构 | 是 |
+
+#### 当前持仓 `GET /api/portfolio`
+
+响应 200：
+```json
+{
+  "positions": [
+    {
+      "stock_code": "SH600001",
+      "stock_name": "浦发银行",
+      "quantity": 500,
+      "available_quantity": 300,
+      "cost_basis": 8.45,
+      "current_price": 8.52,
+      "market_value": 4260.00,
+      "profit_loss": 35.00,
+      "profit_loss_percent": 0.83
+    }
+  ]
+}
+```
+
+#### 资产摘要 `GET /api/portfolio/summary`
+
+响应 200：
+```json
+{
+  "total_assets": 1000035.00,
+  "balance": 995740.00,
+  "frozen_balance": 0,
+  "market_value": 4260.00,
+  "total_profit_loss": 35.00,
+  "total_profit_loss_percent": 0.0035
+}
+```
+
+#### 仓位结构 `GET /api/portfolio/exposure`
+
+响应 200：
+```json
+{
+  "position_count": 3,
+  "concentration": 0.45,
+  "largest_position": {
+    "stock_code": "SH600001",
+    "stock_name": "浦发银行",
+    "weight": 0.45
+  },
+  "profitable_count": 2,
+  "losing_count": 1
+}
+```
+
+### 9.6 历史与复盘
+
+| 方法 | 路径 | 描述 | 认证 |
+|------|------|------|------|
+| GET | `/api/history/trades` | 成交记录 | 是 |
+| GET | `/api/history/daily` | 每日资产曲线 | 是 |
+| GET | `/api/history/highlights` | 当日交易摘要 | 是 |
+
+#### 成交记录 `GET /api/history/trades?stock=&direction=&limit=20&offset=0`
+
+响应 200：
+```json
+{
+  "trades": [
+    {
+      "id": 1,
+      "stock_code": "SH600001",
+      "stock_name": "浦发银行",
+      "direction": "buy",
+      "quantity": 100,
+      "price": 8.52,
+      "amount": 852.00,
+      "status": "filled",
+      "filled_at": 1712000100,
+      "created_at": 1712000000
+    }
+  ],
+  "total": 42
+}
+```
+
+#### 每日资产曲线 `GET /api/history/daily`
+
+响应 200：
+```json
+{
+  "snapshots": [
+    {
+      "date": "2025-04-01",
+      "total_assets": 1000000.00,
+      "cash": 1000000.00,
+      "market_value": 0
+    }
+  ]
+}
+```
+
+#### 当日交易摘要 `GET /api/history/highlights`
+
+响应 200：
+```json
+{
+  "trade_count": 5,
+  "buy_count": 3,
+  "sell_count": 2,
+  "total_amount": 12345.00,
+  "realized_profit_loss": 120.00,
+  "largest_trade": {
+    "stock_name": "上海机场",
+    "amount": 4560.00,
+    "direction": "buy"
+  }
+}
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 十、行情模拟引擎
+
+### 10.1 种子数据
+
+预置 10 只模拟股票：
+
+| 代码 | 名称 | 开盘价 | 趋势因子 |
+|------|------|--------|---------|
+| SH600001 | 浦发银行 | 8.50 | +0.02% |
+| SH600002 | 齐鲁石化 | 12.30 | -0.01% |
+| SH600003 | 东北高速 | 15.80 | +0.05% |
+| SH600004 | 白云机场 | 22.40 | +0.03% |
+| SH600005 | 武钢股份 | 5.60 | -0.03% |
+| SH600006 | 东风汽车 | 9.20 | +0.01% |
+| SH600007 | 中国国贸 | 18.90 | +0.04% |
+| SH600008 | 首创环保 | 3.80 | -0.02% |
+| SH600009 | 上海机场 | 45.60 | +0.06% |
+| SH600010 | 包钢股份 | 2.10 | -0.04% |
+
+### 10.2 历史数据生成
+
+- 服务启动时生成当日历史价格
+- 模拟 9:30 开盘至当前时刻，每分钟一个 tick（约 240 点）
+- 以 OHLCV 格式存储于 `price_history` 表
+- 每根 1 分钟 bar 包含：open、high、low、close、volume
+- volume 为随机值（基础量 ± 50% 波动）
+
+### 10.3 实时 Tick 生成
+
+- 每 2 秒生成一次新 tick：
+  1. 基于上一个价格 ± 随机波动（正态分布，σ = 0.5%）
+  2. 叠加趋势因子（每只股票有隐含趋势 -0.1% ~ +0.1%）
+  3. 涨跌幅限制 ±10%（基于当日开盘价）
+  4. 当前 bar 的 high/low 随 tick 持续更新
+  5. 满 60 秒封闭当根 K 线，开启新 bar
+
+### 10.4 K 线聚合规则
+
+kline 接口实时计算：
+- `1m` — 原始每分钟 bar
+- `5m` — 将 1m bar 按 5 分钟窗口合并：首根 open、末根 close、区间 high/low 极值、累计 volume
+- `15m` — 同理，15 分钟窗口
+- `1d` — 当天全部 1m bar 合并为一根日 K
+
+### 10.5 技术指标计算
+
+随 K 线响应一同返回：
+- **MA5、MA10、MA20**: close 的简单移动平均
+- **MACD**:
+  - EMA12 = 12 周期指数移动平均
+  - EMA26 = 26 周期指数移动平均
+  - DIF = EMA12 − EMA26
+  - DEA = EMA9(DIF)（9 周期指数移动平均）
+  - BAR = (DIF − DEA) × 2
+
+### 10.6 撮合引擎
+
+每次价格变动自动撮合挂单：
+- 买单：当前市价 ≤ 买入委托价 → 成交
+- 卖单：当前市价 ≥ 卖出委托价 → 成交
+
+撮合后同步更新：
+1. 用户余额与冻结资金
+2. 持仓数量、可卖数量、成本价（加权平均）
+3. 股票成交量
+4. 成交记录与委托状态（`pending` → `filled`）
+5. SSE 推送载荷
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 十一、个股新闻生成引擎
+
+### 11.1 设计目标
+
+用情绪驱动的随机新闻让模拟系统具有「真实市场」氛围感，提升演示体验。
+新闻不落入数据库，仅在内存中维护（每只股票最多 50 条，全市场混排队列最多 100 条），
+服务重启后重新生成。
+
+### 11.2 生成逻辑
+
+1. 服务启动时为每只股票预生成 8 条历史新闻（模拟早盘前已发布）
+2. 此后每只股票每 30~120 秒（独立随机间隔）追加一条新新闻
+3. 情绪类型按当前涨跌幅加权随机选取：
+   - `涨幅 > 3%` → 利好 70% + 中性 20% + 利空 10%（噪音）
+   - `跌幅 > 3%` → 利空 70% + 中性 20% + 利好 10%（噪音）
+   - `波动 ±3%` → 利好 40% + 利空 40% + 中性 20%
+
+### 11.3 新闻数据结构
+
+```typescript
+interface NewsItem {
+  id: string;            // UUID
+  stock_code: string;    // 股票代码（全市场新闻为 "MARKET"）
+  title: string;         // 标题（15-40 字，从模板插值）
+  summary: string;       // 摘要（50-120 字）
+  sentiment: "positive" | "negative" | "neutral";
+  source: string;        // 轮换自 5 个来源
+  impact: "high" | "medium" | "low";
+  created_at: number;    // Unix 时间戳
+}
+```
+
+### 11.4 新闻来源池
+
+轮换自：「东方财富」「证券时报」「21 世纪经济报道」「界面新闻」「上海证券报」
+
+### 11.5 标题模板库
+
+**利好类**:
+- `{{name}}主力资金大单净流入，机构持续增持信号明显`
+- `{{name}}核心业务超预期，分析师上调目标价`
+- `{{name}}入选重要指数成分，被动配置资金或大幅流入`
+- `{{name}}签署战略合作协议，业绩增长预期显著改善`
+- `{{name}}回购计划落地，彰显管理层对长期价值的信心`
+- `{{name}}所属板块受政策利好提振，资金积极布局`
+
+**利空类**:
+- `{{name}}大股东减持计划出炉，市场情绪受到压制`
+- `{{name}}所属行业政策趋严，多家机构下调评级`
+- `{{name}}季报净利润低于预期，业绩拐点尚未确认`
+- `{{name}}外资持续流出，北向资金近三日累计净卖出`
+- `{{name}}竞争格局恶化，分析师警示毛利率下滑风险`
+- `{{name}}收到监管关注函，短期合规压力不容忽视`
+
+**中性类**:
+- `{{name}}发布公告：董事会审议通过独立董事换届议案`
+- `{{name}}拟回购不超过总股本 1% 股份，维护股东利益`
+- `分析师：{{name}}估值回归历史中位区间，建议持有观察`
+- `{{name}}参加行业发展峰会，介绍未来两年战略布局`
+- `机构调研纪要：{{name}}管理层就经营情况作出详细说明`
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 十二、交易规则与风控
+
+### 12.1 认证与权限
+
+- 密码用 Argon2 哈希存储（`Bun.password.hash()` / `Bun.password.verify()`）
+- 未认证请求返回 401
+- 用户只能操作自己的订单、自选股和持仓
+- 所有修改操作必须验证 Bearer token
+
+### 12.2 交易规则
+
+- 交易数量必须是 100 的整数倍（1 手 = 100 股）
+- 挂单价格限制：当前价 ±10%
+- 买入校验：可用资金 ≥ 数量 × 价格
+- 买入挂单未成交前，相应资金进入冻结态（`frozen_balance += quantity × price`）
+- 卖出校验：持仓可卖数量 ≥ 卖出数量
+- 卖出挂单未成交前，相应可卖持仓进入冻结态（`available_quantity -= quantity`）
+- 撤单成功后恢复对应冻结资金或可卖持仓
+
+### 12.3 输入校验
+
+- 股票代码必须在 SH600001-SH600010 范围内
+- 价格必须为正数，保留 2 位小数
+- 数量必须为正整数，且是 100 的整数倍
+- 所有校验失败返回明确中文错误文案（见 API 错误响应示例）
+
+### 12.4 资金同步
+
+- 所有涉及资金的接口返回最新资产摘要（`account` 字段），避免前端自行推算
+- 成本价计算：加权平均法
+  - `新成本 = (原成本 × 原数量 + 成交价 × 成交数量) / (原数量 + 成交数量)`
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 十三、数据模型
+
+```sql
+CREATE TABLE users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  username TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  balance REAL NOT NULL DEFAULT 1000000,
+  frozen_balance REAL NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+CREATE TABLE sessions (
+  token TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+CREATE TABLE stocks (
+  code TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  open_price REAL NOT NULL,
+  current_price REAL NOT NULL,
+  high_price REAL NOT NULL,
+  low_price REAL NOT NULL,
+  prev_close REAL NOT NULL,
+  volume INTEGER NOT NULL DEFAULT 0,
+  trend REAL NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+CREATE TABLE price_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  stock_code TEXT NOT NULL REFERENCES stocks(code),
+  open REAL NOT NULL,
+  high REAL NOT NULL,
+  low REAL NOT NULL,
+  close REAL NOT NULL,
+  volume INTEGER NOT NULL DEFAULT 0,
+  timestamp INTEGER NOT NULL,
+  UNIQUE(stock_code, timestamp)
+);
+
+CREATE TABLE orders (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  stock_code TEXT NOT NULL REFERENCES stocks(code),
+  direction TEXT NOT NULL CHECK(direction IN ('buy', 'sell')),
+  quantity INTEGER NOT NULL,
+  price REAL NOT NULL,
+  frozen_amount REAL NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'filled', 'cancelled')),
+  filled_at INTEGER,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+CREATE TABLE positions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  stock_code TEXT NOT NULL REFERENCES stocks(code),
+  quantity INTEGER NOT NULL DEFAULT 0,
+  available_quantity INTEGER NOT NULL DEFAULT 0,
+  cost_basis REAL NOT NULL DEFAULT 0,
+  UNIQUE(user_id, stock_code)
+);
+
+CREATE TABLE watchlists (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  stock_code TEXT NOT NULL REFERENCES stocks(code),
+  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  UNIQUE(user_id, stock_code)
+);
+
+CREATE TABLE daily_snapshots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  total_assets REAL NOT NULL,
+  cash REAL NOT NULL,
+  market_value REAL NOT NULL,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+-- 索引
+CREATE INDEX idx_price_history_code_time ON price_history(stock_code, timestamp);
+CREATE INDEX idx_orders_user_status ON orders(user_id, status);
+CREATE INDEX idx_orders_stock_status ON orders(stock_code, status);
+CREATE INDEX idx_positions_user ON positions(user_id);
+CREATE INDEX idx_daily_snapshots_user ON daily_snapshots(user_id, created_at);
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 十四、响应式设计
+
+### 14.1 断点定义
+
+| 断点 | 宽度 | 目标设备 | 优先级 |
+|------|------|---------|--------|
+| Desktop XL | ≥ 1440px | 大屏桌面 | 主设计目标 |
+| Desktop | 1024-1439px | 标准桌面 | 完整支持 |
+| Tablet | 768-1023px | iPad | 侧栏折叠 |
+| Mobile | < 768px | 手机 | 基础可用 |
+
+### 14.2 各断点适配规则
+
+**Desktop XL (≥1440px)**:
+- 最佳信息密度
+- 所有面板完整展示
+- 页面最大宽度 1440px，居中
+
+**Desktop (1024-1439px)**:
+- 行情首页右侧辅助区宽度缩至 280px
+- 个股详情页交易面板宽度缩至 300px
+
+**Tablet (768-1023px)**:
+- 行情首页右侧辅助区折叠为可展开抽屉（右侧滑出）
+- 个股详情页切换为上下布局（图表在上，交易面板在下）
+- 热力图节点文字缩小
+
+**Mobile (<768px)**:
+- 导航栏改为底部 Tab Bar（Apple iOS 风格）
+- 资产概览条改为 2×2 网格
+- 表格水平可滚动
+- 交易面板改为底部弹出 Sheet
+- 不是本期重点，但保证布局不崩坏
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 十五、无障碍与可用性
+
+### 15.1 键盘导航
+
+- 所有交互元素可通过 Tab 键访问
+- 表格行可通过 Enter 键进入详情
+- ESC 键关闭弹窗和下拉菜单
+- 交易面板中 Enter 键提交订单（需二次确认弹窗）
+
+### 15.2 ARIA 标注
+
+- 所有交互元素提供 `aria-label`
+- 表格使用 `role="grid"` + `role="row"` + `role="gridcell"`
+- 价格变化区域使用 `aria-live="polite"` 播报变化
+- 状态徽章使用 `role="status"`
+
+### 15.3 对比度
+
+- 主文字与背景对比度 ≥ 7:1（WCAG AAA）
+- 次要文字与背景对比度 ≥ 4.5:1（WCAG AA）
+- 涨跌色与背景对比度 ≥ 4.5:1
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 十六、性能指标
+
+| 指标 | 目标值 | 测量方式 |
+|------|--------|---------|
+| 首屏 LCP | < 2.0s | Lighthouse |
+| 交互 INP | < 100ms | 感知测试 |
+| SSE 推送延迟 | < 50ms | 服务端到客户端 |
+| 前端构建大小 | < 500KB gzipped | `bun run build` |
+| SQLite 查询响应 | < 10ms | P99 |
+| 内存占用（服务端） | < 100MB | 正常运行态 |
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 十七、数字格式规范
+
+| 数据类型 | 格式 | 示例 |
+|---------|------|------|
+| 价格 | 保留 2 位小数 | `8.52` |
+| 涨跌额 | 带 +/- 前缀，2 位小数 | `+0.02` / `-0.15` |
+| 涨跌幅 | 带 +/- 前缀，2 位小数，% 后缀 | `+0.24%` / `-1.50%` |
+| 金额 | 千分位分隔，2 位小数，¥ 前缀 | `¥1,234,567.00` |
+| 成交量 | 表格中用万/亿简写，tooltip 完整值 | `12.3万` / `1.5亿` |
+| 数量 | 整数 | `100` / `1,200` |
+| 时间 | 本地时区 | `2025-04-01 14:30:25` |
+| 百分比（收益率） | 带 +/- 前缀，2 位小数 | `+3.25%` |
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 十八、错误处理规范
+
+### 18.1 HTTP 错误码
+
+| 状态码 | 场景 |
+|--------|------|
+| 200 | 成功（查询、更新） |
+| 201 | 成功（创建） |
+| 400 | 参数校验失败、业务规则违反 |
+| 401 | 未认证或 token 过期 |
+| 403 | 无权操作（如操作他人订单） |
+| 404 | 资源不存在 |
+| 500 | 服务端内部错误 |
+
+### 18.2 错误响应格式
+
+```json
+{
+  "error": "具体中文错误描述"
+}
+```
+
+### 18.3 前端错误处理
+
+- 401 → 自动跳转登录页
+- 400 → 在对应表单字段下方显示错误信息
+- 500 → Toast 提示「服务器繁忙，请稍后重试」
+- 网络错误 → Toast 提示「网络连接异常」
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 十九、启动方式
+
+```bash
+cd web && bun install && bun run build && cd ..
+bun run index.ts
+# 浏览器打开 http://localhost:3000
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 二十、测试要求
+
+`tests/api.test.ts` 使用 `bun:test`，至少覆盖以下场景：
+
+1. 注册返回用户信息和初始资金 1,000,000
+2. 登录返回 token，可用于后续认证请求
+3. 获取股票列表返回 10 只股票，每只包含完整字段
+4. 获取当前用户信息返回余额与冻结资金
+5. 买入成功：扣减可用资金，增加冻结资金，创建 pending 订单
+6. 买入数量不是 100 倍数被拒绝，返回明确错误信息
+7. 资金不足买入被拒绝，返回具体差额
+8. 买入价格超出 ±10% 限价被拒绝
+9. 卖出成功：增加资金，减少持仓
+10. 持仓不足卖出被拒绝
+11. 撤单成功：恢复冻结资金或可卖持仓，订单状态变为 cancelled
+12. 撤单已成交订单被拒绝
+13. 用户隔离：A 不能撤 B 的单，返回 403
+14. 自选股添加/删除生效，重复添加幂等
+15. SSE 行情载荷结构正确，包含 stocks 数组
+16. K 线接口返回正确 OHLCV 字段与 MA5/MA10/MA20/MACD 值
+17. 新闻接口返回 sentiment 字段且为合法枚举值（`positive`/`negative`/`neutral`）
+18. 热力图接口返回所有 10 只股票且包含 change_percent 字段
+19. 未认证请求返回 401
+20. 注册重复用户名返回 409
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 二十一、P1 扩展能力（本次不强制验收，template 预留）
+
+- 市价单与更丰富的委托类型
+- 五档盘口深度展示
+- 股票搜索、拼音缩写搜索、快捷键下单
+- 风险提示中心（连续亏损、重仓提醒、撤单频繁提示）
+- 个股标签、行业分组、自选分组
+- 成交回报 toast 流与操作通知中心
+- 资产日报导出、简版交易复盘卡片
+- Light Mode 支持（Apple 浅色模式色板）
+- 多语言支持（i18n）
+- WebSocket 替代 SSE（双向通信）
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 二十二、验收标准
+
+### 22.1 构建验收
+
+- `cd web && bun install && bun run build` 前端构建成功
+- `bunx tsc --noEmit` 后端类型检查通过
+- `bun test` API 测试全部通过（20 个测试用例）
+
+### 22.2 功能验收
+
+- `bun run index.ts` 启动后，浏览器打开 http://localhost:3000 可看到完整交易应用
+- 行情表格每 2 秒实时刷新（SSE 驱动，非轮询）
+- 可完成完整流程：注册 → 登录 → 查看行情 → 加入自选 → 切换 K 线图 → 买入 → 查看持仓 → 卖出 → 查看记录
+- 交易面板在下单前可看到可买数量或可卖数量提示
+- 资产页能同时看到总资产、可用资金、冻结资金、总盈亏
+- K 线图在日 K 周期下正确渲染蜡烛实体 + 上下影线 + MA 均线叠加 + MACD 子图
+- 个股详情页下方新闻 Tab 至少显示 5 条有情绪标签的模拟新闻
+- 首页热力图可见，颜色随 SSE 数据更新
+
+### 22.3 UI/UX 验收（Apple 设计标准）
+
+- 整体色调为 Apple 深色模式风格（`#000000` / `#1c1c1e` / `#2c2c2e` 背景层级），
+  不是传统交易终端的纯黑蓝风格
+- 导航栏具有毛玻璃效果（backdrop-filter blur）
+- 所有卡片使用 12px+ 圆角，带 0.5px 半透明边框
+- 文字层级清晰：主要/次要/辅助三级，符合 Apple HIG 规范
+- 按钮高度 ≥ 44px，符合 Apple 最小可点击区域标准
+- 价格变化时表格对应单元格有明确的 flash 动画（涨红/跌绿）
+- 账户摘要核心数字在变化时有数字滚动动画
+- Segmented Control（图表周期切换、买入卖出切换）使用 Apple 标准样式，
+  选中项有平滑滑动过渡
+- Toast 通知从右上角滑入，带左侧色条
+- 涨跌色使用 A 股惯例：红涨（`#ff453a`）、绿跌（`#30d158`）
+- 字体使用 Inter 或系统字体栈，数字启用 tabular-nums
+- 输入框使用 Apple 深色模式样式：无边框、填充背景、聚焦蓝色 outline
+- 空状态页面有专属图标和引导文字，不显示空白表格
+- 所有弹窗使用毛玻璃背景 + scale 入场动画
+- 页面首屏有分段入场动画（淡入 + 微上移）
+
+### 22.4 交互验收
+
+- 表格行 hover 有背景色过渡
+- 按钮 press 有 scale(0.97) 反馈
+- 下单有二次确认弹窗
+- SSE 连接状态在导航栏可见（绿/橙/红色圆点）
+- 断线时页面顶部出现非阻塞提示横幅
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+END OF template

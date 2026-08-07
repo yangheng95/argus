@@ -3,7 +3,7 @@
  * Local full-platform packaging script.
  *
  * Builds all possible platform artifacts from the current machine:
- *   - opencorvus CLI: all platforms (Bun cross-compile)
+ *   - opencorvus overlay-server sidecar: all platforms (Bun cross-compile)
  *   - overlay windows-x64: native build (Windows only)
  *   - overlay linux-x64 / linux-arm64: Docker build
  *   - overlay darwin-*: skipped (requires macOS hardware)
@@ -27,17 +27,18 @@ const overlay = path.join(repo, "packages/overlay")
 const skipCli = process.argv.includes("--skip-cli")
 const skipLinux = process.argv.includes("--skip-linux")
 const skipNative = process.argv.includes("--skip-native")
-const linuxTargets = process.argv
-  .filter((a) => a.startsWith("--target="))
-  .map((a) => a.split("=")[1])
+const linuxTargets = process.argv.filter((a) => a.startsWith("--target=")).map((a) => a.split("=")[1])
 
-// ── 1. opencorvus CLI — all platforms ────────────────────────────────────────
+// ── 1. opencorvus overlay server — all platforms ─────────────────────────────
 if (!skipCli) {
-  console.log("\n=== opencorvus CLI (all platforms) ===")
-  await $`bun run build --all`.cwd(opencorvus)
-  console.log("  opencorvus CLI done → packages/opencorvus/dist/")
+  console.log("\n=== overlay UI assets ===")
+  await $`bun run build:vite`.cwd(overlay)
+
+  console.log("\n=== opencorvus overlay server (all platforms) ===")
+  await $`bun run build --overlay-server --all`.cwd(opencorvus)
+  console.log("  opencorvus overlay server done -> packages/opencorvus/dist/")
 } else {
-  console.log("  [skip] opencorvus CLI (--skip-cli)")
+  console.log("  [skip] opencorvus overlay server (--skip-cli)")
 }
 
 // ── 2. overlay — current platform (native) ───────────────────────────────────
@@ -60,8 +61,9 @@ if (!skipLinux) {
   // Check Docker is available
   const dockerCheck = await $`docker info`.nothrow().quiet()
   if (dockerCheck.exitCode !== 0) {
-    console.warn("  [warn] Docker not running — skipping Linux overlay builds")
-    console.warn("  Start Docker Desktop and re-run, or use: bun run build:overlay:docker")
+    throw new Error(
+      "Docker is required for Linux overlay builds. Start Docker Desktop and re-run, or pass --skip-linux explicitly.",
+    )
   } else {
     const targetArgs = linuxTargets.map((t) => `--target=${t}`).join(" ")
     await $`bun run script/build-docker.ts ${targetArgs}`.cwd(overlay)
@@ -78,7 +80,7 @@ if (process.platform !== "darwin") {
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log(`
 === Package complete ===
-  opencorvus CLI:      packages/opencorvus/dist/opencorvus-{platform}-{arch}/
+  opencorvus server:   packages/opencorvus/dist/opencorvus-overlay-server-{platform}-{arch}/
   overlay (native):    packages/overlay/src-tauri/target/release/bundle/
   overlay (linux):     packages/overlay/dist-artifacts/{linux-x64,linux-arm64}/
   overlay (darwin):    — requires macOS machine —

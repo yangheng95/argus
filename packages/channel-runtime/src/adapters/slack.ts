@@ -1,8 +1,6 @@
 import { App } from "@slack/bolt"
+import { createHttpAudioSource } from "./audio-download"
 import type { AudioAttachment, ChannelAdapter, MessageHandler } from "../adapter"
-
-const DEDUP_MAX_SIZE = 500
-const DEDUP_TARGET_SIZE = 400
 
 export class SlackAdapter implements ChannelAdapter {
   readonly platform = "slack"
@@ -10,8 +8,6 @@ export class SlackAdapter implements ChannelAdapter {
   private token: string
   private handler?: MessageHandler
   private botUserId?: string
-  /** Deduplicate: Slack Socket Mode can deliver the same message event twice */
-  private processedMessages = new Set<string>()
   /** Ignore messages older than this timestamp (seconds) to prevent replay on restart */
   private startTs = (Date.now() / 1000).toString()
 
@@ -55,7 +51,7 @@ export class SlackAdapter implements ChannelAdapter {
             mimetype: string
             url_private: string
             name?: string
-            size: number
+            size?: number
             duration_ms?: number
           }>
         | undefined
@@ -63,26 +59,14 @@ export class SlackAdapter implements ChannelAdapter {
       if (files) {
         const audioFile = files.find((f) => f.mimetype?.startsWith("audio/"))
         if (audioFile) {
-          try {
-            const res = await fetch(audioFile.url_private, {
-              headers: { Authorization: `Bearer ${this.token}` },
-              signal: AbortSignal.timeout(30_000),
-            })
-            if (res.ok) {
-              const buffer = Buffer.from(await res.arrayBuffer())
-              audio = {
-                data: buffer,
-                mime: audioFile.mimetype,
-                filename: audioFile.name,
-                size: buffer.length,
-                duration: audioFile.duration_ms ? audioFile.duration_ms / 1000 : undefined,
-              }
-            } else {
-              console.error(`[Slack] Failed to download audio: ${res.status}`)
-            }
-          } catch (err) {
-            console.error("[Slack] Audio download error:", err)
-          }
+          audio = createHttpAudioSource({
+            url: audioFile.url_private,
+            headers: { Authorization: `Bearer ${this.token}` },
+            mime: audioFile.mimetype,
+            filename: audioFile.name,
+            size: audioFile.size,
+            duration: audioFile.duration_ms ? audioFile.duration_ms / 1000 : undefined,
+          })
         }
       }
 
@@ -92,24 +76,13 @@ export class SlackAdapter implements ChannelAdapter {
       // Skip messages from before this bot instance started (prevents replay on restart)
       if (message.ts < this.startTs) return
 
-      // Deduplicate by message ts — Slack Socket Mode delivers thread events twice
       const msgTs = message.ts
-      if (this.processedMessages.has(msgTs)) return
-      this.processedMessages.add(msgTs)
-      // Prevent unbounded growth — evict oldest batch when limit reached
-      if (this.processedMessages.size > DEDUP_MAX_SIZE) {
-        const iter = this.processedMessages.values()
-        const evictCount = Math.min(DEDUP_MAX_SIZE - DEDUP_TARGET_SIZE, this.processedMessages.size - DEDUP_TARGET_SIZE)
-        for (let i = 0; i < evictCount; i++) {
-          const val = iter.next().value
-          if (val !== undefined) this.processedMessages.delete(val)
-        }
-      }
 
       const channel = message.channel
       const thread = (msgAny.thread_ts as string) || message.ts
 
       await this.handler({
+        id: msgTs,
         platform: this.platform,
         channel,
         thread,
@@ -137,11 +110,6 @@ export class SlackAdapter implements ChannelAdapter {
   async startThread(channel: string, text: string): Promise<string> {
     const result = await this.app.client.chat.postMessage({ channel, text })
     return result.ts!
-  }
-
-  /** Backward-compatible alias used by older call sites. */
-  async postAndGetTs(channel: string, text: string): Promise<string> {
-    return this.startThread(channel, text)
   }
 
   async uploadImage(

@@ -1,15 +1,13 @@
 import type { Argv } from "yargs"
-import { spawn } from "child_process"
 import { Database } from "../../storage/db"
 import { Database as BunDatabase } from "bun:sqlite"
+import { Instance } from "../../project/instance"
 import { UI } from "../ui"
 import { cmd } from "./cmd"
-import { JsonMigration } from "../../storage/json-migration"
-import { EOL } from "os"
 
 const QueryCommand = cmd({
-  command: "$0 [query]",
-  describe: "open an interactive sqlite3 shell or run a query",
+  command: "$0 <query>",
+  describe: "run a read-only SQL query against the OpenCorvus database",
   builder: (yargs: Argv) => {
     return yargs
       .positional("query", {
@@ -24,31 +22,56 @@ const QueryCommand = cmd({
       })
   },
   handler: async (args: { query?: string; format: string }) => {
-    const query = args.query as string | undefined
-    if (query) {
-      const db = new BunDatabase(Database.Path, { readonly: true })
+    if (!args.query) throw new Error("db query requires a nonempty SQL query")
+    const db = new BunDatabase(Database.Path(), { readonly: true })
+    let result: Record<string, unknown>[] = []
+    let failure: unknown
+    let failed = false
+    let statement: ReturnType<BunDatabase["query"]> | undefined
+    try {
+      statement = db.query(args.query)
+      result = statement.all() as Record<string, unknown>[]
+    } catch (error) {
+      failed = true
+      failure = error
+    }
+    if (statement) {
       try {
-        const result = db.query(query).all() as Record<string, unknown>[]
-        if (args.format === "json") {
-          console.log(JSON.stringify(result, null, 2))
-        } else if (result.length > 0) {
-          const keys = Object.keys(result[0])
-          console.log(keys.join("\t"))
-          for (const row of result) {
-            console.log(keys.map((k) => row[k]).join("\t"))
-          }
-        }
-      } catch (err) {
-        UI.error(err instanceof Error ? err.message : String(err))
-        process.exit(1)
+        statement.finalize()
+      } catch (error) {
+        failure = failed
+          ? new AggregateError([failure, error], "DB query and SQLite statement finalization both failed", {
+              cause: failure,
+            })
+          : error
+        failed = true
       }
-      db.close()
+    }
+    try {
+      db.close(true)
+    } catch (error) {
+      failure = failed
+        ? new AggregateError([failure, error], "DB query and SQLite connection close both failed", {
+            cause: failure,
+          })
+        : error
+      failed = true
+    }
+    if (failed) {
+      UI.error(failure instanceof Error ? failure.message : String(failure))
+      process.exitCode = 1
       return
     }
-    const child = spawn("sqlite3", [Database.Path], {
-      stdio: "inherit",
-    })
-    await new Promise((resolve) => child.on("close", resolve))
+
+    if (args.format === "json") {
+      console.log(JSON.stringify(result, null, 2))
+    } else if (result.length > 0) {
+      const keys = Object.keys(result[0])
+      console.log(keys.join("\t"))
+      for (const row of result) {
+        console.log(keys.map((key) => row[key]).join("\t"))
+      }
+    }
   },
 })
 
@@ -56,54 +79,43 @@ const PathCommand = cmd({
   command: "path",
   describe: "print the database path",
   handler: () => {
-    console.log(Database.Path)
+    console.log(Database.Path())
   },
 })
 
-const MigrateCommand = cmd({
-  command: "migrate",
-  describe: "migrate JSON data to SQLite (merges with existing data)",
-  handler: async () => {
-    const sqlite = new BunDatabase(Database.Path)
-    const tty = process.stderr.isTTY
-    const width = 36
-    const orange = "\x1b[38;5;214m"
-    const muted = "\x1b[0;2m"
-    const reset = "\x1b[0m"
-    let last = -1
-    if (tty) process.stderr.write("\x1b[?25l")
-    try {
-      const stats = await JsonMigration.run(sqlite, {
-        progress: (event) => {
-          const percent = Math.floor((event.current / event.total) * 100)
-          if (percent === last) return
-          last = percent
-          if (tty) {
-            const fill = Math.round((percent / 100) * width)
-            const bar = `${"■".repeat(fill)}${"･".repeat(width - fill)}`
-            process.stderr.write(
-              `\r${orange}${bar} ${percent.toString().padStart(3)}%${reset} ${muted}${event.current}/${event.total}${reset} `,
-            )
-          } else {
-            process.stderr.write(`sqlite-migration:${percent}${EOL}`)
-          }
-        },
-      })
-      if (tty) process.stderr.write("\n")
-      if (tty) process.stderr.write("\x1b[?25h")
-      else process.stderr.write(`sqlite-migration:done${EOL}`)
-      UI.println(
-        `Migration complete: ${stats.projects} projects, ${stats.sessions} sessions, ${stats.messages} messages`,
-      )
-      if (stats.errors.length > 0) {
-        UI.println(`${stats.errors.length} errors occurred during migration`)
-      }
-    } catch (err) {
-      if (tty) process.stderr.write("\x1b[?25h")
-      UI.error(`Migration failed: ${err instanceof Error ? err.message : String(err)}`)
+/** Strict DB and project scratch reset after all in-memory instances are disposed. */
+export const ResetCommand = cmd({
+  command: "reset",
+  describe:
+    "wipe the global opencorvus SQLite DB and project scratch (worktrees, ownership markers, snapshots). DESTRUCTIVE — there is no undo.",
+  builder: (yargs: Argv) => {
+    return yargs.option("force", {
+      type: "boolean",
+      default: false,
+      describe: "skip the confirmation prompt (non-interactive / CI).",
+    })
+  },
+  handler: async (args: { force: boolean }) => {
+    if (!args.force) {
+      UI.error("opencorvus db reset is DESTRUCTIVE — wipes DB + worktrees + ownership + snapshots.")
+      UI.error("Re-run with --force to proceed.")
       process.exit(1)
-    } finally {
-      sqlite.close()
+    }
+
+    // CLI is invoked from the project directory; capture cwd BEFORE disposing
+    // any active Instance so reset() can locate the project's scratch dirs.
+    const projectDir = process.cwd()
+    try {
+      await Instance.disposeAll()
+      const results = await Database.reset(projectDir)
+      for (const result of results) {
+        console.log(`✓ ${result.label}: ${result.path}`)
+      }
+      console.log("")
+      console.log("opencorvus db reset complete. Next process start will rebuild schema from DDL.")
+    } catch (error) {
+      process.exitCode = 1
+      throw error
     }
   },
 })
@@ -112,7 +124,7 @@ export const DbCommand = cmd({
   command: "db",
   describe: "database tools",
   builder: (yargs: Argv) => {
-    return yargs.command(QueryCommand).command(PathCommand).command(MigrateCommand).demandCommand()
+    return yargs.command(QueryCommand).command(PathCommand).command(ResetCommand).demandCommand()
   },
   handler: () => {},
 })

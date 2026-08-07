@@ -342,6 +342,10 @@ export function displayStats(stats: SessionStats, toolLimit?: number, modelLimit
   console.log(renderRow("Output", formatNumber(stats.totalTokens.output)))
   console.log(renderRow("Cache Read", formatNumber(stats.totalTokens.cache.read)))
   console.log(renderRow("Cache Write", formatNumber(stats.totalTokens.cache.write)))
+  // input tokens here are post-normalization (Session.getUsage subtracts
+  // cache.read+write for non-Anthropic providers; Anthropic returns input
+  // already excluding cache). Total billable input = input + cache.read + cache.write.
+  console.log(renderRow("Cache Hit %", formatHitRatio(stats.totalTokens)))
   console.log("└────────────────────────────────────────────────────────┘")
   console.log()
 
@@ -361,6 +365,15 @@ export function displayStats(stats: SessionStats, toolLimit?: number, modelLimit
       console.log(renderRow("  Output Tokens", formatNumber(usage.tokens.output)))
       console.log(renderRow("  Cache Read", formatNumber(usage.tokens.cache.read)))
       console.log(renderRow("  Cache Write", formatNumber(usage.tokens.cache.write)))
+      console.log(
+        renderRow(
+          "  Cache Hit %",
+          formatHitRatio({
+            input: usage.tokens.input,
+            cache: usage.tokens.cache,
+          }),
+        ),
+      )
       console.log(renderRow("  Cost", `$${usage.cost.toFixed(4)}`))
       console.log("├────────────────────────────────────────────────────────┤")
     }
@@ -398,6 +411,13 @@ export function displayStats(stats: SessionStats, toolLimit?: number, modelLimit
     console.log("└────────────────────────────────────────────────────────┘")
   }
   console.log()
+}
+
+export function formatHitRatio(t: { input: number; cache: { read: number; write: number } }): string {
+  const billable = t.input + t.cache.read + t.cache.write
+  if (billable === 0) return "n/a"
+  const ratio = t.cache.read / billable
+  return `${(ratio * 100).toFixed(1)}%  (${formatNumber(t.cache.read)} / ${formatNumber(billable)})`
 }
 
 function formatNumber(num: number): string {

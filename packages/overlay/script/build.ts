@@ -4,6 +4,16 @@ import { $ } from "bun"
 import fs from "fs/promises"
 import path from "path"
 import { fileURLToPath } from "url"
+import { copyReleaseFile } from "../../../script/copy-release-file"
+import { runTimedStage } from "../../../script/timed-stage"
+
+import {
+  overlayArchFromNode,
+  overlayExecutableFileName,
+  overlayPlatformFromNode,
+  overlayServerDistName,
+  overlayServerFileName,
+} from "./artifact-names"
 
 const dir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const repo = path.resolve(dir, "../..")
@@ -12,54 +22,22 @@ const tauri = path.resolve(dir, "src-tauri")
 const target = path.join(tauri, "target")
 const release = path.join(target, "release")
 
-const serverFile = process.platform === "win32" ? "opencorvus.exe" : "opencorvus"
-const overlayFile = process.platform === "win32" ? "opencorvus-overlay.exe" : "opencorvus-overlay"
-const serverDistName = [
-  "opencorvus",
-  process.platform === "win32" ? "windows" : process.platform,
-  process.arch,
-].join("-")
-const packageName = [
-  "opencorvus-overlay",
-  process.platform === "win32" ? "windows" : process.platform,
-  process.arch,
-].join("-")
+const hostPlatform = overlayPlatformFromNode()
+const hostArch = overlayArchFromNode()
+const serverFile = overlayServerFileName(hostPlatform)
+const overlayFile = overlayExecutableFileName(hostPlatform)
+const serverDistName = overlayServerDistName(hostPlatform, hostArch)
 
-const distServer = path.join(opencorvus, "dist", serverDistName, serverFile)
-const distRoot = path.join(dir, "dist", packageName)
-const packagedOverlay = path.join(distRoot, overlayFile)
+const distServerDir = path.join(opencorvus, "dist", serverDistName)
+const distServer = path.join(distServerDir, serverFile)
+const packagingSnapshot = path.join(release, "package-input", overlayFile)
 const stagedResources = path.join(tauri, "resources")
-
-function text(error: unknown) {
-  if (typeof error === "string") return error
-  if (!(error instanceof Error)) return String(error)
-  const stderr = Reflect.get(error, "stderr")
-  return [error.message, typeof stderr === "string" ? stderr : ""].filter(Boolean).join("\n")
-}
 
 async function exists(file: string) {
   return fs
     .access(file)
     .then(() => true)
     .catch(() => false)
-}
-
-async function copyFile(src: string, dest: string, options?: { required?: boolean; tolerateBusy?: boolean }) {
-  if (!(await exists(src))) {
-    if (options?.required) throw new Error(`Missing required file: ${src}`)
-    return false
-  }
-  await fs.mkdir(path.dirname(dest), { recursive: true })
-  try {
-    await fs.copyFile(src, dest)
-    return true
-  } catch (error) {
-    if (options?.tolerateBusy && process.platform === "win32") {
-      console.warn(`overlay build: unable to copy ${src} -> ${dest}\n${text(error)}`)
-      return false
-    }
-    throw error
-  }
 }
 
 async function cargoPath() {
@@ -76,8 +54,11 @@ function tauriArgs() {
   return [
     "--config",
     JSON.stringify({
-      build: { frontendDist: "../dist-vite" },
-      bundle: { resources: [] },
+      build: { beforeBuildCommand: null },
+      bundle: {
+        resources: [],
+        windows: { nsis: { compression: "zlib" } },
+      },
     }),
   ]
 }
@@ -96,6 +77,7 @@ async function cleanBuildResidue() {
     fs.rm(path.join(release, "bundle"), { recursive: true, force: true }).catch(() => undefined),
     fs.rm(path.join(release, "nsis"), { recursive: true, force: true }).catch(() => undefined),
     fs.rm(path.join(release, "wix"), { recursive: true, force: true }).catch(() => undefined),
+    fs.rm(path.join(release, "package-input"), { recursive: true, force: true }).catch(() => undefined),
     fs.rm(path.join(release, serverFile), { force: true }).catch(() => undefined),
     fs.rm(path.join(release, "ui"), { recursive: true, force: true }).catch(() => undefined),
     fs.rm(path.join(stagedResources, serverFile), { force: true }).catch(() => undefined),
@@ -110,22 +92,45 @@ async function cleanBuildResidue() {
   )
 }
 
-await $`bun run build`.cwd(opencorvus)
+await runTimedStage("Overlay Vite build", async () => {
+  await $`bun run build:vite`.cwd(dir)
+})
+
+await runTimedStage("Embedded backend build", async () => {
+  await $`bun run build --overlay-server`.cwd(opencorvus)
+})
 
 if (!(await exists(distServer))) {
   throw new Error(`Bundled opencorvus binary not found at ${distServer}`)
 }
 
-await $`bun run build:mainjs`.cwd(dir)
-await $`bun run build:vite`.cwd(dir)
-
-await fs.rm(distRoot, { recursive: true, force: true }).catch(() => undefined)
 await cleanBuildResidue()
 
-await $`tauri build --no-bundle ${tauriArgs()}`.cwd(dir).env({
+// `tauri build` alone leaves Tauri 2.x without an explicit bundle list
+// and the build silently produces only the bare executable — no
+// .app/.dmg on macOS, no .msi/-setup.exe on Windows, no
+// .deb/.rpm/.AppImage on Linux. Even with bundle.active=true and
+// targets="all" in tauri.conf.json, the CLI's --config deep-merge
+// (we pass {bundle:{resources:[]}}) interacts poorly enough that the
+// bundle pipeline gets skipped. The `--bundles` flag opts in
+// unconditionally, but Tauri 2.x rejects the keyword `all`; valid
+// values are platform-specific (`app dmg` on macOS, `msi nsis` on
+// Windows, `deb rpm appimage` on Linux), so we pass the host's full
+// default set explicitly.
+function bundleTargets(): string[] {
+  if (process.platform === "darwin") return ["app", "dmg"]
+  if (process.platform === "win32") return ["msi", "nsis"]
+  return ["deb", "rpm", "appimage"]
+}
+const tauriEnvironment = {
+  ...process.env,
   CARGO_TARGET_DIR: target,
-  OPENCORVUS_EMBED_PATH: distServer,
+  OPENCORVUS_EMBED_PATH: distServerDir,
   PATH: await cargoPath(),
+}
+
+await runTimedStage("Tauri executable build", async () => {
+  await $`tauri build --no-bundle ${tauriArgs()}`.cwd(dir).env(tauriEnvironment)
 })
 
 const builtOverlay = path.join(release, overlayFile)
@@ -133,6 +138,8 @@ if (!(await exists(builtOverlay))) {
   throw new Error(`Overlay binary not found at ${builtOverlay}`)
 }
 
-await fs.mkdir(distRoot, { recursive: true })
-await copyFile(builtOverlay, packagedOverlay, { required: true })
-await cleanBuildResidue()
+await copyReleaseFile(builtOverlay, packagingSnapshot)
+
+await runTimedStage("Tauri installer bundle", async () => {
+  await $`tauri bundle --bundles ${bundleTargets()} ${tauriArgs()}`.cwd(dir).env(tauriEnvironment)
+})

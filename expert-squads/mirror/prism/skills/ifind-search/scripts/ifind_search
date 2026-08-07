@@ -1,0 +1,51 @@
+#!/usr/bin/env bun
+
+// CLI means Command-Line Interface. JSON means JavaScript Object Notation.
+// This diagnostic entrypoint delegates to the same package library used by the projected OpenCorvus tool.
+
+import {
+  IFIND_CHANNELS,
+  IFIND_MAX_RESULTS,
+  searchIfind,
+  serializeIfindSearchResult,
+  type IfindChannel,
+} from "../../../lib/prism/ifind-search"
+
+function fail(message: string): never {
+  throw new Error(`ifind_search: ${message}`)
+}
+
+const [query, channelsJSON, sizeText, ...extra] = Bun.argv.slice(2)
+if (!query || !channelsJSON || !sizeText || extra.length > 0) {
+  fail('expected exactly: <query> <channels_json> <size>')
+}
+
+let channels: unknown
+try {
+  channels = JSON.parse(channelsJSON)
+} catch {
+  fail("channels_json must be a JSON array")
+}
+if (
+  !Array.isArray(channels) ||
+  channels.length === 0 ||
+  channels.some((channel) => typeof channel !== "string" || !IFIND_CHANNELS.includes(channel as IfindChannel)) ||
+  new Set(channels).size !== channels.length
+) {
+  fail(`channels_json must contain unique declared channels: ${IFIND_CHANNELS.join(", ")}`)
+}
+
+const size = Number(sizeText)
+if (!Number.isInteger(size) || size < 1 || size > IFIND_MAX_RESULTS) {
+  fail(`size must be an integer from 1 through ${IFIND_MAX_RESULTS}`)
+}
+
+const result = await searchIfind(
+  {
+    query,
+    channels: channels as IfindChannel[],
+    size,
+  },
+  {},
+)
+process.stdout.write(`${serializeIfindSearchResult(result)}\n`)

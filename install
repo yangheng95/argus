@@ -16,19 +16,19 @@ Usage: install.sh [options]
 Options:
     -h, --help              Display this help message
     -v, --version <version> Install a specific version (e.g., 1.0.180)
-    -b, --binary <path>     Install from a local binary instead of downloading
+    -b, --bundle <path>     Install from a local native bundle directory
         --no-modify-path    Don't modify shell config files (.zshrc, .bashrc, etc.)
 
 Examples:
     curl -fsSL https://opencorvus.ai/install | bash
     curl -fsSL https://opencorvus.ai/install | bash -s -- --version 1.0.180
-    ./install --binary /path/to/opencorvus
+    ./install --bundle /path/to/opencorvus-windows-x64
 EOF
 }
 
 requested_version=${VERSION:-}
 no_modify_path=false
-binary_path=""
+bundle_path=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -45,12 +45,12 @@ while [[ $# -gt 0 ]]; do
                 exit 1
             fi
             ;;
-        -b|--binary)
+        -b|--bundle)
             if [[ -n "${2:-}" ]]; then
-                binary_path="$2"
+                bundle_path="$2"
                 shift 2
             else
-                echo -e "${RED}Error: --binary requires a path argument${NC}"
+                echo -e "${RED}Error: --bundle requires a path argument${NC}"
                 exit 1
             fi
             ;;
@@ -65,25 +65,60 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-INSTALL_DIR=$HOME/.opencorvus/bin
-mkdir -p "$INSTALL_DIR"
+raw_os=$(uname -s)
+os=$(echo "$raw_os" | tr '[:upper:]' '[:lower:]')
+case "$raw_os" in
+  Darwin*) os="darwin" ;;
+  Linux*) os="linux" ;;
+  MINGW*|MSYS*|CYGWIN*) os="windows" ;;
+esac
 
-# If --binary is provided, skip all download/detection logic
-if [ -n "$binary_path" ]; then
-    if [ ! -f "$binary_path" ]; then
-        echo -e "${RED}Error: Binary not found at ${binary_path}${NC}"
+if [ -n "${OPENCORVUS_HOME:-}" ]; then
+    runtime_root="$OPENCORVUS_HOME"
+elif [ "$os" = "windows" ]; then
+    runtime_root="${LOCALAPPDATA:-$HOME/AppData/Local}/opencorvus"
+elif [ "$os" = "darwin" ]; then
+    runtime_root="$HOME/Library/Application Support/opencorvus"
+else
+    runtime_root="${XDG_DATA_HOME:-$HOME/.local/share}/opencorvus"
+fi
+
+case "$runtime_root" in
+    /*) ;;
+    [A-Za-z]:[\\/]*)
+        if [ "$os" != "windows" ]; then
+            echo "OPENCORVUS_HOME must be an absolute path" >&2
+            exit 1
+        fi
+        ;;
+    \\\\*)
+        if [ "$os" != "windows" ]; then
+            echo "OPENCORVUS_HOME must be an absolute path" >&2
+            exit 1
+        fi
+        ;;
+    *)
+        echo "OPENCORVUS_HOME must be an absolute path" >&2
+        exit 1
+        ;;
+esac
+
+INSTALL_DIR="$runtime_root/bin"
+mkdir -p "$INSTALL_DIR" "$runtime_root/tmp"
+
+installed_binary_name="$APP"
+if [ "$os" = "windows" ]; then
+    installed_binary_name="$APP.exe"
+fi
+
+# If --bundle is provided, skip all download/detection logic.
+if [ -n "$bundle_path" ]; then
+    if [ ! -d "$bundle_path" ]; then
+        echo -e "${RED}Error: Native bundle not found at ${bundle_path}${NC}"
         exit 1
     fi
     specific_version="local"
 else
-    raw_os=$(uname -s)
-    os=$(echo "$raw_os" | tr '[:upper:]' '[:lower:]')
-    case "$raw_os" in
-      Darwin*) os="darwin" ;;
-      Linux*) os="linux" ;;
-      MINGW*|MSYS*|CYGWIN*) os="windows" ;;
-    esac
-
     arch=$(uname -m)
     if [[ "$arch" == "aarch64" ]]; then
       arch="arm64"
@@ -109,10 +144,7 @@ else
         ;;
     esac
 
-    archive_ext=".zip"
-    if [ "$os" = "linux" ]; then
-      archive_ext=".tar.gz"
-    fi
+    archive_ext=".tar.gz"
 
     is_musl=false
     if [ "$os" = "linux" ]; then
@@ -168,16 +200,9 @@ else
     filename="$APP-$target$archive_ext"
 
 
-    if [ "$os" = "linux" ]; then
-        if ! command -v tar >/dev/null 2>&1; then
-             echo -e "${RED}Error: 'tar' is required but not installed.${NC}"
-             exit 1
-        fi
-    else
-        if ! command -v unzip >/dev/null 2>&1; then
-            echo -e "${RED}Error: 'unzip' is required but not installed.${NC}"
-            exit 1
-        fi
+    if ! command -v tar >/dev/null 2>&1; then
+        echo -e "${RED}Error: 'tar' is required but not installed.${NC}"
+        exit 1
     fi
 
     if [ -z "$requested_version" ]; then
@@ -327,32 +352,57 @@ download_with_progress() {
 download_and_install() {
     print_message info "\n${MUTED}Installing ${NC}opencorvus ${MUTED}version: ${NC}$specific_version"
     local tmp_dir="${TMPDIR:-/tmp}/opencorvus_install_$$"
+    local extracted="$tmp_dir/bundle"
     mkdir -p "$tmp_dir"
+    mkdir -p "$extracted"
 
-    if [[ "$os" == "windows" ]] || ! [ -t 2 ] || ! download_with_progress "$url" "$tmp_dir/$filename"; then
-        # Fallback to standard curl on Windows, non-TTY environments, or if custom progress fails
+    if [[ "$os" == "windows" ]] || ! [ -t 2 ]; then
         curl -# -L -o "$tmp_dir/$filename" "$url"
-    fi
-
-    if [ "$os" = "linux" ]; then
-        tar -xzf "$tmp_dir/$filename" -C "$tmp_dir"
     else
-        unzip -q "$tmp_dir/$filename" -d "$tmp_dir"
+        download_with_progress "$url" "$tmp_dir/$filename"
     fi
 
-    mv "$tmp_dir/opencorvus" "$INSTALL_DIR"
-    chmod 755 "${INSTALL_DIR}/opencorvus"
+    tar -xzf "$tmp_dir/$filename" -C "$extracted"
+
+    install_bundle "$extracted"
     rm -rf "$tmp_dir"
 }
 
-install_from_binary() {
-    print_message info "\n${MUTED}Installing ${NC}opencorvus ${MUTED}from: ${NC}$binary_path"
-    cp "$binary_path" "${INSTALL_DIR}/opencorvus"
-    chmod 755 "${INSTALL_DIR}/opencorvus"
+install_bundle() {
+    local source="$1"
+    local next="${INSTALL_DIR}.next.$$"
+    local rg_name="rg"
+    local node_name="node"
+    if [ "$os" = "windows" ]; then
+        rg_name="rg.exe"
+        node_name="node.exe"
+    fi
+    for required in \
+        "$installed_binary_name" \
+        "package.json" \
+        "bin/$rg_name" \
+        "browser-mcp-node/$node_name" \
+        "browser-mcp-node/browser.mjs" \
+        "node_modules" \
+        "ui/index.html"; do
+        if [ ! -e "$source/$required" ]; then
+            echo -e "${RED}Error: Native bundle is missing $required${NC}"
+            exit 1
+        fi
+    done
+    rm -rf "$next"
+    mkdir -p "$next"
+    cp -R "$source"/. "$next"/
+    chmod 755 "$next/$installed_binary_name"
+    chmod 755 "$next/bin/$rg_name"
+    chmod 755 "$next/browser-mcp-node/$node_name"
+    rm -rf "$INSTALL_DIR"
+    mv "$next" "$INSTALL_DIR"
 }
 
-if [ -n "$binary_path" ]; then
-    install_from_binary
+if [ -n "$bundle_path" ]; then
+    print_message info "\n${MUTED}Installing ${NC}opencorvus ${MUTED}from bundle: ${NC}$bundle_path"
+    install_bundle "$bundle_path"
 else
     check_version
     download_and_install

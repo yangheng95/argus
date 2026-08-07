@@ -1,4 +1,5 @@
 import { Instance } from "../project/instance"
+import { createInstanceState } from "../project/instance-state"
 import { Log } from "../util/log"
 import { Flag } from "../flag/flag"
 import { Filesystem } from "../util/filesystem"
@@ -9,7 +10,7 @@ export namespace FileTime {
   // All tools that overwrite existing files should run their
   // assert/read/write/update sequence inside withLock(filepath, ...)
   // so concurrent writes to the same file are serialized.
-  export const state = Instance.state(() => {
+  export const state = createInstanceState(() => {
     const read: {
       [sessionID: string]: {
         [path: string]: Date | undefined
@@ -20,9 +21,10 @@ export namespace FileTime {
       read,
       locks,
     }
-  })
+  }, undefined, "file-time")
 
   export function read(sessionID: string, file: string) {
+    file = Filesystem.normalizePath(file)
     log.info("read", { sessionID, file })
     const { read } = state()
     read[sessionID] = read[sessionID] || {}
@@ -30,10 +32,12 @@ export namespace FileTime {
   }
 
   export function get(sessionID: string, file: string) {
+    file = Filesystem.normalizePath(file)
     return state().read[sessionID]?.[file]
   }
 
   export async function withLock<T>(filepath: string, fn: () => Promise<T>): Promise<T> {
+    filepath = Filesystem.normalizePath(filepath)
     const current = state()
     const currentLock = current.locks.get(filepath) ?? Promise.resolve()
     let release: () => void = () => {}
@@ -58,6 +62,7 @@ export namespace FileTime {
       return
     }
 
+    filepath = Filesystem.normalizePath(filepath)
     const time = get(sessionID, filepath)
     if (!time) throw new Error(`You must read file ${filepath} before overwriting it. Use the Read tool first`)
     const mtime = Filesystem.stat(filepath)?.mtime

@@ -12,13 +12,7 @@ import { MattermostAdapter } from "./adapters/mattermost"
 import { SignalAdapter } from "./adapters/signal"
 import { WeComAdapter } from "./adapters/wecom"
 import { DingTalkAdapter } from "./adapters/dingtalk"
-import { QQAdapter } from "./adapters/qq"
-import { STTPipeline } from "./stt/pipeline"
-import { GroqProvider } from "./stt/providers/groq"
-import { OpenAIWhisperProvider } from "./stt/providers/openai-whisper"
-import { DeepgramProvider } from "./stt/providers/deepgram"
-import { GoogleGeminiProvider } from "./stt/providers/google-gemini"
-import { LocalCLIProvider } from "./stt/providers/local-cli"
+import { createConfiguredSTT } from "./stt/setup"
 import { VisionPipeline } from "./vision"
 import { applyDashscopeRuntime } from "./dashscope"
 import { ADAPTER_HINT, registerAdapters } from "./registry"
@@ -27,7 +21,9 @@ import { resolveRuntimeConfig } from "./runtime-config"
 
 const bundled = await applyBundledEnv()
 if (bundled.expired) {
-  console.warn(`[ChannelRuntime] Bundled env expired at ${bundled.expireAt}. Configure your own packages/channel-runtime/.env to continue.`)
+  console.warn(
+    `[ChannelRuntime] Bundled env expired at ${bundled.expireAt}. Configure your own packages/channel-runtime/.env to continue.`,
+  )
 } else if (bundled.enabled) {
   console.log(
     `[ChannelRuntime] Bundled env active until ${bundled.expireAt} (applied ${bundled.applied}, user overrides ${bundled.skipped}).`,
@@ -45,18 +41,16 @@ const runtimeConfig = resolveRuntimeConfig(
   process.env.OPENCORVUS_CONFIG_CONTENT,
   process.env.OPENCORVUS_CHANNEL_PERMISSION_PROFILE,
 )
-const profileState = runtimeConfig.profileState
 process.env.OPENCORVUS_CONFIG_CONTENT = JSON.stringify(runtimeConfig.config)
-if (profileState.invalid) {
-  console.warn(
-    `[ChannelRuntime] Unknown OPENCORVUS_CHANNEL_PERMISSION_PROFILE=${process.env.OPENCORVUS_CHANNEL_PERMISSION_PROFILE}. Fallback to profile: ${profileState.profile}.`,
-  )
-}
-console.log(`[ChannelRuntime] Permission profile: ${profileState.profile}`)
+console.log(`[ChannelRuntime] Permission profile: ${runtimeConfig.profile}`)
 
-console.log("[ChannelRuntime] Model/provider config source: opencorvus auth + opencorvus.json + OPENCORVUS_CONFIG_CONTENT")
+console.log(
+  "[ChannelRuntime] Model/provider config source: opencorvus auth + opencorvus.jsonc + OPENCORVUS_CONFIG_CONTENT",
+)
 if (!activeKey) {
-  console.log("[ChannelRuntime] DashScope key not found in opencorvus auth. Run: opencorvus auth login (provider: alibaba-cn)")
+  console.log(
+    "[ChannelRuntime] DashScope key not found in opencorvus auth. Run: opencorvus auth login (provider: alibaba-cn)",
+  )
 }
 if (activeKey) {
   const keyType = useCodingPlan ? "sk-sp-* (Coding Plan)" : "sk-* (DashScope)"
@@ -71,46 +65,20 @@ if (serverUrl) {
 }
 const runtime = new ChannelRuntime({
   baseUrl: serverUrl,
+  directory: process.env.OPENCORVUS_PROJECT_DIR?.trim(),
+  channelProtocol: process.env.OPENCORVUS_CHANNEL_PROTOCOL === "1",
   sharedMode: process.env.OPENCORVUS_SHARED_SESSION_MODE === "1",
   sharedFile: process.env.OPENCORVUS_SHARED_SESSION_FILE,
 })
 
 // --- STT Pipeline Setup ---
-const sttPipeline = new STTPipeline({
-  providers: (process.env.STT_PROVIDERS ?? "groq,openai-whisper,deepgram,google-gemini,local-cli").split(","),
-  language: process.env.STT_LANGUAGE,
-})
-sttPipeline.register(
-  new GroqProvider({
-    apiKey: process.env.GROQ_API_KEY,
-    model: process.env.STT_GROQ_MODEL,
-    baseURL: process.env.STT_GROQ_BASE_URL,
-  }),
-)
-sttPipeline.register(
-  new OpenAIWhisperProvider({
-    apiKey: process.env.OPENAI_API_KEY,
-    model: process.env.STT_OPENAI_MODEL,
-    baseURL: process.env.STT_OPENAI_BASE_URL,
-  }),
-)
-sttPipeline.register(
-  new DeepgramProvider({
-    apiKey: process.env.DEEPGRAM_API_KEY,
-    model: process.env.STT_DEEPGRAM_MODEL,
-    baseURL: process.env.STT_DEEPGRAM_BASE_URL,
-  }),
-)
-sttPipeline.register(
-  new GoogleGeminiProvider({
-    apiKey: process.env.GOOGLE_API_KEY,
-    model: process.env.STT_GOOGLE_MODEL,
-    baseURL: process.env.STT_GOOGLE_BASE_URL,
-  }),
-)
-sttPipeline.register(new LocalCLIProvider({ command: process.env.STT_LOCAL_COMMAND }))
-await sttPipeline.init()
-runtime.setSTT(sttPipeline)
+const sttPipeline = await createConfiguredSTT(process.env)
+if (sttPipeline) {
+  runtime.setSTT(sttPipeline)
+  console.log(`[ChannelRuntime] STT provider: ${process.env.STT_PROVIDER}`)
+} else {
+  console.log("[ChannelRuntime] STT disabled (STT_PROVIDER not set)")
+}
 
 // --- Vision Pipeline Setup ---
 if (activeKey) {
@@ -124,7 +92,9 @@ if (activeKey) {
       }),
     )
     const keySource = useCodingPlan ? "opencorvus auth (coding plan)" : "opencorvus auth"
-    console.log(`[ChannelRuntime] Vision pipeline enabled (model: ${visionModel}, key: ${keySource}, baseURL: ${baseURL})`)
+    console.log(
+      `[ChannelRuntime] Vision pipeline enabled (model: ${visionModel}, key: ${keySource}, baseURL: ${baseURL})`,
+    )
   } else {
     console.log("[ChannelRuntime] Vision pipeline disabled (OPENCORVUS_VISION_MODEL not set)")
   }
@@ -144,7 +114,6 @@ const adapters = registerAdapters(runtime, process.env, {
   signal: (opts) => new SignalAdapter(opts),
   wecom: (opts) => new WeComAdapter(opts),
   dingtalk: (opts) => new DingTalkAdapter(opts),
-  qq: (opts) => new QQAdapter(opts),
 })
 for (const warn of adapters.warns) {
   console.warn(`[ChannelRuntime] ${warn}`)
@@ -167,4 +136,3 @@ if (process.env.TEST_PROMPT) {
     .injectPrompt("slack", channel, process.env.TEST_PROMPT)
     .catch((err) => console.error("[Test] injectPrompt failed:", err))
 }
-

@@ -3,28 +3,39 @@ function truthy(key: string) {
   return value === "true" || value === "1"
 }
 
+function positiveInteger(key: string) {
+  const value = process.env[key]
+  if (!value) return undefined
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
+}
+
 export namespace Flag {
+  /** Maximum number of idle Project runtime cache entries retained by the server. */
+  export declare const OPENCORVUS_PROJECT_RUNTIME_CACHE_LIMIT: number
+  /** Maximum time cache convergence waits for one Project runtime disposer. */
+  export declare const OPENCORVUS_PROJECT_RUNTIME_DISPOSAL_TIMEOUT_MS: number
+  /** Maximum attempts for one atomic rename while Windows releases transient filesystem handles. */
+  export declare const OPENCORVUS_FILESYSTEM_RENAME_ATTEMPTS: number
+  /** Base delay in milliseconds between atomic rename attempts after transient filesystem contention. */
+  export declare const OPENCORVUS_FILESYSTEM_RENAME_DELAY_MS: number
   export const OPENCORVUS_AUTO_SHARE = truthy("OPENCORVUS_AUTO_SHARE")
   export const OPENCORVUS_GIT_BASH_PATH = process.env["OPENCORVUS_GIT_BASH_PATH"]
   export const OPENCORVUS_CONFIG = process.env["OPENCORVUS_CONFIG"]
-  export declare const OPENCORVUS_TUI_CONFIG: string | undefined
   export declare const OPENCORVUS_CONFIG_DIR: string | undefined
   export const OPENCORVUS_CONFIG_CONTENT = process.env["OPENCORVUS_CONFIG_CONTENT"]
   export const OPENCORVUS_DISABLE_AUTOUPDATE = truthy("OPENCORVUS_DISABLE_AUTOUPDATE")
   export const OPENCORVUS_DISABLE_PRUNE = truthy("OPENCORVUS_DISABLE_PRUNE")
   export const OPENCORVUS_DISABLE_TERMINAL_TITLE = truthy("OPENCORVUS_DISABLE_TERMINAL_TITLE")
   export const OPENCORVUS_PERMISSION = process.env["OPENCORVUS_PERMISSION"]
-  export const OPENCORVUS_DISABLE_DEFAULT_PLUGINS = truthy("OPENCORVUS_DISABLE_DEFAULT_PLUGINS")
   export const OPENCORVUS_DISABLE_LSP_DOWNLOAD = truthy("OPENCORVUS_DISABLE_LSP_DOWNLOAD")
   export const OPENCORVUS_ENABLE_EXPERIMENTAL_MODELS = truthy("OPENCORVUS_ENABLE_EXPERIMENTAL_MODELS")
   export const OPENCORVUS_DISABLE_AUTOCOMPACT = truthy("OPENCORVUS_DISABLE_AUTOCOMPACT")
-  export const OPENCORVUS_DISABLE_MODELS_FETCH = truthy("OPENCORVUS_DISABLE_MODELS_FETCH")
   export declare const OPENCORVUS_DISABLE_CLAUDE_CODE: boolean
   export declare const OPENCORVUS_DISABLE_CLAUDE_CODE_PROMPT: boolean
   export declare const OPENCORVUS_DISABLE_CLAUDE_CODE_SKILLS: boolean
   export declare const OPENCORVUS_DISABLE_EXTERNAL_SKILLS: boolean
   export declare const OPENCORVUS_DISABLE_PROJECT_CONFIG: boolean
-  export const OPENCORVUS_FAKE_VCS = process.env["OPENCORVUS_FAKE_VCS"]
   export declare const OPENCORVUS_CLIENT: string
   export const OPENCORVUS_SERVER_PASSWORD = process.env["OPENCORVUS_SERVER_PASSWORD"]
   export const OPENCORVUS_SERVER_USERNAME = process.env["OPENCORVUS_SERVER_USERNAME"]
@@ -40,10 +51,10 @@ export namespace Flag {
   export const OPENCORVUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT =
     copy === undefined ? process.platform === "win32" : truthy("OPENCORVUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT")
   export declare const OPENCORVUS_ENABLE_EXA: boolean
-  export const OPENCORVUS_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS = number(
+  export const OPENCORVUS_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS = positiveInteger(
     "OPENCORVUS_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS",
   )
-  export const OPENCORVUS_EXPERIMENTAL_OUTPUT_TOKEN_MAX = number("OPENCORVUS_EXPERIMENTAL_OUTPUT_TOKEN_MAX")
+  export const OPENCORVUS_EXPERIMENTAL_OUTPUT_TOKEN_MAX = positiveInteger("OPENCORVUS_EXPERIMENTAL_OUTPUT_TOKEN_MAX")
   export declare const OPENCORVUS_EXPERIMENTAL_OXFMT: boolean
   export const OPENCORVUS_EXPERIMENTAL_LSP_TY = truthy("OPENCORVUS_EXPERIMENTAL_LSP_TY")
   export declare const OPENCORVUS_EXPERIMENTAL_LSP_TOOL: boolean
@@ -51,14 +62,46 @@ export namespace Flag {
   export const OPENCORVUS_EXPERIMENTAL_MARKDOWN = truthy("OPENCORVUS_EXPERIMENTAL_MARKDOWN")
   export const OPENCORVUS_MODELS_URL = process.env["OPENCORVUS_MODELS_URL"]
   export const OPENCORVUS_MODELS_PATH = process.env["OPENCORVUS_MODELS_PATH"]
-
-  function number(key: string) {
-    const value = process.env[key]
-    if (!value) return undefined
-    const parsed = Number(value)
-    return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
-  }
 }
+
+const DEFAULT_PROJECT_RUNTIME_CACHE_LIMIT = 4
+const DEFAULT_PROJECT_RUNTIME_DISPOSAL_TIMEOUT_MS = 30_000
+const DEFAULT_FILESYSTEM_RENAME_ATTEMPTS = 20
+const DEFAULT_FILESYSTEM_RENAME_DELAY_MS = 100
+
+Object.defineProperty(Flag, "OPENCORVUS_PROJECT_RUNTIME_CACHE_LIMIT", {
+  get() {
+    return positiveInteger("OPENCORVUS_PROJECT_RUNTIME_CACHE_LIMIT") ?? DEFAULT_PROJECT_RUNTIME_CACHE_LIMIT
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+Object.defineProperty(Flag, "OPENCORVUS_PROJECT_RUNTIME_DISPOSAL_TIMEOUT_MS", {
+  get() {
+    return (
+      positiveInteger("OPENCORVUS_PROJECT_RUNTIME_DISPOSAL_TIMEOUT_MS") ?? DEFAULT_PROJECT_RUNTIME_DISPOSAL_TIMEOUT_MS
+    )
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+Object.defineProperty(Flag, "OPENCORVUS_FILESYSTEM_RENAME_ATTEMPTS", {
+  get() {
+    return positiveInteger("OPENCORVUS_FILESYSTEM_RENAME_ATTEMPTS") ?? DEFAULT_FILESYSTEM_RENAME_ATTEMPTS
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+Object.defineProperty(Flag, "OPENCORVUS_FILESYSTEM_RENAME_DELAY_MS", {
+  get() {
+    return positiveInteger("OPENCORVUS_FILESYSTEM_RENAME_DELAY_MS") ?? DEFAULT_FILESYSTEM_RENAME_DELAY_MS
+  },
+  enumerable: true,
+  configurable: false,
+})
 
 // Dynamic getter for OPENCORVUS_DISABLE_PROJECT_CONFIG
 // This must be evaluated at access time, not module load time,
@@ -66,17 +109,6 @@ export namespace Flag {
 Object.defineProperty(Flag, "OPENCORVUS_DISABLE_PROJECT_CONFIG", {
   get() {
     return truthy("OPENCORVUS_DISABLE_PROJECT_CONFIG")
-  },
-  enumerable: true,
-  configurable: false,
-})
-
-// Dynamic getter for OPENCORVUS_TUI_CONFIG
-// This must be evaluated at access time, not module load time,
-// because tests and external tooling may set this env var at runtime
-Object.defineProperty(Flag, "OPENCORVUS_TUI_CONFIG", {
-  get() {
-    return process.env["OPENCORVUS_TUI_CONFIG"]
   },
   enumerable: true,
   configurable: false,

@@ -1,4 +1,7 @@
-import type { Part, ToolPart } from "@opencorvus-ai/sdk/v2"
+import type { Part, ToolPart } from "@opencorvus-ai/sdk"
+import fs from "node:fs"
+import path from "node:path"
+import { channelRuntimePaths } from "./runtime-paths"
 
 const MAX_LENGTH = 3000
 
@@ -71,20 +74,13 @@ function dataUrlToBuffer(url: string): Buffer | null {
   // Handle opencorvus:// file-backed screenshots
   if (url.startsWith("opencorvus://screenshot/")) {
     try {
-      const fs = require("fs")
-      const path = require("path")
-      const dataDir =
-        process.env.XDG_DATA_HOME ||
-        (process.platform === "win32"
-          ? process.env.LOCALAPPDATA || path.join(require("os").homedir(), "AppData", "Local")
-          : path.join(require("os").homedir(), ".local", "share"))
       const rel = url.slice("opencorvus://screenshot/".length)
       // Guard against path traversal (e.g. "../../etc/passwd")
       if (rel.includes("..")) return null
-      const filepath = path.join(dataDir, "opencorvus", "screenshots", rel)
+      const filepath = path.join(channelRuntimePaths().data, "screenshots", rel)
       return fs.readFileSync(filepath)
     } catch {
-      // screenshot file missing or unreadable — return null so callers skip this attachment
+      // A missing or unreadable screenshot produces the attachment parser's null result.
       return null
     }
   }

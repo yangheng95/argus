@@ -51,9 +51,7 @@ export function createNote(input: { content: string }): CreateNoteResult {
 }
 
 export function listNotes(): Note[] {
-  const rows = Database.use((db) =>
-    db.select().from(QuickNoteTable).orderBy(desc(QuickNoteTable.time_created)).all(),
-  )
+  const rows = Database.use((db) => db.select().from(QuickNoteTable).orderBy(desc(QuickNoteTable.time_created)).all())
 
   return rows.map((row) => ({
     note_id: row.id,
@@ -67,9 +65,7 @@ export function listNotes(): Note[] {
 }
 
 export function getNote(id: string): Note | undefined {
-  const row = Database.use((db) =>
-    db.select().from(QuickNoteTable).where(eq(QuickNoteTable.id, id)).get(),
-  )
+  const row = Database.use((db) => db.select().from(QuickNoteTable).where(eq(QuickNoteTable.id, id)).get())
   if (!row) return undefined
 
   return {
@@ -92,4 +88,14 @@ export function deleteNote(id: string): boolean {
   })
 
   return true
+}
+
+export function deleteProjectNotes(input: { projectID: string }, db?: Database.TxOrDb): void {
+  const write = (target: Database.TxOrDb) =>
+    target.delete(QuickNoteTable).where(eq(QuickNoteTable.project_id, input.projectID)).run()
+  if (db) {
+    write(db)
+    return
+  }
+  Database.use(write)
 }

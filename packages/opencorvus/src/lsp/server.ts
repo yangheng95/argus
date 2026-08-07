@@ -1,6 +1,6 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "child_process"
+import { spawn, type ChildProcessWithoutNullStreams, type SpawnOptionsWithoutStdio } from "child_process"
+import { EventEmitter } from "node:events"
 import path from "path"
-import os from "os"
 import { Global } from "../global"
 import { Log } from "../util/log"
 import { BunProc } from "../bun"
@@ -13,6 +13,10 @@ import { Flag } from "../flag/flag"
 import { Archive } from "../util/archive"
 import { Process } from "../util/process"
 import { which } from "@/util/which"
+import { ProcessSupervisor } from "@/shell/process-supervisor"
+import { Shell } from "@/shell/shell"
+import { LSP_BUILTIN_SERVER_ID } from "./catalog"
+import { activeTaskExecutionCapsule } from "@/engine/task-execution-capsule-binding"
 
 export namespace LSPServer {
   const log = Log.create({ service: "lsp.server" })
@@ -37,9 +41,201 @@ export namespace LSPServer {
     return process.platform === "win32" ? "npm.cmd" : "npm"
   }
 
+  function quotePosix(value: string) {
+    return `'${value.replaceAll("'", "'\"'\"'")}'`
+  }
+
+  function quotePowerShell(value: string) {
+    return `'${value.replaceAll("'", "''")}'`
+  }
+
+  function quoteCmd(value: string) {
+    if (/^[A-Za-z0-9_./:=+-]+$/.test(value)) return value
+    return `"${value.replaceAll('"', '""')}"`
+  }
+
+  function shellCommand(argv: string[], shell: string) {
+    const name = path.basename(shell, path.extname(shell)).toLowerCase()
+    if (name === "powershell" || name === "pwsh") return `& ${argv.map(quotePowerShell).join(" ")}`
+    if (name === "cmd") return argv.map(quoteCmd).join(" ")
+    return `exec ${argv.map(quotePosix).join(" ")}`
+  }
+
+  async function waitForExit(proc: ChildProcessWithoutNullStreams, timeoutMs: number): Promise<boolean> {
+    if (proc.exitCode !== null || proc.signalCode !== null) return true
+    return await Promise.race([
+      new Promise<boolean>((resolve) => proc.once("exit", () => resolve(true))),
+      Bun.sleep(timeoutMs).then(() => false),
+    ])
+  }
+
+  async function waitForClose(proc: ChildProcessWithoutNullStreams, timeoutMs: number): Promise<boolean> {
+    if (proc.stdin.destroyed && proc.stdout.destroyed && proc.stderr.destroyed) return true
+    return await Promise.race([
+      new Promise<boolean>((resolve) => proc.once("close", () => resolve(true))),
+      Bun.sleep(timeoutMs).then(() => false),
+    ])
+  }
+
+  async function terminateSpawnedStdio(proc: ChildProcessWithoutNullStreams) {
+    const close = waitForClose(proc, 2_000)
+    if (proc.exitCode === null && proc.signalCode === null && proc.pid) {
+      await ProcessSupervisor.terminateOwnedChildProcessTree(proc, `LSP stdio process tree ${proc.pid}`, {
+        gracefulTimeoutMs: 1_000,
+      })
+    } else if (proc.exitCode === null && proc.signalCode === null) {
+      proc.kill("SIGTERM")
+      if (!(await waitForExit(proc, 1_000))) {
+        proc.kill("SIGKILL")
+        await waitForExit(proc, 1_000)
+      }
+    }
+    if (!(await close)) throw new Error(`LSP stdio process ${proc.pid ?? "unknown"} did not close its streams`)
+    proc.unref()
+  }
+
+  export type OwnedChildProcess = ChildProcessWithoutNullStreams & {
+    opencorvusDispose?: () => Promise<void>
+  }
+
+  export async function spawnTaskStdio(
+    taskID: string,
+    command: string,
+    argsOrOptions?: string[] | SpawnOptionsWithoutStdio,
+    maybeOptions?: SpawnOptionsWithoutStdio,
+  ): Promise<OwnedChildProcess> {
+    const args = Array.isArray(argsOrOptions) ? argsOrOptions : []
+    const options = (Array.isArray(argsOrOptions) ? maybeOptions : argsOrOptions) ?? {}
+    if (!options.cwd) throw new Error("LSP stdio spawning requires an exact Task cwd")
+    const handle = await spawnSupervisedStdio(taskID, options.cwd.toString(), [command, ...args], options.env)
+    const owned = handle.process as OwnedChildProcess
+    let disposeOperation: Promise<void> | undefined
+    owned.opencorvusDispose = async () => {
+      if (disposeOperation) return disposeOperation
+      const operation = handle.dispose?.() ?? Promise.resolve()
+      disposeOperation = operation
+      try {
+        await operation
+      } catch (error) {
+        if (disposeOperation === operation) disposeOperation = undefined
+        throw error
+      }
+    }
+    return owned
+  }
+
+  export function spawnHostStdio(
+    command: string,
+    argsOrOptions?: string[] | SpawnOptionsWithoutStdio,
+    maybeOptions?: SpawnOptionsWithoutStdio,
+  ): OwnedChildProcess {
+    const args = Array.isArray(argsOrOptions) ? argsOrOptions : []
+    const options = (Array.isArray(argsOrOptions) ? maybeOptions : argsOrOptions) ?? {}
+    const proc = spawn(command, args, { ...options, detached: process.platform !== "win32", stdio: "pipe" })
+    const owned = proc as OwnedChildProcess
+    let disposeOperation: Promise<void> | undefined
+    owned.opencorvusDispose = async () => {
+      disposeOperation ??= terminateSpawnedStdio(proc)
+      return disposeOperation
+    }
+    return owned
+  }
+
+  function supervisedChildProcess(supervisor: ProcessSupervisor.Handle): ChildProcessWithoutNullStreams {
+    const events = new EventEmitter()
+    let exitCode: number | null = null
+    let signalCode: NodeJS.Signals | null = null
+    let exitError: Error | undefined
+    let settled = false
+    const processLike = {
+      pid: supervisor.pid,
+      stdin: supervisor.stdin,
+      stdout: supervisor.stdout,
+      stderr: supervisor.stderr,
+      get exitCode() {
+        return exitCode
+      },
+      get signalCode() {
+        return signalCode
+      },
+      kill: () => {
+        void supervisor.terminate()
+        return true
+      },
+      once(event: string | symbol, listener: (...args: any[]) => void) {
+        if (event === "exit" && settled && !exitError) {
+          queueMicrotask(() => listener(exitCode, signalCode))
+          return processLike
+        }
+        if (event === "error" && exitError) {
+          queueMicrotask(() => listener(exitError))
+          return processLike
+        }
+        events.once(event, listener)
+        return processLike
+      },
+      on(event: string | symbol, listener: (...args: any[]) => void) {
+        events.on(event, listener)
+        return processLike
+      },
+      off(event: string | symbol, listener: (...args: any[]) => void) {
+        events.off(event, listener)
+        return processLike
+      },
+      removeListener(event: string | symbol, listener: (...args: any[]) => void) {
+        events.removeListener(event, listener)
+        return processLike
+      },
+      emit(event: string | symbol, ...args: any[]) {
+        return events.emit(event, ...args)
+      },
+    } as unknown as ChildProcessWithoutNullStreams
+
+    supervisor.exited.then(
+      (code) => {
+        settled = true
+        exitCode = code
+        events.emit("exit", exitCode, signalCode)
+        events.emit("close", exitCode, signalCode)
+      },
+      (error) => {
+        settled = true
+        exitError = error instanceof Error ? error : new Error(String(error))
+        if (events.listenerCount("error") > 0) events.emit("error", exitError)
+      },
+    )
+
+    return processLike
+  }
+
+  async function spawnSupervisedStdio(
+    taskID: string,
+    root: string,
+    argv: string[],
+    env?: NodeJS.ProcessEnv,
+  ): Promise<Handle> {
+    const shell = Shell.acceptable()
+    const supervisor = await ProcessSupervisor.spawnTaskShell({ taskID, cwd: root }, {
+      command: shellCommand(argv, shell),
+      shell,
+      env,
+      stdin: "pipe",
+      owner: "lsp",
+    })
+    if (!supervisor.stdin || !supervisor.stdout || !supervisor.stderr) {
+      await supervisor.dispose()
+      throw new Error("Process supervisor did not provide stdio pipes")
+    }
+    return {
+      process: supervisedChildProcess(supervisor),
+      dispose: () => supervisor.dispose(),
+    }
+  }
+
   export interface Handle {
     process: ChildProcessWithoutNullStreams
     initialization?: Record<string, any>
+    dispose?: () => Promise<void>
   }
 
   type RootFunction = (file: string) => Promise<string | undefined>
@@ -73,11 +269,34 @@ export namespace LSPServer {
     extensions: string[]
     global?: boolean
     root: RootFunction
-    spawn(root: string): Promise<Handle | undefined>
+    spawn(root: string, stdio: StdioSpawner, probe: ProcessProbe): Promise<Handle | undefined>
+  }
+
+  export type StdioSpawner = (
+    command: string,
+    argsOrOptions?: string[] | SpawnOptionsWithoutStdio,
+    maybeOptions?: SpawnOptionsWithoutStdio,
+  ) => Promise<OwnedChildProcess>
+
+  export type ProcessProbe = (root: string, argv: string[]) => Promise<Process.Result>
+
+  function isServerInfo(value: unknown): value is Info {
+    return (
+      typeof value === "object" &&
+      value !== null &&
+      typeof (value as { id?: unknown }).id === "string" &&
+      Array.isArray((value as { extensions?: unknown }).extensions) &&
+      typeof (value as { root?: unknown }).root === "function" &&
+      typeof (value as { spawn?: unknown }).spawn === "function"
+    )
+  }
+
+  export function builtInServers(): Info[] {
+    return Object.values(LSPServer).filter(isServerInfo)
   }
 
   export const Deno: Info = {
-    id: "deno",
+    id: LSP_BUILTIN_SERVER_ID.deno,
     root: async (file) => {
       const files = Filesystem.up({
         targets: ["deno.json", "deno.jsonc"],
@@ -90,14 +309,14 @@ export namespace LSPServer {
       return path.dirname(first.value)
     },
     extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs"],
-    async spawn(root) {
+    async spawn(root, stdio) {
       const deno = which("deno")
       if (!deno) {
         log.info("deno not found, please install deno first")
         return
       }
       return {
-        process: spawn(deno, ["lsp"], {
+      process: await stdio(deno, ["lsp"], {
           cwd: root,
         }),
       }
@@ -105,17 +324,17 @@ export namespace LSPServer {
   }
 
   export const Typescript: Info = {
-    id: "typescript",
+    id: LSP_BUILTIN_SERVER_ID.typescript,
     root: NearestRoot(
       ["package-lock.json", "bun.lockb", "bun.lock", "pnpm-lock.yaml", "yarn.lock"],
       ["deno.json", "deno.jsonc"],
     ),
     extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts"],
-    async spawn(root) {
+    async spawn(root, stdio) {
       const tsserver = await Bun.resolve("typescript/lib/tsserver.js", Instance.directory).catch(() => {})
       log.info("typescript server", { tsserver })
       if (!tsserver) return
-      const proc = spawn(BunProc.which(), ["x", "typescript-language-server", "--stdio"], {
+      const child = await stdio(BunProc.which(), ["x", "typescript-language-server", "--stdio"], {
         cwd: root,
         env: {
           ...process.env,
@@ -123,7 +342,7 @@ export namespace LSPServer {
         },
       })
       return {
-        process: proc,
+        process: child,
         initialization: {
           tsserver: {
             path: tsserver,
@@ -134,10 +353,10 @@ export namespace LSPServer {
   }
 
   export const Vue: Info = {
-    id: "vue",
+    id: LSP_BUILTIN_SERVER_ID.vue,
     extensions: [".vue"],
     root: NearestRoot(["package-lock.json", "bun.lockb", "bun.lock", "pnpm-lock.yaml", "yarn.lock"]),
-    async spawn(root) {
+    async spawn(root, stdio) {
       let binary = which("vue-language-server")
       const args: string[] = []
       if (!binary) {
@@ -151,7 +370,7 @@ export namespace LSPServer {
         )
         if (!(await Filesystem.exists(js))) {
           if (Flag.OPENCORVUS_DISABLE_LSP_DOWNLOAD) return
-          await Process.spawn([BunProc.which(), "install", "@vue/language-server"], {
+          await Process.spawnHost([BunProc.which(), "install", "@vue/language-server"], {
             cwd: Global.Path.bin,
             env: {
               ...process.env,
@@ -166,7 +385,7 @@ export namespace LSPServer {
         args.push("run", js)
       }
       args.push("--stdio")
-      const proc = spawn(binary, args, {
+      const proc = await stdio(binary, args, {
         cwd: root,
         env: {
           ...process.env,
@@ -183,10 +402,10 @@ export namespace LSPServer {
   }
 
   export const ESLint: Info = {
-    id: "eslint",
+    id: LSP_BUILTIN_SERVER_ID.eslint,
     root: NearestRoot(["package-lock.json", "bun.lockb", "bun.lock", "pnpm-lock.yaml", "yarn.lock"]),
     extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts", ".vue"],
-    async spawn(root) {
+    async spawn(root, stdio) {
       const eslint = await Bun.resolve("eslint", Instance.directory).catch(() => {})
       if (!eslint) return
       log.info("spawning eslint server")
@@ -226,7 +445,7 @@ export namespace LSPServer {
         log.info("installed VS Code ESLint server", { serverPath })
       }
 
-      const proc = spawn(BunProc.which(), [serverPath, "--stdio"], {
+      const proc = await stdio(BunProc.which(), [serverPath, "--stdio"], {
         cwd: root,
         env: {
           ...process.env,
@@ -241,7 +460,7 @@ export namespace LSPServer {
   }
 
   export const Oxlint: Info = {
-    id: "oxlint",
+    id: LSP_BUILTIN_SERVER_ID.oxlint,
     root: NearestRoot([
       ".oxlintrc.json",
       "package-lock.json",
@@ -252,7 +471,7 @@ export namespace LSPServer {
       "package.json",
     ]),
     extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts", ".vue", ".astro", ".svelte"],
-    async spawn(root) {
+    async spawn(root, stdio, runProbe) {
       const ext = process.platform === "win32" ? ".cmd" : ""
 
       const serverTarget = path.join("node_modules", ".bin", "oxc_language_server" + ext)
@@ -281,13 +500,12 @@ export namespace LSPServer {
       }
 
       if (lintBin) {
-        const proc = Process.spawn([lintBin, "--help"], { stdout: "pipe" })
-        await proc.exited
-        if (proc.stdout) {
-          const help = await text(proc.stdout)
+        const probe = await runProbe(root, [lintBin, "--help"])
+        if (probe.code === 0) {
+          const help = probe.stdout.toString()
           if (help.includes("--lsp")) {
             return {
-              process: spawn(lintBin, ["--lsp"], {
+              process: await stdio(lintBin, ["--lsp"], {
                 cwd: root,
               }),
             }
@@ -302,7 +520,7 @@ export namespace LSPServer {
       }
       if (serverBin) {
         return {
-          process: spawn(serverBin, [], {
+          process: await stdio(serverBin, [], {
             cwd: root,
           }),
         }
@@ -314,7 +532,7 @@ export namespace LSPServer {
   }
 
   export const Biome: Info = {
-    id: "biome",
+    id: LSP_BUILTIN_SERVER_ID.biome,
     root: NearestRoot([
       "biome.json",
       "biome.jsonc",
@@ -343,7 +561,7 @@ export namespace LSPServer {
       ".gql",
       ".html",
     ],
-    async spawn(root) {
+    async spawn(root, stdio) {
       const localBin = path.join(root, "node_modules", ".bin", "biome")
       let bin: string | undefined
       if (await Filesystem.exists(localBin)) bin = localBin
@@ -361,7 +579,7 @@ export namespace LSPServer {
         args = ["x", "biome", "lsp-proxy", "--stdio"]
       }
 
-      const proc = spawn(bin, args, {
+      const proc = await stdio(bin, args, {
         cwd: root,
         env: {
           ...process.env,
@@ -376,14 +594,14 @@ export namespace LSPServer {
   }
 
   export const Gopls: Info = {
-    id: "gopls",
+    id: LSP_BUILTIN_SERVER_ID.gopls,
     root: async (file) => {
       const work = await NearestRoot(["go.work"])(file)
       if (work) return work
       return NearestRoot(["go.mod", "go.sum"])(file)
     },
     extensions: [".go"],
-    async spawn(root) {
+    async spawn(root, stdio) {
       let bin = which("gopls", {
         PATH: pathWithBin(),
       })
@@ -392,7 +610,7 @@ export namespace LSPServer {
         if (Flag.OPENCORVUS_DISABLE_LSP_DOWNLOAD) return
 
         log.info("installing gopls")
-        const proc = Process.spawn(["go", "install", "golang.org/x/tools/gopls@latest"], {
+        const proc = Process.spawnHost(["go", "install", "golang.org/x/tools/gopls@latest"], {
           env: { ...process.env, GOBIN: Global.Path.bin },
           stdout: "pipe",
           stderr: "pipe",
@@ -409,7 +627,7 @@ export namespace LSPServer {
         })
       }
       return {
-        process: spawn(bin!, {
+        process: await stdio(bin!, {
           cwd: root,
         }),
       }
@@ -417,10 +635,10 @@ export namespace LSPServer {
   }
 
   export const Rubocop: Info = {
-    id: "ruby-lsp",
+    id: LSP_BUILTIN_SERVER_ID.rubyLsp,
     root: NearestRoot(["Gemfile"]),
     extensions: [".rb", ".rake", ".gemspec", ".ru"],
-    async spawn(root) {
+    async spawn(root, stdio) {
       let bin = which("rubocop", {
         PATH: pathWithBin(),
       })
@@ -433,7 +651,7 @@ export namespace LSPServer {
         }
         if (Flag.OPENCORVUS_DISABLE_LSP_DOWNLOAD) return
         log.info("installing rubocop")
-        const proc = Process.spawn(["gem", "install", "rubocop", "--bindir", Global.Path.bin], {
+        const proc = Process.spawnHost(["gem", "install", "rubocop", "--bindir", Global.Path.bin], {
           stdout: "pipe",
           stderr: "pipe",
           stdin: "pipe",
@@ -449,7 +667,7 @@ export namespace LSPServer {
         })
       }
       return {
-        process: spawn(bin!, ["--lsp"], {
+        process: await stdio(bin!, ["--lsp"], {
           cwd: root,
         }),
       }
@@ -457,7 +675,7 @@ export namespace LSPServer {
   }
 
   export const Ty: Info = {
-    id: "ty",
+    id: LSP_BUILTIN_SERVER_ID.ty,
     extensions: [".py", ".pyi"],
     root: NearestRoot([
       "pyproject.toml",
@@ -468,7 +686,7 @@ export namespace LSPServer {
       "Pipfile",
       "pyrightconfig.json",
     ]),
-    async spawn(root) {
+    async spawn(root, stdio) {
       if (!Flag.OPENCORVUS_EXPERIMENTAL_LSP_TY) {
         return undefined
       }
@@ -509,7 +727,7 @@ export namespace LSPServer {
         return
       }
 
-      const proc = spawn(binary, ["server"], {
+      const proc = await stdio(binary, ["server"], {
         cwd: root,
       })
 
@@ -521,17 +739,17 @@ export namespace LSPServer {
   }
 
   export const Pyright: Info = {
-    id: "pyright",
+    id: LSP_BUILTIN_SERVER_ID.pyright,
     extensions: [".py", ".pyi"],
     root: NearestRoot(["pyproject.toml", "setup.py", "setup.cfg", "requirements.txt", "Pipfile", "pyrightconfig.json"]),
-    async spawn(root) {
+    async spawn(root, stdio) {
       let binary = which("pyright-langserver")
       const args: string[] = []
       if (!binary) {
         const js = path.join(Global.Path.bin, "node_modules", "pyright", "dist", "pyright-langserver.js")
         if (!(await Filesystem.exists(js))) {
           if (Flag.OPENCORVUS_DISABLE_LSP_DOWNLOAD) return
-          await Process.spawn([BunProc.which(), "install", "pyright"], {
+          await Process.spawnHost([BunProc.which(), "install", "pyright"], {
             cwd: Global.Path.bin,
             env: {
               ...process.env,
@@ -560,7 +778,7 @@ export namespace LSPServer {
         }
       }
 
-      const proc = spawn(binary, args, {
+      const proc = await stdio(binary, args, {
         cwd: root,
         env: {
           ...process.env,
@@ -575,10 +793,10 @@ export namespace LSPServer {
   }
 
   export const ElixirLS: Info = {
-    id: "elixir-ls",
+    id: LSP_BUILTIN_SERVER_ID.elixirLs,
     extensions: [".ex", ".exs"],
     root: NearestRoot(["mix.exs", "mix.lock"]),
-    async spawn(root) {
+    async spawn(root, stdio) {
       let binary = which("elixir-ls")
       if (!binary) {
         const elixirLsPath = path.join(Global.Path.bin, "elixir-ls")
@@ -629,7 +847,7 @@ export namespace LSPServer {
       }
 
       return {
-        process: spawn(binary, {
+        process: await stdio(binary, {
           cwd: root,
         }),
       }
@@ -637,10 +855,10 @@ export namespace LSPServer {
   }
 
   export const Zls: Info = {
-    id: "zls",
+    id: LSP_BUILTIN_SERVER_ID.zls,
     extensions: [".zig", ".zon"],
     root: NearestRoot(["build.zig"]),
-    async spawn(root) {
+    async spawn(root, stdio) {
       let bin = which("zls", {
         PATH: pathWithBin(),
       })
@@ -741,7 +959,7 @@ export namespace LSPServer {
       }
 
       return {
-        process: spawn(bin, {
+        process: await stdio(bin, {
           cwd: root,
         }),
       }
@@ -749,10 +967,10 @@ export namespace LSPServer {
   }
 
   export const CSharp: Info = {
-    id: "csharp",
+    id: LSP_BUILTIN_SERVER_ID.csharp,
     root: NearestRoot([".slnx", ".sln", ".csproj", "global.json"]),
     extensions: [".cs"],
-    async spawn(root) {
+    async spawn(root, stdio) {
       let bin = which("csharp-ls", {
         PATH: pathWithBin(),
       })
@@ -764,7 +982,7 @@ export namespace LSPServer {
 
         if (Flag.OPENCORVUS_DISABLE_LSP_DOWNLOAD) return
         log.info("installing csharp-ls via dotnet tool")
-        const proc = Process.spawn(["dotnet", "tool", "install", "csharp-ls", "--tool-path", Global.Path.bin], {
+        const proc = Process.spawnHost(["dotnet", "tool", "install", "csharp-ls", "--tool-path", Global.Path.bin], {
           stdout: "pipe",
           stderr: "pipe",
           stdin: "pipe",
@@ -780,7 +998,7 @@ export namespace LSPServer {
       }
 
       return {
-        process: spawn(bin, {
+        process: await stdio(bin, {
           cwd: root,
         }),
       }
@@ -788,10 +1006,10 @@ export namespace LSPServer {
   }
 
   export const FSharp: Info = {
-    id: "fsharp",
+    id: LSP_BUILTIN_SERVER_ID.fsharp,
     root: NearestRoot([".slnx", ".sln", ".fsproj", "global.json"]),
     extensions: [".fs", ".fsi", ".fsx", ".fsscript"],
-    async spawn(root) {
+    async spawn(root, stdio) {
       let bin = which("fsautocomplete", {
         PATH: pathWithBin(),
       })
@@ -803,7 +1021,7 @@ export namespace LSPServer {
 
         if (Flag.OPENCORVUS_DISABLE_LSP_DOWNLOAD) return
         log.info("installing fsautocomplete via dotnet tool")
-        const proc = Process.spawn(["dotnet", "tool", "install", "fsautocomplete", "--tool-path", Global.Path.bin], {
+        const proc = Process.spawnHost(["dotnet", "tool", "install", "fsautocomplete", "--tool-path", Global.Path.bin], {
           stdout: "pipe",
           stderr: "pipe",
           stdin: "pipe",
@@ -819,7 +1037,7 @@ export namespace LSPServer {
       }
 
       return {
-        process: spawn(bin, {
+        process: await stdio(bin, {
           cwd: root,
         }),
       }
@@ -827,16 +1045,16 @@ export namespace LSPServer {
   }
 
   export const SourceKit: Info = {
-    id: "sourcekit-lsp",
+    id: LSP_BUILTIN_SERVER_ID.sourcekitLsp,
     extensions: [".swift", ".objc", "objcpp"],
     root: NearestRoot(["Package.swift", "*.xcodeproj", "*.xcworkspace"]),
-    async spawn(root) {
+    async spawn(root, stdio) {
       // Check if sourcekit-lsp is available in the PATH
       // This is installed with the Swift toolchain
       const sourcekit = which("sourcekit-lsp")
       if (sourcekit) {
         return {
-          process: spawn(sourcekit, {
+          process: await stdio(sourcekit, {
             cwd: root,
           }),
         }
@@ -853,7 +1071,7 @@ export namespace LSPServer {
       const bin = lspLoc.text().trim()
 
       return {
-        process: spawn(bin, {
+        process: await stdio(bin, {
           cwd: root,
         }),
       }
@@ -861,7 +1079,7 @@ export namespace LSPServer {
   }
 
   export const RustAnalyzer: Info = {
-    id: "rust",
+    id: LSP_BUILTIN_SERVER_ID.rust,
     root: async (root) => {
       const crateRoot = await NearestRoot(["Cargo.toml", "Cargo.lock"])(root)
       if (crateRoot === undefined) {
@@ -892,14 +1110,14 @@ export namespace LSPServer {
       return crateRoot
     },
     extensions: [".rs"],
-    async spawn(root) {
+    async spawn(root, stdio) {
       const bin = which("rust-analyzer")
       if (!bin) {
         log.info("rust-analyzer not found in path, please install it")
         return
       }
       return {
-        process: spawn(bin, {
+        process: await stdio(bin, {
           cwd: root,
         }),
       }
@@ -907,15 +1125,15 @@ export namespace LSPServer {
   }
 
   export const Clangd: Info = {
-    id: "clangd",
+    id: LSP_BUILTIN_SERVER_ID.clangd,
     root: NearestRoot(["compile_commands.json", "compile_flags.txt", ".clangd", "CMakeLists.txt", "Makefile"]),
     extensions: [".c", ".cpp", ".cc", ".cxx", ".c++", ".h", ".hpp", ".hh", ".hxx", ".h++"],
-    async spawn(root) {
+    async spawn(root, stdio) {
       const args = ["--background-index", "--clang-tidy"]
       const fromPath = which("clangd")
       if (fromPath) {
         return {
-          process: spawn(fromPath, args, {
+          process: await stdio(fromPath, args, {
             cwd: root,
           }),
         }
@@ -925,7 +1143,7 @@ export namespace LSPServer {
       const direct = path.join(Global.Path.bin, "clangd" + ext)
       if (await Filesystem.exists(direct)) {
         return {
-          process: spawn(direct, args, {
+          process: await stdio(direct, args, {
             cwd: root,
           }),
         }
@@ -938,7 +1156,7 @@ export namespace LSPServer {
         const candidate = path.join(Global.Path.bin, entry.name, "bin", "clangd" + ext)
         if (await Filesystem.exists(candidate)) {
           return {
-            process: spawn(candidate, args, {
+            process: await stdio(candidate, args, {
               cwd: root,
             }),
           }
@@ -1054,7 +1272,7 @@ export namespace LSPServer {
       log.info(`installed clangd`, { bin })
 
       return {
-        process: spawn(bin, args, {
+        process: await stdio(bin, args, {
           cwd: root,
         }),
       }
@@ -1062,17 +1280,17 @@ export namespace LSPServer {
   }
 
   export const Svelte: Info = {
-    id: "svelte",
+    id: LSP_BUILTIN_SERVER_ID.svelte,
     extensions: [".svelte"],
     root: NearestRoot(["package-lock.json", "bun.lockb", "bun.lock", "pnpm-lock.yaml", "yarn.lock"]),
-    async spawn(root) {
+    async spawn(root, stdio) {
       let binary = which("svelteserver")
       const args: string[] = []
       if (!binary) {
         const js = path.join(Global.Path.bin, "node_modules", "svelte-language-server", "bin", "server.js")
         if (!(await Filesystem.exists(js))) {
           if (Flag.OPENCORVUS_DISABLE_LSP_DOWNLOAD) return
-          await Process.spawn([BunProc.which(), "install", "svelte-language-server"], {
+          await Process.spawnHost([BunProc.which(), "install", "svelte-language-server"], {
             cwd: Global.Path.bin,
             env: {
               ...process.env,
@@ -1087,7 +1305,7 @@ export namespace LSPServer {
         args.push("run", js)
       }
       args.push("--stdio")
-      const proc = spawn(binary, args, {
+      const proc = await stdio(binary, args, {
         cwd: root,
         env: {
           ...process.env,
@@ -1102,10 +1320,10 @@ export namespace LSPServer {
   }
 
   export const Astro: Info = {
-    id: "astro",
+    id: LSP_BUILTIN_SERVER_ID.astro,
     extensions: [".astro"],
     root: NearestRoot(["package-lock.json", "bun.lockb", "bun.lock", "pnpm-lock.yaml", "yarn.lock"]),
-    async spawn(root) {
+    async spawn(root, stdio) {
       const tsserver = await Bun.resolve("typescript/lib/tsserver.js", Instance.directory).catch(() => {})
       if (!tsserver) {
         log.info("typescript not found, required for Astro language server")
@@ -1119,7 +1337,7 @@ export namespace LSPServer {
         const js = path.join(Global.Path.bin, "node_modules", "@astrojs", "language-server", "bin", "nodeServer.js")
         if (!(await Filesystem.exists(js))) {
           if (Flag.OPENCORVUS_DISABLE_LSP_DOWNLOAD) return
-          await Process.spawn([BunProc.which(), "install", "@astrojs/language-server"], {
+          await Process.spawnHost([BunProc.which(), "install", "@astrojs/language-server"], {
             cwd: Global.Path.bin,
             env: {
               ...process.env,
@@ -1134,7 +1352,7 @@ export namespace LSPServer {
         args.push("run", js)
       }
       args.push("--stdio")
-      const proc = spawn(binary, args, {
+      const proc = await stdio(binary, args, {
         cwd: root,
         env: {
           ...process.env,
@@ -1153,10 +1371,10 @@ export namespace LSPServer {
   }
 
   export const JDTLS: Info = {
-    id: "jdtls",
+    id: LSP_BUILTIN_SERVER_ID.jdtls,
     root: NearestRoot(["pom.xml", "build.gradle", "build.gradle.kts", ".project", ".classpath"]),
     extensions: [".java"],
-    async spawn(root) {
+    async spawn(root, stdio) {
       const java = which("java")
       if (!java) {
         log.error("Java 21 or newer is required to run the JDTLS. Please install it first.")
@@ -1226,35 +1444,49 @@ export namespace LSPServer {
           }
         })(),
       )
-      const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-jdtls-data"))
+      const dataDir = await Global.createTemporaryDirectory("jdtls-data-")
+      const childProcess = await stdio(
+        java,
+        [
+          "-jar",
+          launcherJar,
+          "-configuration",
+          configFile,
+          "-data",
+          dataDir,
+          "-Declipse.application=org.eclipse.jdt.ls.core.id1",
+          "-Dosgi.bundles.defaultStartLevel=4",
+          "-Declipse.product=org.eclipse.jdt.ls.core.product",
+          "-Dlog.level=ALL",
+          "--add-modules=ALL-SYSTEM",
+          "--add-opens java.base/java.util=ALL-UNNAMED",
+          "--add-opens java.base/java.lang=ALL-UNNAMED",
+        ],
+        {
+          cwd: root,
+        },
+      )
+      const disposeProcess = childProcess.opencorvusDispose!
+      let cleanup: Promise<void> | undefined
+      childProcess.opencorvusDispose = async () => {
+        if (cleanup) return cleanup
+        cleanup = (async () => {
+          try {
+            await disposeProcess()
+          } finally {
+            await fs.rm(dataDir, { recursive: true, force: true })
+          }
+        })()
+        return cleanup
+      }
       return {
-        process: spawn(
-          java,
-          [
-            "-jar",
-            launcherJar,
-            "-configuration",
-            configFile,
-            "-data",
-            dataDir,
-            "-Declipse.application=org.eclipse.jdt.ls.core.id1",
-            "-Dosgi.bundles.defaultStartLevel=4",
-            "-Declipse.product=org.eclipse.jdt.ls.core.product",
-            "-Dlog.level=ALL",
-            "--add-modules=ALL-SYSTEM",
-            "--add-opens java.base/java.util=ALL-UNNAMED",
-            "--add-opens java.base/java.lang=ALL-UNNAMED",
-          ],
-          {
-            cwd: root,
-          },
-        ),
+        process: childProcess,
       }
     },
   }
 
   export const KotlinLS: Info = {
-    id: "kotlin-ls",
+    id: LSP_BUILTIN_SERVER_ID.kotlinLs,
     extensions: [".kt", ".kts"],
     root: async (file) => {
       // 1) Nearest Gradle root (multi-project or included build)
@@ -1266,10 +1498,10 @@ export namespace LSPServer {
       // 3) Single-project or module-level build
       const buildRoot = await NearestRoot(["build.gradle.kts", "build.gradle"])(file)
       if (buildRoot) return buildRoot
-      // 4) Maven fallback
+      // 4) Maven project-root detection
       return NearestRoot(["pom.xml"])(file)
     },
-    async spawn(root) {
+    async spawn(root, stdio) {
       const distPath = path.join(Global.Path.bin, "kotlin-ls")
       const launcherScript =
         process.platform === "win32" ? path.join(distPath, "kotlin-lsp.cmd") : path.join(distPath, "kotlin-lsp.sh")
@@ -1337,7 +1569,7 @@ export namespace LSPServer {
         return
       }
       return {
-        process: spawn(launcherScript, ["--stdio"], {
+        process: await stdio(launcherScript, ["--stdio"], {
           cwd: root,
         }),
       }
@@ -1345,10 +1577,10 @@ export namespace LSPServer {
   }
 
   export const YamlLS: Info = {
-    id: "yaml-ls",
+    id: LSP_BUILTIN_SERVER_ID.yamlLs,
     extensions: [".yaml", ".yml"],
     root: NearestRoot(["package-lock.json", "bun.lockb", "bun.lock", "pnpm-lock.yaml", "yarn.lock"]),
-    async spawn(root) {
+    async spawn(root, stdio) {
       let binary = which("yaml-language-server")
       const args: string[] = []
       if (!binary) {
@@ -1364,7 +1596,7 @@ export namespace LSPServer {
         const exists = await Filesystem.exists(js)
         if (!exists) {
           if (Flag.OPENCORVUS_DISABLE_LSP_DOWNLOAD) return
-          await Process.spawn([BunProc.which(), "install", "yaml-language-server"], {
+          await Process.spawnHost([BunProc.which(), "install", "yaml-language-server"], {
             cwd: Global.Path.bin,
             env: {
               ...process.env,
@@ -1379,7 +1611,7 @@ export namespace LSPServer {
         args.push("run", js)
       }
       args.push("--stdio")
-      const proc = spawn(binary, args, {
+      const proc = await stdio(binary, args, {
         cwd: root,
         env: {
           ...process.env,
@@ -1393,7 +1625,7 @@ export namespace LSPServer {
   }
 
   export const LuaLS: Info = {
-    id: "lua-ls",
+    id: LSP_BUILTIN_SERVER_ID.luaLs,
     root: NearestRoot([
       ".luarc.json",
       ".luarc.jsonc",
@@ -1404,7 +1636,7 @@ export namespace LSPServer {
       "selene.yml",
     ]),
     extensions: [".lua"],
-    async spawn(root) {
+    async spawn(root, stdio) {
       let bin = which("lua-language-server", {
         PATH: pathWithBin(),
       })
@@ -1525,7 +1757,7 @@ export namespace LSPServer {
       }
 
       return {
-        process: spawn(bin, {
+        process: await stdio(bin, {
           cwd: root,
         }),
       }
@@ -1533,17 +1765,17 @@ export namespace LSPServer {
   }
 
   export const PHPIntelephense: Info = {
-    id: "php intelephense",
+    id: LSP_BUILTIN_SERVER_ID.phpIntelephense,
     extensions: [".php"],
     root: NearestRoot(["composer.json", "composer.lock", ".php-version"]),
-    async spawn(root) {
+    async spawn(root, stdio) {
       let binary = which("intelephense")
       const args: string[] = []
       if (!binary) {
         const js = path.join(Global.Path.bin, "node_modules", "intelephense", "lib", "intelephense.js")
         if (!(await Filesystem.exists(js))) {
           if (Flag.OPENCORVUS_DISABLE_LSP_DOWNLOAD) return
-          await Process.spawn([BunProc.which(), "install", "intelephense"], {
+          await Process.spawnHost([BunProc.which(), "install", "intelephense"], {
             cwd: Global.Path.bin,
             env: {
               ...process.env,
@@ -1558,7 +1790,7 @@ export namespace LSPServer {
         args.push("run", js)
       }
       args.push("--stdio")
-      const proc = spawn(binary, args, {
+      const proc = await stdio(binary, args, {
         cwd: root,
         env: {
           ...process.env,
@@ -1577,17 +1809,17 @@ export namespace LSPServer {
   }
 
   export const Prisma: Info = {
-    id: "prisma",
+    id: LSP_BUILTIN_SERVER_ID.prisma,
     extensions: [".prisma"],
     root: NearestRoot(["schema.prisma", "prisma/schema.prisma", "prisma"], ["package.json"]),
-    async spawn(root) {
+    async spawn(root, stdio) {
       const prisma = which("prisma")
       if (!prisma) {
         log.info("prisma not found, please install prisma")
         return
       }
       return {
-        process: spawn(prisma, ["language-server"], {
+        process: await stdio(prisma, ["language-server"], {
           cwd: root,
         }),
       }
@@ -1595,17 +1827,17 @@ export namespace LSPServer {
   }
 
   export const Dart: Info = {
-    id: "dart",
+    id: LSP_BUILTIN_SERVER_ID.dart,
     extensions: [".dart"],
     root: NearestRoot(["pubspec.yaml", "analysis_options.yaml"]),
-    async spawn(root) {
+    async spawn(root, stdio) {
       const dart = which("dart")
       if (!dart) {
         log.info("dart not found, please install dart first")
         return
       }
       return {
-        process: spawn(dart, ["language-server", "--lsp"], {
+        process: await stdio(dart, ["language-server", "--lsp"], {
           cwd: root,
         }),
       }
@@ -1613,34 +1845,34 @@ export namespace LSPServer {
   }
 
   export const Ocaml: Info = {
-    id: "ocaml-lsp",
+    id: LSP_BUILTIN_SERVER_ID.ocamlLsp,
     extensions: [".ml", ".mli"],
     root: NearestRoot(["dune-project", "dune-workspace", ".merlin", "opam"]),
-    async spawn(root) {
+    async spawn(root, stdio) {
       const bin = which("ocamllsp")
       if (!bin) {
         log.info("ocamllsp not found, please install ocaml-lsp-server")
         return
       }
       return {
-        process: spawn(bin, {
+        process: await stdio(bin, {
           cwd: root,
         }),
       }
     },
   }
   export const BashLS: Info = {
-    id: "bash",
+    id: LSP_BUILTIN_SERVER_ID.bash,
     extensions: [".sh", ".bash", ".zsh", ".ksh"],
     root: async () => Instance.directory,
-    async spawn(root) {
+    async spawn(root, stdio) {
       let binary = which("bash-language-server")
       const args: string[] = []
       if (!binary) {
         const js = path.join(Global.Path.bin, "node_modules", "bash-language-server", "out", "cli.js")
         if (!(await Filesystem.exists(js))) {
           if (Flag.OPENCORVUS_DISABLE_LSP_DOWNLOAD) return
-          await Process.spawn([BunProc.which(), "install", "bash-language-server"], {
+          await Process.spawnHost([BunProc.which(), "install", "bash-language-server"], {
             cwd: Global.Path.bin,
             env: {
               ...process.env,
@@ -1655,7 +1887,7 @@ export namespace LSPServer {
         args.push("run", js)
       }
       args.push("start")
-      const proc = spawn(binary, args, {
+      const proc = await stdio(binary, args, {
         cwd: root,
         env: {
           ...process.env,
@@ -1669,10 +1901,10 @@ export namespace LSPServer {
   }
 
   export const TerraformLS: Info = {
-    id: "terraform",
+    id: LSP_BUILTIN_SERVER_ID.terraform,
     extensions: [".tf", ".tfvars"],
     root: NearestRoot([".terraform.lock.hcl", "terraform.tfstate", "*.tf"]),
-    async spawn(root) {
+    async spawn(root, stdio) {
       let bin = which("terraform-ls", {
         PATH: pathWithBin(),
       })
@@ -1738,7 +1970,7 @@ export namespace LSPServer {
       }
 
       return {
-        process: spawn(bin, ["serve"], {
+        process: await stdio(bin, ["serve"], {
           cwd: root,
         }),
         initialization: {
@@ -1752,10 +1984,10 @@ export namespace LSPServer {
   }
 
   export const TexLab: Info = {
-    id: "texlab",
+    id: LSP_BUILTIN_SERVER_ID.texlab,
     extensions: [".tex", ".bib"],
     root: NearestRoot([".latexmkrc", "latexmkrc", ".texlabroot", "texlabroot"]),
-    async spawn(root) {
+    async spawn(root, stdio) {
       let bin = which("texlab", {
         PATH: pathWithBin(),
       })
@@ -1834,7 +2066,7 @@ export namespace LSPServer {
       }
 
       return {
-        process: spawn(bin, {
+        process: await stdio(bin, {
           cwd: root,
         }),
       }
@@ -1842,17 +2074,17 @@ export namespace LSPServer {
   }
 
   export const DockerfileLS: Info = {
-    id: "dockerfile",
+    id: LSP_BUILTIN_SERVER_ID.dockerfile,
     extensions: [".dockerfile", "Dockerfile"],
     root: async () => Instance.directory,
-    async spawn(root) {
+    async spawn(root, stdio) {
       let binary = which("docker-langserver")
       const args: string[] = []
       if (!binary) {
         const js = path.join(Global.Path.bin, "node_modules", "dockerfile-language-server-nodejs", "lib", "server.js")
         if (!(await Filesystem.exists(js))) {
           if (Flag.OPENCORVUS_DISABLE_LSP_DOWNLOAD) return
-          await Process.spawn([BunProc.which(), "install", "dockerfile-language-server-nodejs"], {
+          await Process.spawnHost([BunProc.which(), "install", "dockerfile-language-server-nodejs"], {
             cwd: Global.Path.bin,
             env: {
               ...process.env,
@@ -1867,7 +2099,7 @@ export namespace LSPServer {
         args.push("run", js)
       }
       args.push("--stdio")
-      const proc = spawn(binary, args, {
+      const proc = await stdio(binary, args, {
         cwd: root,
         env: {
           ...process.env,
@@ -1881,17 +2113,17 @@ export namespace LSPServer {
   }
 
   export const Gleam: Info = {
-    id: "gleam",
+    id: LSP_BUILTIN_SERVER_ID.gleam,
     extensions: [".gleam"],
     root: NearestRoot(["gleam.toml"]),
-    async spawn(root) {
+    async spawn(root, stdio) {
       const gleam = which("gleam")
       if (!gleam) {
         log.info("gleam not found, please install gleam first")
         return
       }
       return {
-        process: spawn(gleam, ["lsp"], {
+        process: await stdio(gleam, ["lsp"], {
           cwd: root,
         }),
       }
@@ -1899,10 +2131,10 @@ export namespace LSPServer {
   }
 
   export const Clojure: Info = {
-    id: "clojure-lsp",
+    id: LSP_BUILTIN_SERVER_ID.clojureLsp,
     extensions: [".clj", ".cljs", ".cljc", ".edn"],
     root: NearestRoot(["deps.edn", "project.clj", "shadow-cljs.edn", "bb.edn", "build.boot"]),
-    async spawn(root) {
+    async spawn(root, stdio) {
       let bin = which("clojure-lsp")
       if (!bin && process.platform === "win32") {
         bin = which("clojure-lsp.exe")
@@ -1912,7 +2144,7 @@ export namespace LSPServer {
         return
       }
       return {
-        process: spawn(bin, ["listen"], {
+        process: await stdio(bin, ["listen"], {
           cwd: root,
         }),
       }
@@ -1920,7 +2152,7 @@ export namespace LSPServer {
   }
 
   export const Nixd: Info = {
-    id: "nixd",
+    id: LSP_BUILTIN_SERVER_ID.nixd,
     extensions: [".nix"],
     root: async (file) => {
       // First, look for flake.nix - the most reliable Nix project root indicator
@@ -1930,17 +2162,17 @@ export namespace LSPServer {
       // If no flake.nix, fall back to git repository root
       if (Instance.worktree && Instance.worktree !== Instance.directory) return Instance.worktree
 
-      // Finally, use the instance directory as fallback
+      // Finally, use the configured instance directory
       return Instance.directory
     },
-    async spawn(root) {
+    async spawn(root, stdio) {
       const nixd = which("nixd")
       if (!nixd) {
         log.info("nixd not found, please install nixd first")
         return
       }
       return {
-        process: spawn(nixd, [], {
+        process: await stdio(nixd, [], {
           cwd: root,
           env: {
             ...process.env,
@@ -1951,10 +2183,10 @@ export namespace LSPServer {
   }
 
   export const Tinymist: Info = {
-    id: "tinymist",
+    id: LSP_BUILTIN_SERVER_ID.tinymist,
     extensions: [".typ", ".typc"],
     root: NearestRoot(["typst.toml"]),
-    async spawn(root) {
+    async spawn(root, stdio) {
       let bin = which("tinymist", {
         PATH: pathWithBin(),
       })
@@ -2039,23 +2271,23 @@ export namespace LSPServer {
       }
 
       return {
-        process: spawn(bin, { cwd: root }),
+        process: await stdio(bin, { cwd: root }),
       }
     },
   }
 
   export const HLS: Info = {
-    id: "haskell-language-server",
+    id: LSP_BUILTIN_SERVER_ID.haskellLanguageServer,
     extensions: [".hs", ".lhs"],
     root: NearestRoot(["stack.yaml", "cabal.project", "hie.yaml", "*.cabal"]),
-    async spawn(root) {
+    async spawn(root, stdio) {
       const bin = which("haskell-language-server-wrapper")
       if (!bin) {
         log.info("haskell-language-server-wrapper not found, please install haskell-language-server")
         return
       }
       return {
-        process: spawn(bin, ["--lsp"], {
+        process: await stdio(bin, ["--lsp"], {
           cwd: root,
         }),
       }
@@ -2063,19 +2295,23 @@ export namespace LSPServer {
   }
 
   export const JuliaLS: Info = {
-    id: "julials",
+    id: LSP_BUILTIN_SERVER_ID.julials,
     extensions: [".jl"],
     root: NearestRoot(["Project.toml", "Manifest.toml", "*.jl"]),
-    async spawn(root) {
+    async spawn(root, stdio) {
       const julia = which("julia")
       if (!julia) {
         log.info("julia not found, please install julia first (https://julialang.org/downloads/)")
         return
       }
       return {
-        process: spawn(julia, ["--startup-file=no", "--history-file=no", "-e", "using LanguageServer; runserver()"], {
-          cwd: root,
-        }),
+        process: await stdio(
+          julia,
+          ["--startup-file=no", "--history-file=no", "-e", "using LanguageServer; runserver()"],
+          {
+            cwd: root,
+          },
+        ),
       }
     },
   }

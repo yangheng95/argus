@@ -5,7 +5,7 @@ const options = {
   port: {
     type: "number" as const,
     describe: "port to listen on",
-    default: 0,
+    default: 7878,
   },
   hostname: {
     type: "string" as const,
@@ -19,7 +19,7 @@ const options = {
   },
   "mdns-domain": {
     type: "string" as const,
-    describe: "custom domain name for mDNS service (default: opencorvus.local)",
+    describe: "custom domain name for mDNS service",
     default: "opencorvus.local",
   },
   cors: {

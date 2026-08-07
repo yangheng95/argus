@@ -13,9 +13,9 @@ export const DecisionLogTable = sqliteTable(
     id: text().primaryKey(),
     /** Which task this decision belongs to. Scoped per-task, isolated between tasks. */
     task_id: text().notNull(),
-    /** Which goal produced this entry (null = decompose phase / global). */
+    /** Which goal produced this entry (null = requirements phase / global). */
     goal_id: text(),
-    /** Lifecycle phase: decompose | plan | execute | eval | delivery */
+    /** Lifecycle phase: requirements | plan | execute | eval | acceptance */
     phase: text().notNull(),
     /** Decision category key. Examples: "runtime", "backend_framework", "test_runner", "api_contract" */
     key: text().notNull(),

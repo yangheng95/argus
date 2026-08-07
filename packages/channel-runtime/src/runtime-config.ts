@@ -4,13 +4,11 @@ type Config = Record<string, unknown>
 
 function parseConfig(raw: string | undefined): Config {
   if (!raw) return {}
-  try {
-    const parsed = JSON.parse(raw)
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {}
-    return parsed as Config
-  } catch {
-    return {}
+  const parsed = JSON.parse(raw)
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("OPENCORVUS_CONFIG_CONTENT must be a JSON object")
   }
+  return parsed as Config
 }
 
 function permissionMap(permission: unknown): Config {
@@ -20,8 +18,8 @@ function permissionMap(permission: unknown): Config {
 
 export function resolveRuntimeConfig(raw: string | undefined, profileInput: string | undefined) {
   const config = parseConfig(raw)
-  const profileState = pickPermissionProfile(profileInput)
-  const botPermission = permissionForProfile(profileState.profile)
+  const profile = pickPermissionProfile(profileInput)
+  const botPermission = permissionForProfile(profile)
   return {
     config: {
       ...config,
@@ -30,6 +28,6 @@ export function resolveRuntimeConfig(raw: string | undefined, profileInput: stri
         ...botPermission,
       },
     },
-    profileState,
+    profile,
   }
 }

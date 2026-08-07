@@ -1,6 +1,0 @@
-interface:
-  display_name: "OpenCorvus DingTalk Channel Config"
-  short_description: "Configure DingTalk channel integration for OpenCorvus"
-  default_prompt: "Use $opencorvus-dingtalk-channel-config to set up or debug DingTalk channel integration for OpenCorvus."
-
-

@@ -1,848 +1,591 @@
-/**
- * Consolidated DDL for OpenCorvus.
- *
- * All tables use CREATE TABLE IF NOT EXISTS so the schema is idempotent —
- * safe to run on every startup whether the DB is fresh or already populated.
- *
- * No migrations — DDL is the single source of truth. Change columns here directly.
- * The benchmark resets the DB on each run via resetDatabase().
- */
+import { SQL } from "drizzle-orm"
+import { getTableConfig, SQLiteSyncDialect } from "drizzle-orm/sqlite-core"
+import { ENGINE_ARTIFACT_CATALOG_LABEL_INDEX_CODE_POINTS } from "@/engine/artifact-catalog-constants"
+import * as schema from "./schema"
 
-// ---------------------------------------------------------------------------
-// Full schema — ordered by foreign-key dependency (parents first)
-// ---------------------------------------------------------------------------
+type Column = ReturnType<typeof getTableConfig>["columns"][number]
+type IndexColumn = ReturnType<typeof getTableConfig>["indexes"][number]["config"]["columns"][number]
 
-export const SCHEMA_DDL = /* sql */ `
+const dialect = new SQLiteSyncDialect()
+const deferredIndexNames = new Set(["engine_channel_binding_thread_idx"])
 
--- ===== project (root) =====
+function quoteIdentifier(name: string) {
+  return `"${name.replaceAll('"', '""')}"`
+}
 
-CREATE TABLE IF NOT EXISTS project (
-  id           text PRIMARY KEY,
-  worktree     text NOT NULL,
-  vcs          text,
-  name         text,
-  icon_url     text,
-  icon_color   text,
-  commands     text,
-  time_created integer NOT NULL,
-  time_updated integer NOT NULL,
-  time_initialized integer,
-  sandboxes    text NOT NULL
-);
+function quoteLiteral(value: string) {
+  return `'${value.replaceAll("'", "''")}'`
+}
 
--- ===== control =====
+export function tableName(table: unknown) {
+  return getTableConfig(table as never).name
+}
 
-CREATE TABLE IF NOT EXISTS control_message (
-  id           text PRIMARY KEY,
-  project_id   text NOT NULL,
-  scope        text NOT NULL,
-  scope_id     text NOT NULL,
-  task_id      text,
-  session_id   text,
-  surface      text NOT NULL,
-  role         text NOT NULL,
-  source       text NOT NULL,
-  channel      text,
-  thread       text,
-  user_id      text,
-  request_id   text,
-  text         text NOT NULL,
-  metadata     text,
-  time_created integer NOT NULL,
-  time_updated integer NOT NULL
-);
-CREATE INDEX IF NOT EXISTS control_message_project_idx ON control_message (project_id);
-CREATE INDEX IF NOT EXISTS control_message_task_idx    ON control_message (task_id);
-CREATE INDEX IF NOT EXISTS control_message_session_idx ON control_message (session_id);
-CREATE INDEX IF NOT EXISTS control_message_thread_idx  ON control_message (surface, channel, thread);
+function renderDefault(column: Column) {
+  if (column.default === undefined) return undefined
+  if (typeof column.default === "number") return String(column.default)
+  if (typeof column.default === "boolean") return column.default ? "1" : "0"
+  if (typeof column.default === "string") return quoteLiteral(column.default)
+  return quoteLiteral(JSON.stringify(column.default))
+}
 
--- ===== session =====
+function renderColumn(column: Column) {
+  const pieces = [quoteIdentifier(column.name), column.getSQLType()]
 
-CREATE TABLE IF NOT EXISTS session (
-  id                 text PRIMARY KEY,
-  project_id         text NOT NULL,
-  parent_id          text,
-  slug               text NOT NULL,
-  directory          text NOT NULL,
-  title              text NOT NULL,
-  version            text NOT NULL,
-  share_url          text,
-  summary_additions  integer,
-  summary_deletions  integer,
-  summary_files      integer,
-  summary_diffs      text,
-  revert             text,
-  permission         text,
-  time_created       integer NOT NULL,
-  time_updated       integer NOT NULL,
-  time_compacting    integer,
-  time_archived      integer,
-  FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS session_project_idx ON session (project_id);
-CREATE INDEX IF NOT EXISTS session_parent_idx  ON session (parent_id);
+  if (column.primary) pieces.push("PRIMARY KEY")
+  if (column.notNull) pieces.push("NOT NULL")
 
--- ===== message =====
+  const defaultValue = renderDefault(column)
+  if (defaultValue !== undefined) pieces.push(`DEFAULT ${defaultValue}`)
 
-CREATE TABLE IF NOT EXISTS message (
-  id           text PRIMARY KEY,
-  session_id   text NOT NULL,
-  time_created integer NOT NULL,
-  time_updated integer NOT NULL,
-  data         text NOT NULL,
-  FOREIGN KEY (session_id) REFERENCES session(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS message_session_idx ON message (session_id);
+  return pieces.join(" ")
+}
 
--- ===== part =====
+function renderForeignKey(foreignKey: ReturnType<typeof getTableConfig>["foreignKeys"][number]) {
+  const reference = foreignKey.reference()
+  const columns = reference.columns.map((column) => quoteIdentifier(column.name)).join(", ")
+  const foreignColumns = reference.foreignColumns.map((column) => quoteIdentifier(column.name)).join(", ")
+  const pieces = [
+    `FOREIGN KEY (${columns}) REFERENCES ${quoteIdentifier(tableName(reference.foreignTable))}(${foreignColumns})`,
+  ]
 
-CREATE TABLE IF NOT EXISTS part (
-  id           text PRIMARY KEY,
-  message_id   text NOT NULL,
-  session_id   text NOT NULL,
-  time_created integer NOT NULL,
-  time_updated integer NOT NULL,
-  data         text NOT NULL,
-  FOREIGN KEY (message_id) REFERENCES message(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS part_message_idx ON part (message_id);
-CREATE INDEX IF NOT EXISTS part_session_idx ON part (session_id);
+  if (foreignKey.onDelete) pieces.push(`ON DELETE ${foreignKey.onDelete.toUpperCase()}`)
+  if (foreignKey.onUpdate) pieces.push(`ON UPDATE ${foreignKey.onUpdate.toUpperCase()}`)
 
--- ===== permission =====
+  return pieces.join(" ")
+}
 
-CREATE TABLE IF NOT EXISTS permission (
-  project_id   text PRIMARY KEY,
-  time_created integer NOT NULL,
-  time_updated integer NOT NULL,
-  data         text NOT NULL,
-  FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE CASCADE
-);
+function renderSql(value: SQL) {
+  const query = dialect.sqlToQuery(value)
+  if (query.params.length > 0) {
+    throw new Error(`Schema DDL SQL expressions must be static; received ${query.params.length} params`)
+  }
+  return query.sql
+}
 
--- ===== todo =====
+function renderIndexSql(value: SQL, currentTableName: string) {
+  return renderSql(value).replaceAll(`${quoteIdentifier(currentTableName)}.`, "")
+}
 
-CREATE TABLE IF NOT EXISTS todo (
-  session_id   text NOT NULL,
-  content      text NOT NULL,
-  status       text NOT NULL,
-  priority     text NOT NULL,
-  position     integer NOT NULL,
-  time_created integer NOT NULL,
-  time_updated integer NOT NULL,
-  PRIMARY KEY (session_id, position),
-  FOREIGN KEY (session_id) REFERENCES session(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS todo_session_idx ON todo (session_id);
+function isSql(value: unknown): value is SQL {
+  return value instanceof SQL
+}
 
--- ===== session_share =====
+function renderIndexColumn(column: IndexColumn, currentTableName: string) {
+  if (isSql(column)) return renderIndexSql(column, currentTableName)
+  return quoteIdentifier(column.name)
+}
 
-CREATE TABLE IF NOT EXISTS session_share (
-  session_id   text PRIMARY KEY,
-  id           text NOT NULL,
-  secret       text NOT NULL,
-  url          text NOT NULL,
-  time_created integer NOT NULL,
-  time_updated integer NOT NULL,
-  FOREIGN KEY (session_id) REFERENCES session(id) ON DELETE CASCADE
-);
+function renderIndex(
+  config: ReturnType<typeof getTableConfig>,
+  index: ReturnType<typeof getTableConfig>["indexes"][number],
+) {
+  const unique = index.config.unique ? "UNIQUE " : ""
+  const columns = index.config.columns.map((column) => renderIndexColumn(column, config.name)).join(", ")
+  const where = index.config.where ? ` WHERE ${renderIndexSql(index.config.where, config.name)}` : ""
+  return `CREATE ${unique}INDEX IF NOT EXISTS ${quoteIdentifier(index.config.name)} ON ${quoteIdentifier(config.name)} (${columns})${where};`
+}
 
--- ===== control_account =====
+function renderTable(table: unknown) {
+  const config = getTableConfig(table as never)
+  const definitions: string[] = config.columns.map(renderColumn)
 
-CREATE TABLE IF NOT EXISTS control_account (
-  email         text NOT NULL,
-  url           text NOT NULL,
-  access_token  text NOT NULL,
-  refresh_token text NOT NULL,
-  token_expiry  integer,
-  active        integer NOT NULL,
-  time_created  integer NOT NULL,
-  time_updated  integer NOT NULL,
-  PRIMARY KEY (email, url)
-);
+  for (const primaryKey of config.primaryKeys) {
+    definitions.push(`PRIMARY KEY (${primaryKey.columns.map((column) => quoteIdentifier(column.name)).join(", ")})`)
+  }
 
--- ===== workspace =====
+  for (const uniqueConstraint of config.uniqueConstraints) {
+    definitions.push(`UNIQUE (${uniqueConstraint.columns.map((column) => quoteIdentifier(column.name)).join(", ")})`)
+  }
 
-CREATE TABLE IF NOT EXISTS workspace (
-  id         text PRIMARY KEY,
-  branch     text,
-  project_id text NOT NULL,
-  config     text NOT NULL,
-  FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE CASCADE
-);
+  for (const foreignKey of config.foreignKeys) {
+    definitions.push(renderForeignKey(foreignKey))
+  }
 
--- ===== memory =====
+  const tableSql = [
+    `CREATE TABLE IF NOT EXISTS ${quoteIdentifier(config.name)} (`,
+    definitions.map((definition) => `  ${definition}`).join(",\n"),
+    ");",
+  ].join("\n")
 
-CREATE TABLE IF NOT EXISTS memory_file (
-  id           text PRIMARY KEY,
-  project_id   text NOT NULL,
-  session_id   text,
-  scope        text NOT NULL DEFAULT 'global',
-  title        text NOT NULL,
-  source       text NOT NULL,
-  kind         text NOT NULL DEFAULT 'note',
-  key          text,
-  importance   integer NOT NULL DEFAULT 60,
-  confidence   integer NOT NULL DEFAULT 75,
-  time_created integer NOT NULL,
-  time_updated integer NOT NULL,
-  FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS memory_file_project_idx ON memory_file (project_id);
-CREATE INDEX IF NOT EXISTS memory_file_session_idx ON memory_file (session_id);
-CREATE INDEX IF NOT EXISTS memory_file_scope_idx ON memory_file (scope);
-CREATE INDEX IF NOT EXISTS memory_file_kind_idx ON memory_file (kind);
-CREATE INDEX IF NOT EXISTS memory_file_key_idx ON memory_file (key);
+  const indexSql = config.indexes
+    .filter((index) => !deferredIndexNames.has(index.config.name))
+    .map((index) => renderIndex(config, index))
 
-CREATE TABLE IF NOT EXISTS memory_chunk (
-  id           text PRIMARY KEY,
-  file_id      text NOT NULL,
-  project_id   text NOT NULL,
-  content      text NOT NULL,
-  token_count  integer NOT NULL,
-  time_created integer NOT NULL,
-  time_updated integer NOT NULL,
-  FOREIGN KEY (file_id)      REFERENCES memory_file(id) ON DELETE CASCADE,
-  FOREIGN KEY (project_id)   REFERENCES project(id)     ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS memory_chunk_file_idx    ON memory_chunk (file_id);
-CREATE INDEX IF NOT EXISTS memory_chunk_project_idx ON memory_chunk (project_id);
+  return [tableSql, ...indexSql].join("\n")
+}
 
-CREATE TABLE IF NOT EXISTS memory_embedding (
-  chunk_id     text PRIMARY KEY,
-  embedding    blob NOT NULL,
-  model        text NOT NULL,
-  time_created integer NOT NULL,
-  time_updated integer NOT NULL,
-  FOREIGN KEY (chunk_id) REFERENCES memory_chunk(id) ON DELETE CASCADE
-);
+export function collectTables() {
+  const tables: unknown[] = []
+  const seen = new Set<string>()
 
+  for (const value of Object.values(schema)) {
+    try {
+      const name = tableName(value)
+      if (seen.has(name)) continue
+      seen.add(name)
+      tables.push(value)
+    } catch {}
+  }
+
+  return tables
+}
+
+function generatedSchemaDdl() {
+  return collectTables().map(renderTable).join("\n\n")
+}
+
+function generatedDeferredIndexDdl() {
+  const indexSql: string[] = []
+  for (const table of collectTables()) {
+    const config = getTableConfig(table as never)
+    for (const index of config.indexes) {
+      if (deferredIndexNames.has(index.config.name)) indexSql.push(renderIndex(config, index))
+    }
+  }
+  return indexSql.join("\n")
+}
+
+// FTS is Full-Text Search. Drizzle table declarations do not model SQLite FTS5
+// virtual tables, so this remains an explicit storage extension.
+const STORAGE_EXTENSION_DDL = /* sql */ `
 CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5(
   content,
   chunk_id UNINDEXED,
   project_id UNINDEXED
 );
 
--- ===== scheduler =====
-
-CREATE TABLE IF NOT EXISTS cron_job (
-  id            text PRIMARY KEY,
-  project_id    text NOT NULL,
-  session_id    text,
-  name          text NOT NULL,
-  expression    text NOT NULL,
-  prompt        text NOT NULL,
-  agent         text NOT NULL DEFAULT 'default',
-  enabled       integer NOT NULL DEFAULT 1,
-  one_shot      integer NOT NULL DEFAULT 0,
-  last_run      integer,
-  next_run      integer NOT NULL,
-  failure_count integer NOT NULL DEFAULT 0,
-  last_error    text,
-  lease_until   integer NOT NULL DEFAULT 0,
-  lease_owner   text,
-  time_created  integer NOT NULL,
-  time_updated  integer NOT NULL,
-  FOREIGN KEY (project_id) REFERENCES project(id)  ON DELETE CASCADE,
-  FOREIGN KEY (session_id) REFERENCES session(id)  ON DELETE SET NULL
-);
-CREATE INDEX IF NOT EXISTS cron_job_project_idx    ON cron_job (project_id);
-CREATE INDEX IF NOT EXISTS cron_job_next_run_idx   ON cron_job (next_run);
-CREATE INDEX IF NOT EXISTS cron_job_lease_until_idx ON cron_job (lease_until);
-
-CREATE TABLE IF NOT EXISTS event_job (
-  id           text PRIMARY KEY,
-  project_id   text NOT NULL,
-  session_id   text,
-  name         text NOT NULL,
-  event_type   text NOT NULL,
-  match_json   text,
-  prompt       text NOT NULL,
-  agent        text NOT NULL DEFAULT 'default',
-  enabled      integer NOT NULL DEFAULT 1,
-  one_shot     integer NOT NULL DEFAULT 0,
-  cooldown_ms  integer NOT NULL DEFAULT 0,
-  last_run     integer,
-  last_event   text,
-  time_created integer NOT NULL,
-  time_updated integer NOT NULL,
-  FOREIGN KEY (project_id) REFERENCES project(id)  ON DELETE CASCADE,
-  FOREIGN KEY (session_id) REFERENCES session(id)  ON DELETE SET NULL
-);
-CREATE INDEX IF NOT EXISTS event_job_project_idx ON event_job (project_id);
-CREATE INDEX IF NOT EXISTS event_job_type_idx    ON event_job (event_type);
-CREATE INDEX IF NOT EXISTS event_job_enabled_idx ON event_job (enabled);
-
--- ===== session extensions =====
-
-CREATE TABLE IF NOT EXISTS scratchpad (
-  session_id   text PRIMARY KEY,
-  content      text NOT NULL DEFAULT '',
-  time_created integer NOT NULL,
-  time_updated integer NOT NULL,
-  FOREIGN KEY (session_id) REFERENCES session(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS task_plan (
-  id           text PRIMARY KEY,
-  session_id   text NOT NULL,
-  parent_id    text,
-  goal         text NOT NULL,
-  status       text NOT NULL DEFAULT 'pending',
-  priority     integer NOT NULL DEFAULT 0,
-  notes        text,
-  progress_pct integer NOT NULL DEFAULT 0,
-  time_created integer NOT NULL,
-  time_updated integer NOT NULL,
-  FOREIGN KEY (session_id) REFERENCES session(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS task_plan_session_idx ON task_plan (session_id);
-CREATE INDEX IF NOT EXISTS task_plan_parent_idx  ON task_plan (parent_id);
-CREATE INDEX IF NOT EXISTS task_plan_status_idx  ON task_plan (status);
-
-CREATE TABLE IF NOT EXISTS goal (
-  id               text PRIMARY KEY,
-  session_id       text NOT NULL,
-  description      text NOT NULL,
-  criteria         text NOT NULL,
-  verify_cmd       text,
-  status           text NOT NULL DEFAULT 'active',
-  priority         text NOT NULL DEFAULT 'blocking',
-  max_attempts     integer NOT NULL DEFAULT 10,
-  current_attempts integer NOT NULL DEFAULT 0,
-  progress_log     text NOT NULL DEFAULT '[]',
-  time_created     integer NOT NULL,
-  time_updated     integer NOT NULL,
-  FOREIGN KEY (session_id) REFERENCES session(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS goal_session_idx ON goal (session_id);
-CREATE INDEX IF NOT EXISTS goal_status_idx  ON goal (status);
-
-CREATE TABLE IF NOT EXISTS a2a_task_queue (
-  id               text PRIMARY KEY,
-  session_id       text NOT NULL,
-  prompt           text NOT NULL,
-  priority         text NOT NULL DEFAULT 'normal',
-  status           text NOT NULL DEFAULT 'queued',
-  source           text NOT NULL DEFAULT 'api',
-  retry_count      integer NOT NULL DEFAULT 0,
-  max_retries      integer NOT NULL DEFAULT 3,
-  previous_summary text,
-  error_message    text,
-  metadata         text NOT NULL DEFAULT '{}',
-  time_started     integer,
-  time_completed   integer,
-  time_created     integer NOT NULL,
-  time_updated     integer NOT NULL,
-  FOREIGN KEY (session_id) REFERENCES session(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS a2a_queue_session_idx  ON a2a_task_queue (session_id);
-CREATE INDEX IF NOT EXISTS a2a_queue_status_idx   ON a2a_task_queue (status);
-CREATE INDEX IF NOT EXISTS a2a_queue_priority_idx ON a2a_task_queue (priority, status);
-
--- ===== orchestrator =====
-
-CREATE TABLE IF NOT EXISTS orchestrator_task (
-  id                     text PRIMARY KEY,
-  project_id             text NOT NULL,
-  session_id             text,
-  active_spec_version_id text,
-  active_plan_version_id text,
-  active_run_id          text,
-  request_id             text,
-  source                 text NOT NULL DEFAULT 'api',
-  title                  text NOT NULL,
-  request                text NOT NULL,
-  status                 text NOT NULL DEFAULT 'queued',
-  priority               text NOT NULL DEFAULT 'normal',
-  blocking_reason        text,
-  error                  text,
-  budget                 text,
-  metadata               text,
-  time_started           integer,
-  time_completed         integer,
-  time_status_changed    integer,
-  time_created           integer NOT NULL,
-  time_updated           integer NOT NULL,
-  FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE CASCADE,
-  FOREIGN KEY (session_id) REFERENCES session(id) ON DELETE SET NULL
-);
-CREATE INDEX IF NOT EXISTS orchestrator_task_project_idx ON orchestrator_task (project_id);
-CREATE INDEX IF NOT EXISTS orchestrator_task_status_idx  ON orchestrator_task (status);
-CREATE UNIQUE INDEX IF NOT EXISTS orchestrator_task_project_request_idx
-  ON orchestrator_task (project_id, request_id);
-
-CREATE TABLE IF NOT EXISTS orchestrator_spec_snapshot (
-  id           text PRIMARY KEY,
-  task_id      text NOT NULL,
-  version      integer NOT NULL DEFAULT 1,
-  status       text NOT NULL DEFAULT 'ready',
-  summary      text NOT NULL,
-  content      text NOT NULL,
-  scope        text NOT NULL DEFAULT '',
-  out_of_scope text,
-  evidence     text,
-  metadata     text,
-  time_created integer NOT NULL,
-  time_updated integer NOT NULL,
-  FOREIGN KEY (task_id) REFERENCES orchestrator_task(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS orchestrator_spec_snapshot_task_idx ON orchestrator_spec_snapshot (task_id);
-
-CREATE TABLE IF NOT EXISTS orchestrator_spec_item (
-  id               text PRIMARY KEY,
-  task_id          text NOT NULL,
-  spec_snapshot_id text NOT NULL,
-  title            text NOT NULL,
-  description      text NOT NULL,
-  status           text NOT NULL DEFAULT 'pending',
-  priority         text NOT NULL DEFAULT 'blocking',
-  check_selector   text,
-  evidence         text,
-  metadata         text,
-  time_created     integer NOT NULL,
-  time_updated     integer NOT NULL,
-  FOREIGN KEY (task_id)          REFERENCES orchestrator_task(id)          ON DELETE CASCADE,
-  FOREIGN KEY (spec_snapshot_id) REFERENCES orchestrator_spec_snapshot(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS orchestrator_spec_item_task_idx     ON orchestrator_spec_item (task_id);
-CREATE INDEX IF NOT EXISTS orchestrator_spec_item_snapshot_idx ON orchestrator_spec_item (spec_snapshot_id);
-
-CREATE TABLE IF NOT EXISTS orchestrator_plan_version (
-  id               text PRIMARY KEY,
-  task_id          text NOT NULL,
-  spec_snapshot_id text,
-  version          integer NOT NULL,
-  status           text NOT NULL DEFAULT 'active',
-  summary          text NOT NULL,
-  prompt           text NOT NULL,
-  metadata         text,
-  time_created     integer NOT NULL,
-  time_updated     integer NOT NULL,
-  FOREIGN KEY (task_id)          REFERENCES orchestrator_task(id)          ON DELETE CASCADE,
-  FOREIGN KEY (spec_snapshot_id) REFERENCES orchestrator_spec_snapshot(id) ON DELETE SET NULL
-);
-CREATE INDEX IF NOT EXISTS orchestrator_plan_task_idx ON orchestrator_plan_version (task_id);
-
-CREATE TABLE IF NOT EXISTS orchestrator_milestone (
-  id               text PRIMARY KEY,
-  task_id          text NOT NULL,
-  plan_version_id  text NOT NULL,
-  title            text NOT NULL,
-  description      text NOT NULL DEFAULT '',
-  status           text NOT NULL DEFAULT 'pending',
-  order_index      integer NOT NULL DEFAULT 0,
-  metadata         text,
-  time_created     integer NOT NULL,
-  time_updated     integer NOT NULL,
-  FOREIGN KEY (task_id)         REFERENCES orchestrator_task(id)         ON DELETE CASCADE,
-  FOREIGN KEY (plan_version_id) REFERENCES orchestrator_plan_version(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS orchestrator_milestone_task_idx ON orchestrator_milestone (task_id);
-CREATE INDEX IF NOT EXISTS orchestrator_milestone_plan_idx ON orchestrator_milestone (plan_version_id);
-
-CREATE TABLE IF NOT EXISTS orchestrator_goal (
-  id               text PRIMARY KEY,
-  task_id          text NOT NULL,
-  plan_version_id  text,
-  spec_snapshot_id text,
-  milestone_id     text,
-  title            text NOT NULL,
-  objective        text NOT NULL,
-  done_definition  text NOT NULL,
-  owned_paths      text NOT NULL DEFAULT '[]',
-  depends_on       text NOT NULL DEFAULT '[]',
-  exports          text NOT NULL DEFAULT '[]',
-  imports          text NOT NULL DEFAULT '[]',
-  kind             text NOT NULL DEFAULT 'feature',
-  requirement_ids  text NOT NULL DEFAULT '[]',
-  priority         text NOT NULL DEFAULT 'blocking',
-  source           text NOT NULL DEFAULT 'spec',
-  status           text NOT NULL DEFAULT 'pending',
-  order_index      integer NOT NULL DEFAULT 0,
-  metadata         text,
-  time_created     integer NOT NULL,
-  time_updated     integer NOT NULL,
-  FOREIGN KEY (task_id)          REFERENCES orchestrator_task(id)          ON DELETE CASCADE,
-  FOREIGN KEY (plan_version_id)  REFERENCES orchestrator_plan_version(id)  ON DELETE CASCADE,
-  FOREIGN KEY (spec_snapshot_id) REFERENCES orchestrator_spec_snapshot(id) ON DELETE CASCADE,
-  FOREIGN KEY (milestone_id)     REFERENCES orchestrator_milestone(id)     ON DELETE SET NULL
-);
-CREATE INDEX IF NOT EXISTS orchestrator_goal_task_idx      ON orchestrator_goal (task_id);
-CREATE INDEX IF NOT EXISTS orchestrator_goal_plan_idx      ON orchestrator_goal (plan_version_id);
-CREATE INDEX IF NOT EXISTS orchestrator_goal_milestone_idx ON orchestrator_goal (milestone_id);
-
-CREATE TABLE IF NOT EXISTS orchestrator_requirement (
-  id               text PRIMARY KEY,
-  task_id          text NOT NULL,
-  spec_snapshot_id text NOT NULL,
-  title            text NOT NULL,
-  description      text NOT NULL,
-  status           text NOT NULL DEFAULT 'pending',
-  priority         text NOT NULL DEFAULT 'blocking',
-  acceptance       text NOT NULL,
-  evidence_refs    text,
-  non_goals        text,
-  metadata         text,
-  order_index      integer NOT NULL DEFAULT 0,
-  time_created     integer NOT NULL,
-  time_updated     integer NOT NULL,
-  FOREIGN KEY (task_id)          REFERENCES orchestrator_task(id)          ON DELETE CASCADE,
-  FOREIGN KEY (spec_snapshot_id) REFERENCES orchestrator_spec_snapshot(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS orchestrator_requirement_task_idx ON orchestrator_requirement (task_id);
-CREATE INDEX IF NOT EXISTS orchestrator_requirement_spec_idx ON orchestrator_requirement (spec_snapshot_id);
-
-CREATE TABLE IF NOT EXISTS orchestrator_goal_snapshot (
-  id               text PRIMARY KEY,
-  task_id          text NOT NULL,
-  spec_snapshot_id text NOT NULL,
-  version          integer NOT NULL DEFAULT 1,
-  status           text NOT NULL DEFAULT 'ready',
-  summary          text NOT NULL,
-  metadata         text,
-  time_created     integer NOT NULL,
-  time_updated     integer NOT NULL,
-  FOREIGN KEY (task_id)          REFERENCES orchestrator_task(id)          ON DELETE CASCADE,
-  FOREIGN KEY (spec_snapshot_id) REFERENCES orchestrator_spec_snapshot(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS orchestrator_goal_snapshot_task_idx ON orchestrator_goal_snapshot (task_id);
-
-CREATE TABLE IF NOT EXISTS orchestrator_plan_node (
-  id              text PRIMARY KEY,
-  task_id         text NOT NULL,
-  plan_version_id text NOT NULL,
-  kind            text NOT NULL,
-  goal_id         text,
-  title           text NOT NULL,
-  brief           text NOT NULL,
-  depends_on_ids  text,
-  order_index     integer NOT NULL DEFAULT 0,
-  metadata        text,
-  time_created    integer NOT NULL,
-  time_updated    integer NOT NULL,
-  FOREIGN KEY (task_id)         REFERENCES orchestrator_task(id)         ON DELETE CASCADE,
-  FOREIGN KEY (plan_version_id) REFERENCES orchestrator_plan_version(id) ON DELETE CASCADE,
-  FOREIGN KEY (goal_id)         REFERENCES orchestrator_goal(id)         ON DELETE SET NULL
-);
-CREATE INDEX IF NOT EXISTS orchestrator_plan_node_task_idx ON orchestrator_plan_node (task_id);
-CREATE INDEX IF NOT EXISTS orchestrator_plan_node_plan_idx ON orchestrator_plan_node (plan_version_id);
-CREATE INDEX IF NOT EXISTS orchestrator_plan_node_goal_idx ON orchestrator_plan_node (goal_id);
-
-CREATE TABLE IF NOT EXISTS orchestrator_run (
-  id              text PRIMARY KEY,
-  task_id         text NOT NULL,
-  plan_version_id text,
-  session_id      text,
-  executor        text NOT NULL DEFAULT 'opencode',
-  status          text NOT NULL DEFAULT 'queued',
-  phase           text NOT NULL DEFAULT 'execute',
-  blocking_reason text,
-  error           text,
-  retry_count     integer NOT NULL DEFAULT 0,
-  executor_ref    text,
-  metadata        text,
-  time_started    integer,
-  time_completed  integer,
-  time_created    integer NOT NULL,
-  time_updated    integer NOT NULL,
-  FOREIGN KEY (task_id)         REFERENCES orchestrator_task(id)         ON DELETE CASCADE,
-  FOREIGN KEY (plan_version_id) REFERENCES orchestrator_plan_version(id) ON DELETE SET NULL,
-  FOREIGN KEY (session_id)      REFERENCES session(id)                   ON DELETE SET NULL
-);
-CREATE INDEX IF NOT EXISTS orchestrator_run_task_idx   ON orchestrator_run (task_id);
-CREATE INDEX IF NOT EXISTS orchestrator_run_status_idx ON orchestrator_run (status);
-
-CREATE TABLE IF NOT EXISTS orchestrator_goal_run (
-  id                  text PRIMARY KEY,
-  task_id             text NOT NULL,
-  goal_id             text NOT NULL,
-  plan_node_id        text,
-  coordinator_run_id  text NOT NULL,
-  session_id          text,
-  executor            text NOT NULL DEFAULT 'opencode',
-  status              text NOT NULL DEFAULT 'queued',
-  retry_count         integer NOT NULL DEFAULT 0,
-  blocking_reason     text,
-  error               text,
-  workspace_dir       text,
-  base_ref            text,
-  merge_ref           text,
-  metadata            text,
-  lease_until          integer,
-  time_started        integer,
-  time_completed      integer,
-  time_created        integer NOT NULL,
-  time_updated        integer NOT NULL,
-  FOREIGN KEY (task_id)            REFERENCES orchestrator_task(id) ON DELETE CASCADE,
-  FOREIGN KEY (goal_id)            REFERENCES orchestrator_goal(id) ON DELETE CASCADE,
-  FOREIGN KEY (coordinator_run_id) REFERENCES orchestrator_run(id)  ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS orchestrator_goal_run_task_idx        ON orchestrator_goal_run (task_id);
-CREATE INDEX IF NOT EXISTS orchestrator_goal_run_goal_idx        ON orchestrator_goal_run (goal_id);
-CREATE INDEX IF NOT EXISTS orchestrator_goal_run_coordinator_idx ON orchestrator_goal_run (coordinator_run_id);
-CREATE INDEX IF NOT EXISTS orchestrator_goal_run_status_idx      ON orchestrator_goal_run (status);
-
-CREATE TABLE IF NOT EXISTS orchestrator_interaction_request (
-  id            text PRIMARY KEY,
-  task_id       text NOT NULL,
-  run_id        text NOT NULL,
-  session_id    text,
-  external_id   text NOT NULL,
-  request_type  text NOT NULL,
-  status        text NOT NULL DEFAULT 'pending',
-  title         text NOT NULL,
-  body          text NOT NULL,
-  payload       text,
-  response      text,
-  time_resolved integer,
-  time_created  integer NOT NULL,
-  time_updated  integer NOT NULL,
-  FOREIGN KEY (task_id)    REFERENCES orchestrator_task(id) ON DELETE CASCADE,
-  FOREIGN KEY (run_id)     REFERENCES orchestrator_run(id)  ON DELETE CASCADE,
-  FOREIGN KEY (session_id) REFERENCES session(id)           ON DELETE SET NULL
-);
-CREATE INDEX IF NOT EXISTS orchestrator_interaction_run_idx      ON orchestrator_interaction_request (run_id);
-CREATE INDEX IF NOT EXISTS orchestrator_interaction_external_idx ON orchestrator_interaction_request (external_id);
-CREATE INDEX IF NOT EXISTS orchestrator_interaction_status_idx   ON orchestrator_interaction_request (status);
-
-CREATE TABLE IF NOT EXISTS orchestrator_delivery (
-  id           text PRIMARY KEY,
-  task_id      text NOT NULL,
-  run_id       text NOT NULL,
-  goal_run_id  text REFERENCES orchestrator_goal_run(id) ON DELETE SET NULL,
-  status       text NOT NULL DEFAULT 'ready',
-  summary      text NOT NULL,
-  result       text,
-  lease_until  integer,
-  time_started integer,
-  time_completed integer,
-  time_created integer NOT NULL,
-  time_updated integer NOT NULL,
-  FOREIGN KEY (task_id) REFERENCES orchestrator_task(id) ON DELETE CASCADE,
-  FOREIGN KEY (run_id)  REFERENCES orchestrator_run(id)  ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS orchestrator_delivery_run_idx ON orchestrator_delivery (run_id);
-
-CREATE TABLE IF NOT EXISTS orchestrator_artifact (
-  id           text PRIMARY KEY,
-  task_id      text NOT NULL,
-  run_id       text NOT NULL,
-  goal_run_id  text REFERENCES orchestrator_goal_run(id) ON DELETE SET NULL,
-  delivery_id  text,
-  kind         text NOT NULL,
-  label        text NOT NULL,
-  payload      text,
-  time_created integer NOT NULL,
-  time_updated integer NOT NULL,
-  FOREIGN KEY (task_id)     REFERENCES orchestrator_task(id)     ON DELETE CASCADE,
-  FOREIGN KEY (run_id)      REFERENCES orchestrator_run(id)      ON DELETE CASCADE,
-  FOREIGN KEY (delivery_id) REFERENCES orchestrator_delivery(id) ON DELETE SET NULL
-);
-CREATE INDEX IF NOT EXISTS orchestrator_artifact_run_idx      ON orchestrator_artifact (run_id);
-CREATE INDEX IF NOT EXISTS orchestrator_artifact_delivery_idx ON orchestrator_artifact (delivery_id);
-
-CREATE TABLE IF NOT EXISTS orchestrator_evaluation (
-  id             text PRIMARY KEY,
-  task_id        text NOT NULL,
-  run_id         text NOT NULL,
-  goal_run_id    text REFERENCES orchestrator_goal_run(id) ON DELETE SET NULL,
-  delivery_id    text,
-  status         text NOT NULL DEFAULT 'pending',
-  verdict        text NOT NULL DEFAULT 'inconclusive',
-  summary        text NOT NULL,
-  checks         text,
-  lease_until    integer,
-  time_started   integer,
-  time_completed integer,
-  time_created   integer NOT NULL,
-  time_updated   integer NOT NULL,
-  FOREIGN KEY (task_id)     REFERENCES orchestrator_task(id)     ON DELETE CASCADE,
-  FOREIGN KEY (run_id)      REFERENCES orchestrator_run(id)      ON DELETE CASCADE,
-  FOREIGN KEY (delivery_id) REFERENCES orchestrator_delivery(id) ON DELETE SET NULL
-);
-CREATE INDEX IF NOT EXISTS orchestrator_evaluation_run_idx ON orchestrator_evaluation (run_id);
-
-CREATE TABLE IF NOT EXISTS orchestrator_progress_snapshot (
-  id           text PRIMARY KEY,
-  task_id      text NOT NULL,
-  status       text NOT NULL,
-  summary      text NOT NULL,
-  payload      text,
-  time_created integer NOT NULL,
-  time_updated integer NOT NULL,
-  FOREIGN KEY (task_id) REFERENCES orchestrator_task(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS orchestrator_progress_task_idx ON orchestrator_progress_snapshot (task_id);
-
-CREATE TABLE IF NOT EXISTS orchestrator_executor_session (
-  id               text PRIMARY KEY,
-  task_id          text NOT NULL,
-  run_id           text NOT NULL,
-  goal_run_id      text REFERENCES orchestrator_goal_run(id) ON DELETE SET NULL,
-  provider         text NOT NULL,
-  protocol         text NOT NULL,
-  protocol_version text NOT NULL,
-  transport        text NOT NULL,
-  status           text NOT NULL DEFAULT 'active',
-  refs             text,
-  capabilities     text,
-  settings         text,
-  lease_owner      text,
-  lease_until      integer,
-  time_started     integer,
-  time_completed   integer,
-  time_created     integer NOT NULL,
-  time_updated     integer NOT NULL,
-  FOREIGN KEY (task_id) REFERENCES orchestrator_task(id) ON DELETE CASCADE,
-  FOREIGN KEY (run_id)  REFERENCES orchestrator_run(id)  ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS orchestrator_executor_session_task_idx     ON orchestrator_executor_session (task_id);
-CREATE INDEX IF NOT EXISTS orchestrator_executor_session_run_idx ON orchestrator_executor_session (run_id);
-CREATE INDEX IF NOT EXISTS orchestrator_executor_session_goal_run_idx ON orchestrator_executor_session (goal_run_id);
-CREATE INDEX IF NOT EXISTS orchestrator_executor_session_status_idx   ON orchestrator_executor_session (status);
-
-CREATE TABLE IF NOT EXISTS orchestrator_channel_binding (
-  id           text PRIMARY KEY,
-  task_id      text NOT NULL,
-  platform     text NOT NULL,
-  channel      text NOT NULL,
-  thread       text NOT NULL,
-  payload      text,
-  time_created integer NOT NULL,
-  time_updated integer NOT NULL,
-  FOREIGN KEY (task_id) REFERENCES orchestrator_task(id) ON DELETE CASCADE
-);
-DELETE FROM orchestrator_channel_binding
+DELETE FROM engine_channel_binding
 WHERE rowid NOT IN (
   SELECT MIN(rowid)
-  FROM orchestrator_channel_binding
+  FROM engine_channel_binding
   GROUP BY platform, channel, thread
 );
-CREATE INDEX IF NOT EXISTS orchestrator_channel_task_idx ON orchestrator_channel_binding (task_id);
-CREATE UNIQUE INDEX IF NOT EXISTS orchestrator_channel_binding_thread_idx ON orchestrator_channel_binding (platform, channel, thread);
+${generatedDeferredIndexDdl()}
 
--- ===== decision log =====
+-- Dispatch lineage is immutable physical-execution authority. Adapter input
+-- must be present as an exact JSON (JavaScript Object Notation) object because
+-- continuation reuses it unchanged; changing this trigger is also the physical
+-- schema breakpoint for any future breaking lineage-payload contract.
+CREATE TRIGGER IF NOT EXISTS engine_dispatch_lineage_payload_insert
+BEFORE INSERT ON engine_artifact
+FOR EACH ROW
+WHEN NEW.kind = 'dispatch_lineage'
+  AND json_type(NEW.payload, '$.adapter_input') IS NOT 'object'
+BEGIN
+  SELECT RAISE(ABORT, 'engine_artifact: dispatch_lineage adapter_input must be an exact object');
+END;
 
-CREATE TABLE IF NOT EXISTS decision_log (
-  id           text PRIMARY KEY,
-  task_id      text NOT NULL,
-  goal_id      text,
-  phase        text NOT NULL,
-  key          text NOT NULL,
-  value        text NOT NULL,
-  reason       text NOT NULL,
-  time_created integer NOT NULL,
-  FOREIGN KEY (task_id) REFERENCES orchestrator_task(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS decision_log_task_idx ON decision_log (task_id);
-CREATE INDEX IF NOT EXISTS decision_log_task_key_idx ON decision_log (task_id, key);
+CREATE TRIGGER IF NOT EXISTS engine_dispatch_lineage_immutable
+BEFORE UPDATE ON engine_artifact
+FOR EACH ROW
+WHEN OLD.kind = 'dispatch_lineage' OR NEW.kind = 'dispatch_lineage'
+BEGIN
+  SELECT RAISE(ABORT, 'engine_artifact: dispatch_lineage facts are immutable');
+END;
 
--- ===== workbench =====
+-- Baseline metric definitions are immutable measurement facts. The SQL layer
+-- protects comparability; it does not grant them scheduling authority.
+CREATE TRIGGER IF NOT EXISTS engine_metric_spec_baseline_no_update
+BEFORE UPDATE ON engine_metric_spec
+FOR EACH ROW
+WHEN OLD.source = 'baseline'
+BEGIN
+  SELECT RAISE(ABORT, 'engine_metric_spec: baseline row is frozen (no UPDATE)');
+END;
 
-CREATE TABLE IF NOT EXISTS workbench_task_note (
-  id           text PRIMARY KEY,
-  task_id      text NOT NULL,
-  run_id       text,
-  kind         text NOT NULL,
-  source       text NOT NULL DEFAULT 'user_message',
-  user_id      text,
-  content      text NOT NULL,
-  metadata     text,
-  time_created integer NOT NULL,
-  time_updated integer NOT NULL,
-  FOREIGN KEY (task_id) REFERENCES orchestrator_task(id) ON DELETE CASCADE,
-  FOREIGN KEY (run_id)  REFERENCES orchestrator_run(id)  ON DELETE SET NULL
-);
-CREATE INDEX IF NOT EXISTS workbench_task_note_task_idx ON workbench_task_note (task_id);
-CREATE INDEX IF NOT EXISTS workbench_task_note_run_idx  ON workbench_task_note (run_id);
-CREATE INDEX IF NOT EXISTS workbench_task_note_kind_idx ON workbench_task_note (kind);
+-- SHA-256 means Secure Hash Algorithm 256-bit. SQLite has no built-in SHA-256
+-- function and Bun's SQLite binding does not expose user-defined SQL
+-- functions. The canonical Engine Artifact writer computes the digest. These
+-- triggers enforce the part SQLite can prove independently: the byte count is
+-- exact, digests have canonical shape, fixed-block coverage is complete, and
+-- payload/index identities cannot be changed separately. Directory reads
+-- verify only the bounded index digest. Exact reads verify covered blocks;
+-- complete consumers additionally verify the locator's full payload digest.
+CREATE TRIGGER IF NOT EXISTS engine_artifact_catalog_metadata_insert
+BEFORE INSERT ON engine_artifact
+FOR EACH ROW
+WHEN
+  typeof(NEW.catalog_revision) != 'integer'
+  OR NEW.catalog_revision < 1
+  OR NOT EXISTS (
+    SELECT 1 FROM engine_artifact_catalog_revision
+    WHERE revision = NEW.catalog_revision
+  )
+  OR EXISTS (
+    SELECT 1 FROM engine_artifact
+    WHERE catalog_revision = NEW.catalog_revision
+  )
+  OR EXISTS (
+    SELECT 1 FROM engine_artifact_version
+    WHERE catalog_revision = NEW.catalog_revision
+  )
+  OR typeof(NEW.payload) != 'text'
+  OR json_valid(NEW.payload) != 1
+  OR NEW.payload_bytes != octet_length(NEW.payload)
+  OR typeof(NEW.payload_sha256) != 'text'
+  OR octet_length(NEW.payload_sha256) != 64
+  OR NEW.payload_sha256 GLOB '*[^0-9a-f]*'
+  OR json_valid(NEW.payload_block_sha256s) != 1
+  OR json_type(NEW.payload_block_sha256s) != 'array'
+  OR json_array_length(NEW.payload_block_sha256s) != ((NEW.payload_bytes + 65535) / 65536)
+  OR EXISTS (
+    SELECT 1
+    FROM json_each(NEW.payload_block_sha256s)
+    WHERE type != 'text'
+      OR octet_length(value) != 64
+      OR value GLOB '*[^0-9a-f]*'
+  )
+  OR typeof(NEW.payload_block_index_sha256) != 'text'
+  OR octet_length(NEW.payload_block_index_sha256) != 64
+  OR NEW.payload_block_index_sha256 GLOB '*[^0-9a-f]*'
+  OR (
+    NEW.catalog_import_source_task_id IS NOT NULL
+    AND (
+      typeof(NEW.catalog_import_source_task_id) != 'text'
+      OR octet_length(NEW.catalog_import_source_task_id) < 1
+    )
+  )
+  OR typeof(NEW.catalog_metadata_sha256) != 'text'
+  OR octet_length(NEW.catalog_metadata_sha256) != 64
+  OR NEW.catalog_metadata_sha256 GLOB '*[^0-9a-f]*'
+BEGIN
+  SELECT RAISE(ABORT, 'engine_artifact: payload catalog metadata is inconsistent');
+END;
 
-CREATE TABLE IF NOT EXISTS workbench_brief_snapshot (
-  id              text PRIMARY KEY,
-  task_id         text NOT NULL,
-  plan_version_id text,
-  run_id          text,
-  content         text NOT NULL,
-  inputs          text,
-  time_created    integer NOT NULL,
-  time_updated    integer NOT NULL,
-  FOREIGN KEY (task_id)         REFERENCES orchestrator_task(id)         ON DELETE CASCADE,
-  FOREIGN KEY (plan_version_id) REFERENCES orchestrator_plan_version(id) ON DELETE SET NULL,
-  FOREIGN KEY (run_id)          REFERENCES orchestrator_run(id)          ON DELETE SET NULL
-);
-CREATE INDEX IF NOT EXISTS workbench_brief_task_idx ON workbench_brief_snapshot (task_id);
-CREATE INDEX IF NOT EXISTS workbench_brief_run_idx  ON workbench_brief_snapshot (run_id);
+CREATE TRIGGER IF NOT EXISTS engine_artifact_catalog_metadata_update
+BEFORE UPDATE OF
+  payload,
+  task_id,
+  kind,
+  label,
+  time_created,
+  time_updated,
+  payload_sha256,
+  payload_bytes,
+  payload_block_sha256s,
+  payload_block_index_sha256,
+  catalog_artifact_type,
+  catalog_schema_diagnostic,
+  catalog_producer,
+  catalog_import_source_task_id,
+  catalog_resource_count,
+  catalog_resource_media_types,
+  catalog_search_text,
+  catalog_search_text_truncated,
+  catalog_metadata_sha256,
+  catalog_revision
+ON engine_artifact
+FOR EACH ROW
+WHEN
+  typeof(NEW.catalog_revision) != 'integer'
+  OR NEW.catalog_revision <= OLD.catalog_revision
+  OR NEW.task_id IS NOT OLD.task_id
+  OR NEW.kind IS NOT OLD.kind
+  OR NEW.time_created IS NOT OLD.time_created
+  OR NOT EXISTS (
+    SELECT 1 FROM engine_artifact_catalog_revision
+    WHERE revision = NEW.catalog_revision
+  )
+  OR EXISTS (
+    SELECT 1 FROM engine_artifact
+    WHERE catalog_revision = NEW.catalog_revision
+      AND id != OLD.id
+  )
+  OR EXISTS (
+    SELECT 1 FROM engine_artifact_version
+    WHERE catalog_revision = NEW.catalog_revision
+  )
+  OR typeof(NEW.payload) != 'text'
+  OR json_valid(NEW.payload) != 1
+  OR NEW.payload_bytes != octet_length(NEW.payload)
+  OR typeof(NEW.payload_sha256) != 'text'
+  OR octet_length(NEW.payload_sha256) != 64
+  OR NEW.payload_sha256 GLOB '*[^0-9a-f]*'
+  OR json_valid(NEW.payload_block_sha256s) != 1
+  OR json_type(NEW.payload_block_sha256s) != 'array'
+  OR json_array_length(NEW.payload_block_sha256s) != ((NEW.payload_bytes + 65535) / 65536)
+  OR EXISTS (
+    SELECT 1
+    FROM json_each(NEW.payload_block_sha256s)
+    WHERE type != 'text'
+      OR octet_length(value) != 64
+      OR value GLOB '*[^0-9a-f]*'
+  )
+  OR typeof(NEW.payload_block_index_sha256) != 'text'
+  OR octet_length(NEW.payload_block_index_sha256) != 64
+  OR NEW.payload_block_index_sha256 GLOB '*[^0-9a-f]*'
+  OR (
+    NEW.catalog_import_source_task_id IS NOT NULL
+    AND (
+      typeof(NEW.catalog_import_source_task_id) != 'text'
+      OR octet_length(NEW.catalog_import_source_task_id) < 1
+    )
+  )
+  OR typeof(NEW.catalog_metadata_sha256) != 'text'
+  OR octet_length(NEW.catalog_metadata_sha256) != 64
+  OR NEW.catalog_metadata_sha256 GLOB '*[^0-9a-f]*'
+  OR (
+    CAST(COALESCE(NEW.payload, 'null') AS TEXT) IS NOT CAST(COALESCE(OLD.payload, 'null') AS TEXT)
+    AND (
+      NEW.payload_sha256 = OLD.payload_sha256
+      OR NEW.payload_block_sha256s IS OLD.payload_block_sha256s
+      OR NEW.payload_block_index_sha256 = OLD.payload_block_index_sha256
+      OR NEW.catalog_metadata_sha256 = OLD.catalog_metadata_sha256
+    )
+  )
+  OR (
+    CAST(COALESCE(NEW.payload, 'null') AS TEXT) IS CAST(COALESCE(OLD.payload, 'null') AS TEXT)
+    AND (
+      NEW.payload_sha256 != OLD.payload_sha256
+      OR NEW.payload_bytes != OLD.payload_bytes
+      OR NEW.payload_block_sha256s IS NOT OLD.payload_block_sha256s
+      OR NEW.payload_block_index_sha256 != OLD.payload_block_index_sha256
+    )
+  )
+  OR (
+    (
+      NEW.payload_sha256 IS NOT OLD.payload_sha256
+      OR NEW.payload_bytes IS NOT OLD.payload_bytes
+      OR NEW.payload_block_index_sha256 IS NOT OLD.payload_block_index_sha256
+      OR NEW.catalog_artifact_type IS NOT OLD.catalog_artifact_type
+      OR NEW.catalog_schema_diagnostic IS NOT OLD.catalog_schema_diagnostic
+      OR NEW.catalog_producer IS NOT OLD.catalog_producer
+      OR NEW.catalog_import_source_task_id IS NOT OLD.catalog_import_source_task_id
+      OR NEW.catalog_resource_count IS NOT OLD.catalog_resource_count
+      OR NEW.catalog_resource_media_types IS NOT OLD.catalog_resource_media_types
+      OR NEW.catalog_search_text IS NOT OLD.catalog_search_text
+      OR NEW.catalog_search_text_truncated IS NOT OLD.catalog_search_text_truncated
+    )
+    AND NEW.catalog_metadata_sha256 = OLD.catalog_metadata_sha256
+  )
+  OR (
+    NEW.task_id IS OLD.task_id
+    AND NEW.kind IS OLD.kind
+    AND substr(NEW.label, 1, ${ENGINE_ARTIFACT_CATALOG_LABEL_INDEX_CODE_POINTS})
+      IS substr(OLD.label, 1, ${ENGINE_ARTIFACT_CATALOG_LABEL_INDEX_CODE_POINTS})
+    AND NEW.time_created IS OLD.time_created
+    AND NEW.time_updated IS OLD.time_updated
+    AND NEW.payload_sha256 IS OLD.payload_sha256
+    AND NEW.payload_bytes IS OLD.payload_bytes
+    AND NEW.payload_block_index_sha256 IS OLD.payload_block_index_sha256
+    AND NEW.catalog_artifact_type IS OLD.catalog_artifact_type
+    AND NEW.catalog_schema_diagnostic IS OLD.catalog_schema_diagnostic
+    AND NEW.catalog_producer IS OLD.catalog_producer
+    AND NEW.catalog_import_source_task_id IS OLD.catalog_import_source_task_id
+    AND NEW.catalog_resource_count IS OLD.catalog_resource_count
+    AND NEW.catalog_resource_media_types IS OLD.catalog_resource_media_types
+    AND NEW.catalog_search_text IS OLD.catalog_search_text
+    AND NEW.catalog_search_text_truncated IS OLD.catalog_search_text_truncated
+    AND NEW.catalog_metadata_sha256 != OLD.catalog_metadata_sha256
+  )
+  OR (
+    (
+      NEW.task_id IS NOT OLD.task_id
+      OR NEW.kind IS NOT OLD.kind
+      OR substr(NEW.label, 1, ${ENGINE_ARTIFACT_CATALOG_LABEL_INDEX_CODE_POINTS})
+        IS NOT substr(OLD.label, 1, ${ENGINE_ARTIFACT_CATALOG_LABEL_INDEX_CODE_POINTS})
+      OR NEW.time_created IS NOT OLD.time_created
+      OR NEW.time_updated IS NOT OLD.time_updated
+    )
+    AND NEW.catalog_metadata_sha256 = OLD.catalog_metadata_sha256
+  )
+  OR NEW.catalog_import_source_task_id IS NOT OLD.catalog_import_source_task_id
+BEGIN
+  SELECT RAISE(ABORT, 'engine_artifact: payload and bounded catalog identities must change atomically');
+END;
 
--- ===== protocol event store =====
+CREATE TRIGGER IF NOT EXISTS engine_artifact_catalog_revision_no_update
+BEFORE UPDATE ON engine_artifact_catalog_revision
+FOR EACH ROW
+BEGIN
+  SELECT RAISE(ABORT, 'engine_artifact_catalog_revision: revisions are append-only');
+END;
 
-CREATE TABLE IF NOT EXISTS protocol_event (
-  id              text PRIMARY KEY,
-  kind            text NOT NULL,
-  type            text NOT NULL,
-  aggregate_type  text NOT NULL,
-  aggregate_id    text NOT NULL,
-  task_id         text REFERENCES orchestrator_task(id) ON DELETE CASCADE,
-  run_id          text REFERENCES orchestrator_run(id) ON DELETE SET NULL,
-  goal_run_id     text REFERENCES orchestrator_goal_run(id) ON DELETE SET NULL,
-  session_id      text REFERENCES session(id) ON DELETE SET NULL,
-  interaction_id  text REFERENCES orchestrator_interaction_request(id) ON DELETE SET NULL,
-  stream_id       text,
-  source          text NOT NULL,
-  target          text,
-  causation_id    text,
-  correlation_id  text,
-  reply_to        text,
-  seq             integer NOT NULL,
-  deadline_ms     integer,
-  emitted_at      integer NOT NULL,
-  payload         text,
-  time_created    integer NOT NULL,
-  time_updated    integer NOT NULL
-);
-CREATE UNIQUE INDEX IF NOT EXISTS protocol_event_aggregate_seq_idx ON protocol_event (aggregate_type, aggregate_id, seq);
-CREATE INDEX IF NOT EXISTS protocol_event_task_idx        ON protocol_event (task_id, seq);
-CREATE INDEX IF NOT EXISTS protocol_event_run_idx         ON protocol_event (run_id, seq);
-CREATE INDEX IF NOT EXISTS protocol_event_session_idx     ON protocol_event (session_id, seq);
-CREATE INDEX IF NOT EXISTS protocol_event_interaction_idx ON protocol_event (interaction_id, seq);
-CREATE INDEX IF NOT EXISTS protocol_event_stream_idx      ON protocol_event (stream_id, seq);
-CREATE INDEX IF NOT EXISTS protocol_event_type_idx        ON protocol_event (type);
+CREATE TRIGGER IF NOT EXISTS engine_artifact_catalog_revision_no_delete
+BEFORE DELETE ON engine_artifact_catalog_revision
+FOR EACH ROW
+BEGIN
+  SELECT RAISE(ABORT, 'engine_artifact_catalog_revision: revisions are append-only');
+END;
 
-CREATE TABLE IF NOT EXISTS protocol_inbox (
-  id           text PRIMARY KEY,
-  envelope_id  text NOT NULL REFERENCES protocol_event(id) ON DELETE CASCADE,
-  actor        text NOT NULL,
-  actor_id     text NOT NULL,
-  status       text NOT NULL DEFAULT 'pending',
-  lease_owner  text,
-  lease_until  integer,
-  attempt      integer NOT NULL DEFAULT 0,
-  visible_at   integer NOT NULL,
-  last_error   text,
-  time_created integer NOT NULL,
-  time_updated integer NOT NULL
-);
-CREATE UNIQUE INDEX IF NOT EXISTS protocol_inbox_envelope_actor_idx ON protocol_inbox (envelope_id, actor, actor_id);
-CREATE INDEX IF NOT EXISTS protocol_inbox_visible_idx              ON protocol_inbox (actor, status, visible_at);
-CREATE INDEX IF NOT EXISTS protocol_inbox_lease_idx                ON protocol_inbox (actor, lease_until);
+CREATE TRIGGER IF NOT EXISTS engine_artifact_version_integrity_insert
+BEFORE INSERT ON engine_artifact_version
+FOR EACH ROW
+WHEN
+  typeof(NEW.catalog_revision) != 'integer'
+  OR NEW.catalog_revision < 1
+  OR NOT EXISTS (
+    SELECT 1 FROM engine_artifact_catalog_revision
+    WHERE revision = NEW.catalog_revision
+  )
+  OR EXISTS (
+    SELECT 1 FROM engine_artifact
+    WHERE catalog_revision = NEW.catalog_revision
+  )
+  OR EXISTS (
+    SELECT 1 FROM engine_artifact_version
+    WHERE catalog_revision = NEW.catalog_revision
+  )
+  OR NOT EXISTS (
+    SELECT 1
+    FROM engine_artifact AS current
+    WHERE current.id = NEW.artifact_id
+      AND current.task_id IS NEW.task_id
+      AND current.kind IS NEW.kind
+      AND NEW.catalog_revision < current.catalog_revision
+  )
+  OR typeof(NEW.payload) != 'text'
+  OR json_valid(NEW.payload) != 1
+  OR NEW.payload_bytes != octet_length(NEW.payload)
+  OR typeof(NEW.payload_sha256) != 'text'
+  OR octet_length(NEW.payload_sha256) != 64
+  OR NEW.payload_sha256 GLOB '*[^0-9a-f]*'
+  OR json_valid(NEW.payload_block_sha256s) != 1
+  OR json_type(NEW.payload_block_sha256s) != 'array'
+  OR json_array_length(NEW.payload_block_sha256s) != ((NEW.payload_bytes + 65535) / 65536)
+  OR EXISTS (
+    SELECT 1
+    FROM json_each(NEW.payload_block_sha256s)
+    WHERE type != 'text'
+      OR octet_length(value) != 64
+      OR value GLOB '*[^0-9a-f]*'
+  )
+  OR typeof(NEW.payload_block_index_sha256) != 'text'
+  OR octet_length(NEW.payload_block_index_sha256) != 64
+  OR NEW.payload_block_index_sha256 GLOB '*[^0-9a-f]*'
+  OR typeof(NEW.catalog_metadata_sha256) != 'text'
+  OR octet_length(NEW.catalog_metadata_sha256) != 64
+  OR NEW.catalog_metadata_sha256 GLOB '*[^0-9a-f]*'
+BEGIN
+  SELECT RAISE(ABORT, 'engine_artifact_version: prior catalog version is inconsistent');
+END;
 
-CREATE TABLE IF NOT EXISTS protocol_stream_chunk (
-  id          text PRIMARY KEY,
-  stream_id   text NOT NULL,
-  task_id     text REFERENCES orchestrator_task(id) ON DELETE CASCADE,
-  run_id      text REFERENCES orchestrator_run(id) ON DELETE SET NULL,
-  goal_run_id text REFERENCES orchestrator_goal_run(id) ON DELETE SET NULL,
-  session_id  text REFERENCES session(id) ON DELETE SET NULL,
-  kind        text NOT NULL,
-  chunk_seq   integer NOT NULL,
-  text        text NOT NULL,
-  payload     text,
-  emitted_at  integer NOT NULL,
-  time_created integer NOT NULL,
-  time_updated integer NOT NULL
-);
-CREATE UNIQUE INDEX IF NOT EXISTS protocol_stream_chunk_stream_seq_idx ON protocol_stream_chunk (stream_id, chunk_seq);
-CREATE INDEX IF NOT EXISTS protocol_stream_chunk_task_idx              ON protocol_stream_chunk (task_id, chunk_seq);
-CREATE INDEX IF NOT EXISTS protocol_stream_chunk_run_idx               ON protocol_stream_chunk (run_id, chunk_seq);
-CREATE INDEX IF NOT EXISTS protocol_stream_chunk_session_idx           ON protocol_stream_chunk (session_id, chunk_seq);
+CREATE TRIGGER IF NOT EXISTS engine_artifact_archive_previous_version
+AFTER UPDATE ON engine_artifact
+FOR EACH ROW
+BEGIN
+  INSERT INTO engine_artifact_version (
+    artifact_id, task_id, kind, label, payload,
+    payload_sha256, payload_bytes, payload_block_sha256s, payload_block_index_sha256,
+    catalog_artifact_type, catalog_schema_diagnostic, catalog_producer,
+    catalog_import_source_task_id, catalog_resource_count, catalog_resource_media_types,
+    catalog_search_text, catalog_search_text_truncated, catalog_metadata_sha256,
+    catalog_revision, time_created, time_updated
+  ) VALUES (
+    OLD.id, OLD.task_id, OLD.kind, OLD.label, OLD.payload,
+    OLD.payload_sha256, OLD.payload_bytes, OLD.payload_block_sha256s, OLD.payload_block_index_sha256,
+    OLD.catalog_artifact_type, OLD.catalog_schema_diagnostic, OLD.catalog_producer,
+    OLD.catalog_import_source_task_id, OLD.catalog_resource_count, OLD.catalog_resource_media_types,
+    OLD.catalog_search_text, OLD.catalog_search_text_truncated, OLD.catalog_metadata_sha256,
+    OLD.catalog_revision, OLD.time_created, OLD.time_updated
+  );
+END;
 
+CREATE TRIGGER IF NOT EXISTS engine_artifact_version_no_update
+BEFORE UPDATE ON engine_artifact_version
+FOR EACH ROW
+BEGIN
+  SELECT RAISE(ABORT, 'engine_artifact_version: prior versions are immutable');
+END;
+
+CREATE TRIGGER IF NOT EXISTS engine_artifact_version_no_delete
+BEFORE DELETE ON engine_artifact_version
+FOR EACH ROW
+WHEN EXISTS (
+  SELECT 1 FROM engine_artifact
+  WHERE id = OLD.artifact_id
+)
+AND EXISTS (
+  SELECT 1 FROM engine_task
+  WHERE id = OLD.task_id
+)
+BEGIN
+  SELECT RAISE(ABORT, 'engine_artifact_version: prior versions are immutable');
+END;
+
+-- Architect ContractGraph and GoalGraphProjection rows are immutable
+-- execution facts. Mutable coordination/queue artifacts keep their dedicated
+-- update protocols; these two kinds can only be superseded by appending a new
+-- exact Artifact.
+CREATE TRIGGER IF NOT EXISTS engine_goal_graph_artifact_immutable
+BEFORE UPDATE ON engine_artifact
+FOR EACH ROW
+WHEN OLD.kind IN ('architect_contract_graph', 'goal_graph_projection')
+BEGIN
+  SELECT RAISE(ABORT, 'engine_artifact: Architect ContractGraph and GoalGraphProjection facts are immutable');
+END;
+
+CREATE TRIGGER IF NOT EXISTS engine_goal_exact_artifact_binding_insert
+BEFORE INSERT ON engine_goal
+FOR EACH ROW
+WHEN
+  (NEW.requirement_set_artifact_id IS NULL) != (NEW.requirement_set_artifact_sha256 IS NULL)
+  OR (NEW.requirement_set_artifact_id IS NULL) != (NEW.requirement_set_artifact_revision IS NULL)
+  OR (NEW.contract_graph_artifact_id IS NULL) != (NEW.contract_graph_artifact_sha256 IS NULL)
+  OR (NEW.contract_graph_artifact_id IS NULL) != (NEW.contract_graph_artifact_revision IS NULL)
+  OR (
+    NEW.requirement_set_artifact_id IS NOT NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM engine_artifact
+      WHERE id = NEW.requirement_set_artifact_id
+        AND task_id = NEW.task_id
+        AND kind = 'requirement_set'
+        AND catalog_revision = NEW.requirement_set_artifact_revision
+        AND payload_sha256 = NEW.requirement_set_artifact_sha256
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM engine_artifact_version
+      WHERE artifact_id = NEW.requirement_set_artifact_id
+        AND task_id = NEW.task_id
+        AND kind = 'requirement_set'
+        AND catalog_revision = NEW.requirement_set_artifact_revision
+        AND payload_sha256 = NEW.requirement_set_artifact_sha256
+    )
+  )
+  OR (
+    NEW.contract_graph_artifact_id IS NOT NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM engine_artifact
+      WHERE id = NEW.contract_graph_artifact_id
+        AND task_id = NEW.task_id
+        AND kind = 'architect_contract_graph'
+        AND catalog_revision = NEW.contract_graph_artifact_revision
+        AND payload_sha256 = NEW.contract_graph_artifact_sha256
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM engine_artifact_version
+      WHERE artifact_id = NEW.contract_graph_artifact_id
+        AND task_id = NEW.task_id
+        AND kind = 'architect_contract_graph'
+        AND catalog_revision = NEW.contract_graph_artifact_revision
+        AND payload_sha256 = NEW.contract_graph_artifact_sha256
+    )
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'engine_goal: Artifact bindings must be exact same-Task locators');
+END;
+
+CREATE TRIGGER IF NOT EXISTS engine_goal_immutable
+BEFORE UPDATE ON engine_goal
+FOR EACH ROW
+BEGIN
+  SELECT RAISE(ABORT, 'engine_goal: Goal revisions are immutable; append a new revision fact');
+END;
+
+CREATE TRIGGER IF NOT EXISTS engine_goal_supersede_same_task_insert
+BEFORE INSERT ON engine_goal
+FOR EACH ROW
+WHEN
+  NEW.supersede_of IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM engine_goal
+    WHERE id = NEW.supersede_of
+      AND task_id = NEW.task_id
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'engine_goal: supersede_of must reference an existing Goal in the same Task');
+END;
 `
 
+export const SCHEMA_DDL = `${generatedSchemaDdl()}\n\n${STORAGE_EXTENSION_DDL}`

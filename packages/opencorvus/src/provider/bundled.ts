@@ -1,5 +1,7 @@
-import type { Provider as SDK } from "ai"
+import type { LanguageModel } from "ai"
 import { createAmazonBedrock } from "@ai-sdk/amazon-bedrock"
+import { createBedrockMantle } from "@ai-sdk/amazon-bedrock/mantle"
+import { createAlibaba } from "@ai-sdk/alibaba"
 import { createAnthropic } from "@ai-sdk/anthropic"
 import { createAzure } from "@ai-sdk/azure"
 import { createCerebras } from "@ai-sdk/cerebras"
@@ -17,12 +19,18 @@ import { createPerplexity } from "@ai-sdk/perplexity"
 import { createTogetherAI } from "@ai-sdk/togetherai"
 import { createVercel } from "@ai-sdk/vercel"
 import { createXai } from "@ai-sdk/xai"
-import { createGitLab } from "@gitlab/gitlab-ai-provider"
+import { createGitLab } from "gitlab-ai-provider"
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
-import { createOpenaiCompatible as createGitHubCopilotOpenAICompatible } from "./sdk/copilot"
+import { createOpenaiCompatible as createGitHubCopilot } from "./github-copilot/copilot-provider"
+import { createVenice } from "venice-ai-sdk-provider"
 
-export const BUNDLED_PROVIDERS: Record<string, (options: any) => SDK> = {
+type LanguageModelProvider = {
+  languageModel(modelId: string): LanguageModel
+}
+
+export const BUNDLED_PROVIDERS: Record<string, (options: any) => LanguageModelProvider> = {
   "@ai-sdk/amazon-bedrock": createAmazonBedrock,
+  "@ai-sdk/amazon-bedrock/mantle": createBedrockMantle,
   "@ai-sdk/anthropic": createAnthropic,
   "@ai-sdk/azure": createAzure,
   "@ai-sdk/google": createGoogleGenerativeAI,
@@ -41,7 +49,8 @@ export const BUNDLED_PROVIDERS: Record<string, (options: any) => SDK> = {
   "@ai-sdk/togetherai": createTogetherAI,
   "@ai-sdk/perplexity": createPerplexity,
   "@ai-sdk/vercel": createVercel,
-  "@gitlab/gitlab-ai-provider": createGitLab,
-  // @ts-ignore (TODO: kill this code so we dont have to maintain it)
-  "@ai-sdk/github-copilot": createGitHubCopilotOpenAICompatible,
+  "@ai-sdk/alibaba": createAlibaba,
+  "gitlab-ai-provider": createGitLab,
+  "@ai-sdk/github-copilot": createGitHubCopilot,
+  "venice-ai-sdk-provider": createVenice,
 }

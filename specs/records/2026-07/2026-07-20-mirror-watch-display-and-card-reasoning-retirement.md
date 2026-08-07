@@ -1,0 +1,50 @@
+# MirrorWatch display identity and message-card reasoning retirement
+
+## Recall
+
+| Item                       | Evidence                                                                                                                                                                                                                                                                                                                                                                                       |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| User request               | Change the expert-squad presentation currently shown as `MyHexin/Mirror Watch` to `TanZeqi/MirrorWatch`, and remove reasoning display from message cards.                                                                                                                                                                                                                                      |
+| Acceptance                 | The catalog/composer derives `TanZeqi/MirrorWatch` from package-owned metadata; the canonical package still loads through its strict manifest identity; message cards render narrative, tools, patches and other supported parts without rendering or counting reasoning; persisted/backend reasoning remains unchanged.                                                                       |
+| Hard constraints           | Preserve `prompt_profile.active` and manifest `id` as the single active identity source; do not add aliases, fallback identity, hidden messages, a second renderer, a gate, a worktree, mobile scope, or interaction with the running OpenCorvus/Overlay. Browser verification uses an isolated Node-launched page and a task-scoped screenshot. Preserve the unrelated untracked `C:/` entry. |
+| Sources read               | `AGENTS.md`; browser-control skill; `specs/current/architecture/12-overlay-card-system.md`; Mirror Watch package README and manifest; `catalog-profile.ts`; `Card.tsx`; `CardParts.tsx`; `ReasoningPart.tsx`; `message-part.ts`; focused package, rendering, and browser tests.                                                                                                                |
+| Whole-repository search    | Exact searches covered `MyHexin`, `myhexin/mirror-watch`, `expert_squad_display_prefix`, `Mirror Watch`, `ReasoningPart`, `reasoning-toggle`, `.msg-reasoning`, reasoning type comparisons, `isCollapsedExecutionMessagePart`, `messagePartHasNarrativeContent`, `partitionMessagePartRenderRuns`, and `workSummary`. The generated payload is owned by `generate-expert-squad-payload.ts`.    |
+| Independent agent feedback | None. The user did not request independent agents, and the active delegation policy prohibits spawning them implicitly.                                                                                                                                                                                                                                                                        |
+
+## Root cause and decision
+
+The expert-squad selector does not derive its visible prefix from the canonical namespace. `catalog-profile.ts` derives `display_label` from the package README's `expert_squad_display_prefix` and manifest `label`. Therefore changing the strict directory/manifest identity would be the wrong layer and would also violate the existing lowercase kebab-case identity schema. The single presentation-source correction is `TanZeqi` in the README frontmatter and `MirrorWatch` in the manifest label, followed by regeneration of the checked-in payload.
+
+Reasoning is currently a first-class renderable part in `CardParts`: it is classified into execution runs, included in the disclosure summary, and rendered through `ReasoningPart`. Removing only its CSS or disclosure button would preserve empty reasoning-owned rows or counts. The display projection must instead treat reasoning as non-display content while retaining the raw part in the message/store/protocol for chronology, diagnostics, and backend ownership.
+
+## Call-point disposition
+
+| Call point                                                                                  | Disposition                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `.opencorvus/expert-squads/myhexin/mirror-watch/README.md`                                  | Replace only the display prefix with `TanZeqi`; keep the canonical namespace path.                                                                                             |
+| `.opencorvus/expert-squads/myhexin/mirror-watch/expert-squad.jsonc`                         | Replace only the user-visible label with `MirrorWatch`; keep `namespace=myhexin` and `id=mirror-watch`.                                                                        |
+| `packages/opencorvus/src/expert-squad/payload.ts`                                           | Regenerate from package sources; never edit by hand.                                                                                                                           |
+| Mirror Watch package/catalog tests                                                          | Assert canonical identity remains stable and display metadata becomes `TanZeqi/MirrorWatch`.                                                                                   |
+| `message-part.ts`                                                                           | Make reasoning non-display and transparent to message-card run partitioning; retain other execution and narrative rules.                                                       |
+| `CardParts.tsx`                                                                             | Remove the reasoning renderer and reasoning disclosure-summary branch; keep one tool/patch chronological disclosure.                                                           |
+| `ReasoningPart.tsx`, reasoning-only CSS and direct fixtures                                 | Delete the retired display implementation and its obsolete direct tests; replace coverage with absence assertions at the message-card projection and rendered browser surface. |
+| Store, transport, SDK, backend conversation, usage, review and persistence reasoning fields | Preserve. They are data/runtime contracts, not message-card rendering.                                                                                                         |
+
+## Codex review feedback
+
+The second whole-repository review found that the current architecture chapters still described reasoning as visible Activity/standalone disclosure content. That was an omitted current call point in the initial disposition even though it appeared in the original grep evidence. The implementation record is therefore revised explicitly: `07-panel-reactivity.md` now limits Activity display to Tool/Patch parts, and `12-overlay-card-system.md` states that reasoning remains runtime data without a message-card renderer, disclosure, count, or style.
+
+## Verification plan
+
+1. Run focused Mirror Watch package/payload/catalog tests and Overlay message-part/card tests.
+2. Run Overlay typecheck/build checks relevant to the changed imports and styles.
+3. Launch an isolated production-shaped message-card fixture with Node, capture and inspect a desktop screenshot, and assert no reasoning text, toggle, row, or disclosure count is present while narrative/tool content remains visible.
+4. Run historical-doc links plus document-health checks, inspect the final diff, then commit and push to `myhexin/v0.0.11beta`.
+
+## Verification results
+
+- Focused package/catalog/payload and Overlay rendering suites passed after one expected assertion update: once reasoning is transparent, the first visible execution part retains its real source index rather than inheriting the removed reasoning part's index.
+- Overlay TypeScript validation and the Vite production build passed. The i18n checker identified the now-unreferenced `transcript.reasoning` locale key; both locale entries were removed and the checker then passed.
+- The two headed Node browser suites passed against the production-built Overlay. The message-card screenshot at `.scratch/overlay-codex-tool-expanded.png` shows narrative, `Tools 1 · Changes 1`, the expanded Tool, Patch and interactive artifact with no reasoning row or residual vertical gap. The chronology screenshot at `.scratch/message-part-chronology-component.png` shows `Tools 4` and `Tools 2`, six Tool events in source order, and no reasoning content.
+- The real chat-bubble fixture exposed an unrelated stale mocked route: it still served task-scoped interactive artifacts while the production contract is session-scoped. The fixture now mirrors `/session/:sessionID/interactive-artifact/:artifactID` and the current strict response shape; no production route or fallback changed.
+- The in-app Browser independently observed two disclosure labels (`Tools 4`, `Tools 2`), visible narrative, zero reasoning rows/toggles, and absence of the reasoning text. Its screenshot transport rendered the fixture as a false narrow column despite correct DOM geometry, so visual acceptance uses the repository's headed Node/Playwright screenshots above.

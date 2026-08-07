@@ -1,8 +1,8 @@
 # opencorvus GitHub Action
 
-A GitHub Action that integrates [opencorvus](https://opencorvus.ai) directly into your GitHub workflow.
+A GitHub Action that integrates [opencorvus](https://opencorvus.ai) directly into comments, issue or PR lifecycle events, scheduled workflows, and manual workflow dispatch events.
 
-Mention `/opencorvus` in your comment, and opencorvus will execute tasks within your GitHub Actions runner.
+Comment triggers read `/opencorvus` or `/oc`, and repository events use the configured workflow prompt. OpenCorvus executes tasks within your GitHub Actions runner.
 
 ## Features
 
@@ -50,15 +50,20 @@ This allows for more targeted requests without needing to specify file paths or 
 
 ## Installation
 
-Run the following command in the terminal from your GitHub repo:
+The action runs the repository source entrypoint directly with Bun:
+`bun "$GITHUB_ACTION_PATH/../packages/opencorvus/src/index.ts" github run`.
+That runtime parses the GitHub event, creates the session, and calls `SessionPrompt.prompt` in-process.
 
-```bash
-opencorvus github install
-```
+Supported triggers:
 
-This will walk you through installing the GitHub app, creating the workflow, and setting up secrets.
+- `issue_comment` - Issue and PR comments
+- `pull_request_review_comment` - line-level PR review comments
+- `issues` - issue lifecycle events
+- `pull_request` - PR lifecycle events
+- `schedule` - scheduled repository automation
+- `workflow_dispatch` - manually triggered repository automation
 
-### Manual Setup
+Comment triggers read the `/opencorvus` or `/oc` request from the GitHub comment. `issues`, `schedule`, and `workflow_dispatch` require the `prompt` input because their payloads do not include a comment body. The quickstart workflow below enables comment triggers only; use the repository event workflow when you want issue, PR, scheduled, or manual automation.
 
 1. Install the GitHub app https://github.com/apps/opencorvus-agent. Make sure it is installed on the target repository.
 2. Add the following workflow file to `.github/workflows/opencorvus.yml` in your repo. Set the appropriate `model` and required API keys in `env`.
@@ -75,26 +80,67 @@ This will walk you through installing the GitHub app, creating the workflow, and
    jobs:
      opencorvus:
        if: |
-         contains(github.event.comment.body, '/oc') ||
-         contains(github.event.comment.body, '/opencorvus')
+         contains(github.event.comment.body, ' /oc') ||
+         startsWith(github.event.comment.body, '/oc') ||
+         contains(github.event.comment.body, ' /opencorvus') ||
+         startsWith(github.event.comment.body, '/opencorvus')
        runs-on: ubuntu-latest
        permissions:
          id-token: write
+         contents: read
+         pull-requests: read
+         issues: read
        steps:
-          - name: Checkout repository
-            uses: actions/checkout@v6
-            with:
-              fetch-depth: 1
-              persist-credentials: false
+         - name: Checkout repository
+           uses: actions/checkout@v7
+           with:
+             persist-credentials: false
 
-          - name: Run opencorvus
+         - name: Run OpenCorvus
            uses: yangheng95/opencorvus/github@latest
            env:
-             ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+             ALIBABA_CODING_PLAN_API_KEY: ${{ secrets.ALIBABA_CODING_PLAN_API_KEY }}
+             OPENCORVUS_PERMISSION: '{"bash": "deny"}'
            with:
-             model: anthropic/claude-sonnet-4-20250514
-             use_github_token: true
+             model: alibaba-coding-plan-cn/qwen3.5-plus
+   ```
+
+   Repository event workflow:
+
+   ```yml
+   name: opencorvus-repository
+
+   on:
+     issues:
+       types: [opened, reopened]
+     pull_request:
+       types: [opened, synchronize, reopened, ready_for_review]
+     schedule:
+       - cron: "0 9 * * 1"
+     workflow_dispatch: {}
+
+   jobs:
+     opencorvus:
+       runs-on: ubuntu-latest
+       permissions:
+         id-token: write
+         contents: read
+         pull-requests: read
+         issues: read
+       steps:
+         - name: Checkout repository
+           uses: actions/checkout@v7
+           with:
+             persist-credentials: false
+
+         - name: Run OpenCorvus
+           uses: yangheng95/opencorvus/github@latest
+           env:
+             ALIBABA_CODING_PLAN_API_KEY: ${{ secrets.ALIBABA_CODING_PLAN_API_KEY }}
+             OPENCORVUS_PERMISSION: '{"bash": "deny"}'
+           with:
+             model: alibaba-coding-plan-cn/qwen3.5-plus
+             prompt: Maintain this repository from the triggering issue, pull request, schedule, or manual dispatch.
    ```
 
 3. Store the API keys in secrets. In your organization or project **settings**, expand **Secrets and variables** on the left and select **Actions**. Add the required API keys.
@@ -105,36 +151,18 @@ This is an early release. If you encounter issues or have feedback, please creat
 
 ## Development
 
-To test locally:
+To validate changes locally, use the repository test suite instead of a personal repository token:
 
-1. Navigate to a test repo (e.g. `hello-world`):
+```bash
+bun test packages/opencorvus/test/cli/github-action-run.test.ts
+```
 
-   ```bash
-   cd hello-world
-   ```
-
-2. Run:
-
-   ```bash
-   MODEL=anthropic/claude-sonnet-4-20250514 \
-     ANTHROPIC_API_KEY=sk-ant-api03-1234567890 \
-     GITHUB_RUN_ID=dummy \
-     MOCK_TOKEN=github_pat_1234567890 \
-     MOCK_EVENT='{"eventName":"issue_comment",...}' \
-     bun /path/to/opencorvus/github/index.ts
-   ```
-
-   - `MODEL`: The model used by opencorvus. Same as the `MODEL` defined in the GitHub workflow.
-   - `ANTHROPIC_API_KEY`: Your model provider API key. Same as the keys defined in the GitHub workflow.
-   - `GITHUB_RUN_ID`: Dummy value to emulate GitHub action environment.
-   - `MOCK_TOKEN`: A GitHub personal access token. This token is used to verify you have `admin` or `write` access to the test repo. Generate a token [here](https://github.com/settings/personal-access-tokens).
-   - `MOCK_EVENT`: Mock GitHub event payload (see templates below).
-   - `/path/to/opencorvus`: Path to your cloned opencorvus repo. `bun /path/to/opencorvus/github/index.ts` runs your local version of `opencorvus`.
+The runtime also accepts `--event` for repository tests that mock the GitHub event payload. Token exchange remains the same OIDC App-token path used by the published Action.
 
 ### Issue comment event
 
 ```
-MOCK_EVENT='{"eventName":"issue_comment","repo":{"owner":"sst","repo":"hello-world"},"actor":"fwang","payload":{"issue":{"number":4},"comment":{"id":1,"body":"hey opencorvus, summarize thread"}}}'
+--event '{"eventName":"issue_comment","repo":{"owner":"sst","repo":"hello-world"},"actor":"fwang","payload":{"issue":{"number":4},"comment":{"id":1,"body":"hey opencorvus, summarize thread"}}}'
 ```
 
 Replace:
@@ -148,7 +176,7 @@ Replace:
 ### Issue comment with image attachment.
 
 ```
-MOCK_EVENT='{"eventName":"issue_comment","repo":{"owner":"sst","repo":"hello-world"},"actor":"fwang","payload":{"issue":{"number":4},"comment":{"id":1,"body":"hey opencorvus, what is in my image ![Image](https://github.com/user-attachments/assets/xxxxxxxx)"}}}'
+--event '{"eventName":"issue_comment","repo":{"owner":"sst","repo":"hello-world"},"actor":"fwang","payload":{"issue":{"number":4},"comment":{"id":1,"body":"hey opencorvus, what is in my image ![Image](https://github.com/user-attachments/assets/xxxxxxxx)"}}}'
 ```
 
 Replace the image URL `https://github.com/user-attachments/assets/xxxxxxxx` with a valid GitHub attachment (you can generate one by commenting with an image in any issue).
@@ -156,11 +184,11 @@ Replace the image URL `https://github.com/user-attachments/assets/xxxxxxxx` with
 ### PR comment event
 
 ```
-MOCK_EVENT='{"eventName":"issue_comment","repo":{"owner":"sst","repo":"hello-world"},"actor":"fwang","payload":{"issue":{"number":4,"pull_request":{}},"comment":{"id":1,"body":"hey opencorvus, summarize thread"}}}'
+--event '{"eventName":"issue_comment","repo":{"owner":"sst","repo":"hello-world"},"actor":"fwang","payload":{"issue":{"number":4,"pull_request":{}},"comment":{"id":1,"body":"hey opencorvus, summarize thread"}}}'
 ```
 
 ### PR review comment event
 
 ```
-MOCK_EVENT='{"eventName":"pull_request_review_comment","repo":{"owner":"sst","repo":"hello-world"},"actor":"fwang","payload":{"pull_request":{"number":7},"comment":{"id":1,"body":"hey opencorvus, add error handling","path":"src/components/Button.tsx","diff_hunk":"@@ -45,8 +45,11 @@\n- const handleClick = () => {\n-   console.log('clicked')\n+ const handleClick = useCallback(() => {\n+   console.log('clicked')\n+   doSomething()\n+ }, [doSomething])","line":47,"original_line":45,"position":10,"commit_id":"abc123","original_commit_id":"def456"}}}'
+--event '{"eventName":"pull_request_review_comment","repo":{"owner":"sst","repo":"hello-world"},"actor":"fwang","payload":{"pull_request":{"number":7},"comment":{"id":1,"body":"hey opencorvus, add error handling","path":"src/components/Button.tsx","diff_hunk":"@@ -45,8 +45,11 @@\n- const handleClick = () => {\n-   console.log('clicked')\n+ const handleClick = useCallback(() => {\n+   console.log('clicked')\n+   doSomething()\n+ }, [doSomething])","line":47,"original_line":45,"position":10,"commit_id":"abc123","original_commit_id":"def456"}}}'
 ```

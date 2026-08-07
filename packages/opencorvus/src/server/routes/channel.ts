@@ -1,12 +1,13 @@
 import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
-import { ChannelIngress, MessageInput, MessageResult } from "@/channel/ingress"
+import { ChannelIngress, ChannelIngressInput, ChannelIngressResult } from "@/channel/ingress"
 import { ChannelRegistry } from "@/channel/registry"
 import { ChannelSupervisor } from "@/channel/supervisor"
 import { ChannelAttachment } from "@/channel/attachment"
 import { lazy } from "../../util/lazy"
 import { errors } from "../error"
 import z from "zod"
+import { NotFoundError } from "../../storage/db"
 
 export const ChannelRoutes = lazy(() =>
   new Hono()
@@ -35,7 +36,8 @@ export const ChannelRoutes = lazy(() =>
       "/attachment",
       describeRoute({
         summary: "Create a temporary channel attachment URL",
-        description: "Store a temporary attachment and return a signed public URL for channels that require remote image URLs.",
+        description:
+          "Store a temporary attachment and return a signed public URL for channels that require remote image URLs.",
         operationId: "channel.attachment.create",
         responses: {
           200: {
@@ -81,13 +83,18 @@ export const ChannelRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        const file = await ChannelAttachment.get(c.req.param("id"))
-        if (!file) return c.json({ error: "not found" }, 404)
-        return new Response(Bun.file(file.path), {
+        const id = c.req.param("id")
+        if (!(await ChannelAttachment.authorize(id, c.req.query("e") ?? null, c.req.query("s") ?? null))) {
+          throw new NotFoundError({ message: `Channel attachment not found: ${id}` })
+        }
+        const file = await ChannelAttachment.get(id)
+        if (!file) throw new NotFoundError({ message: `Channel attachment not found: ${id}` })
+        const maxAge = Math.max(0, Math.floor((file.expires_at - Date.now()) / 1000))
+        return new Response(file.bytes, {
           headers: {
             "content-type": file.mime,
             "content-disposition": `inline; filename="${file.filename.replace(/"/g, "")}"`,
-            "cache-control": "public, max-age=86400",
+            "cache-control": `public, max-age=${maxAge}`,
           },
         })
       },
@@ -103,13 +110,13 @@ export const ChannelRoutes = lazy(() =>
             description: "Message handled",
             content: {
               "application/json": {
-                schema: resolver(MessageResult),
+                schema: resolver(ChannelIngressResult),
               },
             },
           },
         },
       }),
-      validator("json", MessageInput),
+      validator("json", ChannelIngressInput),
       async (c) => {
         return c.json(await ChannelIngress.message(c.req.valid("json")))
       },
@@ -126,13 +133,15 @@ export const ChannelRoutes = lazy(() =>
             content: {
               "application/json": {
                 schema: resolver(
-                  ChannelRegistry.Info.pick({ id: true }).omit({ id: true }).extend({
-                    status: ChannelRegistry.Info.shape.runtime_status,
-                    detail: ChannelRegistry.Info.shape.runtime_detail,
-                    channels: ChannelRegistry.Info.shape.id.array(),
-                    logs: ChannelRegistry.Info.shape.runtime_detail.array(),
-                    running: ChannelRegistry.Info.shape.runtime_status.transform((item) => item === "running"),
-                  }),
+                  ChannelRegistry.Info.pick({ id: true })
+                    .omit({ id: true })
+                    .extend({
+                      status: ChannelRegistry.Info.shape.runtime_status,
+                      detail: ChannelRegistry.Info.shape.runtime_detail,
+                      channels: ChannelRegistry.Info.shape.id.array(),
+                      logs: ChannelRegistry.Info.shape.runtime_detail.array(),
+                      running: ChannelRegistry.Info.shape.runtime_status.transform((item) => item === "running"),
+                    }),
                 ),
               },
             },
@@ -156,13 +165,15 @@ export const ChannelRoutes = lazy(() =>
             content: {
               "application/json": {
                 schema: resolver(
-                  ChannelRegistry.Info.pick({ id: true }).omit({ id: true }).extend({
-                    status: ChannelRegistry.Info.shape.runtime_status,
-                    detail: ChannelRegistry.Info.shape.runtime_detail,
-                    channels: ChannelRegistry.Info.shape.id.array(),
-                    logs: ChannelRegistry.Info.shape.runtime_detail.array(),
-                    running: ChannelRegistry.Info.shape.runtime_status.transform((item) => item === "running"),
-                  }),
+                  ChannelRegistry.Info.pick({ id: true })
+                    .omit({ id: true })
+                    .extend({
+                      status: ChannelRegistry.Info.shape.runtime_status,
+                      detail: ChannelRegistry.Info.shape.runtime_detail,
+                      channels: ChannelRegistry.Info.shape.id.array(),
+                      logs: ChannelRegistry.Info.shape.runtime_detail.array(),
+                      running: ChannelRegistry.Info.shape.runtime_status.transform((item) => item === "running"),
+                    }),
                 ),
               },
             },

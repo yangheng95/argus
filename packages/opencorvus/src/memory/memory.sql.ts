@@ -2,7 +2,6 @@ import { sqliteTable, text, integer, index, blob } from "drizzle-orm/sqlite-core
 import { ProjectTable } from "../project/project.sql"
 import { Timestamps } from "@/storage/schema.sql"
 
-export type MemoryScope = "global" | "session"
 export type MemoryKind = "note" | "episode" | "fact" | "lesson" | "profile"
 export type MemorySource = "agent" | "compaction" | "user" | "reflection"
 
@@ -13,8 +12,6 @@ export const MemoryFileTable = sqliteTable(
     project_id: text()
       .notNull()
       .references(() => ProjectTable.id, { onDelete: "cascade" }),
-    session_id: text(),
-    scope: text().notNull().$type<MemoryScope>().default("global"),
     title: text().notNull(),
     source: text().notNull().$type<MemorySource>(),
     kind: text().notNull().$type<MemoryKind>().default("note"),
@@ -25,8 +22,6 @@ export const MemoryFileTable = sqliteTable(
   },
   (table) => [
     index("memory_file_project_idx").on(table.project_id),
-    index("memory_file_scope_idx").on(table.scope),
-    index("memory_file_session_idx").on(table.session_id),
     index("memory_file_kind_idx").on(table.kind),
     index("memory_file_key_idx").on(table.key),
   ],

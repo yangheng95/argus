@@ -1,0 +1,7680 @@
+[
+  {
+    "id": "user-0554",
+    "uid": "1823300554",
+    "name": "user-0554",
+    "tier": "D",
+    "status": "沉睡",
+    "total_questions": 850,
+    "active_days": 87,
+    "daily_questions": 9.8,
+    "avg_len": 59,
+    "recent_31d": 0,
+    "total_tags": 19,
+    "stat_ratio": 11,
+    "abstract_ratio": 89,
+    "inactive_days": 51,
+    "dimensions": [
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 6
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 4
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 2
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 2
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 2
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 1
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 1
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      }
+    ],
+    "top_dimension": "App Behavior Analysis",
+    "interaction_mode": "standard",
+    "capability": {},
+    "seed": null,
+    "has_avatar": true
+  },
+  {
+    "id": "user-1001",
+    "uid": "1803911001",
+    "name": "user-1001",
+    "tier": "S",
+    "status": "活跃",
+    "total_questions": 6852,
+    "active_days": 228,
+    "daily_questions": 30.1,
+    "avg_len": 135,
+    "recent_31d": 638,
+    "total_tags": 52,
+    "stat_ratio": 60,
+    "abstract_ratio": 40,
+    "inactive_days": 1,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 22
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 10
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 6
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 5
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 4
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 3
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 2
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "deep",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 4.5,
+      "position_mgmt": 5.5,
+      "risk_control": 5.5,
+      "trading_discipline": 4.5,
+      "market_timing": 5.5,
+      "construction": 4.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1002",
+    "uid": "1815621002",
+    "name": "user-1002",
+    "tier": "A",
+    "status": "活跃",
+    "total_questions": 5124,
+    "active_days": 198,
+    "daily_questions": 25.9,
+    "avg_len": 78,
+    "recent_31d": 542,
+    "total_tags": 85,
+    "stat_ratio": 28,
+    "abstract_ratio": 72,
+    "inactive_days": 3,
+    "dimensions": [
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 18
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 14
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 12
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 11
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 9
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 7
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 6
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 5
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 3
+      }
+    ],
+    "top_dimension": "Emotion And Psychology",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 5.5,
+      "position_mgmt": 5.5,
+      "risk_control": 5.5,
+      "trading_discipline": 5.5,
+      "market_timing": 5.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1003",
+    "uid": "1828741003",
+    "name": "user-1003",
+    "tier": "B",
+    "status": "活跃",
+    "total_questions": 2896,
+    "active_days": 185,
+    "daily_questions": 15.7,
+    "avg_len": 0,
+    "recent_31d": 89,
+    "total_tags": 38,
+    "stat_ratio": 21,
+    "abstract_ratio": 79,
+    "inactive_days": 4,
+    "dimensions": [
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 10
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 7
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 6
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 5
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 4
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 3
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 2
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      }
+    ],
+    "top_dimension": "App Behavior Analysis",
+    "interaction_mode": "click",
+    "capability": {
+      "instrument_selection": 4.5,
+      "profitability": 4.5,
+      "position_mgmt": 5.5,
+      "risk_control": 4.5,
+      "trading_discipline": 5.5,
+      "market_timing": 4.5,
+      "construction": 4.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1004",
+    "uid": "1834151004",
+    "name": "user-1004",
+    "tier": "C",
+    "status": "活跃",
+    "total_questions": 1568,
+    "active_days": 98,
+    "daily_questions": 16.0,
+    "avg_len": 142,
+    "recent_31d": 12,
+    "total_tags": 42,
+    "stat_ratio": 31,
+    "abstract_ratio": 69,
+    "inactive_days": 12,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 11
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 8
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 7
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 5
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 4
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 3
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 2
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 2
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "deep",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 5.5,
+      "position_mgmt": 4.5,
+      "risk_control": 5.5,
+      "trading_discipline": 4.5,
+      "market_timing": 5.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1005",
+    "uid": "1846281005",
+    "name": "user-1005",
+    "tier": "D",
+    "status": "沉睡",
+    "total_questions": 720,
+    "active_days": 82,
+    "daily_questions": 8.8,
+    "avg_len": 52,
+    "recent_31d": 0,
+    "total_tags": 16,
+    "stat_ratio": 19,
+    "abstract_ratio": 81,
+    "inactive_days": 45,
+    "dimensions": [
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 5
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 3
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 2
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 2
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 2
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 1
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Logic",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 2.5,
+      "profitability": 2.5,
+      "position_mgmt": 2.5,
+      "risk_control": 2.5,
+      "trading_discipline": 2.5,
+      "market_timing": 2.5,
+      "construction": 2.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1006",
+    "uid": "1845121006",
+    "name": "user-1006",
+    "tier": "S",
+    "status": "活跃",
+    "total_questions": 5892,
+    "active_days": 198,
+    "daily_questions": 29.8,
+    "avg_len": 88,
+    "recent_31d": 634,
+    "total_tags": 56,
+    "stat_ratio": 32,
+    "abstract_ratio": 68,
+    "inactive_days": 1,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 14
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 10
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 8
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 7
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 6
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 5
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 4
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 2
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 4.5,
+      "position_mgmt": 5.5,
+      "risk_control": 5.5,
+      "trading_discipline": 4.5,
+      "market_timing": 5.5,
+      "construction": 2.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1007",
+    "uid": "1817231007",
+    "name": "user-1007",
+    "tier": "A",
+    "status": "活跃",
+    "total_questions": 4321,
+    "active_days": 166,
+    "daily_questions": 26.0,
+    "avg_len": 45,
+    "recent_31d": 512,
+    "total_tags": 72,
+    "stat_ratio": 29,
+    "abstract_ratio": 71,
+    "inactive_days": 3,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 16
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 12
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 10
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 9
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 8
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 6
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 5
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 4
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 2
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "concise",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 5.5,
+      "position_mgmt": 5.5,
+      "risk_control": 5.5,
+      "trading_discipline": 5.5,
+      "market_timing": 5.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1008",
+    "uid": "1860451008",
+    "name": "user-1008",
+    "tier": "B",
+    "status": "预警",
+    "total_questions": 2987,
+    "active_days": 191,
+    "daily_questions": 15.6,
+    "avg_len": 0,
+    "recent_31d": 12,
+    "total_tags": 38,
+    "stat_ratio": 21,
+    "abstract_ratio": 79,
+    "inactive_days": 23,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 9
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 7
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 6
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 5
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 4
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 3
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 2
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 2
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "click",
+    "capability": {
+      "instrument_selection": 4.5,
+      "profitability": 2.5,
+      "position_mgmt": 5.5,
+      "risk_control": 4.5,
+      "trading_discipline": 2.5,
+      "market_timing": 4.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1009",
+    "uid": "1833671009",
+    "name": "user-1009",
+    "tier": "B",
+    "status": "沉睡",
+    "total_questions": 2156,
+    "active_days": 130,
+    "daily_questions": 16.6,
+    "avg_len": 153,
+    "recent_31d": 0,
+    "total_tags": 52,
+    "stat_ratio": 31,
+    "abstract_ratio": 69,
+    "inactive_days": 68,
+    "dimensions": [
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 9
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 7
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 6
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 6
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 5
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 4
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 3
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 3
+      },
+      {
+        "name": "Personalization And Rules",
+        "cn": "个性化与规则",
+        "count": 3
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 2
+      },
+      {
+        "name": "Executable",
+        "cn": "可执行性",
+        "count": 2
+      },
+      {
+        "name": "Idea And Note",
+        "cn": "观点与笔记",
+        "count": 2
+      }
+    ],
+    "top_dimension": "Background",
+    "interaction_mode": "deep",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 5.5,
+      "position_mgmt": 5.5,
+      "risk_control": 4.5,
+      "trading_discipline": 5.5,
+      "market_timing": 5.5,
+      "construction": 4.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1010",
+    "uid": "1898901010",
+    "name": "user-1010",
+    "tier": "D",
+    "status": "沉睡",
+    "total_questions": 765,
+    "active_days": 78,
+    "daily_questions": 9.8,
+    "avg_len": 59,
+    "recent_31d": 0,
+    "total_tags": 22,
+    "stat_ratio": 14,
+    "abstract_ratio": 86,
+    "inactive_days": 45,
+    "dimensions": [
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 7
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 5
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 3
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 2
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 2
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 1
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 1
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      }
+    ],
+    "top_dimension": "App Behavior Analysis",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 2.5,
+      "profitability": 2.5,
+      "position_mgmt": 2.5,
+      "risk_control": 2.5,
+      "trading_discipline": 2.5,
+      "market_timing": 2.5,
+      "construction": 2.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1011",
+    "uid": "1801231011",
+    "name": "user-1011",
+    "tier": "S",
+    "status": "活跃",
+    "total_questions": 6254,
+    "active_days": 210,
+    "daily_questions": 29.8,
+    "avg_len": 95,
+    "recent_31d": 856,
+    "total_tags": 55,
+    "stat_ratio": 60,
+    "abstract_ratio": 40,
+    "inactive_days": 1,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 18
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 12
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 8
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 5
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 4
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 4
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 3
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 8,
+      "profitability": 5.5,
+      "position_mgmt": 6.5,
+      "risk_control": 2.5,
+      "trading_discipline": 5.5,
+      "market_timing": 8,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1012",
+    "uid": "1814561012",
+    "name": "user-1012",
+    "tier": "A",
+    "status": "活跃",
+    "total_questions": 4120,
+    "active_days": 158,
+    "daily_questions": 26.1,
+    "avg_len": 72,
+    "recent_31d": 645,
+    "total_tags": 82,
+    "stat_ratio": 29,
+    "abstract_ratio": 71,
+    "inactive_days": 3,
+    "dimensions": [
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 16
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 14
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 12
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 10
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 8
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 7
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 6
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 5
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 3
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Emotion And Psychology",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 5.5,
+      "position_mgmt": 5.5,
+      "risk_control": 6.5,
+      "trading_discipline": 5.5,
+      "market_timing": 4.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1013",
+    "uid": "1827891013",
+    "name": "user-1013",
+    "tier": "B",
+    "status": "活跃",
+    "total_questions": 2890,
+    "active_days": 185,
+    "daily_questions": 15.6,
+    "avg_len": 0,
+    "recent_31d": 89,
+    "total_tags": 38,
+    "stat_ratio": 26,
+    "abstract_ratio": 74,
+    "inactive_days": 7,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 10
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 8
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 6
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 5
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 4
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 3
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 2
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "click",
+    "capability": {
+      "instrument_selection": 4.5,
+      "profitability": 5.5,
+      "position_mgmt": 4.5,
+      "risk_control": 5.5,
+      "trading_discipline": 4.5,
+      "market_timing": 5.5,
+      "construction": 4.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1014",
+    "uid": "1830121014",
+    "name": "user-1014",
+    "tier": "B",
+    "status": "沉睡",
+    "total_questions": 1825,
+    "active_days": 110,
+    "daily_questions": 16.6,
+    "avg_len": 153,
+    "recent_31d": 0,
+    "total_tags": 42,
+    "stat_ratio": 31,
+    "abstract_ratio": 69,
+    "inactive_days": 68,
+    "dimensions": [
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 9
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 7
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 6
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 5
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 4
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 3
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 3
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 2
+      },
+      {
+        "name": "Personalization And Rules",
+        "cn": "个性化与规则",
+        "count": 2
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Logic",
+    "interaction_mode": "deep",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 4.5,
+      "position_mgmt": 5.5,
+      "risk_control": 6.5,
+      "trading_discipline": 4.5,
+      "market_timing": 5.5,
+      "construction": 6.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1015",
+    "uid": "1845671015",
+    "name": "user-1015",
+    "tier": "D",
+    "status": "沉睡",
+    "total_questions": 720,
+    "active_days": 74,
+    "daily_questions": 9.7,
+    "avg_len": 59,
+    "recent_31d": 0,
+    "total_tags": 16,
+    "stat_ratio": 6,
+    "abstract_ratio": 94,
+    "inactive_days": 45,
+    "dimensions": [
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 5
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 4
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 2
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 2
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 1
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Logic",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 2.5,
+      "profitability": 2.5,
+      "position_mgmt": 2.5,
+      "risk_control": 2.5,
+      "trading_discipline": 2.5,
+      "market_timing": 2.5,
+      "construction": 2.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1016",
+    "uid": "1810161016",
+    "name": "user-1016",
+    "tier": "S",
+    "status": "活跃",
+    "total_questions": 6850,
+    "active_days": 228,
+    "daily_questions": 30.0,
+    "avg_len": 88,
+    "recent_31d": 645,
+    "total_tags": 56,
+    "stat_ratio": 32,
+    "abstract_ratio": 68,
+    "inactive_days": 1,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 16
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 10
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 8
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 6
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 5
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 4
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 4
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 3
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 8,
+      "profitability": 5.5,
+      "position_mgmt": 8,
+      "risk_control": 4.5,
+      "trading_discipline": 2.5,
+      "market_timing": 5.5,
+      "construction": 8
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1017",
+    "uid": "1820171017",
+    "name": "user-1017",
+    "tier": "A",
+    "status": "活跃",
+    "total_questions": 4126,
+    "active_days": 168,
+    "daily_questions": 24.6,
+    "avg_len": 45,
+    "recent_31d": 532,
+    "total_tags": 72,
+    "stat_ratio": 49,
+    "abstract_ratio": 51,
+    "inactive_days": 3,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 18
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 12
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 10
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 8
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 7
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 6
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 5
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 4
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 2
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "concise",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 6.5,
+      "position_mgmt": 5.5,
+      "risk_control": 5.5,
+      "trading_discipline": 6.5,
+      "market_timing": 4.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1018",
+    "uid": "1830181018",
+    "name": "user-1018",
+    "tier": "B",
+    "status": "活跃",
+    "total_questions": 2890,
+    "active_days": 195,
+    "daily_questions": 14.8,
+    "avg_len": 0,
+    "recent_31d": 89,
+    "total_tags": 38,
+    "stat_ratio": 21,
+    "abstract_ratio": 79,
+    "inactive_days": 7,
+    "dimensions": [
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 9
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 7
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 6
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 5
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 4
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 3
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 2
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 2
+      }
+    ],
+    "top_dimension": "Investment Logic",
+    "interaction_mode": "click",
+    "capability": {
+      "instrument_selection": 4.5,
+      "profitability": 5.5,
+      "position_mgmt": 4.5,
+      "risk_control": 5.5,
+      "trading_discipline": 5.5,
+      "market_timing": 4.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1019",
+    "uid": "1840191019",
+    "name": "user-1019",
+    "tier": "B",
+    "status": "沉睡",
+    "total_questions": 1560,
+    "active_days": 102,
+    "daily_questions": 15.3,
+    "avg_len": 128,
+    "recent_31d": 0,
+    "total_tags": 42,
+    "stat_ratio": 29,
+    "abstract_ratio": 71,
+    "inactive_days": 63,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 10
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 8
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 7
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 5
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 4
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 3
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 3
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 2
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "deep",
+    "capability": {
+      "instrument_selection": 2.5,
+      "profitability": 4.5,
+      "position_mgmt": 4.5,
+      "risk_control": 2.5,
+      "trading_discipline": 4.5,
+      "market_timing": 4.5,
+      "construction": 2.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1020",
+    "uid": "1850201020",
+    "name": "user-1020",
+    "tier": "D",
+    "status": "沉睡",
+    "total_questions": 680,
+    "active_days": 72,
+    "daily_questions": 9.4,
+    "avg_len": 52,
+    "recent_31d": 0,
+    "total_tags": 15,
+    "stat_ratio": 7,
+    "abstract_ratio": 93,
+    "inactive_days": 89,
+    "dimensions": [
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 5
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 3
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 2
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 2
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 1
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Logic",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 2.5,
+      "profitability": 2.5,
+      "position_mgmt": 2.5,
+      "risk_control": 4.5,
+      "trading_discipline": 2.5,
+      "market_timing": 2.5,
+      "construction": 2.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1021",
+    "uid": "1836211021",
+    "name": "user-1021",
+    "tier": "S",
+    "status": "活跃",
+    "total_questions": 6524,
+    "active_days": 218,
+    "daily_questions": 29.9,
+    "avg_len": 134,
+    "recent_31d": 587,
+    "total_tags": 52,
+    "stat_ratio": 60,
+    "abstract_ratio": 40,
+    "inactive_days": 1,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 18
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 12
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 7
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 5
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 4
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 3
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 2
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "deep",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 4.5,
+      "position_mgmt": 5.5,
+      "risk_control": 4.5,
+      "trading_discipline": 4.5,
+      "market_timing": 5.5,
+      "construction": 4.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1022",
+    "uid": "1819051022",
+    "name": "user-1022",
+    "tier": "A",
+    "status": "活跃",
+    "total_questions": 4956,
+    "active_days": 190,
+    "daily_questions": 26.1,
+    "avg_len": 82,
+    "recent_31d": 634,
+    "total_tags": 86,
+    "stat_ratio": 29,
+    "abstract_ratio": 71,
+    "inactive_days": 3,
+    "dimensions": [
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 16
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 14
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 12
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 11
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 8
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 7
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 6
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 5
+      },
+      {
+        "name": "Personalization And Rules",
+        "cn": "个性化与规则",
+        "count": 4
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 2
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Emotion And Psychology",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 5.5,
+      "position_mgmt": 5.5,
+      "risk_control": 5.5,
+      "trading_discipline": 5.5,
+      "market_timing": 5.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1023",
+    "uid": "1804381023",
+    "name": "user-1023",
+    "tier": "B",
+    "status": "活跃",
+    "total_questions": 3126,
+    "active_days": 200,
+    "daily_questions": 15.6,
+    "avg_len": 0,
+    "recent_31d": 156,
+    "total_tags": 58,
+    "stat_ratio": 22,
+    "abstract_ratio": 78,
+    "inactive_days": 4,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 14
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 12
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 9
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 8
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 6
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 4
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 3
+      },
+      {
+        "name": "Personalization And Rules",
+        "cn": "个性化与规则",
+        "count": 2
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "click",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 5.5,
+      "position_mgmt": 4.5,
+      "risk_control": 5.5,
+      "trading_discipline": 4.5,
+      "market_timing": 5.5,
+      "construction": 4.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1024",
+    "uid": "1821561024",
+    "name": "user-1024",
+    "tier": "B",
+    "status": "沉睡",
+    "total_questions": 2156,
+    "active_days": 130,
+    "daily_questions": 16.6,
+    "avg_len": 153,
+    "recent_31d": 0,
+    "total_tags": 44,
+    "stat_ratio": 30,
+    "abstract_ratio": 70,
+    "inactive_days": 68,
+    "dimensions": [
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 9
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 7
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 6
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 5
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 4
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 4
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 3
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 3
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 2
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Background",
+    "interaction_mode": "deep",
+    "capability": {
+      "instrument_selection": 4.5,
+      "profitability": 5.5,
+      "position_mgmt": 4.5,
+      "risk_control": 5.5,
+      "trading_discipline": 4.5,
+      "market_timing": 4.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1025",
+    "uid": "1817721025",
+    "name": "user-1025",
+    "tier": "D",
+    "status": "沉睡",
+    "total_questions": 784,
+    "active_days": 80,
+    "daily_questions": 9.8,
+    "avg_len": 59,
+    "recent_31d": 0,
+    "total_tags": 21,
+    "stat_ratio": 5,
+    "abstract_ratio": 95,
+    "inactive_days": 82,
+    "dimensions": [
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 6
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 5
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 3
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 2
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 2
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 1
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Logic",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 2.5,
+      "profitability": 2.5,
+      "position_mgmt": 2.5,
+      "risk_control": 4.5,
+      "trading_discipline": 2.5,
+      "market_timing": 2.5,
+      "construction": 2.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1026",
+    "uid": "1810231026",
+    "name": "user-1026",
+    "tier": "S",
+    "status": "活跃",
+    "total_questions": 6892,
+    "active_days": 228,
+    "daily_questions": 30.2,
+    "avg_len": 88,
+    "recent_31d": 756,
+    "total_tags": 72,
+    "stat_ratio": 60,
+    "abstract_ratio": 40,
+    "inactive_days": 1,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 22
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 12
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 10
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 8
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 6
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 5
+      },
+      {
+        "name": "Market Timing",
+        "cn": "Market Timing",
+        "count": 4
+      },
+      {
+        "name": "Executable",
+        "cn": "可执行性",
+        "count": 3
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 2
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "standard",
+    "capability": {
+      "market_timing": 2.5,
+      "instrument_selection": 2.5,
+      "profitability": 2.5,
+      "position_mgmt": 2.5,
+      "risk_control": 2.5,
+      "trading_discipline": 2.5,
+      "construction": 2.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1027",
+    "uid": "1823471027",
+    "name": "user-1027",
+    "tier": "A",
+    "status": "活跃",
+    "total_questions": 5124,
+    "active_days": 198,
+    "daily_questions": 25.9,
+    "avg_len": 45,
+    "recent_31d": 634,
+    "total_tags": 55,
+    "stat_ratio": 29,
+    "abstract_ratio": 71,
+    "inactive_days": 3,
+    "dimensions": [
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 14
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 12
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 10
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 8
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 6
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 3
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 2
+      }
+    ],
+    "top_dimension": "Emotion And Psychology",
+    "interaction_mode": "concise",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 5.5,
+      "position_mgmt": 5.5,
+      "risk_control": 5.5,
+      "trading_discipline": 5.5,
+      "market_timing": 5.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1028",
+    "uid": "1801561028",
+    "name": "user-1028",
+    "tier": "B",
+    "status": "预警",
+    "total_questions": 3126,
+    "active_days": 205,
+    "daily_questions": 15.2,
+    "avg_len": 0,
+    "recent_31d": 12,
+    "total_tags": 38,
+    "stat_ratio": 21,
+    "abstract_ratio": 79,
+    "inactive_days": 23,
+    "dimensions": [
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 9
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 8
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 7
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 5
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 4
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 3
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 2
+      }
+    ],
+    "top_dimension": "App Behavior Analysis",
+    "interaction_mode": "click",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 4.5,
+      "position_mgmt": 4.5,
+      "risk_control": 5.5,
+      "trading_discipline": 4.5,
+      "market_timing": 5.5,
+      "construction": 4.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1029",
+    "uid": "1834291029",
+    "name": "user-1029",
+    "tier": "C",
+    "status": "沉睡",
+    "total_questions": 1985,
+    "active_days": 125,
+    "daily_questions": 15.9,
+    "avg_len": 142,
+    "recent_31d": 0,
+    "total_tags": 52,
+    "stat_ratio": 35,
+    "abstract_ratio": 65,
+    "inactive_days": 82,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 14
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 9
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 8
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 6
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 5
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 4
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 3
+      },
+      {
+        "name": "Personalization And Rules",
+        "cn": "个性化与规则",
+        "count": 2
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "deep",
+    "capability": {},
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1030",
+    "uid": "1845011030",
+    "name": "user-1030",
+    "tier": "D",
+    "status": "沉睡",
+    "total_questions": 756,
+    "active_days": 82,
+    "daily_questions": 9.2,
+    "avg_len": 52,
+    "recent_31d": 0,
+    "total_tags": 22,
+    "stat_ratio": 14,
+    "abstract_ratio": 86,
+    "inactive_days": 95,
+    "dimensions": [
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 6
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 5
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 3
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 3
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 2
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 1
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 1
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Logic",
+    "interaction_mode": "standard",
+    "capability": {},
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1031",
+    "uid": "1824101031",
+    "name": "user-1031",
+    "tier": "S",
+    "status": "活跃",
+    "total_questions": 6854,
+    "active_days": 228,
+    "daily_questions": 30.1,
+    "avg_len": 88,
+    "recent_31d": 756,
+    "total_tags": 52,
+    "stat_ratio": 60,
+    "abstract_ratio": 40,
+    "inactive_days": 1,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 22
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 8
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 6
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 5
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 4
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 3
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 2
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 2
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 2.5,
+      "profitability": 2.5,
+      "position_mgmt": 2.5,
+      "risk_control": 2.5,
+      "trading_discipline": 2.5,
+      "market_timing": 2.5,
+      "construction": 2.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1032",
+    "uid": "1825101032",
+    "name": "user-1032",
+    "tier": "A",
+    "status": "活跃",
+    "total_questions": 5123,
+    "active_days": 196,
+    "daily_questions": 26.1,
+    "avg_len": 67,
+    "recent_31d": 634,
+    "total_tags": 85,
+    "stat_ratio": 29,
+    "abstract_ratio": 71,
+    "inactive_days": 2,
+    "dimensions": [
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 18
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 14
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 12
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 10
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 8
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 7
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 6
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 5
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 3
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 2
+      }
+    ],
+    "top_dimension": "Emotion And Psychology",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 5.5,
+      "position_mgmt": 5.5,
+      "risk_control": 5.5,
+      "trading_discipline": 5.5,
+      "market_timing": 5.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1033",
+    "uid": "1826101033",
+    "name": "user-1033",
+    "tier": "B",
+    "status": "预警",
+    "total_questions": 3421,
+    "active_days": 219,
+    "daily_questions": 15.6,
+    "avg_len": 0,
+    "recent_31d": 7,
+    "total_tags": 58,
+    "stat_ratio": 24,
+    "abstract_ratio": 76,
+    "inactive_days": 25,
+    "dimensions": [
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 12
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 11
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 9
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 8
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 6
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 4
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 3
+      },
+      {
+        "name": "Personalization And Rules",
+        "cn": "个性化与规则",
+        "count": 2
+      },
+      {
+        "name": "Executable",
+        "cn": "可执行性",
+        "count": 2
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      }
+    ],
+    "top_dimension": "App Behavior Analysis",
+    "interaction_mode": "click",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 4.5,
+      "position_mgmt": 5.5,
+      "risk_control": 4.5,
+      "trading_discipline": 4.5,
+      "market_timing": 4.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1034",
+    "uid": "1827101034",
+    "name": "user-1034",
+    "tier": "B",
+    "status": "沉睡",
+    "total_questions": 1987,
+    "active_days": 120,
+    "daily_questions": 16.6,
+    "avg_len": 153,
+    "recent_31d": 0,
+    "total_tags": 45,
+    "stat_ratio": 31,
+    "abstract_ratio": 69,
+    "inactive_days": 68,
+    "dimensions": [
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 9
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 7
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 6
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 5
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 4
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 3
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 3
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 3
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 2
+      },
+      {
+        "name": "Personalization And Rules",
+        "cn": "个性化与规则",
+        "count": 2
+      },
+      {
+        "name": "Executable",
+        "cn": "可执行性",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Background",
+    "interaction_mode": "deep",
+    "capability": {
+      "instrument_selection": 4.5,
+      "profitability": 5.5,
+      "position_mgmt": 4.5,
+      "risk_control": 5.5,
+      "trading_discipline": 4.5,
+      "market_timing": 5.5,
+      "construction": 4.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1035",
+    "uid": "1828101035",
+    "name": "user-1035",
+    "tier": "D",
+    "status": "沉睡",
+    "total_questions": 912,
+    "active_days": 93,
+    "daily_questions": 9.8,
+    "avg_len": 59,
+    "recent_31d": 0,
+    "total_tags": 20,
+    "stat_ratio": 5,
+    "abstract_ratio": 95,
+    "inactive_days": 56,
+    "dimensions": [
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 5
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 4
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 3
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 2
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 2
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 1
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 1
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      },
+      {
+        "name": "Personalization And Rules",
+        "cn": "个性化与规则",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Logic",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 2.5,
+      "profitability": 2.5,
+      "position_mgmt": 2.5,
+      "risk_control": 2.5,
+      "trading_discipline": 2.5,
+      "market_timing": 2.5,
+      "construction": 2.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1036",
+    "uid": "1836921036",
+    "name": "user-1036",
+    "tier": "S",
+    "status": "活跃",
+    "total_questions": 6852,
+    "active_days": 228,
+    "daily_questions": 30.1,
+    "avg_len": 95,
+    "recent_31d": 623,
+    "total_tags": 42,
+    "stat_ratio": 60,
+    "abstract_ratio": 40,
+    "inactive_days": 1,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 18
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 7
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 5
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 4
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 3
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 2
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 1
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 4.5,
+      "profitability": 4.5,
+      "position_mgmt": 5.5,
+      "risk_control": 4.5,
+      "trading_discipline": 2.5,
+      "market_timing": 5.5,
+      "construction": 4.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1037",
+    "uid": "1847151037",
+    "name": "user-1037",
+    "tier": "A",
+    "status": "活跃",
+    "total_questions": 5124,
+    "active_days": 198,
+    "daily_questions": 25.9,
+    "avg_len": 68,
+    "recent_31d": 534,
+    "total_tags": 55,
+    "stat_ratio": 29,
+    "abstract_ratio": 71,
+    "inactive_days": 3,
+    "dimensions": [
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 14
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 10
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 9
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 7
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 5
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 4
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 3
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 2
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Logic",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 5.5,
+      "position_mgmt": 6.5,
+      "risk_control": 5.5,
+      "trading_discipline": 4.5,
+      "market_timing": 5.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1038",
+    "uid": "1850281038",
+    "name": "user-1038",
+    "tier": "B",
+    "status": "活跃",
+    "total_questions": 3126,
+    "active_days": 201,
+    "daily_questions": 15.5,
+    "avg_len": 0,
+    "recent_31d": 89,
+    "total_tags": 38,
+    "stat_ratio": 21,
+    "abstract_ratio": 79,
+    "inactive_days": 4,
+    "dimensions": [
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 9
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 7
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 6
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 5
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 4
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 3
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 2
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 1
+      }
+    ],
+    "top_dimension": "App Behavior Analysis",
+    "interaction_mode": "click",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 5.5,
+      "position_mgmt": 5.5,
+      "risk_control": 5.5,
+      "trading_discipline": 4.5,
+      "market_timing": 5.5,
+      "construction": 4.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1039",
+    "uid": "1863411039",
+    "name": "user-1039",
+    "tier": "B",
+    "status": "沉睡",
+    "total_questions": 1985,
+    "active_days": 120,
+    "daily_questions": 16.5,
+    "avg_len": 142,
+    "recent_31d": 0,
+    "total_tags": 35,
+    "stat_ratio": 29,
+    "abstract_ratio": 71,
+    "inactive_days": 62,
+    "dimensions": [
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 7
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 6
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 5
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 5
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 4
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 3
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 2
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 1
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Background",
+    "interaction_mode": "deep",
+    "capability": {
+      "instrument_selection": 4.5,
+      "profitability": 4.5,
+      "position_mgmt": 5.5,
+      "risk_control": 4.5,
+      "trading_discipline": 2.5,
+      "market_timing": 4.5,
+      "construction": 4.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1040",
+    "uid": "1876541040",
+    "name": "user-1040",
+    "tier": "D",
+    "status": "沉睡",
+    "total_questions": 756,
+    "active_days": 78,
+    "daily_questions": 9.7,
+    "avg_len": 52,
+    "recent_31d": 0,
+    "total_tags": 16,
+    "stat_ratio": 12,
+    "abstract_ratio": 88,
+    "inactive_days": 85,
+    "dimensions": [
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 5
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 3
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 2
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 2
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 1
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 1
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Logic",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 2.5,
+      "profitability": 2.5,
+      "position_mgmt": 4.5,
+      "risk_control": 2.5,
+      "trading_discipline": 2.5,
+      "market_timing": 4.5,
+      "construction": 2.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1041",
+    "uid": "1824511041",
+    "name": "user-1041",
+    "tier": "S",
+    "status": "活跃",
+    "total_questions": 6892,
+    "active_days": 231,
+    "daily_questions": 29.8,
+    "avg_len": 148,
+    "recent_31d": 612,
+    "total_tags": 55,
+    "stat_ratio": 51,
+    "abstract_ratio": 49,
+    "inactive_days": 1,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 24
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 11
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 7
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 5
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 4
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 3
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "deep",
+    "capability": {
+      "instrument_selection": 2.5,
+      "profitability": 2.5,
+      "position_mgmt": 2.5,
+      "risk_control": 2.5,
+      "trading_discipline": 2.5,
+      "market_timing": 2.5,
+      "construction": 2.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1042",
+    "uid": "1818921042",
+    "name": "user-1042",
+    "tier": "A",
+    "status": "活跃",
+    "total_questions": 4682,
+    "active_days": 179,
+    "daily_questions": 26.2,
+    "avg_len": 68,
+    "recent_31d": 756,
+    "total_tags": 95,
+    "stat_ratio": 28,
+    "abstract_ratio": 72,
+    "inactive_days": 2,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 19
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 14
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 11
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 9
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 8
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 7
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 7
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 7
+      },
+      {
+        "name": "Personalization And Rules",
+        "cn": "个性化与规则",
+        "count": 3
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 2
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 2
+      },
+      {
+        "name": "Idea And Note",
+        "cn": "观点与笔记",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "standard",
+    "capability": {},
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1043",
+    "uid": "1831041043",
+    "name": "user-1043",
+    "tier": "B",
+    "status": "预警",
+    "total_questions": 3654,
+    "active_days": 234,
+    "daily_questions": 15.6,
+    "avg_len": 0,
+    "recent_31d": 3,
+    "total_tags": 62,
+    "stat_ratio": 23,
+    "abstract_ratio": 77,
+    "inactive_days": 32,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 12
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 10
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 9
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 8
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 6
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 5
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 2
+      },
+      {
+        "name": "Personalization And Rules",
+        "cn": "个性化与规则",
+        "count": 2
+      },
+      {
+        "name": "Executable",
+        "cn": "可执行性",
+        "count": 2
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 1
+      },
+      {
+        "name": "Idea And Note",
+        "cn": "观点与笔记",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "click",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 4.5,
+      "position_mgmt": 5.5,
+      "risk_control": 4.5,
+      "trading_discipline": 4.5,
+      "market_timing": 4.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1044",
+    "uid": "1806781044",
+    "name": "user-1044",
+    "tier": "B",
+    "status": "沉睡",
+    "total_questions": 2324,
+    "active_days": 140,
+    "daily_questions": 16.6,
+    "avg_len": 155,
+    "recent_31d": 0,
+    "total_tags": 45,
+    "stat_ratio": 29,
+    "abstract_ratio": 71,
+    "inactive_days": 82,
+    "dimensions": [
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 7
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 5
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 5
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 4
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 4
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 3
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 3
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 3
+      },
+      {
+        "name": "Personalization And Rules",
+        "cn": "个性化与规则",
+        "count": 3
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 2
+      },
+      {
+        "name": "Executable",
+        "cn": "可执行性",
+        "count": 1
+      },
+      {
+        "name": "Idea And Note",
+        "cn": "观点与笔记",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Background",
+    "interaction_mode": "deep",
+    "capability": {},
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1045",
+    "uid": "1812341045",
+    "name": "user-1045",
+    "tier": "D",
+    "status": "沉睡",
+    "total_questions": 823,
+    "active_days": 84,
+    "daily_questions": 9.8,
+    "avg_len": 58,
+    "recent_31d": 0,
+    "total_tags": 18,
+    "stat_ratio": 11,
+    "abstract_ratio": 89,
+    "inactive_days": 56,
+    "dimensions": [
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 5
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 4
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 2
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 2
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 2
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 1
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 1
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      }
+    ],
+    "top_dimension": "App Behavior Analysis",
+    "interaction_mode": "standard",
+    "capability": {},
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1046",
+    "uid": "1867243590",
+    "name": "user-1046",
+    "tier": "S",
+    "status": "活跃",
+    "total_questions": 0,
+    "active_days": 0,
+    "daily_questions": 28.5,
+    "avg_len": 78,
+    "recent_31d": 0,
+    "total_tags": 0,
+    "stat_ratio": 55,
+    "abstract_ratio": 45,
+    "inactive_days": 0,
+    "dimensions": [
+      {
+        "name": "数据驱动",
+        "cn": "数据驱动",
+        "count": 11
+      },
+      {
+        "name": "量化分析",
+        "cn": "量化分析",
+        "count": 10
+      },
+      {
+        "name": "趋势追踪",
+        "cn": "趋势追踪",
+        "count": 9
+      },
+      {
+        "name": "统计验证",
+        "cn": "统计验证",
+        "count": 8
+      },
+      {
+        "name": "指标监控",
+        "cn": "指标监控",
+        "count": 7
+      },
+      {
+        "name": "规律总结",
+        "cn": "规律总结",
+        "count": 6
+      },
+      {
+        "name": "概念理解",
+        "cn": "概念理解",
+        "count": 5
+      },
+      {
+        "name": "模式识别",
+        "cn": "模式识别",
+        "count": 4
+      }
+    ],
+    "top_dimension": "数据驱动",
+    "interaction_mode": "standard",
+    "capability": {
+      "info_gathering": 7.0,
+      "analysis": 8.0,
+      "execution": 6.0,
+      "risk_control": 7.0,
+      "learning": 8.0,
+      "communication": 6.0,
+      "innovation": 7.0
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1047",
+    "uid": "1848392057",
+    "name": "user-1047",
+    "tier": "A",
+    "status": "活跃",
+    "total_questions": 0,
+    "active_days": 0,
+    "daily_questions": 24.3,
+    "avg_len": 142,
+    "recent_31d": 0,
+    "total_tags": 0,
+    "stat_ratio": 32,
+    "abstract_ratio": 68,
+    "inactive_days": 0,
+    "dimensions": [
+      {
+        "name": "数据参考",
+        "cn": "数据参考",
+        "count": 13
+      },
+      {
+        "name": "指标关注",
+        "cn": "指标关注",
+        "count": 12
+      },
+      {
+        "name": "基础统计",
+        "cn": "基础统计",
+        "count": 11
+      },
+      {
+        "name": "数值验证",
+        "cn": "数值验证",
+        "count": 10
+      },
+      {
+        "name": "趋势观察",
+        "cn": "趋势观察",
+        "count": 9
+      },
+      {
+        "name": "深度洞察",
+        "cn": "深度洞察",
+        "count": 8
+      },
+      {
+        "name": "概念建构",
+        "cn": "概念建构",
+        "count": 7
+      },
+      {
+        "name": "理论推演",
+        "cn": "理论推演",
+        "count": 6
+      }
+    ],
+    "top_dimension": "数据参考",
+    "interaction_mode": "deep",
+    "capability": {
+      "info_gathering": 8.0,
+      "analysis": 9.0,
+      "execution": 7.0,
+      "risk_control": 6.0,
+      "learning": 8.0,
+      "communication": 7.0,
+      "innovation": 9.0
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1048",
+    "uid": "1890567234",
+    "name": "user-1048",
+    "tier": "B",
+    "status": "预警",
+    "total_questions": 0,
+    "active_days": 0,
+    "daily_questions": 16.8,
+    "avg_len": 0,
+    "recent_31d": 0,
+    "total_tags": 0,
+    "stat_ratio": 18,
+    "abstract_ratio": 82,
+    "inactive_days": 0,
+    "dimensions": [
+      {
+        "name": "数据浏览",
+        "cn": "数据浏览",
+        "count": 11
+      },
+      {
+        "name": "指标查看",
+        "cn": "指标查看",
+        "count": 10
+      },
+      {
+        "name": "基础关注",
+        "cn": "基础关注",
+        "count": 9
+      },
+      {
+        "name": "概念关注",
+        "cn": "概念关注",
+        "count": 8
+      },
+      {
+        "name": "模式感知",
+        "cn": "模式感知",
+        "count": 7
+      },
+      {
+        "name": "趋势直觉",
+        "cn": "趋势直觉",
+        "count": 6
+      },
+      {
+        "name": "价值认同",
+        "cn": "价值认同",
+        "count": 5
+      },
+      {
+        "name": "情感共鸣",
+        "cn": "情感共鸣",
+        "count": 4
+      }
+    ],
+    "top_dimension": "数据浏览",
+    "interaction_mode": "click",
+    "capability": {
+      "info_gathering": 5.0,
+      "analysis": 6.0,
+      "execution": 5.0,
+      "risk_control": 5.0,
+      "learning": 6.0,
+      "communication": 4.0,
+      "innovation": 6.0
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1049",
+    "uid": "1823456789",
+    "name": "user-1049",
+    "tier": "C",
+    "status": "沉睡",
+    "total_questions": 0,
+    "active_days": 0,
+    "daily_questions": 12.4,
+    "avg_len": 52,
+    "recent_31d": 0,
+    "total_tags": 0,
+    "stat_ratio": 42,
+    "abstract_ratio": 58,
+    "inactive_days": 0,
+    "dimensions": [
+      {
+        "name": "数据关注",
+        "cn": "数据关注",
+        "count": 11
+      },
+      {
+        "name": "指标追踪",
+        "cn": "指标追踪",
+        "count": 10
+      },
+      {
+        "name": "统计规律",
+        "cn": "统计规律",
+        "count": 9
+      },
+      {
+        "name": "数值比较",
+        "cn": "数值比较",
+        "count": 8
+      },
+      {
+        "name": "基础分析",
+        "cn": "基础分析",
+        "count": 7
+      },
+      {
+        "name": "事实核查",
+        "cn": "事实核查",
+        "count": 6
+      },
+      {
+        "name": "概念理解",
+        "cn": "概念理解",
+        "count": 5
+      },
+      {
+        "name": "模式识别",
+        "cn": "模式识别",
+        "count": 4
+      }
+    ],
+    "top_dimension": "数据关注",
+    "interaction_mode": "standard",
+    "capability": {
+      "info_gathering": 6.0,
+      "analysis": 7.0,
+      "execution": 5.0,
+      "risk_control": 7.0,
+      "learning": 6.0,
+      "communication": 5.0,
+      "innovation": 5.0
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1050",
+    "uid": "1876543210",
+    "name": "user-1050",
+    "tier": "D",
+    "status": "沉睡",
+    "total_questions": 0,
+    "active_days": 0,
+    "daily_questions": 8.6,
+    "avg_len": 35,
+    "recent_31d": 0,
+    "total_tags": 0,
+    "stat_ratio": 8,
+    "abstract_ratio": 92,
+    "inactive_days": 0,
+    "dimensions": [
+      {
+        "name": "基础数据",
+        "cn": "基础数据",
+        "count": 10
+      },
+      {
+        "name": "简单关注",
+        "cn": "简单关注",
+        "count": 9
+      },
+      {
+        "name": "概念认知",
+        "cn": "概念认知",
+        "count": 8
+      },
+      {
+        "name": "态度倾向",
+        "cn": "态度倾向",
+        "count": 7
+      },
+      {
+        "name": "价值判断",
+        "cn": "价值判断",
+        "count": 6
+      },
+      {
+        "name": "情感偏好",
+        "cn": "情感偏好",
+        "count": 5
+      },
+      {
+        "name": "兴趣标签",
+        "cn": "兴趣标签",
+        "count": 4
+      },
+      {
+        "name": "认知风格",
+        "cn": "认知风格",
+        "count": 3
+      }
+    ],
+    "top_dimension": "基础数据",
+    "interaction_mode": "concise",
+    "capability": {
+      "info_gathering": 4.0,
+      "analysis": 5.0,
+      "execution": 4.0,
+      "risk_control": 5.0,
+      "learning": 5.0,
+      "communication": 3.0,
+      "innovation": 4.0
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1051",
+    "uid": "1830211051",
+    "name": "user-1051",
+    "tier": "S",
+    "status": "活跃",
+    "total_questions": 6892,
+    "active_days": 228,
+    "daily_questions": 30.2,
+    "avg_len": 135,
+    "recent_31d": 856,
+    "total_tags": 55,
+    "stat_ratio": 33,
+    "abstract_ratio": 67,
+    "inactive_days": 1,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 16
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 12
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 9
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 7
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 5
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 3
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 2
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "deep",
+    "capability": {
+      "instrument_selection": 8,
+      "profitability": 5.5,
+      "position_mgmt": 5.5,
+      "risk_control": 8,
+      "trading_discipline": 2.5,
+      "market_timing": 5.5,
+      "construction": 8
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1052",
+    "uid": "1845671052",
+    "name": "user-1052",
+    "tier": "A",
+    "status": "活跃",
+    "total_questions": 5124,
+    "active_days": 198,
+    "daily_questions": 25.9,
+    "avg_len": 78,
+    "recent_31d": 634,
+    "total_tags": 72,
+    "stat_ratio": 31,
+    "abstract_ratio": 69,
+    "inactive_days": 3,
+    "dimensions": [
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 14
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 12
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 11
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 10
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 8
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 7
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 5
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 3
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 2
+      }
+    ],
+    "top_dimension": "Emotion And Psychology",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 5.5,
+      "position_mgmt": 5.5,
+      "risk_control": 5.5,
+      "trading_discipline": 5.5,
+      "market_timing": 5.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1053",
+    "uid": "1854321053",
+    "name": "user-1053",
+    "tier": "B",
+    "status": "活跃",
+    "total_questions": 2986,
+    "active_days": 192,
+    "daily_questions": 15.6,
+    "avg_len": 45,
+    "recent_31d": 312,
+    "total_tags": 38,
+    "stat_ratio": 42,
+    "abstract_ratio": 58,
+    "inactive_days": 4,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 11
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 8
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 6
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 5
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 4
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 2
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "concise",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 4.5,
+      "position_mgmt": 5.5,
+      "risk_control": 5.5,
+      "trading_discipline": 4.5,
+      "market_timing": 5.5,
+      "construction": 4.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1054",
+    "uid": "1867891054",
+    "name": "user-1054",
+    "tier": "B",
+    "status": "活跃",
+    "total_questions": 1426,
+    "active_days": 98,
+    "daily_questions": 14.6,
+    "avg_len": 112,
+    "recent_31d": 18,
+    "total_tags": 29,
+    "stat_ratio": 28,
+    "abstract_ratio": 72,
+    "inactive_days": 24,
+    "dimensions": [
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 7
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 5
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 5
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 4
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 3
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 2
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 2
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Logic",
+    "interaction_mode": "deep",
+    "capability": {
+      "instrument_selection": 2.5,
+      "profitability": 2.5,
+      "position_mgmt": 4.5,
+      "risk_control": 2.5,
+      "trading_discipline": 2.5,
+      "market_timing": 4.5,
+      "construction": 2.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1055",
+    "uid": "1876541055",
+    "name": "user-1055",
+    "tier": "D",
+    "status": "沉睡",
+    "total_questions": 756,
+    "active_days": 82,
+    "daily_questions": 9.2,
+    "avg_len": 0,
+    "recent_31d": 0,
+    "total_tags": 15,
+    "stat_ratio": 7,
+    "abstract_ratio": 93,
+    "inactive_days": 68,
+    "dimensions": [
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 5
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 4
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 2
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 2
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 1
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Logic",
+    "interaction_mode": "click",
+    "capability": {
+      "instrument_selection": 2.5,
+      "profitability": 2.5,
+      "position_mgmt": 2.5,
+      "risk_control": 2.5,
+      "trading_discipline": 2.5,
+      "market_timing": 2.5,
+      "construction": 2.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1056",
+    "uid": "18010561056",
+    "name": "user-1056",
+    "tier": "S",
+    "status": "活跃",
+    "total_questions": 6824,
+    "active_days": 228,
+    "daily_questions": 29.9,
+    "avg_len": 88,
+    "recent_31d": 856,
+    "total_tags": 72,
+    "stat_ratio": 60,
+    "abstract_ratio": 40,
+    "inactive_days": 1,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 22
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 12
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 10
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 8
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 6
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 5
+      },
+      {
+        "name": "Instrument Selection",
+        "cn": "Instrument Selection",
+        "count": 5
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 4
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 5.5,
+      "position_mgmt": 4.5,
+      "risk_control": 5.5,
+      "trading_discipline": 2.5,
+      "market_timing": 5.5,
+      "construction": 4.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1057",
+    "uid": "18105721057",
+    "name": "user-1057",
+    "tier": "A",
+    "status": "活跃",
+    "total_questions": 4956,
+    "active_days": 190,
+    "daily_questions": 26.1,
+    "avg_len": 45,
+    "recent_31d": 612,
+    "total_tags": 55,
+    "stat_ratio": 29,
+    "abstract_ratio": 71,
+    "inactive_days": 3,
+    "dimensions": [
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 14
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 12
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 10
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 8
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 5
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 4
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 2
+      }
+    ],
+    "top_dimension": "Emotion And Psychology",
+    "interaction_mode": "concise",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 5.5,
+      "position_mgmt": 5.5,
+      "risk_control": 5.5,
+      "trading_discipline": 5.5,
+      "market_timing": 5.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1058",
+    "uid": "18205831058",
+    "name": "user-1058",
+    "tier": "B",
+    "status": "预警",
+    "total_questions": 3125,
+    "active_days": 200,
+    "daily_questions": 15.6,
+    "avg_len": 0,
+    "recent_31d": 18,
+    "total_tags": 38,
+    "stat_ratio": 24,
+    "abstract_ratio": 76,
+    "inactive_days": 15,
+    "dimensions": [
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 10
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 7
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 6
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 5
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 4
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 3
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 2
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Logic",
+    "interaction_mode": "click",
+    "capability": {
+      "instrument_selection": 4.5,
+      "profitability": 2.5,
+      "position_mgmt": 4.5,
+      "risk_control": 5.5,
+      "trading_discipline": 2.5,
+      "market_timing": 4.5,
+      "construction": 2.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1059",
+    "uid": "18305941059",
+    "name": "user-1059",
+    "tier": "B",
+    "status": "沉睡",
+    "total_questions": 1824,
+    "active_days": 110,
+    "daily_questions": 16.6,
+    "avg_len": 142,
+    "recent_31d": 0,
+    "total_tags": 42,
+    "stat_ratio": 31,
+    "abstract_ratio": 69,
+    "inactive_days": 62,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 11
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 8
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 6
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 5
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 4
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 3
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 3
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 2
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "deep",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 4.5,
+      "position_mgmt": 2.5,
+      "risk_control": 5.5,
+      "trading_discipline": 2.5,
+      "market_timing": 4.5,
+      "construction": 2.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1060",
+    "uid": "18406051060",
+    "name": "user-1060",
+    "tier": "D",
+    "status": "沉睡",
+    "total_questions": 686,
+    "active_days": 70,
+    "daily_questions": 9.8,
+    "avg_len": 52,
+    "recent_31d": 0,
+    "total_tags": 16,
+    "stat_ratio": 6,
+    "abstract_ratio": 94,
+    "inactive_days": 45,
+    "dimensions": [
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 5
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 4
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 2
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 2
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 1
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 1
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Logic",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 2.5,
+      "profitability": 2.5,
+      "position_mgmt": 2.5,
+      "risk_control": 2.5,
+      "trading_discipline": 2.5,
+      "market_timing": 2.5,
+      "construction": 2.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1061",
+    "uid": "1821561061",
+    "name": "user-1061",
+    "tier": "S",
+    "status": "活跃",
+    "total_questions": 6852,
+    "active_days": 228,
+    "daily_questions": 30.1,
+    "avg_len": 95,
+    "recent_31d": 673,
+    "total_tags": 72,
+    "stat_ratio": 49,
+    "abstract_ratio": 51,
+    "inactive_days": 3,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 18
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 12
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 10
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 9
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 7
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 6
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 5
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 5
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 5.5,
+      "position_mgmt": 6.5,
+      "risk_control": 5.5,
+      "trading_discipline": 4.5,
+      "market_timing": 5.5,
+      "construction": 6.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1062",
+    "uid": "1810891062",
+    "name": "user-1062",
+    "tier": "A",
+    "status": "活跃",
+    "total_questions": 5124,
+    "active_days": 198,
+    "daily_questions": 25.9,
+    "avg_len": 68,
+    "recent_31d": 712,
+    "total_tags": 85,
+    "stat_ratio": 26,
+    "abstract_ratio": 74,
+    "inactive_days": 1,
+    "dimensions": [
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 16
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 14
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 12
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 11
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 9
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 7
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 6
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 5
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 3
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 2
+      }
+    ],
+    "top_dimension": "Investment Logic",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 6.5,
+      "profitability": 5.5,
+      "position_mgmt": 5.5,
+      "risk_control": 6.5,
+      "trading_discipline": 5.5,
+      "market_timing": 6.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1063",
+    "uid": "1803771063",
+    "name": "user-1063",
+    "tier": "B",
+    "status": "预警",
+    "total_questions": 3246,
+    "active_days": 208,
+    "daily_questions": 15.6,
+    "avg_len": 42,
+    "recent_31d": 18,
+    "total_tags": 56,
+    "stat_ratio": 32,
+    "abstract_ratio": 68,
+    "inactive_days": 21,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 14
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 9
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 8
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 7
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 6
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 4
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 3
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 3
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "concise",
+    "capability": {
+      "instrument_selection": 4.5,
+      "profitability": 4.5,
+      "position_mgmt": 5.5,
+      "risk_control": 5.5,
+      "trading_discipline": 4.5,
+      "market_timing": 4.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1064",
+    "uid": "1836421064",
+    "name": "user-1064",
+    "tier": "C",
+    "status": "沉睡",
+    "total_questions": 1865,
+    "active_days": 112,
+    "daily_questions": 16.6,
+    "avg_len": 128,
+    "recent_31d": 0,
+    "total_tags": 38,
+    "stat_ratio": 26,
+    "abstract_ratio": 74,
+    "inactive_days": 63,
+    "dimensions": [
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 8
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 6
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 5
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 5
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 4
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 4
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 3
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 2
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Logic",
+    "interaction_mode": "deep",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 4.5,
+      "position_mgmt": 5.5,
+      "risk_control": 5.5,
+      "trading_discipline": 4.5,
+      "market_timing": 5.5,
+      "construction": 4.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1065",
+    "uid": "1849151065",
+    "name": "user-1065",
+    "tier": "D",
+    "status": "沉睡",
+    "total_questions": 720,
+    "active_days": 74,
+    "daily_questions": 9.7,
+    "avg_len": 0,
+    "recent_31d": 0,
+    "total_tags": 22,
+    "stat_ratio": 9,
+    "abstract_ratio": 91,
+    "inactive_days": 45,
+    "dimensions": [
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 6
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 5
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 4
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 2
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 2
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 1
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 1
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Logic",
+    "interaction_mode": "click",
+    "capability": {
+      "instrument_selection": 2.5,
+      "profitability": 2.5,
+      "position_mgmt": 2.5,
+      "risk_control": 2.5,
+      "trading_discipline": 2.5,
+      "market_timing": 2.5,
+      "construction": 2.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1066",
+    "uid": "1867891066",
+    "name": "user-1066",
+    "tier": "S",
+    "status": "活跃",
+    "total_questions": 6245,
+    "active_days": 218,
+    "daily_questions": 28.6,
+    "avg_len": 88,
+    "recent_31d": 658,
+    "total_tags": 56,
+    "stat_ratio": 45,
+    "abstract_ratio": 55,
+    "inactive_days": 1,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 18
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 12
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 9
+      },
+      {
+        "name": "Instrument Selection",
+        "cn": "Instrument Selection",
+        "count": 7
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 5
+      },
+      {
+        "name": "Market Timing",
+        "cn": "Market Timing",
+        "count": 3
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 2
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 5.5,
+      "market_timing": 5.5,
+      "profitability": 4.5,
+      "position_mgmt": 5.5,
+      "risk_control": 4.5,
+      "trading_discipline": 4.5,
+      "construction": 4.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1067",
+    "uid": "1876541067",
+    "name": "user-1067",
+    "tier": "A",
+    "status": "活跃",
+    "total_questions": 5123,
+    "active_days": 198,
+    "daily_questions": 25.9,
+    "avg_len": 142,
+    "recent_31d": 612,
+    "total_tags": 72,
+    "stat_ratio": 35,
+    "abstract_ratio": 65,
+    "inactive_days": 2,
+    "dimensions": [
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 14
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 12
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 11
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 9
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 7
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 6
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 5
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 4
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 3
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Logic",
+    "interaction_mode": "deep",
+    "capability": {},
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1068",
+    "uid": "1883211068",
+    "name": "user-1068",
+    "tier": "B",
+    "status": "活跃",
+    "total_questions": 3421,
+    "active_days": 220,
+    "daily_questions": 15.5,
+    "avg_len": 76,
+    "recent_31d": 287,
+    "total_tags": 48,
+    "stat_ratio": 55,
+    "abstract_ratio": 45,
+    "inactive_days": 5,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 15
+      },
+      {
+        "name": "Instrument Selection",
+        "cn": "Instrument Selection",
+        "count": 9
+      },
+      {
+        "name": "Market Timing",
+        "cn": "Market Timing",
+        "count": 7
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 6
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 4
+      },
+      {
+        "name": "Profitability And Quality",
+        "cn": "Profitability And Quality",
+        "count": 4
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 3
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 7,
+      "market_timing": 7,
+      "profitability": 7,
+      "position_mgmt": 5.5,
+      "risk_control": 5.5,
+      "trading_discipline": 5.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1069",
+    "uid": "1890121069",
+    "name": "user-1069",
+    "tier": "B",
+    "status": "活跃",
+    "total_questions": 1567,
+    "active_days": 112,
+    "daily_questions": 14.0,
+    "avg_len": 52,
+    "recent_31d": 45,
+    "total_tags": 28,
+    "stat_ratio": 18,
+    "abstract_ratio": 82,
+    "inactive_days": 11,
+    "dimensions": [
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 8
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 6
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 4
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 4
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 3
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 2
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Logic",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 2.5,
+      "profitability": 2.5,
+      "position_mgmt": 2.5,
+      "risk_control": 4.5,
+      "trading_discipline": 2.5,
+      "market_timing": 2.5,
+      "construction": 2.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1070",
+    "uid": "1907651070",
+    "name": "user-1070",
+    "tier": "C",
+    "status": "沉睡",
+    "total_questions": 1985,
+    "active_days": 156,
+    "daily_questions": 12.7,
+    "avg_len": 0,
+    "recent_31d": 0,
+    "total_tags": 35,
+    "stat_ratio": 8,
+    "abstract_ratio": 92,
+    "inactive_days": 45,
+    "dimensions": [
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 10
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 8
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 6
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 4
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 3
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 2
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 2
+      }
+    ],
+    "top_dimension": "App Behavior Analysis",
+    "interaction_mode": "click",
+    "capability": {
+      "instrument_selection": 4.5,
+      "profitability": 4.5,
+      "position_mgmt": 5.5,
+      "risk_control": 4.5,
+      "trading_discipline": 4.5,
+      "market_timing": 5.5,
+      "construction": 4.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1071",
+    "uid": "1812345671",
+    "name": "user-1071",
+    "tier": "S",
+    "status": "活跃",
+    "total_questions": 6542,
+    "active_days": 218,
+    "daily_questions": 30.0,
+    "avg_len": 85,
+    "recent_31d": 612,
+    "total_tags": 56,
+    "stat_ratio": 50,
+    "abstract_ratio": 50,
+    "inactive_days": 1,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 18
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 12
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 8
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 7
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 5
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 4
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 2
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 2.5,
+      "profitability": 2.5,
+      "position_mgmt": 2.5,
+      "risk_control": 2.5,
+      "trading_discipline": 2.5,
+      "market_timing": 2.5,
+      "construction": 2.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1072",
+    "uid": "1823456782",
+    "name": "user-1072",
+    "tier": "A",
+    "status": "活跃",
+    "total_questions": 4215,
+    "active_days": 168,
+    "daily_questions": 25.1,
+    "avg_len": 42,
+    "recent_31d": 534,
+    "total_tags": 72,
+    "stat_ratio": 25,
+    "abstract_ratio": 75,
+    "inactive_days": 3,
+    "dimensions": [
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 14
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 12
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 11
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 9
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 8
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 7
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 5
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 3
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 2
+      },
+      {
+        "name": "Executable",
+        "cn": "可执行性",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Emotion And Psychology",
+    "interaction_mode": "concise",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 5.5,
+      "position_mgmt": 5.5,
+      "risk_control": 5.5,
+      "trading_discipline": 5.5,
+      "market_timing": 5.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1073",
+    "uid": "1834567893",
+    "name": "user-1073",
+    "tier": "B",
+    "status": "预警",
+    "total_questions": 2896,
+    "active_days": 198,
+    "daily_questions": 14.6,
+    "avg_len": 0,
+    "recent_31d": 8,
+    "total_tags": 38,
+    "stat_ratio": 26,
+    "abstract_ratio": 74,
+    "inactive_days": 23,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 10
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 8
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 6
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 5
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 4
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 3
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 1
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "click",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 4.5,
+      "position_mgmt": 5.5,
+      "risk_control": 4.5,
+      "trading_discipline": 4.5,
+      "market_timing": 4.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1074",
+    "uid": "1845678904",
+    "name": "user-1074",
+    "tier": "B",
+    "status": "沉睡",
+    "total_questions": 1954,
+    "active_days": 132,
+    "daily_questions": 14.8,
+    "avg_len": 148,
+    "recent_31d": 0,
+    "total_tags": 52,
+    "stat_ratio": 31,
+    "abstract_ratio": 69,
+    "inactive_days": 62,
+    "dimensions": [
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 9
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 8
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 7
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 6
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 5
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 4
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 4
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 3
+      },
+      {
+        "name": "Personalization And Rules",
+        "cn": "个性化与规则",
+        "count": 3
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 2
+      },
+      {
+        "name": "Executable",
+        "cn": "可执行性",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Background",
+    "interaction_mode": "deep",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 4.5,
+      "position_mgmt": 5.5,
+      "risk_control": 4.5,
+      "trading_discipline": 4.5,
+      "market_timing": 4.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1075",
+    "uid": "1856789015",
+    "name": "user-1075",
+    "tier": "D",
+    "status": "沉睡",
+    "total_questions": 756,
+    "active_days": 82,
+    "daily_questions": 9.2,
+    "avg_len": 55,
+    "recent_31d": 0,
+    "total_tags": 22,
+    "stat_ratio": 14,
+    "abstract_ratio": 86,
+    "inactive_days": 45,
+    "dimensions": [
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 6
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 5
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 3
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 2
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 2
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 1
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 1
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Logic",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 2.5,
+      "profitability": 2.5,
+      "position_mgmt": 2.5,
+      "risk_control": 2.5,
+      "trading_discipline": 2.5,
+      "market_timing": 2.5,
+      "construction": 2.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1076",
+    "uid": "1812341076",
+    "name": "user-1076",
+    "tier": "S",
+    "status": "活跃",
+    "total_questions": 6892,
+    "active_days": 228,
+    "daily_questions": 30.2,
+    "avg_len": 88,
+    "recent_31d": 652,
+    "total_tags": 55,
+    "stat_ratio": 60,
+    "abstract_ratio": 40,
+    "inactive_days": 4,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 22
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 10
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 7
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 5
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 4
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 3
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 2
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 2
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 2.5,
+      "profitability": 2.5,
+      "position_mgmt": 4.5,
+      "risk_control": 2.5,
+      "trading_discipline": 2.5,
+      "market_timing": 2.5,
+      "construction": 2.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1077",
+    "uid": "1834561077",
+    "name": "user-1077",
+    "tier": "A",
+    "status": "活跃",
+    "total_questions": 5124,
+    "active_days": 198,
+    "daily_questions": 25.9,
+    "avg_len": 45,
+    "recent_31d": 734,
+    "total_tags": 76,
+    "stat_ratio": 26,
+    "abstract_ratio": 74,
+    "inactive_days": 3,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 18
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 14
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 11
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 9
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 8
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 6
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 5
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 3
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 2
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "concise",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 5.5,
+      "position_mgmt": 5.5,
+      "risk_control": 4.5,
+      "trading_discipline": 5.5,
+      "market_timing": 5.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1078",
+    "uid": "1845671078",
+    "name": "user-1078",
+    "tier": "B",
+    "status": "活跃",
+    "total_questions": 3421,
+    "active_days": 220,
+    "daily_questions": 15.5,
+    "avg_len": 0,
+    "recent_31d": 18,
+    "total_tags": 58,
+    "stat_ratio": 21,
+    "abstract_ratio": 79,
+    "inactive_days": 7,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 12
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 10
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 9
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 8
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 6
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 5
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 2
+      },
+      {
+        "name": "Personalization And Rules",
+        "cn": "个性化与规则",
+        "count": 2
+      },
+      {
+        "name": "Executable",
+        "cn": "可执行性",
+        "count": 2
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "click",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 4.5,
+      "position_mgmt": 5.5,
+      "risk_control": 4.5,
+      "trading_discipline": 4.5,
+      "market_timing": 4.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1079",
+    "uid": "1856781079",
+    "name": "user-1079",
+    "tier": "B",
+    "status": "沉睡",
+    "total_questions": 1986,
+    "active_days": 132,
+    "daily_questions": 15.0,
+    "avg_len": 142,
+    "recent_31d": 0,
+    "total_tags": 42,
+    "stat_ratio": 31,
+    "abstract_ratio": 69,
+    "inactive_days": 82,
+    "dimensions": [
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 7
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 6
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 5
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 5
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 4
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 4
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 3
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 3
+      },
+      {
+        "name": "Personalization And Rules",
+        "cn": "个性化与规则",
+        "count": 2
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 2
+      },
+      {
+        "name": "Executable",
+        "cn": "可执行性",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Background",
+    "interaction_mode": "deep",
+    "capability": {},
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1080",
+    "uid": "1867891080",
+    "name": "user-1080",
+    "tier": "D",
+    "status": "沉睡",
+    "total_questions": 720,
+    "active_days": 82,
+    "daily_questions": 8.8,
+    "avg_len": 52,
+    "recent_31d": 0,
+    "total_tags": 16,
+    "stat_ratio": 6,
+    "abstract_ratio": 94,
+    "inactive_days": 62,
+    "dimensions": [
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 5
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 3
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 2
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 2
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 2
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 1
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 1
+      }
+    ],
+    "top_dimension": "App Behavior Analysis",
+    "interaction_mode": "standard",
+    "capability": {},
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1081",
+    "uid": "1856321081",
+    "name": "user-1081",
+    "tier": "S",
+    "status": "活跃",
+    "total_questions": 6248,
+    "active_days": 210,
+    "daily_questions": 29.8,
+    "avg_len": 88,
+    "recent_31d": 685,
+    "total_tags": 52,
+    "stat_ratio": 60,
+    "abstract_ratio": 40,
+    "inactive_days": 1,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 18
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 10
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 8
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 5
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 4
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 3
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 2
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 2
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 4.5,
+      "profitability": 2.5,
+      "position_mgmt": 4.5,
+      "risk_control": 5.5,
+      "trading_discipline": 2.5,
+      "market_timing": 4.5,
+      "construction": 2.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1082",
+    "uid": "1874151082",
+    "name": "user-1082",
+    "tier": "A",
+    "status": "活跃",
+    "total_questions": 5123,
+    "active_days": 198,
+    "daily_questions": 25.9,
+    "avg_len": 45,
+    "recent_31d": 612,
+    "total_tags": 76,
+    "stat_ratio": 29,
+    "abstract_ratio": 71,
+    "inactive_days": 3,
+    "dimensions": [
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 16
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 12
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 10
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 9
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 8
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 6
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 5
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 4
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 3
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 3
+      }
+    ],
+    "top_dimension": "Investment Logic",
+    "interaction_mode": "concise",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 5.5,
+      "position_mgmt": 6.5,
+      "risk_control": 5.5,
+      "trading_discipline": 4.5,
+      "market_timing": 5.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1083",
+    "uid": "1839281083",
+    "name": "user-1083",
+    "tier": "B",
+    "status": "预警",
+    "total_questions": 2986,
+    "active_days": 192,
+    "daily_questions": 15.6,
+    "avg_len": 0,
+    "recent_31d": 8,
+    "total_tags": 58,
+    "stat_ratio": 22,
+    "abstract_ratio": 78,
+    "inactive_days": 23,
+    "dimensions": [
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 14
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 11
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 9
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 8
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 6
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 4
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 3
+      },
+      {
+        "name": "Personalization And Rules",
+        "cn": "个性化与规则",
+        "count": 2
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      }
+    ],
+    "top_dimension": "App Behavior Analysis",
+    "interaction_mode": "click",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 4.5,
+      "position_mgmt": 4.5,
+      "risk_control": 5.5,
+      "trading_discipline": 2.5,
+      "market_timing": 4.5,
+      "construction": 4.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1084",
+    "uid": "1867431084",
+    "name": "user-1084",
+    "tier": "B",
+    "status": "沉睡",
+    "total_questions": 2156,
+    "active_days": 130,
+    "daily_questions": 16.6,
+    "avg_len": 142,
+    "recent_31d": 0,
+    "total_tags": 41,
+    "stat_ratio": 29,
+    "abstract_ratio": 71,
+    "inactive_days": 68,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 9
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 7
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 6
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 5
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 4
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 3
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 3
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 2
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 1
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "deep",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 5.5,
+      "position_mgmt": 4.5,
+      "risk_control": 5.5,
+      "trading_discipline": 5.5,
+      "market_timing": 4.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1085",
+    "uid": "1841561085",
+    "name": "user-1085",
+    "tier": "D",
+    "status": "沉睡",
+    "total_questions": 720,
+    "active_days": 74,
+    "daily_questions": 9.7,
+    "avg_len": 52,
+    "recent_31d": 0,
+    "total_tags": 16,
+    "stat_ratio": 6,
+    "abstract_ratio": 94,
+    "inactive_days": 82,
+    "dimensions": [
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 5
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 3
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 2
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 2
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 1
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 1
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Logic",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 2.5,
+      "profitability": 2.5,
+      "position_mgmt": 2.5,
+      "risk_control": 4.5,
+      "trading_discipline": 2.5,
+      "market_timing": 2.5,
+      "construction": 2.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1086",
+    "uid": "1836211086",
+    "name": "user-1086",
+    "tier": "S",
+    "status": "活跃",
+    "total_questions": 6452,
+    "active_days": 218,
+    "daily_questions": 29.6,
+    "avg_len": 138,
+    "recent_31d": 612,
+    "total_tags": 52,
+    "stat_ratio": 42,
+    "abstract_ratio": 58,
+    "inactive_days": 1,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 18
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 12
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 8
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 6
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 4
+      },
+      {
+        "name": "Instrument Selection",
+        "cn": "Instrument Selection",
+        "count": 2
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 2
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "deep",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 5.5,
+      "position_mgmt": 4.5,
+      "risk_control": 5.5,
+      "trading_discipline": 2.5,
+      "market_timing": 5.5,
+      "construction": 4.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1087",
+    "uid": "1819471087",
+    "name": "user-1087",
+    "tier": "A",
+    "status": "活跃",
+    "total_questions": 5124,
+    "active_days": 198,
+    "daily_questions": 25.9,
+    "avg_len": 85,
+    "recent_31d": 534,
+    "total_tags": 76,
+    "stat_ratio": 24,
+    "abstract_ratio": 76,
+    "inactive_days": 3,
+    "dimensions": [
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 16
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 14
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 12
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 10
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 8
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 6
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 5
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 3
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 2
+      }
+    ],
+    "top_dimension": "Emotion And Psychology",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 5.5,
+      "position_mgmt": 5.5,
+      "risk_control": 5.5,
+      "trading_discipline": 5.5,
+      "market_timing": 4.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1088",
+    "uid": "1803381088",
+    "name": "user-1088",
+    "tier": "B",
+    "status": "预警",
+    "total_questions": 3456,
+    "active_days": 228,
+    "daily_questions": 15.2,
+    "avg_len": 0,
+    "recent_31d": 12,
+    "total_tags": 58,
+    "stat_ratio": 21,
+    "abstract_ratio": 79,
+    "inactive_days": 15,
+    "dimensions": [
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 14
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 10
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 9
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 8
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 6
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 4
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 3
+      },
+      {
+        "name": "Personalization And Rules",
+        "cn": "个性化与规则",
+        "count": 2
+      },
+      {
+        "name": "Executable",
+        "cn": "可执行性",
+        "count": 1
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      }
+    ],
+    "top_dimension": "App Behavior Analysis",
+    "interaction_mode": "click",
+    "capability": {
+      "instrument_selection": 4.5,
+      "profitability": 5.5,
+      "position_mgmt": 4.5,
+      "risk_control": 5.5,
+      "trading_discipline": 4.5,
+      "market_timing": 4.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1089",
+    "uid": "1821561089",
+    "name": "user-1089",
+    "tier": "B",
+    "status": "沉睡",
+    "total_questions": 1987,
+    "active_days": 124,
+    "daily_questions": 16.0,
+    "avg_len": 147,
+    "recent_31d": 0,
+    "total_tags": 41,
+    "stat_ratio": 37,
+    "abstract_ratio": 63,
+    "inactive_days": 68,
+    "dimensions": [
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 9
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 8
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 7
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 5
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 4
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 3
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 2
+      },
+      {
+        "name": "Personalization And Rules",
+        "cn": "个性化与规则",
+        "count": 2
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Background",
+    "interaction_mode": "deep",
+    "capability": {
+      "instrument_selection": 2.5,
+      "profitability": 2.5,
+      "position_mgmt": 4.5,
+      "risk_control": 2.5,
+      "trading_discipline": 2.5,
+      "market_timing": 4.5,
+      "construction": 2.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1090",
+    "uid": "1810891090",
+    "name": "user-1090",
+    "tier": "D",
+    "status": "沉睡",
+    "total_questions": 756,
+    "active_days": 78,
+    "daily_questions": 9.7,
+    "avg_len": 62,
+    "recent_31d": 0,
+    "total_tags": 22,
+    "stat_ratio": 23,
+    "abstract_ratio": 77,
+    "inactive_days": 45,
+    "dimensions": [
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 6
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 4
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 3
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 3
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 2
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 2
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 1
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Logic",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 2.5,
+      "profitability": 2.5,
+      "position_mgmt": 2.5,
+      "risk_control": 4.5,
+      "trading_discipline": 2.5,
+      "market_timing": 2.5,
+      "construction": 2.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1091",
+    "uid": "1823451091",
+    "name": "user-1091",
+    "tier": "S",
+    "status": "活跃",
+    "total_questions": 6240,
+    "active_days": 198,
+    "daily_questions": 31.5,
+    "avg_len": 88,
+    "recent_31d": 612,
+    "total_tags": 72,
+    "stat_ratio": 60,
+    "abstract_ratio": 40,
+    "inactive_days": 4,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 22
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 12
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 10
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 8
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 7
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 5
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 4
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 4
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 4.5,
+      "position_mgmt": 5.5,
+      "risk_control": 5.5,
+      "trading_discipline": 4.5,
+      "market_timing": 5.5,
+      "construction": 4.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1092",
+    "uid": "1805671092",
+    "name": "user-1092",
+    "tier": "A",
+    "status": "活跃",
+    "total_questions": 5120,
+    "active_days": 196,
+    "daily_questions": 26.1,
+    "avg_len": 45,
+    "recent_31d": 534,
+    "total_tags": 55,
+    "stat_ratio": 29,
+    "abstract_ratio": 71,
+    "inactive_days": 3,
+    "dimensions": [
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 14
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 11
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 10
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 8
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 5
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 4
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 3
+      }
+    ],
+    "top_dimension": "Emotion And Psychology",
+    "interaction_mode": "concise",
+    "capability": {
+      "instrument_selection": 6.5,
+      "profitability": 5.5,
+      "position_mgmt": 5.5,
+      "risk_control": 4.5,
+      "trading_discipline": 5.5,
+      "market_timing": 6.5,
+      "construction": 4.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1093",
+    "uid": "1812341093",
+    "name": "user-1093",
+    "tier": "B",
+    "status": "预警",
+    "total_questions": 3150,
+    "active_days": 210,
+    "daily_questions": 15.0,
+    "avg_len": 0,
+    "recent_31d": 8,
+    "total_tags": 38,
+    "stat_ratio": 26,
+    "abstract_ratio": 74,
+    "inactive_days": 23,
+    "dimensions": [
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 9
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 8
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 7
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 5
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 4
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 3
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 2
+      }
+    ],
+    "top_dimension": "Investment Logic",
+    "interaction_mode": "click",
+    "capability": {
+      "instrument_selection": 4.5,
+      "profitability": 4.5,
+      "position_mgmt": 5.5,
+      "risk_control": 4.5,
+      "trading_discipline": 5.5,
+      "market_timing": 4.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1094",
+    "uid": "1834561094",
+    "name": "user-1094",
+    "tier": "C",
+    "status": "沉睡",
+    "total_questions": 1980,
+    "active_days": 132,
+    "daily_questions": 15.0,
+    "avg_len": 142,
+    "recent_31d": 0,
+    "total_tags": 42,
+    "stat_ratio": 31,
+    "abstract_ratio": 69,
+    "inactive_days": 68,
+    "dimensions": [
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 10
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 8
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 7
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 5
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 4
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 3
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 3
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 2
+      }
+    ],
+    "top_dimension": "Background",
+    "interaction_mode": "deep",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 5.5,
+      "position_mgmt": 4.5,
+      "risk_control": 5.5,
+      "trading_discipline": 4.5,
+      "market_timing": 5.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1095",
+    "uid": "1845671095",
+    "name": "user-1095",
+    "tier": "D",
+    "status": "沉睡",
+    "total_questions": 720,
+    "active_days": 82,
+    "daily_questions": 8.8,
+    "avg_len": 52,
+    "recent_31d": 0,
+    "total_tags": 16,
+    "stat_ratio": 6,
+    "abstract_ratio": 94,
+    "inactive_days": 82,
+    "dimensions": [
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 5
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 3
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 2
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 2
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 1
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 1
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Logic",
+    "interaction_mode": "standard",
+    "capability": {
+      "instrument_selection": 2.5,
+      "profitability": 2.5,
+      "position_mgmt": 2.5,
+      "risk_control": 4.5,
+      "trading_discipline": 2.5,
+      "market_timing": 2.5,
+      "construction": 2.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1096",
+    "uid": "18010961096",
+    "name": "user-1096",
+    "tier": "S",
+    "status": "活跃",
+    "total_questions": 6250,
+    "active_days": 210,
+    "daily_questions": 29.8,
+    "avg_len": 145,
+    "recent_31d": 680,
+    "total_tags": 52,
+    "stat_ratio": 60,
+    "abstract_ratio": 40,
+    "inactive_days": 1,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 22
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 10
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 7
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 5
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 4
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 3
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "deep",
+    "capability": {
+      "instrument_selection": 2.5,
+      "profitability": 2.5,
+      "position_mgmt": 2.5,
+      "risk_control": 2.5,
+      "trading_discipline": 2.5,
+      "market_timing": 2.5,
+      "construction": 2.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1097",
+    "uid": "18010971097",
+    "name": "user-1097",
+    "tier": "A",
+    "status": "活跃",
+    "total_questions": 4200,
+    "active_days": 165,
+    "daily_questions": 25.5,
+    "avg_len": 68,
+    "recent_31d": 720,
+    "total_tags": 85,
+    "stat_ratio": 29,
+    "abstract_ratio": 71,
+    "inactive_days": 3,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 18
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 14
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 11
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 9
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 8
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 7
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 6
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 5
+      },
+      {
+        "name": "Personalization And Rules",
+        "cn": "个性化与规则",
+        "count": 3
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 2
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 2
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "standard",
+    "capability": {},
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1098",
+    "uid": "18010981098",
+    "name": "user-1098",
+    "tier": "B",
+    "status": "活跃",
+    "total_questions": 3200,
+    "active_days": 205,
+    "daily_questions": 15.6,
+    "avg_len": 0,
+    "recent_31d": 12,
+    "total_tags": 58,
+    "stat_ratio": 22,
+    "abstract_ratio": 78,
+    "inactive_days": 4,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 14
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 10
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 9
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 8
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 6
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 4
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 2
+      },
+      {
+        "name": "Personalization And Rules",
+        "cn": "个性化与规则",
+        "count": 2
+      },
+      {
+        "name": "Executable",
+        "cn": "可执行性",
+        "count": 2
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "click",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 4.5,
+      "position_mgmt": 5.5,
+      "risk_control": 4.5,
+      "trading_discipline": 4.5,
+      "market_timing": 4.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1099",
+    "uid": "18010991099",
+    "name": "user-1099",
+    "tier": "B",
+    "status": "沉睡",
+    "total_questions": 2100,
+    "active_days": 130,
+    "daily_questions": 16.2,
+    "avg_len": 148,
+    "recent_31d": 0,
+    "total_tags": 45,
+    "stat_ratio": 31,
+    "abstract_ratio": 69,
+    "inactive_days": 82,
+    "dimensions": [
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 8
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 6
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 6
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 5
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 5
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 4
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 3
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 3
+      },
+      {
+        "name": "Personalization And Rules",
+        "cn": "个性化与规则",
+        "count": 3
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 2
+      },
+      {
+        "name": "Executable",
+        "cn": "可执行性",
+        "count": 1
+      },
+      {
+        "name": "Idea And Note",
+        "cn": "观点与笔记",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Background",
+    "interaction_mode": "deep",
+    "capability": {},
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-1100",
+    "uid": "18011001100",
+    "name": "user-1100",
+    "tier": "D",
+    "status": "沉睡",
+    "total_questions": 780,
+    "active_days": 80,
+    "daily_questions": 9.8,
+    "avg_len": 55,
+    "recent_31d": 0,
+    "total_tags": 18,
+    "stat_ratio": 11,
+    "abstract_ratio": 89,
+    "inactive_days": 55,
+    "dimensions": [
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 6
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 4
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 2
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 2
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 2
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 1
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 1
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      }
+    ],
+    "top_dimension": "App Behavior Analysis",
+    "interaction_mode": "standard",
+    "capability": {},
+    "seed": null,
+    "has_avatar": false
+  },
+  {
+    "id": "user-5432",
+    "uid": "1805245432",
+    "name": "user-5432",
+    "tier": "B",
+    "status": "沉睡",
+    "total_questions": 2408,
+    "active_days": 145,
+    "daily_questions": 16.6,
+    "avg_len": 153,
+    "recent_31d": 0,
+    "total_tags": 47,
+    "stat_ratio": 30,
+    "abstract_ratio": 70,
+    "inactive_days": 77,
+    "dimensions": [
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 8
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 6
+      },
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 6
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 5
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 5
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 4
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 3
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 3
+      },
+      {
+        "name": "Personalization And Rules",
+        "cn": "个性化与规则",
+        "count": 3
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 2
+      },
+      {
+        "name": "Executable",
+        "cn": "可执行性",
+        "count": 1
+      },
+      {
+        "name": "Idea And Note",
+        "cn": "观点与笔记",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Background",
+    "interaction_mode": "deep",
+    "capability": {},
+    "seed": null,
+    "has_avatar": true
+  },
+  {
+    "id": "user-8318",
+    "uid": "1822388318",
+    "name": "user-8318",
+    "tier": "A",
+    "status": "活跃",
+    "total_questions": 4777,
+    "active_days": 183,
+    "daily_questions": 26.1,
+    "avg_len": 71,
+    "recent_31d": 789,
+    "total_tags": 98,
+    "stat_ratio": 29,
+    "abstract_ratio": 71,
+    "inactive_days": 2,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 20
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 15
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 12
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 10
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 9
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 8
+      },
+      {
+        "name": "Wealth Structure",
+        "cn": "财富结构",
+        "count": 8
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 8
+      },
+      {
+        "name": "Personalization And Rules",
+        "cn": "个性化与规则",
+        "count": 3
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 2
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 2
+      },
+      {
+        "name": "Idea And Note",
+        "cn": "观点与笔记",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "standard",
+    "capability": {},
+    "seed": null,
+    "has_avatar": true
+  },
+  {
+    "id": "user-9073",
+    "uid": "1802449073",
+    "name": "user-9073",
+    "tier": "S",
+    "status": "活跃",
+    "total_questions": 7139,
+    "active_days": 239,
+    "daily_questions": 29.9,
+    "avg_len": 162,
+    "recent_31d": 702,
+    "total_tags": 49,
+    "stat_ratio": 51,
+    "abstract_ratio": 49,
+    "inactive_days": 2,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 25
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 10
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 5
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 5
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 4
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "deep",
+    "capability": {
+      "instrument_selection": 2.5,
+      "profitability": 2.5,
+      "position_mgmt": 2.5,
+      "risk_control": 2.5,
+      "trading_discipline": 2.5,
+      "market_timing": 2.5,
+      "construction": 2.5
+    },
+    "seed": null,
+    "has_avatar": true
+  },
+  {
+    "id": "user-9605",
+    "uid": "1805519605",
+    "name": "user-9605",
+    "tier": "B",
+    "status": "预警",
+    "total_questions": 3782,
+    "active_days": 242,
+    "daily_questions": 15.6,
+    "avg_len": 0,
+    "recent_31d": 4,
+    "total_tags": 64,
+    "stat_ratio": 23,
+    "abstract_ratio": 77,
+    "inactive_days": 29,
+    "dimensions": [
+      {
+        "name": "Investment Status",
+        "cn": "投资现状",
+        "count": 13
+      },
+      {
+        "name": "App Behavior Analysis",
+        "cn": "应用行为分析",
+        "count": 11
+      },
+      {
+        "name": "Investor Assessment",
+        "cn": "投资者评估",
+        "count": 10
+      },
+      {
+        "name": "Investment Logic",
+        "cn": "投资逻辑",
+        "count": 9
+      },
+      {
+        "name": "Emotion And Psychology",
+        "cn": "情绪心理",
+        "count": 7
+      },
+      {
+        "name": "Risk Profile",
+        "cn": "风险偏好",
+        "count": 5
+      },
+      {
+        "name": "Background",
+        "cn": "背景",
+        "count": 2
+      },
+      {
+        "name": "Personalization And Rules",
+        "cn": "个性化与规则",
+        "count": 2
+      },
+      {
+        "name": "Executable",
+        "cn": "可执行性",
+        "count": 2
+      },
+      {
+        "name": "Goals",
+        "cn": "目标",
+        "count": 1
+      },
+      {
+        "name": "Constraints",
+        "cn": "约束条件",
+        "count": 1
+      },
+      {
+        "name": "Idea And Note",
+        "cn": "观点与笔记",
+        "count": 1
+      }
+    ],
+    "top_dimension": "Investment Status",
+    "interaction_mode": "click",
+    "capability": {
+      "instrument_selection": 5.5,
+      "profitability": 4.5,
+      "position_mgmt": 5.5,
+      "risk_control": 4.5,
+      "trading_discipline": 4.5,
+      "market_timing": 4.5,
+      "construction": 5.5
+    },
+    "seed": null,
+    "has_avatar": true
+  }
+]

@@ -6,6 +6,7 @@ import DESCRIPTION from "./glob.txt"
 import { Ripgrep } from "../file/ripgrep"
 import { Instance } from "../project/instance"
 import { assertExternalDirectory } from "./external-directory"
+import { taskIDForSession } from "@/engine/task-session-lineage"
 
 export const GlobTool = Tool.define("glob", {
   description: DESCRIPTION,
@@ -30,16 +31,27 @@ export const GlobTool = Tool.define("glob", {
     })
 
     let search = params.path ?? Instance.directory
+    // On win32, translate Git Bash / Cygwin / WSL mount paths
+    // (`/c/...`, `/mnt/c/...`) to native Windows form BEFORE path.isAbsolute
+    // / path.resolve / fs.stat see it. path.isAbsolute("/mnt/c/...") returns
+    // false on Windows, which would silently re-root the search at
+    // Instance.directory and the assertExternalDirectory check would never
+    // see the LLM-supplied path. Reuses the same Filesystem.windowsPath
+    // translator the bash tool uses (rule 8 single source).
+    if (process.platform === "win32") search = Filesystem.windowsPath(search)
     search = path.isAbsolute(search) ? search : path.resolve(Instance.directory, search)
     await assertExternalDirectory(ctx, search, { kind: "directory" })
 
     const limit = 100
+    const taskID = taskIDForSession(ctx.sessionID)
+    if (!taskID) throw new Error(`Glob Session ${ctx.sessionID} does not belong to a Task`)
     const files: Array<{ path: string; mtime: number }> = []
     let truncated = false
-    for await (const file of Ripgrep.files({
+    for await (const file of Ripgrep.filesForTask({
       cwd: search,
       glob: [params.pattern],
       signal: ctx.abort,
+      taskID,
     })) {
       if (files.length >= limit) {
         truncated = true

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Prism Delivery Planning"
+  short_description: "Ordinary non-Goal Mirror Prism planning"
+  default_prompt: "Publish the complete Task delivery plan from selected source evidence."

@@ -1,5 +1,13 @@
 import z from "zod"
 
+function safeStringify(value: unknown): string {
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return String(value)
+  }
+}
+
 export abstract class NamedError extends Error {
   abstract schema(): z.core.$ZodType
   abstract toObject(): { name: string; data: any }
@@ -22,7 +30,25 @@ export abstract class NamedError extends Error {
         public readonly data: z.input<Data>,
         options?: ErrorOptions,
       ) {
-        super(name, options)
+        // `Error.message` is the only thing that survives most generic
+        // serialization paths (`String(err)`, `err.message`, AI-SDK tool
+        // error envelopes, JSON.stringify of plain Error). Folding the
+        // structured `data` into the message keeps a single source of truth
+        // (rule 7/8): consumers don't need to know about `.data` to see
+        // the real diagnostic, and we don't need a parallel extraction path
+        // at every error site. We prefer `data.message` when present
+        // because that's the canonical field across our error schemas;
+        // otherwise we serialize the entire data payload.
+        const detail =
+          data &&
+          typeof data === "object" &&
+          "message" in data &&
+          typeof (data as { message: unknown }).message === "string"
+            ? (data as { message: string }).message
+            : data !== undefined
+              ? safeStringify(data)
+              : ""
+        super(detail ? `${name}: ${detail}` : name, options)
         this.name = name
       }
 

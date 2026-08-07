@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 1,
+  "title": "Repository Quality Audit — 2026-07-27",
+  "repository": {
+    "branch": "v0.0.20beta",
+    "head": "ec79321f83694daa995f3b38262f91a63de8bc57",
+    "sourceChanged": false
+  },
+  "summary": {
+    "findings": 4,
+    "bySeverity": { "high": 2, "medium": 1, "low": 1 },
+    "open": 4,
+    "checksPassed": 12,
+    "checksFailed": 3
+  },
+  "findings": [
+    {
+      "id": "AUD-001",
+      "severity": "high",
+      "status": "open",
+      "title": "CI omits existing shared-package behavioral tests",
+      "evidence": [".github/workflows/test.yml:54-161,227-258", "turbo.json:5-14", "shared-suite command results"],
+      "impact": "Shared behavioral regressions can merge without their owning suite.",
+      "recommendation": "Create a canonical workspace test graph and require every shared-package suite in CI."
+    },
+    {
+      "id": "AUD-002",
+      "severity": "medium",
+      "status": "open",
+      "title": "Util Windows-path test is not portable across host platforms",
+      "evidence": [
+        "packages/util/test/node-runtime.test.ts:18-23",
+        "packages/util/src/node-runtime.ts:27-40",
+        "util suite exit 1"
+      ],
+      "impact": "The shared test suite cannot run consistently on macOS/Linux.",
+      "recommendation": "Use target-aware path semantics or separate native-host and synthetic-target assertions."
+    },
+    {
+      "id": "AUD-003",
+      "severity": "low",
+      "status": "open",
+      "title": "Production dead-code analysis reports stale files and declarations",
+      "evidence": [
+        "bun run check:dead-code exit 1",
+        "TerminalPanel.tsx",
+        "services/terminal.ts",
+        "packages/channel-runtime/package.json:6-14"
+      ],
+      "impact": "Unused code and dependency declarations increase maintenance and supply-chain surface.",
+      "recommendation": "Confirm feature ownership, then delete/reconnect code and document the ps binary owner."
+    },
+    {
+      "id": "AUD-004",
+      "severity": "high",
+      "status": "open",
+      "title": "Lockfile contains known-vulnerable direct and transitive dependencies",
+      "evidence": [
+        "bun audit exit 1",
+        "87 advisories",
+        "packages/opencorvus/package.json:77-123",
+        "bun.lock:987,2503,2663,2845,3259"
+      ],
+      "impact": "Release tree contains known security advisories; exploitability must be triaged per exposed path.",
+      "recommendation": "Update remediated direct pins/overrides, retest affected integrations, and enforce dependency audit ownership."
+    }
+  ],
+  "checks": [
+    { "command": "bun run --cwd packages/sdk/js test", "exitCode": 0, "result": "55 pass" },
+    { "command": "bun test packages/plugin/test/artifact-catalog.test.ts", "exitCode": 0, "result": "23 pass" },
+    { "command": "bun test packages/transport-protocol/test/contract.test.ts", "exitCode": 0, "result": "20 pass" },
+    {
+      "command": "bun test packages/util/test/error.test.ts packages/util/test/lazy.test.ts packages/util/test/node-runtime.test.ts",
+      "exitCode": 1,
+      "result": "9 pass, 1 fail"
+    },
+    { "command": "bun run typecheck", "exitCode": 0, "result": "8 Turbo tasks successful" },
+    { "command": "bun run --cwd packages/sdk/js build", "exitCode": 0, "result": "SDK generated and built" },
+    {
+      "command": "bun run --cwd packages/opencorvus build --single --skip-install",
+      "exitCode": 0,
+      "result": "Darwin ARM64 build complete"
+    },
+    { "command": "bun run api:routes-check", "exitCode": 0, "result": "6 rules, 32 files" },
+    { "command": "bun run docs:check", "exitCode": 0, "result": "294 operations, 24 groups" },
+    {
+      "command": "bun test packages/opencorvus/test/script/db-write-boundary.test.ts",
+      "exitCode": 0,
+      "result": "17 pass"
+    },
+    { "command": "bun run check:dead-code", "exitCode": 1, "result": "2 unused files, 1 dependency, 1 binary" },
+    { "command": "bun audit", "exitCode": 1, "result": "87 vulnerabilities" },
+    {
+      "command": "bun test packages/opencorvus/test/script/historical-docs-links.test.ts",
+      "exitCode": 0,
+      "result": "22 pass"
+    },
+    {
+      "command": "bun test packages/opencorvus/test/script/document-health.test.ts",
+      "exitCode": 0,
+      "result": "63 pass"
+    },
+    {
+      "command": "bun test packages/opencorvus/test/script/product-docs-single-source.test.ts",
+      "exitCode": 0,
+      "result": "8 pass"
+    }
+  ],
+  "uncovered": [
+    {
+      "priority": "P1",
+      "scope": "Full advisory exploitability review",
+      "reason": "Version exposure is confirmed; per-advisory input-to-sink reachability is not."
+    },
+    {
+      "priority": "P1",
+      "scope": "Windows runtime verification",
+      "reason": "Current host is macOS and AUD-002 is a cross-host test failure."
+    },
+    {
+      "priority": "P2",
+      "scope": "UI visual audit",
+      "reason": "No UI defect was asserted and no existing process was disturbed."
+    },
+    {
+      "priority": "P2",
+      "scope": "CI-shaped clean install",
+      "reason": "Would mutate local dependency state; run in isolation."
+    }
+  ]
+}

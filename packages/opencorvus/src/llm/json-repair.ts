@@ -5,14 +5,14 @@ export function sanitizeJSON(raw: string): string {
   while (i < raw.length) {
     const ch = raw[i]
     if (!inString) {
-      if (ch === "\"") inString = true
+      if (ch === '"') inString = true
       result += ch
       i++
       continue
     }
     if (ch === "\\") {
       const next = raw[i + 1]
-      if (next && "\"\\\\/bfnrtu".includes(next)) {
+      if (next && '"\\\\/bfnrtu'.includes(next)) {
         result += ch + next
         i += 2
         continue
@@ -21,7 +21,7 @@ export function sanitizeJSON(raw: string): string {
       i++
       continue
     }
-    if (ch === "\"") {
+    if (ch === '"') {
       inString = false
       result += ch
       i++
@@ -62,9 +62,9 @@ export function repairTruncatedJSON(raw: string): string {
       escaped = true
       continue
     }
-    if (ch === "\"") inString = !inString
+    if (ch === '"') inString = !inString
   }
-  if (inString) repaired += "\""
+  if (inString) repaired += '"'
 
   repaired = repaired.replace(/,\s*"[^"]*"?\s*:?\s*"?[^"]*$/, "")
   repaired = repaired.replace(/,\s*$/, "")
@@ -82,7 +82,7 @@ export function repairTruncatedJSON(raw: string): string {
       escaped = true
       continue
     }
-    if (ch === "\"") {
+    if (ch === '"') {
       inString = !inString
       continue
     }
@@ -112,7 +112,7 @@ export function trimToLastComplete(raw: string): string {
       escaped = true
       continue
     }
-    if (ch === "\"") {
+    if (ch === '"') {
       inString = !inString
       if (!inString) lastComplete = i
       continue
@@ -138,7 +138,7 @@ export function trimToLastComplete(raw: string): string {
         escaped = true
         continue
       }
-      if (ch === "\"") {
+      if (ch === '"') {
         inString = !inString
         continue
       }
@@ -154,9 +154,7 @@ export function trimToLastComplete(raw: string): string {
   return repairTruncatedJSON(raw)
 }
 
-export function tryParseJSON(text: string):
-  | { ok: true; value: unknown }
-  | { ok: false; error: Error } {
+export function tryParseJSON(text: string): { ok: true; value: unknown } | { ok: false; error: Error } {
   try {
     return { ok: true, value: JSON.parse(text) }
   } catch (err) {

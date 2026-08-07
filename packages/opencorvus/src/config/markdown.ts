@@ -7,85 +7,88 @@ export namespace ConfigMarkdown {
   export const FILE_REGEX = /(?<![\w`])@(\.?[^\s`,.]*(?:\.[^\s`,.]+)*)/g
   export const SHELL_REGEX = /!`([^`]+)`/g
 
+  type Range = readonly [start: number, end: number]
+
+  function isInsideRange(ranges: Range[], index: number) {
+    return ranges.some(([start, end]) => index >= start && index < end)
+  }
+
+  function fencedCodeRanges(template: string): Range[] {
+    const ranges: Range[] = []
+    let offset = 0
+    let fence: { start: number; marker: "`" | "~"; length: number } | undefined
+    while (offset < template.length) {
+      const newline = template.indexOf("\n", offset)
+      const end = newline === -1 ? template.length : newline + 1
+      const line = template.slice(offset, end)
+      if (!fence) {
+        const open = /^[ \t]{0,3}(`{3,}|~{3,})/.exec(line)
+        if (open) {
+          fence = {
+            start: offset,
+            marker: open[1][0] as "`" | "~",
+            length: open[1].length,
+          }
+        }
+      } else {
+        const escaped = fence.marker === "`" ? "`" : "~"
+        const close = new RegExp(`^[ \\t]{0,3}${escaped}{${fence.length},}(?:[ \\t]*\\r?\\n?|$)`)
+        if (close.test(line)) {
+          ranges.push([fence.start, end])
+          fence = undefined
+        }
+      }
+      offset = end
+    }
+    if (fence) ranges.push([fence.start, template.length])
+    return ranges
+  }
+
+  function inlineCodeRanges(template: string, fenced: Range[]): Range[] {
+    const ranges: Range[] = []
+    const marker = /`+/g
+    let open: RegExpExecArray | null
+    while ((open = marker.exec(template))) {
+      if (isInsideRange(fenced, open.index)) continue
+      let close: RegExpExecArray | null
+      while ((close = marker.exec(template))) {
+        if (isInsideRange(fenced, close.index)) continue
+        if (close[0].length !== open[0].length) continue
+        ranges.push([open.index, close.index + close[0].length])
+        break
+      }
+    }
+    return ranges
+  }
+
+  function markdownCodeRanges(template: string): Range[] {
+    const fenced = fencedCodeRanges(template)
+    return [...fenced, ...inlineCodeRanges(template, fenced)]
+  }
+
   export function files(template: string) {
-    return Array.from(template.matchAll(FILE_REGEX))
+    const codeRanges = markdownCodeRanges(template)
+    return Array.from(template.matchAll(FILE_REGEX)).filter((match) => {
+      return match.index === undefined || !isInsideRange(codeRanges, match.index)
+    })
   }
 
   export function shell(template: string) {
     return Array.from(template.matchAll(SHELL_REGEX))
   }
 
-  // other coding agents like claude code allow invalid yaml in their
-  // frontmatter, we need to fallback to a more permissive parser for those cases
-  export function fallbackSanitization(content: string): string {
-    const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/)
-    if (!match) return content
-
-    const frontmatter = match[1]
-    const lines = frontmatter.split(/\r?\n/)
-    const result: string[] = []
-
-    for (const line of lines) {
-      // skip comments and empty lines
-      if (line.trim().startsWith("#") || line.trim() === "") {
-        result.push(line)
-        continue
-      }
-
-      // skip lines that are continuations (indented)
-      if (line.match(/^\s+/)) {
-        result.push(line)
-        continue
-      }
-
-      // match key: value pattern
-      const kvMatch = line.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*(.*)$/)
-      if (!kvMatch) {
-        result.push(line)
-        continue
-      }
-
-      const key = kvMatch[1]
-      const value = kvMatch[2].trim()
-
-      // skip if value is empty, already quoted, or uses block scalar
-      if (value === "" || value === ">" || value === "|" || value.startsWith('"') || value.startsWith("'")) {
-        result.push(line)
-        continue
-      }
-
-      // if value contains a colon, convert to block scalar
-      if (value.includes(":")) {
-        result.push(`${key}: |-`)
-        result.push(`  ${value}`)
-        continue
-      }
-
-      result.push(line)
-    }
-
-    const processed = result.join("\n")
-    return content.replace(frontmatter, () => processed)
-  }
-
   export async function parse(filePath: string) {
     const template = await Filesystem.readText(filePath)
-
     try {
-      const md = matter(template)
-      return md
-    } catch {
-      try {
-        return matter(fallbackSanitization(template))
-      } catch (err) {
-        throw new FrontmatterError(
-          {
-            path: filePath,
-            message: `${filePath}: Failed to parse YAML frontmatter: ${err instanceof Error ? err.message : String(err)}`,
-          },
-          { cause: err },
-        )
-      }
+      return matter(template)
+    } catch (err) {
+      throw new FrontmatterError(
+        {
+          path: filePath,
+          message: `${filePath}: Failed to parse YAML frontmatter: ${err instanceof Error ? err.message : String(err)}`,
+        },
+        { cause: err },
+      )
     }
   }
 

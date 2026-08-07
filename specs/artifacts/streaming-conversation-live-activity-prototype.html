@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenCorvus · 流式活动反馈样稿</title>
+    <style>
+      :root { color-scheme: light; --page:#f8fafc; --surface:#fff; --surface-soft:#f4f7fa; --text:#1d252d; --muted:#77818d; --line:#e6ebf0; --accent:#1677e8; --accent-soft:#eaf3ff; --code:#eef3f7; --shadow:0 12px 36px rgb(26 40 58 / 8%); }
+      [data-theme="dark"] { color-scheme: dark; --page:#16191d; --surface:#1c2025; --surface-soft:#23282f; --text:#edf2f7; --muted:#929eae; --line:#303842; --accent:#65a8ff; --accent-soft:#193658; --code:#11161c; --shadow:none; }
+      * { box-sizing:border-box; }
+      body { margin:0; background:var(--page); color:var(--text); font:15px/1.65 Inter, ui-sans-serif, system-ui, "Microsoft YaHei", sans-serif; }
+      .app { max-width:1040px; margin:0 auto; padding:34px 54px 72px; }
+      .toolbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:34px; }
+      .toolbar h1 { font-size:16px; margin:0; font-weight:700; letter-spacing:.01em; }
+      .toolbar p { margin:3px 0 0; color:var(--muted); font-size:13px; }
+      button { font:inherit; color:inherit; cursor:pointer; }
+      .theme { border:1px solid var(--line); background:var(--surface); border-radius:999px; padding:7px 12px; font-size:13px; }
+      .conversation { background:var(--surface); border:1px solid var(--line); box-shadow:var(--shadow); border-radius:18px; padding:28px 34px; }
+      .agent { display:flex; gap:10px; align-items:center; margin:0 0 16px; font-weight:760; letter-spacing:.015em; }
+      .agent-icon { width:30px; height:30px; display:grid; place-items:center; color:var(--accent); background:var(--accent-soft); border-radius:50%; font-size:18px; }
+      .live-dot { width:9px; height:9px; border-radius:50%; background:#28bd8a; }
+      .time { color:var(--muted); font-weight:500; font-size:13px; }
+      .message { margin:0 0 21px 40px; max-width:790px; font-size:17px; line-height:1.72; }
+      .message--final { margin-bottom:28px; }
+      .generation { display:block; width:max-content; margin:8px 0 0; color:var(--muted); font-size:13px; font-weight:600; letter-spacing:.04em; line-height:1.5; }
+      .execution { margin:12px 0 18px 40px; }
+      .tool-list { display:grid; gap:7px; }
+      .tool { display:flex; align-items:center; width:100%; gap:8px; padding:7px 0; border:0; background:transparent; text-align:left; border-radius:8px; }
+      .tool:hover { background:var(--surface-soft); padding-inline:8px; margin-inline:-8px; width:calc(100% + 16px); }
+      .tool-icon { color:var(--muted); font-size:16px; flex:none; }
+      .tool-name { color:var(--text); font:600 14px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; }
+      .tool-detail { color:var(--muted); overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font:14px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; min-width:0; }
+      .tool-chevron { margin-left:2px; color:var(--muted); font-size:18px; transition:transform .22s ease; }
+      .tool[aria-expanded="true"] .tool-chevron { transform:rotate(90deg); }
+      .tool-live .tool-icon, .tool-live .tool-name, .tool-live .tool-detail, .generation { background-image:linear-gradient(90deg, var(--muted) 0%, var(--muted) 45.5%, color-mix(in srgb, var(--accent) 42%, white) 47.5%, color-mix(in srgb, var(--accent) 76%, white) 49%, var(--accent) 50%, color-mix(in srgb, var(--accent) 76%, white) 51%, color-mix(in srgb, var(--accent) 42%, white) 52.5%, var(--muted) 54.5%, var(--muted) 100%); background-size:360% 100%; background-position:130% 50%; -webkit-background-clip:text; background-clip:text; color:transparent; will-change:background-position; animation:soft-wave 5.6s linear infinite; }
+      .tool-live .tool-icon { animation-delay:-.18s; }
+      .tool-live .tool-name { animation-delay:-.12s; }
+      .tool-live .tool-detail { animation-delay:-.06s; }
+      @keyframes soft-wave { from { background-position:130% 50%; } to { background-position:-180% 50%; } }
+      @media (prefers-reduced-motion: reduce) { .tool-live .tool-icon, .tool-live .tool-name, .tool-live .tool-detail, .generation { animation:none; color:var(--accent); } }
+      .tool-body { display:none; margin:2px 0 12px 25px; border-left:1px solid var(--line); padding-left:16px; }
+      .tool-body.is-open { display:block; }
+      .tool-note { margin:0 0 11px; color:var(--muted); font-size:13px; }
+      .data-section { display:grid; gap:6px; margin-top:10px; }
+      .data-label { color:var(--muted); font-size:12px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; }
+      pre { margin:0; max-height:166px; overflow:auto; overscroll-behavior:contain; padding:12px 14px; border-radius:9px; background:var(--code); border:1px solid color-mix(in srgb, var(--line) 85%, transparent); color:var(--text); white-space:pre; tab-size:2; font:12.5px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; }
+      .key { color:#1874d1; } .str { color:#aa5d1e; } .bool { color:#805ad5; }
+      [data-theme="dark"] .key { color:#77baff; } [data-theme="dark"] .str { color:#e6ae75; } [data-theme="dark"] .bool { color:#c6a7ff; }
+      .separator { height:1px; margin:30px 0 26px 40px; background:linear-gradient(90deg, transparent, var(--line) 8%, var(--line) 92%, transparent); }
+      .legend { display:flex; flex-wrap:wrap; gap:8px 18px; margin:25px 0 0 40px; color:var(--muted); font-size:12px; }
+      .legend i { display:inline-block; width:8px; height:8px; margin-right:6px; border-radius:50%; background:var(--accent); }
+      .legend .static { background:var(--muted); }
+    </style>
+  </head>
+  <body>
+    <main class="app" id="app">
+      <header class="toolbar">
+        <div><h1>流式对话 · 活动反馈样稿</h1><p>只有最后一个仍在活动的内容拥有动效；展开内容保持结构化、可滚动。</p></div>
+        <button class="theme" id="theme" type="button">切换深色</button>
+      </header>
+      <article class="conversation">
+        <header class="agent"><span class="agent-icon">✦</span><span>ORCHESTRATOR</span><span class="live-dot" aria-label="运行中"></span><span class="time">6 分 38 秒</span></header>
+        <p class="message">我会先读取团队配置和任务上下文，再决定下一步调用。历史消息保持静态，不重复提示活动状态。</p>
+        <section class="execution" aria-label="工具调用记录">
+          <div class="tool-list">
+            <button class="tool" type="button" aria-expanded="false" data-target="tool-1"><span class="tool-icon">⌕</span><span class="tool-name">mission_state</span><span class="tool-detail">action=read · file=tasks.md</span><span class="tool-chevron">›</span></button>
+            <div class="tool-body" id="tool-1"><p class="tool-note">已完成 · 完整参数以数据格式保留，不再以 Markdown 段落回流。</p><div class="data-section"><span class="data-label">输入</span><pre>{
+  <span class="key">"action"</span>: <span class="str">"read"</span>,
+  <span class="key">"file"</span>: <span class="str">"tasks.md"</span>,
+  <span class="key">"includeChildren"</span>: <span class="bool">true</span>
+}</pre></div><div class="data-section"><span class="data-label">输出</span><pre># 当前任务
+
+- 读取团队安装状态
+- 汇集各子任务的终态证据
+- 继续生产阶段</pre></div></div>
+            <button class="tool" type="button" aria-expanded="false" data-target="tool-2"><span class="tool-icon">⌕</span><span class="tool-name">panel</span><span class="tool-detail">action=inspect_squad</span><span class="tool-chevron">›</span></button>
+            <div class="tool-body" id="tool-2"><p class="tool-note">已完成</p><div class="data-section"><span class="data-label">输出</span><pre>{
+  <span class="key">"squad"</span>: <span class="str">"clinic-capacity-planning"</span>,
+  <span class="key">"members"</span>: 7,
+  <span class="key">"status"</span>: <span class="str">"ready"</span>
+}</pre></div></div>
+            <button class="tool tool-live" type="button" aria-expanded="true" data-target="tool-3"><span class="tool-icon">⌕</span><span class="tool-name">panel</span><span class="tool-detail">action=create_task · 生产 ExportHub 团队</span><span class="tool-chevron">›</span></button>
+            <div class="tool-body is-open" id="tool-3"><p class="tool-note">当前工具正在返回内容；动效附着于工具标题，而非另起一段“正在执行”。</p><div class="data-section"><span class="data-label">输入</span><pre>{
+  <span class="key">"action"</span>: <span class="str">"create_task"</span>,
+  <span class="key">"title"</span>: <span class="str">"生产 ExportHub 团队"</span>,
+  <span class="key">"request"</span>: <span class="str">"建立导出服务的任务结构、工作目录与证据接口。"</span>,
+  <span class="key">"directory"</span>: <span class="str">"D:/test-project"</span>
+}</pre></div><div class="data-section"><span class="data-label">实时输出</span><pre>{
+  <span class="key">"taskId"</span>: <span class="str">"task_exporthub_01"</span>,
+  <span class="key">"session"</span>: <span class="str">"creating"</span>,
+  <span class="key">"artifacts"</span>: []
+}</pre></div></div>
+          </div>
+        </section>
+        <div class="separator"></div>
+        <header class="agent"><span class="agent-icon">✦</span><span>SYSTEM ARCHITECT</span><span class="live-dot" aria-label="运行中"></span><span class="time">刚刚</span></header>
+        <div class="message message--final"><div>我正在整理 API、Worker 和审计日志的职责边界，并会将结论写入项目架构说明。</div><span class="generation" role="status">正在生成</span></div>
+        <div class="legend"><span><i></i>波浪：仅当前等待工具或最后一条生成中的文本</span><span><i class="static"></i>静态：已完成的工具与历史内容</span></div>
+      </article>
+    </main>
+    <script>
+      document.querySelectorAll('.tool').forEach((button) => button.addEventListener('click', () => {
+        const body = document.getElementById(button.dataset.target);
+        const expanded = button.getAttribute('aria-expanded') === 'true';
+        button.setAttribute('aria-expanded', String(!expanded));
+        body.classList.toggle('is-open', !expanded);
+      }));
+      document.getElementById('theme').addEventListener('click', () => {
+        const dark = document.documentElement.dataset.theme === 'dark';
+        document.documentElement.dataset.theme = dark ? '' : 'dark';
+        document.getElementById('theme').textContent = dark ? '切换深色' : '切换浅色';
+      });
+    </script>
+  </body>
+</html>

@@ -1,19 +1,68 @@
 import { Global } from "../global"
 import { Log } from "../util/log"
 import path from "path"
+import fs from "fs/promises"
+import lockfile from "proper-lockfile"
 import z from "zod"
 import { Installation } from "../installation"
 import { Flag } from "../flag/flag"
 import { lazy } from "@/util/lazy"
 import { Filesystem } from "../util/filesystem"
-
-// Try to import bundled snapshot (generated at build time)
-// Falls back to undefined in dev mode when snapshot doesn't exist
-/* @ts-ignore */
+import { withKeyedLock } from "../util/lock"
+import { profileFor } from "./hexin-profiles"
+import { HEXIN_ENDPOINT } from "./hexin-endpoint"
+import bootstrapCatalogText from "./models-bootstrap.json" with { type: "text" }
 
 export namespace ModelsDev {
   const log = Log.create({ service: "models.dev" })
-  const filepath = path.join(Global.Path.cache, "models.json")
+  export const HEXIN_GATEWAY_URL = HEXIN_ENDPOINT.url
+  export const HEXIN_DEFAULT_CONTEXT_LIMIT = 200_000
+  const LOCAL_HEXIN_MODEL_IDS = [
+    "gpt-5.5",
+    "gpt-5.4",
+    "gpt-5.4-mini",
+    "gpt-5.4-nano",
+    "kimi-k2.5",
+    "kimi-k2.6",
+    "kimi-k2.7-code",
+    "glm-5",
+    "glm-5.1",
+    "openai/glm-5.1",
+    "qwen3.7-max",
+    "claude-sonnet-4-6",
+    "cy-claude-sonnet-4-6",
+    "cy-claude-sonnet-4-6-v2",
+  ] as const
+
+  const KILO_API_URL = "https://api.kilo.ai/api/gateway"
+  const OMITTED_PRODUCT_PROVIDER_IDS = new Set(["opencorvus"])
+
+  const ExperimentalModeCost = z
+    .object({
+      input: z.number(),
+      output: z.number(),
+      cache_read: z.number().optional(),
+      cache_write: z.number().optional(),
+    })
+    .strict()
+
+  const ExperimentalMode = z
+    .object({
+      cost: ExperimentalModeCost.optional(),
+      provider: z
+        .object({
+          body: z.record(z.string(), z.unknown()),
+          headers: z.record(z.string(), z.string()).optional(),
+        })
+        .strict(),
+    })
+    .strict()
+
+  const Experimental = z
+    .object({
+      modes: z.record(z.string(), ExperimentalMode),
+    })
+    .strict()
 
   export const Model = z.object({
     id: z.string(),
@@ -22,7 +71,7 @@ export namespace ModelsDev {
     release_date: z.string(),
     attachment: z.boolean(),
     reasoning: z.boolean(),
-    temperature: z.boolean(),
+    temperature: z.boolean().default(false),
     tool_call: z.boolean(),
     interleaved: z
       .union([
@@ -61,41 +110,222 @@ export namespace ModelsDev {
         output: z.array(z.enum(["text", "audio", "image", "video", "pdf"])),
       })
       .optional(),
-    experimental: z.boolean().optional(),
+    experimental: Experimental.optional(),
     status: z.enum(["alpha", "beta", "deprecated"]).optional(),
-    options: z.record(z.string(), z.any()),
+    options: z.record(z.string(), z.any()).default({}),
     headers: z.record(z.string(), z.string()).optional(),
     provider: z.object({ npm: z.string().optional(), api: z.string().optional() }).optional(),
     variants: z.record(z.string(), z.record(z.string(), z.any())).optional(),
-  })
+  }).passthrough()
   export type Model = z.infer<typeof Model>
 
-  export const Provider = z.object({
-    api: z.string().optional(),
-    name: z.string(),
-    env: z.array(z.string()),
-    id: z.string(),
-    npm: z.string().optional(),
-    models: z.record(z.string(), Model),
-  })
+  export const Provider = z
+    .object({
+      api: z.string().optional(),
+      name: z.string(),
+      env: z.array(z.string()),
+      id: z.string(),
+      npm: z.string().optional(),
+      models: z.record(z.string(), Model),
+    })
+    .passthrough()
 
   export type Provider = z.infer<typeof Provider>
+
+  const Catalog = z.record(z.string(), Provider)
+
+  export interface HexinModelLimits {
+    context: number
+    input?: number
+    output: number
+  }
+
+  function hexinModel(
+    id: string,
+    limit: HexinModelLimits = { context: HEXIN_DEFAULT_CONTEXT_LIMIT, output: 0 },
+  ): Model {
+    const profile = profileFor(id)
+    const input: Array<"text" | "audio" | "image" | "video" | "pdf"> = ["text"]
+    if (profile.image_in) input.push("image")
+    if (profile.pdf_in) input.push("pdf")
+
+    return {
+      id,
+      name: profile.name || id,
+      family: profile.family,
+      attachment: profile.attachment,
+      reasoning: profile.reasoning,
+      tool_call: profile.toolcall,
+      temperature: profile.temperature ?? true,
+      interleaved: profile.interleaved || undefined,
+      release_date: "",
+      modalities: {
+        input,
+        output: ["text"],
+      },
+      limit,
+      cost: {
+        input: 0,
+        output: 0,
+        cache_read: 0,
+        cache_write: 0,
+      },
+      options: {},
+    }
+  }
+
+  function hexinProvider(input?: Provider): Provider {
+    const ids = Object.keys(input?.models ?? {})
+    const modelIDs = ids.length > 0 ? ids : Array.from(LOCAL_HEXIN_MODEL_IDS)
+    const models = Object.fromEntries(modelIDs.map((id) => [id, hexinModel(id, input?.models[id]?.limit)]))
+    return {
+      id: "hexin",
+      env: input?.env ?? ["HEXIN_API_KEY"],
+      npm: "@ai-sdk/openai-compatible",
+      api: HEXIN_GATEWAY_URL,
+      name: input?.name ?? "Hexin OpenAI Gateway",
+      models,
+    }
+  }
+
+  function kiloModel(id: string): Model {
+    return {
+      id,
+      name: id === "inclusionai/ling-2.6-1t" ? "inclusionAI: Ling-2.6-1T" : id,
+      family: "ling",
+      attachment: false,
+      reasoning: false,
+      tool_call: true,
+      temperature: true,
+      release_date: "2026-04-23",
+      modalities: {
+        input: ["text"],
+        output: ["text"],
+      },
+      limit: {
+        context: 262_144,
+        output: 32_768,
+      },
+      cost: {
+        input: 0.3,
+        output: 2.5,
+        cache_read: 0.06,
+      },
+      options: {},
+    }
+  }
+
+  function kiloProvider(input?: Provider): Provider {
+    const ids = Object.keys(input?.models ?? {})
+    const modelIDs = ids.length > 0 ? ids : ["inclusionai/ling-2.6-1t"]
+    return {
+      id: "kilo",
+      env: input?.env ?? ["KILO_API_KEY"],
+      npm: "@ai-sdk/openai-compatible",
+      api: input?.api ?? KILO_API_URL,
+      name: input?.name ?? "Kilo Gateway",
+      models: Object.fromEntries(modelIDs.map((id) => [id, input?.models?.[id] ?? kiloModel(id)])),
+    }
+  }
+
+  export function withLocalProviders(input: Record<string, Provider>): Record<string, Provider> {
+    const catalog = withoutOmittedProductProviders(input)
+    return {
+      ...catalog,
+      hexin: hexinProvider(input.hexin),
+      kilo: kiloProvider(input.kilo),
+    }
+  }
 
   function url() {
     return Flag.OPENCORVUS_MODELS_URL || "https://models.dev"
   }
 
+  const LOCAL_PROVIDER_IDS = ["hexin", "kilo"] as const
+  const catalogWriterLocks = new Map<string, Promise<unknown>>()
+
+  function withoutOmittedProductProviders(input: Record<string, Provider>): Record<string, Provider> {
+    return Object.fromEntries(
+      Object.entries(input).filter(([providerID]) => !OMITTED_PRODUCT_PROVIDER_IDS.has(providerID)),
+    )
+  }
+
+  export function catalogPath(): string {
+    return path.resolve(Flag.OPENCORVUS_MODELS_PATH ?? path.join(Global.Path.data, "models.json"))
+  }
+
+  function bootstrapCatalog(): Record<string, Provider> {
+    let input: unknown
+    try {
+      input = JSON.parse(bootstrapCatalogText as unknown as string)
+    } catch (error) {
+      throw new Error(
+        `Bundled model catalog is invalid JSON: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
+    const remote = parseCatalog(input, "bundled bootstrap", false)
+    return parseCatalog(withLocalProviders(remote), "bundled bootstrap")
+  }
+
+  async function provisionDefaultCatalog(): Promise<void> {
+    if (Flag.OPENCORVUS_MODELS_PATH) return
+    const source = catalogPath()
+    if (await Filesystem.exists(source)) return
+    const body = JSON.stringify(bootstrapCatalog(), null, 2)
+    const created = await Filesystem.writeAtomicIfAbsent(source, body, 0o600)
+    if (created) log.info("provisioned bundled model catalog", { source })
+  }
+
+  async function writeCatalogTransaction(
+    update: (current: Record<string, Provider>) => Record<string, Provider>,
+  ): Promise<Record<string, Provider>> {
+    const source = catalogPath()
+    await provisionDefaultCatalog()
+    await fs.mkdir(path.dirname(source), { recursive: true })
+    return withKeyedLock(catalogWriterLocks, source, async () => {
+      const release = await lockfile.lock(source, { realpath: false })
+      try {
+        const current = parseCatalog(await Filesystem.readJson<unknown>(source), source)
+        const next = parseCatalog(update(current), source)
+        await Filesystem.writeAtomic(source, JSON.stringify(next, null, 2), 0o600)
+        ModelsDev.Data.reset()
+        return next
+      } finally {
+        await release()
+      }
+    })
+  }
+
+  function parseCatalog(input: unknown, source: string, requireLocalProviders = true): Record<string, Provider> {
+    const parsed = Catalog.safeParse(input)
+    if (!parsed.success) {
+      const details = parsed.error.issues
+        .slice(0, 20)
+        .map((issue) => `${issue.path.join(".") || "<root>"}: ${issue.message}`)
+        .join("; ")
+      throw new Error(`Model catalog ${source} is invalid: ${details}`)
+    }
+    const catalog = withoutOmittedProductProviders(parsed.data)
+    if (requireLocalProviders) {
+      for (const providerID of LOCAL_PROVIDER_IDS) {
+        if (!catalog[providerID]) {
+          throw new Error(`Model catalog ${source} is missing required provider ${providerID}`)
+        }
+      }
+    }
+    return catalog
+  }
+
   export const Data = lazy(async () => {
-    const result = await Filesystem.readJson(Flag.OPENCORVUS_MODELS_PATH ?? filepath).catch(() => {})
-    if (result) return result
-    // @ts-ignore
-    const snapshot = await import("./models-snapshot")
-      .then((m) => m.snapshot as Record<string, unknown>)
-      .catch(() => undefined)
-    if (snapshot) return snapshot
-    if (Flag.OPENCORVUS_DISABLE_MODELS_FETCH) return {}
-    const json = await fetch(`${url()}/api.json`).then((x) => x.text())
-    return JSON.parse(json)
+    const source = catalogPath()
+    await provisionDefaultCatalog()
+    let input: unknown
+    try {
+      input = await Filesystem.readJson(source)
+    } catch (error) {
+      throw new Error(`Model catalog ${source} is unreadable: ${error instanceof Error ? error.message : String(error)}`)
+    }
+    return parseCatalog(input, source)
   })
 
   export async function get() {
@@ -103,30 +333,50 @@ export namespace ModelsDev {
     return result as Record<string, Provider>
   }
 
-  export async function refresh() {
-    const result = await fetch(`${url()}/api.json`, {
-      headers: {
-        "User-Agent": Installation.USER_AGENT,
-      },
-      signal: AbortSignal.timeout(10 * 1000),
-    }).catch((e) => {
-      log.error("Failed to fetch models.dev", {
-        error: e,
+  /**
+   * Pull a fresh registry catalog from the configured URL and atomically replace
+   * the canonical catalog file. Returns `{ ok: true, fetchedAt }` on a
+   * successful update, otherwise `{ ok: false, error }`. Callers are the
+   * UI button in ProvidersPanel, `opencorvus models --refresh`, and
+   * `POST /provider/refresh` — there is no implicit invocation.
+   */
+  export async function refresh(): Promise<{ ok: true; fetchedAt: number } | { ok: false; error: string }> {
+    try {
+      const result = await fetch(`${url()}/api.json`, {
+        headers: { "User-Agent": Installation.USER_AGENT },
+        signal: AbortSignal.timeout(10 * 1000),
       })
-    })
-    if (result && result.ok) {
-      await Filesystem.write(filepath, await result.text())
-      ModelsDev.Data.reset()
+      if (!result.ok) {
+        const error = `${result.status} ${result.statusText}`
+        log.error("registry refresh non-2xx", { error })
+        return { ok: false, error }
+      }
+      const source = `${url()}/api.json`
+      const remote = parseCatalog(await result.json(), source, false)
+      await writeCatalogTransaction((current) => ({
+        ...withLocalProviders(remote),
+        hexin: current.hexin,
+      }))
+      const fetchedAt = Date.now()
+      log.info("registry refreshed", { fetchedAt })
+      return { ok: true, fetchedAt }
+    } catch (e) {
+      const error = e instanceof Error ? e.message : String(e)
+      log.error("registry refresh failed", { error })
+      return { ok: false, error }
     }
   }
-}
 
-if (!Flag.OPENCORVUS_DISABLE_MODELS_FETCH && !process.argv.includes("--get-yargs-completions")) {
-  ModelsDev.refresh()
-  setInterval(
-    async () => {
-      await ModelsDev.refresh()
-    },
-    60 * 1000 * 60,
-  ).unref()
+  export async function refreshHexinProvider(limits: Record<string, HexinModelLimits>): Promise<Provider> {
+    const provider = hexinProvider({
+      id: "hexin",
+      env: ["HEXIN_API_KEY"],
+      npm: "@ai-sdk/openai-compatible",
+      api: HEXIN_GATEWAY_URL,
+      name: "Hexin OpenAI Gateway",
+      models: Object.fromEntries(Object.entries(limits).map(([id, limit]) => [id, hexinModel(id, limit)])),
+    })
+    await writeCatalogTransaction((current) => ({ ...current, hexin: provider }))
+    return provider
+  }
 }

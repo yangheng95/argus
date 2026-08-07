@@ -4,17 +4,14 @@ import type {
   Project,
   Model,
   Provider,
-  PermissionRequest,
-  UserMessage,
-  Message,
+  VisibleMessage,
   Part,
   Auth,
   Config,
-} from "@opencorvus-ai/sdk/v2"
+} from "@opencorvus-ai/sdk"
+import type { Hono } from "hono"
 
 import type { BunShell } from "./shell"
-import { type ToolDefinition } from "./tool"
-
 export * from "./tool"
 
 export type ProviderContext = {
@@ -23,6 +20,8 @@ export type ProviderContext = {
   options: Record<string, any>
 }
 
+type UserMessage = Extract<VisibleMessage, { role: "user" }>
+
 export type PluginInput = {
   client: ReturnType<typeof createOpenCorvusClient>
   project: Project
@@ -30,9 +29,53 @@ export type PluginInput = {
   worktree: string
   serverUrl: URL
   $: BunShell
+  resources: PluginResources
 }
 
 export type Plugin = (input: PluginInput) => Promise<Hooks>
+
+export type PluginResourceOS = "win32" | "linux" | "darwin"
+
+export type PluginResourceKind = "worker" | "asset" | "runtime"
+
+export type PluginResourceManifestEntry = {
+  id: string
+  kind: PluginResourceKind
+  path?: string
+  paths?: Partial<Record<PluginResourceOS, string>>
+}
+
+export type PluginResource = {
+  id: string
+  kind: PluginResourceKind
+  path: string
+  absolutePath: string
+}
+
+export type PluginResources = {
+  all(): PluginResource[]
+  get(id: string): PluginResource
+}
+
+export type PluginServiceRegistration = {
+  id: string
+  app: Hono
+}
+
+export type OpenCorvusPluginManifest = {
+  packageSpecifier: string
+  // ID = identifier. The serviceID owns the dynamic /plugin/:id namespace.
+  serviceID: string
+  backendExport: string
+  overlayExport: string
+  resources: PluginResourceManifestEntry[]
+}
+
+export type AuthPromptRule = {
+  key: string
+  op: "eq" | "neq"
+  value: string
+}
 
 export type AuthHook = {
   provider: string
@@ -41,6 +84,7 @@ export type AuthHook = {
     | {
         type: "oauth"
         label: string
+        preferred?: boolean
         prompts?: Array<
           | {
               type: "text"
@@ -48,25 +92,27 @@ export type AuthHook = {
               message: string
               placeholder?: string
               validate?: (value: string) => string | undefined
-              condition?: (inputs: Record<string, string>) => boolean
+              when?: AuthPromptRule
             }
           | {
               type: "select"
               key: string
               message: string
+              selectValue: string
               options: Array<{
                 label: string
                 value: string
                 hint?: string
               }>
-              condition?: (inputs: Record<string, string>) => boolean
+              when?: AuthPromptRule
             }
         >
-        authorize(inputs?: Record<string, string>): Promise<AuthOuathResult>
+        authorize(inputs?: Record<string, string>): Promise<AuthOAuthResult>
       }
     | {
         type: "api"
         label: string
+        preferred?: boolean
         prompts?: Array<
           | {
               type: "text"
@@ -74,18 +120,19 @@ export type AuthHook = {
               message: string
               placeholder?: string
               validate?: (value: string) => string | undefined
-              condition?: (inputs: Record<string, string>) => boolean
+              when?: AuthPromptRule
             }
           | {
               type: "select"
               key: string
               message: string
+              selectValue: string
               options: Array<{
                 label: string
                 value: string
                 hint?: string
               }>
-              condition?: (inputs: Record<string, string>) => boolean
+              when?: AuthPromptRule
             }
         >
         authorize?(inputs?: Record<string, string>): Promise<
@@ -93,6 +140,7 @@ export type AuthHook = {
               type: "success"
               key: string
               provider?: string
+              metadata?: Record<string, string>
             }
           | {
               type: "failed"
@@ -102,7 +150,7 @@ export type AuthHook = {
   )[]
 }
 
-export type AuthOuathResult = { url: string; instructions: string } & (
+export type AuthOAuthResult = { url: string; instructions: string } & (
   | {
       method: "auto"
       callback(): Promise<
@@ -115,8 +163,9 @@ export type AuthOuathResult = { url: string; instructions: string } & (
                 access: string
                 expires: number
                 accountId?: string
+                enterpriseUrl?: string
               }
-            | { key: string }
+            | { key: string; metadata?: Record<string, string> }
           ))
         | {
             type: "failed"
@@ -135,8 +184,9 @@ export type AuthOuathResult = { url: string; instructions: string } & (
                 access: string
                 expires: number
                 accountId?: string
+                enterpriseUrl?: string
               }
-            | { key: string }
+            | { key: string; metadata?: Record<string, string> }
           ))
         | {
             type: "failed"
@@ -145,13 +195,21 @@ export type AuthOuathResult = { url: string; instructions: string } & (
     }
 )
 
+export type ProviderHookContext = {
+  auth?: Auth
+}
+
+export type ProviderHook = {
+  id: string
+  models?: (provider: Provider, context: ProviderHookContext) => Promise<Record<string, Model>>
+}
+
 export interface Hooks {
   event?: (input: { event: Event }) => Promise<void>
+  service?: () => Promise<PluginServiceRegistration | PluginServiceRegistration[] | void>
   config?: (input: Config) => Promise<void>
-  tool?: {
-    [key: string]: ToolDefinition
-  }
   auth?: AuthHook
+  provider?: ProviderHook
   /**
    * Called when a new message is received
    */
@@ -170,13 +228,18 @@ export interface Hooks {
    */
   "chat.params"?: (
     input: { sessionID: string; agent: string; model: Model; provider: ProviderContext; message: UserMessage },
-    output: { temperature: number; topP: number; topK: number; options: Record<string, any> },
+    output: {
+      temperature: number | undefined
+      topP: number | undefined
+      topK: number | undefined
+      maxOutputTokens: number | undefined
+      options: Record<string, any>
+    },
   ) => Promise<void>
   "chat.headers"?: (
     input: { sessionID: string; agent: string; model: Model; provider: ProviderContext; message: UserMessage },
     output: { headers: Record<string, string> },
   ) => Promise<void>
-  "permission.ask"?: (input: PermissionRequest, output: { status: "ask" | "deny" | "allow" }) => Promise<void>
   "command.execute.before"?: (
     input: { command: string; sessionID: string; arguments: string },
     output: { parts: Part[] },
@@ -201,7 +264,7 @@ export interface Hooks {
     input: {},
     output: {
       messages: {
-        info: Message
+        info: VisibleMessage
         parts: Part[]
       }[]
     },
@@ -213,16 +276,12 @@ export interface Hooks {
     },
   ) => Promise<void>
   /**
-   * Called before session compaction starts. Allows plugins to customize
-   * the compaction prompt.
+   * Called before session compaction starts. Allows plugins to append
+   * evidence context to the host-owned compaction prompt.
    *
    * - `context`: Additional context strings appended to the default prompt
-   * - `prompt`: If set, replaces the default compaction prompt entirely
    */
-  "experimental.session.compacting"?: (
-    input: { sessionID: string },
-    output: { context: string[]; prompt?: string },
-  ) => Promise<void>
+  "experimental.session.compacting"?: (input: { sessionID: string }, output: { context: string[] }) => Promise<void>
   "experimental.text.complete"?: (
     input: { sessionID: string; messageID: string; partID: string },
     output: { text: string },
@@ -231,107 +290,4 @@ export interface Hooks {
    * Modify tool definitions (description and parameters) sent to LLM
    */
   "tool.definition"?: (input: { toolID: string }, output: { description: string; parameters: any }) => Promise<void>
-  /**
-   * Register custom evaluation checks. Plugin pushes checks into `output.checks`.
-   */
-  "evaluation.checks"?: (
-    input: {
-      taskID?: string
-      runID?: string
-      request?: string
-      config: Record<string, unknown>
-    },
-    output: {
-      checks: Array<{
-        name: string
-        mode: "soft" | "strict"
-        run: (ctx: {
-          request?: string
-          delivery: { summary: string; diffs?: any[] }
-        }) => Promise<{
-          status: "passed" | "failed" | "skipped"
-          evidence: string
-          artifacts?: Array<{ kind: string; label: string; payload: Record<string, any> }>
-        }>
-      }>
-    },
-  ) => Promise<void>
-  /**
-   * Post-process evaluation results (e.g. send notifications, persist to external systems).
-   */
-  "evaluation.result"?: (
-    input: {
-      taskID?: string
-      runID?: string
-      request?: string
-    },
-    output: {
-      status: string
-      verdict: string
-      summary: string
-      checks: any[]
-      artifacts: any[]
-    },
-  ) => Promise<void>
-  /**
-   * Provide structured evaluation analysis without invoking the default evaluator model.
-   */
-  "evaluation.analysis"?: (
-    input: {
-      task: {
-        title: string
-        request: string
-        sessionID?: string
-      }
-      goals: Array<{
-        description: string
-        criteria: string
-        priority: "blocking" | "advisory"
-        check_selector?: string[]
-      }>
-      delivery: {
-        summary: string
-        changedFiles: string[]
-        diffs?: Array<{ file: string; diff?: string }>
-      }
-      checkResults: Array<{
-        name: string
-        status: "passed" | "failed" | "skipped"
-        evidence?: string
-      }>
-    },
-    output: {
-      analysis?: {
-        verdict: "accepted" | "rejected" | "inconclusive"
-        classification: "transient" | "environment" | "input" | "permission" | "evaluation" | "strategy" | "unknown"
-        summary: string
-        goal_statuses: Array<{
-          goal_index: number
-          status: "passed" | "failed" | "inconclusive"
-          evidence: string
-          reasoning: string
-        }>
-        replan_guidance?: {
-          root_cause: string
-          what_failed: string
-          suggested_strategy: string
-          avoid_approaches: string[]
-        } | null
-      }
-    },
-  ) => Promise<void>
-  /**
-   * Called after delivery is persisted. Plugins can trigger deployment, doc generation, etc.
-   */
-  "delivery.ready"?: (
-    input: {
-      taskID: string
-      runID: string
-      deliveryID: string
-      delivery: { summary: string; changedFiles: string[]; diffs: any[] }
-    },
-    output: {
-      actions: Array<{ name: string; status: string; summary: string; artifacts?: any[] }>
-    },
-  ) => Promise<void>
 }

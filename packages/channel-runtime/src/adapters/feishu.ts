@@ -117,15 +117,13 @@ export class FeishuAdapter implements ChannelAdapter {
     this.server = undefined
   }
 
-  async sendMessage(channel: string, thread: string, text: string): Promise<void> {
+  async sendMessage(_channel: string, thread: string, text: string): Promise<void> {
     const token = await this.tenant()
     const payload: Payload = {
       msg_type: "text",
       content: JSON.stringify({ text }),
     }
-    const sent = await this.reply(token, thread, payload)
-    if (sent) return
-    await this.create(token, channel, payload)
+    await this.reply(token, thread, payload)
   }
 
   async uploadImage(
@@ -163,8 +161,7 @@ export class FeishuAdapter implements ChannelAdapter {
       msg_type: "image",
       content: JSON.stringify({ image_key: imageKey }),
     }
-    const sent = await this.reply(token, thread, payload)
-    if (!sent) await this.create(token, channel, payload)
+    await this.reply(token, thread, payload)
     if (!title || title === filename) return
     await this.sendMessage(channel, thread, title)
   }
@@ -188,19 +185,19 @@ export class FeishuAdapter implements ChannelAdapter {
     const body = (await req.json().catch(() => undefined)) as Body | undefined
     if (!body) return Response.json({ error: "invalid body" }, { status: 400 })
 
-    const challenge = typeof body.challenge === "string" ? body.challenge : undefined
-    if (body.type === "url_verification" && challenge) return Response.json({ challenge })
-    if (challenge) return Response.json({ challenge })
-
     const token =
       typeof body.header?.token === "string"
         ? body.header.token
         : typeof body.token === "string"
           ? body.token
           : undefined
-    if (this.verificationToken && token && token !== this.verificationToken) {
+    if (this.verificationToken && token !== this.verificationToken) {
       return Response.json({ error: "invalid token" }, { status: 401 })
     }
+
+    const challenge = typeof body.challenge === "string" ? body.challenge : undefined
+    if (body.type === "url_verification" && challenge) return Response.json({ challenge })
+    if (challenge) return Response.json({ challenge })
 
     const eventType = body.header?.event_type
     if (eventType !== "im.message.receive_v1") return Response.json({ ok: true })
@@ -255,7 +252,7 @@ export class FeishuAdapter implements ChannelAdapter {
   }
 
   private async reply(token: string, thread: string, payload: Payload) {
-    if (!thread) return false
+    if (!thread) throw new Error("Feishu reply failed: missing thread")
     const res = await fetch(`https://open.feishu.cn/open-apis/im/v1/messages/${encodeURIComponent(thread)}/reply`, {
       method: "POST",
       headers: {
@@ -265,8 +262,7 @@ export class FeishuAdapter implements ChannelAdapter {
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(30_000),
     })
-    if (res.ok) return true
-    if (res.status === 400 || res.status === 404) return false
+    if (res.ok) return
     throw new Error(`Feishu reply failed: ${res.status} ${await res.text()}`)
   }
 

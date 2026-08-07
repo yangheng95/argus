@@ -5,11 +5,15 @@ import DESCRIPTION from "./ls.txt"
 import { Instance } from "../project/instance"
 import { Ripgrep } from "../file/ripgrep"
 import { assertExternalDirectory } from "./external-directory"
+import { taskIDForSession } from "@/engine/task-session-lineage"
 
 export const IGNORE_PATTERNS = [
   "node_modules/",
   "__pycache__/",
   ".git/",
+  // `.opencorvus/` covers all Task runtime data and dispatch worktrees.
+  ".opencorvus/",
+  ".opencorvus-meta.json",
   "dist/",
   "build/",
   "target/",
@@ -55,8 +59,10 @@ export const ListTool = Tool.define("list", {
     })
 
     const ignoreGlobs = IGNORE_PATTERNS.map((p) => `!${p}*`).concat(params.ignore?.map((p) => `!${p}`) || [])
+    const taskID = taskIDForSession(ctx.sessionID)
+    if (!taskID) throw new Error(`List Session ${ctx.sessionID} does not belong to a Task`)
     const files: string[] = []
-    for await (const file of Ripgrep.files({ cwd: searchPath, glob: ignoreGlobs, signal: ctx.abort })) {
+    for await (const file of Ripgrep.filesForTask({ cwd: searchPath, glob: ignoreGlobs, signal: ctx.abort, taskID })) {
       files.push(file)
       if (files.length >= LIMIT) break
     }

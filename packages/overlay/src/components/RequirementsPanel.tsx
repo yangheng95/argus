@@ -1,92 +1,117 @@
 /**
  * RequirementsPanel — structured requirements list from Requirements Agent output.
  *
- * Three states:
- * 1. Generating — shows streaming agent messages (spec/goal stage messages)
- * 2. Complete — shows structured requirements list with type/priority badges
- * 3. Pending — shows "pending" hint when no data and not generating
+ * Two states: structured requirements or an explicit pending hint.
  */
-import { For, Show } from "solid-js";
-import { MessageView } from "./MessageView";
-import { t } from "../utils/i18n";
+import { Show } from "solid-js"
+import { cardExpanded, setCardExpanded } from "../store/conversation-ui"
+import { t } from "../utils/i18n"
+import { Disclosure } from "./ui/Disclosure"
+import { ProgressiveList } from "./ui/ProgressiveList"
 
 interface Requirement {
-  id: string;
-  description: string;
-  type: "explicit" | "inferred" | "system";
-  priority: "blocking" | "advisory";
+  id: string
+  description: string
+  type: "explicit" | "inferred" | "system"
+  priority: "blocking" | "advisory"
+  acceptance: {
+    accepted: boolean
+    claimingDeliverySliceRevisionIDs: string[]
+    acceptedDeliverySliceRevisionIDs: string[]
+    completionDecisionArtifactID?: string
+  }
 }
 
 interface RequirementsPanelProps {
-  requirements: Requirement[] | undefined;
-  /** Spec content (legacy, shown as collapsible detail) */
-  specContent?: string;
-  /** Whether the requirements step is currently running */
-  isGenerating?: boolean;
-  /** Streaming agent messages from the requirements stage */
-  streamingMessages?: any[];
+  requirements: Requirement[] | undefined
 }
 
 function typeBadgeClass(type: string): string {
   switch (type) {
-    case "explicit": return "req-type--explicit";
-    case "inferred": return "req-type--inferred";
-    case "system": return "req-type--system";
-    default: return "";
+    case "explicit":
+      return "req-type--explicit"
+    case "inferred":
+      return "req-type--inferred"
+    case "system":
+      return "req-type--system"
+    default:
+      return ""
   }
 }
 
+function requirementTypeLabel(type: Requirement["type"]): string {
+  return t(`task_scope.requirement_type.${type}`)
+}
+
+function RequirementItem(props: { requirement: Requirement; index: number }) {
+  const cardKey = () => `req:${props.requirement.id}`
+  const expanded = () => cardExpanded(cardKey(), false)
+
+  return (
+    <Disclosure.Root
+      class="req-item task-scope-disclosure-item"
+      data-requirement-id={props.requirement.id}
+      animated
+      size="md"
+      defaultOpen={expanded()}
+      onOpenChange={(open) => setCardExpanded(cardKey(), open)}
+    >
+      <Disclosure.Trigger
+        class="task-scope-disclosure-trigger req-item-summary"
+        data-ui="requirement-header"
+        indicatorPosition="end"
+      >
+        <span class="req-index" title={props.requirement.id}>
+          REQ {String(props.index + 1).padStart(2, "0")}
+        </span>
+        <span class="req-summary">{props.requirement.description}</span>
+      </Disclosure.Trigger>
+      <Disclosure.Content class="task-scope-disclosure-content req-item-content">
+        <div class="task-scope-disclosure-content-inner req-item-body">
+          <div class="req-desc">{props.requirement.description}</div>
+          <div class="req-item-meta">
+            <span class={`req-type ${typeBadgeClass(props.requirement.type)}`}>
+              {requirementTypeLabel(props.requirement.type)}
+            </span>
+            <span
+              class="req-status"
+              data-req-status={props.requirement.acceptance.accepted ? "accepted" : "unaccepted"}
+            >
+              {t(
+                props.requirement.acceptance.accepted
+                  ? "task_scope.requirement_acceptance.accepted"
+                  : "task_scope.requirement_acceptance.unaccepted",
+              )}
+            </span>
+            <Show when={props.requirement.priority === "advisory"}>
+              <span class="req-priority">{t("task_scope.requirement_priority.advisory")}</span>
+            </Show>
+          </div>
+        </div>
+      </Disclosure.Content>
+    </Disclosure.Root>
+  )
+}
+
 export function RequirementsPanel(props: RequirementsPanelProps) {
-  const hasData = () => props.requirements && props.requirements.length > 0;
-  const hasStream = () => props.streamingMessages && props.streamingMessages.length > 0;
+  const hasData = () => props.requirements && props.requirements.length > 0
 
   return (
     <div class="req-panel">
-      {/* State 1: Generating — show streaming messages */}
-      <Show when={props.isGenerating && hasStream() && !hasData()}>
-        <div class="req-streaming">
-          <div class="req-streaming-indicator">
-            <span class="agent-card-spinner" />
-            <span class="req-streaming-label">{t("workflow.requirements_generating") || "Analyzing requirements..."}</span>
-          </div>
-          <div class="req-streaming-messages">
-            <For each={props.streamingMessages}>
-              {(msg) => <MessageView message={msg} />}
-            </For>
-          </div>
-        </div>
-      </Show>
-
-      {/* State 2: Complete — show structured list */}
+      {/* Structured requirements list. */}
       <Show when={hasData()}>
-        <div class="req-list">
-          <For each={props.requirements}>
-            {(req) => (
-              <div class="req-item">
-                <span class="req-id">{req.id}</span>
-                <span class={`req-type ${typeBadgeClass(req.type)}`}>{req.type}</span>
-                <span class="req-desc">{req.description}</span>
-                <Show when={req.priority === "advisory"}>
-                  <span class="req-priority">advisory</span>
-                </Show>
-              </div>
-            )}
-          </For>
-        </div>
+        <ProgressiveList
+          items={props.requirements ?? []}
+          class="task-scope-disclosure-list req-list"
+          dataUi="requirements-progressive-list"
+        >
+          {(requirement, index) => <RequirementItem requirement={requirement} index={index()} />}
+        </ProgressiveList>
       </Show>
 
-      {/* State 3: Pending — no data and not generating */}
-      <Show when={!hasData() && !props.isGenerating}>
-        <p class="req-empty">{t("workflow.requirements_pending") || "Requirements analysis pending..."}</p>
-      </Show>
-
-      {/* Spec content — always available as collapsible detail when present */}
-      <Show when={props.specContent}>
-        <details class="req-spec-detail">
-          <summary>{t("workflow.spec_detail") || "Spec Detail"}</summary>
-          <pre class="req-spec-content">{props.specContent}</pre>
-        </details>
+      <Show when={!hasData()}>
+        <p class="empty-hint empty-hint--card">{t("task_scope.requirements_pending")}</p>
       </Show>
     </div>
-  );
+  )
 }

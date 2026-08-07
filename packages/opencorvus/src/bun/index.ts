@@ -1,7 +1,7 @@
 import z from "zod"
 import { Global } from "../global"
 import { Log } from "../util/log"
-import path from "path"
+import path from "node:path"
 import { Filesystem } from "../util/filesystem"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { text } from "node:stream/consumers"
@@ -9,16 +9,18 @@ import { Lock } from "../util/lock"
 import { PackageRegistry } from "./registry"
 import { proxied } from "@/util/proxied"
 import { Process } from "../util/process"
+import { BunExecutable } from "./executable"
 
 export namespace BunProc {
   const log = Log.create({ service: "bun" })
 
   export async function run(cmd: string[], options?: Process.Options) {
+    const executable = BunExecutable.resolve()
     log.info("running", {
-      cmd: [which(), ...cmd],
+      cmd: [executable, ...cmd],
       ...options,
     })
-    const result = Process.spawn([which(), ...cmd], {
+    const result = Process.spawnHost([executable, ...cmd], {
       ...options,
       stdout: "pipe",
       stderr: "pipe",
@@ -43,15 +45,7 @@ export namespace BunProc {
   }
 
   export function which() {
-    // In dev mode process.execPath is the bun binary itself.
-    // In compiled mode process.execPath is the opencorvus binary — not a bun proxy.
-    // Fall back to bun on PATH so `bun add` still works after compilation.
-    const base = path
-      .basename(process.execPath)
-      .toLowerCase()
-      .replace(/\.exe$/, "")
-    if (base === "bun") return process.execPath
-    return Bun.which("bun") ?? process.execPath
+    return BunExecutable.resolve()
   }
 
   export const InstallFailedError = NamedError.create(
@@ -68,21 +62,35 @@ export namespace BunProc {
 
     const mod = path.join(Global.Path.cache, "node_modules", pkg)
     const pkgjsonPath = path.join(Global.Path.cache, "package.json")
-    const parsed = await Filesystem.readJson<{ dependencies: Record<string, string> }>(pkgjsonPath).catch(async () => {
-      const result = { dependencies: {} as Record<string, string> }
-      await Filesystem.writeJson(pkgjsonPath, result)
-      return result
-    })
+    const packageSchema = z.object({ dependencies: z.record(z.string(), z.string()).optional() }).passthrough()
+    const parsed = (await Filesystem.exists(pkgjsonPath))
+      ? packageSchema.parse(await Filesystem.readJson(pkgjsonPath))
+      : { dependencies: {} as Record<string, string> }
     if (!parsed.dependencies) parsed.dependencies = {} as Record<string, string>
     const dependencies = parsed.dependencies
     const modExists = await Filesystem.exists(mod)
     const cachedVersion = dependencies[pkg]
 
+    async function installedVersion(expected?: string) {
+      const installed = z
+        .object({ version: z.string().min(1) })
+        .passthrough()
+        .parse(await Filesystem.readJson(path.join(mod, "package.json"))).version
+      if (expected !== undefined && installed !== expected) {
+        throw new Error(
+          `Cached package version mismatch for ${pkg}: cache records ${expected}, installed package reports ${installed}`,
+        )
+      }
+      return installed
+    }
+
     if (!modExists || !cachedVersion) {
       // continue to install
     } else if (version !== "latest" && cachedVersion === version) {
+      await installedVersion(cachedVersion)
       return mod
     } else if (version === "latest") {
+      await installedVersion(cachedVersion)
       const isOutdated = await PackageRegistry.isOutdated(pkg, cachedVersion, Global.Path.cache)
       if (!isOutdated) return mod
       log.info("Cached version is outdated, proceeding with install", { pkg, cachedVersion })
@@ -93,7 +101,7 @@ export namespace BunProc {
       "add",
       "--force",
       "--exact",
-      // TODO: get rid of this case (see: https://github.com/oven-sh/bun/issues/19936)
+      // Workaround for bun issue oven-sh/bun#19936: --no-cache required under proxy/CI.
       ...(proxied() || process.env.CI ? ["--no-cache"] : []),
       "--cwd",
       Global.Path.cache,
@@ -120,17 +128,8 @@ export namespace BunProc {
       )
     })
 
-    // Resolve actual version from installed package when using "latest"
-    // This ensures subsequent starts use the cached version until explicitly updated
-    let resolvedVersion = version
-    if (version === "latest") {
-      const installedPkg = await Filesystem.readJson<{ version?: string }>(path.join(mod, "package.json")).catch(
-        () => null,
-      )
-      if (installedPkg?.version) {
-        resolvedVersion = installedPkg.version
-      }
-    }
+    // The installed package metadata, not the requested selector, owns the cached version.
+    const resolvedVersion = await installedVersion()
 
     parsed.dependencies[pkg] = resolvedVersion
     await Filesystem.writeJson(pkgjsonPath, parsed)

@@ -8,35 +8,83 @@ import { Flag } from "@/flag/flag"
 import { Global } from "@/global"
 
 export namespace ConfigPaths {
-  export async function projectFiles(name: string, directory: string, worktree: string) {
-    const files: string[] = []
-    for (const file of [`${name}.jsonc`, `${name}.json`]) {
-      const found = await Filesystem.findUp(file, directory, worktree)
-      for (const resolved of found.toReversed()) {
-        files.push(resolved)
-      }
+  export const CANONICAL_FILE_NAME = "opencorvus.jsonc"
+
+  export const NonCanonicalConfigFileError = NamedError.create(
+    "NonCanonicalConfigFileError",
+    z.object({
+      canonical: z.string(),
+      conflicts: z.array(z.string()).min(1),
+      message: z.string(),
+    }),
+  )
+
+  function rejectNonCanonical(canonical: string, conflicts: string[]): never {
+    throw new NonCanonicalConfigFileError({
+      canonical,
+      conflicts,
+      message:
+        `OpenCorvus configuration has one canonical file: ${canonical}. ` +
+        `Remove the non-canonical configuration source${conflicts.length === 1 ? "" : "s"}: ${conflicts.join(", ")}`,
+    })
+  }
+
+  export async function assertCanonicalDirectory(dir: string, additionalNonCanonicalNames: string[] = []) {
+    const canonical = path.join(dir, CANONICAL_FILE_NAME)
+    const conflicts: string[] = []
+    for (const name of ["opencorvus.json", ...additionalNonCanonicalNames]) {
+      const candidate = path.join(dir, name)
+      if (await Filesystem.exists(candidate)) conflicts.push(candidate)
     }
-    return files
+    if (conflicts.length > 0) rejectNonCanonical(canonical, conflicts)
+    return canonical
+  }
+
+  function boundary(directory: string, worktree: string) {
+    return worktree
+  }
+
+  export function projectFile(directory: string) {
+    return path.join(directory, ".opencorvus", CANONICAL_FILE_NAME)
+  }
+
+  export async function assertCanonicalProject(directory: string, worktree: string) {
+    const canonical = projectFile(directory)
+    const [rootJson, rootJsonc, directoryJson, directoryJsonc] = await Promise.all([
+      Filesystem.findUp("opencorvus.json", directory, worktree),
+      Filesystem.findUp(CANONICAL_FILE_NAME, directory, worktree),
+      Filesystem.findUp(path.join(".opencorvus", "opencorvus.json"), directory, worktree),
+      Filesystem.findUp(path.join(".opencorvus", CANONICAL_FILE_NAME), directory, worktree),
+    ])
+    const resolvedCanonical = Filesystem.resolve(canonical)
+    const conflicts = [...rootJson, ...rootJsonc, ...directoryJson, ...directoryJsonc].filter(
+      (candidate) => Filesystem.resolve(candidate) !== resolvedCanonical,
+    )
+    if (conflicts.length > 0) rejectNonCanonical(canonical, conflicts)
+    await assertCanonicalDirectory(path.dirname(canonical))
+    return canonical
   }
 
   export async function directories(directory: string, worktree: string) {
+    const projectDirectories = !Flag.OPENCORVUS_DISABLE_PROJECT_CONFIG
+      ? await Array.fromAsync(
+          Filesystem.up({
+            targets: [".opencorvus"],
+            start: directory,
+            stop: boundary(directory, worktree),
+          }),
+        )
+      : []
+
     return [
       Global.Path.config,
-      ...(!Flag.OPENCORVUS_DISABLE_PROJECT_CONFIG
-        ? await Array.fromAsync(
-            Filesystem.up({
-              targets: [".opencorvus"],
-              start: directory,
-              stop: worktree,
-            }),
-          )
-        : []),
+      ...projectDirectories.toReversed(),
       ...(Flag.OPENCORVUS_CONFIG_DIR ? [Flag.OPENCORVUS_CONFIG_DIR] : []),
     ]
   }
 
   export function fileInDirectory(dir: string, name: string) {
-    return [path.join(dir, `${name}.jsonc`), path.join(dir, `${name}.json`)]
+    return [path.join(dir, `${name}.jsonc`)]
   }
 
   export const JsonError = NamedError.create(
@@ -76,8 +124,25 @@ export namespace ConfigPaths {
 
   /** Apply {env:VAR} and {file:path} substitutions to config text. */
   async function substitute(text: string, input: ParseSource, missing: "error" | "empty" = "error") {
-    text = text.replace(/\{env:([^}]+)\}/g, (_, varName) => {
-      return process.env[varName] || ""
+    // audit-2026-04-29 W2-V23 — pre-fix the `{env:VAR}` branch
+    // ignored the `missing` parameter completely: an UNSET env var
+    // ALWAYS substituted to "" regardless of whether the caller
+    // asked for "error" mode. A config that referenced
+    // `{env:DATABASE_URL}` for a required field silently bound to
+    // empty string, slipped past zod's `.url()` validator (zod
+    // sees ""), and the sidecar tried to connect to a blank DSN.
+    //
+    // Distinguish UNSET from EXPLICITLY-EMPTY: setting an env var
+    // to "" is the operator saying "deliberately empty", which
+    // we honour. UNSET in "error" mode throws naming the variable.
+    const sourceLabel = source(input)
+    text = text.replace(/\{env:([^}]+)\}/g, (_, varName: string) => {
+      const value = process.env[varName]
+      if (value !== undefined) return value
+      if (missing === "error") {
+        throw new Error(`Config substitution failed: env var ${varName} is unset (referenced from ${sourceLabel})`)
+      }
+      return ""
     })
 
     const fileMatches = Array.from(text.matchAll(/\{file:[^}]+\}/g))

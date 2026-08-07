@@ -1,104 +1,108 @@
-import {
-  ChannelCatalog,
-  type ChannelName,
-  channelRequiredFields,
-  resolveChannel,
-} from "@opencorvus-ai/channel-config"
+import { ChannelCatalog, type ChannelName, channelRequiredFields, resolveChannel } from "@opencorvus-ai/channel-config"
 import type { ChannelAdapter } from "./adapter"
 
 type Env = Record<string, string | undefined>
 type Values = Record<string, string | undefined>
 
-type AdapterOptions = {
-  slack: { token: string; appToken: string; signingSecret?: string }
-  telegram: { token: string }
-  discord: { token: string }
-  feishu: {
-    appId: string
-    appSecret: string
-    host?: string
-    port?: number
-    path?: string
-    verificationToken?: string
-  }
-  whatsapp: {
-    token: string
-    numberId: string
-    host?: string
-    port?: number
-    path?: string
-    verifyToken?: string
-  }
-  googlechat: {
-    serviceAccount: string
-    host?: string
-    port?: number
-    path?: string
-  }
-  msteams: {
-    appId: string
-    appSecret: string
-    host?: string
-    port?: number
-    path?: string
-  }
-  line: {
-    token: string
-    host?: string
-    port?: number
-    path?: string
-    secret?: string
-  }
-  matrix: { homeserver: string; token: string; since?: string }
-  mattermost: {
-    url: string
-    token: string
-    host?: string
-    port?: number
-    path?: string
-  }
-  signal: { service: string; account: string }
-  wecom: {
-    corpId: string
-    secret: string
-    agentId: string
-    host?: string
-    port?: number
-    path?: string
-  }
-  dingtalk: {
-    appKey: string
-    appSecret: string
-    host?: string
-    port?: number
-    path?: string
-    defaultWebhook?: string
-  }
-  qq: {
-    appId: string
-    appSecret: string
-    host?: string
-    port?: number
-    path?: string
-    sandbox?: boolean
-  }
+export type AdapterFactory = Partial<Record<ChannelName, (options: any, id: ChannelName) => ChannelAdapter>>
+
+const nativeOptions: Partial<Record<ChannelName, (values: Values) => unknown>> = {
+  slack: (values) => ({
+    token: values.botToken!,
+    appToken: values.appToken!,
+    signingSecret: values.signingSecret,
+  }),
+  telegram: (values) => ({ token: values.token! }),
+  discord: (values) => ({ token: values.token! }),
+  feishu: (values) => ({
+    appId: values.appId!,
+    appSecret: values.appSecret!,
+    host: values.webhookHost,
+    port: parsePort(values.webhookPort),
+    path: values.webhookPath,
+    verificationToken: values.verificationToken,
+  }),
+  whatsapp: (values) => ({
+    token: values.token!,
+    numberId: values.numberId!,
+    appSecret: values.appSecret!,
+    host: values.webhookHost,
+    port: parsePort(values.webhookPort),
+    path: values.webhookPath,
+    verifyToken: values.verifyToken!,
+  }),
+  googlechat: (values) => ({
+    serviceAccount: values.serviceAccount!,
+    authAudience: values.authAudience!,
+    host: values.webhookHost,
+    port: parsePort(values.webhookPort),
+    path: values.webhookPath,
+  }),
+  msteams: (values) => ({
+    appId: values.appId!,
+    appSecret: values.appSecret!,
+    host: values.webhookHost,
+    port: parsePort(values.webhookPort),
+    path: values.webhookPath,
+  }),
+  line: (values) => ({
+    token: values.token!,
+    host: values.webhookHost,
+    port: parsePort(values.webhookPort),
+    path: values.webhookPath,
+    secret: values.secret!,
+  }),
+  matrix: (values) => ({ homeserver: values.homeserver!, token: values.token!, since: values.since }),
+  mattermost: (values) => ({
+    url: values.url!,
+    token: values.token!,
+    webhookToken: values.webhookToken!,
+    host: values.webhookHost,
+    port: parsePort(values.webhookPort),
+    path: values.webhookPath,
+  }),
+  signal: (values) => ({ service: values.service!, account: values.account! }),
+  wecom: (values) => ({
+    corpId: values.corpId!,
+    secret: values.secret!,
+    agentId: values.agentId!,
+    token: values.token!,
+    encodingAesKey: values.encodingAesKey!,
+    host: values.webhookHost,
+    port: parsePort(values.webhookPort),
+    path: values.webhookPath,
+  }),
+  dingtalk: (values) => ({
+    appKey: values.appKey!,
+    appSecret: values.appSecret!,
+    callbackToken: values.callbackToken!,
+    encodingAesKey: values.encodingAesKey!,
+    host: values.webhookHost,
+    port: parsePort(values.webhookPort),
+    path: values.webhookPath,
+    defaultWebhook: values.defaultWebhook,
+  }),
 }
 
-export const ADAPTER_HINT = `Set one chat channel token set: ${ChannelCatalog.map((item) =>
-  channelRequiredFields(item.id)
-    .map((field) => field.env)
-    .filter((field): field is string => Boolean(field))
-    .join(" + "),
+export const ADAPTER_HINT = `Set one chat channel token set: ${ChannelCatalog.flatMap((item) =>
+  item.implementation.kind === "planned"
+    ? []
+    : [
+        channelRequiredFields(item.id)
+          .map((field) => field.env)
+          .filter((field): field is string => Boolean(field))
+          .join(" + "),
+      ],
 )
   .filter((item) => item.length > 0)
   .join(", ")}.`
 
-export type AdapterFactory = {
-  [K in keyof AdapterOptions]: (opts: AdapterOptions[K]) => ChannelAdapter
-}
-
-export const READY_CHANNELS = ChannelCatalog.map((item) => item.id)
-export const PLANNED_CHANNELS: readonly ChannelName[] = []
+export const READY_CHANNELS = ChannelCatalog.flatMap((item) =>
+  item.implementation.kind === "planned" ? [] : [item.id],
+)
+export const PLANNED_CHANNELS = ChannelCatalog.flatMap((item) =>
+  item.implementation.kind === "planned" ? [item.id] : [],
+)
 
 function parsePort(value?: string) {
   if (!value) return undefined
@@ -117,135 +121,35 @@ function need(id: ChannelName) {
     .join(", ")
 }
 
-function bool(value?: string): boolean | undefined {
-  if (!value) return undefined
-  const text = value.trim().toLowerCase()
-  if (text === "1" || text === "true" || text === "yes" || text === "on") return true
-  if (text === "0" || text === "false" || text === "no" || text === "off") return false
-  return undefined
-}
+function build(id: ChannelName, create: AdapterFactory, values: Values): ChannelAdapter {
+  const info = ChannelCatalog.find((entry) => entry.id === id)
+  if (!info) throw new Error(`Unknown channel adapter: ${id}`)
 
-function build(id: ChannelName, create: AdapterFactory, values: Values) {
-  switch (id) {
-    case "slack":
-      return create.slack({
-        token: values.botToken!,
-        appToken: values.appToken!,
-        signingSecret: values.signingSecret,
-      })
-    case "telegram":
-      return create.telegram({
-        token: values.token!,
-      })
-    case "discord":
-      return create.discord({
-        token: values.token!,
-      })
-    case "feishu":
-      return create.feishu({
-        appId: values.appId!,
-        appSecret: values.appSecret!,
-        host: values.webhookHost,
-        port: parsePort(values.webhookPort),
-        path: values.webhookPath,
-        verificationToken: values.verificationToken,
-      })
-    case "whatsapp":
-      return create.whatsapp({
-        token: values.token!,
-        numberId: values.numberId!,
-        host: values.webhookHost,
-        port: parsePort(values.webhookPort),
-        path: values.webhookPath,
-        verifyToken: values.verifyToken,
-      })
-    case "googlechat":
-      return create.googlechat({
-        serviceAccount: values.serviceAccount!,
-        host: values.webhookHost,
-        port: parsePort(values.webhookPort),
-        path: values.webhookPath,
-      })
-    case "msteams":
-      return create.msteams({
-        appId: values.appId!,
-        appSecret: values.appSecret!,
-        host: values.webhookHost,
-        port: parsePort(values.webhookPort),
-        path: values.webhookPath,
-      })
-    case "line":
-      return create.line({
-        token: values.token!,
-        host: values.webhookHost,
-        port: parsePort(values.webhookPort),
-        path: values.webhookPath,
-        secret: values.secret,
-      })
-    case "matrix":
-      return create.matrix({
-        homeserver: values.homeserver!,
-        token: values.token!,
-        since: values.since,
-      })
-    case "mattermost":
-      return create.mattermost({
-        url: values.url!,
-        token: values.token!,
-        host: values.webhookHost,
-        port: parsePort(values.webhookPort),
-        path: values.webhookPath,
-      })
-    case "signal":
-      return create.signal({
-        service: values.service!,
-        account: values.account!,
-      })
-    case "wecom":
-      return create.wecom({
-        corpId: values.corpId!,
-        secret: values.secret!,
-        agentId: values.agentId!,
-        host: values.webhookHost,
-        port: parsePort(values.webhookPort),
-        path: values.webhookPath,
-      })
-    case "dingtalk":
-      return create.dingtalk({
-        appKey: values.appKey!,
-        appSecret: values.appSecret!,
-        host: values.webhookHost,
-        port: parsePort(values.webhookPort),
-        path: values.webhookPath,
-        defaultWebhook: values.defaultWebhook,
-      })
-    case "qq":
-      return create.qq({
-        appId: values.appId!,
-        appSecret: values.appSecret!,
-        host: values.webhookHost,
-        port: parsePort(values.webhookPort),
-        path: values.webhookPath,
-        sandbox: bool(values.sandbox),
-      })
+  const explicitFactory = create[id]
+  if (explicitFactory) {
+    const projector = nativeOptions[id]
+    return explicitFactory(projector ? projector(values) : values, id)
   }
+  if (info.implementation.kind === "planned") {
+    throw new Error(`Channel ${id} is planned: ${info.implementation.reason}`)
+  }
+  throw new Error(`Native channel ${id} is missing its adapter factory.`)
 }
 
 export function registerAdapters(
   runtime: { register(adapter: ChannelAdapter): unknown },
-  env: Env = process.env,
+  env: Env,
   create: AdapterFactory,
 ) {
   const names: string[] = []
   const warns: string[] = []
 
   for (const item of ChannelCatalog) {
+    if (item.implementation.kind === "planned") continue
     const values = resolveChannel(item.id, undefined, env).values
     const missing = channelRequiredFields(item.id).filter((field) => !values[field.key])
     if (missing.length > 0) {
-      if (have(values)) {
-        warns.push(`Skip ${item.id} channel: missing required env. Need: ${need(item.id)}.`)
-      }
+      if (have(values)) warns.push(`Skip ${item.id} channel: missing required env. Need: ${need(item.id)}.`)
       continue
     }
     runtime.register(build(item.id, create, values))

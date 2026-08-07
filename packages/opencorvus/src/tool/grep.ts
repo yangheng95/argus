@@ -3,19 +3,27 @@ import { text } from "node:stream/consumers"
 import { Tool } from "./tool"
 import { Filesystem } from "../util/filesystem"
 import { Ripgrep } from "../file/ripgrep"
-import { Process } from "../util/process"
+import { ProcessSupervisor } from "@/shell/process-supervisor"
 
 import DESCRIPTION from "./grep.txt"
 import { Instance } from "../project/instance"
 import path from "path"
 import { assertExternalDirectory } from "./external-directory"
+import { redactInlinePayloads } from "../util/inline-base64"
+import { taskIDForSession } from "@/engine/task-session-lineage"
+import { activeTaskExecutionCapsule } from "@/engine/task-execution-capsule-binding"
+import { activeExecutionCapsuleRuntimeFact } from "@/execution-capsule/runtime"
 
 const MAX_LINE_LENGTH = 2000
 
-export const GrepTool = Tool.define("grep", {
+export const SearchCodeTool = Tool.define("search_code", {
   description: DESCRIPTION,
   parameters: z.object({
-    pattern: z.string().describe("The regex pattern to search for in file contents"),
+    pattern: z
+      .string()
+      .describe(
+        'Required regex pattern to search for in file contents. This field is named "pattern"; do not use "query".',
+      ),
     path: z.string().optional().describe("The directory to search in. Defaults to the current working directory."),
     include: z.string().optional().describe('File pattern to include in the search (e.g. "*.js", "*.{ts,tsx}")'),
   }),
@@ -25,7 +33,7 @@ export const GrepTool = Tool.define("grep", {
     }
 
     await ctx.ask({
-      permission: "grep",
+      permission: "search_code",
       patterns: [params.pattern],
       always: ["*"],
       metadata: {
@@ -39,18 +47,23 @@ export const GrepTool = Tool.define("grep", {
     searchPath = path.isAbsolute(searchPath) ? searchPath : path.resolve(Instance.directory, searchPath)
     await assertExternalDirectory(ctx, searchPath, { kind: "directory" })
 
-    const rgPath = await Ripgrep.filepath()
+    const taskID = taskIDForSession(ctx.sessionID)
+    if (!taskID) throw new Error(`Search Session ${ctx.sessionID} does not belong to a Task`)
+    const capsuleRuntime = await activeExecutionCapsuleRuntimeFact()
+    const rgPath = capsuleRuntime?.ripgrepPath ?? (await Ripgrep.filepath())
     const args: string[] = ["-nH", "--hidden", "--no-messages", "--field-match-separator=|", "--regexp", params.pattern]
     if (params.include) {
       args.push("--glob", params.include)
     }
     args.push(searchPath)
 
-    const proc = Process.spawn([rgPath, ...args], {
-      stdout: "pipe",
-      stderr: "pipe",
-      abort: ctx.abort,
+    const proc = await ProcessSupervisor.spawnTaskCommand({ taskID, cwd: searchPath }, {
+      executable: rgPath,
+      args,
+      owner: "search-code",
     })
+    const abort = () => void proc.terminate().catch(() => undefined)
+    ctx.abort.addEventListener("abort", abort, { once: true })
 
     if (!proc.stdout || !proc.stderr) {
       throw new Error("Process output not available")
@@ -59,6 +72,8 @@ export const GrepTool = Tool.define("grep", {
     const output = await text(proc.stdout)
     const errorOutput = await text(proc.stderr)
     const exitCode = await proc.exited
+    ctx.abort.removeEventListener("abort", abort)
+    await proc.dispose()
 
     // Exit codes: 0 = matches found, 1 = no matches, 2 = errors (but may still have matches)
     // With --no-messages, we suppress error output but still get exit code 2 for broken symlinks etc.
@@ -150,7 +165,7 @@ export const GrepTool = Tool.define("grep", {
         matches: totalMatches,
         truncated,
       },
-      output: outputLines.join("\n"),
+      output: redactInlinePayloads(outputLines.join("\n")),
     }
   },
 })

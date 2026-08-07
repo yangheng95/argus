@@ -1,40 +1,53 @@
-import { Instance } from "@/project/instance"
+import { createInstanceState } from "@/project/instance-state"
 import { Plugin } from "../plugin"
 import { map, filter, pipe, fromEntries, mapValues } from "remeda"
 import z from "zod"
 import { fn } from "@/util/fn"
-import type { AuthOuathResult } from "@opencorvus-ai/plugin"
+import type { AuthHook, AuthOAuthResult, AuthPromptRule } from "@opencorvus-ai/plugin"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { Auth } from "@/auth"
+import { lazy } from "@/util/lazy"
 
 export namespace ProviderAuth {
-  const state = Instance.state(async () => {
+  export const Scope = z.enum(["project", "global"])
+  export type Scope = z.infer<typeof Scope>
+
+  async function createState(hooks: Awaited<ReturnType<typeof Plugin.list>>) {
     const methods = pipe(
-      await Plugin.list(),
+      hooks,
       filter((x) => x.auth?.provider !== undefined),
       map((x) => [x.auth!.provider, x.auth!] as const),
       fromEntries(),
     )
-    return { methods, pending: {} as Record<string, AuthOuathResult> }
-  })
+    return { methods, pending: {} as Record<string, AuthOAuthResult> }
+  }
+
+  const projectState = createInstanceState(() => Plugin.list().then(createState), undefined, "provider-auth")
+  const globalState = lazy(() => Plugin.listGlobalProviderHooks().then(createState))
+
+  function state(scope: Scope = "project") {
+    return scope === "global" ? globalState() : projectState()
+  }
 
   export const Method = z
     .object({
       type: z.union([z.literal("oauth"), z.literal("api")]),
       label: z.string(),
+      preferred: z.boolean().optional(),
     })
     .meta({
       ref: "ProviderAuthMethod",
     })
   export type Method = z.infer<typeof Method>
 
-  export async function methods() {
-    const s = await state().then((x) => x.methods)
+  export async function methods(scope: Scope = "project") {
+    const s = await state(scope).then((x) => x.methods)
     return mapValues(s, (x) =>
       x.methods.map(
         (y): Method => ({
           type: y.type,
           label: y.label,
+          preferred: y.preferred === true ? true : undefined,
         }),
       ),
     )
@@ -56,13 +69,14 @@ export namespace ProviderAuth {
       providerID: z.string(),
       method: z.number(),
       inputs: z.record(z.string(), z.string()).optional(),
+      scope: Scope.optional(),
     }),
     async (input): Promise<Authorization | undefined> => {
-      const auth = await state().then((s) => s.methods[input.providerID])
+      const auth = await state(input.scope).then((s) => s.methods[input.providerID])
       const method = auth.methods[input.method]
       if (method.type === "oauth") {
         const result = await method.authorize(input.inputs)
-        await state().then((s) => (s.pending[input.providerID] = result))
+        await state(input.scope).then((s) => (s.pending[input.providerID] = result))
         return {
           url: result.url,
           method: result.method,
@@ -77,9 +91,10 @@ export namespace ProviderAuth {
       providerID: z.string(),
       method: z.number(),
       code: z.string().optional(),
+      scope: Scope.optional(),
     }),
     async (input) => {
-      const match = await state().then((s) => s.pending[input.providerID])
+      const match = await state(input.scope).then((s) => s.pending[input.providerID])
       if (!match) throw new OauthMissing({ providerID: input.providerID })
       let result
 
@@ -97,6 +112,7 @@ export namespace ProviderAuth {
           await Auth.set(input.providerID, {
             type: "api",
             key: result.key,
+            metadata: result.metadata,
           })
         }
         if ("refresh" in result) {
@@ -109,6 +125,9 @@ export namespace ProviderAuth {
           if (result.accountId) {
             info.accountId = result.accountId
           }
+          if (result.enterpriseUrl) {
+            info.enterpriseUrl = result.enterpriseUrl
+          }
           await Auth.set(input.providerID, info)
         }
         return
@@ -118,46 +137,82 @@ export namespace ProviderAuth {
     },
   )
 
+  const PromptOption = z.object({
+    label: z.string(),
+    value: z.string(),
+    hint: z.string().optional(),
+  })
   export const Prompt = z
-    .object({
-      type: z.union([z.literal("text"), z.literal("select")]),
-      key: z.string(),
-      message: z.string(),
-      placeholder: z.string().optional(),
-      options: z
-        .array(
-          z.object({
-            label: z.string(),
-            value: z.string(),
-            hint: z.string().optional(),
-          }),
-        )
-        .optional(),
-    })
+    .discriminatedUnion("type", [
+      z.object({
+        type: z.literal("text"),
+        key: z.string(),
+        message: z.string(),
+        placeholder: z.string().optional(),
+      }),
+      z.object({
+        type: z.literal("select"),
+        key: z.string(),
+        message: z.string(),
+        selectValue: z.string(),
+        options: z.array(PromptOption).min(1),
+      }),
+    ])
     .meta({ ref: "ProviderAuthPrompt" })
   export type Prompt = z.infer<typeof Prompt>
+
+  export function matchesWhen(rule: AuthPromptRule, inputs: Record<string, string>): boolean {
+    const matches = inputs[rule.key] === rule.value
+    return rule.op === "eq" ? matches : !matches
+  }
+
+  function selectPromptValue(
+    prompt: Extract<NonNullable<AuthHook["methods"][number]["prompts"]>[number], { type: "select" }>,
+  ) {
+    const selectValue = typeof prompt.selectValue === "string" ? prompt.selectValue : ""
+    if (!selectValue) {
+      throw new Error(`Provider auth select prompt ${prompt.key} requires selectValue`)
+    }
+    if (!prompt.options.some((option) => option.value === selectValue)) {
+      throw new Error(
+        `Provider auth select prompt ${prompt.key} selectValue ${JSON.stringify(selectValue)} is not in options`,
+      )
+    }
+    return selectValue
+  }
 
   export const prompts = fn(
     z.object({
       providerID: z.string(),
       method: z.number(),
       inputs: z.record(z.string(), z.string()).optional(),
+      scope: Scope.optional(),
     }),
     async (input): Promise<Prompt[]> => {
-      const auth = await state().then((s) => s.methods[input.providerID])
+      const auth = await state(input.scope).then((s) => s.methods[input.providerID])
       if (!auth) return []
       const method = auth.methods[input.method]
       if (!method?.prompts) return []
       const currentInputs = input.inputs ?? {}
       return method.prompts
-        .filter((p) => !p.condition || p.condition(currentInputs))
-        .map((p): Prompt => ({
-          type: p.type,
-          key: p.key,
-          message: p.message,
-          placeholder: "placeholder" in p ? p.placeholder : undefined,
-          options: "options" in p ? p.options : undefined,
-        }))
+        .filter((prompt) => !prompt.when || matchesWhen(prompt.when, currentInputs))
+        .map((p): Prompt => {
+          if (p.type === "select") {
+            return {
+              type: "select",
+              key: p.key,
+              message: p.message,
+              selectValue: selectPromptValue(p),
+              options: p.options,
+            }
+          }
+          return {
+            type: "text",
+            key: p.key,
+            message: p.message,
+            placeholder: p.placeholder,
+          }
+        })
     },
   )
 
@@ -166,9 +221,10 @@ export namespace ProviderAuth {
       providerID: z.string(),
       method: z.number(),
       inputs: z.record(z.string(), z.string()).optional(),
+      scope: Scope.optional(),
     }),
     async (input) => {
-      const auth = await state().then((s) => s.methods[input.providerID])
+      const auth = await state(input.scope).then((s) => s.methods[input.providerID])
       if (!auth) throw new ProviderNotFound({ providerID: input.providerID })
       const method = auth.methods[input.method]
       if (!method) throw new MethodNotFound({ providerID: input.providerID, method: input.method })
@@ -180,21 +236,29 @@ export namespace ProviderAuth {
             await Auth.set(result.provider ?? input.providerID, {
               type: "api",
               key: result.key,
+              metadata: result.metadata,
             })
             return
           }
           throw new AuthExecuteFailed({})
         }
-        // api method without authorize — use first input value as key
-        const key = input.inputs ? Object.values(input.inputs)[0] : undefined
+        // API methods with provider-specific prompts use an explicit `key`
+        // field; every other collected value is persisted as provider metadata.
+        if (!input.inputs) throw new AuthExecuteFailed({})
+        const key = input.inputs.key
         if (!key) throw new AuthExecuteFailed({})
-        await Auth.set(input.providerID, { type: "api", key })
+        const { key: _, ...metadata } = input.inputs
+        await Auth.set(input.providerID, {
+          type: "api",
+          key,
+          metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+        })
         return
       }
 
       if (method.type === "oauth") {
         const result = await method.authorize(input.inputs)
-        await state().then((s) => (s.pending[input.providerID] = result))
+        await state(input.scope).then((s) => (s.pending[input.providerID] = result))
         return
       }
     },

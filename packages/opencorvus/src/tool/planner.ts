@@ -1,25 +1,16 @@
 import z from "zod"
 import { Tool } from "./tool"
 import { TaskPlan } from "@/memory/task-plan"
-import { Scratchpad } from "@/memory/scratchpad"
 
 /**
- * Planner tool — task decomposition + working memory.
- *
- * Provides structured goal management (hierarchical tasks) and
- * a scratchpad for intermediate reasoning notes.
+ * Planner tool — task decomposition and progress tracking.
  */
-const DESCRIPTION = `Task planner with working memory for complex multi-step goals.
+const DESCRIPTION = `Task planner for complex multi-step goals.
 
 **Task Planning** — decompose goals into a tree of subtasks, track status and progress:
 - **add_task**: Create a task (optionally as a subtask of an existing task)
 - **update_task**: Change task status, notes, or progress
-- **list_tasks**: View all tasks for this session
-
-**Working Memory** — scratchpad for intermediate thoughts and reasoning:
-- **scratchpad_write**: Replace scratchpad content
-- **scratchpad_append**: Append to scratchpad
-- **scratchpad_read**: Read current scratchpad`
+- **list_tasks**: View all tasks for this session`
 
 export const PlannerTool = Tool.define("planner", {
   description: DESCRIPTION,
@@ -33,23 +24,15 @@ export const PlannerTool = Tool.define("planner", {
     z.object({
       action: z.literal("update_task"),
       taskId: z.string().describe("Task ID to update"),
-      status: z.enum(["pending", "in_progress", "completed", "blocked", "cancelled"]).optional(),
+      status: z
+        .enum(["pending", "in_progress", "completed", "blocked", "cancelled"])
+        .describe("Lifecycle state to assign to the task after this update.")
+        .optional(),
       notes: z.string().optional().describe("Update task notes"),
       progressPct: z.coerce.number().int().min(0).max(100).optional().describe("Progress percentage 0-100"),
     }),
     z.object({
       action: z.literal("list_tasks"),
-    }),
-    z.object({
-      action: z.literal("scratchpad_write"),
-      content: z.string().describe("Content to write (replaces existing)"),
-    }),
-    z.object({
-      action: z.literal("scratchpad_append"),
-      content: z.string().describe("Content to append"),
-    }),
-    z.object({
-      action: z.literal("scratchpad_read"),
     }),
   ]),
   async execute(params, ctx) {
@@ -129,33 +112,6 @@ export const PlannerTool = Tool.define("planner", {
         }
       }
 
-      case "scratchpad_write": {
-        Scratchpad.set(sessionID, params.content)
-        return {
-          title: "Scratchpad updated",
-          output: JSON.stringify({ written: true, length: params.content.length }),
-          metadata: {},
-        }
-      }
-
-      case "scratchpad_append": {
-        Scratchpad.append(sessionID, params.content)
-        const full = Scratchpad.get(sessionID)
-        return {
-          title: "Scratchpad appended",
-          output: JSON.stringify({ appended: true, totalLength: full.length }),
-          metadata: {},
-        }
-      }
-
-      case "scratchpad_read": {
-        const content = Scratchpad.get(sessionID)
-        return {
-          title: content ? "Scratchpad content" : "Scratchpad empty",
-          output: JSON.stringify({ content: content || "(empty)" }),
-          metadata: {},
-        }
-      }
     }
   },
 })

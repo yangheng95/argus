@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Streaming conversation rendering prototype</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --font-ui: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+        --radius-sm: 8px;
+        --radius-md: 12px;
+        --radius-lg: 16px;
+        --shadow: 0 18px 50px rgb(0 0 0 / 18%);
+      }
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --canvas: #171717; --surface: #202020; --raised: #292929; --code: #141414;
+        --text: #f0f0ef; --soft: #c6c6c3; --muted: #999994; --faint: #686862;
+        --border: #363633; --border-strong: #4a4a45; --accent: #72a7ff; --accent-wash: #23436d;
+        --good: #7fcf9c; --good-wash: #173d2a; --warn: #edbd69; --warn-wash: #4b3514;
+        --bad: #f08b84; --bad-wash: #542725; --focus: #8ab7ff; --user: #2c2c2b;
+      }
+      :root[data-theme="light"] {
+        color-scheme: light;
+        --canvas: #fbfbfa; --surface: #fff; --raised: #f2f2f0; --code: #f6f6f4;
+        --text: #20201e; --soft: #4f4f4a; --muted: #73736d; --faint: #96968e;
+        --border: #deded9; --border-strong: #c7c7c0; --accent: #276dcf; --accent-wash: #e5f0ff;
+        --good: #237845; --good-wash: #e7f6eb; --warn: #9b6412; --warn-wash: #fff3d7;
+        --bad: #bd423b; --bad-wash: #ffebe9; --focus: #286ed1; --user: #f1f1ef;
+        --shadow: 0 18px 50px rgb(31 31 28 / 10%);
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-width: 960px; background: var(--canvas); color: var(--text); font: 14px/1.55 var(--font-ui); }
+      button { font: inherit; }
+      button:focus-visible, [tabindex="0"]:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+      .app { width: min(1060px, calc(100vw - 64px)); min-height: 100vh; margin: auto; padding: 28px 0 72px; }
+      .topbar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; padding: 10px 14px 16px; background: color-mix(in srgb, var(--canvas) 90%, transparent); backdrop-filter: blur(12px); border-bottom: 1px solid color-mix(in srgb, var(--border) 68%, transparent); }
+      .crumb { color: var(--soft); font-size: 13px; }.crumb strong { color: var(--text); font-weight: 600; }.crumb span { color: var(--faint); padding: 0 7px; }
+      .theme-switch { display: inline-flex; padding: 3px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); }
+      .theme-switch button { border: 0; border-radius: 6px; padding: 5px 10px; background: transparent; color: var(--muted); cursor: pointer; font-size: 12px; }
+      .theme-switch button[aria-pressed="true"] { background: var(--raised); color: var(--text); box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }
+      .stage { width: 760px; margin: 30px auto 0; }
+      .intro { margin: 0 0 25px; color: var(--soft); font-size: 15px; }.intro strong { color: var(--text); }
+      .message { margin: 18px 0 30px; }.message.user { display: flex; flex-direction: column; align-items: flex-end; }.message.agent { padding-left: 2px; }
+      .identity { display: flex; align-items: center; gap: 8px; height: 24px; margin-bottom: 8px; color: var(--muted); font-size: 12px; }.identity strong { color: var(--soft); font-weight: 600; }.identity .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 15%, transparent); }.identity .label { border: 1px solid var(--border); border-radius: 999px; padding: 1px 7px; font-size: 11px; }.identity .elapsed { margin-left: auto; color: var(--faint); }
+      .bubble { max-width: 630px; }.user .bubble { max-width: 600px; padding: 12px 14px; background: var(--user); border: 1px solid var(--border); border-radius: var(--radius-md) 4px var(--radius-md) var(--radius-md); }.agent .bubble { max-width: 700px; }
+      p { margin: 0 0 11px; } p:last-child { margin-bottom: 0; } .bubble ul { margin: 8px 0 0; padding-left: 20px; }.bubble li { margin: 3px 0; } code { padding: 1px 4px; border: 1px solid var(--border); border-radius: 4px; background: var(--code); font-family: var(--font-mono); font-size: .92em; }
+      .attachment-strip { display: flex; gap: 8px; margin-top: 10px; }.thumbnail { width: 136px; height: 76px; display: grid; place-items: center; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-sm); background: linear-gradient(135deg, #306c99, #b3d1d9 48%, #e7bb9d); color: white; font-size: 11px; text-shadow: 0 1px 3px #000; }
+      .loading-copy { display: inline-block; margin-top: 2px; color: var(--muted); font-size: 12px; font-weight: 500; letter-spacing: .01em; background: linear-gradient(90deg, var(--muted) 0%, var(--muted) 35%, var(--accent) 50%, var(--muted) 65%, var(--muted) 100%); background-size: 240% 100%; background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent; animation: loading-wave 2.8s linear infinite; } @keyframes loading-wave { from { background-position: 100% 0; } to { background-position: -140% 0; } }
+      .run { margin: 16px 0 22px; border-left: 1px solid var(--border); }.run-summary { width: 100%; display: flex; align-items: center; gap: 9px; padding: 8px 11px; border: 0; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; background: transparent; color: var(--soft); text-align: left; cursor: pointer; }.run-summary:hover { background: var(--raised); }.run-summary .count { color: var(--faint); margin-left: auto; font-size: 12px; }.chevron { color: var(--faint); transition: transform .15s ease; }.run[data-open="true"] .chevron { transform: rotate(90deg); }.status { position: relative; width: 8px; height: 8px; border-radius: 50%; flex: none; }.status:is(.running, .wait, .error)::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; background: currentColor; opacity: 0; transform: scale(1); animation: status-halo var(--status-cycle) cubic-bezier(.2, .8, .2, 1) infinite; will-change: transform, opacity; }.status.running { --status-cycle: 1.8s; color: var(--accent); background: currentColor; }.status.done { color: var(--good); background: currentColor; }.status.error { --status-cycle: 1.25s; color: var(--bad); background: currentColor; }.status.wait { --status-cycle: 2.4s; color: var(--warn); background: currentColor; } @keyframes status-halo { 0% { opacity: .34; transform: scale(1); } 72% { opacity: 0; transform: scale(2.4); } 100% { opacity: 0; transform: scale(2.4); } }
+      .run-body { display: none; padding: 4px 0 2px 17px; }.run[data-open="true"] .run-body { display: block; }.tool { position: relative; padding: 9px 10px 9px 15px; border-bottom: 1px solid color-mix(in srgb, var(--border) 74%, transparent); }.tool::before { content: ""; position: absolute; left: -4px; top: 15px; width: 7px; height: 7px; border: 1px solid var(--border-strong); border-radius: 50%; background: var(--canvas); }.tool:last-child { border-bottom: 0; }.tool-head { width: 100%; display: flex; align-items: center; gap: 8px; border: 0; padding: 0; background: transparent; color: var(--soft); text-align: left; cursor: pointer; }.tool-head:hover .tool-name { color: var(--text); }.tool-icon { width: 18px; color: var(--muted); text-align: center; }.tool-name { font-family: var(--font-mono); font-size: 12px; color: var(--soft); }.tool-detail { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }.tool-state { margin-left: auto; color: var(--faint); font-size: 11px; }.tool-detail-body { display: none; margin: 9px 0 2px 26px; }.tool[data-open="true"] .tool-detail-body { display: block; }.terminal, pre { margin: 0; padding: 10px 11px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--code); color: var(--soft); font: 12px/1.55 var(--font-mono); }.prompt { color: var(--good); }.failure { padding: 9px 10px; border-left: 3px solid var(--bad); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; background: var(--bad-wash); color: var(--soft); }.failure strong { color: var(--bad); }
+      .diff { overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-sm); }.diff-title { display: flex; justify-content: space-between; padding: 7px 10px; background: var(--raised); color: var(--soft); font: 12px var(--font-mono); }.add { color: var(--good); }.del { color: var(--bad); }.diff pre { border: 0; border-radius: 0; }.todo { display: grid; gap: 6px; }.todo div { display: flex; gap: 8px; align-items: center; color: var(--soft); }.todo .check { display: grid; place-items: center; width: 16px; height: 16px; border: 1px solid var(--border-strong); border-radius: 4px; color: var(--canvas); font-size: 11px; }.todo .complete .check { border-color: var(--good); background: var(--good); }.browser-evidence { display: grid; grid-template-columns: 168px 1fr; gap: 11px; padding: 9px; border: 1px solid var(--border); border-radius: var(--radius-sm); }.browser-shot { min-height: 90px; display: grid; place-items: center; border-radius: 5px; background: linear-gradient(145deg, #2c405a, #e5d0b4); color: #fff; font-size: 11px; }.evidence-meta { color: var(--muted); font-size: 12px; }.evidence-meta strong { display: block; color: var(--soft); font-size: 13px; }.file-row { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--soft); }.file-icon { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 6px; background: var(--accent-wash); color: var(--accent); font-size: 12px; font-weight: 700; }.file-row small { margin-left: auto; color: var(--muted); }
+      .patch { display: inline-flex; align-items: center; gap: 7px; margin: 2px 0 18px; padding: 6px 9px; border: 1px solid var(--border); border-radius: 7px; color: var(--muted); font-size: 12px; }.patch b { color: var(--soft); font-weight: 600; }.section-label { margin: 30px 0 11px; color: var(--faint); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+      .card { margin: 12px 0; padding: 13px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }.card h3 { margin: 0 0 6px; font-size: 14px; }.card p { color: var(--soft); }.choices { display: grid; gap: 7px; margin-top: 11px; }.choice { display: flex; gap: 9px; align-items: flex-start; width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: transparent; color: var(--soft); text-align: left; cursor: pointer; }.choice:hover, .choice[data-selected="true"] { border-color: var(--accent); background: var(--accent-wash); }.radio { width: 15px; height: 15px; margin-top: 2px; border: 1px solid var(--border-strong); border-radius: 50%; flex: none; }.choice[data-selected="true"] .radio { border: 4px solid var(--accent); }.choice small { display: block; color: var(--muted); }.actions { display: flex; gap: 8px; margin-top: 12px; }.action { padding: 7px 10px; border: 1px solid var(--border-strong); border-radius: 7px; background: transparent; color: var(--soft); cursor: pointer; }.action.primary { border-color: var(--accent); background: var(--accent); color: #fff; }.action:hover { filter: brightness(1.08); }.artifact { display: grid; grid-template-columns: 56px 1fr auto; align-items: center; gap: 11px; }.artifact-icon { display: grid; place-items: center; width: 56px; height: 42px; border-radius: 7px; background: linear-gradient(135deg, var(--accent), #7b6de1); color: #fff; font-weight: 700; }.context, .child, .review { display: flex; align-items: center; gap: 9px; padding: 9px 11px; border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); color: var(--muted); font-size: 12px; }.child { border-style: solid; background: color-mix(in srgb, var(--surface) 80%, transparent); }.avatar { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent-wash); color: var(--accent); font-size: 10px; font-weight: 800; }.review .status { margin-left: auto; }.notice { position: fixed; bottom: 24px; left: 50%; display: none; transform: translateX(-50%); padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--raised); color: var(--soft); box-shadow: var(--shadow); font-size: 12px; }.notice[data-show="true"] { display: block; }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar"><div class="crumb"><strong>Work</strong><span>/</span>Streaming conversation rendering</div><div class="theme-switch" aria-label="Theme"><button data-theme-choice="dark" aria-pressed="true">深色</button><button data-theme-choice="light" aria-pressed="false">浅色</button></div></header>
+      <section class="stage" aria-label="Streaming conversation mock">
+        <p class="intro"><strong>Mock conversation.</strong> 单一时间线、轻量工具记录与按需展开的执行细节。</p>
+        <article class="message user"><div class="bubble"><p>请梳理右侧流式对话渲染，并先给我一个可确认的 UI 原型。</p><div class="attachment-strip"><div class="thumbnail" aria-label="Attached reference image">reference.png</div><div class="file-row"><span class="file-icon">PDF</span><span>conversation-notes.pdf</span><small>1.8 MB</small></div></div></div></article>
+        <article class="message agent"><div class="identity"><span class="dot"></span><strong>CODEX</strong><span class="label">WORK</span><span class="elapsed">正在处理</span></div><div class="bubble"><p>我已定位到消息 part 的分派与工具详情的统一渲染路径。接下来会把可见场景放入同一条时间线中，并保持执行记录可折叠。</p><span class="loading-copy" role="status">正在生成</span></div></article>
+        <section class="run" data-open="false" aria-label="Execution details"><button class="run-summary" data-toggle-run aria-expanded="false"><span class="chevron">›</span><span class="status running"></span><strong>正在检查消息渲染路径</strong><span class="count">6 项活动</span></button><div class="run-body">
+          <article class="tool" data-open="false"><button class="tool-head" data-toggle-tool aria-expanded="false"><span class="tool-icon">⌘</span><span class="tool-name">rg</span><span class="tool-detail">packages/overlay/src/components</span><span class="tool-state">完成</span></button><div class="tool-detail-body"><pre><span class="prompt">$</span> rg -l "CardParts|ChatBubble" packages/overlay/src
+CardParts.tsx
+ChatBubble.tsx
+InlineToolPart.tsx</pre></div></article>
+          <article class="tool" data-open="false"><button class="tool-head" data-toggle-tool aria-expanded="false"><span class="tool-icon">⌁</span><span class="tool-name">read</span><span class="tool-detail">CardParts.tsx</span><span class="tool-state">完成</span></button><div class="tool-detail-body"><pre>text → TextPart
+tool → canonical Tool Card
+patch → changed files event
+interaction-* → InteractionCard</pre></div></article>
+          <article class="tool" data-open="false"><button class="tool-head" data-toggle-tool aria-expanded="false"><span class="tool-icon">✎</span><span class="tool-name">apply_patch</span><span class="tool-detail">conversation renderer design</span><span class="tool-state">完成</span></button><div class="tool-detail-body"><div class="diff"><div class="diff-title"><span>CardParts.tsx</span><span><b class="add">+12</b> <b class="del">-4</b></span></div><pre><span class="del">- Tool rows use independent visual states</span>
+ Tool rows use the shared disclosure surface</pre></div></div></article>
+          <article class="tool" data-open="false"><button class="tool-head" data-toggle-tool aria-expanded="false"><span class="tool-icon">☷</span><span class="tool-name">update_plan</span><span class="tool-detail">覆盖可见消息场景</span><span class="tool-state">完成</span></button><div class="tool-detail-body"><div class="todo"><div class="complete"><span class="check">✓</span><span>扫描协议和 message part 分派</span></div><div class="complete"><span class="check">✓</span><span>确认工具详情渲染分支</span></div><div><span class="check"></span><span>制作 light / dark mock</span></div></div></div></article>
+          <article class="tool" data-open="false"><button class="tool-head" data-toggle-tool aria-expanded="false"><span class="tool-icon">◫</span><span class="tool-name">browser_preview</span><span class="tool-detail">right dock · 1440 × 960</span><span class="tool-state">完成</span></button><div class="tool-detail-body"><div class="browser-evidence"><div class="browser-shot">browser evidence</div><div class="evidence-meta"><strong>OpenCorvus · Work</strong>http://127.0.0.1:5227/ui/<br />1440 × 960 · console 0 · network 0</div></div></div></article>
+          <article class="tool" data-open="false"><button class="tool-head" data-toggle-tool aria-expanded="false"><span class="tool-icon">!</span><span class="tool-name">shell_command</span><span class="tool-detail">build mock renderer</span><span class="tool-state">失败</span></button><div class="tool-detail-body"><div class="failure"><strong>Command failed</strong><br />Dependency is unavailable in the current environment. The error remains visible and does not replace the prior timeline facts.</div></div></article>
+        </div></section>
+        <div class="patch">✎ <b>3 files changed</b><span>CardParts.tsx, messages.css, prototype.html</span></div>
+        <article class="message agent"><div class="identity"><span class="dot"></span><strong>CODEX</strong><span class="label">WORK</span><span class="elapsed">2m 14s</span></div><div class="bubble"><p>当前可见层可以归为 13 类：消息身份、叙事文本、流式文本、执行 disclosure、工具状态与输出、文件、错误、交互、制品、子 Agent 和 review。工具详情不会打断阅读，而是在需要时展开。</p><ul><li>命令和普通输出采用等宽内容块</li><li>文件变更、TODO、浏览器证据使用结构化摘要</li><li>失败结果保留在时间线原位</li></ul></div></article>
+        <div class="section-label">Message-part specimens</div>
+        <section class="card"><h3>需要你选择一个方向</h3><p>第一版原型应优先强调哪种阅读体验？</p><div class="choices"><button class="choice" data-choice data-selected="true"><span class="radio"></span><span><strong>叙事优先</strong><small>工具收起，结论更容易扫描。</small></span></button><button class="choice" data-choice><span class="radio"></span><span><strong>执行优先</strong><small>工具默认展示更多状态。</small></span></button></div><div class="actions"><button class="action primary" data-notice="已记录你的选择">继续</button><button class="action" data-notice="已跳过此交互">跳过</button></div></section>
+        <section class="card"><h3>权限请求</h3><p>允许 browser_preview 读取当前页面截图，用于人工视觉检查。</p><div class="actions"><button class="action primary" data-notice="已允许一次">允许一次</button><button class="action" data-notice="已拒绝该请求">拒绝</button></div></section>
+        <section class="card artifact"><div class="artifact-icon">ART</div><div><h3>Conversation UI artifact</h3><p>独立的可交互 mock 页面 · HTML</p></div><button class="action" data-notice="制品预览已打开">打开</button></section>
+        <section class="context">› 已折叠 delegated context · 来自 Frontend Research 的真实任务上下文</section>
+        <section class="child"><span class="avatar">FE</span><span><strong>FRONTEND RESEARCH</strong><br />已完成：确认工具调用与文件附件的渲染边界</span><span class="status done" style="margin-left:auto"></span></section>
+        <section class="review"><span>Review stream · 正在检查视觉层级与浅深主题等价性</span><span class="status running"></span></section>
+        <section class="card" style="border-color:color-mix(in srgb,var(--bad) 45%,var(--border))"><div class="failure"><strong>Part error · attachment unavailable</strong><br />无法加载一份历史附件；其他可见消息与工具记录保持完整。</div></section>
+        <section class="card"><div class="file-row"><span class="file-icon">IMG</span><span>prototype-dark.png</span><small>image preview</small></div><div class="file-row" style="margin-top:8px"><span class="file-icon">MP3</span><span>research-summary.mp3</span><small>audio</small></div><div class="file-row" style="margin-top:8px"><span class="file-icon">ZIP</span><span>evidence-bundle.zip</span><small>download</small></div></section>
+      </section>
+    </main>
+    <div class="notice" data-notice-area data-show="false" role="status"></div>
+    <script>
+      const root = document.documentElement;
+      const notice = document.querySelector('[data-notice-area]');
+      document.querySelectorAll('[data-theme-choice]').forEach((button) => button.addEventListener('click', () => {
+        root.dataset.theme = button.dataset.themeChoice;
+        document.querySelectorAll('[data-theme-choice]').forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
+      }));
+      document.querySelectorAll('[data-toggle-run]').forEach((button) => button.addEventListener('click', () => {
+        const run = button.closest('.run'); const open = run.dataset.open !== 'true'; run.dataset.open = String(open); button.setAttribute('aria-expanded', String(open));
+      }));
+      document.querySelectorAll('[data-toggle-tool]').forEach((button) => button.addEventListener('click', () => {
+        const tool = button.closest('.tool'); const open = tool.dataset.open !== 'true'; tool.dataset.open = String(open); button.setAttribute('aria-expanded', String(open));
+      }));
+      document.querySelectorAll('[data-choice]').forEach((button) => button.addEventListener('click', () => document.querySelectorAll('[data-choice]').forEach((item) => item.dataset.selected = String(item === button))));
+      document.querySelectorAll('[data-notice]').forEach((button) => button.addEventListener('click', () => { notice.textContent = button.dataset.notice; notice.dataset.show = 'true'; window.setTimeout(() => notice.dataset.show = 'false', 1800); }));
+    </script>
+  </body>
+</html>

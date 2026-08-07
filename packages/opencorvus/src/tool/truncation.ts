@@ -1,18 +1,20 @@
 import fs from "fs/promises"
 import path from "path"
-import { Global } from "../global"
 import { Identifier } from "../id/id"
 import { PermissionNext } from "../permission/next"
-import type { Agent } from "../agent/agent"
 import { Scheduler } from "../scheduler"
 import { Filesystem } from "../util/filesystem"
 import { Glob } from "../util/glob"
+import { Instance } from "@/project/instance"
+import { Project } from "@/project/project"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
+import { taskPrimaryProjectRoot } from "@/project/task-runtime-root"
+import { taskIDForSession } from "@/engine/task-session-lineage"
+import type { ToolExecutionSurface } from "./execution-surface"
 
 export namespace Truncate {
   export const MAX_LINES = 2000
   export const MAX_BYTES = 50 * 1024
-  export const DIR = path.join(Global.Path.data, "tool-output")
-  export const GLOB = path.join(DIR, "*")
   const RETENTION_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
   const HOUR_MS = 60 * 60 * 1000
 
@@ -22,41 +24,104 @@ export namespace Truncate {
     maxLines?: number
     maxBytes?: number
     direction?: "head" | "tail"
+    sessionID?: string
+    taskID?: string
   }
 
   export function init() {
     Scheduler.register({
       id: "tool.truncation.cleanup",
       interval: HOUR_MS,
+      runAtStart: true,
       run: cleanup,
       scope: "global",
     })
   }
 
-  export async function cleanup() {
-    const cutoff = Identifier.timestamp(Identifier.create("tool", false, Date.now() - RETENTION_MS))
-    const entries = await Glob.scan("tool_*", { cwd: DIR, include: "file" }).catch(() => [] as string[])
-    for (const entry of entries) {
-      if (Identifier.timestamp(entry) >= cutoff) continue
-      await fs.unlink(path.join(DIR, entry)).catch(() => {})
+  function isMissingFile(error: unknown): boolean {
+    return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT"
+  }
+
+  async function statExistingFile(filepath: string) {
+    try {
+      return await fs.stat(filepath)
+    } catch (error) {
+      if (isMissingFile(error)) return undefined
+      throw error
     }
   }
 
-  function hasTaskTool(agent?: Agent.Info): boolean {
-    if (!agent?.permission) return false
-    const rule = PermissionNext.evaluate("task", "*", agent.permission)
-    return rule.action !== "deny"
+  async function unlinkExistingFile(filepath: string) {
+    try {
+      await fs.unlink(filepath)
+    } catch (error) {
+      if (isMissingFile(error)) return
+      throw error
+    }
   }
 
-  export async function output(text: string, options: Options = {}, agent?: Agent.Info): Promise<Result> {
+  function registeredRuntimeRoots() {
+    return [...new Set(Project.list().map((project) => ProjectRuntimePaths.projectRuntimeRoot(project.worktree)))]
+  }
+
+  async function cleanupRoot(root: string, cutoff: number) {
+    const entries = [
+      ...(await Glob.scan("s/*/*/tool-output/tool_*", { cwd: root, include: "file" })),
+      ...(await Glob.scan("sx/*/*/tool-output/tool_*", { cwd: root, include: "file" })),
+    ]
+    for (const entry of entries) {
+      const filepath = path.join(root, entry)
+      const stat = await statExistingFile(filepath)
+      if (!stat || stat.mtimeMs >= cutoff) continue
+      await unlinkExistingFile(filepath)
+    }
+  }
+
+  export async function cleanup() {
+    const cutoff = Date.now() - RETENTION_MS
+    for (const root of registeredRuntimeRoots()) {
+      await cleanupRoot(root, cutoff)
+    }
+  }
+
+  function hasRecoveryTool(surface?: ToolExecutionSurface): boolean {
+    return surface?.toolIDs.includes("read") === true
+  }
+
+  /**
+   * Tool output too large for the prompt is shipped to disk and replaced with
+   * a preview + recovery hint. The recovery hint is an active contract: the
+   * receiving execution surface MUST be able to read the saved file via Read.
+   * When that surface lacks the tool we throw rather than silently lose data.
+   *
+   * `direction` defaults to "tail" because the most useful piece of a long
+   * tool output (build log, test failure, error trace) is almost always at
+   * the END. Callers that genuinely want the head can override.
+   */
+  export async function output(
+    text: string,
+    options: Options = {},
+    surface?: ToolExecutionSurface,
+  ): Promise<Result> {
     const maxLines = options.maxLines ?? MAX_LINES
     const maxBytes = options.maxBytes ?? MAX_BYTES
-    const direction = options.direction ?? "head"
+    const direction = options.direction ?? "tail"
     const lines = text.split("\n")
     const totalBytes = Buffer.byteLength(text, "utf-8")
 
     if (lines.length <= maxLines && totalBytes <= maxBytes) {
       return { content: text, truncated: false }
+    }
+
+    if (!surface || !hasRecoveryTool(surface)) {
+      // No recovery path → truncating would lose information silently.
+      // Surface the failure so the caller can react (split the request,
+      // route through an execution surface that owns Read, or fail the task).
+      throw new Error(
+        `Truncate.output: tool result is ${totalBytes} bytes / ${lines.length} lines ` +
+          `(limit ${maxBytes}/${maxLines}). The active execution surface does not have the 'read' tool needed to ` +
+          `re-read a saved copy. Truncating here would silently lose data — denying the call instead.`,
+      )
     }
 
     const out: string[] = []
@@ -91,12 +156,27 @@ export namespace Truncate {
     const preview = out.join("\n")
 
     const id = Identifier.ascending("tool")
-    const filepath = path.join(DIR, id)
+    const sessionID = options.sessionID
+    const taskID = options.taskID ?? (sessionID ? taskIDForSession(sessionID) : undefined)
+    if (!sessionID) {
+      throw new Error("Truncate.output: sessionID is required for runtime-scoped tool output")
+    }
+    const projectRoot = taskID
+      ? taskPrimaryProjectRoot(taskID, { activeProjectID: Instance.project.id })
+      : Instance.project.worktree
+    const outputDir = taskID
+      ? ProjectRuntimePaths.toolOutputDir(projectRoot, taskID, sessionID)
+      : ProjectRuntimePaths.rootSessionToolOutputDir(projectRoot, sessionID)
+    const filepath = path.join(outputDir, id)
+    if (PermissionNext.evaluate("read", filepath, surface.permission).action === "deny") {
+      throw new Error(
+        `Truncate.output: the active execution surface denies reading the saved output path ${filepath}; ` +
+          "truncating here would silently lose data.",
+      )
+    }
     await Filesystem.write(filepath, text)
 
-    const hint = hasTaskTool(agent)
-      ? `The tool call succeeded but the output was truncated. Full output saved to: ${filepath}\nUse the Task tool to have explore agent process this file with Grep and Read (with offset/limit). Do NOT read the full file yourself - delegate to save context.`
-      : `The tool call succeeded but the output was truncated. Full output saved to: ${filepath}\nUse Grep to search the full content or Read with offset/limit to view specific sections.`
+    const hint = `The tool call succeeded but the output was truncated. Full output saved to: ${filepath}\nUse Read with offset/limit to view the required sections.`
     const message =
       direction === "head"
         ? `${preview}\n\n...${removed} ${unit} truncated...\n\n${hint}`

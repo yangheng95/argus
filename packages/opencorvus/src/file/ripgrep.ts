@@ -1,18 +1,14 @@
-import { which } from "@/util/which"
-// Ripgrep utility functions
 import path from "path"
-import { Global } from "../global"
 import fs from "fs/promises"
 import z from "zod"
-import { NamedError } from "@opencorvus-ai/util/error"
+import { buffer as readStreamBuffer } from "node:stream/consumers"
 import { lazy } from "../util/lazy"
-import { $ } from "bun"
-import { Filesystem } from "../util/filesystem"
 import { Process } from "../util/process"
-import { text } from "node:stream/consumers"
-
-import { ZipReader, BlobReader, BlobWriter } from "@zip.js/zip.js"
 import { Log } from "@/util/log"
+import { resolveRipgrepRuntime } from "@/runtime/ripgrep"
+import { ProcessSupervisor } from "@/shell/process-supervisor"
+import { activeTaskExecutionCapsule } from "@/engine/task-execution-capsule-binding"
+import { activeExecutionCapsuleRuntimeFact } from "@/execution-capsule/runtime"
 
 export namespace Ripgrep {
   const log = Log.create({ service: "ripgrep" })
@@ -92,159 +88,51 @@ export namespace Ripgrep {
   export type Begin = z.infer<typeof Begin>
   export type End = z.infer<typeof End>
   export type Summary = z.infer<typeof Summary>
-  const PLATFORM = {
-    "arm64-darwin": { platform: "aarch64-apple-darwin", extension: "tar.gz" },
-    "arm64-linux": {
-      platform: "aarch64-unknown-linux-gnu",
-      extension: "tar.gz",
-    },
-    "x64-darwin": { platform: "x86_64-apple-darwin", extension: "tar.gz" },
-    "x64-linux": { platform: "x86_64-unknown-linux-musl", extension: "tar.gz" },
-    "x64-win32": { platform: "x86_64-pc-windows-msvc", extension: "zip" },
-  } as const
+  const state = lazy(async () => {
+    const runtime = await resolveRipgrepRuntime()
+    return { filepath: runtime.filepath }
+  })
 
-  export const ExtractionFailedError = NamedError.create(
-    "RipgrepExtractionFailedError",
-    z.object({
-      filepath: z.string(),
-      stderr: z.string(),
-    }),
-  )
-
-  export const UnsupportedPlatformError = NamedError.create(
-    "RipgrepUnsupportedPlatformError",
-    z.object({
-      platform: z.string(),
-    }),
-  )
-
-  export const DownloadFailedError = NamedError.create(
-    "RipgrepDownloadFailedError",
-    z.object({
-      url: z.string(),
-      status: z.number(),
-    }),
-  )
-
-  async function findFile(root: string, name: string): Promise<string | undefined> {
-    const entries = await fs.readdir(root, { withFileTypes: true }).catch(() => [])
-    for (const entry of entries) {
-      const full = path.join(root, entry.name)
-      if (entry.isFile() && entry.name === name) return full
-      if (!entry.isDirectory()) continue
-      const nested = await findFile(full, name)
-      if (nested) return nested
-    }
+  function outputText(input: Buffer | Uint8Array | undefined) {
+    return input ? new TextDecoder().decode(input).trim() : ""
   }
 
-  const state = lazy(async () => {
-    const system = which("rg")
-    if (system) {
-      const stat = await fs.stat(system).catch(() => undefined)
-      if (stat?.isFile()) return { filepath: system }
-      log.warn("bun.which returned invalid rg path", { filepath: system })
-    }
-    const filepath = path.join(Global.Path.bin, "rg" + (process.platform === "win32" ? ".exe" : ""))
-
-    if (!(await Filesystem.exists(filepath))) {
-      const platformKey = `${process.arch}-${process.platform}` as keyof typeof PLATFORM
-      const config = PLATFORM[platformKey]
-      if (!config) throw new UnsupportedPlatformError({ platform: platformKey })
-
-      const version = "14.1.1"
-      const filename = `ripgrep-${version}-${config.platform}.${config.extension}`
-      const url = `https://github.com/BurntSushi/ripgrep/releases/download/${version}/${filename}`
-
-      const response = await fetch(url)
-      if (!response.ok) throw new DownloadFailedError({ url, status: response.status })
-
-      const arrayBuffer = await response.arrayBuffer()
-      const archivePath = path.join(Global.Path.bin, filename)
-      await Filesystem.write(archivePath, Buffer.from(arrayBuffer))
-      if (config.extension === "tar.gz") {
-        const extractDir = await fs.mkdtemp(path.join(Global.Path.bin, "ripgrep-"))
-        const args = ["tar", "-xzf", archivePath, "-C", extractDir]
-
-        const proc = Process.spawn(args, {
-          cwd: Global.Path.bin,
-          stderr: "pipe",
-          stdout: "pipe",
-        })
-        const exit = await proc.exited
-        if (exit !== 0) {
-          const stderr = proc.stderr ? await text(proc.stderr) : ""
-          throw new ExtractionFailedError({
-            filepath,
-            stderr,
-          })
-        }
-        const extracted = await findFile(extractDir, "rg")
-        if (!extracted) {
-          throw new ExtractionFailedError({
-            filepath: archivePath,
-            stderr: "rg binary not found after tar extraction",
-          })
-        }
-        await fs.copyFile(extracted, filepath)
-        await fs.rm(extractDir, { recursive: true, force: true }).catch(() => {})
-      }
-      if (config.extension === "zip") {
-        const zipFileReader = new ZipReader(new BlobReader(new Blob([arrayBuffer])))
-        const entries = await zipFileReader.getEntries()
-        let rgEntry: any
-        for (const entry of entries) {
-          if (entry.filename.endsWith("rg.exe")) {
-            rgEntry = entry
-            break
-          }
-        }
-
-        if (!rgEntry) {
-          throw new ExtractionFailedError({
-            filepath: archivePath,
-            stderr: "rg.exe not found in zip archive",
-          })
-        }
-
-        const rgBlob = await rgEntry.getData(new BlobWriter())
-        if (!rgBlob) {
-          throw new ExtractionFailedError({
-            filepath: archivePath,
-            stderr: "Failed to extract rg.exe from zip archive",
-          })
-        }
-        await Filesystem.write(filepath, Buffer.from(await rgBlob.arrayBuffer()))
-        await zipFileReader.close()
-      }
-      await fs.unlink(archivePath)
-      if (!platformKey.endsWith("-win32")) {
-        await fs.chmod(filepath, 0o755).catch((error) => {
-          log.warn("failed to chmod ripgrep binary", { filepath, error })
-        })
-      }
-    }
-
-    return {
-      filepath,
-    }
-  })
+  function ripgrepFailure(action: string, code: number, stderr?: Buffer | Uint8Array, stdout?: Buffer | Uint8Array) {
+    const detail = [outputText(stderr), outputText(stdout)].filter(Boolean).join("\n")
+    return detail ? `ripgrep ${action} failed with code ${code}: ${detail}` : `ripgrep ${action} failed with code ${code}`
+  }
 
   export async function filepath() {
     const { filepath } = await state()
     return filepath
   }
 
-  export async function* files(input: {
+  type FilesInput = {
     cwd: string
     glob?: string[]
     hidden?: boolean
     follow?: boolean
     maxDepth?: number
     signal?: AbortSignal
-  }) {
+  }
+
+  type FilesRequest = FilesInput & ({ owner: "host" } | { owner: "task"; taskID: string })
+
+  export function filesForHost(input: FilesInput) {
+    return files({ ...input, owner: "host" })
+  }
+
+  export function filesForTask(input: FilesInput & { taskID: string }) {
+    return files({ ...input, owner: "task" })
+  }
+
+  async function* files(input: FilesRequest) {
     input.signal?.throwIfAborted()
 
-    const args = [await filepath(), "--files", "--glob=!.git/*"]
+    const executable = input.owner === "task"
+      ? (await activeExecutionCapsuleRuntimeFact())?.ripgrepPath ?? (await filepath())
+      : await filepath()
+    const args = ["--files", "--glob=!.git/*"]
     if (input.follow) args.push("--follow")
     if (input.hidden !== false) args.push("--hidden")
     if (input.maxDepth !== undefined) args.push(`--max-depth=${input.maxDepth}`)
@@ -263,41 +151,72 @@ export namespace Ripgrep {
       })
     }
 
-    const proc = Process.spawn(args, {
-      cwd: input.cwd,
-      stdout: "pipe",
-      stderr: "ignore",
-      abort: input.signal,
-    })
+    const options = {
+      executable,
+      args,
+      owner: "ripgrep-files",
+    }
+    const proc = input.owner === "task"
+      ? await ProcessSupervisor.spawnTaskCommand({ taskID: input.taskID, cwd: input.cwd }, options)
+      : await ProcessSupervisor.spawnHostCommand({ ...options, cwd: input.cwd })
+    const abort = () => void proc.terminate().catch(() => undefined)
+    input.signal?.addEventListener("abort", abort, { once: true })
 
-    if (!proc.stdout) {
+    if (!proc.stdout || !proc.stderr) {
       throw new Error("Process output not available")
     }
 
+    const stderr = readStreamBuffer(proc.stderr)
     let buffer = ""
-    const stream = proc.stdout as AsyncIterable<Buffer | string>
-    for await (const chunk of stream) {
+    let sawFile = false
+    let completed = false
+    try {
+      const stream = proc.stdout as AsyncIterable<Buffer | string>
+      for await (const chunk of stream) {
+        input.signal?.throwIfAborted()
+
+        buffer += typeof chunk === "string" ? chunk : chunk.toString()
+        // Handle both Unix (\n) and Windows (\r\n) line endings
+        const lines = buffer.split(/\r?\n/)
+        buffer = lines.pop() || ""
+
+        for (const line of lines) {
+          if (line) {
+            sawFile = true
+            yield line
+          }
+        }
+      }
+
+      if (buffer) {
+        sawFile = true
+        yield buffer
+      }
+      const [code, stderrBuffer] = await Promise.all([proc.exited, stderr])
+      if (code === 1 && !sawFile && !stderrBuffer.toString().trim()) {
+        completed = true
+        return
+      }
+      if (code !== 0) {
+        throw new Error(ripgrepFailure("files", code, stderrBuffer))
+      }
+
       input.signal?.throwIfAborted()
-
-      buffer += typeof chunk === "string" ? chunk : chunk.toString()
-      // Handle both Unix (\n) and Windows (\r\n) line endings
-      const lines = buffer.split(/\r?\n/)
-      buffer = lines.pop() || ""
-
-      for (const line of lines) {
-        if (line) yield line
+      completed = true
+    } finally {
+      input.signal?.removeEventListener("abort", abort)
+      if (!completed) {
+        await ProcessSupervisor.terminateAndWaitForExit(proc, "ripgrep files")
+        await stderr.catch(() => undefined)
+      } else {
+        await proc.dispose()
       }
     }
-
-    if (buffer) yield buffer
-    await proc.exited
-
-    input.signal?.throwIfAborted()
   }
 
-  export async function tree(input: { cwd: string; limit?: number; signal?: AbortSignal }) {
+  export async function treeHost(input: { cwd: string; limit?: number; signal?: AbortSignal }) {
     log.info("tree", input)
-    const files = await Array.fromAsync(Ripgrep.files({ cwd: input.cwd, signal: input.signal }))
+    const files = await Array.fromAsync(Ripgrep.filesForHost({ cwd: input.cwd, signal: input.signal }))
     interface Node {
       name: string
       children: Map<string, Node>
@@ -353,14 +272,14 @@ export namespace Ripgrep {
     return lines.join("\n")
   }
 
-  export async function search(input: {
+  export async function searchHost(input: {
     cwd: string
     pattern: string
     glob?: string[]
     limit?: number
     follow?: boolean
   }) {
-    const args = [`${await filepath()}`, "--json", "--hidden", "--glob='!.git/*'"]
+    const args = [`${await filepath()}`, "--json", "--hidden", "--glob=!.git/*"]
     if (input.follow) args.push("--follow")
 
     if (input.glob) {
@@ -376,14 +295,16 @@ export namespace Ripgrep {
     args.push("--")
     args.push(input.pattern)
 
-    const command = args.join(" ")
-    const result = await $`${{ raw: command }}`.cwd(input.cwd).quiet().nothrow()
-    if (result.exitCode !== 0) {
+    const result = await Process.runHost(args, { cwd: input.cwd, nothrow: true })
+    if (result.code === 1) {
       return []
+    }
+    if (result.code !== 0) {
+      throw new Error(ripgrepFailure("search", result.code, result.stderr, result.stdout))
     }
 
     // Handle both Unix (\n) and Windows (\r\n) line endings
-    const lines = result.text().trim().split(/\r?\n/).filter(Boolean)
+    const lines = result.stdout.toString().trim().split(/\r?\n/).filter(Boolean)
     // Parse JSON lines from ripgrep output
 
     return lines

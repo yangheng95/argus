@@ -1,0 +1,8 @@
+# 站点本地 .gitignore
+# 依赖目录保持忽略（不提交 node_modules）
+node_modules/
+
+# dist/ 构建产物必须提交（离线可用硬约束：运行时零外部网络，无 CDN）。
+# 根 .gitignore 第 29 行 dist/ 会排除本目录 dist，这里用反向规则重新包含。
+!dist/
+!dist/**

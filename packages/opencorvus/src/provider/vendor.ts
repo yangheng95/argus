@@ -5,28 +5,26 @@ import { iife } from "@/util/iife"
 import { Installation } from "../installation"
 import os from "os"
 import { GoogleAuth } from "google-auth-library"
-import { fromNodeProviderChain } from "@aws-sdk/credential-providers"
 import type { AmazonBedrockProviderSettings } from "@ai-sdk/amazon-bedrock"
-import { createGitLab, VERSION as GITLAB_PROVIDER_VERSION } from "@gitlab/gitlab-ai-provider"
-import type { Provider } from "./provider"
+import { createGitLab, VERSION as GITLAB_PROVIDER_VERSION } from "gitlab-ai-provider"
+import type { ProviderInfo } from "./model-schema"
+
+// Provider loader semantics synchronized from anomalyco/opencode
+// packages/opencode/src/provider/provider.ts @ 8e2d422ffe56f3b2eb52e3f7195a2f9722a9fc46.
 
 export type CustomModelLoader = (sdk: any, modelID: string, options?: Record<string, any>) => Promise<any>
-export type CustomLoader = (provider: Provider.Info) => Promise<{
+export type CustomLoader = (
+  provider: ProviderInfo,
+  context?: { config: Config.Info },
+) => Promise<{
   autoload: boolean
   getModel?: CustomModelLoader
   options?: Record<string, any>
 }>
 
-function isGpt5OrLater(modelID: string): boolean {
-  const match = /^gpt-(\d+)/.exec(modelID)
-  if (!match) {
-    return false
-  }
-  return Number(match[1]) >= 5
-}
-
-function shouldUseCopilotResponsesApi(modelID: string): boolean {
-  return isGpt5OrLater(modelID) && !modelID.startsWith("gpt-5-mini")
+function googleVertexAnthropicBaseURL(project: string | undefined, location: string | undefined) {
+  if (!project || (location !== "eu" && location !== "us")) return
+  return `https://aiplatform.${location}.rep.googleapis.com/v1/projects/${project}/locations/${location}/publishers/anthropic/models`
 }
 
 export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
@@ -41,28 +39,6 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
       },
     }
   },
-  async opencorvus(input) {
-    const hasKey = await (async () => {
-      const env = Env.all()
-      if (input.env.some((item) => env[item])) return true
-      if (await Auth.get(input.id)) return true
-      const config = await Config.get()
-      if (config.provider?.["opencorvus"]?.options?.apiKey) return true
-      return false
-    })()
-
-    if (!hasKey) {
-      for (const [key, value] of Object.entries(input.models)) {
-        if (value.cost.input === 0) continue
-        delete input.models[key]
-      }
-    }
-
-    return {
-      autoload: Object.keys(input.models).length > 0,
-      options: hasKey ? {} : { apiKey: "public" },
-    }
-  },
   openai: async () => {
     return {
       autoload: false,
@@ -72,27 +48,23 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
       options: {},
     }
   },
-  "github-copilot": async () => {
-    return {
-      autoload: false,
-      async getModel(sdk: any, modelID: string, _options?: Record<string, any>) {
-        if (sdk.responses === undefined && sdk.chat === undefined) return sdk.languageModel(modelID)
-        return shouldUseCopilotResponsesApi(modelID) ? sdk.responses(modelID) : sdk.chat(modelID)
-      },
-      options: {},
+  azure: async (provider) => {
+    const auth = await Auth.get(provider.id)
+    const resourceName = [
+      provider.options?.resourceName,
+      auth?.type === "api" ? auth.metadata?.resourceName : undefined,
+      Env.get("AZURE_RESOURCE_NAME"),
+    ].find((value) => typeof value === "string" && value.trim() !== "")
+    if (!resourceName && !provider.options?.baseURL) {
+      return {
+        autoload: false,
+        async getModel() {
+          throw new Error(
+            "AZURE_RESOURCE_NAME is missing; set it with the environment or reconnect Azure with a resource name",
+          )
+        },
+      }
     }
-  },
-  "github-copilot-enterprise": async () => {
-    return {
-      autoload: false,
-      async getModel(sdk: any, modelID: string, _options?: Record<string, any>) {
-        if (sdk.responses === undefined && sdk.chat === undefined) return sdk.languageModel(modelID)
-        return shouldUseCopilotResponsesApi(modelID) ? sdk.responses(modelID) : sdk.chat(modelID)
-      },
-      options: {},
-    }
-  },
-  azure: async () => {
     return {
       autoload: false,
       async getModel(sdk: any, modelID: string, options?: Record<string, any>) {
@@ -102,7 +74,7 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
           return sdk.responses(modelID)
         }
       },
-      options: {},
+      options: { resourceName },
     }
   },
   "azure-cognitive-services": async () => {
@@ -121,8 +93,8 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
       },
     }
   },
-  "amazon-bedrock": async () => {
-    const config = await Config.get()
+  "amazon-bedrock": async (_input, context) => {
+    const config = context?.config ?? (await Config.get())
     const providerConfig = config.provider?.["amazon-bedrock"]
 
     const auth = await Auth.get("amazon-bedrock")
@@ -140,10 +112,7 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     const awsBearerToken = iife(() => {
       const envToken = process.env.AWS_BEARER_TOKEN_BEDROCK
       if (envToken) return envToken
-      if (auth?.type === "api") {
-        process.env.AWS_BEARER_TOKEN_BEDROCK = auth.key
-        return auth.key
-      }
+      if (auth?.type === "api") return auth.key
       return undefined
     })
 
@@ -160,8 +129,11 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
       region: defaultRegion,
     }
 
-    if (!awsBearerToken) {
+    if (awsBearerToken) {
+      providerOptions.apiKey = awsBearerToken
+    } else {
       const credentialProviderOptions = profile ? { profile } : {}
+      const { fromNodeProviderChain } = await import("@aws-sdk/credential-providers")
 
       providerOptions.credentialProvider = fromNodeProviderChain(credentialProviderOptions)
     }
@@ -264,6 +236,31 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
       },
     }
   },
+  llmgateway: async () => {
+    return {
+      autoload: false,
+      options: {
+        headers: {
+          "HTTP-Referer": "https://opencorvus.ai/",
+          "X-Title": "opencorvus",
+          "X-Source": "opencorvus",
+        },
+      },
+    }
+  },
+  nvidia: async (_provider, context) => {
+    const config = context?.config ?? (await Config.get())
+    return {
+      autoload: Boolean(config.provider?.nvidia),
+      options: {
+        headers: {
+          "HTTP-Referer": "https://opencorvus.ai/",
+          "X-Title": "opencorvus",
+          "X-BILLING-INVOKE-ORIGIN": "OpenCorvus",
+        },
+      },
+    }
+  },
   vercel: async () => {
     return {
       autoload: false,
@@ -278,12 +275,17 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
   "google-vertex": async (provider) => {
     const project =
       provider.options?.project ??
+      Env.get("GOOGLE_VERTEX_PROJECT") ??
       Env.get("GOOGLE_CLOUD_PROJECT") ??
       Env.get("GCP_PROJECT") ??
       Env.get("GCLOUD_PROJECT")
 
     const location =
-      provider.options?.location ?? Env.get("GOOGLE_CLOUD_LOCATION") ?? Env.get("VERTEX_LOCATION") ?? "us-central1"
+      provider.options?.location ??
+      Env.get("GOOGLE_VERTEX_LOCATION") ??
+      Env.get("GOOGLE_CLOUD_LOCATION") ??
+      Env.get("VERTEX_LOCATION") ??
+      "us-central1"
 
     const autoload = Boolean(project)
     if (!autoload) return { autoload: false }
@@ -293,9 +295,9 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
         project,
         location,
         fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
-          const auth = new GoogleAuth()
-          const client = await auth.getApplicationDefault()
-          const token = await client.credential.getAccessToken()
+          const auth = new GoogleAuth({ scopes: ["https://www.googleapis.com/auth/cloud-platform"] })
+          const client = await auth.getClient()
+          const token = await client.getAccessToken()
 
           const headers = new Headers(init?.headers)
           headers.set("Authorization", `Bearer ${token.token}`)
@@ -310,8 +312,13 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     }
   },
   "google-vertex-anthropic": async () => {
-    const project = Env.get("GOOGLE_CLOUD_PROJECT") ?? Env.get("GCP_PROJECT") ?? Env.get("GCLOUD_PROJECT")
-    const location = Env.get("GOOGLE_CLOUD_LOCATION") ?? Env.get("VERTEX_LOCATION") ?? "global"
+    const project =
+      Env.get("GOOGLE_VERTEX_PROJECT") ??
+      Env.get("GOOGLE_CLOUD_PROJECT") ??
+      Env.get("GCP_PROJECT") ??
+      Env.get("GCLOUD_PROJECT")
+    const location =
+      Env.get("GOOGLE_VERTEX_LOCATION") ?? Env.get("GOOGLE_CLOUD_LOCATION") ?? Env.get("VERTEX_LOCATION") ?? "global"
     const autoload = Boolean(project)
     if (!autoload) return { autoload: false }
     return {
@@ -319,6 +326,7 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
       options: {
         project,
         location,
+        baseURL: googleVertexAnthropicBaseURL(project, location),
       },
       async getModel(sdk: any, modelID) {
         const id = String(modelID).trim()
@@ -331,10 +339,7 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     const envServiceKey = iife(() => {
       const envAICoreServiceKey = process.env.AICORE_SERVICE_KEY
       if (envAICoreServiceKey) return envAICoreServiceKey
-      if (auth?.type === "api") {
-        process.env.AICORE_SERVICE_KEY = auth.key
-        return auth.key
-      }
+      if (auth?.type === "api") return auth.key
       return undefined
     })
     const deploymentId = process.env.AICORE_DEPLOYMENT_ID
@@ -342,7 +347,7 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
 
     return {
       autoload: !!envServiceKey,
-      options: envServiceKey ? { deploymentId, resourceGroup } : {},
+      options: envServiceKey ? { apiKey: envServiceKey, deploymentId, resourceGroup } : {},
       async getModel(sdk: any, modelID: string) {
         return sdk(modelID)
       },
@@ -359,7 +364,7 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
       },
     }
   },
-  gitlab: async (input) => {
+  gitlab: async (input, context) => {
     const instanceUrl = Env.get("GITLAB_INSTANCE_URL") || "https://gitlab.com"
 
     const auth = await Auth.get(input.id)
@@ -369,7 +374,7 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
       return Env.get("GITLAB_TOKEN")
     })()
 
-    const config = await Config.get()
+    const config = context?.config ?? (await Config.get())
     const providerConfig = config.provider?.["gitlab"]
 
     const aiGatewayHeaders = {
@@ -402,13 +407,25 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     }
   },
   "cloudflare-workers-ai": async (input) => {
-    const accountId = Env.get("CLOUDFLARE_ACCOUNT_ID")
-    if (!accountId) return { autoload: false }
+    if (input.options?.baseURL) return { autoload: false }
 
-    const apiKey = await iife(async () => {
+    const auth = await Auth.get(input.id)
+    const accountId =
+      Env.get("CLOUDFLARE_ACCOUNT_ID") || (auth?.type === "api" ? auth.metadata?.accountId : undefined)
+    if (!accountId) {
+      return {
+        autoload: false,
+        async getModel() {
+          throw new Error(
+            "CLOUDFLARE_ACCOUNT_ID is missing. Set it in the environment or reconnect Cloudflare Workers AI.",
+          )
+        },
+      }
+    }
+
+    const apiKey = iife(() => {
       const envToken = Env.get("CLOUDFLARE_API_KEY")
       if (envToken) return envToken
-      const auth = await Auth.get(input.id)
       if (auth?.type === "api") return auth.key
       return undefined
     })
@@ -417,7 +434,9 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
       autoload: !!apiKey,
       options: {
         apiKey,
-        baseURL: `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/v1`,
+        headers: {
+          "User-Agent": `opencorvus/${Installation.VERSION} cloudflare-workers-ai (${os.platform()} ${os.release()}; ${os.arch()})`,
+        },
       },
       async getModel(sdk: any, modelID: string) {
         return sdk.languageModel(modelID)
@@ -425,15 +444,29 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     }
   },
   "cloudflare-ai-gateway": async (input) => {
-    const accountId = Env.get("CLOUDFLARE_ACCOUNT_ID")
-    const gateway = Env.get("CLOUDFLARE_GATEWAY_ID")
+    if (input.options?.baseURL) return { autoload: false }
 
-    if (!accountId || !gateway) return { autoload: false }
+    const auth = await Auth.get(input.id)
+    const accountId =
+      Env.get("CLOUDFLARE_ACCOUNT_ID") || (auth?.type === "api" ? auth.metadata?.accountId : undefined)
+    const gateway =
+      Env.get("CLOUDFLARE_GATEWAY_ID") || (auth?.type === "api" ? auth.metadata?.gatewayId : undefined)
+
+    if (!accountId || !gateway) {
+      const missing = [!accountId ? "CLOUDFLARE_ACCOUNT_ID" : undefined, !gateway ? "CLOUDFLARE_GATEWAY_ID" : undefined]
+        .filter((value): value is string => Boolean(value))
+        .join(" and ")
+      return {
+        autoload: false,
+        async getModel() {
+          throw new Error(`${missing} missing. Set them in the environment or reconnect Cloudflare AI Gateway.`)
+        },
+      }
+    }
 
     const apiToken = await (async () => {
       const envToken = Env.get("CLOUDFLARE_API_TOKEN") || Env.get("CF_AIG_TOKEN")
       if (envToken) return envToken
-      const auth = await Auth.get(input.id)
       if (auth?.type === "api") return auth.key
       return undefined
     })()
@@ -448,8 +481,24 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     const { createAiGateway } = await import("ai-gateway-provider")
     const { createUnified } = await import("ai-gateway-provider/providers/unified")
 
-    const aigateway = createAiGateway({ accountId, gateway, apiKey: apiToken })
-    const unified = createUnified()
+    const metadata = input.options?.metadata
+    const options = {
+      metadata,
+      cacheTtl: input.options?.cacheTtl,
+      cacheKey: input.options?.cacheKey,
+      skipCache: input.options?.skipCache,
+      collectLog: input.options?.collectLog,
+      headers: {
+        "User-Agent": `opencorvus/${Installation.VERSION} cloudflare-ai-gateway (${os.platform()} ${os.release()}; ${os.arch()})`,
+      },
+    }
+    const aigateway = createAiGateway({
+      accountId,
+      gateway,
+      apiKey: apiToken,
+      ...(Object.values(options).some((value) => value !== undefined) ? { options } : {}),
+    })
+    const unified = createUnified({ apiKey: apiToken })
 
     return {
       autoload: true,
@@ -457,6 +506,87 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
         return aigateway(unified(modelID))
       },
       options: {},
+    }
+  },
+  "snowflake-cortex": async (input, context) => {
+    const auth = await Auth.get(input.id)
+    const account =
+      Env.get("SNOWFLAKE_ACCOUNT") ??
+      (auth?.type === "api" ? auth.metadata?.account : undefined) ??
+      (auth?.type === "oauth" ? auth.accountId : undefined) ??
+      input.options?.account
+    const environmentToken = Env.get("SNOWFLAKE_CORTEX_TOKEN") ?? Env.get("SNOWFLAKE_CORTEX_PAT")
+    const apiKeyToken = auth?.type === "api" ? auth.key : undefined
+    const oauthToken = auth?.type === "oauth" ? auth.access : undefined
+    const configToken = input.options?.token ?? input.options?.apiKey
+    const token = environmentToken ?? apiKeyToken ?? oauthToken ?? configToken
+
+    if (!account || !token) {
+      const missing = [!account ? "SNOWFLAKE_ACCOUNT" : undefined, !token ? "SNOWFLAKE_CORTEX_TOKEN" : undefined]
+        .filter((value): value is string => Boolean(value))
+        .join(", ")
+      return {
+        autoload: false,
+        async getModel() {
+          throw new Error(`Snowflake Cortex is missing credentials: ${missing}`)
+        },
+      }
+    }
+
+    const options: Record<string, any> = {
+      baseURL: `https://${account}.snowflakecomputing.com/api/v2/cortex/v1`,
+      apiKey: token,
+    }
+    const useOAuthHandler =
+      oauthToken !== undefined &&
+      environmentToken === undefined &&
+      apiKeyToken === undefined &&
+      configToken === undefined
+
+    if (!useOAuthHandler) {
+      options.fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
+        let request = init
+        if (init?.body && typeof init.body === "string") {
+          const body = JSON.parse(init.body)
+          if ("max_tokens" in body) {
+            body.max_completion_tokens = body.max_tokens
+            delete body.max_tokens
+            request = { ...init, body: JSON.stringify(body) }
+          }
+        }
+
+        const response = await fetch(url, request)
+        if (!response.body || !response.headers.get("content-type")?.includes("text/event-stream")) return response
+
+        const reader = response.body.getReader()
+        const encoder = new TextEncoder()
+        const decoder = new TextDecoder()
+        const stream = new ReadableStream({
+          async pull(controller) {
+            const { done, value } = await reader.read()
+            if (done) {
+              controller.close()
+              return
+            }
+            const text = decoder.decode(value, { stream: true })
+            controller.enqueue(encoder.encode(text.replace(/"role"\s*:\s*""/g, '"role":"assistant"')))
+          },
+          cancel(reason) {
+            return reader.cancel(reason)
+          },
+        })
+        return new Response(stream, {
+          headers: response.headers,
+          status: response.status,
+          statusText: response.statusText,
+        })
+      }
+    }
+
+    const config = context?.config ?? (await Config.get())
+    return {
+      autoload: Boolean(config.provider?.["snowflake-cortex"]),
+      options,
     }
   },
   cerebras: async () => {
@@ -482,8 +612,8 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
   },
 }
 
-export function smallModelPriority(providerID: string, _region?: string): string[] {
-  let priority = [
+export function smallModelPriority(_providerID: string, _region?: string): string[] {
+  return [
     "claude-haiku-4-5",
     "claude-haiku-4.5",
     "3-5-haiku",
@@ -492,11 +622,4 @@ export function smallModelPriority(providerID: string, _region?: string): string
     "gemini-2.5-flash",
     "gpt-5-nano",
   ]
-  if (providerID.startsWith("opencorvus")) {
-    priority = ["gpt-5-nano"]
-  }
-  if (providerID.startsWith("github-copilot")) {
-    priority = ["gpt-5-mini", "claude-haiku-4.5", ...priority]
-  }
-  return priority
 }

@@ -2,11 +2,11 @@ import { BusEvent } from "@/bus/bus-event"
 import z from "zod"
 import { Config } from "../config/config"
 import { Instance } from "../project/instance"
+import { createInstanceState } from "../project/instance-state"
 import { Identifier } from "../id/id"
 import PROMPT_INITIALIZE from "./template/initialize.txt"
 import PROMPT_REVIEW from "./template/review.txt"
 import { MCP } from "../mcp"
-import { Skill } from "../skill"
 import { entries, values as objectValues } from "@/util/object"
 
 export namespace Command {
@@ -32,7 +32,6 @@ export namespace Command {
       // workaround for zod not supporting async functions natively so we use getters
       // https://zod.dev/v4/changelog?id=zfunction
       template: z.promise(z.string()).or(z.string()),
-      subtask: z.boolean().optional(),
       hints: z.array(z.string()),
     })
     .meta({
@@ -57,7 +56,7 @@ export namespace Command {
     REVIEW: "review",
   } as const
 
-  const state = Instance.state(async () => {
+  const state = createInstanceState(async () => {
     const cfg = await Config.get()
 
     const result: Record<string, Info> = {
@@ -77,7 +76,6 @@ export namespace Command {
         get template() {
           return PROMPT_REVIEW.replace("${path}", Instance.worktree)
         },
-        subtask: true,
         hints: hints(PROMPT_REVIEW),
       },
     }
@@ -92,7 +90,6 @@ export namespace Command {
         get template() {
           return command.template
         },
-        subtask: command.subtask,
         hints: hints(command.template),
       }
     }
@@ -123,23 +120,8 @@ export namespace Command {
       }
     }
 
-    // Add skills as invokable commands
-    for (const skill of await Skill.all()) {
-      // Skip if a command with this name already exists
-      if (result[skill.name]) continue
-      result[skill.name] = {
-        name: skill.name,
-        description: skill.description,
-        source: "skill",
-        get template() {
-          return skill.content
-        },
-        hints: [],
-      }
-    }
-
     return result
-  })
+  }, undefined, "command")
 
   export async function get(name: string) {
     return state().then((x) => x[name])
